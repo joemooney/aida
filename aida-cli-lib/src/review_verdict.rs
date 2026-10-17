@@ -463,7 +463,7 @@ pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<(
     }
     // Verify: an honest "written" claim reads the artefact back rather than
     // trusting the write syscall's return value.
-    match std::fs::read_to_string(path) {
+    match read_verdict_body(path) {
         Ok(on_disk) if on_disk == body => Ok(()),
         Ok(_) => Err(std::io::Error::other(format!(
             "wrote {} but the content on disk does not match what was staged",
@@ -940,7 +940,7 @@ pub fn rework_findings_comment(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    let body = std::fs::read_to_string(verdict_path(project_root, spec)).ok()?;
+    let body = read_verdict_body(verdict_path(project_root, spec)).ok()?;
     parse_recorded_verdict(&body)
 }
 
@@ -1139,7 +1139,7 @@ pub fn backfill_abbreviated_shas(
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let Ok(body) = std::fs::read_to_string(&path) else {
+        let Ok(body) = read_verdict_body(&path) else {
             continue;
         };
         let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
@@ -1235,7 +1235,7 @@ pub(crate) fn build_verdict_object(
             "review recording requires non-empty recorded_by provenance",
         ));
     }
-    let mut obj = std::fs::read_to_string(path)
+    let mut obj = read_verdict_body(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -1487,7 +1487,7 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     let archive = dir.join(format!("{}.json", sha.to_ascii_lowercase()));
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
-    let mut existing: JsonObj = std::fs::read_to_string(&archive)
+    let mut existing: JsonObj = read_verdict_body(&archive)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -1509,7 +1509,7 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
 // trace:TASK-1460 | ai:claude
 pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
     let path = verdict_file_for_sha(project_root, key, sha)?;
-    std::fs::read_to_string(path)
+    read_verdict_body(path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
 }
@@ -1522,7 +1522,7 @@ pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
 // trace:TASK-1460 | ai:claude
 pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<PathBuf> {
     let path = verdict_path(project_root, key);
-    let current_at_sha = std::fs::read_to_string(&path)
+    let current_at_sha = read_verdict_body(&path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)
@@ -1586,7 +1586,7 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
                 .is_some_and(|stem| same_reviewed_sha(stem, sha))
         })
         .filter_map(|p| {
-            let v = parse_recorded_verdict(&std::fs::read_to_string(&p).ok()?)?;
+            let v = parse_recorded_verdict(&read_verdict_body(&p).ok()?)?;
             Some((p, v))
         })
         .collect();
@@ -1602,7 +1602,7 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
 /// archived (the same refusal the record path makes). Idempotent.
 // trace:TASK-1460 | ai:claude
 pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
-    let Some(obj) = std::fs::read_to_string(path)
+    let Some(obj) = read_verdict_body(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -1668,34 +1668,115 @@ impl VerdictCandidate {
 /// a few KiB; anything larger is not one.
 const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 
+/// Open the verdict directory itself without following links, then descend
+/// through archive directories relative to held descriptors. Project-root and
+/// .aida resolution retain their existing behavior; the verdict subtree cannot
+/// redirect a read through a link or a directory replacement.
+// trace:TASK-1801 | ai:codex
+fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let root = path
+        .ancestors()
+        .filter(|p| {
+            p.file_name().is_some_and(|n| n == "review-verdicts")
+                && p.parent()
+                    .and_then(Path::file_name)
+                    .is_some_and(|n| n == ".aida")
+        })
+        .last()
+        .unwrap_or(path);
+    let mut dir = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(root)?;
+    for component in path
+        .strip_prefix(root)
+        .map_err(std::io::Error::other)?
+        .components()
+    {
+        let std::path::Component::Normal(name) = component else {
+            return Err(std::io::Error::other("invalid verdict directory component"));
+        };
+        dir = open_verdict_entry(&dir, name, libc::O_DIRECTORY)?;
+    }
+    Ok(dir)
+}
+
+// trace:TASK-1801 | ai:codex
+fn open_verdict_entry(
+    parent: &std::fs::File,
+    name: &std::ffi::OsStr,
+    flags: libc::c_int,
+) -> std::io::Result<std::fs::File> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+    let name = std::ffi::CString::new(name.as_bytes())?;
+    // SAFETY: parent stays open across openat; name is NUL-terminated. The
+    // returned descriptor is owned exactly once by File, including on errors.
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC | flags,
+        )
+    };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+// trace:TASK-1801 | ai:codex
+fn read_verdict_body(path: impl AsRef<Path>) -> std::io::Result<String> {
+    read_verdict_file(path.as_ref()).map(|(body, _)| body)
+}
+
+fn read_verdict_file(path: &Path) -> std::io::Result<(String, std::fs::Metadata)> {
+    read_verdict_file_with_hook(path, || {})
+}
+
+/// The hook permits a deterministic replacement between validation and read in
+/// tests. Both operations must use the same descriptor even after that swap.
+// trace:TASK-1801 | ai:codex
+fn read_verdict_file_with_hook(
+    path: &Path,
+    after_validation: impl FnOnce(),
+) -> std::io::Result<(String, std::fs::Metadata)> {
+    use std::io::Read;
+    use std::os::unix::fs::MetadataExt;
+    let parent = open_verdict_directory(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new(".")),
+    )?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("missing verdict name"))?;
+    let file = open_verdict_entry(&parent, name, 0)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.nlink() != 1 || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
+        return Err(std::io::Error::other(
+            "verdict must be a bounded, singly linked regular file",
+        ));
+    }
+    after_validation();
+    let mut body = String::new();
+    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
+        .read_to_string(&mut body)?;
+    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
+        return Err(std::io::Error::other("verdict exceeds size limit"));
+    }
+    Ok((body, meta))
+}
+
 /// BUG-2149: a verdict file modified at or after `since` (the reviewer's
 /// start), read as a candidate. A pre-existing file is never a candidate,
 /// and neither is anything but a regular file of bounded size — a symlink to
 /// a FIFO or device must not be able to hang or flood the launcher.
 fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
-    // Validate and read the same opened inode. O_NONBLOCK prevents a FIFO
-    // replacement from hanging open; O_NOFOLLOW rejects final-component links.
-    // trace:TASK-1786 | ai:codex
-    use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-        .ok()?;
-    let meta = file.metadata().ok()?;
-    if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
-        return None;
-    }
+    let (body, meta) = read_verdict_file(path).ok()?;
     let modified = meta.modified().ok()?;
     if modified < since {
-        return None;
-    }
-    let mut body = String::new();
-    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
-        .read_to_string(&mut body)
-        .ok()?;
-    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }
     let obj = serde_json::from_str::<serde_json::Value>(&body)
@@ -1928,7 +2009,7 @@ pub fn migrate_sidecars_to_archive(dir: &Path) -> std::io::Result<usize> {
     files.sort();
     let mut created = 0;
     for path in files {
-        let Some(obj) = std::fs::read_to_string(&path)
+        let Some(obj) = read_verdict_body(&path)
             .ok()
             .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
             .and_then(|v| v.as_object().cloned())
@@ -2007,7 +2088,7 @@ pub fn close_verdict_on_merge(
         return Ok(false);
     }
     let path = verdict_path(project_root, spec);
-    let Ok(body) = std::fs::read_to_string(&path) else {
+    let Ok(body) = read_verdict_body(&path) else {
         return Ok(false);
     };
     let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
@@ -2556,7 +2637,7 @@ pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| {
             let file = p.file_name()?.to_str()?.to_string();
-            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let body = read_verdict_body(&p).unwrap_or_default();
             let (raw, kind, issues) = audit_verdict_body(&body);
             (!issues.is_empty()).then_some(NonCanonicalVerdict {
                 file,
@@ -2581,7 +2662,7 @@ pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| {
             let spec = p.file_stem()?.to_str()?.to_string();
-            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let body = read_verdict_body(&p).unwrap_or_default();
             let verdict = parse_recorded_verdict(&body)?;
             Some((spec, verdict))
         })

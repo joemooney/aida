@@ -1744,6 +1744,22 @@ pub(crate) struct MandateCover {
     pub principal: String,
 }
 
+/// Assemble exclusion subjects only; never use this union for authority inputs.
+// trace:TASK-1790 | ai:codex
+pub(crate) fn mandate_exclusion_specs(
+    named: &[String],
+    traced: std::collections::BTreeSet<String>,
+    resolve: impl FnMut(&str) -> crate::mandate::ShipSpec,
+) -> Vec<crate::mandate::ShipSpec> {
+    let mut ids = named.to_vec();
+    ids.extend(traced);
+    normalized_spec_ids(&ids)
+        .iter()
+        .map(String::as_str)
+        .map(resolve)
+        .collect()
+}
+
 /// STORY-1698: does an active fire-fighting mandate let THIS session ship PR
 /// `pr` past its merge-hold? Reads the mandate records from disk at this
 /// instant (never cached); only when one is active does it read the forge,
@@ -1790,37 +1806,50 @@ pub(crate) fn mandate_ship_cover(
     );
     let author_ids: &[String] = if forge_resolved { &ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
+    // trace:TASK-1790 | ai:codex
+    // Trace-derived IDs can only ADD exclusions. Build verdict/author inputs
+    // above from named IDs first; never pass the union to those authority paths.
+    let unreadable = |e: anyhow::Error| MandateRefusal::TraceEvidenceUnreadable(format!("{e:#}"));
+    let info = fetch_change_info_via_resolved_forge(
+        main_worktree,
+        pr,
+        crate::forge::resolve_open_change_forge_kind(main_worktree),
+    )
+    .map_err(&unreadable)?;
+    let trace_evidence = crate::mandate_traces::collect_pr(
+        main_worktree,
+        &info.base_ref,
+        head.as_deref().unwrap_or(""),
+        &info.head_oid,
+    )
+    .map_err(&unreadable)?;
+    let store_root = crate::store_sync::detect_distributed_store_from(project_root)
+        .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
+    let store_snapshot = crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)?;
     let store = load_store_for_lookup(project_root);
-    let store_root = crate::store_sync::detect_distributed_store_from(project_root);
-    let specs: Vec<crate::mandate::ShipSpec> = ids
-        .iter()
-        .map(|id| {
-            let req = store.as_ref().and_then(|store| {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| {
-                        r.spec_id
+    let specs = mandate_exclusion_specs(&ids, trace_evidence.ids, |id| {
+        let req = store.as_ref().and_then(|store| {
+            store
+                .requirements
+                .iter()
+                .find(|r| {
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || r.agreed_id
                             .as_deref()
                             .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                            || r.agreed_id
-                                .as_deref()
-                                .is_some_and(|s| s.eq_ignore_ascii_case(id))
-                    })
-                    .cloned()
-            });
-            // STORY-1698: sticky exclusion reads every stored version.
-            let history = match &store_root {
-                Some(root) => crate::mandate::store_history_versions(root, id),
-                None => Err("no git-canonical store to read history from".to_string()),
-            };
-            crate::mandate::ShipSpec {
-                id: id.clone(),
-                current: req,
-                history,
-            }
-        })
-        .collect();
+                })
+                .cloned()
+        });
+        // STORY-1698: sticky exclusion reads every stored version.
+        let history = crate::mandate::store_history_versions(&store_root, id);
+        crate::mandate::ShipSpec {
+            id: id.to_owned(),
+            current: req,
+            history,
+        }
+    });
     // STORY-1698: every excluded class seen in any version goes into the
     // append-only ledger first, then the ledger is read back as the first
     // source of exclusion. trace:STORY-1698 | ai:claude
@@ -1847,6 +1876,13 @@ pub(crate) fn mandate_ship_cover(
         Ok(dir) => crate::mandate::read_exclusions(dir),
         Err(e) => Err(format!("{e:#}")),
     };
+    // Keep all current/history evidence within the same observed store version.
+    // A concurrent store write refuses this attempt; a retry builds fresh facts.
+    if crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)? != store_snapshot {
+        return Err(MandateRefusal::TraceEvidenceUnreadable(
+            "the store changed while collecting exclusions; retry".into(),
+        ));
+    }
     let hold_record = crate::merge_hold::read_hold_record(hold_root, pr);
     let hold_reason = crate::merge_hold::read_hold(hold_root, pr);
     let hold = HoldFacts::of(hold_record.as_ref(), hold_reason.as_deref());
@@ -1855,7 +1891,7 @@ pub(crate) fn mandate_ship_cover(
         now: chrono::Utc::now(),
         grant: grant.as_ref().map(|(s, p)| (s.as_str(), p.as_str())),
         specs: &specs,
-        specs_resolved: forge_resolved,
+        specs_resolved: forge_resolved && !ids.is_empty(),
         candidates: &candidates,
         policy: &policy,
         head: head.as_deref(),

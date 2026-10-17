@@ -8620,7 +8620,7 @@ pub(crate) fn handle_queue_rework(
             permission_mode,
             /* sandbox */ false,
             /* no_launch */ false,
-            QueueWorkRoleInput::rework(for_role, for_role_resolved.as_deref()),
+            rework_role_input(for_role, for_role_resolved.as_deref()),
             no_pull,
             /* type_filter */ None,
             /* branch_override */ None,
@@ -8692,13 +8692,6 @@ impl<'a> QueueWorkRoleInput<'a> {
         }
     }
 
-    pub(crate) fn rework(raw_for: Option<&'a str>, resolved_route: Option<&'a str>) -> Self {
-        Self {
-            pickup: resolved_route,
-            explicit: raw_for,
-        }
-    }
-
     pub(crate) fn review_coexistence<'p>(
         &self,
         plan: &'p QueueWorkPlan,
@@ -8706,6 +8699,18 @@ impl<'a> QueueWorkRoleInput<'a> {
         plan.review_target?;
         self.explicit
             .map(|explicit| (explicit, plan.anchor_display.as_str()))
+    }
+}
+
+/// Rework inherits the route while preserving the raw CLI intent separately.
+// trace:TASK-1801 | ai:codex
+pub(crate) fn rework_role_input<'a>(
+    raw_for: Option<&'a str>,
+    resolved_route: Option<&'a str>,
+) -> QueueWorkRoleInput<'a> {
+    QueueWorkRoleInput {
+        pickup: resolved_route,
+        explicit: raw_for,
     }
 }
 

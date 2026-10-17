@@ -66,6 +66,29 @@ impl ReviewForge {
     }
 }
 
+/// Compare canonical requirement identity, so aliases work but an unrelated
+/// existing requirement cannot authorize coexistence on this change.
+// trace:TASK-1801 | ai:codex
+pub(crate) fn review_anchor_matches_change(
+    store: &aida_core::RequirementsStore,
+    anchor: &str,
+    title: &str,
+    branch: &str,
+) -> bool {
+    let Some(anchor) = store.get_requirement_unambiguous(anchor).ok().flatten() else {
+        return false;
+    };
+    crate::pr_ship::derive_squash_subject_spec_ids(title, branch, "")
+        .iter()
+        .any(|id| {
+            store
+                .get_requirement_unambiguous(id)
+                .ok()
+                .flatten()
+                .is_some_and(|backing| backing.id == anchor.id)
+        })
+}
+
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
@@ -1557,19 +1580,25 @@ pub(crate) fn session_start(
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude
+                // An existing spec alone is insufficient: the PR/MR must
+                // actually credit that spec at this boundary. Unknown metadata
+                // cannot grant the coexistence exception.
+                // trace:TASK-1801 | ai:codex
+                let backing = review_coexistence.and_then(|(_, id)| {
+                    let store = preflight_store.as_ref()?;
+                    let forge = crate::forge::forge_for_kind(&project_root, forge.forge_kind());
+                    let meta = forge
+                        .change_metadata(n, &mut crate::network_retry::NoopSink)
+                        .ok()?;
+                    review_anchor_matches_change(store, id, &meta.title, &meta.head_ref)
+                        .then_some(id)
+                });
                 let decision = review_source_branch_conflict_decision(
                     headless,
                     is_live,
                     l.role.as_deref(),
                     review_coexistence.map(|(explicit_role, _)| explicit_role),
-                    review_coexistence.and_then(|(_, id)| {
-                        preflight_store
-                            .as_ref()?
-                            .get_requirement_unambiguous(id)
-                            .ok()
-                            .flatten()
-                            .map(|_| id)
-                    }),
+                    backing,
                 );
                 match decision {
                     LeaseConflictDecision::Coexist => {

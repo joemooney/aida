@@ -1,3 +1,9 @@
+Verdict readers pin the non-symlink review-verdicts directory and archive
+subdirectories, then validate and read bounded, singly linked regular files by
+handle. Reviewer coexistence checks the anchor against current change credit;
+direct reviewer starts keep ordinary source-lease conflict handling.
+<!-- trace:TASK-1801 | ai:codex -->
+
 Standalone reviewer coexistence requires an explicit queue-work role flag plus
 an unambiguous backing spec. Verdict collection reads a size-bounded regular
 file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
@@ -12,7 +18,11 @@ queueing or phase startup; delegated child expiry matches its parent.
 Mandate exclusion-ledger reads validate the opened non-symlink regular file,
 mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
 mandate ships restore holds with explicit re-arm context in the placement event.
-Trace-derived exclusions remain separate pending work.
+Mandate exclusions also include committed base/head traces in changed source
+hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
+with full-file fallback when attribution
+fails. Trace IDs grant no completion or author/reviewer authority; unreadable
+evidence or a moving/dirty store refuses mandate coverage. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
