@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T07:58:45.918836097Z
-modified_at: 2026-10-16T19:54:05.760587564Z
+modified_at: 2026-10-17T01:29:54.715349061Z
 req_type: Task
 relationships:
 - rel_type:
@@ -44,6 +44,18 @@ comments:
     The Non-completing slice marker is preserved, and an explicit aida: no-complete line reinforces it. TASK-1791 remains Needs Attention/incomplete: explicit --help timed-out completeness reason and sleeping-tool regression still need a separate follow-up after this slice merges, using fresh main with STORY-1677 (already merged).
   created_at: 2026-10-16T19:54:05.760587564Z
   modified_at: 2026-10-16T19:54:05.760587564Z
+- id: 01a1477a-d51b-7ca2-bf93-a93a4cac9570
+  author: ai:codex:joe
+  content: |-
+    MERGE-UP READY at eb283b3db61cf3e42eb74c895c9537b2b39410e8.
+
+    Normal merge of origin/main a7101365ea into the delivered rework. AGENTS retains both parent notes. The score.rs conflict retains main's completeness check/snapshots before the existing bounded oracle timeout/output-limit handling. No new feature work.
+
+    Validation: all30 fast gates passed; every workspace test target compiled (1452.4s including queue time); the fresh workspace libtest binary passed all98 regen::score tests serially with RUST_MIN_STACK=8388608. A fresh author checker compared both conflict resolutions to both parents and found no actionable issues. Author checking supplies no independent review authority.
+
+    Normal push accepted; exact OPEN PR head and both Non-completing slice / aida: no-complete markers read back. TASK-1791 remains incomplete for the help-timeout follow-up. No verdict, clearance or merge by author.
+  created_at: 2026-10-17T01:29:54.715349061Z
+  modified_at: 2026-10-17T01:29:54.715349061Z
 history:
 - id: 01a145da-f676-71a3-ae22-ca2e7db01fda
   author: aida-session-start
