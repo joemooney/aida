@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:56.498956423Z
-modified_at: 2026-10-17T05:59:45.230121882Z
+modified_at: 2026-10-17T06:00:23.365483088Z
 req_type: Task
 comments:
 - id: 01a1486f-6bb5-7541-8987-2b2f866edb98
@@ -21,6 +21,11 @@ comments:
   content: 'Delivered PR #2713 https://github.com/joemooney/aida/pull/2713 at exact OPEN head 64072b7e6984043d673e3ba13e5bbe26e218aa76, base main28575d. Contained plan-only posture now selects plan with unchanged containment flags and AIDA_CONTAINED=1. Actual workspace baseline:5 passed/2 expected failed old dontAsk-vs-plan assertions; final focused8/8 passed. Final full make check-ci-fast30/30, fmt/diff clean. Real Claude2.1.302 SDK initialize accepted plan+representativecontainedsettings and AIDA_CONTAINED=1, reported current_permission_mode plan, exited0 without modelprompt. This is startup compatibility, not runtime sandbox/model policy enforcement. Two fresh author checker contexts, final independently reran8tests and traced actual shared builder, no actionable findings; zero independent authority. First fast run failed two fake-server fixtures because of inherited local sccache-disable variables;7fixtures and final fullfast passed after removing those env variables, no code workaround. Independent review requested; no own verdict/clearance/merge or CI-green claim.'
   created_at: 2026-10-17T05:58:32.261554591Z
   modified_at: 2026-10-17T05:58:32.261554591Z
+- id: 01a14872-7645-7ec1-8a98-d9e44875f75a
+  author: ai:codex:joe
+  content: 'Author follow-up before final handoff: a last path audit found that parser still accepted documented-interactive-only --plan-only with --no-human; the separate headless builder ignores resolved plan posture. PR2713 returned to draft and spec In Progress while adding an early clap conflict (including aliases) plus real parser regression. This closes the unsupported combination before lifecycle setup without widening headless release APIs. Final targeted/fast checks will rerun; prior ready-head64072b7 evidence is superseded for final delivery.'
+  created_at: 2026-10-17T06:00:23.365483088Z
+  modified_at: 2026-10-17T06:00:23.365483088Z
 history:
 - id: 01a14865-04c5-7fc0-b914-96deb5acf813
   author: aida-session-start
