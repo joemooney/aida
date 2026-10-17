@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:28:20.109746078Z
+modified_at: 2026-10-17T15:29:15.378017339Z
 req_type: Task
 relationships:
 - rel_type:
@@ -222,6 +222,26 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T15:28:20.109746078Z
   modified_at: 2026-10-17T15:28:20.109746078Z
+- id: 01a14a7b-4672-7212-a68c-11c9eae08bfb
+  author: ai:codex:joe
+  content: |
+    Measurement-only continuation published as ready, non-completing PR #2719: https://github.com/joemooney/aida/pull/2719, exact OPEN head c99b087c59c3d4fcd2f5036ede107f84aa486437. Stacked on #2718 at83ef02d0b8254743a57bc61eb49c98a11b3c07f7; exactly three docs/data files, both Non-completing slice and aida: no-complete markers verified. TASK-1800 stays In Progress.
+
+    FIFTEEN complete manual blocker inventories, both modes; two added:
+    | PR | full/scoped blockers | true supervised trace touches | unresolved |
+    |---|---:|---|---|
+    |2676|22/14|BUG-2148, TASK-1750|none|
+    |2672|18/18|BUG-1178, BUG-1699, BUG-2006, BUG-2124, BUG-2133, BUG-2144, BUG-2146, BUG-2151, TASK-1232|FR-1-043|
+
+    Cumulative full126 pairs =27 true +82 incidental +17 unresolved; scoped109 =25+71+13. These are case/ID pairs, not PR counts. All15 extracted named tokens inventoried across9 cases, including all4 PR2672 tokens (BUG2144/2145/2146/2151). Five cases have no unresolved reason: four true refusals and the already-allowed baseline. Other TEN retain uncertainty. No refused PR proven incidental-only;35 cases remain; semantic gate OPEN. Frozen conservative outcome remains22 named +27 additional =49/50 refusals.
+
+    Frozen advisor comments matter: BUG2133 states blanket monotonic containment; BUG2144's cap ruling explicitly names BUG2151 as its agent-new follow-up. Both are true shared-contract touches despite unchanged trace-local phase-driver/queue code. BUG2145 is incidental in both trace/named inventory: its queue auto-complete/sandbox path is unchanged. New/resume config.contained inputs affect unchanged child-env consumers (BUG2006/2124). OS-wrap selection depends on unchanged os_wrap_enabled(worktree_root), not that field (TASK864 incidental). PR2676 adds strict identity to signal paths without changing BUG1156 ancestor-session liveness/reaping predicates. Full frozen object hashes on both new cases pin comments as well as descriptions.
+
+    Final make check-ci-fast30/30, formatting/diff clean. Integrity verifies all15 pins,126/109 complete trace inventories/policy reasons,15 named tokens,all diff/blob/spec hashes,exact trace locations/scoped/fallback provenance,unchanged consumers,full new frozen objects and exact prior13 rows. Same frozen clean storea5dae7145abd11d2480271c466030b12db6e7668 and collector7041c86b; no new expensive classification or private-ledger publication.
+
+    Two skill-required spawned author self-check contexts ran own actual-spec/contract/source/integrity commands. First found too-narrow BUG2133 contract scope, corrected with frozen rulings; author integrity caught omitted named2672 tokens, restored. Fresh second found no actionable findings. Author self-check only, not independent review. STANDARD independent review requested per ruling; code2714 retains its separate STRICT gate. No runtime/workspace execution, end-to-end mandate replay, author verdict, clearance, merge, CI-green claim or policy/collector/authority behavior change. Local evidence: relay evidence/session8. Own session cleanup follows; parent stays open.
+  created_at: 2026-10-17T15:29:15.378017339Z
+  modified_at: 2026-10-17T15:29:15.378017339Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
