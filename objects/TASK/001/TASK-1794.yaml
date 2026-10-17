@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:56.498956423Z
-modified_at: 2026-10-17T06:04:45.572681913Z
+modified_at: 2026-10-17T06:05:11.424552809Z
 req_type: Task
 comments:
 - id: 01a1486f-6bb5-7541-8987-2b2f866edb98
@@ -31,6 +31,18 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T06:03:49.144288428Z
   modified_at: 2026-10-17T06:03:49.144288428Z
+- id: 01a14876-db80-7b80-98ff-53e0ae73884d
+  author: ai:codex:joe
+  content: |
+    FINAL delivery supersedes the earlier 64072b7 ready notice. PR #2713 https://github.com/joemooney/aida/pull/2713 is OPEN and ready at exact head 74db349b769fdfa9803bfc81a777f9da40500f29 (commits 64072b7 + 74db349; base main28575d). Contained interactive plan-only uses plan plus unchanged contained flags and AIDA_CONTAINED=1. The documented interactive-only flag now conflicts with the autonomous group (auto-complete + drain) and no-human/aliases before setup; ordinary headless containment is still supported.
+
+    Final actual workspace binary: 9/9 focused tests passed with project8MiB stack, including all five conflicting flags with/without sandbox and supported-mode positives. Final complete fast30/30 after autonomous-group fix; fmt/diff clean. Original posture baseline5pass2expectedfail; real Claude2.1.302 representative-settings SDK initialize accepted plan, no modelprompt (startup compatibility only).
+
+    Three fresh author contexts: first2 no findings; author later caught headless path; third caught drain alias, then verified its correction in SAME third context against rebuilt binary9/9, no remaining actionable findings. No fourth fresh context or independent authority claimed. Initial local sccache env caused two fixture failures; fixtures7/7 and full final fast passed with env disabled flags removed, no code workaround. Earlier9-pass run without drain coverage is not final evidence.
+
+    Independent review requested; no author verdict/clearance/merge/current-head CI-green claim. TASK-1794 Done pending integration. Normal own lease/worktree/target cleanup follows. TASK-0446 unsigned schema sketch v1 and request41fe9453 remain pending advisor signoff; no mapping implementation.
+  created_at: 2026-10-17T06:05:11.424552809Z
+  modified_at: 2026-10-17T06:05:11.424552809Z
 history:
 - id: 01a14865-04c5-7fc0-b914-96deb5acf813
   author: aida-session-start
