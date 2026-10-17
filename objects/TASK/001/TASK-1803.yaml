@@ -1,0 +1,20 @@
+id: 01a147a9-f491-7121-b97b-b47e2c2dce7f
+spec_id: TASK-1803
+agreed_id: TASK-1803
+title: 'No-number pr ship: resolve default branch on non-GitHub forges, clarify unknown refusal, use gh PATH-walk'
+description: 'Follow-up from the #2706 TASK-1795 r2 STRICT review (two-round cap; advisor ruled merge-with-follow-up, 2026-10-16). 1) forge.rs:3938 returns unknown for every non-GitHub forge, so a GitLab or pure-git clone without refs/remotes/origin/HEAD refuses every no-number ship on a feature branch, including the first ship that creates the MR. Add a time-limited ''git ls-remote --symref origin HEAD'' probe that works on any forge. 2) The unknown-evidence refusal (pr_cmd.rs:2288-2291) says ''on the default branch; pass a PR number'', which is false on a feature branch. Say the default branch could not be determined and suggest ''git remote set-head origin --auto''. 3) Production resolves bare ''gh'' (forge.rs:3943-3946) instead of the existing PATH-walk fallback. Use the shared resolver. AC: regression tests for a GitLab feature branch without origin/HEAD (ship proceeds via ls-remote), the refusal wording, and a stripped-PATH gh resolution.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T02:21:22.961127976Z
+modified_at: 2026-10-17T02:21:22.961127976Z
+req_type: Task
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: claude
+  session: bf9b9791-09d0-4540-80b0-665993f3e6f0
