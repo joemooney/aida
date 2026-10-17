@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:29:39.028917686Z
+modified_at: 2026-10-17T15:39:51.030910930Z
 req_type: Task
 relationships:
 - rel_type:
@@ -247,6 +247,11 @@ comments:
     Two skill-required spawned author self-check contexts ran own actual-spec/contract/source/integrity commands. First found too-narrow BUG2133 contract scope, corrected with frozen rulings; author integrity caught omitted named2672 tokens, restored. Fresh second found no actionable findings. Author self-check only, not independent review. STANDARD independent review requested per ruling; code2714 retains its separate STRICT gate. No runtime/workspace execution, end-to-end mandate replay, author verdict, clearance, merge, CI-green claim or policy/collector/authority behavior change. Local evidence: relay evidence/session8. Own session cleanup follows; parent stays open.
   created_at: 2026-10-17T15:29:15.378017339Z
   modified_at: 2026-10-17T15:29:15.378017339Z
+- id: 01a14a84-f976-7832-a51a-e351e39d37b9
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T15:39:51.030910930Z
+  modified_at: 2026-10-17T15:39:51.030910930Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
