@@ -6679,7 +6679,7 @@ pub(crate) fn handle_queue_command(
                 permission_mode.as_deref(),
                 *sandbox,
                 *no_launch,
-                role.as_deref(),
+                QueueWorkRoleInput::direct(role.as_deref()),
                 *no_pull,
                 type_filter.as_deref(),
                 branch.as_deref(),
@@ -8620,7 +8620,7 @@ pub(crate) fn handle_queue_rework(
             permission_mode,
             /* sandbox */ false,
             /* no_launch */ false,
-            for_role_resolved.as_deref(),
+            QueueWorkRoleInput::rework(for_role, for_role_resolved.as_deref()),
             no_pull,
             /* type_filter */ None,
             /* branch_override */ None,
@@ -8673,6 +8673,40 @@ pub(crate) fn handle_queue_rework(
     }
 
     Ok(())
+}
+
+/// Keep route inheritance separate from the caller's explicit reviewer intent.
+/// Rework may preserve a stored route for pickup without authorizing coexistence.
+// trace:TASK-1786 | ai:codex
+#[derive(Clone, Copy)]
+pub(crate) struct QueueWorkRoleInput<'a> {
+    pickup: Option<&'a str>,
+    explicit: Option<&'a str>,
+}
+
+impl<'a> QueueWorkRoleInput<'a> {
+    pub(crate) fn direct(role: Option<&'a str>) -> Self {
+        Self {
+            pickup: role,
+            explicit: role,
+        }
+    }
+
+    pub(crate) fn rework(raw_for: Option<&'a str>, resolved_route: Option<&'a str>) -> Self {
+        Self {
+            pickup: resolved_route,
+            explicit: raw_for,
+        }
+    }
+
+    pub(crate) fn review_coexistence<'p>(
+        &self,
+        plan: &'p QueueWorkPlan,
+    ) -> Option<(&'a str, &'p str)> {
+        plan.review_target?;
+        self.explicit
+            .map(|explicit| (explicit, plan.anchor_display.as_str()))
+    }
 }
 
 /// STORY-42: resolved pickup plan — which queue entries we're working,
@@ -11025,7 +11059,7 @@ pub(crate) fn handle_queue_work(
     permission_mode: Option<&str>,
     sandbox: bool,
     no_launch: bool,
-    role_override: Option<&str>,
+    role_input: QueueWorkRoleInput<'_>,
     no_pull: bool,
     type_filter: Option<&str>,
     branch_override: Option<&str>,
@@ -11102,6 +11136,7 @@ pub(crate) fn handle_queue_work(
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
 ) -> Result<()> {
+    let role_override = role_input.pickup;
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
     // message rather than surfacing deep in session setup.
@@ -12507,6 +12542,8 @@ pub(crate) fn handle_queue_work(
             None,
             /* self_claim */
             queue_work_self_claim(no_launch),
+            // trace:TASK-1786 | ai:codex
+            role_input.review_coexistence(&plan),
         )
     };
     if no_launch {
