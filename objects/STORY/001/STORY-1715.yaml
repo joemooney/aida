@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2709` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T21:44:09.947959524Z
-modified_at: 2026-10-16T21:46:13.529818678Z
+modified_at: 2026-10-17T00:11:37.584949807Z
 req_type: Story
 relationships:
 - rel_type:
@@ -36,6 +36,19 @@ comments:
   content: 'Binding review tier: STRICT, per TASK-1790 advisor ruling 1a40cba8. Review exact PR-2709 head 9386e30ebdac4434ff4a14d6dbbcc4f26fe985a7. The PR body/report disclose that three author contexts preceded the final hardened host-Git reader correction; final actual-core 15 collector + 47 mandate regressions and the frozen 50-case benchmark cover it. Read the owning canonical requirement and acceptance; author checks confer no independent review authority.'
   created_at: 2026-10-16T21:46:13.529818678Z
   modified_at: 2026-10-16T21:46:13.529818678Z
+- id: 01a14733-2f0f-7da0-9bd0-9cd42f2c53b1
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2709 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-17T00:11:39.151800618Z
+  modified_at: 2026-10-17T00:11:39.151800618Z
+history:
+- id: 01a14733-2f0f-7da0-9bd0-9cec5aabc31f
+  author: aida-auto-bump
+  timestamp: 2026-10-17T00:11:39.151806971Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
   branch: main
@@ -43,3 +56,6 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 7dd7aee9de
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-17T00:11:39.151798186Z
