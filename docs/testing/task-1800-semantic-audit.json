@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in fifteen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in seventeen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
   "classification_gate_complete": false,
   "frozen_case_count": 50,
-  "cases_inspected": 15,
-  "remaining_cases": 35,
+  "cases_inspected": 17,
+  "remaining_cases": 33,
   "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
@@ -14,16 +14,16 @@
   "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
   "summary": {
     "full": {
-      "total": 126,
-      "incidental": 82,
-      "unresolved": 17,
-      "true-touch": 27
+      "total": 175,
+      "incidental": 117,
+      "unresolved": 29,
+      "true-touch": 29
     },
     "scoped": {
-      "total": 109,
-      "incidental": 71,
-      "unresolved": 13,
-      "true-touch": 25
+      "total": 142,
+      "incidental": 93,
+      "unresolved": 22,
+      "true-touch": 27
     }
   },
   "rows": [
@@ -10822,6 +10822,4702 @@
           "blob_sha256": "86589cddb94fc31ae3327eb59470dd981b4bbea1e1f98841ecc6648042261e47",
           "line": 3044,
           "text": "if !os_wrap_enabled(worktree_root) {"
+        }
+      ]
+    },
+    {
+      "pr": 2670,
+      "base": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+      "head": "182ef87134058ffc1d85c78d52401214b08c8736",
+      "named_policy_refusal": true,
+      "title": "[AI:claude] fix(store): write the contained-store marker before the git version check; route the store diff through host_git_command (TASK-1775)",
+      "full_blocker_count": 31,
+      "scoped_blocker_count": 15,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1775",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "Marker-before-version ordering, hardened staged diff plus raw-call guard and expiring Git-version cache directly implement the named hardening task.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1775",
+            "agreed_id": "TASK-1775",
+            "title": "BUG-2131 hardening: write the contained-store marker before the git version check; route git_backend's raw diff --cached through host_git_command",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "security",
+              "store"
+            ],
+            "description_sha256": "ee321a8b6394b5ce1f700eac5423279b71734eb273b70ef38b41de62e08a93ff",
+            "object_sha256": "fd9e2750b5b4a55a33a989ae8ae8f45684b8c3022184e12a37bc20df7ed58ec3"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/session.rs",
+          "diff_sha256": "b912485283ffb7e124b6402ec063cd615a44bc70d9cabbbe7bdca82e80669a12"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+          "diff_sha256": "f91f4a5738c207d37db6c08dbdea38e0c81c426b69316e4f64814cbae96c4908"
+        },
+        {
+          "path": "aida-core/src/db/git_backend.rs",
+          "diff_sha256": "35d55b141b99639cfde9db93b7fd532e841830f3559359a062ba62d827218194"
+        },
+        {
+          "path": "aida-core/src/git_ops/tests/store_hook_tests.rs",
+          "diff_sha256": "b14234fa92c38410184d40bebb19ff877e71134013d1b2e0abef098f2b4781fa"
+        },
+        {
+          "path": "aida-core/src/store_hooks.rs",
+          "diff_sha256": "657336230a9079b7c4a1d63856ac7581911699af80534759a77a6c11bdee5e44"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1-040",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "The changed auto_commit_paths staging predicate lies in the traced per-operation commit helper. No frozen requirement resolves this ID. Its unknown contract cannot be inferred from the targeted-save comments; retain exclusion.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 584,
+                  "text": "/// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 613,
+                  "text": "/// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1408,
+                  "text": "// when one file moved. trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1847,
+                  "text": "// trace:BUG-1-040 trace:BUG-425 | ai:claude"
+                },
+                {
+                  "line": 1864,
+                  "text": "// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1920,
+                  "text": "// trace:BUG-1-040 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 584,
+                  "text": "/// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 613,
+                  "text": "/// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1408,
+                  "text": "// when one file moved. trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1847,
+                  "text": "// trace:BUG-1-040 trace:BUG-425 | ai:claude"
+                },
+                {
+                  "line": 1864,
+                  "text": "// trace:BUG-1-040 | ai:claude"
+                },
+                {
+                  "line": 1920,
+                  "text": "// trace:BUG-1-040 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "BUG-1164",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "auto_commit_paths still stages each path through the same git_ops::add_all call. Stale-index-lock recovery, store-write serialization and retries are unchanged; the new hardened builder is for the subsequent diff --cached predicate, not staging or lock recovery.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 627,
+                  "text": "// the same stale-index-lock recovery as bulk saves. trace:BUG-1164 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 627,
+                  "text": "// the same stale-index-lock recovery as bulk saves. trace:BUG-1164 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1164",
+            "agreed_id": "BUG-1164",
+            "title": "A stale .aida-store git index.lock wedges EVERY subsequent drain spec (fast-fail on 'git add failed: index.lock: File exists')",
+            "execution_mode": "drive",
+            "tags": [
+              "aida-store",
+              "concurrency",
+              "drain",
+              "index-lock",
+              "reliability"
+            ],
+            "description_sha256": "590cf11bb525db97f8b82f62e01f8a4c4e4918359fd0a776e4f991b2f93b745e",
+            "object_sha256": "af104f29513b41e23e273e14b261bf3ca0997e445264d9baf957c737b1d3ad72"
+          }
+        },
+        {
+          "id": "BUG-1593",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "role_from_jsonl line-cap, structural-marker precedence and bare-role fallback remain unchanged. Store marker/version/cache and staged-diff changes neither scan transcripts nor choose a session role.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4346,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 4450,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5606,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5625,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5639,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4349,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 4453,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5609,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5628,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                },
+                {
+                  "line": 5642,
+                  "text": "// trace:BUG-1593 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1593",
+            "agreed_id": "BUG-1593",
+            "title": "role_from_jsonl scans an unbounded, still-growing transcript when the role is unresolved, so a session's reported role can change between calls",
+            "execution_mode": null,
+            "tags": [
+              "identity",
+              "parent:BUG-1521",
+              "ps"
+            ],
+            "description_sha256": "85147ee3c2b016ea02fe59f057820ab65bc97fd6dc6f30501f4822744eb2234d",
+            "object_sha256": "63d6881e90641826d303294394e25a6c365fcf68d78871e9d83dc1b9f43c0b2c"
+          }
+        },
+        {
+          "id": "BUG-1928",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The worktree Edit/Write permission rules, actual-root resolution, pool announcement and behavioral boundary tests remain unchanged. The change inside the settings wrapper marks a store before its version check; the frozen triage expressly assigns the store Bash-sandbox boundary to BUG-1929, separately from this permission-rule contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2445,
+                  "text": "// pool may have replaced. trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2453,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2567,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2716,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 6577,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2445,
+                  "text": "// pool may have replaced. trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2453,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2567,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 2719,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                },
+                {
+                  "line": 6580,
+                  "text": "// trace:BUG-1928 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1928",
+            "agreed_id": "BUG-1928",
+            "title": "Contained drain implementers are denied Edit/Write on their own worktree, so every contained headless phase 1 ships nothing",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "drain",
+              "factory:2026-10-11",
+              "regression-test-gap",
+              "sandbox",
+              "triaged:night"
+            ],
+            "description_sha256": "217b89323a1b458faa2e1b82f9df6b2950a41675f4327a4027ead2bda674a7a9",
+            "object_sha256": "59c2c56fb9873b51eda3e5f03fb1f1bfd7200721e00344e60929ccb98e7901f5"
+          }
+        },
+        {
+          "id": "BUG-1929",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Frozen operator round-4 decision requires every host store git call to use the hardened builder; round-8 requires GIT_ATTR_SOURCE hardening. auto_commit_paths now uses host_git_command for the staged predicate and the raw-call guard adds git_backend.rs. The earlier marker plus expiring host-version input also hardens this host-over-sandbox-writable-store boundary. Existing write paths and hook pinning remain unchanged, but this is a direct shared security-contract touch.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2574,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 2582,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 2730,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 2767,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2574,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 2582,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 2733,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 2770,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+              "side": "base",
+              "blob_sha256": "a8a59f20d8a5121aee9472766f693ded35d0557281df25918712738f1a5021d5",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 27,
+                  "text": "//! trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 284,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 296,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 309,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 518,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 539,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 562,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 641,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 671,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 728,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 738,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 787,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 944,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1016,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1093,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1153,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+              "side": "head",
+              "blob_sha256": "5a461096565ddb9aa72616dd55f7b59846f7a12b4bd3723523ec7b4ed219a25f",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 27,
+                  "text": "//! trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 284,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 296,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 309,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 518,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 539,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 562,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 641,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 671,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 728,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 738,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 787,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 944,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1017,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1094,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1154,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 590,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 604,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 618,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 645,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 590,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 604,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 618,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 645,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops/tests/store_hook_tests.rs",
+              "side": "base",
+              "blob_sha256": "bbff85cb7e05f5bd9ddad8d040e9b0a1f672b0d7db9a848c64fecd89af2b62dc",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 38,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 103,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 153,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 185,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 324,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 332,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 340,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 348,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 398,
+                  "text": "// and group-write by any other group still refuse. trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 430,
+                  "text": "// still refuse. trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 465,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 491,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 529,
+                  "text": "// to the host; a writable one commits as before. trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops/tests/store_hook_tests.rs",
+              "side": "head",
+              "blob_sha256": "d7c2bc6fb83352e69d7137dfab76b1c4f7cb3d50d75ea266c891d2936aaaf7e7",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 38,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 103,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 153,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 185,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 324,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 332,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 340,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 348,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 398,
+                  "text": "// and group-write by any other group still refuse. trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 430,
+                  "text": "// still refuse. trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 465,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 491,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 529,
+                  "text": "// to the host; a writable one commits as before. trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/store_hooks.rs",
+              "side": "base",
+              "blob_sha256": "284d49d51b1273e0ee871733f9eabb822d37a0d2ce79eafcbf524996903c9b01",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 37,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 47,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 64,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 124,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 240,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/store_hooks.rs",
+              "side": "head",
+              "blob_sha256": "70a61482cbfa0ebccabd390964dbd509d6152b857298d91bb7e39bf80813582c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 37,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 47,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 64,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 124,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 240,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1929",
+            "agreed_id": "BUG-1929",
+            "title": "Contained/pool worktree sessions can't write the AIDA store or cache: .aida-store is a symlink to the main checkout, outside the write boundary",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "drain",
+              "factory:2026-10-11",
+              "sandbox",
+              "store",
+              "triaged:night"
+            ],
+            "description_sha256": "48a19019d39ca32997ea2c6cdb089a1a5cca5ff050707a967515d1e4dbf32a45",
+            "object_sha256": "b8eba79023ef405c88d106a8ed232d436183a33cc9b6d0019cccbbc52219e80e"
+          }
+        },
+        {
+          "id": "BUG-1971",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Real-HOME test handling, shared announcement/settings roots, no-git-root refusal and explicit resume cwd remain unchanged. The same write_roots first element still selects the same main checkout and store paths; moving its store marker before the git-version check does not change any of these four acceptance decisions.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1337,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1344,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1353,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1371,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1401,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1410,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1412,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1423,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 2447,
+                  "text": "// fallback. trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 2459,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3404,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3422,
+                  "text": "// write roots. trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3606,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1337,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1344,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1353,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1371,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1401,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1410,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1412,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 1423,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 2447,
+                  "text": "// fallback. trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 2459,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3407,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3425,
+                  "text": "// write roots. trace:BUG-1971 | ai:claude"
+                },
+                {
+                  "line": 3609,
+                  "text": "// trace:BUG-1971 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1971",
+            "agreed_id": "BUG-1971",
+            "title": "BUG-1928 follow-ups: run the real-claude boundary test once; announcement vs rule path on symlinks; cwd fallback outside git; resume path ignores its worktree",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "follow-up:advisor-review",
+              "groom:approve",
+              "groomed:night",
+              "sandbox"
+            ],
+            "description_sha256": "a5b140299322e12544c7b6118a0a56b551e54d29dc29ef72a63bd34929e8af8d",
+            "object_sha256": "b7a3663403080848fbdb7e2edf7bf9683c66029f7875bc036d2634036dea6736"
+          }
+        },
+        {
+          "id": "BUG-2006",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Every child environment set/strip and containment_applied decision remains unchanged. The marker and Git-version cache affect host store operations, not whether the launched agent exports AIDA_CONTAINED.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 937,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1021,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1299,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1451,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1488,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1545,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1613,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1686,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 2062,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 3257,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 3624,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4961,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 7894,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 7962,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8006,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8094,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8179,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8190,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8275,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8346,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8371,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8396,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8419,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8431,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 937,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1021,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1299,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1451,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1488,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1545,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1613,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 1686,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 2062,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 3260,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 3627,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4964,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 7897,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 7965,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8009,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8097,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8182,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8193,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8278,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8349,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8374,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8399,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8422,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 8434,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2006",
+            "agreed_id": "BUG-2006",
+            "title": "Contained launch paths other than queue work never export AIDA_CONTAINED=1, so contained-aware checks treat those sessions as uncontained",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "review-follow-up",
+              "sandbox"
+            ],
+            "description_sha256": "5ae6378e8d6e67237b4ea27ea418b7a6ad816b4e682c387f275306a6612a292e",
+            "object_sha256": "81325aa0893ca4a36ac12680adecc5bc56dde812c135198ef25e72c197ee5171"
+          }
+        },
+        {
+          "id": "BUG-2133",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "The full frozen monotonic-child ruling was read. Phase-driver/child launch builders, requested containment, refusal policy and parent-to-child propagation are unchanged. Store Git hardening changes host operations over a writable store, not the confinement or authority assigned to an agent child.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2091,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2118,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2186,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2203,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2366,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 3514,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 8295,
+                  "text": "// per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2091,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2118,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2186,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2203,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 2366,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 3517,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                },
+                {
+                  "line": 8298,
+                  "text": "// per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2133",
+            "agreed_id": "BUG-2133",
+            "title": "Contained drain launches its phase_driver CI-fix and advisor child sessions uncontained",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "3d127c12b4a121f0bcd922a36d57b8191dbfde29abb08b71bd44c5ff12d5a00d",
+            "object_sha256": "f256156ba493d34bc7b5863d6b9891d780a9c1d9767999ad4a7e83099cc9d533"
+          }
+        },
+        {
+          "id": "BUG-2144",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Unsupported-vendor contained launch refusals and the agent-new continuation named by its cap ruling are unchanged. Earlier store marking and refreshed host-version gating do not change vendor capability decisions or downgrade a child.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1183,
+                  "text": "// trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 1247,
+                  "text": "// BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 1559,
+                  "text": "// refused, never downgraded. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 2164,
+                  "text": "// trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 3301,
+                  "text": "// BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 8196,
+                  "text": "// strips an ambient AIDA_CONTAINED. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 8295,
+                  "text": "// per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1183,
+                  "text": "// trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 1247,
+                  "text": "// BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 1559,
+                  "text": "// refused, never downgraded. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 2164,
+                  "text": "// trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 3304,
+                  "text": "// BUG-2144: refuse before the log file and tee exist. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 8199,
+                  "text": "// strips an ambient AIDA_CONTAINED. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 8298,
+                  "text": "// per the BUG-2133 ruling it is refused instead. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2144",
+            "agreed_id": "BUG-2144",
+            "title": "Contained codex/agy drain still runs its queue-work implementer and reviewer children uncontained (containment_applied silently false)",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "2a760153ed9f02d25b1fa1062aa5581fbfcebcc0d9baf88e7e9bc9e1bc9ea8c6",
+            "object_sha256": "1d630471cc21ffa72f11681b14289bfd32a72f638b445377338189d4bf6ba31f"
+          }
+        },
+        {
+          "id": "BUG-2146",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "load_agents_contained parse failures and drain/queue-work propagation remain unchanged. The changed cache reads git --version, not agents.toml; it introduces no malformed-config fallback.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2123,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 2138,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 2147,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2123,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 2138,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 2147,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2146",
+            "agreed_id": "BUG-2146",
+            "title": "A malformed agents.toml silently disables containment (load_agents_contained(..).unwrap_or(false))",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "b47b59c842305771527e0bcb62c6ce06b75a7a92c12548e955faaa804cf8e97a",
+            "object_sha256": "a30b28c1b06e4686da81644a9d7a36d37553a77c5c6bbd289a8f32728d7032e2"
+          }
+        },
+        {
+          "id": "BUG-675",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The queue_depth current-user path and GitBackend canonical-user helper are unchanged. Hardening the staged-diff command does not change queue ownership, case matching, identity fallback or displayed depth.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 713,
+                  "text": "// creating side effects). trace:BUG-675 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 713,
+                  "text": "// creating side effects). trace:BUG-675 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-675",
+            "agreed_id": "BUG-675",
+            "title": "BUG-89 identity unification: queue_depth's user-resolution path must match the queue list command path so it's always trustworthy (not just suppressed on mismatch \u2014 BUG-670 remainder)",
+            "execution_mode": null,
+            "tags": [
+              "bug-89",
+              "careful",
+              "from-audit",
+              "identity",
+              "queue"
+            ],
+            "description_sha256": "97df376846347fc44e1ae02096a3a8403f9de16e8ed4ddfc277e8d5e95ed7921",
+            "object_sha256": "04e30fdb63ba2b62a84ca333be670651018adb382abaf83f4ad1111b35b1d753"
+          }
+        },
+        {
+          "id": "CR-8",
+          "policy_reason": "history unreadable: no version of CR-8 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Filing provenance stamping/preservation is unchanged and frozen current alias CR-1-173 describes that contract. The frozen policy census cannot read history under CR-8; the apparent separation does not resolve historical supervision.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 895,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 918,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 1235,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 1878,
+                  "text": "// already stamped keeps its stamp). trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 2435,
+                  "text": "// for the whole batch; write-once). trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 3766,
+                  "text": "// trace:CR-8 | ai:claude \u2014 a new spec gets filing provenance, an edit"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 895,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 918,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 1235,
+                  "text": "// trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 1878,
+                  "text": "// already stamped keeps its stamp). trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 2435,
+                  "text": "// for the whole batch; write-once). trace:CR-8 | ai:claude"
+                },
+                {
+                  "line": 3766,
+                  "text": "// trace:CR-8 | ai:claude \u2014 a new spec gets filing provenance, an edit"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "CR-1-173",
+            "agreed_id": "CR-8",
+            "title": "Stamp filing provenance on every spec: code HEAD SHA, branch, dirty flag, aida version and build SHA, filing agent/session",
+            "execution_mode": null,
+            "tags": [
+              "intake:requester",
+              "provenance",
+              "spec-model",
+              "traceability"
+            ],
+            "description_sha256": "986d71efed71d591a525f3035ca95f23936637e04d1dc7a7582f66dfeff39186",
+            "object_sha256": "d93f96faf906b0f7148da90db0155fd8705a633f2def189fca965fd6ae957795"
+          }
+        },
+        {
+          "id": "FR-1-002",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Trace belongs to unchanged add_relationship/dependency-cycle behavior and its test. No frozen object resolves the contract, so apparent distance from auto_commit_paths cannot establish incidental status.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 812,
+                  "text": "///   trace:FR-1-002 | ai:claude"
+                },
+                {
+                  "line": 2266,
+                  "text": "/// trace:FR-1-002 | ai:claude"
+                },
+                {
+                  "line": 2998,
+                  "text": "// trace:FR-1-002 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 812,
+                  "text": "///   trace:FR-1-002 | ai:claude"
+                },
+                {
+                  "line": 2266,
+                  "text": "/// trace:FR-1-002 | ai:claude"
+                },
+                {
+                  "line": 2998,
+                  "text": "// trace:FR-1-002 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-1-043",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged session module header and dispatcher carry this trace; no frozen object resolves it. Keep the conservative blocker despite store-specific changed hunks.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 15,
+                  "text": "//! trace:FR-1-043 | ai:claude"
+                },
+                {
+                  "line": 4448,
+                  "text": "// trace:FR-1-043 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 15,
+                  "text": "//! trace:FR-1-043 | ai:claude"
+                },
+                {
+                  "line": 4451,
+                  "text": "// trace:FR-1-043 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-1-044",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace belongs to unchanged session registration/title and health-check functions. No frozen object resolves it; absence of a local edit does not establish the unknown contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 647,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                },
+                {
+                  "line": 824,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                },
+                {
+                  "line": 3685,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 647,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                },
+                {
+                  "line": 824,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                },
+                {
+                  "line": 3688,
+                  "text": "/// trace:FR-1-044 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "STORY-605",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "allowed_hosts lookup, allowedDomains settings, empty-allowlist omission and network keys are unchanged. The wrapper gains a store marker side effect on old Git, but produces the same network settings; the egress allowlist contract is untouched.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2557,
+                  "text": "// allowlist \u2014 i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 2615,
+                  "text": "/// `aida sandbox` throwaway-store command's vocabulary. trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 2708,
+                  "text": "/// total so the \"empty \u2192 unchanged\" invariant is unit-tested. trace:STORY-605"
+                },
+                {
+                  "line": 5216,
+                  "text": "// trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 5520,
+                  "text": "// base sandbox keys intact. trace:STORY-605 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2557,
+                  "text": "// allowlist \u2014 i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 2618,
+                  "text": "/// `aida sandbox` throwaway-store command's vocabulary. trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 2711,
+                  "text": "/// total so the \"empty \u2192 unchanged\" invariant is unit-tested. trace:STORY-605"
+                },
+                {
+                  "line": 5219,
+                  "text": "// trace:STORY-605 | ai:claude"
+                },
+                {
+                  "line": 5523,
+                  "text": "// base sandbox keys intact. trace:STORY-605 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-605",
+            "agreed_id": "STORY-605",
+            "title": "Sandbox slice 1: harden the existing contained posture with a default-deny network-egress allowlist",
+            "execution_mode": null,
+            "tags": [
+              "agent-execution",
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "e32d9abc7e25a866a7b0b0b29ee20ff4d5daca36963c4ca2e60dddbbf552849f",
+            "object_sha256": "30f170886018b530dd44826a873ca2125766614e00c1a090f9225f161812a53e"
+          }
+        },
+        {
+          "id": "STORY-612",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: whole-process bwrap program/args, read-only-root and write binds, os_wrap opt-in and userns/bwrap preflight are unchanged. The changed Claude settings helper manages its native Bash sandbox/store, not the separate OS-wrapper contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1120,
+                  "text": "// trace:BUG-705 STORY-683 STORY-612 TASK-1081 | ai:claude"
+                },
+                {
+                  "line": 1321,
+                  "text": "/// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2835,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2840,
+                  "text": "/// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2885,
+                  "text": "/// it). trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3017,
+                  "text": "// trace:STORY-612 trace:TASK-1081 | ai:claude"
+                },
+                {
+                  "line": 3115,
+                  "text": "/// and never fall through to an unconfined launch. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3223,
+                  "text": "/// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3602,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 5365,
+                  "text": "// no such bind (unchanged STORY-612 posture). trace:TASK-809 | ai:claude"
+                },
+                {
+                  "line": 7589,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7642,
+                  "text": "// slice-1 empty-allowlist test. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7679,
+                  "text": "/// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7704,
+                  "text": "// a pass. trace:STORY-612 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1120,
+                  "text": "// trace:BUG-705 STORY-683 STORY-612 TASK-1081 | ai:claude"
+                },
+                {
+                  "line": 1321,
+                  "text": "/// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2838,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2843,
+                  "text": "/// opt-in, mirroring the slice-1 `allowed_hosts` rule. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 2888,
+                  "text": "/// it). trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3020,
+                  "text": "// trace:STORY-612 trace:TASK-1081 | ai:claude"
+                },
+                {
+                  "line": 3118,
+                  "text": "/// and never fall through to an unconfined launch. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3226,
+                  "text": "/// crate). Returns the first matching path, or `None`. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 3605,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 5368,
+                  "text": "// no such bind (unchanged STORY-612 posture). trace:TASK-809 | ai:claude"
+                },
+                {
+                  "line": 7592,
+                  "text": "// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7645,
+                  "text": "// slice-1 empty-allowlist test. trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7682,
+                  "text": "/// trace:STORY-612 | ai:claude"
+                },
+                {
+                  "line": 7707,
+                  "text": "// a pass. trace:STORY-612 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-612",
+            "agreed_id": "STORY-612",
+            "title": "Sandbox slice 2: OS boundary (bubblewrap) around the whole headless claude -p process",
+            "execution_mode": null,
+            "tags": [
+              "agent-execution",
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security",
+              "supervised"
+            ],
+            "description_sha256": "f2aa5e7acc9c49d7e412fb79ac3031fd6c0df07bdb3e51eb5e7008aee24cddbb",
+            "object_sha256": "e8dd44b9e9afe0fca803cce7995a00ebb872dd6612eef0e8a65be61638038fee"
+          }
+        },
+        {
+          "id": "STORY-615",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: managed_domains_only lookup and allowManagedDomainsOnly JSON emission remain unchanged. No managed-settings or network-egress decision changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2635,
+                  "text": "/// trace:STORY-615 | ai:claude"
+                },
+                {
+                  "line": 2745,
+                  "text": "// posture is unchanged (the pre-STORY-605 shape). trace:STORY-615"
+                },
+                {
+                  "line": 5248,
+                  "text": "// trace:STORY-615 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2638,
+                  "text": "/// trace:STORY-615 | ai:claude"
+                },
+                {
+                  "line": 2748,
+                  "text": "// posture is unchanged (the pre-STORY-605 shape). trace:STORY-615"
+                },
+                {
+                  "line": 5251,
+                  "text": "// trace:STORY-615 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-615",
+            "agreed_id": "STORY-615",
+            "title": "Sandbox: headless default-deny egress via managed-settings network.allowManagedDomainsOnly",
+            "execution_mode": null,
+            "tags": [
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "f30894ab61ca70b6967ae13701a967ad2d6cf6c7e6badbd021ae514aadb813cc",
+            "object_sha256": "5e30be3403ef81f4d4dfda356349bf4194ecbebaa6efd322b86ad888701ab590"
+          }
+        },
+        {
+          "id": "STORY-617",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: read_allowlist resolution, default-absent binds and strict read-confinement tests remain unchanged. Store marker ordering and host Git hardening do not change filesystem read visibility.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2649,
+                  "text": "/// instead of `--ro-bind / /`. trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 2901,
+                  "text": "/// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 2918,
+                  "text": "/// Pure + total so both arms are unit-tested without spawning. trace:STORY-617"
+                },
+                {
+                  "line": 5415,
+                  "text": "// changed.) trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 5442,
+                  "text": "// net. Host secrets outside the allowlist are simply absent. trace:STORY-617"
+                },
+                {
+                  "line": 5498,
+                  "text": "// trace:STORY-617 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2652,
+                  "text": "/// instead of `--ro-bind / /`. trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 2904,
+                  "text": "/// the bwrap `--dev`/`--proc`/`--tmpfs` flags. trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 2921,
+                  "text": "/// Pure + total so both arms are unit-tested without spawning. trace:STORY-617"
+                },
+                {
+                  "line": 5418,
+                  "text": "// changed.) trace:STORY-617 | ai:claude"
+                },
+                {
+                  "line": 5445,
+                  "text": "// net. Host secrets outside the allowlist are simply absent. trace:STORY-617"
+                },
+                {
+                  "line": 5501,
+                  "text": "// trace:STORY-617 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-617",
+            "agreed_id": "STORY-617",
+            "title": "Sandbox: strict read-confinement hardening for os_wrap (default-absent FS bind-allowlist)",
+            "execution_mode": null,
+            "tags": [
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "effcace3fd56b79f45f8005032f4509413a7f60f531ab3f0cd2ce325266f41b6",
+            "object_sha256": "4f1c725bcbf9fea47263056b72f4ebf07215fbe46743fe90eb33a3a472807d15"
+          }
+        },
+        {
+          "id": "STORY-665",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Sandbox setup/remediation strings, sysctl drop-in, doctor guidance and live OS-wrapper smoke commands remain unchanged. No new-machine sandbox configuration or setup path is edited.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3209,
+                  "text": "/// trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 3214,
+                  "text": "/// `/etc/sysctl.d` drop-in. trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 3219,
+                  "text": "/// The Debian/Ubuntu install command for bubblewrap. trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 5184,
+                  "text": "// and they can't silently drift apart. trace:STORY-665 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3212,
+                  "text": "/// trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 3217,
+                  "text": "/// `/etc/sysctl.d` drop-in. trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 3222,
+                  "text": "/// The Debian/Ubuntu install command for bubblewrap. trace:STORY-665 | ai:claude"
+                },
+                {
+                  "line": 5187,
+                  "text": "// and they can't silently drift apart. trace:STORY-665 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-665",
+            "agreed_id": "STORY-665",
+            "title": "Guided bwrap sandbox setup: doctor surfaces the exact remediation + a repeatable install path for new machines",
+            "execution_mode": null,
+            "tags": [
+              "aida:doctor",
+              "aida:init",
+              "bubblewrap",
+              "from-operator",
+              "onboarding",
+              "parent:SPIKE-68",
+              "sandbox"
+            ],
+            "description_sha256": "dca3b7ffe3fa0e7943d4cc33ff4bdcc37782dfb6420a85ac161d87a354742cf5",
+            "object_sha256": "a91c35f059bd6d15e06a7bab4737ed6e6cc28798c6c6356b125725e55a762b7e"
+          }
+        },
+        {
+          "id": "STORY-994",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Terminal capture, emulator identity, title apply/restore and opt-out behavior remain unchanged. The store Git version is not a terminal identity and does not affect registry terminal fields.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 1047,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 5314,
+                  "text": "// trace:STORY-994 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 1047,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 5317,
+                  "text": "// trace:STORY-994 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-994",
+            "agreed_id": "STORY-994",
+            "title": "Capture terminal identity at agent launch and title the tab so a human can find the session",
+            "execution_mode": "drain",
+            "tags": [
+              "from-product",
+              "recommend:approve",
+              "registry",
+              "risk:low",
+              "session",
+              "terminal",
+              "ux"
+            ],
+            "description_sha256": "703c76fb91e7bbfd36c903efbf4bd59becde9da375bafc20a0f5de4e5ec90309",
+            "object_sha256": "ded116fb0f135723b73d403d55dc95900645141a6b86b4d05acc39e9dc0f2f64"
+          }
+        },
+        {
+          "id": "TASK-1169",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: foreground CI waits, background wait ceiling injection, timeout punt behavior and all traced launcher env assignments remain unchanged. The 60-second Git-version TTL is a different cache, not the integration wait ceiling.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1279,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                },
+                {
+                  "line": 3271,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                },
+                {
+                  "line": 3611,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1279,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                },
+                {
+                  "line": 3274,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                },
+                {
+                  "line": 3614,
+                  "text": "// trace:TASK-1169 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1169",
+            "agreed_id": "TASK-1169",
+            "title": "drain integration-wait architecture: foreground-block CI/merge waits + bounded ceiling + punt-not-abort, all launcher-set (BUG-755 follow-up, ratified)",
+            "execution_mode": "guided",
+            "tags": [
+              "aida:burndown",
+              "followup:BUG-755",
+              "from-operator",
+              "orchestration",
+              "reliability"
+            ],
+            "description_sha256": "e594ba4025d7e629871c8e85d9706369d5272d035c0872b39a8740d25d1a0b59",
+            "object_sha256": "56ee531097c68097a531fffcaa1a5f2dec03a2dd59983029084e7c2580ee5d16"
+          }
+        },
+        {
+          "id": "TASK-152",
+          "policy_reason": "history unreadable: no version of TASK-152 in the store's history",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace is the unchanged live transcript-role correlation. Frozen current alias TASK-1-128 resolves its description, but historical supervision under TASK-152 is unavailable and remains excluded.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4218,
+                  "text": "// trace:TASK-152 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4221,
+                  "text": "// trace:TASK-152 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-128",
+            "agreed_id": "TASK-152",
+            "title": "aida ps and session conversations report different roles for the same pid (lease role vs jsonl hook role)",
+            "execution_mode": "drain",
+            "tags": [
+              "from-advisor:STORY-993",
+              "from-product",
+              "kind:observation",
+              "linked:STORY-993",
+              "role",
+              "session",
+              "severity:minor"
+            ],
+            "description_sha256": "4aa19ec681d4507aa29b5865802d6f04796cb930452f1af63d237b380a9b3fd3",
+            "object_sha256": "b435b79a1197112e159d6ca0ca8601563ddd8dddfbe0cce4c38393c140822827"
+          }
+        },
+        {
+          "id": "TASK-153",
+          "policy_reason": "history unreadable: no version of TASK-153 in the store's history",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace is the unchanged lease-manifest/resumed-transcript role resolution. Frozen current alias TASK-1-129 does not repair absent history under TASK-153; retain uncertainty.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4231,
+                  "text": "// trace:TASK-153 | ai:codex"
+                },
+                {
+                  "line": 4237,
+                  "text": "// trace:TASK-153 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4234,
+                  "text": "// trace:TASK-153 | ai:codex"
+                },
+                {
+                  "line": 4240,
+                  "text": "// trace:TASK-153 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-129",
+            "agreed_id": "TASK-153",
+            "title": "aida ps still shows lease role for a long-lived advisor whose transcript conversations calls advisor",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:general",
+              "kind:observation"
+            ],
+            "description_sha256": "f625d7f7965624ad84ae5caae7263c2b1ce76580a3f5958ce2826d8010d8179d",
+            "object_sha256": "05487415eba756196ede8e47dd2e11cb778cfb9efd70920e8c3e2fdbbdccf64c"
+          }
+        },
+        {
+          "id": "TASK-1594",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: subject-at-TTY issuance, grant env handling, role/help hygiene and hold-authority carve-out are unchanged. No grant or hold input is consumed by the new staged-diff builder or store marker.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 865,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 968,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 1505,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 4988,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 865,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 968,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 1505,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                },
+                {
+                  "line": 4991,
+                  "text": "// trace:TASK-1594 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1594",
+            "agreed_id": "TASK-1594",
+            "title": "STORY-1473 review follow-ups: seat-authority hygiene findings and three design confirmations",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "a97af236dc7d2e5d0caf500f449a0f470e228f8624413b85700d53f88956d00e",
+            "object_sha256": "92fb3636340d2f9c9ea82eed4d87ba18dd4a0135d1f20e198dbc59eb3945e04d"
+          }
+        },
+        {
+          "id": "TASK-1775",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Moves mark_store_contained before ensure_git_supports_contained, adds an old/unparseable-Git marker fixture, routes git_backend staged diff through host_git_command with guard coverage and replaces process-lifetime version caching with a 60-second TTL. These directly implement all three named hardening items.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2596,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+              "side": "head",
+              "blob_sha256": "5a461096565ddb9aa72616dd55f7b59846f7a12b4bd3723523ec7b4ed219a25f",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 974,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                },
+                {
+                  "line": 1195,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 637,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops/tests/store_hook_tests.rs",
+              "side": "head",
+              "blob_sha256": "d7c2bc6fb83352e69d7137dfab76b1c4f7cb3d50d75ea266c891d2936aaaf7e7",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 753,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/store_hooks.rs",
+              "side": "head",
+              "blob_sha256": "70a61482cbfa0ebccabd390964dbd509d6152b857298d91bb7e39bf80813582c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 290,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                },
+                {
+                  "line": 298,
+                  "text": "// trace:TASK-1775 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1775",
+            "agreed_id": "TASK-1775",
+            "title": "BUG-2131 hardening: write the contained-store marker before the git version check; route git_backend's raw diff --cached through host_git_command",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "security",
+              "store"
+            ],
+            "description_sha256": "ee321a8b6394b5ce1f700eac5423279b71734eb273b70ef38b41de62e08a93ff",
+            "object_sha256": "fd9e2750b5b4a55a33a989ae8ae8f45684b8c3022184e12a37bc20df7ed58ec3"
+          }
+        },
+        {
+          "id": "TASK-845",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: person registry, canonical-user alias resolution and owner matching remain unchanged. The staged predicate does not alter or supply an identity mapping.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 2833,
+                  "text": "// trace:TASK-845 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 2833,
+                  "text": "// trace:TASK-845 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-845",
+            "agreed_id": "TASK-845",
+            "title": "Cross-machine person unification: reconcile one human across different $USER/user_id per machine",
+            "execution_mode": null,
+            "tags": [
+              "node-identity",
+              "parent:EPIC-47",
+              "team"
+            ],
+            "description_sha256": "8b10c809319a32b536d50c4002540c5b2006ba05fa76afb5eba07982450c3f61",
+            "object_sha256": "6d297380ab224d61d1ef8382ddd6e991b58e5332db363f438e46f2b061d988c9"
+          }
+        },
+        {
+          "id": "TASK-864",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: interactive os_wrapped_program_and_args, os_wrap_enabled selection and missing-bwrap refusal are unchanged. Native contained settings store marking is separate from choosing/wiring the OS wrapper.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3035,
+                  "text": "/// trace:TASK-864 | ai:claude"
+                },
+                {
+                  "line": 7835,
+                  "text": "/// host) when os_wrap is ON. trace:TASK-864 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3038,
+                  "text": "/// trace:TASK-864 | ai:claude"
+                },
+                {
+                  "line": 7838,
+                  "text": "/// host) when os_wrap is ON. trace:TASK-864 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-864",
+            "agreed_id": "TASK-864",
+            "title": "Wire bwrap os_wrap into the interactive agent-launch path (aida agent new), not just headless drains",
+            "execution_mode": null,
+            "tags": [
+              "bubblewrap",
+              "from-spike",
+              "parent:SPIKE-68",
+              "reliability",
+              "sandbox"
+            ],
+            "description_sha256": "c8dfd8088f2d02a515700f202f71fe1630c10815f3957faa89801c1879c7347a",
+            "object_sha256": "73e2a82cdbebb2959ef4a4c460409fb8f9fe813517bd59b59fc4308b711ef649"
+          }
+        },
+        {
+          "id": "TASK-866",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: os_wrap/read_allowlist/managed_domains_only helpers and config-show policy rows remain unchanged. A Git-version TTL is not a new exposed contained configuration knob.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2841,
+                  "text": "/// trace:TASK-866 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2844,
+                  "text": "/// trace:TASK-866 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-866",
+            "agreed_id": "TASK-866",
+            "title": "Expose [contained] os_wrap / read_allowlist / managed_domains_only in aida config show",
+            "execution_mode": null,
+            "tags": [
+              "aida:config",
+              "bubblewrap",
+              "from-spike",
+              "parent:SPIKE-68"
+            ],
+            "description_sha256": "b22c27e7f427ea80520c121ceaf5c3e09be42560f28fa4fdd304f4a2022a2da6",
+            "object_sha256": "dada2fe96edc02a745d21e610c6998b0244aa21ab4b34a9408fc0faa2509ecba"
+          }
+        },
+        {
+          "id": "TASK-876",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: AIDA_OS_WRAP parsing/precedence and os_wrap_enabled tests are unchanged. No per-host confinement override changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "base",
+              "blob_sha256": "c4be43161372d40d317caf25db7f92561411fc3e6a4b277894ac3db974c0a307",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2852,
+                  "text": "/// trace:TASK-876 | ai:claude"
+                },
+                {
+                  "line": 2866,
+                  "text": "/// surrounding whitespace tolerated. trace:TASK-876 | ai:claude"
+                },
+                {
+                  "line": 7778,
+                  "text": "/// they run serially under a shared mutex. trace:TASK-876 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session.rs",
+              "side": "head",
+              "blob_sha256": "2c4ed430f62823e3607351019df9938f20eeea07dcbba99b39d01371f624386d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2855,
+                  "text": "/// trace:TASK-876 | ai:claude"
+                },
+                {
+                  "line": 2869,
+                  "text": "/// surrounding whitespace tolerated. trace:TASK-876 | ai:claude"
+                },
+                {
+                  "line": 7781,
+                  "text": "/// they run serially under a shared mutex. trace:TASK-876 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-876",
+            "agreed_id": "TASK-876",
+            "title": "Per-machine os_wrap override (AIDA_OS_WRAP env) so the sandbox can be enabled per-host without editing shared config",
+            "execution_mode": null,
+            "tags": [
+              "aida:config",
+              "bubblewrap",
+              "from-operator",
+              "parent:SPIKE-68",
+              "sandbox"
+            ],
+            "description_sha256": "f1c9189a83bc6b318d8c3e12a552a163350606813c1ac095f529dc9a6860dd99",
+            "object_sha256": "66b7a85a8b820e2e39838e4dac3ee25b89f80c810712630cba36c38c64cd2eae"
+          }
+        },
+        {
+          "id": "TASK-951",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "canonical_user and all queue/owner/assignment comparison and filename matching boundaries remain unchanged. auto_commit_paths hardens the later Git command without altering case folding, storage casing or identity selection.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "base",
+              "blob_sha256": "37f7e64b9cbd3e77aa5430db843ffcc43c89e4624f409f4c95a4d466aff0bc2b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 708,
+                  "text": "// trace:TASK-951 | ai:claude"
+                },
+                {
+                  "line": 1937,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary so `Joe` finds the"
+                },
+                {
+                  "line": 1976,
+                  "text": "// trace:TASK-951 \u2014 resolve the FILENAME case-insensitively (so `Joe`"
+                },
+                {
+                  "line": 2036,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2074,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2112,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2180,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2784,
+                  "text": "// trace:TASK-951 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/git_backend.rs",
+              "side": "head",
+              "blob_sha256": "5d3de7faf09e03afc65cf43d05a37291fddfad403350618906c4116560aa83ee",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 414,
+                  "text": "// trace:BUG-675 trace:TASK-951 trace:TASK-845 | ai:claude"
+                },
+                {
+                  "line": 708,
+                  "text": "// trace:TASK-951 | ai:claude"
+                },
+                {
+                  "line": 1937,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary so `Joe` finds the"
+                },
+                {
+                  "line": 1976,
+                  "text": "// trace:TASK-951 \u2014 resolve the FILENAME case-insensitively (so `Joe`"
+                },
+                {
+                  "line": 2036,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2074,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2112,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2180,
+                  "text": "// trace:TASK-951 \u2014 fold case at the lookup boundary."
+                },
+                {
+                  "line": 2784,
+                  "text": "// trace:TASK-951 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-951",
+            "agreed_id": "TASK-951",
+            "title": "Case-insensitive user identity matching in queue/queries/owner comparisons",
+            "execution_mode": null,
+            "tags": [
+              "from-operator",
+              "identity",
+              "queue",
+              "user-matching"
+            ],
+            "description_sha256": "0095545ff1cb7a5afa5cc7716e3bb69a3223cf7cfd70f2bd4fcd45b573b33dff",
+            "object_sha256": "50fb1c8e94c011d7e91afc8a845e59d25b76fbeb13635d1726337955c63f9f22"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2652,
+      "base": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+      "head": "53548583acbfc53a30149900edf75e3e15d47a7c",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(git): anchor the shared info/exclude .aida entry and migrate the legacy line (BUG-2141)",
+      "full_blocker_count": 18,
+      "scoped_blocker_count": 18,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2141",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "Anchors the root .aida runtime pattern, migrates legacy unanchored entries in the shared common-dir exclude, preserves template/discipline/config addability and adds behavioral Git ignore/staging fixtures. Direct ordinary named bug; no named refusal.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2141",
+            "agreed_id": "BUG-2141",
+            "title": "ensure_aida_runtime_excluded writes an unanchored '.aida/' into the shared info/exclude, silently ignoring tracked .aida/discipline and template masters in every worktree",
+            "execution_mode": null,
+            "tags": [
+              "git",
+              "scaffolding"
+            ],
+            "description_sha256": "16afc014059b23c9b6c01c6ff2f803d16a2d80977c3d1471200aef85cd00cc4e",
+            "object_sha256": "e9d0adf571085d457ff693659b9b85cf7053e071eb3f44802f8e5b24f008d978"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-core/src/git_ops.rs",
+          "diff_sha256": "1bcf34b8d65437a9e39779bdbca028b4aa6210f5bd925624c97ba82e37a6808e"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1-051",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged deprecated pull wrapper carries the trace; the diff edits shared runtime exclusion migration and tests. No frozen object resolves this contract, so its apparent distance remains unresolved.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1617,
+                  "text": "/// trace:BUG-1-051 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1673,
+                  "text": "/// trace:BUG-1-051 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "BUG-1-069",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged bootstrap/join local-config commit and pull-rebase paths carry this trace. No frozen object resolves it; do not substitute a contract inferred from surrounding comments.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3689,
+                  "text": "// trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 3693,
+                  "text": "// which pull --rebase rejects. trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 3924,
+                  "text": "// pull --rebase applies cleanly. trace:BUG-1-069"
+                },
+                {
+                  "line": 4166,
+                  "text": "// stale local commit. trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 4170,
+                  "text": "// which pull --rebase rejects. trace:BUG-1-069 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3745,
+                  "text": "// trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 3749,
+                  "text": "// which pull --rebase rejects. trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 3980,
+                  "text": "// pull --rebase applies cleanly. trace:BUG-1-069"
+                },
+                {
+                  "line": 4222,
+                  "text": "// stale local commit. trace:BUG-1-069 | ai:claude"
+                },
+                {
+                  "line": 4226,
+                  "text": "// which pull --rebase rejects. trace:BUG-1-069 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "BUG-1164",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "add_all stale-index-lock recovery, backoff, stale-lock liveness and tests are unchanged. Rewriting info/exclude patterns neither removes an index lock nor changes concurrent store-writer serialization.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 557,
+                  "text": "// spec in the drain. trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 1928,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 1975,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5585,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5606,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5630,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 613,
+                  "text": "// spec in the drain. trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 1984,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 2031,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5783,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5804,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                },
+                {
+                  "line": 5828,
+                  "text": "// trace:BUG-1164 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1164",
+            "agreed_id": "BUG-1164",
+            "title": "A stale .aida-store git index.lock wedges EVERY subsequent drain spec (fast-fail on 'git add failed: index.lock: File exists')",
+            "execution_mode": "drive",
+            "tags": [
+              "aida-store",
+              "concurrency",
+              "drain",
+              "index-lock",
+              "reliability"
+            ],
+            "description_sha256": "590cf11bb525db97f8b82f62e01f8a4c4e4918359fd0a776e4f991b2f93b745e",
+            "object_sha256": "af104f29513b41e23e273e14b261bf3ca0997e445264d9baf957c737b1d3ad72"
+          }
+        },
+        {
+          "id": "BUG-1535",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Taken-short-ID collection, ambiguity detection, agreed-ID allocation and collision fixtures remain unchanged. Anchoring a runtime directory ignore pattern does not change which store object resolves an ID or the disposition of old collisions.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4208,
+                  "text": "// trace:BUG-1535 trace:BUG-82 | ai:claude"
+                },
+                {
+                  "line": 5031,
+                  "text": "// store. trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 5098,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6099,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6150,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6183,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4264,
+                  "text": "// trace:BUG-1535 trace:BUG-82 | ai:claude"
+                },
+                {
+                  "line": 5087,
+                  "text": "// store. trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 5154,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6297,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6348,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                },
+                {
+                  "line": 6381,
+                  "text": "// trace:BUG-1535 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1535",
+            "agreed_id": "BUG-1535",
+            "title": "Seven spec IDs resolve to two different requirements each: the merge-gate assigned agreed_ids that collide with existing native spec_ids, and aida show silently returns the rejected test fixture",
+            "execution_mode": null,
+            "tags": [
+              "aida:show",
+              "closure:pending",
+              "identity",
+              "severity:major",
+              "substrate-integrity"
+            ],
+            "description_sha256": "e21b412025dcd5046a450ef2274746c08ceadc63b2cc6b1de87bc9d8f5f2f665",
+            "object_sha256": "6fd15c85fa1c2e6580500d4c024c4320fe760be1fd9687e9497b9ec12ced2046"
+          }
+        },
+        {
+          "id": "BUG-1929",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Host_git_command hardening, hooks pinning/verification, store commit deferral, embedded-repo/gitlink guards and contained writable roots remain unchanged. ensure_store_lock_excluded still calls append_exclude_entries with the same lock pattern; its new delegate receives an empty migration list and preserves its result. No store-host security decision changes.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 69,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 80,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 101,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 162,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 191,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 196,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 202,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 257,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 274,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 301,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 315,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 321,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 375,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 533,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 546,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 601,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 629,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 647,
+                  "text": "refuse_embedded_repos_for_push(repo, \"HEAD\")?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 758,
+                  "text": "refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1018,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1042,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1079,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1114,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1724,
+                  "text": "let mut child = host_git_command(repo) // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1867,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1883,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4297,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4303,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4430,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4907,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4927,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4946,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8415,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8459,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8582,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8595,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8614,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8793,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8832,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8870,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8883,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8900,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 69,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 80,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 101,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 162,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 191,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 196,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 202,
+                  "text": "// trace:BUG-1929 | ai:codex"
+                },
+                {
+                  "line": 257,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 274,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 301,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 315,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 321,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 375,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 589,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 602,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 657,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 685,
+                  "text": "refuse_embedded_repos(repo)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 703,
+                  "text": "refuse_embedded_repos_for_push(repo, \"HEAD\")?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 814,
+                  "text": "refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1074,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1098,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1135,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1170,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1780,
+                  "text": "let mut child = host_git_command(repo) // trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1923,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 1939,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4353,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4359,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4486,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4963,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 4983,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 5002,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8613,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8657,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8780,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8793,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8812,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 8991,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 9030,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 9068,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 9081,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 9098,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1929",
+            "agreed_id": "BUG-1929",
+            "title": "Contained/pool worktree sessions can't write the AIDA store or cache: .aida-store is a symlink to the main checkout, outside the write boundary",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "drain",
+              "factory:2026-10-11",
+              "sandbox",
+              "store",
+              "triaged:night"
+            ],
+            "description_sha256": "48a19019d39ca32997ea2c6cdb089a1a5cca5ff050707a967515d1e4dbf32a45",
+            "object_sha256": "b8eba79023ef405c88d106a8ed232d436183a33cc9b6d0019cccbbc52219e80e"
+          }
+        },
+        {
+          "id": "BUG-2003",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Hook-refresh custom-hook problem aggregation and external hooksPath notes are unchanged. info/exclude is resolved through the same host builder; changing ignore entries does not choose, refresh or report hook directories.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 4350,
+                  "text": "// trace:BUG-1977 trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4457,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4542,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4716,
+                  "text": "// trace:BUG-2003 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 8266,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 8328,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4406,
+                  "text": "// trace:BUG-1977 trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4513,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4598,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 4772,
+                  "text": "// trace:BUG-2003 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 8464,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                },
+                {
+                  "line": 8526,
+                  "text": "// trace:BUG-2003 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2003",
+            "agreed_id": "BUG-2003",
+            "title": "Hook refresh follow-ups from the BUG-1977 review: custom-hook refusal hides the stale list; core.hooksPath followed silently",
+            "execution_mode": "guided",
+            "tags": [
+              "follow-up",
+              "hooks",
+              "review-follow-up"
+            ],
+            "description_sha256": "22aa9ae80790ed8326a63dd2edf650f6cfb992ff618ee35cd939fed1cc476d20",
+            "object_sha256": "3aa6e1ac29c779f56df5a99cb46080e1a4cab165f738b84bdc7f5d37b5b0f162"
+          }
+        },
+        {
+          "id": "BUG-2009",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Hook executable-bit detection, mode repair/reporting and hook installation writers are unchanged. No permission mode is read or written by the runtime ignore-pattern migration.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4471,
+                  "text": "// trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 4558,
+                  "text": "// trace:BUG-1977 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 4716,
+                  "text": "// trace:BUG-2003 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 8153,
+                  "text": "// trace:BUG-2009 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4527,
+                  "text": "// trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 4614,
+                  "text": "// trace:BUG-1977 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 4772,
+                  "text": "// trace:BUG-2003 trace:BUG-2009 | ai:claude"
+                },
+                {
+                  "line": 8351,
+                  "text": "// trace:BUG-2009 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2009",
+            "agreed_id": "BUG-2009",
+            "title": "Hook refresh and the stale-hook check ignore the executable bit: a 0644 AIDA hook is reported current while git silently skips it",
+            "execution_mode": "guided",
+            "tags": [
+              "hooks",
+              "review-follow-up",
+              "security"
+            ],
+            "description_sha256": "6e54bc78627091fa3d896a21c4a5bc263b1299c7b20aecd4aa6c6fce45641cd8",
+            "object_sha256": "fe16c18b3fd4541c562506842f703f48f02dbec065f849dce9f00186be9f5a3d"
+          }
+        },
+        {
+          "id": "BUG-715",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Node email/hostname redaction and public identity defaults remain unchanged, as do their tests. The new exclusion fixtures use fixed generic Git test identities without changing production node registration or store identity content.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3300,
+                  "text": "// trace:BUG-715 trace:BUG-724 | ai:claude"
+                },
+                {
+                  "line": 3314,
+                  "text": "// trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3347,
+                  "text": "// trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3360,
+                  "text": "// fs_atomic guard test. trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3542,
+                  "text": "// trace:BUG-715 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3356,
+                  "text": "// trace:BUG-715 trace:BUG-724 | ai:claude"
+                },
+                {
+                  "line": 3370,
+                  "text": "// trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3403,
+                  "text": "// trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3416,
+                  "text": "// fs_atomic guard test. trace:BUG-715 | ai:claude"
+                },
+                {
+                  "line": 3598,
+                  "text": "// trace:BUG-715 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-715",
+            "agreed_id": "BUG-715",
+            "title": "aida node acquire commits RAW machine identity (corporate email + hostname) to the store \u2014 leaks employer content to mirrors and would leak to the public origin",
+            "execution_mode": null,
+            "tags": [
+              "employer-content",
+              "from-operator",
+              "scrub",
+              "security",
+              "severity:major",
+              "store"
+            ],
+            "description_sha256": "d9ed0275a1095728b2a0106e7f27a3a25e5ffd4bed2b510fe9d943e811552bce",
+            "object_sha256": "46a6d8d5b1d6eeb9aafb977fdc1182b421be8d01426fe40d24723d323a3478f3"
+          }
+        },
+        {
+          "id": "BUG-724",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Default-safe public identity sanitization and public-remote detection remain unchanged. Anchored runtime ignores do not enable, disable or supply any machine redaction input.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3300,
+                  "text": "// trace:BUG-715 trace:BUG-724 | ai:claude"
+                },
+                {
+                  "line": 3339,
+                  "text": "// trace:BUG-724 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3356,
+                  "text": "// trace:BUG-715 trace:BUG-724 | ai:claude"
+                },
+                {
+                  "line": 3395,
+                  "text": "// trace:BUG-724 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-724",
+            "agreed_id": "BUG-724",
+            "title": "Machine-identity redaction is opt-in, so a work clone pushed a raw corporate email into the PUBLIC store (BUG-715 follow-up)",
+            "execution_mode": null,
+            "tags": [
+              "aida:store",
+              "followup:BUG-715",
+              "privacy",
+              "public-repo",
+              "security",
+              "severity:major"
+            ],
+            "description_sha256": "5cbc51539c190170b14d7032dee2c2dd09f924ecf46423b1053402c6c2df10a8",
+            "object_sha256": "34c8b240021682de4a03f6c4b82a57d2105e50bbf9609f8afdcc3d3e509137f8"
+          }
+        },
+        {
+          "id": "BUG-725",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Per-user queue path classification, CRDT union merge and pull-rebase conflict handling remain unchanged. The shared exclusion file migration does not change registry/queues paths, entry deduplication or ordering.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1162,
+                  "text": "// trace:BUG-725 | ai:claude"
+                },
+                {
+                  "line": 1233,
+                  "text": "// trace:BUG-725 | ai:claude"
+                },
+                {
+                  "line": 7460,
+                  "text": "// trace:BUG-725 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1218,
+                  "text": "// trace:BUG-725 | ai:claude"
+                },
+                {
+                  "line": 1289,
+                  "text": "// trace:BUG-725 | ai:claude"
+                },
+                {
+                  "line": 7658,
+                  "text": "// trace:BUG-725 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-725",
+            "agreed_id": "BUG-725",
+            "title": "Queue registry is per-USER and non-mergeable, so the same user on two machines causes aida pull failures",
+            "execution_mode": "drive",
+            "tags": [
+              "aida:queue",
+              "aida:store",
+              "batch:keystone-0719",
+              "distributed",
+              "reliability",
+              "severity:major"
+            ],
+            "description_sha256": "7030164e3136aa4c4ea8d9aeaa5ce0b3ab45a590f96b375fc279687a62bccdc1",
+            "object_sha256": "726c425e77f5e4bd7cc1bd5456245f2449031a14c908ffc6eb44b91b32689007"
+          }
+        },
+        {
+          "id": "EPIC-1-052",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged remote-branch probing/bootstrap/node-join helpers carry the phase-4 trace. No frozen object resolves this ID; retain unknown scope despite the runtime-exclusion-only diff.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2804,
+                  "text": "/// trace:EPIC-1-052 Phase 4 | ai:claude"
+                },
+                {
+                  "line": 2905,
+                  "text": "/// trace:EPIC-1-052 Phase 4 | ai:claude"
+                },
+                {
+                  "line": 3417,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                },
+                {
+                  "line": 3506,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                },
+                {
+                  "line": 4138,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2860,
+                  "text": "/// trace:EPIC-1-052 Phase 4 | ai:claude"
+                },
+                {
+                  "line": 2961,
+                  "text": "/// trace:EPIC-1-052 Phase 4 | ai:claude"
+                },
+                {
+                  "line": 3473,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                },
+                {
+                  "line": 3562,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                },
+                {
+                  "line": 4194,
+                  "text": "/// trace:EPIC-1-052 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-1-071",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged global-ID-format detector and merge-gate legacy-ID migration carry the trace. No frozen object resolves its contract, so separation from the changed helper is not authoritative.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4198,
+                  "text": "/// trace:FR-1-071 | ai:claude"
+                },
+                {
+                  "line": 5053,
+                  "text": "// divergence. trace:FR-1-071 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4254,
+                  "text": "/// trace:FR-1-071 | ai:claude"
+                },
+                {
+                  "line": 5109,
+                  "text": "// divergence. trace:FR-1-071 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-1-074",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged docs-layer ID-prefix mapping carries this trace. No frozen object resolves it; code-local appearance cannot establish the whole contract.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 5075,
+                  "text": "// in trace comments and refs. trace:FR-1-074 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 5131,
+                  "text": "// in trace comments and refs. trace:FR-1-074 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-265",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Remote-only node acquisition validation, registry write/push and suppression of local identity writes remain unchanged. Runtime ignore migration introduces no remote-only identity inputs or node registration path.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3727,
+                  "text": "/// trace:FR-265 | ai:claude"
+                },
+                {
+                  "line": 3792,
+                  "text": "// keeps its own identity. trace:FR-265 | ai:claude"
+                },
+                {
+                  "line": 5913,
+                  "text": "/// trace:FR-265 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3783,
+                  "text": "/// trace:FR-265 | ai:claude"
+                },
+                {
+                  "line": 3848,
+                  "text": "// keeps its own identity. trace:FR-265 | ai:claude"
+                },
+                {
+                  "line": 6111,
+                  "text": "/// trace:FR-265 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "FR-265",
+            "agreed_id": null,
+            "title": "aida node acquire --remote-only for retroactive backfill",
+            "execution_mode": null,
+            "tags": [
+              "EPIC-1-052-followup",
+              "multi-repo",
+              "node-identity",
+              "ready-to-implement"
+            ],
+            "description_sha256": "49244b17fe38dd865c5e3a308daf808c4e8cc41bb8a8f5799438799546eb82a7",
+            "object_sha256": "2ef379a0f1052c719ababbfc67671aeda8bbed0300cc08bbdd1d40948dd96d0b"
+          }
+        },
+        {
+          "id": "STORY-1226",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Scheduler ledger path recognition, CAS store writes, interrupted-rebase guards and registry/ledger tests are unchanged. Empty-migration append delegation preserves the store lock exclusion; no schedule/<job>.yaml path or job delivery behavior changes.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 956,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1361,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1548,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1567,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 7295,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 7316,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1012,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1417,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1604,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1623,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 7493,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 7514,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1226",
+            "agreed_id": "STORY-1226",
+            "title": "aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)",
+            "execution_mode": "guided",
+            "tags": [
+              "keyboard-gate",
+              "multivendor",
+              "parent:EPIC-62",
+              "reliability",
+              "scheduler",
+              "seats",
+              "substrate-first"
+            ],
+            "description_sha256": "cf5dbd8355df217ef668d53e8b733aa6eb504108506834d20520b3427b6a5a9c",
+            "object_sha256": "d8ea9e494284581cae4052f1d9e81436d71bf6686aa3ac7efdd04682f8acd82e"
+          }
+        },
+        {
+          "id": "STORY-652",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Node friendly-name/default-owner computation, registration model and backfill helpers remain unchanged. Generic user.name/user.email setup in new Git fixtures does not alter production node identity.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3432,
+                  "text": "/// `<host>-<user>-<seq>` default. trace:STORY-652 | ai:claude"
+                },
+                {
+                  "line": 3527,
+                  "text": "/// local `.aida/node.toml`. trace:STORY-652 | ai:claude"
+                },
+                {
+                  "line": 4074,
+                  "text": "// new owner rather than the prior clone's name. trace:STORY-652"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3488,
+                  "text": "/// `<host>-<user>-<seq>` default. trace:STORY-652 | ai:claude"
+                },
+                {
+                  "line": 3583,
+                  "text": "/// local `.aida/node.toml`. trace:STORY-652 | ai:claude"
+                },
+                {
+                  "line": 4130,
+                  "text": "// new owner rather than the prior clone's name. trace:STORY-652"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-652",
+            "agreed_id": "STORY-652",
+            "title": "Node friendly names + owner identity: name (<host>-<user>-<seq>) + $USER string on each node, settable at init/acquire",
+            "execution_mode": null,
+            "tags": [
+              "node-identity",
+              "onboarding",
+              "parent:EPIC-47",
+              "team"
+            ],
+            "description_sha256": "fe75cb962c9e39faec1c74bada9b1b00f6311700fa7de59d161f8c2b7a83fe86",
+            "object_sha256": "f9fca30a2ff457b48532f81dd9b8cb107e600a82587d9898dc178355d377ebb3"
+          }
+        },
+        {
+          "id": "STORY-654",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "set-node-owner, set-node-name, team-unset-role and their CAS/local-node updates remain unchanged. Runtime ignore lines neither mutate nodes.toml nor resolve a team owner.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3819,
+                  "text": "// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 3837,
+                  "text": "// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6299,
+                  "text": "/// `.aida/node.toml`. trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6332,
+                  "text": "/// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6363,
+                  "text": "/// trace:STORY-654 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3875,
+                  "text": "// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 3893,
+                  "text": "// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6497,
+                  "text": "/// `.aida/node.toml`. trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6530,
+                  "text": "/// trace:STORY-654 | ai:claude"
+                },
+                {
+                  "line": 6561,
+                  "text": "/// trace:STORY-654 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-654",
+            "agreed_id": "STORY-654",
+            "title": "aida node set-owner / set-name + aida team unset-role: backfill legacy node identity + clean stray role keys",
+            "execution_mode": null,
+            "tags": [
+              "cli",
+              "node-identity",
+              "parent:EPIC-47",
+              "team"
+            ],
+            "description_sha256": "cc088e3aaa8edf2dc9b75acff4514c3747086b464252dfef763817286a5d1a3f",
+            "object_sha256": "d57e958200af62e362f0d99c94e67c7e2953861db246e7621a674f65d6a80088"
+          }
+        },
+        {
+          "id": "TASK-1122",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Store commit author redaction overrides, public-email configuration, doctor scrub and preview surfaces remain unchanged. The new Git fixture configures a fixed generic test identity, not the source-side public identity contract.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "base",
+              "blob_sha256": "3b5d39bc1d34c6c467bff64abfcdf57137aa0d8a5544ead693e395fe457fb864",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 584,
+                  "text": "/// override construction is unit-tested. trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 598,
+                  "text": "/// global git config. trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 3381,
+                  "text": "// trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 3393,
+                  "text": "// trace:TASK-1122 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/git_ops.rs",
+              "side": "head",
+              "blob_sha256": "ace419c7a2580bbc6cfcae5d6097a48e802e2f35b89c31349401b91fe2fbf7c1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 640,
+                  "text": "/// override construction is unit-tested. trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 654,
+                  "text": "/// global git config. trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 3437,
+                  "text": "// trace:TASK-1122 | ai:claude"
+                },
+                {
+                  "line": 3449,
+                  "text": "// trace:TASK-1122 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1122",
+            "agreed_id": "TASK-1122",
+            "title": "BUG-715 follow-ups: redact git author of store commits + doctor detection + dry-run preview",
+            "execution_mode": null,
+            "tags": [
+              "followup:bug-715",
+              "scrub",
+              "security",
+              "store"
+            ],
+            "description_sha256": "5b16784f1e31a3e1863a63bb1ff67aa0af192e90224c85c2169e900200e58758",
+            "object_sha256": "d4a535f31a5c246a7d80a4c3f9e62176395d8f0f1b4e2d6f7617633b85b5915e"
+          }
         }
       ]
     }

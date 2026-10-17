@@ -1,16 +1,16 @@
-# Frozen-50 semantic audit: fifteen complete blocker inventories
+# Frozen-50 semantic audit: seventeen complete blocker inventories
 
 <!-- trace:TASK-1800 | ai:codex -->
 
-Fifteen cases now have manual inspection of **every policy-blocking trace ID**, in
-both full-file and scoped modes. This is an incremental measurement: **35 cases
+Seventeen cases now have manual inspection of **every policy-blocking trace ID**, in
+both full-file and scoped modes. This is an incremental measurement: **33 cases
 remain**, and the classification gate is open. No refused case inspected so
 far is proven incidental-only. PR2668 remains the frozen allowed case, with no
 blocking trace IDs. No collector or policy behavior changes.
 
 The [machine data](task-1800-semantic-audit.json) extends the
-[selected-witness audit](task-1800-witness-audit.md). It inventories all 126
-full-file case/ID pairs (109 scoped pairs), not just the first refusal witness:
+[selected-witness audit](task-1800-witness-audit.md). It inventories all 175
+full-file case/ID pairs (142 scoped pairs), not just the first refusal witness:
 
 | PR | Full/scoped blockers | True supervised touches | Incidental blockers | Unresolved blockers |
 | --- | ---: | --- | --- | --- |
@@ -29,17 +29,19 @@ full-file case/ID pairs (109 scoped pairs), not just the first refusal witness:
 | 2697 | 17 / 17 | TASK-963 | BUG-1167, BUG-1953, BUG-710, BUG-716, BUG-727, STORY-1166, STORY-1171, STORY-1698, STORY-771, TASK-1277, TASK-1330, TASK-1600 | TASK-1331, TASK-140, TASK-141, TASK-142 |
 | 2676 | 22 / 14 | BUG-2148, TASK-1750 | BUG-1043, BUG-1156, BUG-1178†, BUG-1699†, BUG-1983, BUG-2005, BUG-2006†, BUG-2124†, BUG-2133, BUG-2144, BUG-2145, BUG-2146, STORY-1124†, STORY-1473, STORY-561, STORY-564, STORY-994, TASK-1232†, TASK-1233†, TASK-798† | None |
 | 2672 | 18 / 18 | BUG-1178, BUG-1699, BUG-2006, BUG-2124, BUG-2133, BUG-2144, BUG-2146, BUG-2151, TASK-1232 | BUG-1720, BUG-2145, STORY-1124, STORY-1226, STORY-561, TASK-1607, TASK-1750, TASK-864 | FR-1-043 |
+| 2670 | 31 / 15 | BUG-1929, TASK-1775 | BUG-1164, BUG-1593†, BUG-1928, BUG-1971, BUG-2006, BUG-2133†, BUG-2144†, BUG-2146†, BUG-675, STORY-605, STORY-612†, STORY-615†, STORY-617†, STORY-665, STORY-994, TASK-1169†, TASK-1594†, TASK-845†, TASK-864†, TASK-866†, TASK-876†, TASK-951 | BUG-1-040, CR-8, FR-1-002, FR-1-043, FR-1-044†, TASK-152†, TASK-153† |
+| 2652 | 18 / 18 | None established | BUG-1164, BUG-1535, BUG-1929, BUG-2003, BUG-2009, BUG-715, BUG-724, BUG-725, FR-265, STORY-1226, STORY-652, STORY-654, TASK-1122 | BUG-1-051, BUG-1-069, EPIC-1-052, FR-1-071, FR-1-074 |
 
-† Full-file mode only. Trace totals are **27 true supervised touches, 82
-incidental matches, 17 unresolved** in full-file mode; scoped totals are
-**25, 71, 13**. Counts are case/ID pairs, so a requirement present in two cases
+† Full-file mode only. Trace totals are **29 true supervised touches, 117
+incidental matches, 29 unresolved** in full-file mode; scoped totals are
+**27, 93, 22**. Counts are case/ID pairs, so a requirement present in two cases
 counts twice. Five cases have no unresolved exclusion reason: PR2654, PR2681,
 PR2653 and PR2676 have true supervised touches; PR2668 has no blockers and was
-already allowed. The other ten retain unresolved evidence, including the combined
+already allowed. The other twelve retain unresolved evidence, including the combined
 named token in PR2686. The frozen conservative outcome remains **49/50
 refusals**, comprising 22 named refusals and 27 additional trace refusals.
 
-Nine inspected cases also inventory **every extracted named token**:
+Eleven inspected cases also inventory **every extracted named token**:
 
 | PR | Named tokens | Frozen named result and manual finding |
 | --- | --- | --- |
@@ -52,12 +54,16 @@ Nine inspected cases also inventory **every extracted named token**:
 | 2697 | BUG-2164 | Ordinary; default-branch/no-number refusal and approved-PR suggestions directly implement it |
 | 2676 | BUG-2148 | Keystone refusal; start-identity capture and strict stop/teardown signal checks directly implement it |
 | 2672 | BUG-2144, BUG-2145, BUG-2146, BUG-2151 | All named keystone blockers; BUG-2144/2146/2151 directly touched, BUG-2145 incidental (queue auto-complete/sandbox dispatch unchanged) |
+| 2670 | TASK-1775 | Keystone refusal; store marker ordering, hardened staged diff and expiring host-version cache directly implement it |
+| 2652 | BUG-2141 | Ordinary; anchored shared runtime exclude, legacy migration and Git ignore/staging fixtures directly implement it |
 
 These named findings are separate from the trace-pair totals. The earlier five
 cases and PR2698 had no named refusal. PR2656, PR2674 and PR2697 also had no
 named refusal; their ordinary named tokens
 are inventoried for completeness. PR2676 and PR2672 have named keystone refusals
-and no unresolved named token. No policy/history classification was rerun.
+and no unresolved named token. PR2670 also has a named keystone refusal; PR2652
+has no named refusal. Neither new named token is unresolved. No policy/history
+classification was rerun.
 
 PR2669's true parent touch, `STORY-1218`, is absent from the existing scoped ID
 set even though other true blockers still refuse that PR. Case-level refusal
@@ -223,6 +229,40 @@ unchanged: config containment is not that decision input. TASK-864 is therefore
 incidental despite sharing the launcher. FR-1-043 remains unresolved; its
 unchanged session-command dispatcher trace has no frozen contract.
 
+PR2670 moves the contained-store marker before the host Git version check, routes
+`auto_commit_paths`' staged-diff predicate through `host_git_command`, extends
+the raw-store-Git guard to `git_backend.rs`, and expires the host-version cache
+after 60 seconds. TASK-1775 is directly implemented. BUG-1929's frozen operator
+round-4 ruling requires all host store Git calls to use the hardened builder;
+round 8 requires attributes hardening. That shared contract is a true touch,
+including the changed version-cache input, despite unchanged hook pinning and
+writable roots. BUG-1164's staging/lock recovery is unchanged: only the later
+diff predicate changes. BUG-1928's permission rules, BUG-1971's root selection,
+child set/strip and monotonic-posture decisions, vendor/config refusals, network
+settings and OS-wrapper behavior are unchanged. The frozen BUG-1928 triage
+explicitly separates its permission layer from BUG-1929's store Bash boundary.
+The broader BUG-2133 child-confinement ruling does not turn this host-store
+change into a child posture change. Identity, terminal, setup, grant and wait
+ceiling contracts are also unchanged. Seven blockers remain unresolved:
+BUG-1-040, FR-1-002/043/044 have no frozen contract; current aliases
+CR-8 → CR-1-173, TASK-152 → TASK-1-128 and TASK-153 → TASK-1-129 do not repair
+the census's missing history. The named refusal is true; the case is not fully
+resolved.
+
+PR2652 anchors the runtime exclusion to `/.aida/*`, migrates legacy `.aida/`
+lines in the common Git exclude file and verifies template/discipline/config
+addability while runtime files stay ignored. Ordinary named BUG-2141 is direct.
+All 13 known trace-blocking contracts are incidental. In particular,
+`ensure_store_lock_excluded` still supplies the same lock pattern through
+`append_exclude_entries`; the new delegate receives an empty migration list,
+so this shared store path preserves its behavior. Host Git hardening and hook
+refresh/modes, stale-index-lock recovery, queue CRDT merge, scheduler ledger,
+node/owner identity, public redaction and short-ID collision handling do not
+change. New fixtures' generic Git identities do not implement production node
+identity or redaction. Five unknown contracts remain unresolved: BUG-1-051,
+BUG-1-069, EPIC-1-052, FR-1-071 and FR-1-074. Their unchanged trace locations
+are not enough to establish safety. No refused PR is proven incidental-only.
+
 ## Evidence and limits
 
 The data pins each base/head, every changed path's diff hash, each blocker’s
@@ -236,7 +276,7 @@ occurrences are recovered from committed changed-path blobs. A full-file
 occurrence can be unselected on one side even when its ID is selected elsewhere.
 
 The policy census covers all 2,160 unique full-set trace IDs, including 331
-blocking IDs; this document manually inspects only the fifteen cases above. It
+blocking IDs; this document manually inspects only the seventeen cases above. It
 reuses that census rather than rerunning history classification. The frozen
 store is `a5dae7145abd11d2480271c466030b12db6e7668`, and the collector SHA-256 is
 `7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8`. Input census
@@ -246,7 +286,7 @@ No ledger contents are published.
 `all_policy_blockers_inspected` means every blocker received a manual judgment;
 it does **not** mean every blocker was resolved. `all_blockers_resolved` is
 separate and includes named uncertainty when a named inventory is present.
-`all_exclusion_reasons_inspected` on the nine named-inventory rows records complete trace
+`all_exclusion_reasons_inspected` on the eleven named-inventory rows records complete trace
 and named inspection, including unresolved tokens; it grants no policy clearance.
 None of these fields grants completion, review or shipping authority.
 No symlink, binary, gitlink, fallback or path-class authority change is included.
