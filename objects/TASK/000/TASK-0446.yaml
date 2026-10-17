@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:09:32.180659596Z
-modified_at: 2026-10-17T05:55:29.511662883Z
+modified_at: 2026-10-17T05:55:59.808315921Z
 req_type: Task
 tags:
 - from-implementer:STORY-1679
@@ -39,7 +39,7 @@ comments:
         [[checks]]
         name = "exact.case-sensitive/oracle-check"
         spec_uuid = "<canonical requirement UUID>"
-        description_sha256 = "<64 lowercase hex bytes digest>"
+        description_sha256 = "<64 lowercase ASCII hex characters, 32 digest bytes>"
         clauses = [{ text = "exact contract acceptance paragraph", sha256 = "<SHA256 of UTF-8 text>" }]
 
     One exact check maps to one owning spec UUID and one or more clauses within that spec. No regex, fuzzy display-ID matching, globbing, executable values, invented clause IDs, or multi-owner parent selection. Clause identity is the exact UTF-8 excerpt plus its hash, uniquely occurring in the selected corpus description. Full description hash deliberately treats any intervening description change as stale until the trusted mapping is updated. UUIDs survive display-ID remapping.
@@ -58,7 +58,7 @@ comments:
 
     Verification plan: strict schema/duplicate/version/mode negatives; valid UUID + exact clause; missing mapping; unavailable committed evidence; stale corpus and live-description/owner references; remapped display alias; ambiguous clause text; unchanged report-only store; mapped draft parent in the real Storage atomic seam; repeat filing/dedup and existing different-parent conflict. Existing STORY-1679 tests remain green. No production code until advisor explicitly signs this schema/trust/parent policy or supplies revisions.
   created_at: 2026-10-17T05:55:29.511662883Z
-  modified_at: 2026-10-17T05:55:29.511662883Z
+  modified_at: 2026-10-17T05:55:59.808315753Z
 history:
 - id: 01a14039-91e8-7f70-9646-6686cc0e631b
   author: joe
