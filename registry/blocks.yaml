@@ -887,3 +887,11 @@ blocks:
   range_end: 2014
   next: 1915
   allocated_at: 2026-10-16T14:10:13.616819543Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: STORY
+  range_start: 1841
+  range_end: 1940
+  next: 1841
+  allocated_at: 2026-10-17T10:55:05.529654332Z
