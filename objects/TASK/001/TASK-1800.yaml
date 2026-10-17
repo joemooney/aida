@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T11:03:21.102718702Z
+modified_at: 2026-10-17T11:06:01.788867304Z
 req_type: Task
 relationships:
 - rel_type:
@@ -163,6 +163,29 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T11:03:21.102718702Z
   modified_at: 2026-10-17T11:03:21.102718702Z
+- id: 01a1498a-48bc-7683-90ab-a3ab9477bf71
+  author: ai:codex:joe
+  content: |
+    Measurement-only continuation published as non-completing PR #2717: https://github.com/joemooney/aida/pull/2717, exact ready OPEN head c78b18e99a296c34ea456077d0e238cce9d14466, stacked on #2716 at87e8d13e3fff1b370728eb282905269c0f6d8099. Three docs/data files only; both Non-completing slice and aida: no-complete markers verified. Parent remains In Progress.
+
+    Every policy-blocking trace ID manually inspected in TEN cases, both modes. Five added this session:
+    | PR | full/scoped blockers | true supervised touches | unresolved |
+    |---|---:|---|---|
+    |2668|0/0|none; already allowed baseline|none|
+    |2681|2/2|BUG-2148, TASK-1782|none|
+    |2686|6/4|STORY-1218, TASK-1492, TASK-1730, full-only TASK-1731|combined named BUG-2160-2161|
+    |2653|4/4|STORY-1130, TASK-1750|none|
+    |2698|10/9|BUG-2139|TASK-176|
+
+    Cumulative trace-pair totals: full43 =15 true +22 incidental +6 unresolved; scoped37 =13+19+5. Four cases have no unresolved exclusion reason:2654/2681/2653 have true touches;2668 was already allowed. Other SIX retain uncertainty. No refused PR is proven incidental-only. Forty cases remain; semantic gate OPEN; frozen conservative49/50 refusal count unchanged. Every extracted named token is inventoried for2668/2681/2686/2653 (seven tokens);2698 and earlier five had no named refusal. Component BUG2160/2161 behavior is touched, but does not resolve the combined branch token.
+
+    New ID-level coverage limitation: PR2686 changes roots::survivors, whose result feeds record.survivors_detected/clean and controls.rs zero-survivor requirement. Full-file-only TASK-1731 is therefore a true touched control contract missing from scoped evidence, alongside the earlier PR2669/STORY-1218 parent omission. Other true IDs still refuse both cases; case retention does not prove every true ID retained. Shared shift lock explicitly unlocks on Drop and gates both run_tick and run_redrive_pass_with, supporting STORY1218/TASK1492 true touches. PR2698 adds a cleanup caller that revokes a delegated headless grant; its incidental selected sender witness does not establish an incidental-only case.
+
+    Integrity checker verifies all10 pins,43/37 complete trace-blocker inventories,seven named tokens,all diff/blob/spec hashes,exact locations/provenance,aliases and supporting source consumers against frozen clean storea5dae7145abd11d2480271c466030b12db6e7668; same collector7041c86b and private-ledger digest. No classifier rerun or ledger contents published. Actual make check-ci-fast30/30,fmt/diff clean. One fresh spawned author checker read actual spec/rulings and ran its own source/contracts/integrity commands: no actionable findings. Author self-check only, not independent review.
+
+    STANDARD independent review requested for this docs-only slice;#2714 retains separate STRICT gate. No production collector/policy/fallback/authority/symlink/completion change, no workspace runtime or end-to-end mandate replay, no author verdict/clearance/merge or CI-green claim. Docs: docs/testing/task-1800-semantic-audit.{json,md}; durable local evidence/session6. Own lease/worktree cleanup follows.
+  created_at: 2026-10-17T11:06:01.788867304Z
+  modified_at: 2026-10-17T11:06:01.788867304Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
