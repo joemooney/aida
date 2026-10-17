@@ -1,0 +1,20 @@
+id: 01a14741-0bc7-70f0-a518-9c7972342650
+spec_id: BUG-2173
+agreed_id: BUG-2173
+title: Attested reviewer cannot record a verdict in a non-AIDA-repo project (aida-relay)
+description: '''aida queue work PR-96 --role reviewer --no-human --vendor claude'', run in /home/joe/ai/aida-relay on 2026-10-16 17:09, ran for 17 min and exited 30 with no verdict file. Inside the session, Write to .aida/review-verdicts/PR-96.json was refused, the aida CLI (review claim/record) was refused, and GitHub access was blocked; the run logged 12 permission denials. The same command works in the aida repo, so the reviewer''s tool and permission grant (settings/sandbox profile) is probably not installed or synced for other projects. Acceptance: the attested reviewer records a verdict in an aida-init''d project other than aida itself, or refuses up front with a named fix instead of spending a full review run.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T00:26:47.623987290Z
+modified_at: 2026-10-17T00:26:47.623987290Z
+req_type: Bug
+filed_at:
+  code_sha: a7101365ea6a12b448688d13bfb3f2f32594a153
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a7101365ea
+  vendor: claude
+  session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
