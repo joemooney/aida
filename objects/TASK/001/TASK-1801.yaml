@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-17T05:50:15.687426283Z
+modified_at: 2026-10-17T05:50:18.010974384Z
 req_type: Task
 comments:
 - id: 01a14860-7c2f-7f50-967a-63b6d1afd28a
@@ -26,6 +26,11 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T05:49:24.107109801Z
   modified_at: 2026-10-17T05:49:24.107109801Z
+- id: 01a14869-399a-76a2-90bb-fcfd2a42315f
+  author: ai:codex:joe
+  content: 'Delivered draft PR #2712 at 3510d399f83d5399448fa2ec9b0fbadc73c8a2b4, stacked on still-open #2704 / codex/task-1786 at 0069e89f84. Implementation-only diff against merge 90e05895ac (includes main28575d prerequisite). Final actual workspace binary 96987fa6f289cdef:81 verdict+16 standalone tests passed serially; every workspace test target compiled; fast30/30 and fmt/diff clean. Exact extracted FIFO reader mutant times out; exact extracted Rust dispatch-contract test fails specified direct(...) call-site mutant. Those are extracted proofs, not whole-workspace runtime mutants. Three fresh author checker rounds; first found nested-basename bypass, fixed/regressed; final no actionable findings. STRICT independent review required. No own verdict/clearance/merge/CI-green claim. Retarget to main once2704 merges.'
+  created_at: 2026-10-17T05:50:18.010974384Z
+  modified_at: 2026-10-17T05:50:18.010974384Z
 history:
 - id: 01a1485a-e1b6-7b12-9d59-d3a2ba1fafd8
   author: aida-session-start
