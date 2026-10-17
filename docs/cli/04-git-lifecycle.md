@@ -384,7 +384,11 @@ a label-only hold or a recusal hold always needs a human.
 
 Mandate exclusions also consider committed trace IDs in changed source hunks and
 their enclosing Rust functions/impls, plus the file’s leading header traces
-(including doc comments), on both base and head. Deletions and renames
+(including doc comments), on both base and head. Rust module comments outside
+fn/impl items and their leading prefixes also add exclusions, including traces
+between items and at EOF. Inline-module headers apply even when attached to an
+unchanged first function. Other unchanged fn/impl prefixes remain scoped.
+Deletions and renames
 retain the old traces. When a hunk cannot be attributed safely, the check uses
 the full file; other text formats (including docs, configuration and hooks) use
 that conservative fallback. Every changed text path is scanned, including nested
