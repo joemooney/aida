@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T01:16:02.476105948Z
+modified_at: 2026-10-17T01:29:56.457999988Z
 req_type: Task
 comments:
 - id: 01a14718-5271-7e40-b609-40fe6102da42
@@ -46,6 +46,11 @@ comments:
   created_at: 2026-10-17T01:16:02.476105948Z
   modified_at: 2026-10-17T01:16:02.476105948Z
   session_id: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
+- id: 01a1477a-dbea-7703-a97f-f38318aa150d
+  author: ai:codex:joe
+  content: 'Published non-completing priority slice PR #2711 at afad958ccd67b84917da7950a2b4fd900306046e, normal push and exact OPEN head/both no-complete markers verified. Final workspace binary20 collector tests and actual exact mandate_ship_cover callback test passed; final fast30/30, fmt/diff clean. Header regressions3 fail on parent and pass on final module. Three fresh author contexts, final no findings; initial outer-doc/same-line omissions fixed. Actual callback first exposed uncommitted roster fixture setup; corrected by committing the setup and rechecking clean snapshot. No compiled empty-set callsite mutant claim. Frozen50 additional refusals27/50,49/50 total;50 fallback cases/290 paths. Parent remains open for advisor-ruled measurement-only true/incidental classification and gated fallback reduction. STRICT independent review requested; no author verdict/clearance/merge.'
+  created_at: 2026-10-17T01:29:56.457999988Z
+  modified_at: 2026-10-17T01:29:56.457999988Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
