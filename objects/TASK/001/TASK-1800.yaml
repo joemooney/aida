@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:39:51.030910930Z
+modified_at: 2026-10-17T15:40:58.882852093Z
 req_type: Task
 relationships:
 - rel_type:
@@ -252,6 +252,26 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T15:39:51.030910930Z
   modified_at: 2026-10-17T15:39:51.030910930Z
+- id: 01a14a86-0282-78b0-9ed1-98a44a49215f
+  author: joe
+  content: |
+    Measurement-only continuation published as non-completing PR #2720: https://github.com/joemooney/aida/pull/2720, exact ready OPEN head371b5b618eb0a1a07b8705d86eabb73427d3e2dc. Stacked on #2719 at c99b087c59c3d4fcd2f5036ede107f84aa486437; exactly3 docs/data files. Both Non-completing slice / aida: no-complete markers verified. TASK-1800 remains In Progress.
+
+    Every policy-blocking trace ID in both modes and every extracted named token inspected in two more cases:
+    | PR | full/scoped blockers | true supervised trace touches | unresolved |
+    | --- | ---: | --- | --- |
+    |2670|31/15|BUG-1929, TASK-1775|BUG-1-040, CR-8, FR-1-002, FR-1-043, FR-1-044, TASK-152, TASK-153|
+    |2652|18/18|None established|BUG-1-051, BUG-1-069, EPIC-1-052, FR-1-071, FR-1-074|
+
+    Cumulative17 cases,175full pairs =29 true +117 incidental +29 unresolved;142scoped =27+93+22. Seventeen named tokens across11cases. Counts are case/ID pairs, not PRs. Five cases have no unresolved exclusion reason: four true refusals plus the already-allowed baseline. Twelve retain uncertainty. No refused PR is proven incidental-only. Thirty-three remain; semantic gate OPEN; conservative frozen22 named +27 additional =49/50 refusals unchanged.
+
+    PR2670's earlier contained-store marker, hardened staged-diff predicate/guard and expiring host-version input directly touch BUG-1929's shared host-store security contract (read frozen round4/8 operator comments) plus named TASK-1775. Child posture/env, vendor/config refusal, native permission/root selection, egress, OS-wrap and staging lock-recovery contracts remain unchanged. PR2652 changes shared runtime exclude migration; store-lock exclusion passes the same pattern with an empty migration list and preserves behavior. Its13 known trace blockers are incidental, but5 unknown contracts still refuse. Ordinary named BUG-2141 is direct. Aliases CR8->CR1-173/TASK152->TASK1-128/TASK153->TASK1-129 do not repair missing frozen history. Full new object hashes pin scope-defining comments.
+
+    Actual make check-ci-fast30/30, formatting/diff clean. Integrity passes all17 endpoints,175/142 complete blocker/policy inventories,17named tokens,all diff/blob/spec hashes,exact trace lines/scoped/fallback provenance,full new frozen-object hashes,unknown-object absence and exact prior15 JSON row preservation. Same frozen clean storea5dae7145abd11d2480271c466030b12db6e7668 and collector7041c86b; no expensive classifier rerun or private-ledger publication. Two skill-required spawned author self-check contexts read actual substrate rulings and ran OWN source/contract/integrity commands. First found Markdown table separators; fixed and rechecked. Second corrected-candidate pass found no actionable findings. Author self-check only, NOT independent review.
+
+    STANDARD independent review requested; code #2714 retains separate STRICT gate. No collector/policy/fallback/path-class/symlink/authority/shipping/completion change, no workspace runtime/end-to-end mandate replay/verdict/clearance/merge/CI-green claim. Own normal session cleanup will queue the review item. Durable local evidence/session9 in this relay; next prepared packets2666/2650 are unadjudicated only.
+  created_at: 2026-10-17T15:40:58.882852093Z
+  modified_at: 2026-10-17T15:40:58.882852093Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
