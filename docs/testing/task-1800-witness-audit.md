@@ -9,7 +9,7 @@ Another exclusion in the same PR may still justify refusal. This measurement
 changes no collector, authority rule, or mandate decision.
 
 The [incremental semantic audit](task-1800-semantic-audit.md) now inspects every
-blocker in thirteen cases, including full-file-only reasons. It retains unresolved
+blocker in fifteen cases, including full-file-only reasons. It retains unresolved
 evidence and leaves the frozen-50 classification gate open.
 
 The frozen outcome remains 22 named refusals plus 27 additional trace refusals,

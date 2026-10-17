@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in thirteen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in fifteen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
   "classification_gate_complete": false,
   "frozen_case_count": 50,
-  "cases_inspected": 13,
-  "remaining_cases": 37,
+  "cases_inspected": 15,
+  "remaining_cases": 35,
   "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
@@ -14,16 +14,16 @@
   "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
   "summary": {
     "full": {
-      "total": 86,
-      "incidental": 54,
-      "unresolved": 16,
-      "true-touch": 16
+      "total": 126,
+      "incidental": 82,
+      "unresolved": 17,
+      "true-touch": 27
     },
     "scoped": {
-      "total": 77,
-      "incidental": 51,
-      "unresolved": 12,
-      "true-touch": 14
+      "total": 109,
+      "incidental": 71,
+      "unresolved": 13,
+      "true-touch": 25
     }
   },
   "rows": [
@@ -7911,6 +7911,2917 @@
             ],
             "description_sha256": "578bd8776f1c8c9ae36347b36a6f64fdb603caf5e6b3ced987ee030f88c0d4b0"
           }
+        }
+      ]
+    },
+    {
+      "pr": 2676,
+      "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "head": "e1a40a89bcae34ede42bce015543b506c984a10f",
+      "named_policy_refusal": true,
+      "title": "[AI:antigravity] fix(liveness): check start-time identity before killing processes on agent stop and session end (BUG-2148)",
+      "full_blocker_count": 22,
+      "scoped_blocker_count": 14,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": true,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2148",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "Registry and leaked-session identity capture plus strict TERM/KILL gating directly implement the named supervised bug.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2148",
+            "agreed_id": "BUG-2148",
+            "title": "aida agent stop and session end's leaked-process kill signal by pid-alive only, with no start-time identity check (pid-reuse kill risk)",
+            "execution_mode": null,
+            "tags": [
+              "liveness",
+              "security"
+            ],
+            "description_sha256": "a641ad6f7d5e0d09b0584f04614967a1013e551aa13b98c23ccee46e7c720908",
+            "object_sha256": "60e18dc66b347dcb3a9ba722481f9bb766e89b747902338b7f59a8da21b55924"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_registry.rs",
+          "diff_sha256": "76a73ef481553ef8b67712fabfe91b8ecb71d0446a6478335bd5fa698b9f9bc1"
+        },
+        {
+          "path": "aida-cli-lib/src/agent_registry_root.rs",
+          "diff_sha256": "cc570d1a31a32174592add13d3f799287fd4a3e6421a084c1a10819664d9ef8b"
+        },
+        {
+          "path": "aida-cli-lib/src/session_end.rs",
+          "diff_sha256": "ae03501d5200ab208ad0890b1a6d6d3806b47a1975de81ba604045da1614d3ff"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "diff_sha256": "c4031917ec39dca6007c1e3fcba95498796528e8f2d21b546b2a8ed73f78b49d"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+          "diff_sha256": "425359f91271142083ac401059224f4314a6a2f956dc0e57033ebaf025066171"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+          "diff_sha256": "01cf6a951afd2d6a8b18845b3be000bc20db45d2d0538c8b1b130e179769e15f"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/fleet_state_hygiene_tests.rs",
+          "diff_sha256": "60d9c8e39fe7f802dd96f9be6f30590ea5ec6830fb83ba78be8c66e24afe590b"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/task_515_status_agent_lease_fallback_tests.rs",
+          "diff_sha256": "0e41c7ebd567e26590814f4c65b95336112784882581d643774b57914df51b91"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1043",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "mcp_authority_status_lines and its server/caller authority rendering are unchanged. The view gains pid_start and two fixtures initialize it, but no authority field, filter, role or relaunch guidance changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "base",
+              "blob_sha256": "52f0852cfaebd664baa29700e3f9149c024b49a066ef8ac0386be524091467d9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1611,
+                  "text": "// trace:BUG-1043 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1616,
+                  "text": "// trace:BUG-1043 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1043",
+            "agreed_id": "BUG-1043",
+            "title": "MCP approval authority can disagree with the active shell role \u2014 refusals must name both roles and the relaunch command",
+            "execution_mode": "drain",
+            "tags": null,
+            "description_sha256": "2efe398ba6ef6468f0cae9c191ddf51e545d1db06acfbb9ddf0f0078d1fc2069",
+            "object_sha256": "03e09f93fca8e25221db43f1631540cdc171855b4a931a4a78d673dfaab72731"
+          }
+        },
+        {
+          "id": "BUG-1156",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "registry_entry_is_live, agent_is_live, role_enter_has_live_session and their descendant-session tests are unchanged. view_for still classifies the same entry before copying fields. Carrying the existing start identity into a view and checking it before stop signals does not change ancestor-shell versus session liveness or reaping predicates.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "base",
+              "blob_sha256": "52f0852cfaebd664baa29700e3f9149c024b49a066ef8ac0386be524091467d9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1682,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 1723,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 1735,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 2719,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1688,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 1729,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 1741,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                },
+                {
+                  "line": 2725,
+                  "text": "// trace:BUG-1156 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1156",
+            "agreed_id": "BUG-1156",
+            "title": "session/role liveness can track a long-lived ancestor shell pid, so an entry reads live after the session exits (never reaped)",
+            "execution_mode": "drive",
+            "tags": [
+              "liveness",
+              "papercut",
+              "role-enter",
+              "session-reap",
+              "story:994"
+            ],
+            "description_sha256": "53e23fe0a26179ec7b0be4bbabff04e40afbc7cb3fb3448864ecec20035c057f",
+            "object_sha256": "58f42e765279387da6e6f425921181e6640eecb162c1a273509819f4b7b5ef6c"
+          }
+        },
+        {
+          "id": "BUG-1178",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only launcher tests for promptable interactive containment and dontAsk rejection are unchanged. The changed launcher fixture adds pid_start; the changed real-process test exercises termination, not permission modes or sandbox argv.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1097,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1131,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1097,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1131,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1178",
+            "agreed_id": "BUG-1178",
+            "title": "Contained posture applies --permission-mode dontAsk to INTERACTIVE launches \u2014 a TTY advisor session is denied all Bash with no way to answer",
+            "execution_mode": "drive",
+            "tags": [
+              "batch:bugs-0917",
+              "contained",
+              "dontask",
+              "launcher",
+              "permissions",
+              "ux-signal"
+            ],
+            "description_sha256": "81af32e95a69b75add30bfc726947864a044d7259d63d48a23a6ec18ff79047b",
+            "object_sha256": "145abef2374708a5488aeed1cc137a1f240e4907a3824604726fcc9e982ba4ec"
+          }
+        },
+        {
+          "id": "BUG-1699",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only split_posture_flags fixture is unchanged, as are the posture partition and preview. The stop changes neither per-tool flags nor conflicting-posture resolution.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3497,
+                  "text": "// trace:BUG-1699 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3498,
+                  "text": "// trace:BUG-1699 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1699",
+            "agreed_id": "BUG-1699",
+            "title": "agent new --no-exec permission_posture claims a resolution that contradicts the conflicting sandbox argv it prints",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "70e61f02d42ef212926d5363c325f84afa80d4e936549d6e0f52d53f7a1dae9f",
+            "object_sha256": "a5eb3d646f18aae77b68afa1df651ecd64de3aa05d03ab77dfbfd0584397380e"
+          }
+        },
+        {
+          "id": "BUG-1983",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The module declaration for grant-verdict fixtures is unchanged in session_end.rs. No promotion/review authority helper, rejected-grant explanation or grant-consuming fixture changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "base",
+              "blob_sha256": "90816ce68970c80d09330c77333fa9b19532b76b13c7d98c48210fd70b2f62ea",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 951,
+                  "text": "// trace:BUG-1983 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "head",
+              "blob_sha256": "c4d2e92ebf6db36837b2f2e8017c17a1880e1f4265e7b5f92e68821f26b4dc17",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 951,
+                  "text": "// trace:BUG-1983 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1983",
+            "agreed_id": "BUG-1983",
+            "title": "Refusals name why a seat grant was rejected (expired, revoked, ...) instead of 'No active role'; review record now refuses a rejected grant",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "groom:approve",
+              "roles",
+              "seats",
+              "security"
+            ],
+            "description_sha256": "e7898ec86116d057a87070d2448e767cf490c0a3694f3026eb7b217bfbeafd4b",
+            "object_sha256": "927eeaf375a0fd73da8f202221354a9c35291f1e7c25a130a23da6de95e87126"
+          }
+        },
+        {
+          "id": "BUG-2005",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The wrapper-staleness test module declaration is unchanged. Process identity capture/termination does not change wrapper capability tokens, install refresh or dev-status classification.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "base",
+              "blob_sha256": "90816ce68970c80d09330c77333fa9b19532b76b13c7d98c48210fd70b2f62ea",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 956,
+                  "text": "// trace:BUG-2005 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "head",
+              "blob_sha256": "c4d2e92ebf6db36837b2f2e8017c17a1880e1f4265e7b5f92e68821f26b4dc17",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 956,
+                  "text": "// trace:BUG-2005 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2005",
+            "agreed_id": "BUG-2005",
+            "title": "Installed shell wrappers carrying the BUG-2000 zsh leak are never refreshed, and dev status reports them as current",
+            "execution_mode": null,
+            "tags": [
+              "review-follow-up",
+              "security",
+              "shell-wrapper"
+            ],
+            "description_sha256": "452f2fde91f14ed6ee17c86cecf5bccc87f0caf64dadde05e1e50b69634a4c52",
+            "object_sha256": "b546bc222874d88f0bb19475416d941f83b43cc2f564bd8014f73a3de96e0d05"
+          }
+        },
+        {
+          "id": "BUG-2006",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only containment environment fixture is unchanged. New AgentRegistryView pid_start fields and termination targets neither set nor strip a child environment variable.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4164,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4166,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2006",
+            "agreed_id": "BUG-2006",
+            "title": "Contained launch paths other than queue work never export AIDA_CONTAINED=1, so contained-aware checks treat those sessions as uncontained",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "review-follow-up",
+              "sandbox"
+            ],
+            "description_sha256": "5ae6378e8d6e67237b4ea27ea418b7a6ad816b4e682c387f275306a6612a292e",
+            "object_sha256": "81325aa0893ca4a36ac12680adecc5bc56dde812c135198ef25e72c197ee5171"
+          }
+        },
+        {
+          "id": "BUG-2124",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only contained-launch detection, tracked-child env and launcher builder fixtures are unchanged. This PR changes stop/teardown, not spawn posture, containment_applied or inherited AIDA_CONTAINED handling.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3688,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3762,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3869,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3912,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3981,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 4043,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3690,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3764,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3871,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3914,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 3983,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 4045,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2124",
+            "agreed_id": "BUG-2124",
+            "title": "Uncontained launchers (phase_driver, burndown, autopilot intake, questions, compete) do not strip inherited AIDA_CONTAINED",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "follow-up"
+            ],
+            "description_sha256": "ac49dec7f1e59d19e2e708c5fa696b43e7c553b7a0350882fe2b2c5c35743491",
+            "object_sha256": "03df6a4f429ddf573ff01c34553b5689112099e0938d97f20f2e1c8a7a31e3eb"
+          }
+        },
+        {
+          "id": "BUG-2133",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The contained-drain-child test module declaration in status_sections.rs is unchanged. No phase-driver CI-fix/advisor launch config or containment propagation changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1373,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1463,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2133",
+            "agreed_id": "BUG-2133",
+            "title": "Contained drain launches its phase_driver CI-fix and advisor child sessions uncontained",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "3d127c12b4a121f0bcd922a36d57b8191dbfde29abb08b71bd44c5ff12d5a00d",
+            "object_sha256": "f256156ba493d34bc7b5863d6b9891d780a9c1d9767999ad4a7e83099cc9d533"
+          }
+        },
+        {
+          "id": "BUG-2144",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Existing unsupported-vendor containment refusal tests and their module declaration are unchanged. Registry-view fixture fields and stop signals do not change queue-work implementer/reviewer launch refusal.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1467,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1482,
+                  "text": "// codex (or agy) `agent new` launch is refused. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 3948,
+                  "text": "// per the advisor ruling on #2665 it is refused. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1482,
+                  "text": "// codex (or agy) `agent new` launch is refused. trace:BUG-2144 | ai:claude"
+                },
+                {
+                  "line": 3950,
+                  "text": "// per the advisor ruling on #2665 it is refused. trace:BUG-2144 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2144",
+            "agreed_id": "BUG-2144",
+            "title": "Contained codex/agy drain still runs its queue-work implementer and reviewer children uncontained (containment_applied silently false)",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "2a760153ed9f02d25b1fa1062aa5581fbfcebcc0d9baf88e7e9bc9e1bc9ea8c6",
+            "object_sha256": "1d630471cc21ffa72f11681b14289bfd32a72f638b445377338189d4bf6ba31f"
+          }
+        },
+        {
+          "id": "BUG-2145",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The containment-refusal test module declaration is unchanged. The auto-complete/sandbox dispatch and threaded drain containment are not touched.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1467,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2145",
+            "agreed_id": "BUG-2145",
+            "title": "queue work --auto-complete --sandbox silently runs the whole drain uncontained",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "a8666fe46365411d2bbc34d370d4e8c401971c117a6bd539912216f14f6bed95",
+            "object_sha256": "2b2a5bdde8b751c078c34d17dbc3765f1b1c330c415a16b32d71619e078f786d"
+          }
+        },
+        {
+          "id": "BUG-2146",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The containment-refusal test module declaration is unchanged. No agents.toml parser, load result handling or malformed-config launch behavior changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1467,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2146",
+            "agreed_id": "BUG-2146",
+            "title": "A malformed agents.toml silently disables containment (load_agents_contained(..).unwrap_or(false))",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "b47b59c842305771527e0bcb62c6ce06b75a7a92c12548e955faaa804cf8e97a",
+            "object_sha256": "a30b28c1b06e4686da81644a9d7a36d37553a77c5c6bbd289a8f32728d7032e2"
+          }
+        },
+        {
+          "id": "BUG-2148",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Adds start identity to registry/lease views, partitions agent-stop targets into gone/unconfirmed/confirmed, captures leaked-session identities, and requires strict matching before both TERM and KILL. New real-process and mismatch fixtures directly implement the supervised named bug.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 164,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry_root.rs",
+              "side": "head",
+              "blob_sha256": "5db6ca98dcf5b0850bed5392db870615f648281e752115a7095d6c8490bb7806",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 196,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 207,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "head",
+              "blob_sha256": "c4d2e92ebf6db36837b2f2e8017c17a1880e1f4265e7b5f92e68821f26b4dc17",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1395,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 2158,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 2169,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 2187,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1203,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 1239,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 1250,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+              "side": "head",
+              "blob_sha256": "4c6fd5457a906b28c770f448a17128d2496a0263bf8a81d1ca4eecc07778022c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2148",
+            "agreed_id": "BUG-2148",
+            "title": "aida agent stop and session end's leaked-process kill signal by pid-alive only, with no start-time identity check (pid-reuse kill risk)",
+            "execution_mode": null,
+            "tags": [
+              "liveness",
+              "security"
+            ],
+            "description_sha256": "a641ad6f7d5e0d09b0584f04614967a1013e551aa13b98c23ccee46e7c720908",
+            "object_sha256": "60e18dc66b347dcb3a9ba722481f9bb766e89b747902338b7f59a8da21b55924"
+          }
+        },
+        {
+          "id": "STORY-1124",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only contained Codex argv and bypass-separation tests remain unchanged. Stop and leaked-process termination do not select a launcher permission tier or alter Codex sandbox/approval flags.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1208,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                },
+                {
+                  "line": 1510,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1208,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                },
+                {
+                  "line": 1510,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1124",
+            "agreed_id": "STORY-1124",
+            "title": "Codex 'contained-autonomous' posture: prompt-free BUT sandboxed (workspace-write + approve-for-me), a middle tier between codex-defaults and --bypass-sandbox",
+            "execution_mode": "drain",
+            "tags": [
+              "agents",
+              "codex",
+              "permission-posture",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "9ec89bce430047c48915f37d4830c8bf91c93387e6b500683190a56ce3bbc278",
+            "object_sha256": "f5673bf16ff17da6f1fb9d0424705b5c0b40491b4a871f60e3795663e252764e"
+          }
+        },
+        {
+          "id": "STORY-1473",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "MCP authority fixture and parent grant minting/delegation in launcher tests are unchanged. Extra pid_start fixture fields carry process identity, not seat authority; stop does not mint or validate grants.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "base",
+              "blob_sha256": "52f0852cfaebd664baa29700e3f9149c024b49a066ef8ac0386be524091467d9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3426,
+                  "text": "// issuance, never an env-var relaunch. trace:STORY-1473 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3434,
+                  "text": "// issuance, never an env-var relaunch. trace:STORY-1473 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2637,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                },
+                {
+                  "line": 2753,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                },
+                {
+                  "line": 3188,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2638,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                },
+                {
+                  "line": 2754,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                },
+                {
+                  "line": 3189,
+                  "text": "// seat. trace:STORY-1473 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1473",
+            "agreed_id": "STORY-1473",
+            "title": "Seat authority is session-bound and set at a TTY; the roster caps which seats a user may take; roster writes are human-at-TTY only",
+            "execution_mode": "guided",
+            "tags": [
+              "authority",
+              "needs-operator",
+              "roles",
+              "security"
+            ],
+            "description_sha256": "4df577194391ece4382b1708bbd1b1e4d4ae832ebd0a8ac871514e210d0db19a",
+            "object_sha256": "71e2740a76606c9c5e9141d914e344050d17fecc6ba30c8a524195389c01bca1"
+          }
+        },
+        {
+          "id": "STORY-561",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "KEYSTONE_TAG and print_status_presence_consumers remain unchanged. Signal identity matching does not change presence, mode defaults or keystone pickup offers.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2108,
+                  "text": "/// the autonomous ready set. trace:STORY-561 | ai:claude"
+                },
+                {
+                  "line": 2120,
+                  "text": "/// up regardless of presence. trace:STORY-561 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2199,
+                  "text": "/// the autonomous ready set. trace:STORY-561 | ai:claude"
+                },
+                {
+                  "line": 2211,
+                  "text": "/// up regardless of presence. trace:STORY-561 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-561",
+            "agreed_id": "STORY-561",
+            "title": "aida home / aida away: operator-presence state the autonomy ladder keys on (not per-command flags)",
+            "execution_mode": null,
+            "tags": [
+              "aida:presence",
+              "autonomy",
+              "core",
+              "needs-supervised-build",
+              "operator-tooling",
+              "ux"
+            ],
+            "description_sha256": "11be14fcf7be72b41143f6f0685311c81af82e35d05ee440ddc101a89a667a89",
+            "object_sha256": "00ef42db3b8810c33cb82bb5a9fbf6bb95469c365f0bba748d78c668f675b97f"
+          }
+        },
+        {
+          "id": "STORY-564",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "zen::clear_needs_human_marker and the explicit finish outcome/auto-exit decision are unchanged. Teardown gains safer leaked-process signalling, but does not change clean versus needs-human selection, finish briefs or the cleanup invocation sequence.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "base",
+              "blob_sha256": "90816ce68970c80d09330c77333fa9b19532b76b13c7d98c48210fd70b2f62ea",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1733,
+                  "text": "// trace:STORY-564 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_end.rs",
+              "side": "head",
+              "blob_sha256": "c4d2e92ebf6db36837b2f2e8017c17a1880e1f4265e7b5f92e68821f26b4dc17",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1735,
+                  "text": "// trace:STORY-564 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-564",
+            "agreed_id": "STORY-564",
+            "title": "aida queue work --zen: auto-exit on a clean finish (no human needed), pause only when a human IS needed",
+            "execution_mode": null,
+            "tags": [
+              "aida:queue:work",
+              "autonomy",
+              "core",
+              "needs-supervised-build",
+              "operator-tooling",
+              "session-lifecycle",
+              "zen"
+            ],
+            "description_sha256": "5715b6e3604e5e50d37a5643de3b7e98ca47ee91eb59230d0b96f81e5de8e081",
+            "object_sha256": "90bbba5b4cc1bd91c64cfc730516e6687eef4457610492e9c4082afebc294c34"
+          }
+        },
+        {
+          "id": "STORY-994",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "TerminalIdentity, terminal capture, title/restore functions and role-enter terminal test are unchanged. view_for still copies the same terminal field; the added pid_start is a separate process identity, not terminal identity.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "base",
+              "blob_sha256": "52f0852cfaebd664baa29700e3f9149c024b49a066ef8ac0386be524091467d9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 186,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 221,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 571,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 701,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2042,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2047,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2052,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2116,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2121,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2129,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2138,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2154,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2214,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2243,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2279,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2689,
+                  "text": "// trace:STORY-994 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 191,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 226,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 576,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 706,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2048,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2053,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2058,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2122,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2127,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2135,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2144,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2160,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2220,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2249,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2285,
+                  "text": "// trace:STORY-994 | ai:codex"
+                },
+                {
+                  "line": 2695,
+                  "text": "// trace:STORY-994 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-994",
+            "agreed_id": "STORY-994",
+            "title": "Capture terminal identity at agent launch and title the tab so a human can find the session",
+            "execution_mode": "drain",
+            "tags": [
+              "from-product",
+              "recommend:approve",
+              "registry",
+              "risk:low",
+              "session",
+              "terminal",
+              "ux"
+            ],
+            "description_sha256": "703c76fb91e7bbfd36c903efbf4bd59becde9da375bafc20a0f5de4e5ec90309",
+            "object_sha256": "ded116fb0f135723b73d403d55dc95900645141a6b86b4d05acc39e9dc0f2f64"
+          }
+        },
+        {
+          "id": "TASK-1232",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only noexec parser/preview fixtures and launch rendering are unchanged. No stop or session-end change affects resolved launcher argv or permission summaries.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 286,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 309,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 286,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 309,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1232",
+            "agreed_id": "TASK-1232",
+            "title": "aida agent new --noexec/--print-command: show the resolved command line + permission posture (sandbox/approval) without launching",
+            "execution_mode": "drain",
+            "tags": [
+              "agents",
+              "codex",
+              "launcher",
+              "permission-posture",
+              "ux"
+            ],
+            "description_sha256": "f3966c730b4f320119f7a8357b3400901ba5dd7ffea2a427cf4a5ba72b7cffdb",
+            "object_sha256": "78fceceb33f8f969eb5d363ef7c743ee199b0cb9b03781baa7536c8dd03c449a"
+          }
+        },
+        {
+          "id": "TASK-1233",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only contained setup fixture is unchanged. The PR neither writes agents/Codex configuration nor changes init/scaffold posture prompts.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1360,
+                  "text": "// matching Codex sandbox table. trace:TASK-1233 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1360,
+                  "text": "// matching Codex sandbox table. trace:TASK-1233 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1233",
+            "agreed_id": "TASK-1233",
+            "title": "aida init / scaffold: detect missing-or-incoherent permission posture and offer to set contained (extend TASK-698 first-machine agent-config)",
+            "execution_mode": "drive",
+            "tags": [
+              "agents",
+              "aida:init",
+              "aida:scaffold",
+              "config",
+              "depends-on:phase-1",
+              "parent:EPIC-65",
+              "permission-posture"
+            ],
+            "description_sha256": "53902c5feeba774595ee71f9de9ef3761d74810bc235dad351c11b5946d10d4a",
+            "object_sha256": "65e062406f062f51f14a3c0a17d367ce5a2a4fdf2289867dc73939c79b427459"
+          }
+        },
+        {
+          "id": "TASK-1750",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Extends canonical pid-plus-start identity consumption to agent stop and leaked-process termination: recorded registry/lease start identities reach TerminateTarget, strict matching guards both signal phases, and survivor checks use canonical process_identity_is_alive. Existing entry liveness helpers are unchanged, but their canonical identity contract now governs additional signal paths.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "base",
+              "blob_sha256": "52f0852cfaebd664baa29700e3f9149c024b49a066ef8ac0386be524091467d9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 88,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 1718,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 2863,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry.rs",
+              "side": "head",
+              "blob_sha256": "5d2b89bf826454f3cffa85c39cb3c8fb0f8fdfc1a3a9d0dc047d33381fef7b99",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 88,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 1724,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 2869,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1194,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "449469f82536c414d0f0e8f4f0531fa20676bae9c18280f815663a6d93cfd0eb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1194,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1750",
+            "agreed_id": "TASK-1750",
+            "title": "Arch: one process-liveness primitive (pid + start time) instead of 5 helpers and 24 raw kill(pid,0)//proc checks",
+            "execution_mode": "drive",
+            "tags": [
+              "arch-review-2026-10-13",
+              "architecture",
+              "tech-debt"
+            ],
+            "description_sha256": "12ba137584cf1c2ebaf33e9282dd71250cc4f52e0802b2dc1836862902934b91",
+            "object_sha256": "2eea8476585664642c027015322e70ff457f9614290b43068b0632929387e7c1"
+          }
+        },
+        {
+          "id": "TASK-798",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only contained_enable_alias_in_config_toml fixture is unchanged. No configuration section, enable alias or launch-posture lookup changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "base",
+              "blob_sha256": "0f9dc99bd8fbab55dd3e555514d53cde1559c83cf46541f4d21190e59dd3ee86",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1293,
+                  "text": "// trace:TASK-798 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/agent_launcher_tests.rs",
+              "side": "head",
+              "blob_sha256": "390236998313bd3ce93035ee4083d43f00dc9be23dd26b1d7fa82c80396072ed",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1293,
+                  "text": "// trace:TASK-798 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-798",
+            "agreed_id": "TASK-798",
+            "title": "Config coherence: contained ENABLE is [agents] contained but the egress allowlist is [contained] allowed_hosts \u2014 two sections for one feature",
+            "execution_mode": null,
+            "tags": [
+              "aida:contained",
+              "cli-consistency",
+              "config-coherence",
+              "from-friction",
+              "relates:STORY-605"
+            ],
+            "description_sha256": "e9e262b9d7015e5c44c2eccc8ad521b32f86e598636328354c32c0ded8349e41",
+            "object_sha256": "c3ea6cac5ff9f82b8a0d4b806ceacd7221bee1618f5398e75507d5a7d16b7cf9"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2672,
+      "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "head": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef",
+      "named_policy_refusal": true,
+      "title": "[AI:claude] fix(contained): agent new honours a contained parent; --bg keeps containment (BUG-2151)",
+      "full_blocker_count": 18,
+      "scoped_blocker_count": 18,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2144",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "Frozen advisor cap ruling explicitly names BUG-2151 as its agent-new follow-up; the new parent guard implements that containment floor.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2144",
+            "agreed_id": "BUG-2144",
+            "title": "Contained codex/agy drain still runs its queue-work implementer and reviewer children uncontained (containment_applied silently false)",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "2a760153ed9f02d25b1fa1062aa5581fbfcebcc0d9baf88e7e9bc9e1bc9ea8c6",
+            "object_sha256": "1d630471cc21ffa72f11681b14289bfd32a72f638b445377338189d4bf6ba31f"
+          }
+        },
+        {
+          "id": "BUG-2145",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "incidental",
+          "rationale": "Named via the branch inventory, but queue-work auto-complete/sandbox dispatch is unchanged; agent-new background posture is separate.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2145",
+            "agreed_id": "BUG-2145",
+            "title": "queue work --auto-complete --sandbox silently runs the whole drain uncontained",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "a8666fe46365411d2bbc34d370d4e8c401971c117a6bd539912216f14f6bed95",
+            "object_sha256": "2b2a5bdde8b751c078c34d17dbc3765f1b1c330c415a16b32d71619e078f786d"
+          }
+        },
+        {
+          "id": "BUG-2146",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "Fallible background config selection propagates malformed agents.toml failure instead of disabling containment.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2146",
+            "agreed_id": "BUG-2146",
+            "title": "A malformed agents.toml silently disables containment (load_agents_contained(..).unwrap_or(false))",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "b47b59c842305771527e0bcb62c6ce06b75a7a92c12548e955faaa804cf8e97a",
+            "object_sha256": "a30b28c1b06e4686da81644a9d7a36d37553a77c5c6bbd289a8f32728d7032e2"
+          }
+        },
+        {
+          "id": "BUG-2151",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "New/resume foreground/background containment and final override refusals directly implement the named supervised bug.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2151",
+            "agreed_id": "BUG-2151",
+            "title": "aida agent new ignores a contained parent (AIDA_CONTAINED) and treats --bg as an explicit posture, launching children uncontained",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "d1e26691bedfdd7d351e171d38abac39ea5e445a7ce785360f350c417768dd99",
+            "object_sha256": "3574f71f6bebb41fe30c5997bba2c9aece0ff63e161723e1075a76fb46c19aed"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "diff_sha256": "c359fa09983e700d1a622d312d39641917a823b4eb1c051b6a81b46324afbe1f"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "diff_sha256": "455fa577ede6a9caf537d118a2fe20b02ddcb6fe57c3ba9963c5aa169bd32e38"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs",
+          "diff_sha256": "20d06782e72c955ecb6179fa810668644b8dab7330ed4570c5b7b43659f511c3"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1178",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Replaces the Claude agent-new posture selection with resolve_claude_new_posture, choosing contained flags for a contained parent and preserving contained background launches instead of forcing bypass. It reuses promptable tool_contained_flags and the unchanged dontAsk guard, but changes when the interactive contained posture is selected; this touches the launch-kind/permission-posture contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1526,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1545,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1551,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 2788,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1572,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1591,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 1597,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                },
+                {
+                  "line": 2975,
+                  "text": "// trace:BUG-1178 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1178",
+            "agreed_id": "BUG-1178",
+            "title": "Contained posture applies --permission-mode dontAsk to INTERACTIVE launches \u2014 a TTY advisor session is denied all Bash with no way to answer",
+            "execution_mode": "drive",
+            "tags": [
+              "batch:bugs-0917",
+              "contained",
+              "dontask",
+              "launcher",
+              "permissions",
+              "ux-signal"
+            ],
+            "description_sha256": "81af32e95a69b75add30bfc726947864a044d7259d63d48a23a6ec18ff79047b",
+            "object_sha256": "145abef2374708a5488aeed1cc137a1f240e4907a3824604726fcc9e982ba4ec"
+          }
+        },
+        {
+          "id": "BUG-1699",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "split_posture_flags adds --allow-dangerously-skip-permissions to the dropped posture flags. Its output also feeds the new final contained-parent guard. This directly changes coherent posture partitioning despite unchanged preview formatting.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1475,
+                  "text": "// trace:BUG-1699 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1519,
+                  "text": "// trace:BUG-1699 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1699",
+            "agreed_id": "BUG-1699",
+            "title": "agent new --no-exec permission_posture claims a resolution that contradicts the conflicting sandbox argv it prints",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "70e61f02d42ef212926d5363c325f84afa80d4e936549d6e0f52d53f7a1dae9f",
+            "object_sha256": "a5eb3d646f18aae77b68afa1df651ecd64de3aa05d03ab77dfbfd0584397380e"
+          }
+        },
+        {
+          "id": "BUG-1720",
+          "policy_reason": "sensitive spec metadata (security) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "gate_agent_bypass and preview use the same unchanged bypass_confirm::args_have_bypass predicate and decision inputs. The new contained-parent guard refuses posture overrides earlier; it does not change equals-form detection, bare-token treatment, consent/strip symmetry or its tests.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3659,
+                  "text": "// trace:BUG-1720 | ai:codex"
+                },
+                {
+                  "line": 4164,
+                  "text": "// trace:BUG-1720 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3846,
+                  "text": "// trace:BUG-1720 | ai:codex"
+                },
+                {
+                  "line": 4351,
+                  "text": "// trace:BUG-1720 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1720",
+            "agreed_id": "BUG-1720",
+            "title": "Bypass consent gate does not detect --permission-mode=bypassPermissions, so the equals form is never confirmed",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:TASK-206",
+              "from-review:PR-2268",
+              "kind:carried-forward",
+              "security-path"
+            ],
+            "description_sha256": "38969301db2c8d41f55a29ebaa5dc52e6e315722088a8b9d4536709dc01929b9",
+            "object_sha256": "ada7ec44ee24f0e58a3422aab7965be7ed5a2556165a240f3bd8c9886838bcf5"
+          }
+        },
+        {
+          "id": "BUG-2006",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "New/resumed Claude configs now set contained=true under a contained parent, and background config-contained launches retain it. Unchanged foreground/background env builders consume is_contained_launch(config) to set/remove AIDA_CONTAINED. The changed config input therefore changes the child environment contract, not just adjacent declarations.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4384,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4440,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4454,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4482,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4647,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4571,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4627,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4641,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4669,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                },
+                {
+                  "line": 4834,
+                  "text": "// trace:BUG-2006 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2006",
+            "agreed_id": "BUG-2006",
+            "title": "Contained launch paths other than queue work never export AIDA_CONTAINED=1, so contained-aware checks treat those sessions as uncontained",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "review-follow-up",
+              "sandbox"
+            ],
+            "description_sha256": "5ae6378e8d6e67237b4ea27ea418b7a6ad816b4e682c387f275306a6612a292e",
+            "object_sha256": "81325aa0893ca4a36ac12680adecc5bc56dde812c135198ef25e72c197ee5171"
+          }
+        },
+        {
+          "id": "BUG-2124",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "The new guard uses the real AgentLaunchConfig plus is_contained_launch/containment_applied, and new/resume paths supply an actual contained decision. This changes inputs to the existing set/strip builders and enforces truthful containment on these launcher paths; the separately listed uncontained phase-driver/autopilot launchers remain unchanged.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 1315,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 4455,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1359,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                },
+                {
+                  "line": 4642,
+                  "text": "// trace:BUG-2124 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2124",
+            "agreed_id": "BUG-2124",
+            "title": "Uncontained launchers (phase_driver, burndown, autopilot intake, questions, compete) do not strip inherited AIDA_CONTAINED",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "follow-up"
+            ],
+            "description_sha256": "ac49dec7f1e59d19e2e708c5fa696b43e7c553b7a0350882fe2b2c5c35743491",
+            "object_sha256": "03df6a4f429ddf573ff01c34553b5689112099e0938d97f20f2e1c8a7a31e3eb"
+          }
+        },
+        {
+          "id": "BUG-2133",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Its frozen advisor ruling states containment is monotonic and no child ever runs with less confinement than its parent. The new agent-new/resume parent guard implements that shared rule on additional launcher paths. The phase-driver builders at its unchanged test-module trace remain unchanged, but the frozen contract extends beyond their bodies.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1373,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1373,
+                  "text": "// trace:BUG-2133 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2133",
+            "agreed_id": "BUG-2133",
+            "title": "Contained drain launches its phase_driver CI-fix and advisor child sessions uncontained",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "3d127c12b4a121f0bcd922a36d57b8191dbfde29abb08b71bd44c5ff12d5a00d",
+            "object_sha256": "f256156ba493d34bc7b5863d6b9891d780a9c1d9767999ad4a7e83099cc9d533"
+          }
+        },
+        {
+          "id": "BUG-2144",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "The frozen advisor cap ruling on #2665 explicitly requires BUG-2151 as the agent-new contained-parent follow-up. This PR implements that continuation, refusing unsupported Codex/agy children and preserving Claude containment. Queue-work dispatch and its test-module declaration are unchanged, but the ruling makes the broader floor part of this contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2144",
+            "agreed_id": "BUG-2144",
+            "title": "Contained codex/agy drain still runs its queue-work implementer and reviewer children uncontained (containment_applied silently false)",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "2a760153ed9f02d25b1fa1062aa5581fbfcebcc0d9baf88e7e9bc9e1bc9ea8c6",
+            "object_sha256": "1d630471cc21ffa72f11681b14289bfd32a72f638b445377338189d4bf6ba31f"
+          }
+        },
+        {
+          "id": "BUG-2145",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The auto-complete/sandbox drain dispatch and its existing test module remain unchanged. New agent-new --bg posture selection is a different entry path and does not thread the queue sandbox flag.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2145",
+            "agreed_id": "BUG-2145",
+            "title": "queue work --auto-complete --sandbox silently runs the whole drain uncontained",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "a8666fe46365411d2bbc34d370d4e8c401971c117a6bd539912216f14f6bed95",
+            "object_sha256": "2b2a5bdde8b751c078c34d17dbc3765f1b1c330c415a16b32d71619e078f786d"
+          }
+        },
+        {
+          "id": "BUG-2146",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Adds a fallible load_agents_contained callback to resolve_claude_new_posture for background config selection; the ? propagates malformed-config failure rather than defaulting containment off. Existing resolver/preview parsing remains unchanged, but a new actual launch decision now consumes the strict config contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2807,
+                  "text": "// BUG-2146: a malformed agents.toml refuses the launch. trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 4115,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2994,
+                  "text": "// BUG-2146: a malformed agents.toml refuses the launch. trace:BUG-2146 | ai:claude"
+                },
+                {
+                  "line": 4302,
+                  "text": "// trace:BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1377,
+                  "text": "// trace:BUG-2144 BUG-2145 BUG-2146 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2146",
+            "agreed_id": "BUG-2146",
+            "title": "A malformed agents.toml silently disables containment (load_agents_contained(..).unwrap_or(false))",
+            "execution_mode": null,
+            "tags": [
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "b47b59c842305771527e0bcb62c6ce06b75a7a92c12548e955faaa804cf8e97a",
+            "object_sha256": "a30b28c1b06e4686da81644a9d7a36d37553a77c5c6bbd289a8f32728d7032e2"
+          }
+        },
+        {
+          "id": "BUG-2151",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Adds strict parent-env parsing, monotonic containment guards before preview/spawn, contained --bg selection, coherent passthrough refusal and contained resume configuration using the resumed worktree. New fixtures directly implement the named supervised bug.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1138,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1186,
+                  "text": "// and any side effect. trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1258,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1283,
+                  "text": "// resolve the parent's git root). trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1531,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1939,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 1959,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 2045,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 2105,
+                  "text": "// interaction. trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 2370,
+                  "text": "// Checked before any preview or side effect. trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 2624,
+                  "text": "// Checked before any preview or side effect. trace:BUG-2151 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1381,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs",
+              "side": "head",
+              "blob_sha256": "11dc635af7356869f18b71682d084cfb811ad55e342511e1f799cecd1099dc42",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 9,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                },
+                {
+                  "line": 368,
+                  "text": "// trace:BUG-2151 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2151",
+            "agreed_id": "BUG-2151",
+            "title": "aida agent new ignores a contained parent (AIDA_CONTAINED) and treats --bg as an explicit posture, launching children uncontained",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "d1e26691bedfdd7d351e171d38abac39ea5e445a7ce785360f350c417768dd99",
+            "object_sha256": "3574f71f6bebb41fe30c5997bba2c9aece0ff63e161723e1075a76fb46c19aed"
+          }
+        },
+        {
+          "id": "FR-1-043",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged trace on handle_session_command does not resolve in the frozen store. The changed code is in agent-new/resume helpers, but distance from this dispatcher does not establish the unknown contract; retain the conservative exclusion.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 21,
+                  "text": "/// trace:FR-1-043 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 21,
+                  "text": "/// trace:FR-1-043 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "STORY-1124",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The Codex workspace-write/approval-never argv generator and bypass-only flag separation are unchanged. The added parent guard refuses unsupported AIDA-contained Codex launches; it does not edit the distinct Codex-native contained-autonomous posture or its settings.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1534,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1580,
+                  "text": "// trace:STORY-1124 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1124",
+            "agreed_id": "STORY-1124",
+            "title": "Codex 'contained-autonomous' posture: prompt-free BUT sandboxed (workspace-write + approve-for-me), a middle tier between codex-defaults and --bypass-sandbox",
+            "execution_mode": "drain",
+            "tags": [
+              "agents",
+              "codex",
+              "permission-posture",
+              "sandbox",
+              "security"
+            ],
+            "description_sha256": "9ec89bce430047c48915f37d4830c8bf91c93387e6b500683190a56ce3bbc278",
+            "object_sha256": "f5673bf16ff17da6f1fb9d0424705b5c0b40491b4a871f60e3795663e252764e"
+          }
+        },
+        {
+          "id": "STORY-1226",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Due Jobs prompt section and render_launch_due_jobs_section are unchanged. Posture/config changes neither alter cron registry schedules, due computation, job delivery text nor ledger writes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3810,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 3948,
+                  "text": "// trace:STORY-1226 trace:BUG-1589 | ai:claude+codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3997,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4135,
+                  "text": "// trace:STORY-1226 trace:BUG-1589 | ai:claude+codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1226",
+            "agreed_id": "STORY-1226",
+            "title": "aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)",
+            "execution_mode": "guided",
+            "tags": [
+              "keyboard-gate",
+              "multivendor",
+              "parent:EPIC-62",
+              "reliability",
+              "scheduler",
+              "seats",
+              "substrate-first"
+            ],
+            "description_sha256": "cf5dbd8355df217ef668d53e8b733aa6eb504108506834d20520b3427b6a5a9c",
+            "object_sha256": "d8ea9e494284581cae4052f1d9e81436d71bf6686aa3ac7efdd04682f8acd82e"
+          }
+        },
+        {
+          "id": "STORY-561",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Presence consumers and KEYSTONE_TAG in status_sections.rs are unchanged. Adding a contained-parent test module and launch posture guards does not change home/away defaults or autonomous pickup offers.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2108,
+                  "text": "/// the autonomous ready set. trace:STORY-561 | ai:claude"
+                },
+                {
+                  "line": 2120,
+                  "text": "/// up regardless of presence. trace:STORY-561 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2112,
+                  "text": "/// the autonomous ready set. trace:STORY-561 | ai:claude"
+                },
+                {
+                  "line": 2124,
+                  "text": "/// up regardless of presence. trace:STORY-561 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-561",
+            "agreed_id": "STORY-561",
+            "title": "aida home / aida away: operator-presence state the autonomy ladder keys on (not per-command flags)",
+            "execution_mode": null,
+            "tags": [
+              "aida:presence",
+              "autonomy",
+              "core",
+              "needs-supervised-build",
+              "operator-tooling",
+              "ux"
+            ],
+            "description_sha256": "11be14fcf7be72b41143f6f0685311c81af82e35d05ee440ddc101a89a667a89",
+            "object_sha256": "00ef42db3b8810c33cb82bb5a9fbf6bb95469c365f0bba748d78c668f675b97f"
+          }
+        },
+        {
+          "id": "TASK-1232",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Both foreground and background final contained-parent guards run before noexec preview dispatch. They change whether a launch contract can be previewed, and accepted configs have newly resolved containment/posture inputs. The renderer itself is unchanged, but this directly changes the noexec entry behavior and resolved argv it receives.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4042,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4064,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4098,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4527,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4538,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4229,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4251,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4285,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4714,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                },
+                {
+                  "line": 4725,
+                  "text": "// trace:TASK-1232 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1232",
+            "agreed_id": "TASK-1232",
+            "title": "aida agent new --noexec/--print-command: show the resolved command line + permission posture (sandbox/approval) without launching",
+            "execution_mode": "drain",
+            "tags": [
+              "agents",
+              "codex",
+              "launcher",
+              "permission-posture",
+              "ux"
+            ],
+            "description_sha256": "f3966c730b4f320119f7a8357b3400901ba5dd7ffea2a427cf4a5ba72b7cffdb",
+            "object_sha256": "78fceceb33f8f969eb5d363ef7c743ee199b0cb9b03781baa7536c8dd03c449a"
+          }
+        },
+        {
+          "id": "TASK-1607",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The seat subcommand dispatch and seat-occupancy gateways/identity bindings are unchanged. New guards inspect containment rather than seat occupancy, reservations, caller lineage or graceful takeover.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 285,
+                  "text": "// trace:TASK-1607 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 285,
+                  "text": "// trace:TASK-1607 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1607",
+            "agreed_id": "TASK-1607",
+            "title": "STORY-1485 slice A: graceful single-occupancy path (--kill fails closed as scaffolding)",
+            "execution_mode": "guided",
+            "tags": [
+              "guided-lane",
+              "seat-occupancy",
+              "slice:A"
+            ],
+            "description_sha256": "a31348f03a92b19cbd3d1757743bea8b9167c639d47a36a86fd45c3c5784909c",
+            "object_sha256": "d822efbb96aa9dbcc44ff294a22d58612ea61983a2cb9c4c8ed9df222cd92c7f"
+          }
+        },
+        {
+          "id": "TASK-1750",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Unchanged live_pids in status_sections.rs still uses canonical pid_is_alive. This PR neither changes registry/lease start identities nor adds a liveness or signal decision; resume config posture is separate from process identity.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "base",
+              "blob_sha256": "9461f1ef54dbbc475982436bc549d1c5dd2a1778b4db271bc32f73d1f358d9a6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1194,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/status_sections.rs",
+              "side": "head",
+              "blob_sha256": "33c771ab2120ed63b1b45315660c7eee0fe13394eeedcdbbebfa76e352268965",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1194,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1750",
+            "agreed_id": "TASK-1750",
+            "title": "Arch: one process-liveness primitive (pid + start time) instead of 5 helpers and 24 raw kill(pid,0)//proc checks",
+            "execution_mode": "drive",
+            "tags": [
+              "arch-review-2026-10-13",
+              "architecture",
+              "tech-debt"
+            ],
+            "description_sha256": "12ba137584cf1c2ebaf33e9282dd71250cc4f52e0802b2dc1836862902934b91",
+            "object_sha256": "2eea8476585664642c027015322e70ff457f9614290b43068b0632929387e7c1"
+          }
+        },
+        {
+          "id": "TASK-864",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The actual run_tracked_agent call to resolved_agent_program_and_args and session::os_wrapped_program_and_args remain unchanged. OS-wrap selection still depends on os_wrap_enabled(worktree_root), not the changed config.contained field. New contained argv reaches the same wrapper, but bwrap selection, preflight, roots and missing-bwrap refusal are unchanged.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "base",
+              "blob_sha256": "8800579c07fc2f6f0cab3a5a053a585691af1e245affe45eb1aa3a207f5896ca",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4595,
+                  "text": "// trace:TASK-864 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_launch.rs",
+              "side": "head",
+              "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4782,
+                  "text": "// trace:TASK-864 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-864",
+            "agreed_id": "TASK-864",
+            "title": "Wire bwrap os_wrap into the interactive agent-launch path (aida agent new), not just headless drains",
+            "execution_mode": null,
+            "tags": [
+              "bubblewrap",
+              "from-spike",
+              "parent:SPIKE-68",
+              "reliability",
+              "sandbox"
+            ],
+            "description_sha256": "c8dfd8088f2d02a515700f202f71fe1630c10815f3957faa89801c1879c7347a",
+            "object_sha256": "73e2a82cdbebb2959ef4a4c460409fb8f9fe813517bd59b59fc4308b711ef649"
+          }
+        }
+      ],
+      "supporting_sources": [
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 2046,
+          "text": "pub(crate) fn refuse_uncontained_child_of_contained_parent("
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4629,
+          "text": "command.env(\"AIDA_CONTAINED\", \"1\");"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4836,
+          "text": "command.env(\"AIDA_CONTAINED\", \"1\");"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4631,
+          "text": "command.env_remove(\"AIDA_CONTAINED\");"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4838,
+          "text": "command.env_remove(\"AIDA_CONTAINED\");"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4648,
+          "text": "session::containment_applied(vendor, config.contained)"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 2069,
+          "text": "let only_containment = posture_names == [\"--setting-sources\", \"--settings\"];"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 2406,
+          "text": "if noexec {"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 2658,
+          "text": "if noexec {"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "blob_sha256": "ebd9a16d25db1a3ce38e634bb3cf3f82cbf326f30c897d9ebafc889e8c4063e9",
+          "line": 4784,
+          "text": "resolved_agent_program_and_args(binary, config, plan, prompt_args, true)?;"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/session.rs",
+          "blob_sha256": "86589cddb94fc31ae3327eb59470dd981b4bbea1e1f98841ecc6648042261e47",
+          "line": 3044,
+          "text": "if !os_wrap_enabled(worktree_root) {"
         }
       ]
     }
