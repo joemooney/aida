@@ -1,0 +1,40 @@
+id: 01a14869-cedb-7e33-8f90-69fc44534d9c
+spec_id: STORY-1718
+agreed_id: STORY-1718
+title: 'Review PR-2712: [AI:codex] fix(review): anchor verdict reads and reviewer intent (TASK-1801)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1485a`) for branch `codex/task-1801`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2712>
+  - Branch: `codex/task-1801` → `codex/task-1786`
+
+  ## Covers
+
+  - TASK-1801
+  - TASK-1790
+
+  ## References (not delivered)
+
+  Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2712` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T05:50:56.219511232Z
+modified_at: 2026-10-17T05:50:56.219511232Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
