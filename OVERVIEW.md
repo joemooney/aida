@@ -20,8 +20,12 @@ from pinned Git object IDs, never checkout contents. Rust comments are parsed
 separately from string fixtures. Changed hunks contribute their enclosing fn/impl
 traces and always add the file’s leading header traces, including inner/outer
 doc comments and same-line block comments before the first item. The first
-code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable
-Rust file, or any other text format falls back to full-file union.
+code-token line is conservatively included in full. Module comments outside
+fn/impl items and their attached leading prefixes also add evidence, including
+between items and at EOF. Inline-module headers apply even when attached to an
+unchanged first function. Leading comments owned by other unchanged fn/impl
+items retain their scope. A hunk without safe item attribution, a mode-only
+change, an unparseable Rust file, or any other text format falls back to full-file union.
 For other formats that fallback conservatively includes raw trace tokens,
 including strings. Documentation, configuration, hooks and nested build paths
 are included. Trace markers are case insensitive. Diff ranges and Rust item

@@ -1356,7 +1356,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     );
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 1; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 1; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1365,7 +1365,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     git(root, &["update-ref", "refs/remotes/origin/main", &base]);
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 2; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 2; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1432,7 +1432,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                             .iter()
                             .map(|s| s.id.as_str())
                             .collect::<Vec<_>>(),
-                        vec!["SUP-1", "TASK-1"]
+                        vec!["ITEM-3", "MODULE-2", "SUP-1", "TASK-1"]
                     );
                     // No approval/clearance is fabricated: the fixture decision refuses.
                     Err(MandateRefusal::SpecsUnresolved)

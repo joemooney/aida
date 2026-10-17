@@ -1,3 +1,9 @@
+Rust mandate exclusions also add module comments outside fn/impl ranges and
+inline-module headers, including traces between items and at EOF. Leading
+comments of unchanged sibling fn/impl items retain their scope; attribution
+fallback is unchanged. See OVERVIEW.md.
+<!-- trace:TASK-1800 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.
