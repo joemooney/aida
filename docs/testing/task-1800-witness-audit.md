@@ -8,6 +8,10 @@ judgments about the selected witnesses, **not 18 proven false-positive PRs**.
 Another exclusion in the same PR may still justify refusal. This measurement
 changes no collector, authority rule, or mandate decision.
 
+The [incremental semantic audit](task-1800-semantic-audit.md) now inspects every
+blocker in five cases, including full-file-only reasons. It retains unresolved
+evidence and leaves the frozen-50 classification gate open.
+
 The frozen outcome remains 22 named refusals plus 27 additional trace refusals,
 49/50 total, in both full-file and scoped modes. Among the 22 named witnesses,
 20 correspond to explicitly implemented supervised work; two are unresolved
