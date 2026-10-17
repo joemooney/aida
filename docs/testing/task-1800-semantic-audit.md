@@ -1,16 +1,16 @@
-# Frozen-50 semantic audit: thirteen complete blocker inventories
+# Frozen-50 semantic audit: fifteen complete blocker inventories
 
 <!-- trace:TASK-1800 | ai:codex -->
 
-Thirteen cases now have manual inspection of **every policy-blocking trace ID**, in
-both full-file and scoped modes. This is an incremental measurement: **37 cases
+Fifteen cases now have manual inspection of **every policy-blocking trace ID**, in
+both full-file and scoped modes. This is an incremental measurement: **35 cases
 remain**, and the classification gate is open. No refused case inspected so
 far is proven incidental-only. PR2668 remains the frozen allowed case, with no
 blocking trace IDs. No collector or policy behavior changes.
 
 The [machine data](task-1800-semantic-audit.json) extends the
-[selected-witness audit](task-1800-witness-audit.md). It inventories all 86
-full-file case/ID pairs (77 scoped pairs), not just the first refusal witness:
+[selected-witness audit](task-1800-witness-audit.md). It inventories all 126
+full-file case/ID pairs (109 scoped pairs), not just the first refusal witness:
 
 | PR | Full/scoped blockers | True supervised touches | Incidental blockers | Unresolved blockers |
 | --- | ---: | --- | --- | --- |
@@ -27,17 +27,19 @@ full-file case/ID pairs (77 scoped pairs), not just the first refusal witness:
 | 2656 | 12 / 9 | None established | ADR-54, BUG-1688, BUG-1693, BUG-1924, BUG-2014, STORY-1382, STORY-612, TASK-1205 | TASK-1363, TASK-1364†, TASK-1365†, TASK-1366† |
 | 2674 | 14 / 14 | None established | ADR-54, BUG-1688, BUG-1693, BUG-1924, BUG-2014, EPIC-48, STORY-1353, STORY-1382, STORY-564, STORY-612, TASK-1205, TASK-1289 | EPIC-1-001, TASK-1363 |
 | 2697 | 17 / 17 | TASK-963 | BUG-1167, BUG-1953, BUG-710, BUG-716, BUG-727, STORY-1166, STORY-1171, STORY-1698, STORY-771, TASK-1277, TASK-1330, TASK-1600 | TASK-1331, TASK-140, TASK-141, TASK-142 |
+| 2676 | 22 / 14 | BUG-2148, TASK-1750 | BUG-1043, BUG-1156, BUG-1178†, BUG-1699†, BUG-1983, BUG-2005, BUG-2006†, BUG-2124†, BUG-2133, BUG-2144, BUG-2145, BUG-2146, STORY-1124†, STORY-1473, STORY-561, STORY-564, STORY-994, TASK-1232†, TASK-1233†, TASK-798† | None |
+| 2672 | 18 / 18 | BUG-1178, BUG-1699, BUG-2006, BUG-2124, BUG-2133, BUG-2144, BUG-2146, BUG-2151, TASK-1232 | BUG-1720, BUG-2145, STORY-1124, STORY-1226, STORY-561, TASK-1607, TASK-1750, TASK-864 | FR-1-043 |
 
-† Full-file mode only. Trace totals are **16 true supervised touches, 54
-incidental matches, 16 unresolved** in full-file mode; scoped totals are
-**14, 51, 12**. Counts are case/ID pairs, so a requirement present in two cases
-counts twice. Four cases have no unresolved exclusion reason: PR2654, PR2681
-and PR2653 have true supervised touches; PR2668 has no blockers and was already
-allowed. The other nine retain unresolved evidence, including the combined
+† Full-file mode only. Trace totals are **27 true supervised touches, 82
+incidental matches, 17 unresolved** in full-file mode; scoped totals are
+**25, 71, 13**. Counts are case/ID pairs, so a requirement present in two cases
+counts twice. Five cases have no unresolved exclusion reason: PR2654, PR2681,
+PR2653 and PR2676 have true supervised touches; PR2668 has no blockers and was
+already allowed. The other ten retain unresolved evidence, including the combined
 named token in PR2686. The frozen conservative outcome remains **49/50
 refusals**, comprising 22 named refusals and 27 additional trace refusals.
 
-Seven inspected cases also inventory **every extracted named token**:
+Nine inspected cases also inventory **every extracted named token**:
 
 | PR | Named tokens | Frozen named result and manual finding |
 | --- | --- | --- |
@@ -48,11 +50,14 @@ Seven inspected cases also inventory **every extracted named token**:
 | 2656 | BUG-2135 | Ordinary; compiler-cache detection, startup/restart, hints and fixtures directly implement it |
 | 2674 | TASK-1780 | Ordinary; local testing tiers, targeted-test planner and Makefile target directly implement it |
 | 2697 | BUG-2164 | Ordinary; default-branch/no-number refusal and approved-PR suggestions directly implement it |
+| 2676 | BUG-2148 | Keystone refusal; start-identity capture and strict stop/teardown signal checks directly implement it |
+| 2672 | BUG-2144, BUG-2145, BUG-2146, BUG-2151 | All named keystone blockers; BUG-2144/2146/2151 directly touched, BUG-2145 incidental (queue auto-complete/sandbox dispatch unchanged) |
 
 These named findings are separate from the trace-pair totals. The earlier five
-cases and PR2698 had no named refusal. The three latest cases also had no
-named refusal; their ordinary named tokens are inventoried for completeness. No policy/history classification
-was rerun.
+cases and PR2698 had no named refusal. PR2656, PR2674 and PR2697 also had no
+named refusal; their ordinary named tokens
+are inventoried for completeness. PR2676 and PR2672 have named keystone refusals
+and no unresolved named token. No policy/history classification was rerun.
 
 PR2669's true parent touch, `STORY-1218`, is absent from the existing scoped ID
 set even though other true blockers still refuse that PR. Case-level refusal
@@ -185,18 +190,53 @@ the census lacked history under those names; current aliases TASK-1-223,
 TASK-1-115, TASK-1-117 and TASK-1-118 do not repair it. In particular, feature
 branch resumption is unchanged; default-branch no-number invocation is refused.
 
+PR2676 adds recorded start identity to registry/lease views, captures leaked
+session identities and checks strict matches before TERM and again before KILL.
+BUG-2148 and TASK-1750 are true touches. The unchanged canonical registry-live
+predicate still distinguishes role-enter shells from their descendant sessions;
+this PR does not alter BUG-1156's liveness/reaping predicate. MCP authority,
+parent-grant fixtures, containment launch fixtures, terminal capture/title,
+presence, wrapper staleness and the explicit zen finish outcome remain unchanged.
+Its extra `pid_start` fixture fields are process identity, not seat or terminal
+authority. All 22 full and 14 scoped blockers are resolved; the refusal is true.
+
+PR2672 changes contained-parent posture selection, including resumed Claude's
+own worktree and background config-contained launches. BUG-2151 is direct.
+BUG-1178's interactive posture selection is touched even though the promptable
+flag generator and dontAsk guard remain unchanged. BUG-1699 is touched by adding
+`--allow-dangerously-skip-permissions` to the posture partition. New/resume
+`config.contained` inputs feed unchanged environment consumers, touching BUG-2006
+and BUG-2124. A new fallible background config read touches BUG-2146. Both final
+guards precede `noexec`, changing the preview entry behavior and accepted argv
+inputs, so TASK-1232 is also retained.
+
+The same PR leaves bypass detection/stripping, phase-driver child builders,
+queue-work containment dispatch, Codex-native workspace-write flags, due-job
+rendering, presence, seat gateways and canonical process liveness unchanged.
+However, BUG-2133's frozen advisor ruling explicitly says no child may run with
+less confinement than its parent; BUG-2144's frozen cap ruling names BUG-2151 as
+its agent-new continuation. Both are true shared-contract touches despite their
+unchanged trace-local code. BUG-2145 is incidental in both trace and named
+inventories: its queue auto-complete/sandbox flag path does not change.
+The actual OS-wrap call and `os_wrap_enabled(worktree_root)` decision are
+unchanged: config containment is not that decision input. TASK-864 is therefore
+incidental despite sharing the launcher. FR-1-043 remains unresolved; its
+unchanged session-command dispatcher trace has no frozen contract.
+
 ## Evidence and limits
 
 The data pins each base/head, every changed path's diff hash, each blocker’s
 policy reason and mode membership, exact trace lines and blob hashes, and the
-shared installer call and scorer/control consumer lines outside the changed
-paths. Scoped occurrence selection
+shared installer call, scorer/control consumers and launcher environment/OS-wrap
+decisions outside the changed hunks. The new cases also pin full frozen spec
+object hashes, including the advisor comments that define shared contract scope.
+Scoped occurrence selection
 comes from the prior exact collector's per-path provenance. Full-file-only
 occurrences are recovered from committed changed-path blobs. A full-file
 occurrence can be unselected on one side even when its ID is selected elsewhere.
 
 The policy census covers all 2,160 unique full-set trace IDs, including 331
-blocking IDs; this document manually inspects only the thirteen cases above. It
+blocking IDs; this document manually inspects only the fifteen cases above. It
 reuses that census rather than rerunning history classification. The frozen
 store is `a5dae7145abd11d2480271c466030b12db6e7668`, and the collector SHA-256 is
 `7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8`. Input census
@@ -206,7 +246,7 @@ No ledger contents are published.
 `all_policy_blockers_inspected` means every blocker received a manual judgment;
 it does **not** mean every blocker was resolved. `all_blockers_resolved` is
 separate and includes named uncertainty when a named inventory is present.
-`all_exclusion_reasons_inspected` on the seven named-inventory rows records complete trace
+`all_exclusion_reasons_inspected` on the nine named-inventory rows records complete trace
 and named inspection, including unresolved tokens; it grants no policy clearance.
 None of these fields grants completion, review or shipping authority.
 No symlink, binary, gitlink, fallback or path-class authority change is included.
