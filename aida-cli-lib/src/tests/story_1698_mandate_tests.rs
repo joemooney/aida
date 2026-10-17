@@ -1396,6 +1396,11 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
             ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
         ],
     );
+    // The seat fixture seeds registry/team.toml in the canonical store. Commit
+    // that setup before exercising the production clean-store boundary.
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-qm", "seed fixture seat roster"]);
+    assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
     let mut mandate = active(false);
     mandate.principal = crate::current_user_id(None);
     mandate.issued_at = Utc::now() - Duration::minutes(1);
