@@ -1,3 +1,13 @@
+No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
+symref before asking the forge. A stale origin/HEAD wins over forge evidence;
+refresh it after a remote default change. Without that symref, the read-only
+GitHub probe uses a three-second child-exit deadline. Unknown evidence (including
+timeout, errors, or unsupported forges) requires an explicit PR number. Output
+collection retains the shared helper's existing bounds. PR-base callers retain
+conventional local/remote refs and a final main fallback after the probe fails.
+Approved-change suggestions use numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 Headless drains validate every headless phase seat before queue mutation or
 plan startup, including refusing when the project root cannot be resolved.
 Pooled-worktree reuse revokes the prior occupant's stamped child grant before

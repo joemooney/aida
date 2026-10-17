@@ -1,3 +1,9 @@
+No-number `pr ship` protects main/master, then uses only origin/HEAD as local
+default-branch evidence before a bounded, read-only forge probe. Unknown evidence
+requires a PR number. PR-base callers retain conventional-ref/main fallbacks.
+Refusal suggestions show numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.
