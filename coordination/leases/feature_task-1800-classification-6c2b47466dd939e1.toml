@@ -1,0 +1,12 @@
+scope = "feature:task-1800-classification"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 994201
+pid_start_time = "2026-10-17T10:24:08+00:00"
+agent = "implementer"
+started_at = "2026-10-17T10:24:09.386426532+00:00"
+heartbeat_at = "2026-10-17T10:24:09.386426532+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = false
