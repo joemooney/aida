@@ -1,27 +1,29 @@
 {
   "version": 1,
-  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in five frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in ten frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
   "classification_gate_complete": false,
   "frozen_case_count": 50,
-  "cases_inspected": 5,
-  "remaining_cases": 45,
+  "cases_inspected": 10,
+  "remaining_cases": 40,
   "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
+  "source_policy_classes_sha256": "da882f7dd9ee8cd07466d25f88cab04a76e252fbdabeffe97af517913bd3bed1",
+  "source_witness_audit_sha256": "36739aaabd042f6108bc8427035ba37741c5ad6d05dcf3a76593a35737dac1bb",
   "source_census_sha256": "061de85cc5d0d163dc8fa2728147e2bd79598810f5d34d4a5eb5c5c4cef21c3e",
   "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
   "summary": {
     "full": {
-      "total": 21,
-      "incidental": 10,
-      "unresolved": 5,
-      "true-touch": 6
+      "total": 43,
+      "incidental": 22,
+      "unresolved": 6,
+      "true-touch": 15
     },
     "scoped": {
-      "total": 18,
-      "incidental": 9,
-      "unresolved": 4,
-      "true-touch": 5
+      "total": 37,
+      "incidental": 19,
+      "unresolved": 5,
+      "true-touch": 13
     }
   },
   "rows": [
@@ -2515,6 +2517,2090 @@
           "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
           "line": 3541,
           "text": "let switched = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {"
+        }
+      ]
+    },
+    {
+      "pr": 2668,
+      "base": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+      "head": "0498eac1e9e30bd322ac7db03d3202bf091d7758",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] docs(memories): correct check-ignore precedence claim in the winner memory (TASK-1767)",
+      "full_blocker_count": 0,
+      "scoped_blocker_count": 0,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": true,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1767",
+          "policy_reason": "ordinary",
+          "judgment": "true-touch",
+          "rationale": "The only named token describes the changed check-ignore precedence memory. The frozen named classification allowed it; no named blocker was reported.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1767",
+            "agreed_id": "TASK-1767",
+            "title": "Template memory feedback_check_ignore_names_the_winner.md claims info/exclude outranks .gitignore; git precedence is the reverse",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "15c38bd463f38cff271f6a8e2ed7624b257af5862bce96ecb1b6ee3f5f3302ca"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": true,
+      "changed_paths": [
+        {
+          "path": "aida-core/templates/memories/feedback_check_ignore_names_the_winner.md",
+          "diff_sha256": "a99fabb69fa359fd461e3627fa6eb4c5752d9a4afbd0dd3495daae734e9d1ade"
+        }
+      ],
+      "blockers": []
+    },
+    {
+      "pr": 2681,
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "head": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b",
+      "named_policy_refusal": true,
+      "title": "[AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)",
+      "full_blocker_count": 2,
+      "scoped_blocker_count": 2,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": true,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1782",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "The process identity partition, diagnostics and fixture changes directly implement the named contract.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1782",
+            "agreed_id": "TASK-1782",
+            "title": "agent stop: distinguish recycled vs unknown identity in the not-signalled message; test a live process with pid_start=None",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "aa13c0f97fc2805b59325c800bb1a0bd8a205c29bb8f9e8c225c40c910536e6a"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_registry_root.rs",
+          "diff_sha256": "6d8ac11ee2bf06c74249b118337f2ab1e390d805bb4d80b0495c46151e4a3cb6"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+          "diff_sha256": "ea4bf838ec13e25935fdabf719e74b55dbb8a1830281c9603c4a55bd79d7da24"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-2148",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "agent_stop_in_project changes the identity partition and preserves no-signal/registry retention for recycled, unknown and corrupt records; tests exercise missing and garbage start identities and synchronize the SIGKILL recheck fixture. This directly exercises and changes the identity-safe process-stop contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry_root.rs",
+              "side": "base",
+              "blob_sha256": "5db6ca98dcf5b0850bed5392db870615f648281e752115a7095d6c8490bb7806",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 196,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 207,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/agent_registry_root.rs",
+              "side": "head",
+              "blob_sha256": "c2eadfe42ece2e64909301b473ce3ecf9ea26528ea36e0afece181df019db0d2",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 196,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 207,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                },
+                {
+                  "line": 215,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                },
+                {
+                  "line": 254,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+              "side": "base",
+              "blob_sha256": "4c6fd5457a906b28c770f448a17128d2496a0263bf8a81d1ca4eecc07778022c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1,
+                  "text": "// trace:BUG-2148 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+              "side": "head",
+              "blob_sha256": "cd51b1a2c003fb0d023a6a0143eeb244fb3eca5fcf3e2618a1f0a365a90c65d8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2148",
+            "agreed_id": "BUG-2148",
+            "title": "aida agent stop and session end's leaked-process kill signal by pid-alive only, with no start-time identity check (pid-reuse kill risk)",
+            "execution_mode": null,
+            "tags": [
+              "liveness",
+              "security"
+            ],
+            "description_sha256": "a641ad6f7d5e0d09b0584f04614967a1013e551aa13b98c23ccee46e7c720908"
+          }
+        },
+        {
+          "id": "TASK-1782",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "The changed stop partition, separate recycled/unknown/corrupt diagnostics, None identity fixture and trap-ready synchronization implement the named requirement directly.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/agent_registry_root.rs",
+              "side": "head",
+              "blob_sha256": "c2eadfe42ece2e64909301b473ce3ecf9ea26528ea36e0afece181df019db0d2",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 207,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                },
+                {
+                  "line": 254,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+              "side": "head",
+              "blob_sha256": "cd51b1a2c003fb0d023a6a0143eeb244fb3eca5fcf3e2618a1f0a365a90c65d8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1,
+                  "text": "// trace:BUG-2148 trace:TASK-1782 | ai:antigravity"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1782",
+            "agreed_id": "TASK-1782",
+            "title": "agent stop: distinguish recycled vs unknown identity in the not-signalled message; test a live process with pid_start=None",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "aa13c0f97fc2805b59325c800bb1a0bd8a205c29bb8f9e8c225c40c910536e6a"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2686,
+      "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "head": "9c7ba29c813eb3ee907a2772e705d9224037444e",
+      "named_policy_refusal": true,
+      "title": "[AI:claude] test: deflake fork-window races in regen guard, scorer and shift-lock tests (BUG-2160 BUG-2161)",
+      "full_blocker_count": 6,
+      "scoped_blocker_count": 4,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2160",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "Scorer survivor/guard race handling and git failure diagnostics directly address this bug; the frozen all-ID census classifies this component ordinary.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2160",
+            "agreed_id": "BUG-2160",
+            "title": "Flaky regen tests under load: guards unexpected_fifo_eof... asserts <1s; exit_policy_distinguishes... intermittent 'git cat-file blob failed' with empty stderr",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "768c1cd3c74fad749c06fea143c160ff7608e255f87289a4ac260a5cbd667591"
+          }
+        },
+        {
+          "id": "BUG-2160-2161",
+          "policy_reason": "unresolved trace/spec id",
+          "judgment": "unresolved",
+          "rationale": "Combined branch token does not resolve under the frozen named classifier. Resolving both component IDs does not resolve this token or authorize removing the refusal.",
+          "frozen_current_spec": null
+        },
+        {
+          "id": "BUG-2161",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "Explicit shift-lock unlock and isolated expected-panic reporting directly address the flaky redrive/queue test evidence; frozen all-ID census classifies this component ordinary.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2161",
+            "agreed_id": "BUG-2161",
+            "title": "Flaky CI test: supervise_cmd::bug_1621_watch_redrive_tests::watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "d560796c95985d83cbad0a4917ebf0218e8b90df317144501d489b58767ef5c7"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "diff_sha256": "a775ac2e903302dcdb2ba8c66f7dced4eea74d017b0a8f78a832e0a6b7bdb4c3"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/guards.rs",
+          "diff_sha256": "06d582879f76719cd0228c0154932b336519dd53220e06a2daef3b7471aed359"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/oracle.rs",
+          "diff_sha256": "61de4f8f2c9f72f0221b4678adc2a307e4b90228c49af0e340ae683877e2da3a"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/roots.rs",
+          "diff_sha256": "b363b192c705082f0a7be7ad2775829897f6f39d90b67b9bf4105829d1007034"
+        },
+        {
+          "path": "aida-cli-lib/src/shift.rs",
+          "diff_sha256": "2770edb73221a0d214a3c4713130cdb1f352c01f9d45041dea36d12b263f09e3"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_1682_global_queue_tests.rs",
+          "diff_sha256": "a2a2dec74535cd528bb5f12ff3c8b9a2229e20fce0ae2ccdaf11828930b0f857"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "STORY-1218",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "try_shift_lock now returns ShiftLock with explicit unlock on Drop. run_tick holds this shared lock around live night-shift execution, changing when a subsequent tick can proceed despite inherited child descriptors.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "base",
+              "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 58,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "head",
+              "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 58,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1218",
+            "agreed_id": "STORY-1218",
+            "title": "aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer",
+            "execution_mode": "guided",
+            "tags": [
+              "autonomy",
+              "closure:pending",
+              "docs:impacted",
+              "keyboard-gate",
+              "orchestrator",
+              "parent:EPIC-62",
+              "reliability",
+              "substrate-first"
+            ],
+            "description_sha256": "5084c19179121e5a0c0feb08ccb2d42adefe5a7b7ede1eb1f567709c24c7a854"
+          }
+        },
+        {
+          "id": "STORY-1473",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only trace is the unchanged advisor grant fixture in the global queue errors test. The changed earlier panic-hook suppression and exact-child assertions neither mint nor validate authority; the grant setup and grant-consuming queue call are unchanged.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/bug_1682_global_queue_tests.rs",
+              "side": "base",
+              "blob_sha256": "9e0330d5ba5743cdb3051adfc68e51dbc69e2f3383ce94fb10c0a79c06978acc",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 437,
+                  "text": "// trace:STORY-1473 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/bug_1682_global_queue_tests.rs",
+              "side": "head",
+              "blob_sha256": "6d88dd1d805819943158f0e3b8303f6d596ae8996cc2a2a2745820fa1ce025e6",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 457,
+                  "text": "// trace:STORY-1473 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1473",
+            "agreed_id": "STORY-1473",
+            "title": "Seat authority is session-bound and set at a TTY; the roster caps which seats a user may take; roster writes are human-at-TTY only",
+            "execution_mode": "guided",
+            "tags": [
+              "authority",
+              "needs-operator",
+              "roles",
+              "security"
+            ],
+            "description_sha256": "4df577194391ece4382b1708bbd1b1e4d4ae832ebd0a8ac871514e210d0db19a"
+          }
+        },
+        {
+          "id": "TASK-1491",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Driver status rendering, install_command, tick invocation and systemd/cron switching are unchanged. Shift-lock release affects live tick/redrive serialization, not driver installation, switching or driver diagnostics.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "base",
+              "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3361,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3521,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3540,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3675,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3766,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "head",
+              "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3375,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3535,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3554,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3689,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 3780,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1491",
+            "agreed_id": "TASK-1491",
+            "title": "Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "docs:impacted",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "ef6bf16c72581705008caeea55bdc6e61853f2333e227d04e217ac266f6e1237"
+          }
+        },
+        {
+          "id": "TASK-1492",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "run_redrive_pass_with takes try_shift_lock and holds it through redrive_pass, returning held without requeueing if contended. Explicit unlock changes whether a later redrive is suppressed by a fork-inherited descriptor. This is a shared execution dependency of the opt-in redrive contract, even though its policy guards are unchanged.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "base",
+              "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 88,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 161,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 361,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the re-drive switch lives only in the"
+                },
+                {
+                  "line": 560,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 960,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 972,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 999,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1019,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1309,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1321,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1733,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1755,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1799,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1814,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1826,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1841,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1845,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1860,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1871,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1928,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1996,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2141,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2231,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2441,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2543,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2863,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2869,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3051,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3205,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3387,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3459,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/shift.rs",
+              "side": "head",
+              "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 88,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 161,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 361,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the re-drive switch lives only in the"
+                },
+                {
+                  "line": 560,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 960,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 972,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 999,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1019,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1309,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1321,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1733,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1755,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1799,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1814,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1826,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1841,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1845,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1860,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1871,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1928,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 1996,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2141,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2231,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2441,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2543,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2863,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 2869,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3051,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3219,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3401,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                },
+                {
+                  "line": 3473,
+                  "text": "// trace:TASK-1492 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1492",
+            "agreed_id": "TASK-1492",
+            "title": "Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "1ea5fcb607b39202ac7d887b06a306c1fa246fcd3f833a3e30cfa65520b18b80"
+          }
+        },
+        {
+          "id": "TASK-1730",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "survivors changes which processes are counted/killed, excluding only own pre-exec forks; its count feeds installer_survivors flags and record.clean. Guard collection tests and oracle input read diagnostics also change. This directly touches sandbox score cleanliness, not merely neighboring declarations.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/regen.rs",
+              "side": "base",
+              "blob_sha256": "3826eb91716d9e5dcc3788a61f77244f05b9c36eb478e82ec193c6e7b95aa5c3",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 18,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 302,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen.rs",
+              "side": "head",
+              "blob_sha256": "dfd766462a8bc692bbf44680b9b0e7e7a7a347fa486228f0ce346b9ae90c026a",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 18,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 306,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/guards.rs",
+              "side": "base",
+              "blob_sha256": "2010e83cbeea6764b402e8aae7b6eb1e9a8c30da9e66ff47560329e6e507c27b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/guards.rs",
+              "side": "head",
+              "blob_sha256": "cb3c6de4f68b5801d0687ffbf4ff9a829cb5efdbce738f511f7a353a6b4a647b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/oracle.rs",
+              "side": "base",
+              "blob_sha256": "5e63c53e1c245d9c0d60e05ee372f171045799e46bd363255542f285a17eff56",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/oracle.rs",
+              "side": "head",
+              "blob_sha256": "b776f5a8d9a4f1d277b10ecbefb5e2410c4975b5b2ebcf57eabd039fb6e105f5",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/roots.rs",
+              "side": "base",
+              "blob_sha256": "d9ee40c0f18bff23fea80ff72d185d4576b23792a6e324c7e77a198622f12e3f",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/roots.rs",
+              "side": "head",
+              "blob_sha256": "8667eb3929cc20a739fa62d8d270bfbbf26c1a32a7d288b6b6a46ef47f215b5d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1730",
+            "agreed_id": "TASK-1730",
+            "title": "Project regen config and aida regen score (R1): run the declared oracle in a sandbox and record the score",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "1ea4bd2ba4d08dcccd71e6499e511ae88c41bc3762a609557bac038f8f836e11"
+          }
+        },
+        {
+          "id": "TASK-1731",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Full-file-only blocker: unchanged score.rs consumes the changed roots::survivors result into record.survivors_detected/clean; controls.rs validates zero survivors for the clean-sandbox control. Changing that detector changes a control-gate input even though validate_links, write_entries and copy_trial_tree at the trace locations are unchanged.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/regen/score/oracle.rs",
+              "side": "base",
+              "blob_sha256": "5e63c53e1c245d9c0d60e05ee372f171045799e46bd363255542f285a17eff56",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 103,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 728,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/oracle.rs",
+              "side": "head",
+              "blob_sha256": "b776f5a8d9a4f1d277b10ecbefb5e2410c4975b5b2ebcf57eabd039fb6e105f5",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 105,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 730,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/roots.rs",
+              "side": "base",
+              "blob_sha256": "d9ee40c0f18bff23fea80ff72d185d4576b23792a6e324c7e77a198622f12e3f",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 128,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/roots.rs",
+              "side": "head",
+              "blob_sha256": "8667eb3929cc20a739fa62d8d270bfbbf26c1a32a7d288b6b6a46ef47f215b5d",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 128,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1731",
+            "agreed_id": "TASK-1731",
+            "title": "Regen controls gate: reference, stub and clean-sandbox controls must pass before a trial score is reported",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "e6aeae0811bc03193da93ed7cbea5ff3b5cbea9f00339ca137398f218a3f0655"
+          }
+        }
+      ],
+      "supporting_sources": [
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "blob_sha256": "89b184ab978fdfd67773dc30ec306f44aa8522f111a150ee6e0ca3f8c4e15737",
+          "line": 486,
+          "text": "record.survivors_detected = roots::survivors("
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "blob_sha256": "89b184ab978fdfd67773dc30ec306f44aa8522f111a150ee6e0ca3f8c4e15737",
+          "line": 690,
+          "text": "record.flags.push(\"installer_survivors\".into());"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "blob_sha256": "89b184ab978fdfd67773dc30ec306f44aa8522f111a150ee6e0ca3f8c4e15737",
+          "line": 695,
+          "text": "record.clean = record.status == \"scored\" && record.flags.is_empty() && !record.unconfined;"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/regen/score/controls.rs",
+          "blob_sha256": "37b3b244de66971ab51748a1b379bb4b8f8233401dd528f29a62e7e1029bdb1b",
+          "line": 67,
+          "text": "&& record.survivors_detected == 0"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+          "line": 3014,
+          "text": "match try_shift_lock(project_root)? {"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+          "line": 3124,
+          "text": "match try_shift_lock(project_root)? {"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "blob_sha256": "6b9f75b7e359b562b1688bdd115d3384d07e509a7c422b25db8772cb690c614f",
+          "line": 3043,
+          "text": "redrive_pass(cfg, &p, &state, &ctx, &mut exec)"
+        }
+      ]
+    },
+    {
+      "pr": 2653,
+      "base": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+      "head": "551163384f4769ebfaa38e3afd7107ad59ca5ce2",
+      "named_policy_refusal": true,
+      "title": "[AI:claude] fix(liveness): read exact linux-starttime identities in the canonical liveness path (TASK-1750)",
+      "full_blocker_count": 4,
+      "scoped_blocker_count": 4,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": true,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1750",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "judgment": "true-touch",
+          "rationale": "Canonical exact identity reader and format-aware liveness directly implement this architecture contract.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1750",
+            "agreed_id": "TASK-1750",
+            "title": "Arch: one process-liveness primitive (pid + start time) instead of 5 helpers and 24 raw kill(pid,0)//proc checks",
+            "execution_mode": "drive",
+            "tags": [
+              "arch-review-2026-10-13",
+              "architecture",
+              "tech-debt"
+            ],
+            "description_sha256": "12ba137584cf1c2ebaf33e9282dd71250cc4f52e0802b2dc1836862902934b91"
+          }
+        },
+        {
+          "id": "TASK-1768",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "Strict signal matching replaces lenient liveness at drain/solo stop and forwarding callsites; canonical digit spellings and strict refusal tests implement the named contract. Frozen all-ID census classifies this component ordinary.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1768",
+            "agreed_id": "TASK-1768",
+            "title": "Kill paths (drain_signal.rs SIGTERM) must use a strict liveness variant where 'cannot tell' means 'do not signal'",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "cef3febc293a960a56bdc277a72af63e7909b15a28ddd6ff52ffc36c06b0a8f1"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/drain_cmd.rs",
+          "diff_sha256": "4c2b0151667814a6bf5d5c4b77fda0080d647aef11b2ff4cf09b4fec5786fea6"
+        },
+        {
+          "path": "aida-cli-lib/src/drain_signal.rs",
+          "diff_sha256": "de198d5652238daf87e9b622ccdf6e753d21a900ad94e3cc049caeed03207ba5"
+        },
+        {
+          "path": "aida-cli-lib/src/solo_cmd.rs",
+          "diff_sha256": "d7f4045cb6746fc6ed56393dde9fd2f7a83ea038bdd1f53499f118c0979d7cbe"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/task_1542_drain_stop_tests.rs",
+          "diff_sha256": "0757399c7cb113e14abcdcbca6623b20e4b5cef82f7de8cf1941eeacd5402c04"
+        },
+        {
+          "path": "aida-core/src/db/cache_lock.rs",
+          "diff_sha256": "429cd36f7ec79ca46fe3c91df486170478cafecbac5faee1fef0b87373c0e2a4"
+        },
+        {
+          "path": "aida-core/src/liveness.rs",
+          "diff_sha256": "f0911697dd2cd62ef616d0bd6bad87d34cecbde58e493c0223c94c279165caf6"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1929",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The contained-cache read-only sidecar exception and lock_info_dir_read_only remain byte-identical. Moving the exact identity reader behind a public re-export does not change its cache-side behavior or the sandbox writable set/store write error handling.",
+          "occurrences": [
+            {
+              "path": "aida-core/src/db/cache_lock.rs",
+              "side": "base",
+              "blob_sha256": "1ff3d225fbe36288c51dd7e8eb2b3efaf417566adcaa419095bab78babba72bf",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 571,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 578,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/cache_lock.rs",
+              "side": "head",
+              "blob_sha256": "2b3af13c3f86eb8ab2110c727fd5f3d2598b4661fb4cd35bbd7f0021b0290775",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 548,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                },
+                {
+                  "line": 555,
+                  "text": "// trace:BUG-1929 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1929",
+            "agreed_id": "BUG-1929",
+            "title": "Contained/pool worktree sessions can't write the AIDA store or cache: .aida-store is a symlink to the main checkout, outside the write boundary",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "drain",
+              "factory:2026-10-11",
+              "sandbox",
+              "store",
+              "triaged:night"
+            ],
+            "description_sha256": "48a19019d39ca32997ea2c6cdb089a1a5cca5ff050707a967515d1e4dbf32a45"
+          }
+        },
+        {
+          "id": "STORY-1130",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "handle_drain_stop --now now calls strict signal_drain_stop_now rather than unconditional kill after a lenient lock probe. Unconfirmed identities receive only the cooperative stop request. This directly changes the drain lifecycle stop contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "base",
+              "blob_sha256": "d68d218dee667d62afdbe6b8d1ca5438b57445f8c3dd1195811085686c6c47b6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 499,
+                  "text": "// trace:STORY-1130 | ai:codex"
+                },
+                {
+                  "line": 587,
+                  "text": "// trace:STORY-1130 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "head",
+              "blob_sha256": "6894396d679573b7f8eca4b159682b0e46e555761f4e3a7915c37aa7010e01a4",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 499,
+                  "text": "// trace:STORY-1130 | ai:codex"
+                },
+                {
+                  "line": 587,
+                  "text": "// trace:STORY-1130 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1130",
+            "agreed_id": "STORY-1130",
+            "title": "aida drain start + stop: complete the drain-noun lifecycle as a thin front-door over the existing engine",
+            "execution_mode": "drive",
+            "tags": [
+              "aida:drain",
+              "aida:queue",
+              "discoverability",
+              "drain",
+              "orchestrator",
+              "queue",
+              "ux"
+            ],
+            "description_sha256": "c73af31bc71c426ca05fab3804cb9080666e4db2a5ea7d1edae2df374c6a4b4a"
+          }
+        },
+        {
+          "id": "STORY-771",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The drain and solo module header traces describe prior pure-movement extraction. This PR changes signal/identity behavior inside already-extracted handlers; it neither extracts handlers nor changes their module boundaries/import plumbing.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "base",
+              "blob_sha256": "d68d218dee667d62afdbe6b8d1ca5438b57445f8c3dd1195811085686c6c47b6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 6,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "head",
+              "blob_sha256": "6894396d679573b7f8eca4b159682b0e46e555761f4e3a7915c37aa7010e01a4",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 6,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/solo_cmd.rs",
+              "side": "base",
+              "blob_sha256": "c62b411ac7331b475425d4acf1e134af5ca1c4eb511ee8ba4e0ab41f75756855",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 4,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/solo_cmd.rs",
+              "side": "head",
+              "blob_sha256": "b7993c09abcde6f2f9e70ff87a2283c935c9f73d51408342f60a88a303544e6c",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 4,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-771",
+            "agreed_id": "STORY-771",
+            "title": "SPIKE-78 follow-up: extract the keystone command handlers (pr/mcp/orchestrator/drain/queue/status/solo/zen) out of main.rs",
+            "execution_mode": "drive",
+            "tags": [
+              "batch:guided-0719",
+              "parent:SPIKE-78",
+              "refactor",
+              "tech-debt"
+            ],
+            "description_sha256": "7229edbcadd2f5202b8bef09b70c11dfabcff2037eb4e319af94dac4ebfb3475"
+          }
+        },
+        {
+          "id": "TASK-1750",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Moves exact process identity reading to canonical liveness, accepts scheme-prefixed records through matching format probes, adds strict signal semantics and replaces cache-local implementation with its re-export. This directly implements canonical identity behavior.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "base",
+              "blob_sha256": "d68d218dee667d62afdbe6b8d1ca5438b57445f8c3dd1195811085686c6c47b6",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1029,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/drain_cmd.rs",
+              "side": "head",
+              "blob_sha256": "6894396d679573b7f8eca4b159682b0e46e555761f4e3a7915c37aa7010e01a4",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1112,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/db/cache_lock.rs",
+              "side": "head",
+              "blob_sha256": "2b3af13c3f86eb8ab2110c727fd5f3d2598b4661fb4cd35bbd7f0021b0290775",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 299,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/liveness.rs",
+              "side": "base",
+              "blob_sha256": "342e1cf089a3aa841d2a9ec8b2449ea6b32088431aee736a4d755addf7fa5515",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 750,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 1526,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/src/liveness.rs",
+              "side": "head",
+              "blob_sha256": "aed8bb58beb833245ba5b24b79f6cbf3bd9fc5248e2f4e1800b66d508e8a17d4",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 711,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 723,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 757,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 769,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 783,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 794,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 831,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 934,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                },
+                {
+                  "line": 2013,
+                  "text": "// trace:TASK-1750 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1750",
+            "agreed_id": "TASK-1750",
+            "title": "Arch: one process-liveness primitive (pid + start time) instead of 5 helpers and 24 raw kill(pid,0)//proc checks",
+            "execution_mode": "drive",
+            "tags": [
+              "arch-review-2026-10-13",
+              "architecture",
+              "tech-debt"
+            ],
+            "description_sha256": "12ba137584cf1c2ebaf33e9282dd71250cc4f52e0802b2dc1836862902934b91"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2698,
+      "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "head": "06c6c50962f24641bd341c5b11112d00053f5f84",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(worktree): re-mint after a hand-deleted worktree instead of a misleading refusal (TASK-1784)",
+      "full_blocker_count": 10,
+      "scoped_blocker_count": 9,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "diff_sha256": "10c7b97700bb30c1d251aaab343aacee71ff7481ce9820f43d602ee3a41672f9"
+        },
+        {
+          "path": "aida-cli-lib/src/session_start.rs",
+          "diff_sha256": "3b32d90ebb09326e414da3fe4c1c1b811d270e1acb8bdab31174f394666c0bc1"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/worktree_handler_tests.rs",
+          "diff_sha256": "536e6fc1938ed1a85ee565b14d8b50f1b0fe6e2d4b60c7b99fd1ab3c33d070dd"
+        },
+        {
+          "path": "aida-cli-lib/src/worktree_gc.rs",
+          "diff_sha256": "80ae7c2550a6539dcb2511dd4cf241f7b570e89aad9f44586d65b11dc30edf8c"
+        },
+        {
+          "path": "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs",
+          "diff_sha256": "4b43b12a70ce430ea18bef579a363714919d4ddbdcb6feb18007f5634c2164d1"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "diff_sha256": "9e8e6af32188eb956bb13aeaed5cc239639cd651e5b70758a30bca49334ef18e"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1533",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The fixed explicit sender identity in notify_sessions and mailbox message construction are unchanged. Deleted-worktree recovery and release_lease_files neither derive nor change a mailbox sender.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "base",
+              "blob_sha256": "6b1e246a28ef317a8551e248ba92a005d5d394b6ddeee79f80a33c0225324f60",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1321,
+                  "text": "// trace:BUG-1533 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "head",
+              "blob_sha256": "01ac11ce6d91b12f786ee3005e5b4d1adb4f711d5de002dc7b17492e27a1d212",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1327,
+                  "text": "// trace:BUG-1533 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1533",
+            "agreed_id": "BUG-1533",
+            "title": "Mail sender identity falls back to the shell user, so 216 of 336 messages cannot be attributed to a seat from the envelope",
+            "execution_mode": null,
+            "tags": [
+              "attribution",
+              "identity",
+              "mailbox",
+              "severity:operational",
+              "substrate-truth"
+            ],
+            "description_sha256": "f0c4d2acb9d4e850793072cc7f53c9164200792b6b86da9845b82b807f47864c"
+          }
+        },
+        {
+          "id": "BUG-2139",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Extracts revoke_lease_child_grant-before-lease-removal into release_lease_files and adds a new caller after successful dead-lease re-mint in ensure_spec_worktree. Although reap cleanup retains its order, the new recovery path now revokes a delegated headless grant; this changes where the authority lifecycle is applied.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "base",
+              "blob_sha256": "6b1e246a28ef317a8551e248ba92a005d5d394b6ddeee79f80a33c0225324f60",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1010,
+                  "text": "// trace:BUG-2139 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "head",
+              "blob_sha256": "01ac11ce6d91b12f786ee3005e5b4d1adb4f711d5de002dc7b17492e27a1d212",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1051,
+                  "text": "// trace:BUG-2139 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2139",
+            "agreed_id": "BUG-2139",
+            "title": "A fresh headless queue-work child inherits the launcher's full grant (including delegable seats), so an advisor running implementer work headless does it with advisor authority",
+            "execution_mode": null,
+            "tags": [
+              "capture",
+              "seats"
+            ],
+            "description_sha256": "856f1986d243de584898011e58880bd215783004885d2f8cd35a298a5666f2f3"
+          }
+        },
+        {
+          "id": "BUG-631",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "for_route_is_request_only and for_target_requires_dispatch_authority are unchanged. New dead-lease recovery is inside worktree add/enter, not queue routing, and does not change which target roles require dispatch authority.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/worktree_gc.rs",
+              "side": "base",
+              "blob_sha256": "f39bfdc2bf5c20c0b317932255d7df8c74c100f2d2808f371f1b97dfd93ab9e9",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1149,
+                  "text": "// trace:BUG-631 | ai:claude"
+                },
+                {
+                  "line": 1166,
+                  "text": "// --for advisor` (a request for review) succeed from any role. trace:BUG-631"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/worktree_gc.rs",
+              "side": "head",
+              "blob_sha256": "239c050367ab503c4d491e6bacff3921294817531608d66e4c2d6a5892f2958e",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1149,
+                  "text": "// trace:BUG-631 | ai:claude"
+                },
+                {
+                  "line": 1166,
+                  "text": "// --for advisor` (a request for review) succeed from any role. trace:BUG-631"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-631",
+            "agreed_id": "BUG-631",
+            "title": "queue-add advisor-authority gate is too broad: 'aida queue add --for advisor' shouldn't need advisor authority",
+            "execution_mode": null,
+            "tags": [
+              "finding",
+              "queue",
+              "role-gate",
+              "substrate"
+            ],
+            "description_sha256": "d3296916d3bf56cd6a000dc454704bf5114ed35ba0a6cd57fed854405f7bdd61"
+          }
+        },
+        {
+          "id": "FR-284",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Existing reap selection, notify predicate and suggested next-spec chain are unchanged. Its old lease/companion cleanup is extracted with the same operations/order. The new worktree recovery path handles hand-deleted trees without changing finished+merged+exited reap criteria, notifications or chained launch.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "base",
+              "blob_sha256": "6b1e246a28ef317a8551e248ba92a005d5d394b6ddeee79f80a33c0225324f60",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 116,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 312,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 346,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 901,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1243,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1275,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1463,
+                  "text": "// live process is never touched. trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1678,
+                  "text": "// trace:FR-284 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "head",
+              "blob_sha256": "01ac11ce6d91b12f786ee3005e5b4d1adb4f711d5de002dc7b17492e27a1d212",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 116,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 312,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 346,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 901,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1249,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1281,
+                  "text": "// trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1469,
+                  "text": "// live process is never touched. trace:FR-284 | ai:claude"
+                },
+                {
+                  "line": 1684,
+                  "text": "// trace:FR-284 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "FR-284",
+            "agreed_id": "FR-284",
+            "title": "Spec-boundary handoff: session reap + chained next-spec launch (no human at every boundary)",
+            "execution_mode": "guided",
+            "tags": null,
+            "description_sha256": "7797db0eecbb2899e5aa7393a1e01157a7ebac8ad22a821734a00b356e781696"
+          }
+        },
+        {
+          "id": "STORY-1218",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "reap_quiet still scans and reaps the same eligible sessions with the same cleanup order via the extracted helper. No night-shift tick, scheduling, wave, redrive or mail behavior changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "base",
+              "blob_sha256": "6b1e246a28ef317a8551e248ba92a005d5d394b6ddeee79f80a33c0225324f60",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1649,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_reap.rs",
+              "side": "head",
+              "blob_sha256": "01ac11ce6d91b12f786ee3005e5b4d1adb4f711d5de002dc7b17492e27a1d212",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1655,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1218",
+            "agreed_id": "STORY-1218",
+            "title": "aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer",
+            "execution_mode": "guided",
+            "tags": [
+              "autonomy",
+              "closure:pending",
+              "docs:impacted",
+              "keyboard-gate",
+              "orchestrator",
+              "parent:EPIC-62",
+              "reliability",
+              "substrate-first"
+            ],
+            "description_sha256": "5084c19179121e5a0c0feb08ccb2d42adefe5a7b7ede1eb1f567709c24c7a854"
+          }
+        },
+        {
+          "id": "TASK-1337",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The pickup role/delegation/occupancy paragraph is unchanged. The added paragraph and source logic concern direct worktree add/enter reminting, not pickup ordering, branch retirement or delegated launch preflight.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "8857daddc755ea4528c725c624174da0e729535ffbb2869e3d70580dde118835",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-230",
+            "agreed_id": "TASK-1337",
+            "title": "guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant \u2014 and the last failure left a half-started session",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1607",
+              "guided",
+              "kind:observation",
+              "linked:STORY-1485",
+              "linked:TASK-1607",
+              "operator-ux",
+              "queue-work",
+              "seat-grants",
+              "severity:major"
+            ],
+            "description_sha256": "2686793fc5c2371df1d861f54fd7c37dcb57dad07fdaf93648f7ee0c241989c9"
+          }
+        },
+        {
+          "id": "TASK-1491",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Systemd/cron installer, driver switching and DriverStatus documentation/source are unchanged. The only manual change adds deleted-worktree recovery near pickup prose.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "8857daddc755ea4528c725c624174da0e729535ffbb2869e3d70580dde118835",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 288,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 339,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 290,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 341,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1491",
+            "agreed_id": "TASK-1491",
+            "title": "Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "docs:impacted",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "ef6bf16c72581705008caeea55bdc6e61853f2333e227d04e217ac266f6e1237"
+          }
+        },
+        {
+          "id": "TASK-1492",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Mail escalation, re-drive and cold-boot documentation/source are unchanged. Sharing the work-autonomy manual and session reap file does not make the direct worktree recovery part of those mechanisms.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "8857daddc755ea4528c725c624174da0e729535ffbb2869e3d70580dde118835",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 337,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 339,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1492",
+            "agreed_id": "TASK-1492",
+            "title": "Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "1ea5fcb607b39202ac7d887b06a306c1fa246fcd3f833a3e30cfa65520b18b80"
+          }
+        },
+        {
+          "id": "TASK-1561",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only blocker: pickup_worktree_path and its worktree_parent resolver are unchanged. Reused-branch refresh gains confirmed-remote-absence handling but does not change the fallback layout or its preview/callers.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/session_start.rs",
+              "side": "base",
+              "blob_sha256": "94a858c45114350827b33155895d33161ac55d5880c297ff0cbe023fd724926f",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 664,
+                  "text": "// trace:TASK-1561 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/session_start.rs",
+              "side": "head",
+              "blob_sha256": "724a301f57c2751b4467f754680c5bac4cf6a634f57748363963d8a99d6a7627",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 692,
+                  "text": "// trace:TASK-1561 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1561",
+            "agreed_id": "TASK-1561",
+            "title": "Warm-pool fallback ignores [worktree_pool] worktree_parent, so pickup worktrees escape the one folder-trusted directory BUG-1700 built",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "9d7eea9800c7c388bceaf23f3cc2268123545753cfe80089b809fa0855aaf66c"
+          }
+        },
+        {
+          "id": "TASK-176",
+          "policy_reason": "history unreadable: no version of TASK-176 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged trace precedes substrate command documentation. As in PR2701/2669 its frozen current alias points to manual preflight work while historical policy evidence is unavailable; keep unresolved despite the distant worktree paragraph change.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "8857daddc755ea4528c725c624174da0e729535ffbb2869e3d70580dde118835",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 281,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 283,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-152",
+            "agreed_id": "TASK-176",
+            "title": "CLI-manual preflight guard already fails on three unresolved flags",
+            "execution_mode": "drain",
+            "tags": [
+              "batch:night-0920",
+              "ci",
+              "docs-drift",
+              "drain-safe",
+              "from-advisor:BUG-1420",
+              "kind:observation",
+              "linked:BUG-1420",
+              "preflight",
+              "severity:major"
+            ],
+            "description_sha256": "8c56e9c31e266ef2c3fe6aac65f3fefe0825e340aced57380fa7ffb8e051f042"
+          }
         }
       ]
     }
