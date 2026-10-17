@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:49:52.675233603Z
+modified_at: 2026-10-17T15:50:34.308956017Z
 req_type: Task
 relationships:
 - rel_type:
@@ -282,6 +282,26 @@ comments:
   content: Commit 28575d74a3 references this requirement
   created_at: 2026-10-17T15:49:52.675233603Z
   modified_at: 2026-10-17T15:49:52.675233603Z
+- id: 01a14a8e-ca44-7c61-8833-69c9c6fa12f7
+  author: ai:codex:joe
+  content: |
+    Measurement-only continuation published as non-completing PR #2721: https://github.com/joemooney/aida/pull/2721, exact ready OPEN head2184535fbbc86d6529cd42fcacbea943c7ff4800, stacked on #2720 at371b5b618eb0a1a07b8705d86eabb73427d3e2dc. Three docs/data files only; both Non-completing slice and aida: no-complete markers verified. TASK-1800 stays In Progress.
+
+    Every full/scoped policy-blocking trace ID and every named token inspected in EIGHTEEN cases; added PR2666:
+
+    | PR | Full/scoped | True supervised touches | Incidental | Unresolved |
+    | --- | ---: | --- | ---: | --- |
+    |2666|19/19|TASK-1730, TASK-1731|9|FR-0042, FR-1-052, TASK-123, TASK-1327, TASK-1328, TASK-1331, TASK-1335, TASK-1338|
+
+    Changed ScoreEnv oracle transport, sanitized output and fresh R2 execution touch TASK1730; applying the same ControlGate to both runs and combining status/cleanliness touches TASK1731 despite unchanged predicate bodies. Ordinary named TASK1732 directly implements its frozen adapter/transport rulings. The nine known other contracts (store-host writes/Git/hooks, holds, shell eval, grant verdicts/notices, pickup, completion credit and seat lifecycle) remain incidental. Current aliases/example traces do not repair missing policy history. True trace refusal established, case not fully resolved.
+
+    Cumulative full194 pairs =31 true +126 incidental +37 unresolved; scoped161 =29+102+30. Five cases have no unresolved reason: four true refusals plus already-allowed2668. Other thirteen retain uncertainty. No refused PR proven incidental-only.32 cases remain; semantic gate OPEN; conservative frozen49/50 refusal count unchanged. Previous17 row objects preserved exactly.
+
+    Integrity passed18 endpoints,194/161 complete trace blocker inventories and policy reasons,18 named tokens in12cases,all changed diff/blob/spec hashes,exact trace lines/scoped/fallback provenance,new full frozen contract bytes including comments,unknown-object absence and prior17 preservation. Same clean frozen storea5dae7145abd11d2480271c466030b12db6e7668 and collector7041c86b. No classifier rerun or raw ledger publication. Final actual make check-ci-fast30/30,fmt/diff clean. One spawned fresh author self-check read actual rulings and ran own source/contract/integrity commands: no actionable findings in corrected candidate. Author corrected inaccurate FR1-052 source location to actual inline-trace example; judgment unchanged. Self-check is not independent review.
+
+    STANDARD independent review requested; code2714 remains separate STRICT gate. No runtime/workspace test, end-to-end mandate replay, author verdict,clearance,merge or CI-green claim. No collector,policy,fallback,path-class,symlink or authority behavior change. Normal own lease cleanup follows. Docs/testing/task-1800-semantic-audit.{md,json}; durable evidence/session10.
+  created_at: 2026-10-17T15:50:34.308956017Z
+  modified_at: 2026-10-17T15:50:34.308956017Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
