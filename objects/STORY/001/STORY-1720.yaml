@@ -22,8 +22,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T06:21:31.546848976Z
-modified_at: 2026-10-17T06:21:31.546848976Z
+modified_at: 2026-10-17T06:21:39.381481396Z
 req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a146f1-9c83-7073-8741-23c712fc9b22
+  created_at: 2026-10-17T06:21:39.381478347Z
+  created_by: joe
 filed_at:
   code_sha: 43839973d60cdd23081f2203d876bc97dd5f36be
   branch: codex/task-1800-module-traces
