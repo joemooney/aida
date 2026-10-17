@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:41:23.443439244Z
+modified_at: 2026-10-17T15:49:52.675233603Z
 req_type: Task
 relationships:
 - rel_type:
@@ -277,6 +277,11 @@ comments:
     STANDARD independent review requested; code #2714 retains separate STRICT gate. No collector/policy/fallback/path-class/symlink/authority/shipping/completion change, no workspace runtime/end-to-end mandate replay/verdict/clearance/merge/CI-green claim. Own normal session cleanup will queue the review item. Durable local evidence/session9 in this relay; next prepared packets2666/2650 are unadjudicated only.
   created_at: 2026-10-17T15:40:58.882852093Z
   modified_at: 2026-10-17T15:40:58.882852093Z
+- id: 01a14a8e-27a3-7e73-8c6b-ee5dae4052d4
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T15:49:52.675233603Z
+  modified_at: 2026-10-17T15:49:52.675233603Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
