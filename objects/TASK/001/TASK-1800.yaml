@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T06:21:49.639545534Z
+modified_at: 2026-10-17T10:39:45.441258635Z
 req_type: Task
 relationships:
 - rel_type:
@@ -88,6 +88,11 @@ comments:
     Same frozen50:33 scoped sets gain IDs, every prior ID retained, scoped sets remain subsets of identical full sets, all fallback paths unchanged50cases/290pairs. Frozen witness/subset proof retains22 named +27 additional refusals =49/50. These are conservative refusal counts, not semantic true/incidental classifications. Measurement-only manual classification is next; symlink/fallback/path-class authority changes remain gated by the advisor ruling. STRICT independent review requested; no author verdict/clearance/merge or CI-green claim. Normal own lease/worktree/target cleanup follows.
   created_at: 2026-10-17T06:21:49.639545534Z
   modified_at: 2026-10-17T06:21:49.639545534Z
+- id: 01a14972-3b21-7550-85bb-05be5bcb3052
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T10:39:45.441258635Z
+  modified_at: 2026-10-17T10:39:45.441258635Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
