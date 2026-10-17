@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:09:32.180659596Z
-modified_at: 2026-10-15T15:41:13.925655882Z
+modified_at: 2026-10-17T05:55:29.511662883Z
 req_type: Task
 tags:
 - from-implementer:STORY-1679
@@ -24,6 +24,41 @@ relationships:
 - rel_type: Child
   target_id: 01a12d8f-854b-7be0-955a-33b56763ff52
   created_at: 2026-10-15T15:09:32.180981087Z
+comments:
+- id: 01a1486d-fa67-7860-83e3-b747beccf3af
+  author: ai:codex:joe
+  content: |
+    Proposed architecture sketch v1 — NOT SIGNED; no implementation started (2026-10-16, Codex relay Session 2).
+
+    Acceptance explicitly requires advisor signoff on schema/trust before coding. Existing seams inspected: regen/consensus.rs analyze/render/file_gaps; score.rs load_config/TrialRecord; regen.rs CorpusRow/export. Consensus already pins oracle_sha + oracle_bundle_sha256 + corpus content_sha256, and draft dedup is the existing exact-check gap tag under Storage::update_atomically.
+
+    Proposed data contract:
+
+        # .aida/regen-check-map.toml in the trusted code repository
+        format_version = 1
+        [[checks]]
+        name = "exact.case-sensitive/oracle-check"
+        spec_uuid = "<canonical requirement UUID>"
+        description_sha256 = "<64 lowercase hex bytes digest>"
+        clauses = [{ text = "exact contract acceptance paragraph", sha256 = "<SHA256 of UTF-8 text>" }]
+
+    One exact check maps to one owning spec UUID and one or more clauses within that spec. No regex, fuzzy display-ID matching, globbing, executable values, invented clause IDs, or multi-owner parent selection. Clause identity is the exact UTF-8 excerpt plus its hash, uniquely occurring in the selected corpus description. Full description hash deliberately treats any intervening description change as stale until the trusted mapping is updated. UUIDs survive display-ID remapping.
+
+    Trust and provenance:
+    1. No CLI mapping-path override and no read of the checkout's current mapping. Resolve the trusted default-branch tip once; selected trial oracle_sha must be an available commit in that trusted history. Read only the fixed regular-blob mapping at that immutable oracle_sha. Missing Git objects or unverifiable ancestry yield explicit unavailable diagnostics and no links. No default-branch or store fetch/rebuild is implicit.
+    2. Strict version/field parsing, duplicate exact check names invalid, bounded blob size/entry counts, no symlink/gitlink interpretation, no following host paths, no shell/command execution. Unknown versions/fields are invalid. A malformed document invalidates the mapping; well-formed entries with stale references are diagnosed per check.
+    3. Reconstruct the selected corpus from committed store_sha using the existing version-1 corpus projection and verify its content_sha256 equals the consensus population. Resolve UUID, description hash and unique exact clause text there. Missing owner/clause, ambiguous excerpt or hash mismatch means stale mapping. Do not invent a parent from title prose. Mapping is not added to exported blind corpus or regenerated tool inputs.
+    4. No trial format change or scoring/cleanliness/control authority. Legacy trials whose pinned code commit has no mapping continue with the explicit missing diagnostic and current unparented-draft behavior.
+
+    Reporting and opt-in filing:
+    - Keep all current consensus provenance/discriminating-set validation, counts, diversity warnings and report-only default. For each gap render mapped owner/clause context, or precise missing/invalid/stale/unavailable status; mapping is a proposed investigation target, not proof of defect/cause.
+    - Only --file writes. Revalidate the referenced UUID and description/clause evidence on the live graph inside the existing atomic store mutation; archived/missing/changed owners yield stale/no parent. Completed contract owners remain valid parents; no owner status/description changes.
+    - Preserve the existing exact-check dedup tag and active-draft predicate unchanged. A newly filed validly mapped amendment gets the ordinary parent relationship to the owning spec using canonical graph conventions; invalid/unmapped gaps retain explicit unparented draft diagnostics.
+    - Proposed existing-draft policy needing signoff: for an existing deduplicated draft, --file may add the validated parent only when no parent exists; repeat calls then do nothing. An existing different parent is never replaced, and reports a conflict without filing a duplicate. Do not overwrite existing title/description/status. Record the add-only link provenance in a comment. This supports mapping becoming available after an initial unparented filing without changing dedup identity.
+
+    Verification plan: strict schema/duplicate/version/mode negatives; valid UUID + exact clause; missing mapping; unavailable committed evidence; stale corpus and live-description/owner references; remapped display alias; ambiguous clause text; unchanged report-only store; mapped draft parent in the real Storage atomic seam; repeat filing/dedup and existing different-parent conflict. Existing STORY-1679 tests remain green. No production code until advisor explicitly signs this schema/trust/parent policy or supplies revisions.
+  created_at: 2026-10-17T05:55:29.511662883Z
+  modified_at: 2026-10-17T05:55:29.511662883Z
 history:
 - id: 01a14039-91e8-7f70-9646-6686cc0e631b
   author: joe
