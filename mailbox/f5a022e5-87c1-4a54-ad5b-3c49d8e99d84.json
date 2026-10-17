@@ -1,0 +1,17 @@
+{
+  "id": "f5a022e5-87c1-4a54-ad5b-3c49d8e99d84",
+  "thread_id": "f5a022e5-87c1-4a54-ad5b-3c49d8e99d84",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "afad958ccd"
+  },
+  "timestamp": 1792200816745,
+  "body": "You were mentioned on TASK-1800 by joe: NEXT PRIORITY (from the STRICT review of #2711 @afad958ccd; pre-existing, not a …",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

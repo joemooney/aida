@@ -1,0 +1,27 @@
+id: 01a14799-c5ea-7fd2-a244-dad0b9695cc5
+spec_id: TASK-1802
+agreed_id: TASK-1802
+title: Rewrap TASK-1800 mandate prose in OVERVIEW.md and AGENTS.md
+description: |
+  PR #2711's mandate-exclusion edits leave one ~140-column unwrapped line in OVERVIEW.md, in the mandate paragraph ("...The first code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable"). They also leave a short orphan line in AGENTS.md ("with full-file fallback when attribution"). Rewrap both to the surrounding ~80-column prose. This is cosmetic only and changes no behavior.
+
+  Raised in review of PR-2711: https://github.com/joemooney/aida/pull/2711
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T02:03:42.442417321Z
+modified_at: 2026-10-17T02:03:42.442417321Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2711
+- severity:cosmetic
+filed_at:
+  code_sha: afad958ccd67b84917da7950a2b4fd900306046e
+  branch: pr-2711
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a7101365ea
+  vendor: claude
+  session: 01a1477eb7e0
