@@ -8,6 +8,13 @@ conventional local/remote refs and a final main fallback after the probe fails.
 Approved-change suggestions use numeric ship commands.
 <!-- trace:TASK-1795 | ai:codex -->
 
+Headless drains validate every headless phase seat before queue mutation or
+plan startup, including refusing when the project root cannot be resolved.
+Pooled-worktree reuse revokes the prior occupant's stamped child grant before
+removing its lease, while leaving sibling worktrees and the parent grant intact.
+Delegated children retain exactly their parent's expiration timestamp.
+<!-- trace:TASK-1789 | ai:codex -->
+
 Mandate exclusion ledgers require a regular file owned by the current uid with
 exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
 An absent ledger stays empty; invalid metadata or content refuses mandate
@@ -15,8 +22,29 @@ coverage. Mandate start/stop retains the shared direct-human authority check,
 with mandate-specific recovery commands. Hold re-arm uses the same composition
 and marker write, but its single placement event explicitly names the failed
 mandate ship; the event follows marker restoration and precedes label sync.
-Marker and label failures remain explicit. Trace-derived mandate exclusions are
-not part of this slice.
+Marker and label failures remain explicit.
+
+Mandate-only exclusion checks add trace IDs from both committed sides of changed
+text files of every format, including deleted and renamed files. Source blobs come
+from pinned Git object IDs, never checkout contents. Rust comments are parsed
+separately from string fixtures. Changed hunks contribute their enclosing fn/impl
+traces; a hunk without safe item attribution, a mode-only change, an unparseable
+Rust file, or any other text format falls back to full-file union.
+For other formats that fallback conservatively includes raw trace tokens,
+including strings. Documentation, configuration, hooks and nested build paths
+are included. Trace markers are case insensitive. Diff ranges and Rust item
+maps both count LF lines, including when a file contains bare CR characters.
+Files without traces cannot identify unnamed specs.
+
+These IDs only add exclusions through the existing current/history/sticky-ledger
+classifier. Verdict candidates, author identity and completion credit still use
+named specs. An empty named subject stays unresolved even when traces exist.
+The forge head must match the checked head; a missing local origin base, ambiguous
+merge base, unreadable diff/blob/store, changed symlink, invalid text or
+moving/dirty store refuses coverage. Retry after fetching missing evidence or
+finishing a store write. A stale local origin base can exclude more specs by
+including older changes. Store HEAD and ref tips are checked around collection;
+the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
 
 C7 lifecycle commands resolve invoking caller authority after acquiring the
