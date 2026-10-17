@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:17:19.718232902Z
+modified_at: 2026-10-17T15:28:20.109746078Z
 req_type: Task
 relationships:
 - rel_type:
@@ -217,6 +217,11 @@ comments:
     STANDARD independent review requested. No author verdict, clearance, merge, whole-workspace runtime, end-to-end mandate replay or CI-green claim. No fallback, path-class authority, symlink or other behavior changes. Durable research and next37 inventory: this relay evidence/session7. Own lease/worktree cleanup follows normal session end, which queues the review item.
   created_at: 2026-10-17T15:16:45.866263830Z
   modified_at: 2026-10-17T15:16:45.866263830Z
+- id: 01a14a7a-6e8d-77a1-8aa4-ac7c4ef68041
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T15:28:20.109746078Z
+  modified_at: 2026-10-17T15:28:20.109746078Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
