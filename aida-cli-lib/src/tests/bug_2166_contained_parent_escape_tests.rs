@@ -277,3 +277,51 @@ fn contained_plan_only_ignores_inherited_permission_overrides_and_refuses_bypass
         );
     }
 }
+
+// trace:TASK-1794 | ai:codex
+#[test]
+fn plan_only_refuses_headless_launch_before_setup() {
+    use clap::Parser;
+    for headless in [
+        "--no-human",
+        "--headless",
+        "--unattended",
+        "--drain",
+        "--auto-complete",
+    ] {
+        for sandbox in [false, true] {
+            let mut args = vec!["aida", "queue", "work", "TASK-1", "--plan-only", headless];
+            if sandbox {
+                args.push("--sandbox");
+            }
+            let error = crate::cli::Cli::try_parse_from(args)
+                .expect_err("headless/autonomous launch must not discard plan mode");
+            assert_eq!(
+                error.kind(),
+                clap::error::ErrorKind::ArgumentConflict,
+                "{headless}, sandbox={sandbox}: {error}"
+            );
+        }
+    }
+    assert!(crate::cli::Cli::try_parse_from([
+        "aida",
+        "queue",
+        "work",
+        "TASK-1",
+        "--plan-only",
+        "--sandbox",
+    ])
+    .is_ok());
+    assert!(
+        crate::cli::Cli::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "TASK-1",
+            "--sandbox",
+            "--no-human",
+        ])
+        .is_ok(),
+        "ordinary headless containment remains supported"
+    );
+}

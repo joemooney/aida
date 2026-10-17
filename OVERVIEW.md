@@ -968,5 +968,7 @@ Contained `queue work --plan-only` selects Claude's `plan` permission mode
 alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
 to inherited, explicit sandbox and configured containment. Ordinary contained
 pickups retain `dontAsk`; caller permission overrides under contained parents
-and bypass/contained combinations still refuse.
+and bypass/contained combinations still refuse. The documented interactive-only
+plan lane rejects headless flags at parsing, before lifecycle setup; headless
+planning remains the separate `--with-plan` drain phase.
 <!-- trace:TASK-1794 | ai:codex -->
