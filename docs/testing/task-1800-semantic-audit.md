@@ -1,16 +1,16 @@
-# Frozen-50 semantic audit: seventeen complete blocker inventories
+# Frozen-50 semantic audit: eighteen complete blocker inventories
 
 <!-- trace:TASK-1800 | ai:codex -->
 
-Seventeen cases now have manual inspection of **every policy-blocking trace ID**, in
-both full-file and scoped modes. This is an incremental measurement: **33 cases
+Eighteen cases now have manual inspection of **every policy-blocking trace ID**, in
+both full-file and scoped modes. This is an incremental measurement: **32 cases
 remain**, and the classification gate is open. No refused case inspected so
 far is proven incidental-only. PR2668 remains the frozen allowed case, with no
 blocking trace IDs. No collector or policy behavior changes.
 
 The [machine data](task-1800-semantic-audit.json) extends the
-[selected-witness audit](task-1800-witness-audit.md). It inventories all 175
-full-file case/ID pairs (142 scoped pairs), not just the first refusal witness:
+[selected-witness audit](task-1800-witness-audit.md). It inventories all 194
+full-file case/ID pairs (161 scoped pairs), not just the first refusal witness:
 
 | PR | Full/scoped blockers | True supervised touches | Incidental blockers | Unresolved blockers |
 | --- | ---: | --- | --- | --- |
@@ -31,17 +31,18 @@ full-file case/ID pairs (142 scoped pairs), not just the first refusal witness:
 | 2672 | 18 / 18 | BUG-1178, BUG-1699, BUG-2006, BUG-2124, BUG-2133, BUG-2144, BUG-2146, BUG-2151, TASK-1232 | BUG-1720, BUG-2145, STORY-1124, STORY-1226, STORY-561, TASK-1607, TASK-1750, TASK-864 | FR-1-043 |
 | 2670 | 31 / 15 | BUG-1929, TASK-1775 | BUG-1164, BUG-1593†, BUG-1928, BUG-1971, BUG-2006, BUG-2133†, BUG-2144†, BUG-2146†, BUG-675, STORY-605, STORY-612†, STORY-615†, STORY-617†, STORY-665, STORY-994, TASK-1169†, TASK-1594†, TASK-845†, TASK-864†, TASK-866†, TASK-876†, TASK-951 | BUG-1-040, CR-8, FR-1-002, FR-1-043, FR-1-044†, TASK-152†, TASK-153† |
 | 2652 | 18 / 18 | None established | BUG-1164, BUG-1535, BUG-1929, BUG-2003, BUG-2009, BUG-715, BUG-724, BUG-725, FR-265, STORY-1226, STORY-652, STORY-654, TASK-1122 | BUG-1-051, BUG-1-069, EPIC-1-052, FR-1-071, FR-1-074 |
+| 2666 | 19 / 19 | TASK-1730, TASK-1731 | BUG-1693, BUG-1806, BUG-1929, BUG-2011, BUG-2014, STORY-1687, TASK-1337, TASK-1600, TASK-1607 | FR-0042, FR-1-052, TASK-123, TASK-1327, TASK-1328, TASK-1331, TASK-1335, TASK-1338 |
 
-† Full-file mode only. Trace totals are **29 true supervised touches, 117
-incidental matches, 29 unresolved** in full-file mode; scoped totals are
-**27, 93, 22**. Counts are case/ID pairs, so a requirement present in two cases
+† Full-file mode only. Trace totals are **31 true supervised touches, 126
+incidental matches, 37 unresolved** in full-file mode; scoped totals are
+**29, 102, 30**. Counts are case/ID pairs, so a requirement present in two cases
 counts twice. Five cases have no unresolved exclusion reason: PR2654, PR2681,
 PR2653 and PR2676 have true supervised touches; PR2668 has no blockers and was
-already allowed. The other twelve retain unresolved evidence, including the combined
+already allowed. The other thirteen retain unresolved evidence, including the combined
 named token in PR2686. The frozen conservative outcome remains **49/50
 refusals**, comprising 22 named refusals and 27 additional trace refusals.
 
-Eleven inspected cases also inventory **every extracted named token**:
+Twelve inspected cases also inventory **every extracted named token**:
 
 | PR | Named tokens | Frozen named result and manual finding |
 | --- | --- | --- |
@@ -56,13 +57,15 @@ Eleven inspected cases also inventory **every extracted named token**:
 | 2672 | BUG-2144, BUG-2145, BUG-2146, BUG-2151 | All named keystone blockers; BUG-2144/2146/2151 directly touched, BUG-2145 incidental (queue auto-complete/sandbox dispatch unchanged) |
 | 2670 | TASK-1775 | Keystone refusal; store marker ordering, hardened staged diff and expiring host-version cache directly implement it |
 | 2652 | BUG-2141 | Ordinary; anchored shared runtime exclude, legacy migration and Git ignore/staging fixtures directly implement it |
+| 2666 | TASK-1732 | Ordinary; strict mapping capture, R1/R2 environment transport and fresh execution, adapter evidence/deltas and fixtures directly implement it |
 
 These named findings are separate from the trace-pair totals. The earlier five
 cases and PR2698 had no named refusal. PR2656, PR2674 and PR2697 also had no
 named refusal; their ordinary named tokens
 are inventoried for completeness. PR2676 and PR2672 have named keystone refusals
 and no unresolved named token. PR2670 also has a named keystone refusal; PR2652
-has no named refusal. Neither new named token is unresolved. No policy/history
+has no named refusal. PR2666 also has no named refusal; its ordinary TASK-1732 is directly touched.
+None of these new named tokens is unresolved. No policy/history
 classification was rerun.
 
 PR2669's true parent touch, `STORY-1218`, is absent from the existing scoped ID
@@ -263,6 +266,31 @@ identity or redaction. Five unknown contracts remain unresolved: BUG-1-051,
 BUG-1-069, EPIC-1-052, FR-1-071 and FR-1-074. Their unchanged trace locations
 are not enough to establish safety. No refused PR is proven incidental-only.
 
+PR2666 adds strict trial-root GAPS mapping, one-time capture of explicitly named
+source variables, R1 transport, and fresh R2 execution with target aliases.
+TASK-1730 is a true touch: `ScoreEnv::run_with_bundle` changes the environment delivered
+to the oracle, `run_trial_in_env` sanitizes mapped output, and the versioned
+trial record retains R2 evidence. TASK-1731 is also true: the existing gate call
+moves into `adapter::apply_gate`, both runs receive it, and combined status and
+cleanliness prevent a refused R2 from hiding behind R1. The new control fixture
+covers guard hits, changed checks, installer failure, survivors and the signed
+nonzero-oracle policy. Unchanged predicate bodies do not make their new callers
+incidental. Ordinary named TASK-1732 directly implements its frozen adapter and
+transport rulings.
+
+The same PR leaves hold clearance/tamper detection, shell role-eval framing,
+contained store-write roots and host Git/hook hardening, grant verdicts/expiry,
+Claude notices, pickup preflight, completion credit and seat occupancy unchanged.
+The existing persistence seam receives new scoring evidence without changing
+store-write authority or its failure handling. These nine known trace-blocking
+contracts are incidental. Eight blockers remain unresolved: FR-0042 and
+FR-1-052 have no frozen objects; current aliases TASK-123 → TASK-1-096,
+TASK-1327 → TASK-1-219, TASK-1328 → TASK-1-220, TASK-1331 → TASK-1-223,
+TASK-1335 → TASK-1-226 and TASK-1338 → TASK-1-229 do not repair unavailable
+historical supervision. Example traces and apparently unrelated paragraphs do
+not prove an unknown contract safe. A true trace refusal is established, but
+this case is not fully resolved.
+
 ## Evidence and limits
 
 The data pins each base/head, every changed path's diff hash, each blocker’s
@@ -276,7 +304,7 @@ occurrences are recovered from committed changed-path blobs. A full-file
 occurrence can be unselected on one side even when its ID is selected elsewhere.
 
 The policy census covers all 2,160 unique full-set trace IDs, including 331
-blocking IDs; this document manually inspects only the seventeen cases above. It
+blocking IDs; this document manually inspects only the eighteen cases above. It
 reuses that census rather than rerunning history classification. The frozen
 store is `a5dae7145abd11d2480271c466030b12db6e7668`, and the collector SHA-256 is
 `7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8`. Input census
@@ -286,7 +314,7 @@ No ledger contents are published.
 `all_policy_blockers_inspected` means every blocker received a manual judgment;
 it does **not** mean every blocker was resolved. `all_blockers_resolved` is
 separate and includes named uncertainty when a named inventory is present.
-`all_exclusion_reasons_inspected` on the eleven named-inventory rows records complete trace
+`all_exclusion_reasons_inspected` on the twelve named-inventory rows records complete trace
 and named inspection, including unresolved tokens; it grants no policy clearance.
 None of these fields grants completion, review or shipping authority.
 No symlink, binary, gitlink, fallback or path-class authority change is included.

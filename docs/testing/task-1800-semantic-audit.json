@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in seventeen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in eighteen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
   "classification_gate_complete": false,
   "frozen_case_count": 50,
-  "cases_inspected": 17,
-  "remaining_cases": 33,
+  "cases_inspected": 18,
+  "remaining_cases": 32,
   "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
@@ -14,16 +14,16 @@
   "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
   "summary": {
     "full": {
-      "total": 175,
-      "incidental": 117,
-      "unresolved": 29,
-      "true-touch": 29
+      "total": 194,
+      "incidental": 126,
+      "unresolved": 37,
+      "true-touch": 31
     },
     "scoped": {
-      "total": 142,
-      "incidental": 93,
-      "unresolved": 22,
-      "true-touch": 27
+      "total": 161,
+      "incidental": 102,
+      "unresolved": 30,
+      "true-touch": 29
     }
   },
   "rows": [
@@ -15517,6 +15517,1514 @@
             ],
             "description_sha256": "5b16784f1e31a3e1863a63bb1ff67aa0af192e90224c85c2169e900200e58758",
             "object_sha256": "d4a535f31a5c246a7d80a4c3f9e62176395d8f0f1b4e2d6f7617633b85b5915e"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2666,
+      "base": "a46af7481e794f7ad299631a78a258f55022c503",
+      "head": "7c8c72c75f0db2462d6ac3019eb0dd4665050bcf",
+      "named_policy_refusal": false,
+      "title": "[AI:codex] feat(regen): score environment seam adapters (TASK-1732)",
+      "full_blocker_count": 19,
+      "scoped_blocker_count": 19,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1732",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "Strict GAPS schema and full-map validation, protected/sensitive names, one-time source capture, raw R1 plus aliased fresh R2, versioned evidence/deltas and renamed-env fixtures directly implement the ordinary named task and its frozen transport rulings.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1732",
+            "agreed_id": "TASK-1732",
+            "title": "Regen seam-adapter score (R2): score through a name-mapping adapter and report R1, R2 and the delta",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "cf9fc0f025626fc1b24704b0903525f0f29404b1c51bffa758c94165c1e18a89",
+            "object_sha256": "1d8b18fc08f0f4149e6b7a4570dd45e953dcd955061800aa9b89ea40fbbf2153"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "AGENTS.md",
+          "diff_sha256": "20bc4a793ddb77e284498f2e6ec5e0fa6a083e9ffef3ff7205056d78b698e919"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "diff_sha256": "86c2661f0650c652010e2aec98977c2a43394392be7940c70e3d7223db4a8c32"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "diff_sha256": "13a41ae05230bf5240cb7454040f4d7ecc24f4253515c1bbcf183dfa9090ef07"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/adapter.rs",
+          "diff_sha256": "e623b73baf078ea5baacd5e6039fce99b38f77d6f3ad2d254dc72645b04ba190"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/controls.rs",
+          "diff_sha256": "0a4c06dc009f0b4ba2826321df29dd73af49afd135fc81aac9efbacde6707f58"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1693",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Recorded-clearance labels, marker tamper detection, gate workflow and the same-user/admin-token floor remain unchanged. New scoring trial records are not hold clearances and neither authorize nor release a merge.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 233,
+                  "text": "<!-- trace:BUG-1693 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 241,
+                  "text": "<!-- trace:BUG-1693 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1693",
+            "agreed_id": "BUG-1693",
+            "title": "The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "integrity-floor",
+              "merge-hold"
+            ],
+            "description_sha256": "0c06909631ec114e4faf551dd0d2b0886e4846ef31d2c50f0ca94b1f2155ec38",
+            "object_sha256": "a4fd824115a25c15a6a2ba62a228011fc12fe40149a5531d9727a3dcf573cf4a"
+          }
+        },
+        {
+          "id": "BUG-1806",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The shell role-enter wrapper, successful-exit check and standalone eval markers are unchanged. Environment mapping is applied directly to the scoring oracle Command, never through the role-shell diagnostic/eval path.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "<!-- trace:BUG-1806 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 160,
+                  "text": "<!-- trace:BUG-1806 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 572,
+                  "text": "<!-- trace:BUG-1806 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 629,
+                  "text": "<!-- trace:BUG-1806 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1806",
+            "agreed_id": "BUG-1806",
+            "title": "Regression: role-enter shell wrapper evaluates failed CLI diagnostics",
+            "execution_mode": "drive",
+            "tags": [
+              "from-qci:BUG-020",
+              "role",
+              "security",
+              "shell-integration"
+            ],
+            "description_sha256": "055a7d396fff6e08a5963e7c6673ab37b7ec076e22b31861610f1f7406fc23fe",
+            "object_sha256": "9cb23507c2a55fe2cdefc4c36f4138959089343a0b133f6cbf05d0490a417e07"
+          }
+        },
+        {
+          "id": "BUG-1929",
+          "policy_reason": "sensitive spec metadata (contained) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Contained write roots, store-host Git builder, pinned hooks and queued host-commit behavior are unchanged. persist uses the existing trial-record store seam for the new adapter evidence without changing its authority, paths or failure handling. The trial oracle environment is a distinct contract from contained spec-store writes.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 281,
+                  "text": "<!-- trace:BUG-1929 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 289,
+                  "text": "<!-- trace:BUG-1929 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 309,
+                  "text": "<!-- trace:BUG-1929 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 309,
+                  "text": "<!-- trace:BUG-1929 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1929",
+            "agreed_id": "BUG-1929",
+            "title": "Contained/pool worktree sessions can't write the AIDA store or cache: .aida-store is a symlink to the main checkout, outside the write boundary",
+            "execution_mode": null,
+            "tags": [
+              "contained",
+              "drain",
+              "factory:2026-10-11",
+              "sandbox",
+              "store",
+              "triaged:night"
+            ],
+            "description_sha256": "48a19019d39ca32997ea2c6cdb089a1a5cca5ff050707a967515d1e4dbf32a45",
+            "object_sha256": "b8eba79023ef405c88d106a8ed232d436183a33cc9b6d0019cccbbc52219e80e"
+          }
+        },
+        {
+          "id": "BUG-2011",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "grant_check, session_grant_lookup, parent-minimum expiry and role-expiry refusal remain unchanged. Mapped oracle variables do not supply a session grant or alter any grant verdict; AIDA_ names are explicitly protected.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 82,
+                  "text": "<!-- trace:BUG-2011 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 90,
+                  "text": "<!-- trace:BUG-2011 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2011",
+            "agreed_id": "BUG-2011",
+            "title": "Grant-expiry lookup validates the grant separately from grant_check, so role expiry can pass a grant the authority gates reject",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "388a2f5938093b95fd30051d84a6ae60def00c387c1e0079ec27dfc990847dce",
+            "object_sha256": "8822a599c04921c90b98cce72aef8e37fdf281eccdd5485767c79fba63ad54fa"
+          }
+        },
+        {
+          "id": "BUG-2014",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Claude hook delivery, zero-cost no-grant path, notice thresholds, grant-local ledger and timeout remain unchanged. Transient scorer environment capture does not emit expiry notices or change notice delivery.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 59,
+                  "text": "<!-- trace:BUG-2014 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 67,
+                  "text": "<!-- trace:BUG-2014 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 690,
+                  "text": "<!-- trace:BUG-2014 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 747,
+                  "text": "<!-- trace:BUG-2014 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2014",
+            "agreed_id": "BUG-2014",
+            "title": "A long-running seat gets no warning when its grant nears expiry mid-session; it learns only when an advisor-gated command refuses",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "hooks",
+              "plan:night",
+              "roles",
+              "seats"
+            ],
+            "description_sha256": "388a8cf7753510775f2f776b89ebff360be7bfcb0f72a71fbb710349a9c02fae",
+            "object_sha256": "5bb95bacd59bedde8e4662e78dfec83c6bcf58cbf76f6761de546de415916975"
+          }
+        },
+        {
+          "id": "FR-0042",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged inline-trace example in AGENTS.md has no resolving frozen object. Its example placement does not establish the unknown contract or justify removing the conservative exclusion.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 544,
+                  "text": "// trace:FR-0042 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 552,
+                  "text": "// trace:FR-0042 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-1-052",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged inline-trace example in the OVERVIEW.md identity/traceability section carries this ID, but no frozen object resolves its contract. Its example placement does not establish an authoritative contract; retain uncertainty.",
+          "occurrences": [
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 518,
+                  "text": "- Inline trace comments: `// trace:FR-1-052 | ai:claude[:confidence]`"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 575,
+                  "text": "- Inline trace comments: `// trace:FR-1-052 | ai:claude[:confidence]`"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "STORY-1687",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Rework-only eligibility, spec-metadata sensitive checks, independent approval, arming timestamps, clearance writes and final live-head rechecks are unchanged. R2 scoring and controls use neither review approval nor hold-release authority.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 52,
+                  "text": "<!-- trace:STORY-1687 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 60,
+                  "text": "<!-- trace:STORY-1687 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 15,
+                  "text": "<!-- trace:STORY-1687 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 15,
+                  "text": "<!-- trace:STORY-1687 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1687",
+            "agreed_id": "STORY-1687",
+            "title": "A Rework merge-hold releases itself on a fresh independent APPROVE at the current head, so approved PRs do not wait on operator presence",
+            "execution_mode": "guided",
+            "tags": null,
+            "description_sha256": "380d284e0e93575aa6dba7ce655aa0c80a2d972ac576df8ac908b6605869c24c",
+            "object_sha256": "9cf892a0109174776baaa4ab7cc6bb591935381679a84553f061fa7a71a1cbc5"
+          }
+        },
+        {
+          "id": "TASK-123",
+          "policy_reason": "history unreadable: no version of TASK-123 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged trace-comment example has current alias TASK-1-096, describing Antigravity failure-mode diagnosis. Frozen policy history under TASK-123 remains unreadable; the apparent mismatch cannot establish an incidental classification.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 433,
+                  "text": "// trace:TASK-123 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 441,
+                  "text": "// trace:TASK-123 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-096",
+            "agreed_id": "TASK-123",
+            "title": "AGY (Antigravity) demonstrated THREE distinct failure modes in 8h of one overni\u2026",
+            "execution_mode": null,
+            "tags": [
+              "agent-discipline",
+              "agent-profile",
+              "from-advisor:STORY-467",
+              "from-aida-chat",
+              "kind:observation",
+              "linked:STORY-467",
+              "linked:STORY-469",
+              "linked:STORY-471",
+              "master-diagnosis-needed",
+              "severity:major"
+            ],
+            "description_sha256": "497349e4ed5b5773fa711e23823beccfed02cae1257b2fcb78ac9f72775e817e",
+            "object_sha256": "3d7a6510d00768e50633050891e95419cd5f5eee60e25f14338245d03e9afb33"
+          }
+        },
+        {
+          "id": "TASK-1327",
+          "policy_reason": "history unreadable: no version of TASK-1327 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged reconstitution diagnostic paragraphs have current alias TASK-1-219. Fresh R2 scoring executes the regen oracle, not the reconstitution vendor launch, but the frozen census cannot read history under TASK-1327; retain unresolved supervision.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 169,
+                  "text": "<!-- trace:TASK-1327 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 177,
+                  "text": "<!-- trace:TASK-1327 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 638,
+                  "text": "<!-- trace:TASK-1327 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 695,
+                  "text": "<!-- trace:TASK-1327 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-219",
+            "agreed_id": "TASK-1327",
+            "title": "Investigate reported silent exit-zero reconstitution probes on aida-monitor",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1-216",
+              "kind:observation",
+              "linked:TASK-1-216",
+              "linked:TASK-1523",
+              "severity:minor"
+            ],
+            "description_sha256": "2e9208b1c2ad9b21271e00671267766f0b293811f0928f3e2d005ef3e028275b",
+            "object_sha256": "80bec5edc8339d8a8c8e3cd0b5f0f47fa7ab3173ee0e2cdd6bd56dd1e87fbe42"
+          }
+        },
+        {
+          "id": "TASK-1328",
+          "policy_reason": "history unreadable: no version of TASK-1328 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged origin-ID branch-ownership documentation has current alias TASK-1-220. Queue-done ownership is unchanged, but resolving the current object cannot repair unreadable frozen policy history under TASK-1328.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 144,
+                  "text": "<!-- trace:TASK-1328 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "<!-- trace:TASK-1328 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 121,
+                  "text": "<!-- trace:TASK-1328 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 121,
+                  "text": "<!-- trace:TASK-1328 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-220",
+            "agreed_id": "TASK-1328",
+            "title": "queue done rejects owned branches after canonical spec-ID remapping",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1324",
+              "kind:observation",
+              "linked:TASK-1324",
+              "severity:major"
+            ],
+            "description_sha256": "0c53e203c32ab6fc3ab7610efd682647ac51a57fc8af1e8f8dc70c459644c1e3",
+            "object_sha256": "0ff85aac420cbb45d6598d08fa593de71628cac69cfa272600c104b13868e592"
+          }
+        },
+        {
+          "id": "TASK-1331",
+          "policy_reason": "history unreadable: no version of TASK-1331 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged informational-workflow CI-wait documentation has current alias TASK-1-223. Scorer controls are not forge CI checks, but frozen policy history under TASK-1331 remains unreadable and the conservative blocker remains.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 132,
+                  "text": "<!-- trace:TASK-1331 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 140,
+                  "text": "<!-- trace:TASK-1331 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 628,
+                  "text": "<!-- trace:TASK-1331 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 685,
+                  "text": "<!-- trace:TASK-1331 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-223",
+            "agreed_id": "TASK-1331",
+            "title": "pr ship CI watch blocks on informational workflows the config already excludes",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:general",
+              "kind:observation",
+              "severity:major"
+            ],
+            "description_sha256": "ee35d8b22bbbeb9a55f5403989249ced3735624303712ff20e8e7ea9311c1ff7",
+            "object_sha256": "8f55bc539ee0a7e7865bc83831edfd9093a9783db548164949a1e4ec05622b7e"
+          }
+        },
+        {
+          "id": "TASK-1335",
+          "policy_reason": "history unreadable: no version of TASK-1335 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged reconcile-status documentation has current alias TASK-1-226. Neither reconciliation evidence nor status-write validation changes. Current contract separation does not repair absent frozen history under TASK-1335; retain uncertainty.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 121,
+                  "text": "<!-- trace:TASK-1335 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 129,
+                  "text": "<!-- trace:TASK-1335 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "behavior_touch": true,
+          "supervised_status": "unknown-frozen-history",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-226",
+            "agreed_id": "TASK-1335",
+            "title": "reconcile-status silently skips Done specs when the forge is unavailable (TASK-1588 stuck)",
+            "execution_mode": null,
+            "tags": [
+              "factory:night",
+              "from-advisor:general",
+              "kind:observation"
+            ],
+            "description_sha256": "8dd60ec3480ed7def707216d912feb609c989953716a3f6ebe0aca0b74a3f43d",
+            "object_sha256": "b594224444e0da34e2774a9b37dd16b58aaf6ee2af99ee869d4242b7ffeab7df"
+          }
+        },
+        {
+          "id": "TASK-1337",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Pickup role precedence, branch-occupancy/delegation preflight, queue/worktree/lease side-effect order and manual launch continuation are unchanged. Fresh scorer roots are private execution inputs, not implementer session worktrees.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 106,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 114,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 30,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 30,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-230",
+            "agreed_id": "TASK-1337",
+            "title": "guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant \u2014 and the last failure left a half-started session",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1607",
+              "guided",
+              "kind:observation",
+              "linked:STORY-1485",
+              "linked:TASK-1607",
+              "operator-ux",
+              "queue-work",
+              "seat-grants",
+              "severity:major"
+            ],
+            "description_sha256": "2686793fc5c2371df1d861f54fd7c37dcb57dad07fdaf93648f7ee0c241989c9",
+            "object_sha256": "59313b96b396c69f98620500390f61f035db6ac991ad2e2fe06a923e0abedfd8"
+          }
+        },
+        {
+          "id": "TASK-1338",
+          "policy_reason": "history unreadable: no version of TASK-1338 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged reopen-fence documentation has current alias TASK-1-229. No merge-evidence or reopen-status path changes, but the frozen census cannot read history under TASK-1338. Current alias resolution is not a new policy decision.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 113,
+                  "text": "<!-- trace:TASK-1338 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 121,
+                  "text": "<!-- trace:TASK-1338 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 37,
+                  "text": "<!-- trace:TASK-1338 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 37,
+                  "text": "<!-- trace:TASK-1338 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-229",
+            "agreed_id": "TASK-1338",
+            "title": "queue in-flight 'Stuck \u2014 PR merged, auto-bump missed' recommends reconcile-status for a deliberately reopened spec",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1538",
+              "kind:observation",
+              "linked:STORY-1488",
+              "linked:TASK-1538",
+              "queue",
+              "reconcile",
+              "recurrence:2",
+              "reopen-fence",
+              "severity:major"
+            ],
+            "description_sha256": "ee28360308cef0f9182451fad7f8e92d8a70908451c814e3ca9c6314d99fe3cd",
+            "object_sha256": "ab9e236c1e957dbae3ac0d1079ee87cdfd0f2dd504e03b9db23f53c7a33064cf"
+          }
+        },
+        {
+          "id": "TASK-1600",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Trailing PR-title/branch completion IDs and reopened_at_sha behavior are unchanged. Adapter records retain scoring checks and aggregates, not requirement completion credit; no shipping or status-bump decision consumes them.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 199,
+                  "text": "<!-- trace:TASK-1600 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 207,
+                  "text": "<!-- trace:TASK-1600 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 348,
+                  "text": "<!-- trace:TASK-1600 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 348,
+                  "text": "<!-- trace:TASK-1600 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1600",
+            "agreed_id": "TASK-1600",
+            "title": "aida pr ship scrapes mid-title spec-ID tokens into completing squash trailers, falsely completing specs the title merely mentions",
+            "execution_mode": "guided",
+            "tags": null,
+            "description_sha256": "cd8ed48da0532112217e6540e511a247c3b69708a40e04b3fea711c17c1601d1",
+            "object_sha256": "f2702e189005ca800ab483a35099c9bcb74dd269d1d590b2f12582328873ed87"
+          }
+        },
+        {
+          "id": "TASK-1607",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Seat locks, caller/child bindings, lifecycle deadlines, reservation/receipt recovery and gateway activation remain unchanged. The new fresh R2 execution is a scoring run, not a seat transfer or agent gateway.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 31,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                },
+                {
+                  "line": 39,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 39,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                },
+                {
+                  "line": 47,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 7,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                },
+                {
+                  "line": 659,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 7,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                },
+                {
+                  "line": 716,
+                  "text": "<!-- trace:TASK-1607 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1607",
+            "agreed_id": "TASK-1607",
+            "title": "STORY-1485 slice A: graceful single-occupancy path (--kill fails closed as scaffolding)",
+            "execution_mode": "guided",
+            "tags": [
+              "guided-lane",
+              "seat-occupancy",
+              "slice:A"
+            ],
+            "description_sha256": "a31348f03a92b19cbd3d1757743bea8b9167c639d47a36a86fd45c3c5784909c",
+            "object_sha256": "d822efbb96aa9dbcc44ff294a22d58612ea61983a2cb9c4c8ed9df222cd92c7f"
+          }
+        },
+        {
+          "id": "TASK-1730",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "ScoreEnv now injects explicitly captured oracle-only variables after the scrubbed base environment; handle_score validates and captures GAPS input before execution and run_trial_in_env sanitizes output. New R2 creates a separate ScoreEnv/install while retaining the immutable oracle. These directly change the sandboxed oracle-input and durable scoring-evidence contract, not just its header trace.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 14,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                },
+                {
+                  "line": 23,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 22,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                },
+                {
+                  "line": 31,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 458,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 458,
+                  "text": "<!-- trace:TASK-1730 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score.rs",
+              "side": "base",
+              "blob_sha256": "72047013746d6649ec048cd5de7582d0b4d800e3f8a84df3dd61cf33a0c11122",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 17,
+                  "text": "mod guards; // trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 18,
+                  "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 19,
+                  "text": "mod roots; // trace:TASK-1730 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score.rs",
+              "side": "head",
+              "blob_sha256": "bb6a9894d9204e24b2d3fa497505bffe06fd605f933558d8264d420edb59d42f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 18,
+                  "text": "mod guards; // trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 19,
+                  "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+                },
+                {
+                  "line": 20,
+                  "text": "mod roots; // trace:TASK-1730 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1730",
+            "agreed_id": "TASK-1730",
+            "title": "Project regen config and aida regen score (R1): run the declared oracle in a sandbox and record the score",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "1ea4bd2ba4d08dcccd71e6499e511ae88c41bc3762a609557bac038f8f836e11",
+            "object_sha256": "8260cf5cc00d44c1ed0190587c54c9eecf2ffb9a731b9bf656e6620064f4dd7a"
+          }
+        },
+        {
+          "id": "TASK-1731",
+          "policy_reason": "sensitive spec metadata (sandbox) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Moves the scored-trial ControlGate application into adapter::apply_gate, invokes it for both R1 and fresh R2, and combines statuses/cleanliness so refused R2 cannot hide behind R1. New controls fixture covers guard hits, differing checks, installer failure, survivors and signed nonzero-oracle policy. This directly extends the controls/fresh-root/discriminating contract despite unchanged ControlGate predicate code.",
+          "occurrences": [
+            {
+              "path": "AGENTS.md",
+              "side": "base",
+              "blob_sha256": "b985181dfa2157399ab401cbb55d2e5da758c683ff0b0630d3aaf534f58b8326",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 8,
+                  "text": "<!-- trace:TASK-1731 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "AGENTS.md",
+              "side": "head",
+              "blob_sha256": "c185898e244bcbba262ad3d8555e747b42c9a6da91815e8eda726338a29ae5b3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 16,
+                  "text": "<!-- trace:TASK-1731 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "base",
+              "blob_sha256": "40df34ccc96cea0f2c38bf5b9c0d91df11c739b2000c2d17ccf0806c884aa60b",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 494,
+                  "text": "<!-- trace:TASK-1731 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "OVERVIEW.md",
+              "side": "head",
+              "blob_sha256": "51e56e140e7ebd33b2a58f34cc82b31b2cee5a315b529a0fb99204507efdc709",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 494,
+                  "text": "<!-- trace:TASK-1731 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score.rs",
+              "side": "base",
+              "blob_sha256": "72047013746d6649ec048cd5de7582d0b4d800e3f8a84df3dd61cf33a0c11122",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 15,
+                  "text": "mod controls; // trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 16,
+                  "text": "mod fresh; // trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 139,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 679,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score.rs",
+              "side": "head",
+              "blob_sha256": "bb6a9894d9204e24b2d3fa497505bffe06fd605f933558d8264d420edb59d42f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 16,
+                  "text": "mod controls; // trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 17,
+                  "text": "mod fresh; // trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 144,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 716,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/controls.rs",
+              "side": "base",
+              "blob_sha256": "abf074bc7f27da45549c0d6fac04c915b14a929580acd9e10034af4235df838d",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 569,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/regen/score/controls.rs",
+              "side": "head",
+              "blob_sha256": "9fdb9ae8681661c04d77c456a260628c7079f94b3da3f875c015c6a8d57f379c",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 2,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                },
+                {
+                  "line": 645,
+                  "text": "// trace:TASK-1731 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1731",
+            "agreed_id": "TASK-1731",
+            "title": "Regen controls gate: reference, stub and clean-sandbox controls must pass before a trial score is reported",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "e6aeae0811bc03193da93ed7cbea5ff3b5cbea9f00339ca137398f218a3f0655",
+            "object_sha256": "1c5d093b3ba658aa27e88eccc4c44e3530a52e4413213674b1e27a790bd0bc3c"
           }
         }
       ]
