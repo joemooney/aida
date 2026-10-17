@@ -1,0 +1,33 @@
+id: 01a14a8f-2017-7db2-9f41-858b443be54c
+spec_id: STORY-1727
+agreed_id: STORY-1727
+title: 'Review PR-2721: [AI:codex] docs(mandate): audit scoring adapter blocker set (TASK-1800)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14a88`) for branch `codex/task-1800-audit-eighteen`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2721>
+  - Branch: `codex/task-1800-audit-eighteen` → `codex/task-1800-audit-sixteen`
+
+  ## Covers
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2721` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T15:50:56.279489130Z
+modified_at: 2026-10-17T15:50:56.279489130Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
