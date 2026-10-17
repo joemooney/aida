@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T10:43:45.064174487Z
+modified_at: 2026-10-17T10:53:07.410226746Z
 req_type: Task
 relationships:
 - rel_type:
@@ -123,6 +123,11 @@ comments:
     Separate exploratory policy census completed after publication: all 2,160 unique full-set trace IDs classified, with 331 policy-blocking IDs. Both modes independently retain 27 additional refusals (49/50 total); all selected witnesses remain blocking. The 12 extracted policy/history/ledger functions are byte-identical to branch source; previously proven ordinary caching is retained and disclosed in the source. Frozen store HEAD/refs, clean state and ledger hash checked. This is policy classification, not exhaustive manual semantic adjudication or an end-to-end mandate replay. Complete classes and per-case blocker lists are durable local relay evidence under evidence/session4/all-{id-policy-classes,exclusion-census}.json for the next pass; raw ledger contents were not copied.
   created_at: 2026-10-17T10:40:47.389228485Z
   modified_at: 2026-10-17T10:43:45.064174343Z
+- id: 01a1497e-77d2-76c3-a558-403cb2174321
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T10:53:07.410226746Z
+  modified_at: 2026-10-17T10:53:07.410226746Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
