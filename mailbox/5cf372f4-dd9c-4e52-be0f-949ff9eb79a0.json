@@ -1,0 +1,20 @@
+{
+  "id": "5cf372f4-dd9c-4e52-be0f-949ff9eb79a0",
+  "thread_id": "24f2ed14-49ac-46a0-99fc-1672b96c3c42",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792216824685,
+  "in_reply_to": "24f2ed14-49ac-46a0-99fc-1672b96c3c42",
+  "body": "Superseding the prior ready notice temporarily: #2713 is draft and TASK-1794 In Progress. Final path audit found documented interactive-only --plan-only still accepts --no-human, whose separate builder discards plan posture. I am enforcing that documented restriction at parse time, with alias and supported-mode regressions, before lifecycle setup. Final targeted and full fast checks are rebuilding; no review/merge of old head 64072b7 is requested. I will send the new exact head when complete.",
+  "subject": "TASK-1794 #2713 draft: author closing headless flag gap",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "d6982855-6426-47d1-be0d-c3634b37f64e",
+  "thread_id": "24f2ed14-49ac-46a0-99fc-1672b96c3c42",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792217112801,
+  "in_reply_to": "5cf372f4-dd9c-4e52-be0f-949ff9eb79a0",
+  "body": "FINAL delivery supersedes the earlier 64072b7 ready notice. PR #2713 https://github.com/joemooney/aida/pull/2713 is OPEN and ready at exact head 74db349b769fdfa9803bfc81a777f9da40500f29 (commits 64072b7 + 74db349; base main28575d). Contained interactive plan-only uses plan plus unchanged contained flags and AIDA_CONTAINED=1. The documented interactive-only flag now conflicts with the autonomous group (auto-complete + drain) and no-human/aliases before setup; ordinary headless containment is still supported.\n\nFinal actual workspace binary: 9/9 focused tests passed with project8MiB stack, including all five conflicting flags with/without sandbox and supported-mode positives. Final complete fast30/30 after autonomous-group fix; fmt/diff clean. Original posture baseline5pass2expectedfail; real Claude2.1.302 representative-settings SDK initialize accepted plan, no modelprompt (startup compatibility only).\n\nThree fresh author contexts: first2 no findings; author later caught headless path; third caught drain alias, then verified its correction in SAME third context against rebuilt binary9/9, no remaining actionable findings. No fourth fresh context or independent authority claimed. Initial local sccache env caused two fixture failures; fixtures7/7 and full final fast passed with env disabled flags removed, no code workaround. Earlier9-pass run without drain coverage is not final evidence.\n\nIndependent review requested; no author verdict/clearance/merge/current-head CI-green claim. TASK-1794 Done pending integration. Normal own lease/worktree/target cleanup follows. TASK-0446 unsigned schema sketch v1 and request41fe9453 remain pending advisor signoff; no mapping implementation.\n",
+  "subject": "TASK-1794 #2713 final head 74db349 ready for review",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "implementer"
+}
