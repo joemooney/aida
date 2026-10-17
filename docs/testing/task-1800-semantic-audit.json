@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in ten frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in thirteen frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
   "classification_gate_complete": false,
   "frozen_case_count": 50,
-  "cases_inspected": 10,
-  "remaining_cases": 40,
+  "cases_inspected": 13,
+  "remaining_cases": 37,
   "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
@@ -14,16 +14,16 @@
   "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
   "summary": {
     "full": {
-      "total": 43,
-      "incidental": 22,
-      "unresolved": 6,
-      "true-touch": 15
+      "total": 86,
+      "incidental": 54,
+      "unresolved": 16,
+      "true-touch": 16
     },
     "scoped": {
-      "total": 37,
-      "incidental": 19,
-      "unresolved": 5,
-      "true-touch": 13
+      "total": 77,
+      "incidental": 51,
+      "unresolved": 12,
+      "true-touch": 14
     }
   },
   "rows": [
@@ -4600,6 +4600,3316 @@
               "severity:major"
             ],
             "description_sha256": "8c56e9c31e266ef2c3fe6aac65f3fefe0825e340aced57380fa7ffb8e051f042"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2656,
+      "base": "672c12158b936102c7cad34691f2ba285a9284de",
+      "head": "2cc1095b5fd8c13ac130fd49862dde453302a4ca",
+      "named_policy_refusal": false,
+      "title": "[AI:antigravity] fix(build): ensure stable TMPDIR for sccache and detect missing temp dir (BUG-2135)",
+      "full_blocker_count": 12,
+      "scoped_blocker_count": 9,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2135",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "New compiler-cache process/temp-dir detection, restart/pre-start helpers, failure hints and fixtures directly implement this ordinary named bug.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2135",
+            "agreed_id": "BUG-2135",
+            "title": "sccache server keeps a deleted per-invocation TMPDIR, so every build fails until it is restarted by hand",
+            "execution_mode": null,
+            "tags": [
+              "build",
+              "capture"
+            ],
+            "description_sha256": "53d66e44a4070d2728e631fbcbb99119602a2aa0336c42229cd0cf32e9d06844"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "diff_sha256": "bdf5526287831eb989872479a5df2ab2062b01166a50db8a4976afb83a413436"
+        },
+        {
+          "path": "aida-cli-lib/src/dev_build.rs",
+          "diff_sha256": "91b50c6005c77b9afdc278aaf5c3f97dbac913f639f578c024ad196e2f913109"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/dev_build_tests.rs",
+          "diff_sha256": "945e824fccb8cbb8834e0af413b536b256fb6a3d236ff15431b6f43ca6350611"
+        },
+        {
+          "path": "scripts/check-ci-gates.py",
+          "diff_sha256": "d6891611b75e3553fb23d4e10a0acd4ee731bf1974f4a92368472e63d3045a2d"
+        },
+        {
+          "path": "scripts/ci-gate-tiers.toml",
+          "diff_sha256": "61ae5568721afc2faa82865ee2471ca75e02fd4dc1774522932d893592698b14"
+        },
+        {
+          "path": "tests/test_bug_2135_sccache_tmpdir.py",
+          "diff_sha256": "54303878d67825e405d18a88a2cc93bc37f264e1482eac9a7fd573e4736349f7"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "ADR-54",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The GitLab live-smoke guard, its full_ci condition and authentication configuration are unchanged. ci.yml adds a separate sccache fixture step; the local runner pre-starts sccache without changing this guard command.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 158,
+                  "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 158,
+                  "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "ADR-54",
+            "agreed_id": "ADR-54",
+            "title": "GitHub-hosted GitLab smoke authenticates through a dedicated Cloudflare Access service token",
+            "execution_mode": null,
+            "tags": [
+              "access",
+              "ci",
+              "cloudflare",
+              "gitlab",
+              "security"
+            ],
+            "description_sha256": "925fcdddf1f5020b5ea94c5930e1016f7b0aa416e9ccc7a2977928f591150556"
+          }
+        },
+        {
+          "id": "BUG-1688",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The shipped full-access launch refusal fixture step and the five protected scripts are unchanged. Added sccache process management starts only the compiler cache, not any vendor launch.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 264,
+                  "text": "# trace:BUG-1688 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 264,
+                  "text": "# trace:BUG-1688 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1688",
+            "agreed_id": "BUG-1688",
+            "title": "Gate or refuse full-access launches in shipped scripts that have no legitimate unattended caller",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "from:TASK-1549",
+              "launch",
+              "scripts",
+              "security"
+            ],
+            "description_sha256": "78dede59f1cc21ec85cc04c7bfa18881f0f485a30ca623c11e1e9f79ada07965"
+          }
+        },
+        {
+          "id": "BUG-1693",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The merge-hold fixture step, marker/clearance enforcement and server gate remain unchanged. Starting sccache before local gates does not alter the gate body or its result handling.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 234,
+                  "text": "# trace:BUG-1693 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 234,
+                  "text": "# trace:BUG-1693 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1693",
+            "agreed_id": "BUG-1693",
+            "title": "The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "integrity-floor",
+              "merge-hold"
+            ],
+            "description_sha256": "0c06909631ec114e4faf551dd0d2b0886e4846ef31d2c50f0ca94b1f2155ec38"
+          }
+        },
+        {
+          "id": "BUG-1924",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The session role/grant banner fixture and its fast-tier entry are unchanged. Compiler-cache detection neither displays nor validates a seat role.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 256,
+                  "text": "# trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 256,
+                  "text": "# trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "base",
+              "blob_sha256": "51d34f4fcae567b96644118e3557839b85b34b727939d5dede42aedc0daa107d",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 66,
+                  "text": "\"Run session role grant banner test\" = \"fast\"  # trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "head",
+              "blob_sha256": "0969cf4e355308b52eae8c0f68b1ea02f4d3d03f32b7fdb5bcbe6625d145c278",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 66,
+                  "text": "\"Run session role grant banner test\" = \"fast\"  # trace:BUG-1924 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1924",
+            "agreed_id": "BUG-1924",
+            "title": "Statusline shows role:advisor when the shell has no seat grant, so a session can't tell it lacks authority",
+            "execution_mode": null,
+            "tags": [
+              "batch:night-2026-10-10",
+              "roles",
+              "statusline"
+            ],
+            "description_sha256": "2b5cad56cfc01aabbfec255b29580a6f974381406cb8fe47adbd7379c4b1919f"
+          }
+        },
+        {
+          "id": "BUG-2014",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The expiry-hook fixture command and tier are unchanged. The sccache status helper reads compiler-cache process environment, not grants, expiry thresholds or the notice ledger.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 483,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 483,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "base",
+              "blob_sha256": "51d34f4fcae567b96644118e3557839b85b34b727939d5dede42aedc0daa107d",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "head",
+              "blob_sha256": "0969cf4e355308b52eae8c0f68b1ea02f4d3d03f32b7fdb5bcbe6625d145c278",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2014",
+            "agreed_id": "BUG-2014",
+            "title": "A long-running seat gets no warning when its grant nears expiry mid-session; it learns only when an advisor-gated command refuses",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "hooks",
+              "plan:night",
+              "roles",
+              "seats"
+            ],
+            "description_sha256": "388a8cf7753510775f2f776b89ebff360be7bfcb0f72a71fbb710349a9c02fae"
+          }
+        },
+        {
+          "id": "STORY-1382",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The prose-classification fixture step and ratchet rules/allowlist remain unchanged. New compiler-cache conditions inspect local wrapper configuration and /proc fields; they do not change classification of another component output by the ratchet.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 548,
+                  "text": "# prose-classification ratchet rule. trace:STORY-1382 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 548,
+                  "text": "# prose-classification ratchet rule. trace:STORY-1382 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1382",
+            "agreed_id": "STORY-1382",
+            "title": "Five specs this week were filed for classifying on another component's prose, and at least three of their fixes did the same thing \u2014 the ratchet that could catch it became extensible tonight",
+            "execution_mode": "guided",
+            "tags": [
+              "ci",
+              "closure:pending",
+              "diagnostic-decay",
+              "from:session-0919",
+              "parent:EPIC-62",
+              "ratchet",
+              "substrate-as-bouncer"
+            ],
+            "description_sha256": "052f7789b84f5d18661617e64a77b4f197eb3858f4c441664f84d159e64ae6eb"
+          }
+        },
+        {
+          "id": "STORY-612",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The live bwrap gate and its required-live env setting are unchanged. No headless launch, bwrap argv, writable roots or confinement decision changes; sccache management is a local build-runner concern.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 191,
+                  "text": "# blocked on. trace:STORY-612 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 191,
+                  "text": "# blocked on. trace:STORY-612 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-612",
+            "agreed_id": "STORY-612",
+            "title": "Sandbox slice 2: OS boundary (bubblewrap) around the whole headless claude -p process",
+            "execution_mode": null,
+            "tags": [
+              "agent-execution",
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security",
+              "supervised"
+            ],
+            "description_sha256": "f2aa5e7acc9c49d7e412fb79ac3031fd6c0df07bdb3e51eb5e7008aee24cddbb"
+          }
+        },
+        {
+          "id": "TASK-1205",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The portability-ratchet step, trusted-base growth check, rule set and cross-platform workflow are unchanged. New production /proc inspection is not an edit to test-code portability enforcement.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 524,
+                  "text": "# edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 524,
+                  "text": "# edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1205",
+            "agreed_id": "TASK-1205",
+            "title": "Catch Linux-only assumptions at PR time: cross-target cargo check, a portability ratchet lint, and a paths-filtered cross-platform trigger",
+            "execution_mode": "guided",
+            "tags": [
+              "ci",
+              "cross-platform",
+              "from-product",
+              "lint",
+              "portability",
+              "recommend:approve",
+              "risk:low"
+            ],
+            "description_sha256": "c0c5cd74a25e1a781fb5440bc116a8569768cdb70af8decae7ec292326f3854a"
+          }
+        },
+        {
+          "id": "TASK-1363",
+          "policy_reason": "history unreadable: no version of TASK-1363 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged CI zsh-required full-suite step. Frozen current alias TASK-1-294 describes zsh fixture coverage, apparently unrelated to sccache, but the frozen classifier cannot read history under TASK-1363. Current resolution does not repair that uncertainty.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "ccb30f63e7cee2b018a7cdead1df4bf0d028c4ee4d9d22bfa62facd38d12afb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "# must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "# must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-294",
+            "agreed_id": "TASK-1363",
+            "title": "pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash (bug_2005_wrapper_stalene\u2026",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:BUG-2005",
+              "finding-hash:70bf4b0f",
+              "from-review:PR-2592",
+              "kind:carried-forward"
+            ],
+            "description_sha256": "839843ecfe290ee37ee3cdfa921aca49db30fd0ed0820a03351b5026099b083b"
+          }
+        },
+        {
+          "id": "TASK-1364",
+          "policy_reason": "history unreadable: no version of TASK-1364 in the store's history",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace on unchanged recover_live_dir_with_steps documentation. Frozen current alias TASK-1-297 describes this helper documentation; sccache helpers do not change recovery. Historical supervision under TASK-1364 remains unavailable, so retain exclusion.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/dev_build.rs",
+              "side": "base",
+              "blob_sha256": "07f4b3fc1205db7532e3cd0d96804d59530f24d3f3a1800b21e7ad3bab3ef40a",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 767,
+                  "text": "// trace:TASK-1364 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/dev_build.rs",
+              "side": "head",
+              "blob_sha256": "df3de6672fed82c33e8a6e9b1ef876965afff70439a208b716f7bbea836c323f",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 912,
+                  "text": "// trace:TASK-1364 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-297",
+            "agreed_id": "TASK-1364",
+            "title": "Non-blocking: recover_live_dir_with_steps (dev_build.rs:763) has no doc comment\u2026",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:BUG-1999",
+              "finding-hash:e0cb3283",
+              "from-review:PR-2595",
+              "kind:carried-forward"
+            ],
+            "description_sha256": "e0c26ef7d52db9a31b0958ba3d704c4545f0feef9a941b1fb3d81fa96b6f1ba7"
+          }
+        },
+        {
+          "id": "TASK-1365",
+          "policy_reason": "history unreadable: no version of TASK-1365 in the store's history",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace in unchanged recovery crash-matrix test. Frozen current alias TASK-1-295 describes asserting named steps fired, not the appended sccache tests. Missing frozen history under TASK-1365 prevents a resolved incidental policy judgment.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/tests/dev_build_tests.rs",
+              "side": "base",
+              "blob_sha256": "a8c926d84730e604c0b089d04408e905f9d6bc3fe498738eb5ce5a67384c7375",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1849,
+                  "text": "// trace:TASK-1365 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/dev_build_tests.rs",
+              "side": "head",
+              "blob_sha256": "acd31b237636985a9656d7c5ccacf2b958990ce825c23bb28f2fb24ecf94bf48",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1849,
+                  "text": "// trace:TASK-1365 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-295",
+            "agreed_id": "TASK-1365",
+            "title": "Non-blocking: dev_build_tests.rs crash-matrix test does 'if first.is_ok() { con\u2026",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:BUG-1999",
+              "finding-hash:34182914",
+              "from-review:PR-2595",
+              "kind:carried-forward"
+            ],
+            "description_sha256": "68b60e24257348f7855772350852083d2e39eed172131c68f0831fe6cede0ff0"
+          }
+        },
+        {
+          "id": "TASK-1366",
+          "policy_reason": "history unreadable: no version of TASK-1366 in the store's history",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace on unchanged recovery rollback-marker ordering comment. Frozen current alias TASK-1-296 describes that comment; added sccache diagnostics do not change rollback. Frozen history under TASK-1366 is unavailable and remains excluded.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/dev_build.rs",
+              "side": "base",
+              "blob_sha256": "07f4b3fc1205db7532e3cd0d96804d59530f24d3f3a1800b21e7ad3bab3ef40a",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 797,
+                  "text": "// or after the marker. trace:TASK-1366 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/dev_build.rs",
+              "side": "head",
+              "blob_sha256": "df3de6672fed82c33e8a6e9b1ef876965afff70439a208b716f7bbea836c323f",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 942,
+                  "text": "// or after the marker. trace:TASK-1366 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-296",
+            "agreed_id": "TASK-1366",
+            "title": "Non-blocking: dev_build.rs:788 comment says 'write the marker first'; the load-\u2026",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:BUG-1999",
+              "finding-hash:4840dbc4",
+              "from-review:PR-2595",
+              "kind:carried-forward"
+            ],
+            "description_sha256": "04f17e18bbe2f0321a061753dded260b709cca9c3fdce4775787d4980a10d9a3"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2674,
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "head": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] feat(build): local testing tiers and make test-touched (TASK-1780)",
+      "full_blocker_count": 14,
+      "scoped_blocker_count": 14,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "TASK-1780",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "New targeted-test planner/Makefile target, CI fixture step and local testing-tier/template instructions directly implement the ordinary named testing-workflow task.",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1780",
+            "agreed_id": "TASK-1780",
+            "title": "Tier local testing by risk: fixer/relay templates stop running the full suite per PR; nightly full-suite job",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "bf7a23118f4a9709aff577c5dfb8631521db00ce1e50603663e26b34cdc099a4"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": ".aida/discipline/README.md",
+          "diff_sha256": "79674321149b416c2b27421296804972d2f3878b6f67a292a8a9db1a68413230"
+        },
+        {
+          "path": ".aida/discipline/git-sync-and-review.md",
+          "diff_sha256": "49b08bb31c2dfa7088ed0522b183cc14323e90cb862412eca7fd0579b0beeff1"
+        },
+        {
+          "path": ".aida/discipline/implementer-discipline.md",
+          "diff_sha256": "0743c1bacc27498b949558c4b76b1db4225dba0d75935d37e4adec30e8d676f1"
+        },
+        {
+          "path": ".aida/discipline/workflow-patterns.md",
+          "diff_sha256": "349ce8fcd3befb4a0399f5a9f46d2c9ef4281bfe3ca5d247b5da36d641cedb9f"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "diff_sha256": "82d677debf5e7410d484baf403481d30182892f046ccd8ea97d49cb510e6b14b"
+        },
+        {
+          "path": "CLAUDE.md",
+          "diff_sha256": "91a3e43effaa1c33ea0e4959c6887a671f3679a28c54e5569501e1610b382765"
+        },
+        {
+          "path": "Makefile",
+          "diff_sha256": "680b5f7f32a56affd0372763d4d678307179d0857cca10ef3dc15cbbf042c13e"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/README.md",
+          "diff_sha256": "252850b61a0675b37253e31fe6c0d75940169f599b1cd2f0f860f3242e6059d4"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "diff_sha256": "c325ffda9327d48fd99649194eaaaa71ec578441688c08c66633f41be3915251"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+          "diff_sha256": "3c74cf5e39b2ab519f160bda38eb76a1177cddbe1f9aac8d62acbdc0870faf67"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+          "diff_sha256": "d52e24b2a38606c2c89008473edd782b9e057fa765e115b64d4306649ad36f65"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-fire.md",
+          "diff_sha256": "ec9b0e9c0dd47939fa655d2acbc2ecad5fe57bbc8e3d855e053db504081abe3c"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-implement.md",
+          "diff_sha256": "71d55576008bbbf409a2b76eb4c74ca954965dc92f7d9d49906dddfb29f3f1ad"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-pickup.md",
+          "diff_sha256": "140c2b0167f2a7f796f7257e8382f8a12cc26daaefe9b202a0984130e300cdd9"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+          "diff_sha256": "81023c26c655c3fdb17e223f62bea85f2e7a2e42d8d23f28649f440d5ef1e213"
+        },
+        {
+          "path": "scripts/ci-gate-tiers.toml",
+          "diff_sha256": "abc751917193234ca7c87654efe87be9fe9cd486a1506ff20372f8c03b021dfe"
+        },
+        {
+          "path": "scripts/test-touched.py",
+          "diff_sha256": "7e30e848f69bf2484dc8e1e707faf905e806711b6126433f466bf5b2ebfeaa20"
+        },
+        {
+          "path": "tests/test_test_touched.py",
+          "diff_sha256": "2aa32631fcb4ac40ca9514cdd0ce29e88fb260a42ae263e9d9d09755bbf01f2c"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "ADR-54",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The GitLab live-smoke guard and authentication contract are unchanged. ci.yml adds a separate test-touched planner fixture step, with no credential or authenticated-request edit.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 158,
+                  "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 158,
+                  "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "ADR-54",
+            "agreed_id": "ADR-54",
+            "title": "GitHub-hosted GitLab smoke authenticates through a dedicated Cloudflare Access service token",
+            "execution_mode": null,
+            "tags": [
+              "access",
+              "ci",
+              "cloudflare",
+              "gitlab",
+              "security"
+            ],
+            "description_sha256": "925fcdddf1f5020b5ea94c5930e1016f7b0aa416e9ccc7a2977928f591150556"
+          }
+        },
+        {
+          "id": "BUG-1688",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The full-access launch-refusal fixture and shipped launch scripts are unchanged. The planner runs cargo tests and changes local verification instructions, not vendor launch authorization.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 264,
+                  "text": "# trace:BUG-1688 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 269,
+                  "text": "# trace:BUG-1688 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1688",
+            "agreed_id": "BUG-1688",
+            "title": "Gate or refuse full-access launches in shipped scripts that have no legitimate unattended caller",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "from:TASK-1549",
+              "launch",
+              "scripts",
+              "security"
+            ],
+            "description_sha256": "78dede59f1cc21ec85cc04c7bfa18881f0f485a30ca623c11e1e9f79ada07965"
+          }
+        },
+        {
+          "id": "BUG-1693",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The CI merge-hold fixtures, marker/clearance logic and server gate are unchanged. Local test tier instructions do not alter hold eligibility or permit clearing/merging.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 234,
+                  "text": "# trace:BUG-1693 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 239,
+                  "text": "# trace:BUG-1693 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1693",
+            "agreed_id": "BUG-1693",
+            "title": "The merge-hold human-at-TTY floor is advisory only: any agent can clear a hold by deleting the marker and dropping the label",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "integrity-floor",
+              "merge-hold"
+            ],
+            "description_sha256": "0c06909631ec114e4faf551dd0d2b0886e4846ef31d2c50f0ca94b1f2155ec38"
+          }
+        },
+        {
+          "id": "BUG-1924",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The role/grant banner fixture and tier entry remain unchanged. No statusline, SessionStart grant display or authority lookup changes.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 256,
+                  "text": "# trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 261,
+                  "text": "# trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "base",
+              "blob_sha256": "0969cf4e355308b52eae8c0f68b1ea02f4d3d03f32b7fdb5bcbe6625d145c278",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 66,
+                  "text": "\"Run session role grant banner test\" = \"fast\"  # trace:BUG-1924 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "head",
+              "blob_sha256": "94c11035f668ebb82403448d05fc5ec204c9a820420338ef824d5ccafea27da1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 67,
+                  "text": "\"Run session role grant banner test\" = \"fast\"  # trace:BUG-1924 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1924",
+            "agreed_id": "BUG-1924",
+            "title": "Statusline shows role:advisor when the shell has no seat grant, so a session can't tell it lacks authority",
+            "execution_mode": null,
+            "tags": [
+              "batch:night-2026-10-10",
+              "roles",
+              "statusline"
+            ],
+            "description_sha256": "2b5cad56cfc01aabbfec255b29580a6f974381406cb8fe47adbd7379c4b1919f"
+          }
+        },
+        {
+          "id": "BUG-2014",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The expiry-hook fixture/tier and Makefile template-hook synchronization/check commands are unchanged. The new test-touched target and testing prose do not change delivery, thresholds or deduplication of expiry notices.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 483,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 488,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "Makefile",
+              "side": "base",
+              "blob_sha256": "e46a997392e51d85d7b08e3134bbeb003fa7fec3ac2a1e629f51beeb6c306d54",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 432,
+                  "text": "@# trace:BUG-2014 | ai:codex"
+                },
+                {
+                  "line": 515,
+                  "text": "@# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "Makefile",
+              "side": "head",
+              "blob_sha256": "88106455973341a14d787d6026c578a0e4af89d6e77918af7fccbb929f86913a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 440,
+                  "text": "@# trace:BUG-2014 | ai:codex"
+                },
+                {
+                  "line": 523,
+                  "text": "@# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "base",
+              "blob_sha256": "0969cf4e355308b52eae8c0f68b1ea02f4d3d03f32b7fdb5bcbe6625d145c278",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "scripts/ci-gate-tiers.toml",
+              "side": "head",
+              "blob_sha256": "94c11035f668ebb82403448d05fc5ec204c9a820420338ef824d5ccafea27da1",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "# trace:BUG-2014 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-2014",
+            "agreed_id": "BUG-2014",
+            "title": "A long-running seat gets no warning when its grant nears expiry mid-session; it learns only when an advisor-gated command refuses",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "hooks",
+              "plan:night",
+              "roles",
+              "seats"
+            ],
+            "description_sha256": "388a8cf7753510775f2f776b89ebff360be7bfcb0f72a71fbb710349a9c02fae"
+          }
+        },
+        {
+          "id": "EPIC-1-001",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged workflow-patterns example says a trace unrelated to its code is misinformation, in both local and template copies. No frozen requirement resolves this ID; an example-looking occurrence does not establish its unknown contract.",
+          "occurrences": [
+            {
+              "path": ".aida/discipline/workflow-patterns.md",
+              "side": "base",
+              "blob_sha256": "a7a586bc895aa74f9d5302018a81de6667b995bb5309eaa8ee46f3778cb96337",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 433,
+                  "text": "5. **Trace comments should match reality.** `// trace:EPIC-1-001 | ai:claude` on code that has nothing to do with EPIC-1-001 is misinformation that compounds. If unsure which EPIC a piece of work belongs to, that's also a signal it needs its own."
+                }
+              ]
+            },
+            {
+              "path": ".aida/discipline/workflow-patterns.md",
+              "side": "head",
+              "blob_sha256": "394b24deee56e5ae3c3a3343fd27317b4de1c4c2f2a1d798050192bb4857e7e3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 436,
+                  "text": "5. **Trace comments should match reality.** `// trace:EPIC-1-001 | ai:claude` on code that has nothing to do with EPIC-1-001 is misinformation that compounds. If unsure which EPIC a piece of work belongs to, that's also a signal it needs its own."
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+              "side": "base",
+              "blob_sha256": "a7a586bc895aa74f9d5302018a81de6667b995bb5309eaa8ee46f3778cb96337",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 433,
+                  "text": "5. **Trace comments should match reality.** `// trace:EPIC-1-001 | ai:claude` on code that has nothing to do with EPIC-1-001 is misinformation that compounds. If unsure which EPIC a piece of work belongs to, that's also a signal it needs its own."
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+              "side": "head",
+              "blob_sha256": "394b24deee56e5ae3c3a3343fd27317b4de1c4c2f2a1d798050192bb4857e7e3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 436,
+                  "text": "5. **Trace comments should match reality.** `// trace:EPIC-1-001 | ai:claude` on code that has nothing to do with EPIC-1-001 is misinformation that compounds. If unsure which EPIC a piece of work belongs to, that's also a signal it needs its own."
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "EPIC-48",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The ablation findings, limits and linked gate-vs-rule writeups are unchanged in workflow-patterns and its template. Testing-tier advice changes an operational habit, not research findings, ablation implementation or roll-your-own cost/benefit conclusions.",
+          "occurrences": [
+            {
+              "path": ".aida/discipline/workflow-patterns.md",
+              "side": "base",
+              "blob_sha256": "a7a586bc895aa74f9d5302018a81de6667b995bb5309eaa8ee46f3778cb96337",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2597,
+                  "text": "Full writeups: `2026-06-18-gate-vs-rule-pilot.md` (I1), `-i2.md` (I2 + cross-vendor), `-i3.md` (I3 + the ceiling-effect conclusion). trace:STORY-655 EPIC-48"
+                }
+              ]
+            },
+            {
+              "path": ".aida/discipline/workflow-patterns.md",
+              "side": "head",
+              "blob_sha256": "394b24deee56e5ae3c3a3343fd27317b4de1c4c2f2a1d798050192bb4857e7e3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2600,
+                  "text": "Full writeups: `2026-06-18-gate-vs-rule-pilot.md` (I1), `-i2.md` (I2 + cross-vendor), `-i3.md` (I3 + the ceiling-effect conclusion). trace:STORY-655 EPIC-48"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+              "side": "base",
+              "blob_sha256": "a7a586bc895aa74f9d5302018a81de6667b995bb5309eaa8ee46f3778cb96337",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2597,
+                  "text": "Full writeups: `2026-06-18-gate-vs-rule-pilot.md` (I1), `-i2.md` (I2 + cross-vendor), `-i3.md` (I3 + the ceiling-effect conclusion). trace:STORY-655 EPIC-48"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+              "side": "head",
+              "blob_sha256": "394b24deee56e5ae3c3a3343fd27317b4de1c4c2f2a1d798050192bb4857e7e3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2600,
+                  "text": "Full writeups: `2026-06-18-gate-vs-rule-pilot.md` (I1), `-i2.md` (I2 + cross-vendor), `-i3.md` (I3 + the ceiling-effect conclusion). trace:STORY-655 EPIC-48"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "EPIC-48",
+            "agreed_id": "EPIC-48",
+            "title": "Coordinating Multi-Vendor AI Agent Fleets (research project)",
+            "execution_mode": null,
+            "tags": [
+              "competitive",
+              "living-doc",
+              "multi-vendor",
+              "research",
+              "theory"
+            ],
+            "description_sha256": "063a562ada20468d900df5b5fe9a4ab43d2e5b704025cd6e2d9887feb8b78e30"
+          }
+        },
+        {
+          "id": "STORY-1353",
+          "policy_reason": "sensitive spec metadata (authority) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Implementer dispatch/disposition boundary prose is unchanged in both copies. Changed testing instructions grant no routing, disposition, approval or merge authority.",
+          "occurrences": [
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 26,
+                  "text": "`authority-boundaries.md`. <!-- trace:STORY-1353 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 26,
+                  "text": "`authority-boundaries.md`. <!-- trace:STORY-1353 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 26,
+                  "text": "`authority-boundaries.md`. <!-- trace:STORY-1353 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 26,
+                  "text": "`authority-boundaries.md`. <!-- trace:STORY-1353 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1353",
+            "agreed_id": "STORY-1353",
+            "title": "Dispatch authority is not advisor authority: let the proxy seat route work in its own right, keep disposition with the advisor and integrity floors with the human",
+            "execution_mode": "drive",
+            "tags": [
+              "authority",
+              "batch:followups-0918i",
+              "drive",
+              "from:operator-0919",
+              "parent:EPIC-69",
+              "proxy",
+              "roles",
+              "substrate-as-bouncer",
+              "throughput"
+            ],
+            "description_sha256": "bbc035bd7a267411b96eedd3e0e50ef83ae6ed95f152ade71b25e15b96250027"
+          }
+        },
+        {
+          "id": "STORY-1382",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The prose-classification discipline, positive/negative fixture step, ratchet rule and allowlist are unchanged. The new Python test planner maps source/build inputs to cargo filters; it does not classify another component error prose or alter the ratchet.",
+          "occurrences": [
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 93,
+                  "text": "<!-- trace:STORY-1382 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 93,
+                  "text": "<!-- trace:STORY-1382 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 548,
+                  "text": "# prose-classification ratchet rule. trace:STORY-1382 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 553,
+                  "text": "# prose-classification ratchet rule. trace:STORY-1382 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 93,
+                  "text": "<!-- trace:STORY-1382 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 93,
+                  "text": "<!-- trace:STORY-1382 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1382",
+            "agreed_id": "STORY-1382",
+            "title": "Five specs this week were filed for classifying on another component's prose, and at least three of their fixes did the same thing \u2014 the ratchet that could catch it became extensible tonight",
+            "execution_mode": "guided",
+            "tags": [
+              "ci",
+              "closure:pending",
+              "diagnostic-decay",
+              "from:session-0919",
+              "parent:EPIC-62",
+              "ratchet",
+              "substrate-as-bouncer"
+            ],
+            "description_sha256": "052f7789b84f5d18661617e64a77b4f197eb3858f4c441664f84d159e64ae6eb"
+          }
+        },
+        {
+          "id": "STORY-564",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The zen needs-human/clean finish signal and auto-exit/cleanup instructions remain unchanged in implement/pr skills. Local test-plan wording and reporting do not change finish-call or exit/pause behavior.",
+          "occurrences": [
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 514,
+                  "text": "**How to apply:** as the reviewing advisor/integrator, for EVERY agent PR: (1) read the DIFF, not the agent's summary; (2) cross-check each trailered SPEC-ID against genuinely-new code that implements it; (3) check for duplicate specs (same title as an already-Completed one \u2192 reject as dup, don't merge); (4) reject any trace-comment renumbering that re-attributes merged work \u2014 restore the original `ai:<tool>`, mixed authorship is `trace:A | ai:x` + `trace:B | ai:y` (the #808 PR did this correctly: kept `STORY-564 | ai:claude` AND added `TASK-758 | ai:codex`); (5) only let a merge land trailers whose work is actually in the diff \u2014 request the commit be re-titled to trailer only the real work. Generic to any AIDA multi-agent project \u2192 candidate for [[feedback_propagate_generic_discipline_via_scaffolding]]. Related: [[feedback_delegated_findings_are_not_verified_ground_truth]] [[feedback_verify_edits_landed_before_claiming_done]] [[feedback_trust_reviewer_over_dialog_intuition]]."
+                }
+              ]
+            },
+            {
+              "path": ".aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 518,
+                  "text": "**How to apply:** as the reviewing advisor/integrator, for EVERY agent PR: (1) read the DIFF, not the agent's summary; (2) cross-check each trailered SPEC-ID against genuinely-new code that implements it; (3) check for duplicate specs (same title as an already-Completed one \u2192 reject as dup, don't merge); (4) reject any trace-comment renumbering that re-attributes merged work \u2014 restore the original `ai:<tool>`, mixed authorship is `trace:A | ai:x` + `trace:B | ai:y` (the #808 PR did this correctly: kept `STORY-564 | ai:claude` AND added `TASK-758 | ai:codex`); (5) only let a merge land trailers whose work is actually in the diff \u2014 request the commit be re-titled to trailer only the real work. Generic to any AIDA multi-agent project \u2192 candidate for [[feedback_propagate_generic_discipline_via_scaffolding]]. Related: [[feedback_delegated_findings_are_not_verified_ground_truth]] [[feedback_verify_edits_landed_before_claiming_done]] [[feedback_trust_reviewer_over_dialog_intuition]]."
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "base",
+              "blob_sha256": "202edfb6afd52119153bbb16c3f09bc9ece8c1d40fea055f7df8e9835281fdbd",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 514,
+                  "text": "**How to apply:** as the reviewing advisor/integrator, for EVERY agent PR: (1) read the DIFF, not the agent's summary; (2) cross-check each trailered SPEC-ID against genuinely-new code that implements it; (3) check for duplicate specs (same title as an already-Completed one \u2192 reject as dup, don't merge); (4) reject any trace-comment renumbering that re-attributes merged work \u2014 restore the original `ai:<tool>`, mixed authorship is `trace:A | ai:x` + `trace:B | ai:y` (the #808 PR did this correctly: kept `STORY-564 | ai:claude` AND added `TASK-758 | ai:codex`); (5) only let a merge land trailers whose work is actually in the diff \u2014 request the commit be re-titled to trailer only the real work. Generic to any AIDA multi-agent project \u2192 candidate for [[feedback_propagate_generic_discipline_via_scaffolding]]. Related: [[feedback_delegated_findings_are_not_verified_ground_truth]] [[feedback_verify_edits_landed_before_claiming_done]] [[feedback_trust_reviewer_over_dialog_intuition]]."
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+              "side": "head",
+              "blob_sha256": "615a3b77cfb0e70b83b3a688c3585e3ab6500bb8e2caee8e892946eee4b5b5ad",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 518,
+                  "text": "**How to apply:** as the reviewing advisor/integrator, for EVERY agent PR: (1) read the DIFF, not the agent's summary; (2) cross-check each trailered SPEC-ID against genuinely-new code that implements it; (3) check for duplicate specs (same title as an already-Completed one \u2192 reject as dup, don't merge); (4) reject any trace-comment renumbering that re-attributes merged work \u2014 restore the original `ai:<tool>`, mixed authorship is `trace:A | ai:x` + `trace:B | ai:y` (the #808 PR did this correctly: kept `STORY-564 | ai:claude` AND added `TASK-758 | ai:codex`); (5) only let a merge land trailers whose work is actually in the diff \u2014 request the commit be re-titled to trailer only the real work. Generic to any AIDA multi-agent project \u2192 candidate for [[feedback_propagate_generic_discipline_via_scaffolding]]. Related: [[feedback_delegated_findings_are_not_verified_ground_truth]] [[feedback_verify_edits_landed_before_claiming_done]] [[feedback_trust_reviewer_over_dialog_intuition]]."
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/skills/aida-implement.md",
+              "side": "base",
+              "blob_sha256": "3af4fbab013d5644e8aefad7bbf43febc8394f226ac0209090ba12765494e7cb",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 105,
+                  "text": "trace:STORY-564"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/skills/aida-implement.md",
+              "side": "head",
+              "blob_sha256": "0066c91e1adaf2a8e05fe7ee34ab5c3efa04bb018b29927395f81aa5c2e7e243",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 105,
+                  "text": "trace:STORY-564"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+              "side": "base",
+              "blob_sha256": "2b0d97f0a4e05005738d3220cacf2206462089c77e16d8b2fca8720df061daf2",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 789,
+                  "text": "deferring it to the operator. trace:BUG-232 trace:BUG-500 trace:STORY-564"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+              "side": "head",
+              "blob_sha256": "60a52fdae7cda3fdc5b1242a58efb33fca69ce4acfe29c8e0feb0d48541fe308",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 790,
+                  "text": "deferring it to the operator. trace:BUG-232 trace:BUG-500 trace:STORY-564"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-564",
+            "agreed_id": "STORY-564",
+            "title": "aida queue work --zen: auto-exit on a clean finish (no human needed), pause only when a human IS needed",
+            "execution_mode": null,
+            "tags": [
+              "aida:queue:work",
+              "autonomy",
+              "core",
+              "needs-supervised-build",
+              "operator-tooling",
+              "session-lifecycle",
+              "zen"
+            ],
+            "description_sha256": "5715b6e3604e5e50d37a5643de3b7e98ca47ee91eb59230d0b96f81e5de8e081"
+          }
+        },
+        {
+          "id": "STORY-612",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The required live bwrap gate and runtime OS-wrap implementation are unchanged. The new local testing tiers leave this separate CI gate in place and do not change confinement or headless spawn.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 191,
+                  "text": "# blocked on. trace:STORY-612 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 196,
+                  "text": "# blocked on. trace:STORY-612 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-612",
+            "agreed_id": "STORY-612",
+            "title": "Sandbox slice 2: OS boundary (bubblewrap) around the whole headless claude -p process",
+            "execution_mode": null,
+            "tags": [
+              "agent-execution",
+              "competitive-hole",
+              "from-strategic",
+              "parent:SPIKE-61",
+              "sandbox",
+              "security",
+              "supervised"
+            ],
+            "description_sha256": "f2aa5e7acc9c49d7e412fb79ac3031fd6c0df07bdb3e51eb5e7008aee24cddbb"
+          }
+        },
+        {
+          "id": "TASK-1205",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The portability-ratchet step and trusted-base allowlist growth command are unchanged; cross-platform triggers/rules are untouched. New local cargo filter planning is separate from those guards.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 524,
+                  "text": "# edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 529,
+                  "text": "# edits cannot bypass it. trace:TASK-1205 BUG-1301 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1205",
+            "agreed_id": "TASK-1205",
+            "title": "Catch Linux-only assumptions at PR time: cross-target cargo check, a portability ratchet lint, and a paths-filtered cross-platform trigger",
+            "execution_mode": "guided",
+            "tags": [
+              "ci",
+              "cross-platform",
+              "from-product",
+              "lint",
+              "portability",
+              "recommend:approve",
+              "risk:low"
+            ],
+            "description_sha256": "c0c5cd74a25e1a781fb5440bc116a8569768cdb70af8decae7ec292326f3854a"
+          }
+        },
+        {
+          "id": "TASK-1289",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The orchestrated parent-owned preflight paragraph and guard resolution/publication boundary are unchanged in aida-pr. Test-status examples change, but no configured guard, preflight failure decision or PR-opening path changes.",
+          "occurrences": [
+            {
+              "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+              "side": "base",
+              "blob_sha256": "2b0d97f0a4e05005738d3220cacf2206462089c77e16d8b2fca8720df061daf2",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 397,
+                  "text": "announced in the drain banner. trace:TASK-1289 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+              "side": "head",
+              "blob_sha256": "60a52fdae7cda3fdc5b1242a58efb33fca69ce4acfe29c8e0feb0d48541fe308",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 398,
+                  "text": "announced in the drain banner. trace:TASK-1289 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1289",
+            "agreed_id": "TASK-1289",
+            "title": "Pre-flight guard parity: the guard runs AFTER the implementer publishes the PR, so it cannot gate publication \u2014 the boundary needs a design decision, not another round",
+            "execution_mode": "guided",
+            "tags": [
+              "batch:followups-0918h",
+              "batch:followups-0918i",
+              "ci",
+              "cycle-time",
+              "decision:retract-on-failure",
+              "drive",
+              "from:failure-analysis-0919",
+              "orchestrator",
+              "parent:EPIC-28",
+              "parent:EPIC-62",
+              "preflight"
+            ],
+            "description_sha256": "2810ea18bddbf5dc6f1dd1516bb7177ac11ac93b5d3fbe9f1cafb89f16ff045e"
+          }
+        },
+        {
+          "id": "TASK-1363",
+          "policy_reason": "history unreadable: no version of TASK-1363 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged zsh-required CI full-suite step. Current frozen alias TASK-1-294 describes mandatory zsh leak-fixture execution; the new planner does not remove this step. Its frozen historical policy classification is nevertheless unavailable and remains excluded.",
+          "occurrences": [
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "base",
+              "blob_sha256": "b5537f3c2c8bac31a7d3eebd5c0910f7195f32b6b9fb38472d3719273dc8966a",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "# must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": ".github/workflows/ci.yml",
+              "side": "head",
+              "blob_sha256": "c97370c3fd8ea913f1e69e4e984932b850d8cce3c87330a575c93e3194b90cf9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 152,
+                  "text": "# must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-294",
+            "agreed_id": "TASK-1363",
+            "title": "pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash (bug_2005_wrapper_stalene\u2026",
+            "execution_mode": null,
+            "tags": [
+              "carried-from:BUG-2005",
+              "finding-hash:70bf4b0f",
+              "from-review:PR-2592",
+              "kind:carried-forward"
+            ],
+            "description_sha256": "839843ecfe290ee37ee3cdfa921aca49db30fd0ed0820a03351b5026099b083b"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2697,
+      "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "head": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a",
+      "named_policy_refusal": false,
+      "title": "[AI:antigravity] fix(ship): refuse pr ship on default branch without PR number (BUG-2164)",
+      "full_blocker_count": 17,
+      "scoped_blocker_count": 17,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "named_inventory": [
+        {
+          "id": "BUG-2164",
+          "policy_reason": null,
+          "judgment": "true-touch",
+          "rationale": "New default-branch/no-number refusal, approved-PR suggestions and fixtures directly implement this ordinary named bug.",
+          "frozen_current_spec": {
+            "spec_id": "BUG-2164",
+            "agreed_id": "BUG-2164",
+            "title": "aida pr ship with no PR number on the default branch pushes main and tries 'gh pr create main->main' instead of refusing",
+            "execution_mode": null,
+            "tags": null,
+            "description_sha256": "36af4137d15d4515ddaee0ab048de839c34a01b81bbdba2815c1b05bd9e80936"
+          }
+        }
+      ],
+      "all_named_reasons_inspected": true,
+      "all_exclusion_reasons_inspected": true,
+      "frozen_policy_allowed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "diff_sha256": "7d48f8e1261c666b808d420d6ca3bf59f865b5a7b69d4005f31b4758ede0064f"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_ship.rs",
+          "diff_sha256": "c0f105485f1e1e9da58e03c7c5cb5cf2bbf81eafcaa5b4b2fe78761081aee8d4"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2164_default_branch_ship_refusal_tests.rs",
+          "diff_sha256": "99da80d993776be7a4164aedd67b77cd1f241afe4df3e686bacc31e15db2be4e"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1167",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The later hold marker/clearance branch and server gate are unchanged. New early default-branch/no-number refusal lists suggestions then returns an error; it never releases or bypasses a hold.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3113,
+                  "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3124,
+                  "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1167",
+            "agreed_id": "BUG-1167",
+            "title": "Supervised-merge hold is bypassable by a CONCURRENT merger \u2014 the drain holds, but a separate integrator/agent merges the drive PR anyway (client-side hold, not a substrate gate)",
+            "execution_mode": "drive",
+            "tags": [
+              "concurrency",
+              "drive",
+              "fence",
+              "integrator",
+              "reliability",
+              "substrate-gate",
+              "supervised-merge"
+            ],
+            "description_sha256": "689c25780f9f988b705bb257f2a67d112b02bfd62a95e39ebcbb87ff52f2322f"
+          }
+        },
+        {
+          "id": "BUG-1953",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Explicit-number shipping bypasses the new refusal and retains the same ship_branch lease lookup and cleanup. New test checks only that explicit-number invocation is not rejected by this guard, not step-5 behavior.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3592,
+                  "text": "// resolved. trace:BUG-1953 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3603,
+                  "text": "// resolved. trace:BUG-1953 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1246,
+                  "text": "// trace:BUG-1953 | ai:claude"
+                },
+                {
+                  "line": 2947,
+                  "text": "// trace:BUG-1953 | ai:claude"
+                },
+                {
+                  "line": 4117,
+                  "text": "// trace:BUG-1953.ac81b0b1 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1246,
+                  "text": "// trace:BUG-1953 | ai:claude"
+                },
+                {
+                  "line": 3003,
+                  "text": "// trace:BUG-1953 | ai:claude"
+                },
+                {
+                  "line": 4173,
+                  "text": "// trace:BUG-1953.ac81b0b1 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1953",
+            "agreed_id": "BUG-1953",
+            "title": "aida pr ship <N> step 5 matches the lease on the cwd branch instead of the PR head branch, so shipping by number from main leaves the lease, worktree and mcp-claim behind",
+            "execution_mode": "guided",
+            "tags": [
+              "batch:drain-20261013",
+              "found:night-2026-10-10",
+              "parked:night",
+              "pr-ship"
+            ],
+            "description_sha256": "bd90ffd49f0bcf33ff22c0c7e97798b94e365fbc493461ba65b80acc478f82ff"
+          }
+        },
+        {
+          "id": "BUG-710",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The drive-seat self-merge guard and independent-review requirement are unchanged. Default-branch detection adds a refusal before shipping, without changing orchestrator identity, phase ownership or merge eligibility for calls that proceed.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:BUG-710 trace:BUG-716 trace:TASK-1253 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:BUG-710 trace:BUG-716 trace:TASK-1253 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-710",
+            "agreed_id": "BUG-710",
+            "title": "Headless implementer can self-merge, bypassing zen's promised independent reviewer",
+            "execution_mode": null,
+            "tags": [
+              "aida:zen",
+              "codex",
+              "governance",
+              "substrate-guard",
+              "supervised"
+            ],
+            "description_sha256": "fc8461e3918f37fb9f4e0a05b44babb4d1deb179957dd3126a73cbd2cf403e16"
+          }
+        },
+        {
+          "id": "BUG-716",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Supervised/headless drive-seat detection and ship_merge_block_reason are unchanged. The new guard uses branch and explicit-number presence, not orchestration mode or reviewer authority.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:BUG-710 trace:BUG-716 trace:TASK-1253 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1000,
+                  "text": "// trace:BUG-710 trace:BUG-716 trace:TASK-1253 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-716",
+            "agreed_id": "BUG-716",
+            "title": "aida pr ship self-merge guard (BUG-710) doesn't cover the SUPERVISED/interactive implementer \u2014 reviewer bypassed in --supervised drives",
+            "execution_mode": null,
+            "tags": [
+              "aida:zen",
+              "codex",
+              "from-self-test",
+              "governance",
+              "severity:major",
+              "substrate-guard",
+              "supervised"
+            ],
+            "description_sha256": "3b9d43dedb7d292706a5d5fd74a5abf0935d0ec03dc52575c89d97d89f7ffbb1"
+          }
+        },
+        {
+          "id": "BUG-727",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "supervised_specs_for_ship and execution-mode supervision checks are unchanged. Suggested PR approval titles are display-only and are never used to permit a merge.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1095,
+                  "text": "// trace:STORY-529 trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1147,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 2723,
+                  "text": "// sync below. trace:BUG-727 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1095,
+                  "text": "// trace:STORY-529 trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1147,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 2734,
+                  "text": "// sync below. trace:BUG-727 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1522,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1530,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1544,
+                  "text": "// trace:BUG-727 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1522,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1530,
+                  "text": "// trace:BUG-727 | ai:claude"
+                },
+                {
+                  "line": 1544,
+                  "text": "// trace:BUG-727 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-727",
+            "agreed_id": "BUG-727",
+            "title": "Keystone 'do not merge, advisor-review' directive is text-only \u2014 pr ship auto-merged two keystones past it; needs a substrate marker pr ship honors",
+            "execution_mode": "drive",
+            "tags": [
+              "aida:pr-ship",
+              "batch:keystone-0719",
+              "governance",
+              "keystone",
+              "severity:major",
+              "substrate",
+              "supervised"
+            ],
+            "description_sha256": "a2cbd53a99c951d7234551a9116876ce3afb36019c656e67f9fa8b538081d6bb"
+          }
+        },
+        {
+          "id": "STORY-1166",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Forge-routed CI registration/watch and delegated-review check-run classification are unchanged. New gh pr list reads suggestion metadata, not CI or review check-run evidence used by those paths.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1067,
+                  "text": "// trace:STORY-1166 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1067,
+                  "text": "// trace:STORY-1166 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1166",
+            "agreed_id": "STORY-1166",
+            "title": "GitLab Slice 3: abstract CI-watch + delegated-review check-runs behind the Forge trait",
+            "execution_mode": "guided",
+            "tags": [
+              "aida:forge",
+              "ci-watch",
+              "forge",
+              "gitlab",
+              "parent:EPIC-68",
+              "review",
+              "slice-3"
+            ],
+            "description_sha256": "e2809471a2ea809d40021eb03207e7f02187b32e3c6feabcdbe44320f2f79ee0"
+          }
+        },
+        {
+          "id": "STORY-1171",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Merge-lock acquisition, bounded waiting and under-lock checks are unchanged. The new default-branch refusal exits before acquiring a merge lease and makes no merge attempt.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1450,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                },
+                {
+                  "line": 1480,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                },
+                {
+                  "line": 2913,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1450,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                },
+                {
+                  "line": 1480,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                },
+                {
+                  "line": 2924,
+                  "text": "// trace:STORY-1171 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1171",
+            "agreed_id": "STORY-1171",
+            "title": "Branch merge-serialization lock: one agent merges to a target branch at a time (coordination primitive)",
+            "execution_mode": "guided",
+            "tags": [
+              "bug-1167",
+              "concurrency",
+              "forge",
+              "merge-lock",
+              "reliability",
+              "serialization"
+            ],
+            "description_sha256": "069f58261ece2b071a59adde17e630b2ea6e05a7c999e60a82b7cec73949ea5d"
+          }
+        },
+        {
+          "id": "STORY-1698",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Mandate cover, attestation/exclusion reads, hold release/re-arm and expiry checks remain unchanged. OpenApprovedPr suggestions carry no mandate or permission and the new branch always refuses.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1154,
+                  "text": "// append-only exclusion ledger. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1740,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1751,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1821,
+                  "text": "// source of exclusion. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1870,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1892,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1913,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2184,
+                  "text": "// fire-fighting mandate. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2587,
+                  "text": "// before the merge call. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2731,
+                  "text": "// the mandate refuses them). trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2917,
+                  "text": "// refuses here, before any hold is touched. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3120,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3238,
+                  "text": "// advisor\". trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3321,
+                  "text": "// a failure. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3344,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3407,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1154,
+                  "text": "// append-only exclusion ledger. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1740,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1751,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1821,
+                  "text": "// source of exclusion. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1870,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1892,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 1913,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2184,
+                  "text": "// fire-fighting mandate. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2598,
+                  "text": "// before the merge call. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2742,
+                  "text": "// the mandate refuses them). trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2928,
+                  "text": "// refuses here, before any hold is touched. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3131,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3249,
+                  "text": "// advisor\". trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3332,
+                  "text": "// a failure. trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3355,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 3418,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2225,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2540,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2281,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                },
+                {
+                  "line": 2596,
+                  "text": "// trace:STORY-1698 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1698",
+            "agreed_id": "STORY-1698",
+            "title": "Fire-fighting mandate: a human-minted, time-boxed grant that lets the advisor seat ship held PRs with attested independent approval",
+            "execution_mode": null,
+            "tags": [
+              "docs:impacted"
+            ],
+            "description_sha256": "4d0e4f8297fed0f6a98976a8e4b51fd01d0268c9b909ee4f05f2b3f0a0b7ec79"
+          }
+        },
+        {
+          "id": "STORY-771",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The prior extracted-handler module boundary and imports are unchanged. This adds a guard/helper within existing modules rather than extracting handlers.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 5,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 5,
+                  "text": "// trace:STORY-771 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-771",
+            "agreed_id": "STORY-771",
+            "title": "SPIKE-78 follow-up: extract the keystone command handlers (pr/mcp/orchestrator/drain/queue/status/solo/zen) out of main.rs",
+            "execution_mode": "drive",
+            "tags": [
+              "batch:guided-0719",
+              "parent:SPIKE-78",
+              "refactor",
+              "tech-debt"
+            ],
+            "description_sha256": "7229edbcadd2f5202b8bef09b70c11dfabcff2037eb4e319af94dac4ebfb3475"
+          }
+        },
+        {
+          "id": "TASK-1277",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Protocol evaluation and PR-body rendering remain unchanged. The new refusal runs before PR creation; its suggestions do not evaluate protocols or bypass a missing-item refusal.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3942,
+                  "text": "// trace:TASK-1277 | ai:claude"
+                },
+                {
+                  "line": 4004,
+                  "text": "// trace:TASK-1277 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3953,
+                  "text": "// trace:TASK-1277 | ai:claude"
+                },
+                {
+                  "line": 4015,
+                  "text": "// trace:TASK-1277 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1277",
+            "agreed_id": "TASK-1277",
+            "title": "Typed protocols slice 2: protocol check at done \u2014 aida queue done / pr create evaluate the type protocol's machine-checkable items, warn by default, refuse when [protocol] enforce = refuse, --force wi",
+            "execution_mode": "guided",
+            "tags": [
+              "agent-ux",
+              "discipline",
+              "keyboard-gate",
+              "parent:EPIC-28",
+              "protocol:slice-2",
+              "substrate-as-bouncer"
+            ],
+            "description_sha256": "6a0235d2f8d541008c2745089032e93f432f00bc7c71d35109420b499e18095a"
+          }
+        },
+        {
+          "id": "TASK-1330",
+          "policy_reason": "sensitive spec metadata (identity) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Email allowlist and squash coauthor sanitization remain unchanged. No new commit/push or merge arguments are introduced; the guard refuses before those operations.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3059,
+                  "text": "// unchecked body. trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 3086,
+                  "text": "squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3070,
+                  "text": "// unchecked body. trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 3097,
+                  "text": "squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1031,
+                  "text": "// trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 1170,
+                  "text": "squash_body: None, // trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 3822,
+                  "text": "// trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 4043,
+                  "text": "squash_body: None, // trace:TASK-1330 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1031,
+                  "text": "// trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 1170,
+                  "text": "squash_body: None, // trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 3878,
+                  "text": "// trace:TASK-1330 | ai:claude"
+                },
+                {
+                  "line": 4099,
+                  "text": "squash_body: None, // trace:TASK-1330 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-221",
+            "agreed_id": "TASK-1330",
+            "title": "Identity hygiene gate: refuse pushes/commits with non-allowlisted author emails",
+            "execution_mode": null,
+            "tags": [
+              "docs:impacted",
+              "from-advisor:general",
+              "kind:observation",
+              "severity:major"
+            ],
+            "description_sha256": "05bae950f3bedc27a0d1d1bdf8122098c46c64f20b860690794f9c0efb40ac4a"
+          }
+        },
+        {
+          "id": "TASK-1331",
+          "policy_reason": "history unreadable: no version of TASK-1331 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "CI watcher and informational-workflow filtering are unchanged. Frozen current alias TASK-1-223 describes that watcher, but frozen history under TASK-1331 is unavailable; keep conservative exclusion.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2824,
+                  "text": "// trace:STORY-516 trace:TASK-1331 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2835,
+                  "text": "// trace:STORY-516 trace:TASK-1331 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 229,
+                  "text": "// trace:TASK-1331 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 229,
+                  "text": "// trace:TASK-1331 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-223",
+            "agreed_id": "TASK-1331",
+            "title": "pr ship CI watch blocks on informational workflows the config already excludes",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:general",
+              "kind:observation",
+              "severity:major"
+            ],
+            "description_sha256": "ee35d8b22bbbeb9a55f5403989249ced3735624303712ff20e8e7ea9311c1ff7"
+          }
+        },
+        {
+          "id": "TASK-140",
+          "policy_reason": "history unreadable: no version of TASK-140 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Squash-subject derivation and branch-head message helpers are unchanged. Current frozen alias TASK-1-115 describes subject selection, but missing historical classification under TASK-140 is not repaired by that apparent separation.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4205,
+                  "text": "/// first line as the squash subject. trace:TASK-140 | ai:claude"
+                },
+                {
+                  "line": 4257,
+                  "text": "// trace:TASK-140 TASK-142 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4216,
+                  "text": "/// first line as the squash subject. trace:TASK-140 | ai:claude"
+                },
+                {
+                  "line": 4268,
+                  "text": "// trace:TASK-140 TASK-142 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-115",
+            "agreed_id": "TASK-140",
+            "title": "aida pr ship squash-subject mismatch: PR-347 (TASK-575) merged with the WRONG s\u2026",
+            "execution_mode": null,
+            "tags": [
+              "aida:pr:ship",
+              "from-advisor:TASK-575",
+              "from-self-test",
+              "kind:observation",
+              "linked:TASK-575",
+              "papercut",
+              "severity:minor"
+            ],
+            "description_sha256": "c7431040d3d3c7228e60e529fd4ab77bbcc8a23efc441d1ec09ac375ef324dc8"
+          }
+        },
+        {
+          "id": "TASK-141",
+          "policy_reason": "history unreadable: no version of TASK-141 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Feature-branch PR resumption is unchanged; the new guard restricts only default-branch no-number calls. Frozen current alias TASK-1-117 describes existing-PR resumption, but history under TASK-141 is unavailable and remains excluded.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2302,
+                  "text": "// trace:TASK-961 trace:STORY-621 trace:TASK-141 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2313,
+                  "text": "// trace:TASK-961 trace:STORY-621 trace:TASK-141 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1343,
+                  "text": "// trace:TASK-141 | ai:codex"
+                },
+                {
+                  "line": 1355,
+                  "text": "// trace:TASK-141 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1343,
+                  "text": "// trace:TASK-141 | ai:codex"
+                },
+                {
+                  "line": 1355,
+                  "text": "// trace:TASK-141 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-117",
+            "agreed_id": "TASK-141",
+            "title": "aida pr ship (no-arg) fails to resume an existing open PR",
+            "execution_mode": null,
+            "tags": [
+              "batch:papercuts-0718",
+              "from-advisor:general",
+              "kind:observation",
+              "severity:minor"
+            ],
+            "description_sha256": "89182cdc6dc75fb264ec5d4e45e308fda8e554a537b53f00fb1ac827f3e2a061"
+          }
+        },
+        {
+          "id": "TASK-142",
+          "policy_reason": "history unreadable: no version of TASK-142 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "PR-title/branch-head squash-subject selection remains unchanged. Frozen current alias TASK-1-118 describes merge-commit subjects; history under TASK-142 remains unreadable despite current resolution.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4239,
+                  "text": "// trace:SPEC-410 TASK-142 | ai:codex"
+                },
+                {
+                  "line": 4257,
+                  "text": "// trace:TASK-140 TASK-142 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 4250,
+                  "text": "// trace:SPEC-410 TASK-142 | ai:codex"
+                },
+                {
+                  "line": 4268,
+                  "text": "// trace:TASK-140 TASK-142 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 586,
+                  "text": "// trace:TASK-142 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 586,
+                  "text": "// trace:TASK-142 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-118",
+            "agreed_id": "TASK-142",
+            "title": "pr ship squash subject derives from branch HEAD commit \u2014 a merge commit yields an uninformative main-history subject",
+            "execution_mode": null,
+            "tags": [
+              "batch:papercuts-0718",
+              "from-advisor:general",
+              "kind:observation",
+              "severity:cosmetic"
+            ],
+            "description_sha256": "a085a715acf69a92770512a0e7ec1a59578a5a061372b937b2cc8e4d5e8d5996"
+          }
+        },
+        {
+          "id": "TASK-1600",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Completion-trailer source selection, store resolution and non-completing markers are unchanged. The new helper reads titles only to print suggestions before returning an error; titles do not feed completion credit.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3451,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 4280,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3462,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 4291,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "base",
+              "blob_sha256": "84b8512f74556bde21b7ccc0651b40e0df1fe483bd6e024d96e4956e822c7e77",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 323,
+                  "text": "// trace:SPEC-410 TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 605,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 3306,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 3337,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_ship.rs",
+              "side": "head",
+              "blob_sha256": "7af0c9be1905e3e87a1ca82183c779815184ff72a2af2dd1f8636a30a2e8cbb8",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 323,
+                  "text": "// trace:SPEC-410 TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 605,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 3362,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                },
+                {
+                  "line": 3393,
+                  "text": "// trace:TASK-1600 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1600",
+            "agreed_id": "TASK-1600",
+            "title": "aida pr ship scrapes mid-title spec-ID tokens into completing squash trailers, falsely completing specs the title merely mentions",
+            "execution_mode": "guided",
+            "tags": null,
+            "description_sha256": "cd8ed48da0532112217e6540e511a247c3b69708a40e04b3fea711c17c1601d1"
+          }
+        },
+        {
+          "id": "TASK-963",
+          "policy_reason": "operator-only",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Adds find_open_approved_prs, a forge-sensitive metadata read: it returns no suggestions for non-GitHub and runs gh pr list --json number,title,reviewDecision directly on GitHub. This extends the PR metadata-read surface governed by the Forge metadata consolidation contract, despite leaving existing fetch_change_info_via_forge callsites unchanged. It is a metadata portability touch, not a new approval grant.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "base",
+              "blob_sha256": "b0ccea229f4a44180378459a99fcb8eaa483bf5890018d0b427ef4b81e18997f",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 481,
+                  "text": "// was a raw `gh pr view`). trace:TASK-963 | ai:claude ----"
+                },
+                {
+                  "line": 982,
+                  "text": "// trace:TASK-963 | ai:claude"
+                },
+                {
+                  "line": 4837,
+                  "text": "// git probing below was already forge-agnostic. trace:TASK-963 | ai:claude"
+                },
+                {
+                  "line": 5014,
+                  "text": "// preflight_stale_base_check. trace:TASK-963 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/pr_cmd.rs",
+              "side": "head",
+              "blob_sha256": "e1e04150471cd2d87bafe3c37f10a75c1b6ae002f9f54b5be7414993efb94093",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 481,
+                  "text": "// was a raw `gh pr view`). trace:TASK-963 | ai:claude ----"
+                },
+                {
+                  "line": 982,
+                  "text": "// trace:TASK-963 | ai:claude"
+                },
+                {
+                  "line": 4885,
+                  "text": "// git probing below was already forge-agnostic. trace:TASK-963 | ai:claude"
+                },
+                {
+                  "line": 5062,
+                  "text": "// preflight_stale_base_check. trace:TASK-963 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-963",
+            "agreed_id": "TASK-963",
+            "title": "STORY-621 Slice 2: Forge::change_metadata + reviewer-preflight/reconcile metadata-read consolidation",
+            "execution_mode": "drive",
+            "tags": [
+              "aida:forge",
+              "batch:operator-0719",
+              "parent:STORY-621",
+              "sign-off-gated"
+            ],
+            "description_sha256": "578bd8776f1c8c9ae36347b36a6f64fdb603caf5e6b3ced987ee030f88c0d4b0"
           }
         }
       ]
