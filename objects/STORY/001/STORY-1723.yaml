@@ -1,0 +1,33 @@
+id: 01a1498a-8fa8-7553-80dc-7c395c29ad01
+spec_id: STORY-1723
+agreed_id: STORY-1723
+title: 'Review PR-2717: [AI:codex] docs(mandate): extend complete blocker audit to ten cases (TASK-1800)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14982`) for branch `codex/task-1800-semantic-audit-next`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2717>
+  - Branch: `codex/task-1800-semantic-audit-next` → `codex/task-1800-semantic-audit`
+
+  ## Covers
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2717` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T11:06:19.944479902Z
+modified_at: 2026-10-17T11:06:19.944479902Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
