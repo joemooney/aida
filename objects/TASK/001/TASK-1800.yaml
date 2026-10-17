@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T11:06:30.709953239Z
+modified_at: 2026-10-17T15:16:45.866263830Z
 req_type: Task
 relationships:
 - rel_type:
@@ -191,6 +191,27 @@ comments:
     STANDARD independent review requested for this docs-only slice;#2714 retains separate STRICT gate. No production collector/policy/fallback/authority/symlink/completion change, no workspace runtime or end-to-end mandate replay, no author verdict/clearance/merge or CI-green claim. Docs: docs/testing/task-1800-semantic-audit.{json,md}; durable local evidence/session6. Own lease/worktree cleanup follows.
   created_at: 2026-10-17T11:06:01.788867304Z
   modified_at: 2026-10-17T11:06:01.788867304Z
+- id: 01a14a6f-d6aa-7a03-9ba3-5b91dd715ab0
+  author: ai:codex:joe
+  content: |
+    Measurement-only continuation published as non-completing PR #2718: https://github.com/joemooney/aida/pull/2718, exact ready OPEN head 83ef02d0b8254743a57bc61eb49c98a11b3c07f7. Stacked on #2717 at c78b18e99a296c34ea456077d0e238cce9d14466. Exactly three docs/data files and both Non-completing slice / aida: no-complete markers verified. TASK-1800 remains In Progress.
+
+    Every policy-blocking trace ID in both modes now inspected in THIRTEEN cases. Three added:
+    | PR | full/scoped | true supervised touches | unresolved |
+    |---|---:|---|---|
+    |2656|12/9|none established|TASK-1363; full-only TASK-1364/1365/1366|
+    |2674|14/14|none established|EPIC-1-001, TASK-1363|
+    |2697|17/17|TASK-963|TASK-1331, TASK-140/141/142|
+
+    Cumulative trace case/ID pairs: full86 =16 true +54 incidental +16 unresolved; scoped77 =14 true +51 incidental +12 unresolved. Prior ten row objects preserved exactly. All extracted named tokens inventoried for these three new cases (ordinary BUG-2135, TASK-1780, BUG-2164 behavior directly touched), now ten named tokens across seven cases; named findings excluded from trace-pair totals. Four cases remain fully resolved, nine retain uncertainty. No refused PR proven incidental-only. 37 cases remain; semantic gate OPEN; frozen conservative refusal outcome unchanged49/50.
+
+    PR2656/2674 leave known supervised CI fixtures and runtime contracts unchanged. Their local build/test workflow changes do not resolve the frozen historical/unknown IDs. PR2697's new find_open_approved_prs directly queries GitHub metadata via gh pr list; TASK-963's Forge metadata-read consolidation contract is touched despite unchanged old trait callsites. Suggestions feed only a refusal message. Later hold/mandate, completion, cleanup and CI watch mechanisms are unchanged. Current aliases verified against frozen objects but do not repair missing frozen history. Earlier full-only true touches PR2669/STORY-1218 and PR2686/TASK-1731 remain retained for future ID-level coverage checks.
+
+    Integrity verifies13 endpoints,86/77 inventories/policy strings,ten named tokens,all changed-path diff/blob/spec hashes,exact trace lines/scoped/fallback provenance,aliases and supporting sources. Frozen store clean a5dae7145abd11d2480271c466030b12db6e7668; same collector7041c86b and private-ledger digest; no new classifier run or ledger contents published. Actual make check-ci-fast30/30, formatting/diff clean. One fresh spawned author self-check read actual spec/rulings and ran own source/contracts/integrity commands, final no actionable findings. Author self-check only, no independent review authority.
+
+    STANDARD independent review requested. No author verdict, clearance, merge, whole-workspace runtime, end-to-end mandate replay or CI-green claim. No fallback, path-class authority, symlink or other behavior changes. Durable research and next37 inventory: this relay evidence/session7. Own lease/worktree cleanup follows normal session end, which queues the review item.
+  created_at: 2026-10-17T15:16:45.866263830Z
+  modified_at: 2026-10-17T15:16:45.866263830Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
