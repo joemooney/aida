@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+mod command; // trace:TASK-1791 | ai:codex
+use command::{CommandOutputLimitExceeded, CommandTimedOut};
+
 mod adapter; // trace:TASK-1732 | ai:codex
 mod completeness; // trace:STORY-1677 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
@@ -271,12 +274,29 @@ struct ScoreEnv {
     path: std::ffi::OsString,
     bwrap: Option<PathBuf>,
     install_ran: std::cell::Cell<bool>,
+    // trace:TASK-1791 | ai:codex
+    command_timeout: std::time::Duration,
     // Explicitly captured interface inputs, supplied only to the oracle.
     // trace:TASK-1732 | ai:codex
     oracle_environment: BTreeMap<String, String>,
     diagnostic_bytes: std::cell::RefCell<Option<Vec<u8>>>,
     #[cfg(test)]
     _guard_cache: tempfile::TempDir,
+}
+
+// A run-local setting, captured before generated code receives its clean env.
+// Invalid values refuse scoring instead of silently removing the deadline.
+// trace:TASK-1791 | ai:codex
+fn command_timeout(value: Option<std::ffi::OsString>) -> Result<std::time::Duration> {
+    let seconds = match value {
+        None => 30,
+        Some(value) => value
+            .to_str()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|s| (1..=86400).contains(s))
+            .context("AIDA_REGEN_COMMAND_TIMEOUT_SECS must be an integer from 1 to 86400")?,
+    };
+    Ok(std::time::Duration::from_secs(seconds))
 }
 
 fn phase_dirs(root: &Path) -> Result<()> {
@@ -301,6 +321,7 @@ impl ScoreEnv {
     }
 
     fn for_project(config: &RegenConfig, unconfined: bool, project: &Path) -> Result<Self> {
+        let command_timeout = command_timeout(std::env::var_os("AIDA_REGEN_COMMAND_TIMEOUT_SECS"))?;
         let bwrap = if unconfined {
             None
         } else {
@@ -342,6 +363,7 @@ impl ScoreEnv {
             path: Default::default(),
             bwrap,
             install_ran: std::cell::Cell::new(false),
+            command_timeout,
             oracle_environment: BTreeMap::new(),
             diagnostic_bytes: Default::default(),
             #[cfg(test)]
@@ -435,6 +457,7 @@ impl ScoreEnv {
             self.path.clone()
         };
         cmd.args(&argv[1..])
+            .stdin(std::process::Stdio::null())
             .current_dir(dir)
             .env_clear()
             .env("PATH", path)
@@ -460,9 +483,10 @@ impl ScoreEnv {
                 cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
             }
         }
-        let output = cmd
-            .output()
-            .with_context(|| format!("run regen command {}", argv[0]))?;
+        // Bound process exit and pipe completion together; a generated --help, installer
+        // or oracle must not prevent the caller from persisting failed evidence.
+        // trace:TASK-1791 | ai:codex
+        let output = command::run(cmd, self.command_timeout)?;
         if let Some(sidecar) = sidecar {
             *self.diagnostic_bytes.borrow_mut() = sidecar.read();
         }
@@ -521,7 +545,15 @@ fn execute(
             Ok(output) => output,
             Err(error) => {
                 record.status = "install_failed".into();
-                record.error = Some(format!("installer launch failed: {error:#}"));
+                if error.downcast_ref::<CommandTimedOut>().is_some() {
+                    record.flags.push("installer_timeout".into());
+                    record.error = Some("installer timed out".into());
+                } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                    record.flags.push("installer_output_limit".into());
+                    record.error = Some("installer output limit exceeded".into());
+                } else {
+                    record.error = Some(format!("installer launch failed: {error:#}"));
+                }
                 return Ok(());
             }
         };
@@ -551,11 +583,26 @@ fn execute(
     } else {
         Vec::new()
     };
-    let oracle = env
-        .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
-        .context(
-            "oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required",
-        )?;
+    let oracle = match env.run_with_bundle(
+        dir,
+        &bundle.command(&config.oracle_command)?,
+        Some(bundle),
+    ) {
+        Ok(output) => output,
+        Err(error) => {
+            record.status = "error".into();
+            if error.downcast_ref::<CommandTimedOut>().is_some() {
+                record.flags.push("oracle_timeout".into());
+                record.error = Some("oracle timed out".into());
+            } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                record.flags.push("oracle_output_limit".into());
+                record.error = Some("oracle output limit exceeded".into());
+            } else {
+                record.error = Some(format!("oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required: {error:#}"));
+            }
+            return Ok(());
+        }
+    };
     record.oracle_exit = oracle.status.code();
     if !oracle.status.success() {
         record.flags.push("oracle_nonzero_exit".into());
@@ -953,6 +1000,162 @@ mod tests {
             content_sha256: "b".repeat(64),
             row_count: 0,
             dirty: false,
+        }
+    }
+
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn command_timeout_setting_defaults_and_refuses_unbounded_values() {
+        use std::ffi::OsString;
+        assert_eq!(command_timeout(None).unwrap().as_secs(), 30);
+        assert_eq!(command_timeout(Some("120".into())).unwrap().as_secs(), 120);
+        for value in [
+            "",
+            "0",
+            "-1",
+            "1.5",
+            "never",
+            "86401",
+            "18446744073709551615",
+        ] {
+            assert!(
+                command_timeout(Some(OsString::from(value))).is_err(),
+                "{value}"
+            );
+        }
+    }
+
+    // Exercise ScoreEnv, rather than only the generic timeout helper, with a
+    // generated tool that sleeps on --help and forks a pipe-holding descendant.
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn generated_tool_help_timeout_kills_group_and_retains_reason() {
+        let cfg = config(&["/bin/true"]);
+        let mut env = ScoreEnv::new(&cfg, true).unwrap();
+        env.command_timeout = std::time::Duration::from_secs(1);
+        let tool = env.prefix.join("bin/regen-fixture-tool");
+        std::fs::write(&tool, "#!/bin/sh\ntest \"$1\" = --help || exit 1\nsleep 60 &\necho $! > descendant.pid\nwait\n").unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let dir = TempDir::new().unwrap();
+        let start = std::time::Instant::now();
+        let error = env
+            .run(
+                dir.path(),
+                &[tool.to_string_lossy().into_owned(), "--help".into()],
+            )
+            .unwrap_err();
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+        assert!(
+            error.downcast_ref::<CommandTimedOut>().is_some(),
+            "{error:#}"
+        );
+        assert!(error.to_string().contains("timed out"), "{error:#}");
+        let pid: u32 = std::fs::read_to_string(dir.path().join("descendant.pid"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // Killed orphan descendants may remain zombies until init reaps them.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while aida_core::liveness::pid_is_alive(pid) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            !aida_core::liveness::pid_is_alive(pid),
+            "sleeping descendant {pid} survived the group timeout"
+        );
+    }
+
+    // Both failure paths must yield serializable failed evidence, including an
+    // oracle that prints a passing marker before hanging (never a partial score).
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn installer_and_oracle_limits_produce_private_failed_trial_records() {
+        for (installer, output_limit) in
+            [(true, false), (false, false), (true, true), (false, true)]
+        {
+            let dir = TempDir::new().unwrap();
+            let repo = TempDir::new().unwrap();
+            super::super::git(repo.path(), &["init", "-b", "main"]).unwrap();
+            super::super::git(repo.path(), &["config", "user.name", "Test"]).unwrap();
+            super::super::git(repo.path(), &["config", "user.email", "test@example.com"]).unwrap();
+            let script = if output_limit {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\nprivate-test-value\\n'\nhead -c 1048577 /dev/zero\nsleep 60\n"
+            } else {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\n'\nsleep 60\n"
+            };
+            std::fs::write(repo.path().join("oracle.sh"), script).unwrap();
+            std::fs::set_permissions(
+                repo.path().join("oracle.sh"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            super::super::git(repo.path(), &["add", "."]).unwrap();
+            super::super::git(repo.path(), &["commit", "-m", "oracle"]).unwrap();
+            let sha =
+                String::from_utf8(super::super::git(repo.path(), &["rev-parse", "HEAD"]).unwrap())
+                    .unwrap();
+            let cfg = config(&["oracle.sh"]);
+            let mut cfg = cfg;
+            if installer {
+                cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), script.into()]);
+            }
+            let cache = tempfile::tempdir_in("/var/tmp").unwrap();
+            let bundle = OracleBundle::freeze_in_cache(
+                repo.path(),
+                sha.trim().into(),
+                &cfg.oracle_paths,
+                dir.path(),
+                cache.path(),
+            )
+            .unwrap();
+            let mut env = ScoreEnv::new(&cfg, true).unwrap();
+            env.command_timeout = std::time::Duration::from_secs(1);
+            // A mapped input activates R1/R2 diagnostic privacy filtering.
+            env.oracle_environment
+                .insert("FIXTURE_INPUT".into(), "private-test-value".into());
+            let start = std::time::Instant::now();
+            let record = run_trial_in_env(
+                &cfg,
+                dir.path(),
+                manifest(),
+                "fixture",
+                "test",
+                "test",
+                true,
+                env,
+                &bundle,
+                None,
+            )
+            .unwrap();
+            assert!(start.elapsed() < std::time::Duration::from_secs(5));
+            assert_eq!(
+                record.status,
+                if installer { "install_failed" } else { "error" }
+            );
+            let reason = if output_limit {
+                "output limit exceeded"
+            } else {
+                "timed out"
+            };
+            assert!(record.error.as_ref().unwrap().contains(reason));
+            assert!(record.flags.iter().any(|flag| flag
+                == match (installer, output_limit) {
+                    (true, false) => "installer_timeout",
+                    (false, false) => "oracle_timeout",
+                    (true, true) => "installer_output_limit",
+                    (false, true) => "oracle_output_limit",
+                }));
+            assert!(!record
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("private-test-value"));
+            assert!(record.aggregate.is_none());
+            assert!(record.checks.is_empty());
+            assert!(!record.clean);
+            let persisted = serde_json::to_value(&record).unwrap();
+            assert!(persisted["error"].as_str().unwrap().contains(reason));
         }
     }
 

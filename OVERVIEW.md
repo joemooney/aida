@@ -458,6 +458,19 @@ targets and submodules are refused. The content-addressed bundle lives under
 project worktrees and the trial root. Its hash (sorted, length-framed paths,
 modes and bytes) is rechecked before execution; tampering refuses scoring.
 
+Generated commands have a 30-second execution timeout per invocation. Set
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` to an integer from 1 to 86400 before scoring
+to change it for the run (including reference/stub controls and R2). Invalid
+values refuse scoring. Timeouts kill the child process group and retain a
+failure reason in the trial, without scoring partial oracle output. The deadline
+includes stdout/stderr collection even if the direct child exits before its
+descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
+the group and records an output-limit failure without child diagnostics. The
+best-effort survivor probe runs after a successful installation; installer
+failure paths (including timeout) return before that probe, so escaped
+descendants on those paths are not detected by it.
+<!-- trace:TASK-1791 | ai:codex -->
+
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
 never through PATH or the trial. The oracle runs from the read-only bundle via
