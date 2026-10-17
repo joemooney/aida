@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T10:55:26.481421986Z
+modified_at: 2026-10-17T11:03:21.102718702Z
 req_type: Task
 relationships:
 - rel_type:
@@ -158,6 +158,11 @@ comments:
     Docs: docs/testing/task-1800-semantic-audit.{md,json}; durable local evidence/session5 in this relay. Own lease/worktree cleanup follows normal session end. Parent stays open.
   created_at: 2026-10-17T10:54:50.777282019Z
   modified_at: 2026-10-17T10:54:50.777282019Z
+- id: 01a14987-d50e-7d81-be62-8ea2a99cb271
+  author: joe
+  content: Commit 28575d74a3 references this requirement
+  created_at: 2026-10-17T11:03:21.102718702Z
+  modified_at: 2026-10-17T11:03:21.102718702Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
