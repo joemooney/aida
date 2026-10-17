@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-17T00:06:47.414190553Z
+modified_at: 2026-10-17T01:31:10.539643552Z
 req_type: Task
 relationships:
 - rel_type:
@@ -63,6 +63,11 @@ comments:
     TASK-1793 remains incomplete. Its AIDA agent-new half #2710 stays draft/stacked until #2682 lands; #2682 is still OPEN at349e7f68d7. No author verdict/clearance/ship/main merge/install/activation/Completed. Please route relay#96 for independent review. Optional effort-column expansion remains excluded.
   created_at: 2026-10-17T00:06:47.414190553Z
   modified_at: 2026-10-17T00:06:47.414190553Z
+- id: 01a1477b-fd4b-75d2-b3b7-b88cba40bff1
+  author: ai:codex:joe
+  content: 'Relay companion PR #96 rework is delivered at 3e4d8d19786efbca6343e49ad2de82acc198cf3c. Imported bash wrapper changed shutdown test fixture child topology; two command bash launches restore direct-child PIDs. Full local shell gate31/31, targeted shutdown suite and ShellCheck passed. No production shutdown change. Parent AIDA launcher PR #2710 remains draft/stacked while #2682 is open; parent remains incomplete. No author verdict/clearance/merge.'
+  created_at: 2026-10-17T01:31:10.539643552Z
+  modified_at: 2026-10-17T01:31:10.539643552Z
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
   author: aida-session-start
