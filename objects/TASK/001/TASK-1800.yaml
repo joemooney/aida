@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T01:33:35.841718286Z
+modified_at: 2026-10-17T06:13:38.972956250Z
 req_type: Task
 relationships:
 - rel_type:
@@ -63,6 +63,14 @@ comments:
   created_at: 2026-10-17T01:33:35.841718286Z
   modified_at: 2026-10-17T01:33:35.841718286Z
   session_id: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
+- id: 01a1487e-9a1c-7073-a7e1-caebd705d7f5
+  author: ai:codex:joe
+  content: |
+    Continuing the latest NEXT PRIORITY ruling before classification: additive module-level Rust comment coverage and inline-module headers; no fallback-reduction or path-class authority change. Isolated feature:task-1800-module-traces lease 01a1487b9fab, branch codex/task-1800-module-traces, base main28575d74a3. Parent remains In Progress/non-completing.
+
+    Both new exact-module regressions fail on the parent collector and pass after the patch (22 collector tests). The actual mandate_ship_cover fixture now requires separate ITEM-3, MODULE-2, and SUP-1 IDs plus named TASK-1; workspace execution pending build. Fresh spawned author checker ran26 extracted tests plus adversarial old/new comparisons; no actionable findings, no independent authority. Frozen50 remeasurement and local fast checks running. No review verdict/clearance/merge.
+  created_at: 2026-10-17T06:13:38.972956250Z
+  modified_at: 2026-10-17T06:13:38.972956250Z
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
