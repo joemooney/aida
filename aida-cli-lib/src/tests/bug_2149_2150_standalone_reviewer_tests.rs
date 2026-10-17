@@ -639,7 +639,7 @@ fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
 // trace:TASK-1786 | ai:codex
 #[test]
 fn queue_work_coexistence_input_preserves_explicit_intent() {
-    use crate::queue_cmd::QueueWorkRoleInput;
+    use crate::queue_cmd::{rework_role_input, QueueWorkRoleInput};
 
     let mut spec = aida_core::Requirement::new("Fix the widget".into(), String::new());
     spec.spec_id = Some("STORY-77".into());
@@ -660,17 +660,17 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         ),
         (
             "rework inherited reviewer route, no --for",
-            QueueWorkRoleInput::rework(None, Some("reviewer")),
+            rework_role_input(None, Some("reviewer")),
             LeaseConflictDecision::Refuse,
         ),
         (
             "rework explicit --for reviewer",
-            QueueWorkRoleInput::rework(Some("reviewer"), Some("reviewer")),
+            rework_role_input(Some("reviewer"), Some("reviewer")),
             LeaseConflictDecision::Coexist,
         ),
         (
             "rework explicit --for any",
-            QueueWorkRoleInput::rework(Some("any"), None),
+            rework_role_input(Some("any"), None),
             LeaseConflictDecision::Refuse,
         ),
     ] {
@@ -696,4 +696,73 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         None,
         "an ordinary work plan cannot authorize review coexistence",
     );
+}
+
+/// The behavioral input test above must cover the adapter actually used by
+/// rework's --work chain. Pin that dispatch seam too: replacing it with direct
+/// would otherwise leave the adapter's unit tests green.
+// trace:TASK-1801 | ai:codex
+#[test]
+fn rework_work_dispatch_uses_intent_preserving_adapter() {
+    let source = include_str!("../queue_cmd.rs");
+    let handler = source
+        .split("pub(crate) fn handle_queue_rework(")
+        .nth(1)
+        .unwrap();
+    let body = handler.split("/// Keep route inheritance").next().unwrap();
+    assert!(body.contains("rework_role_input(for_role, for_role_resolved.as_deref())"));
+    assert!(!body.contains("QueueWorkRoleInput::direct("));
+}
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_review_anchor_must_be_credited_by_change() {
+    use crate::session_start::review_anchor_matches_change;
+    let mut backing = aida_core::Requirement::new("backing".into(), String::new());
+    backing.spec_id = Some("STORY-77".into());
+    backing.agreed_id = Some("STORY-1-77".into());
+    let mut other = aida_core::Requirement::new("unrelated".into(), String::new());
+    other.spec_id = Some("TASK-88".into());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![backing, other],
+        ..Default::default()
+    };
+    for anchor in ["STORY-77", "STORY-1-77"] {
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix (STORY-77)",
+            "widget"
+        ));
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix",
+            "codex/story-77"
+        ));
+    }
+    assert!(!review_anchor_matches_change(
+        &store,
+        "TASK-88",
+        "Fix (STORY-77)",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Mentions STORY-77 but fixes other (TASK-88)",
+        "story-77"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Unidentified",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-99",
+        "Fix (STORY-99)",
+        "widget"
+    ));
 }

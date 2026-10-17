@@ -971,3 +971,14 @@ Verdict collection validates metadata and reads bytes from the same opened
 regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
+
+Verdict reads use a held `review-verdicts` directory descriptor and `openat`
+with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
+`O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
+reject `st_nlink != 1`. Current, archived and adoption readers share this path.
+Reviewer coexistence also verifies that the anchor resolves to a requirement
+credited by the change's title trailer or branch; unavailable metadata refuses
+the exception. Direct `session start --role reviewer` has no coexistence input
+and keeps ordinary conflict handling (headless live-lease refusal, terminal
+conflict prompt). See [sessions](docs/cli/06-roles-sessions.md).
+<!-- trace:TASK-1801 | ai:codex -->

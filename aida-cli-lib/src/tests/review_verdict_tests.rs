@@ -2113,3 +2113,117 @@ fn an_identical_re_recording_reports_unchanged() {
     let changed = record_and_describe(dir.path(), "request-changes", sha, &["x".into()]);
     assert!(changed.ends_with("(round 2)"), "{changed}");
 }
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_verdict_readers_reject_linked_files_and_directories() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let body = format!(r#"{{"verdict":"approved","reviewed_sha":"{sha}"}}"#);
+    let file = dir.join("STORY-77.json");
+    std::fs::write(&file, &body).unwrap();
+    adopt_direct_write(&file).unwrap();
+    assert!(read_recorded_verdict(tmp.path(), "STORY-77").is_some());
+    assert!(read_verdict_for_sha(tmp.path(), "STORY-77", sha).is_some());
+    assert_eq!(verdicts_for_sha(tmp.path(), sha).len(), 1);
+
+    // Both current and archive files reject extra hard links.
+    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+    std::fs::hard_link(&archive, tmp.path().join("archive-link")).unwrap();
+    std::fs::hard_link(&file, tmp.path().join("current-link")).unwrap();
+    assert!(fresh_candidate(&file, std::time::UNIX_EPOCH).is_none());
+    assert!(read_recorded_verdict(tmp.path(), "STORY-77").is_none());
+    assert!(read_verdict_for_sha(tmp.path(), "STORY-77", sha).is_none());
+    assert!(verdicts_for_sha(tmp.path(), sha).is_empty());
+    std::fs::remove_file(tmp.path().join("archive-link")).unwrap();
+    std::fs::remove_file(tmp.path().join("current-link")).unwrap();
+
+    // A linked archive directory cannot redirect archive reads or adoption.
+    let archive_dir = archive.parent().unwrap();
+    let moved_archive = tmp.path().join("moved-archive");
+    std::fs::rename(archive_dir, &moved_archive).unwrap();
+    symlink(&moved_archive, archive_dir).unwrap();
+    assert!(verdicts_for_sha(tmp.path(), sha).is_empty());
+    std::fs::remove_file(archive_dir).unwrap();
+    std::fs::rename(&moved_archive, archive_dir).unwrap();
+
+    // A linked top-level verdict directory rejects current and archive reads.
+    let moved = tmp.path().join("moved-verdicts");
+    std::fs::rename(&dir, &moved).unwrap();
+    symlink(&moved, &dir).unwrap();
+    assert!(fresh_candidate(&file, std::time::UNIX_EPOCH).is_none());
+    assert!(read_recorded_verdict(tmp.path(), "STORY-77").is_none());
+    assert!(read_verdict_for_sha(tmp.path(), "STORY-77", sha).is_none());
+    assert!(verdicts_for_sha(tmp.path(), sha).is_empty());
+    assert!(list_active_verdicts(tmp.path()).is_empty());
+
+    // An archive named review-verdicts must not mask the symlinked root.
+    // Directory discovery sees it, but file opens must still anchor at .aida.
+    let disguised = moved.join("review-verdicts");
+    std::fs::create_dir(&disguised).unwrap();
+    std::fs::write(disguised.join(format!("{sha}.json")), &body).unwrap();
+    assert!(verdicts_for_sha(tmp.path(), sha).is_empty());
+}
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_replacing_validated_verdict_with_fifo_reads_open_inode() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert!(crate::test_env::is_path_isolated_process());
+    let (done, wait) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if matches!(
+            wait.recv_timeout(std::time::Duration::from_secs(10)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            eprintln!("verdict replacement test blocked on FIFO");
+            std::process::exit(124);
+        }
+    });
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("STORY-77.json");
+    let body = r#"{"verdict":"request-changes","summary":"original inode"}"#;
+    std::fs::write(&path, body).unwrap();
+    let result = read_verdict_file_with_hook(&path, || {
+        std::fs::rename(&path, dir.join("original")).unwrap();
+        let name = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    })
+    .unwrap();
+    assert_eq!(
+        result.0, body,
+        "read the validated inode after path replacement"
+    );
+    assert!(fresh_candidate(&path, std::time::UNIX_EPOCH).is_none());
+    // Public adoption/read helpers also accept a bare relative filename.
+    // This exact-test child owns its cwd, independently of the parent suite.
+    let cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(&dir).unwrap();
+    assert_eq!(read_verdict_body("original").unwrap(), body);
+    std::env::set_current_dir(cwd).unwrap();
+    drop(done);
+    watchdog.join().unwrap();
+}
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_bounded_reader_rejects_final_symlinks_and_oversize() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    let file = tmp.path().join("verdict.json");
+    let target = tmp.path().join("target.json");
+    std::fs::write(&target, r#"{"verdict":"approved"}"#).unwrap();
+    symlink(&target, &file).unwrap();
+    assert!(read_verdict_body(&file).is_err());
+    std::fs::remove_file(&file).unwrap();
+    let f = std::fs::File::create(&file).unwrap();
+    f.set_len(MAX_COLLECTED_VERDICT_BYTES + 1).unwrap();
+    assert!(read_verdict_body(&file).is_err());
+}
