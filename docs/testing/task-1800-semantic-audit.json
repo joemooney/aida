@@ -1,0 +1,2522 @@
+{
+  "version": 1,
+  "scope": "Incremental manual semantic inspection of ALL policy-blocking trace IDs in five frozen cases, both full and scoped modes. Not a completed frozen-50 gate.",
+  "classification_gate_complete": false,
+  "frozen_case_count": 50,
+  "cases_inspected": 5,
+  "remaining_cases": 45,
+  "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
+  "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
+  "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
+  "source_census_sha256": "061de85cc5d0d163dc8fa2728147e2bd79598810f5d34d4a5eb5c5c4cef21c3e",
+  "source_provenance_sha256": "bf062fcb6e9638da0bbb4162edecb5e077614b24ba7c96b8471b1408a105ebe7",
+  "summary": {
+    "full": {
+      "total": 21,
+      "incidental": 10,
+      "unresolved": 5,
+      "true-touch": 6
+    },
+    "scoped": {
+      "total": 18,
+      "incidental": 9,
+      "unresolved": 4,
+      "true-touch": 5
+    }
+  },
+  "rows": [
+    {
+      "pr": 2647,
+      "base": "403be14eddc78e845f636fc5ae366fe2b9e53d75",
+      "head": "825ebd7102699a00708fa1f316945b1186d593b1",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(review): state the record outcome explicitly in aida review record (BUG-2136)",
+      "full_blocker_count": 6,
+      "scoped_blocker_count": 4,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/lib_part5.rs",
+          "diff_sha256": "e00ca8736f8ced2f31aedf73be283ec41712b9fe5c5bf16050aa51e1275f5079"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_claim_surface.rs",
+          "diff_sha256": "9a8c026bc63515686334dd033e244c0877ae3191d8a0f747f22bcfeaf55f8146"
+        },
+        {
+          "path": "aida-cli-lib/src/review_verdict.rs",
+          "diff_sha256": "37daca50cc99f73a497838e5ce8de1f626e2ef9fbca7beea110533992ee3f67c"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/review_verdict_tests.rs",
+          "diff_sha256": "ff7945ff7e7f127c575a6f23104f066d3f91b3655f8a7b27208fe9ac9cb7bf8a"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "BUG-1978",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Attribution fallback and review_record_attribution_refusal are unchanged. New code snapshots the verdict record and renders its outcome after the existing grant/identity checks.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3036,
+                  "text": "// trace:BUG-1978 | ai:claude"
+                },
+                {
+                  "line": 3498,
+                  "text": "// trace:BUG-1978 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3036,
+                  "text": "// trace:BUG-1978 | ai:claude"
+                },
+                {
+                  "line": 3515,
+                  "text": "// trace:BUG-1978 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1978",
+            "agreed_id": "BUG-1978",
+            "title": "'aida review record' attribution-fallback error points at 'aida role enter' even when the seat grant is valid; the real fix is AIDA_AGENT_NAME/TYPE",
+            "execution_mode": null,
+            "tags": [
+              "attribution",
+              "capture",
+              "groom:approve",
+              "groomed:night",
+              "review",
+              "ux"
+            ],
+            "description_sha256": "762ec9bc4c043a8a9963d850ed8c6dfcb62f2becf16181b88bfeecad3e149786"
+          }
+        },
+        {
+          "id": "BUG-1983",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The grant_check rejection branch is byte-identical; no authorization input, decision or refusal wording changes. Later record-outcome display does not alter it.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3023,
+                  "text": "// trace:BUG-1983 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3023,
+                  "text": "// trace:BUG-1983 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "BUG-1983",
+            "agreed_id": "BUG-1983",
+            "title": "Refusals name why a seat grant was rejected (expired, revoked, ...) instead of 'No active role'; review record now refuses a rejected grant",
+            "execution_mode": null,
+            "tags": [
+              "authority",
+              "groom:approve",
+              "roles",
+              "seats",
+              "security"
+            ],
+            "description_sha256": "e7898ec86116d057a87070d2448e767cf490c0a3694f3026eb7b217bfbeafd4b"
+          }
+        },
+        {
+          "id": "EPIC-1-001",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Unchanged file-header trace says aida upgrade, but no frozen requirement resolves this ID. Apparent unrelated placement cannot prove absence of its unknown contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 18,
+                  "text": "// trace:EPIC-1-001 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 18,
+                  "text": "// trace:EPIC-1-001 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "FR-0259",
+          "policy_reason": "unresolved trace/spec id",
+          "modes": [
+            "full"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Full-file-only trace precedes unchanged detect_obe_aida_scaffold_files. No frozen requirement resolves this ID; retain uncertainty rather than calling an unknown contract safe.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4444,
+                  "text": "// trace:FR-0259 | ai:claude:high"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 4461,
+                  "text": "// trace:FR-0259 | ai:claude:high"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": null
+        },
+        {
+          "id": "STORY-1473",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "incidental",
+          "rationale": "Full-file-only trace belongs to unchanged spawn_reviewer_launch_plan using the project root. No reviewer launch or session-bound authority code changes.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 950,
+                  "text": "// trace:STORY-1473 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 950,
+                  "text": "// trace:STORY-1473 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1473",
+            "agreed_id": "STORY-1473",
+            "title": "Seat authority is session-bound and set at a TTY; the roster caps which seats a user may take; roster writes are human-at-TTY only",
+            "execution_mode": "guided",
+            "tags": [
+              "authority",
+              "needs-operator",
+              "roles",
+              "security"
+            ],
+            "description_sha256": "4df577194391ece4382b1708bbd1b1e4d4ae832ebd0a8ac871514e210d0db19a"
+          }
+        },
+        {
+          "id": "STORY-1687",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "record_seat_allowed, stamp_record_grant, auto_release and removal of release_grant when building a new round are unchanged. record_outcome reads existing recording_key/rounds only for display; no stamp, hold eligibility or release decision consumes that new output.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "base",
+              "blob_sha256": "d487e12867d840ad8ab52159012994685653b0f9fba42f5b710f4b26bebe1f23",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3077,
+                  "text": "// trace:BUG-1452 trace:STORY-1687 | ai:codex"
+                },
+                {
+                  "line": 3148,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                },
+                {
+                  "line": 3170,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/lib_part5.rs",
+              "side": "head",
+              "blob_sha256": "0c6efa76b0f4255751fb7a47d6c5a9f3b7daccb77d671ba0f521b44a2c2bab74",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 3077,
+                  "text": "// trace:BUG-1452 trace:STORY-1687 | ai:codex"
+                },
+                {
+                  "line": 3155,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                },
+                {
+                  "line": 3183,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/review_verdict.rs",
+              "side": "base",
+              "blob_sha256": "58867151284c363b90a693568f7804b096aafa7800f3cd934aa98e8ce26e25c8",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 1197,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/review_verdict.rs",
+              "side": "head",
+              "blob_sha256": "1bb641ab29a52c8752d6c19b33f1fd66c9ead08b6eeb78b5f2c316fee4cfbac9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 1197,
+                  "text": "// trace:STORY-1687 | ai:codex"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1687",
+            "agreed_id": "STORY-1687",
+            "title": "A Rework merge-hold releases itself on a fresh independent APPROVE at the current head, so approved PRs do not wait on operator presence",
+            "execution_mode": "guided",
+            "tags": null,
+            "description_sha256": "380d284e0e93575aa6dba7ce655aa0c80a2d972ac576df8ac908b6605869c24c"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2701,
+      "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "head": "9d4002c627d8b7e98a3e42626323d6283544046a",
+      "named_policy_refusal": false,
+      "title": "[AI:codex] fix(relay): detect dead owners and bound stall alerts (TASK-1792)",
+      "full_blocker_count": 4,
+      "scoped_blocker_count": 4,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/relay_stall.rs",
+          "diff_sha256": "10c0cace59423bdd54b0d9730d43790d69ed930f63a8687783a9352430691ede"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs",
+          "diff_sha256": "ea03b670411aa2d74ef4312374aa18b06a25d35645a2e0cdaddfd1325b00fcdb"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "diff_sha256": "83b484ed772a1ca9a31f7e22d3816a9aeb10b0f56bd4cf1419c390c742a8d598"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "TASK-1337",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Unchanged pickup/delegation documentation at line 63 is separate from the changed relay-stall command description. relay_stall.rs changes owner liveness/reporting, with no pickup, delegation or setup call.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "ac68d8dbc7871f53636f1fd0ab3e40efbaadfda83dc3bd76ea888d7327a376bf",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-230",
+            "agreed_id": "TASK-1337",
+            "title": "guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant \u2014 and the last failure left a half-started session",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1607",
+              "guided",
+              "kind:observation",
+              "linked:STORY-1485",
+              "linked:TASK-1607",
+              "operator-ux",
+              "queue-work",
+              "seat-grants",
+              "severity:major"
+            ],
+            "description_sha256": "2686793fc5c2371df1d861f54fd7c37dcb57dad07fdaf93648f7ee0c241989c9"
+          }
+        },
+        {
+          "id": "TASK-1491",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Systemd installation/driver-switch and stable-binary paragraphs are unchanged. The relay-stall command listing changes one diagnostic description, not timer construction, switching or DriverStatus.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 290,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 341,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "ac68d8dbc7871f53636f1fd0ab3e40efbaadfda83dc3bd76ea888d7327a376bf",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 290,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 341,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1491",
+            "agreed_id": "TASK-1491",
+            "title": "Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "docs:impacted",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "ef6bf16c72581705008caeea55bdc6e61853f2333e227d04e217ac266f6e1237"
+          }
+        },
+        {
+          "id": "TASK-1492",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Mail escalation and shift command documentation are unchanged. Dead relay owner detection does not requeue parked specs, send latency notifications or cold-boot seats.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 339,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "ac68d8dbc7871f53636f1fd0ab3e40efbaadfda83dc3bd76ea888d7327a376bf",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 339,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1492",
+            "agreed_id": "TASK-1492",
+            "title": "Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "1ea5fcb607b39202ac7d887b06a306c1fa246fcd3f833a3e30cfa65520b18b80"
+          }
+        },
+        {
+          "id": "TASK-176",
+          "policy_reason": "history unreadable: no version of TASK-176 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Trace immediately precedes the changed substrate command listing. Frozen current alias TASK-1-152 is a CLI-manual preflight-guard task, but the frozen classifier found no history under TASK-176. The apparent trace/contract mismatch is unresolved and remains excluded.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a375a5212bdf1cd26846e58decafb836fb41aad58dae57677e00f9b85fb9989c",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 283,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "ac68d8dbc7871f53636f1fd0ab3e40efbaadfda83dc3bd76ea888d7327a376bf",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 283,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-152",
+            "agreed_id": "TASK-176",
+            "title": "CLI-manual preflight guard already fails on three unresolved flags",
+            "execution_mode": "drain",
+            "tags": [
+              "batch:night-0920",
+              "ci",
+              "docs-drift",
+              "drain-safe",
+              "from-advisor:BUG-1420",
+              "kind:observation",
+              "linked:BUG-1420",
+              "preflight",
+              "severity:major"
+            ],
+            "description_sha256": "8c56e9c31e266ef2c3fe6aac65f3fefe0825e340aced57380fa7ffb8e051f042"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2685,
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "head": "d5f63fee913d206a5ff6f8e27593124b29508b15",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(ship): a just-merged PR no longer withholds its own completion (BUG-2163)",
+      "full_blocker_count": 1,
+      "scoped_blocker_count": 1,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/reconcile_evidence.rs",
+          "diff_sha256": "3af4865562fc0d4106689317737884cbebce3652617b19bac7fc2c8e957b534d"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/task_140_squash_subject_tests.rs",
+          "diff_sha256": "f867443bd1d3d1ca5245190a6df0c6cbb742773828498d7d47992b67114af8d2"
+        },
+        {
+          "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+          "diff_sha256": "4754e569a2e1d57232bcb33150923ef953c60ace64e8e22977892b85e347f284"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "TASK-1335",
+          "policy_reason": "history unreadable: no version of TASK-1335 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "Behavior is directly touched: reconcile_evidence requests live state/branch fields and changes open-change and diagnostic credit matching; its test fixture request changes too. Frozen current alias TASK-1-226 describes reconcile-status unavailable evidence, but historical supervision could not be classified under TASK-1335. True behavior touch, unresolved supervised status; not incidental.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/reconcile_evidence.rs",
+              "side": "base",
+              "blob_sha256": "35dd7274897bcb87753bd25f7c5c3a43e83640e9893e01ffd1cf64cd2078be5b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 10,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 104,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 152,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 224,
+                  "text": "// trace:TASK-1335 trace:BUG-2134 | ai:claude"
+                },
+                {
+                  "line": 278,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 321,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 495,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 579,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/reconcile_evidence.rs",
+              "side": "head",
+              "blob_sha256": "4dea94c3cf7e194d73b6e5cbbbf18dc4277ff26618f52f373409cf0b49139f8b",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 10,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 104,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 152,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 229,
+                  "text": "// trace:TASK-1335 trace:BUG-2134 | ai:claude"
+                },
+                {
+                  "line": 314,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 363,
+                  "text": "// trace:TASK-1335 trace:BUG-2163 | ai:claude"
+                },
+                {
+                  "line": 541,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                },
+                {
+                  "line": 625,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+              "side": "base",
+              "blob_sha256": "cb03855ccdd24b4e0f7ea7276df34bb3dcfc9e67425c0a8964cf6b74bd2094f3",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 14,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+              "side": "head",
+              "blob_sha256": "05b8dfa56b5d9e954a48a2a7c63d0f1c99aed479696677dcd300a62874c222b7",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 14,
+                  "text": "// trace:TASK-1335 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "behavior_touch": true,
+          "supervised_status": "unknown-frozen-history",
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-226",
+            "agreed_id": "TASK-1335",
+            "title": "reconcile-status silently skips Done specs when the forge is unavailable (TASK-1588 stuck)",
+            "execution_mode": null,
+            "tags": [
+              "factory:night",
+              "from-advisor:general",
+              "kind:observation"
+            ],
+            "description_sha256": "8dd60ec3480ed7def707216d912feb609c989953716a3f6ebe0aca0b74a3f43d"
+          }
+        }
+      ]
+    },
+    {
+      "pr": 2654,
+      "base": "efd3bba8de3e098599e85dd29c381d4066961994",
+      "head": "1e5dd25bbe4a459d42c9529baf8004768e1c6254",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(schedule): fail only an unsupported job, pin tick drivers to the live binary (BUG-2142)",
+      "full_blocker_count": 4,
+      "scoped_blocker_count": 4,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": true,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "diff_sha256": "d59a82497c637a066dc0ea0b37607216b340655c15648b0ad13fa4f06ff65714"
+        },
+        {
+          "path": "aida-cli-lib/src/schedule_driver.rs",
+          "diff_sha256": "ce615af1a2bc801b3d2de934e13d412208802205f720c15a139d6c495cb0feba"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs",
+          "diff_sha256": "fa57b0dead36adece2691340128bb807b307d74f4c7927fb8eb82bd8de691698"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "STORY-1218",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "The night-shift installer calls schedule_driver::real_tick_invocation from unchanged shift.rs:3541. This PR changes that shared function to real_stable_tick_exe, changing the binary written by shift install.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "bfeab6c51ad97846fe5d06756d2aeb1a01a495f227e5aa85506cbbd90da8b1cd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2947,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 2963,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3808,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 3113,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3129,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3977,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1218",
+            "agreed_id": "STORY-1218",
+            "title": "aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer",
+            "execution_mode": "guided",
+            "tags": [
+              "autonomy",
+              "closure:pending",
+              "docs:impacted",
+              "keyboard-gate",
+              "orchestrator",
+              "parent:EPIC-62",
+              "reliability",
+              "substrate-first"
+            ],
+            "description_sha256": "5084c19179121e5a0c0feb08ccb2d42adefe5a7b7ede1eb1f567709c24c7a854"
+          }
+        },
+        {
+          "id": "STORY-1226",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Registry build_task retains unsupported substrate commands; run_substrate_task records failure per job while other due jobs run; full tick reports unsupported jobs. This changes registry, ledger and substrate execution behavior.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "bfeab6c51ad97846fe5d06756d2aeb1a01a495f227e5aa85506cbbd90da8b1cd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 39,
+                  "text": "//! trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 119,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 334,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 366,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 514,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 523,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 552,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 637,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 737,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 911,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 978,
+                  "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1145,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1220,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1327,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1417,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1497,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1554,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1605,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1612,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1630,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 2615,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 3358,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4806,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4837,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4909,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4959,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5032,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5033,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5086,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5168,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5324,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5396,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5419,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5475,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 39,
+                  "text": "//! trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 119,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 352,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 384,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 546,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 555,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 584,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 685,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 785,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 992,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1065,
+                  "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1273,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1343,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1450,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1552,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1633,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1690,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1741,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1748,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1766,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 2781,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 3525,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4976,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5007,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5079,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5129,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5202,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5203,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5256,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5338,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5494,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5566,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5589,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5645,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1226",
+            "agreed_id": "STORY-1226",
+            "title": "aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)",
+            "execution_mode": "guided",
+            "tags": [
+              "keyboard-gate",
+              "multivendor",
+              "parent:EPIC-62",
+              "reliability",
+              "scheduler",
+              "seats",
+              "substrate-first"
+            ],
+            "description_sha256": "cf5dbd8355df217ef668d53e8b733aa6eb504108506834d20520b3427b6a5a9c"
+          }
+        },
+        {
+          "id": "TASK-1491",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Shared real_tick_invocation and tick_cron_line choose the stable live binary; scheduler_driver_doctor_findings adds stale-driver evidence. These implement the systemd/cron driver and DriverStatus contract.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "bfeab6c51ad97846fe5d06756d2aeb1a01a495f227e5aa85506cbbd90da8b1cd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 475,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1716,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1741,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1804,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1810,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2108,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2270,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2361,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2431,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2494,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2540,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 507,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1852,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1877,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1940,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1946,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2243,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2405,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2496,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2591,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2660,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2706,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/schedule_driver.rs",
+              "side": "base",
+              "blob_sha256": "4a364ae47f7078afaa2a05f694876d859238704bd65499b90f39cc09a53f1f81",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 79,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 374,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 415,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 658,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 860,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 938,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1160,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1230,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1241,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1265,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1280,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1994,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/schedule_driver.rs",
+              "side": "head",
+              "blob_sha256": "8fd3c35307154cd069e388b62068694e3b74961e8837f3d6910ccd9bb3a8ccce",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 79,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 374,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 415,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 658,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 860,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 938,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1160,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1230,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1241,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1265,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1280,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2234,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1491",
+            "agreed_id": "TASK-1491",
+            "title": "Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "docs:impacted",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "ef6bf16c72581705008caeea55bdc6e61853f2333e227d04e217ac266f6e1237"
+          }
+        },
+        {
+          "id": "TASK-1492",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The TASK-1492 trace marks collect_mail_episode_trips, unchanged except line movement. Unsupported-command handling is restricted to substrate jobs, not seat cold-boot; redrive, mail escalation, and cold-boot logic do not change.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "bfeab6c51ad97846fe5d06756d2aeb1a01a495f227e5aa85506cbbd90da8b1cd",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2630,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the same per-recipient read the night"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 2796,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the same per-recipient read the night"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1492",
+            "agreed_id": "TASK-1492",
+            "title": "Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "1ea5fcb607b39202ac7d887b06a306c1fa246fcd3f833a3e30cfa65520b18b80"
+          }
+        }
+      ],
+      "supporting_sources": [
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
+          "line": 3541,
+          "text": "let switched = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {"
+        }
+      ]
+    },
+    {
+      "pr": 2669,
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "head": "34b992adce793bb2f022ec77f312b83b6a5aca89",
+      "named_policy_refusal": false,
+      "title": "[AI:claude] fix(schedule): compare tick-driver binaries canonically and document the live-binary contract (TASK-1769)",
+      "full_blocker_count": 6,
+      "scoped_blocker_count": 5,
+      "all_policy_blockers_inspected": true,
+      "all_blockers_resolved": false,
+      "whole_pr_incidental_only": false,
+      "policy_decision_changed": false,
+      "changed_paths": [
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "diff_sha256": "4ad72a662f787f9d2c9412ca7e2e4b8e3c918358836d8c44c0ccbba63153c091"
+        },
+        {
+          "path": "aida-cli-lib/src/schedule_driver.rs",
+          "diff_sha256": "ca3fd05588875f82dcb19bbf92e41c197c46b6516410dc3540ccb08e4cb332f9"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs",
+          "diff_sha256": "9dcd85bf34cea1055b35b44c67fcae259cea82d5d41db04ca370437d0c35e7b7"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/task_1491_schedule_driver_tests.rs",
+          "diff_sha256": "d5b8b8dc3c471add2869730647fd5a28767868f78e0aacef4411f3fd1647b514"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "diff_sha256": "e6df6cea9fac707f7edebfdc52ba6af7a1ef963acc42327e051ba2353a09ed32"
+        }
+      ],
+      "blockers": [
+        {
+          "id": "STORY-1218",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Full-file-only blocker: the shift installer uses the shared driver. The PR changes stale-driver binary comparison and strengthens shift_install_is_gated_and_installs_driver_after_yes to inject and assert the installed live binary. This tests the parent night-shift installer acceptance, not unrelated file co-location.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3113,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3129,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3977,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "64dc6d2d3bd5d26fd2df38ce5e301b7da1b650187d6dea6a12a23b3c9c57595a",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 3119,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3135,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                },
+                {
+                  "line": 3983,
+                  "text": "// trace:STORY-1218 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1218",
+            "agreed_id": "STORY-1218",
+            "title": "aida shift tick: scheduler-run night-shift loop (launch drain waves when the lock frees, re-drive parks, reap, mailbox-latency escalation) with a systemd user timer installer",
+            "execution_mode": "guided",
+            "tags": [
+              "autonomy",
+              "closure:pending",
+              "docs:impacted",
+              "keyboard-gate",
+              "orchestrator",
+              "parent:EPIC-62",
+              "reliability",
+              "substrate-first"
+            ],
+            "description_sha256": "5084c19179121e5a0c0feb08ccb2d42adefe5a7b7ede1eb1f567709c24c7a854"
+          }
+        },
+        {
+          "id": "STORY-1226",
+          "policy_reason": "guided/operator execution requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "Changes scheduler contract documentation to specify every full tick fails while an enabled substrate command is unsupported and hook ticks never report it. The new CLI paragraph documents registry/execution behavior.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 39,
+                  "text": "//! trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 119,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 352,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 384,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 546,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 555,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 584,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 685,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 785,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 992,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1065,
+                  "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1273,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1343,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1450,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1552,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1633,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1690,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1741,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1748,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1766,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 2781,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 3525,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4976,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5007,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5079,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5129,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5202,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5203,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5256,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5338,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5494,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5566,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5589,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5645,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "64dc6d2d3bd5d26fd2df38ce5e301b7da1b650187d6dea6a12a23b3c9c57595a",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 39,
+                  "text": "//! trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 84,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 119,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 234,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 352,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 384,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 552,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 561,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 590,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 691,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 791,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 998,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1071,
+                  "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1279,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1349,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1456,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1558,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1639,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1696,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1747,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1754,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 1772,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 2787,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 3531,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 4982,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5013,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5085,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5135,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5208,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5209,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5262,
+                  "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5344,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5500,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5572,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5595,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                },
+                {
+                  "line": 5651,
+                  "text": "// trace:STORY-1226 | ai:claude"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "STORY-1226",
+            "agreed_id": "STORY-1226",
+            "title": "aida cron: per-seat periodic job registry + ledger (substrate jobs run by the scheduler tick, seat jobs delivered to whoever holds the role, vendor-neutral)",
+            "execution_mode": "guided",
+            "tags": [
+              "keyboard-gate",
+              "multivendor",
+              "parent:EPIC-62",
+              "reliability",
+              "scheduler",
+              "seats",
+              "substrate-first"
+            ],
+            "description_sha256": "cf5dbd8355df217ef668d53e8b733aa6eb504108506834d20520b3427b6a5a9c"
+          }
+        },
+        {
+          "id": "TASK-1337",
+          "policy_reason": "sensitive spec metadata (grant) requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "Unchanged pickup/delegation paragraph is unrelated to shared driver comparison, installer fixture and tick contract documentation.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a1b5832d73fb26c6b9e819daab3079477b09a1314a47ac9f659b66c51f79efb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "715832ed1c911195213a66bbdd2645cfad7229f2010d7391c8ece7861edf4072",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 64,
+                  "text": "<!-- trace:TASK-1337 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-230",
+            "agreed_id": "TASK-1337",
+            "title": "guided pickup of a keystone child spec took five attempts: role from queue entry, branch held by idle worktree, non-delegating grant \u2014 and the last failure left a half-started session",
+            "execution_mode": null,
+            "tags": [
+              "from-advisor:TASK-1607",
+              "guided",
+              "kind:observation",
+              "linked:STORY-1485",
+              "linked:TASK-1607",
+              "operator-ux",
+              "queue-work",
+              "seat-grants",
+              "severity:major"
+            ],
+            "description_sha256": "2686793fc5c2371df1d861f54fd7c37dcb57dad07fdaf93648f7ee0c241989c9"
+          }
+        },
+        {
+          "id": "TASK-1491",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "true-touch",
+          "rationale": "LiveAidaPaths::names now compares canonical paths and the driver/shift-install tests assert the live binary. This changes driver doctor classification and validates systemd installation.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 507,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1852,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1877,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1940,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1946,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2243,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2405,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2496,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2591,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2660,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2706,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "64dc6d2d3bd5d26fd2df38ce5e301b7da1b650187d6dea6a12a23b3c9c57595a",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 513,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1858,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1883,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1946,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1952,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2249,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2411,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2502,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2597,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2666,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2712,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/schedule_driver.rs",
+              "side": "base",
+              "blob_sha256": "8fd3c35307154cd069e388b62068694e3b74961e8837f3d6910ccd9bb3a8ccce",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 79,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 374,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 415,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 658,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 860,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 938,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1160,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1230,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1241,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1265,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1280,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2234,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/schedule_driver.rs",
+              "side": "head",
+              "blob_sha256": "7cfb4fe751500059fa3cc865ca6b24dcd627b1bc5a146807c0381174329853b8",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 47,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 79,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 374,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 415,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 658,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 860,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 938,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1106,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1160,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1230,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1241,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1265,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 1280,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                },
+                {
+                  "line": 2241,
+                  "text": "// trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/task_1491_schedule_driver_tests.rs",
+              "side": "base",
+              "blob_sha256": "d4f00b185c097858b095f49c343b415dc361a07be4da84d28364309153f78045",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 10,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/tests/task_1491_schedule_driver_tests.rs",
+              "side": "head",
+              "blob_sha256": "8ebf3a45b5a59191ae1a4329168f07ee62d1a69619c11f3f68ef526954c4637e",
+              "scoped_selected": true,
+              "fallback": false,
+              "trace_lines": [
+                {
+                  "line": 10,
+                  "text": "//! trace:TASK-1491 | ai:claude"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a1b5832d73fb26c6b9e819daab3079477b09a1314a47ac9f659b66c51f79efb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 288,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 337,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "715832ed1c911195213a66bbdd2645cfad7229f2010d7391c8ece7861edf4072",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 288,
+                  "text": "On Linux, `aida schedule install-systemd` installs a systemd user timer instead: `~/.config/systemd/user/aida-tick-<hash>.{service,timer}`, running the same `aida schedule tick` command from the repo with the same `PATH`. The timer fires 1 minute after it starts, 2 minutes after boot, then 10 minutes after each tick finishes, and output goes to the journal. Each repo gets one driver. Installing the timer enables it and checks that systemd reports it enabled, then removes this repo's crontab lines, including entries written before the marker comment existed, and prints each removed line. `install-cron` reads its entry back and then disables this repo's timer. Commented-out lines, other repos' lines and unit files aida did not write are never touched, and a unit file of the same name that aida did not write is never overwritten. `aida schedule uninstall-systemd` disables only the timer (a running tick finishes) and deletes the two unit files. Both install commands need a person at an interactive terminal who answers yes. `aida doctor` counts either driver, and flags a repo where both are installed. <!-- trace:TASK-1491 | ai:claude -->"
+                },
+                {
+                  "line": 339,
+                  "text": "Verbs: `aida shift tick [--dry-run] [--json]` (`--dry-run` prints the exact wave command, the specs, every guard with its value and where the switch was read, and writes nothing \u2014 the preflight), `aida shift status [--json]`, `aida shift enable`, `aida shift disable`, `aida shift resume`, `aida shift install --systemd-user|--cron` (enable, and install that driver in the same step; the repo's other driver is removed once the new one is verified). <!-- trace:TASK-1491 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1491",
+            "agreed_id": "TASK-1491",
+            "title": "Night shift slice 2: systemd user timer driver, driver-switch rules and doctor DriverStatus",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "docs:impacted",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "ef6bf16c72581705008caeea55bdc6e61853f2333e227d04e217ac266f6e1237"
+          }
+        },
+        {
+          "id": "TASK-1492",
+          "policy_reason": "keystone-class spec requires a human clear",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "incidental",
+          "rationale": "The mail-escalation trace and shift redrive/cold-boot documentation are unchanged. Canonical driver binary comparison and tick failure documentation do not change those mechanisms.",
+          "occurrences": [
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "base",
+              "blob_sha256": "e6da45fc8b3efa229f94df45f55cdf7970b593cb26272605cf61c1db7806b712",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2796,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the same per-recipient read the night"
+                }
+              ]
+            },
+            {
+              "path": "aida-cli-lib/src/maintenance_schedule.rs",
+              "side": "head",
+              "blob_sha256": "64dc6d2d3bd5d26fd2df38ce5e301b7da1b650187d6dea6a12a23b3c9c57595a",
+              "scoped_selected": false,
+              "fallback": null,
+              "trace_lines": [
+                {
+                  "line": 2802,
+                  "text": "// trace:TASK-1492 | ai:claude \u2014 the same per-recipient read the night"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a1b5832d73fb26c6b9e819daab3079477b09a1314a47ac9f659b66c51f79efb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 335,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "715832ed1c911195213a66bbdd2645cfad7229f2010d7391c8ece7861edf4072",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 337,
+                  "text": "**Mail latency.** Each tick measures, per known recipient, how long the oldest unread message has waited. A known recipient is a seat or role in the agent registry, a team roster member or an active work session's owner or role; mail to any other address is ignored and never pages. Past `mail_latency` (`30m`) it notifies the operator through `aida notify` (never the mailbox or a chat), once per episode per recipient, again only after that recipient's mail is read and falls behind again. One notification names at most five recipients, then \"+N more\". <!-- trace:TASK-1492 | ai:claude -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1492",
+            "agreed_id": "TASK-1492",
+            "title": "Night shift slice 3: opt-in re-drive step, mailbox-latency escalation and headless cold-boot",
+            "execution_mode": null,
+            "tags": [
+              "autonomy",
+              "keystone",
+              "orchestrator",
+              "reliability"
+            ],
+            "description_sha256": "1ea5fcb607b39202ac7d887b06a306c1fa246fcd3f833a3e30cfa65520b18b80"
+          }
+        },
+        {
+          "id": "TASK-176",
+          "policy_reason": "history unreadable: no version of TASK-176 in the store's history",
+          "modes": [
+            "full",
+            "scoped"
+          ],
+          "judgment": "unresolved",
+          "rationale": "The unchanged trace precedes the substrate command listing, near the new driver/tick paragraph. Frozen alias TASK-1-152 describes manual preflight flag verification, not this scheduler contract, but historical classification is unavailable. Do not infer an authoritative contract from this mismatched trace.",
+          "occurrences": [
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "base",
+              "blob_sha256": "a1b5832d73fb26c6b9e819daab3079477b09a1314a47ac9f659b66c51f79efb9",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 281,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            },
+            {
+              "path": "docs/cli/03-work-autonomy.md",
+              "side": "head",
+              "blob_sha256": "715832ed1c911195213a66bbdd2645cfad7229f2010d7391c8ece7861edf4072",
+              "scoped_selected": true,
+              "fallback": true,
+              "trace_lines": [
+                {
+                  "line": 281,
+                  "text": "<!-- trace:TASK-176 | ai:codex -->"
+                }
+              ]
+            }
+          ],
+          "frozen_current_spec": {
+            "spec_id": "TASK-1-152",
+            "agreed_id": "TASK-176",
+            "title": "CLI-manual preflight guard already fails on three unresolved flags",
+            "execution_mode": "drain",
+            "tags": [
+              "batch:night-0920",
+              "ci",
+              "docs-drift",
+              "drain-safe",
+              "from-advisor:BUG-1420",
+              "kind:observation",
+              "linked:BUG-1420",
+              "preflight",
+              "severity:major"
+            ],
+            "description_sha256": "8c56e9c31e266ef2c3fe6aac65f3fefe0825e340aced57380fa7ffb8e051f042"
+          }
+        }
+      ],
+      "supporting_sources": [
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "blob_sha256": "f08ce21de9811295e07a3cd99c843b5e4b768d9de1f33f2fabfb0000e3710048",
+          "line": 3541,
+          "text": "let switched = crate::schedule_driver::real_tick_invocation(project_root).and_then(|inv| {"
+        }
+      ]
+    }
+  ]
+}
