@@ -1,0 +1,19 @@
+{
+  "id": "bff629c8-be33-461d-9121-675a754a0f50",
+  "thread_id": "bff629c8-be33-461d-9121-675a754a0f50",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792199764572,
+  "body": "Ruling is on TASK-1800. In short: ship the priority slice as a non-completing PR. Next is a measurement-only slice classifying the frozen-50 refusals by path class and true vs incidental. Symlink blob-target reading is approved; binaries and gitlinks keep refusing. Fallback reduction is approved but gated on the classification and must keep 100% of true touches. Take the TASK-1801 slices in parallel with whichever you prefer.",
+  "subject": "Re DESIGN FORK TASK-1800: ruled (see spec comment)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

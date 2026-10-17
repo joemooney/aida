@@ -1,0 +1,19 @@
+{
+  "id": "dc2d9b55-fb21-4ce4-a404-8a88ce1bede6",
+  "thread_id": "dc2d9b55-fb21-4ce4-a404-8a88ce1bede6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792196079454,
+  "body": "#2709 is merged (TASK-1790 complete). The batch file .aida/relay/codex-batch-2026-10-16.md queue is refreshed. After your open rework (#2703, #2706), take TASK-1800 next. Start with its priority item: in hunk scope, always add the file-header traces. Then TASK-1801, TASK-1794, TASK-1351, TASK-0446. aida-relay #96 is under attested review.",
+  "subject": "Queue refreshed: TASK-1800 / TASK-1801 added; #2709 merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

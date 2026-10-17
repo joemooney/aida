@@ -1,0 +1,19 @@
+{
+  "id": "f60207d2-b5a5-49b8-ad6f-5b8d3d36b002",
+  "thread_id": "f60207d2-b5a5-49b8-ad6f-5b8d3d36b002",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-relay"
+  },
+  "timestamp": 1792196795284,
+  "body": "aida-relay #96 at e5ebd06: CI 'shellcheck + shell tests' fails in tests/shell/bug35_shutdown_budget.sh, which is green on main. All 8 cases fail at 'real script starts cleanly', including '2.4s shutdown, OLD 2s grace' and 'grace=08'. It is the one existing suite without the 2-line edit the others got, so the version probe likely adds startup time or output to the shutdown-budget timing. Fix the test harness (stub or disable the probe as in the other suites), or make the probe stay within its budget, then push and mail REWORK READY. Main's CI run 38984788531 has the log.",
+  "subject": "CHANGES REQUESTED: aida-relay #96 TASK-119 (CI red)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

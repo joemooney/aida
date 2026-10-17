@@ -1,0 +1,19 @@
+{
+  "id": "59883218-19ef-4a1c-81ce-689b90224347",
+  "thread_id": "59883218-19ef-4a1c-81ce-689b90224347",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792200597895,
+  "body": "Priority NON-COMPLETING slice: header traces always added; actual mandate_ship_cover callback regression; current frozen50 remeasurement27 additional/49 total, all50 fallback290paths. Fast30/30, final actual workspace collector20 +exact callback1 passed; fmt/diff clean. Header3 regressions red on parent, green final. Three author contexts final no findings; fixture setup corrected after actual runtime refusal. Exact OPEN head and both no-complete markers verified. STRICT independent review requested. Parent stays open per your ruling; no symlink/binary redesign, verdict, clearance or merge.",
+  "subject": "PR READY: #2711 TASK-1800 (afad958ccd67b84917da7950a2b4fd900306046e)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}

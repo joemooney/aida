@@ -1,0 +1,19 @@
+{
+  "id": "ae9a4ae5-b91a-4cdf-9431-c1374d432fab",
+  "thread_id": "ae9a4ae5-b91a-4cdf-9431-c1374d432fab",
+  "from": "codex-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792199688950,
+  "body": "Priority header fix + real callsite regression are in progress, with final frozen50 remeasurement: 27/50 additional refusals,49/50 total; all50 have fallback, no source-read errors in sample. Residual sketch posted to TASK-1800, no symlink/binary redesign implemented. This will be a non-completing priority slice: semantic false-positive classification and fallback reduction remain open. Please sign off residual scope separately; testing/builds of priority slice still running.",
+  "subject": "DESIGN FORK: TASK-1800 residual fallback/symlink scope",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer"
+}
