@@ -1,0 +1,33 @@
+id: 01a14a7b-8525-7540-82bc-f9ec61a63dce
+spec_id: STORY-1725
+agreed_id: STORY-1725
+title: 'Review PR-2719: [AI:codex] docs(mandate): audit stop and contained-launch blocker sets (TASK-1800)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14a72`) for branch `codex/task-1800-audit-fourteen`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2719>
+  - Branch: `codex/task-1800-audit-fourteen` → `codex/task-1800-audit-twelve`
+
+  ## Covers
+
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2719` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-17T15:29:31.429795277Z
+modified_at: 2026-10-17T15:29:31.429795277Z
+req_type: Story
+filed_at:
+  code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: codex
