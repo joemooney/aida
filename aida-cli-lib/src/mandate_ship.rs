@@ -1,6 +1,9 @@
 //! STORY-1698's mandate ship cover, moved out of `pr_cmd.rs` (STORY-1700
 //! condition C1) so the drive-mandate gate can protect this file without
-//! gating every PR that touches `pr_cmd.rs`. The code is unchanged.
+//! gating every PR that touches `pr_cmd.rs`. The move itself changed no
+//! code; STORY-1700 R1 then added the gate inputs the decisions read: the
+//! PR's changed paths, the human gates, and the ship / hold-clear gate
+//! reasons.
 // trace:STORY-1700 | ai:claude
 
 use crate::pr_cmd::{

@@ -97,12 +97,12 @@ fn no_spec(_: &str) -> Option<String> {
     None
 }
 
-fn no_signoff(_: &str) -> bool {
-    false
+fn no_signoff(_: &str) -> Option<bool> {
+    None
 }
 
-fn story_9_awaits(id: &str) -> bool {
-    id == "STORY-9"
+fn story_9_awaits(id: &str) -> Option<bool> {
+    (id == "STORY-9").then_some(true)
 }
 
 struct Fixture {
@@ -141,7 +141,8 @@ impl Fixture {
             advisor_live: true,
             inherited_session_env: false,
             spec_always_human: &no_spec,
-            spec_awaiting_signoff: &no_signoff,
+            spec_signoff: &no_signoff,
+            store_readable: true,
             unowned_specs: Vec::new(),
         }
     }
@@ -189,7 +190,7 @@ fn blocked_due_item_carries_resolving_action_and_no_restart() {
     )];
     let mut fake = Fake::default();
     let mut inputs = fx.inputs(&now_clock, lanes, "joe");
-    inputs.spec_awaiting_signoff = &story_9_awaits;
+    inputs.spec_signoff = &story_9_awaits;
     let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
 
     assert_eq!(fake.due.len(), 1, "{report:?}");
@@ -680,6 +681,7 @@ fn pr_touching_gate_paths_is_gated() {
         "aida-cli-lib/src/rework_hold_release.rs",
         "aida-cli-lib/src/review_authority.rs",
         "aida-cli-lib/src/solo_review.rs",
+        "aida-cli-lib/src/review_verdict.rs",
     ] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
@@ -1698,7 +1700,8 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
     assert_eq!(action, DriveAction::SketchSignoff);
     assert_eq!(spec.as_deref(), Some("STORY-9"));
 
-    // awaits_signoff: an open spec with a SKETCH newer than its last signoff.
+    // awaits_signoff fails closed: an open spec awaits one unless a ruling
+    // is newer than its every other comment, whatever the request says.
     let mut req = aida_core::Requirement::new("s".into(), String::new());
     req.spec_id = Some("STORY-9".into());
     let comment = |text: &str, at: DateTime<Utc>| {
@@ -1706,8 +1709,8 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
         c.created_at = at;
         c
     };
-    assert!(!awaits_signoff(&req));
-    req.comments.push(comment("IMPLEMENTER SKETCH: plan", t0()));
+    assert!(awaits_signoff(&req), "no recorded signoff at all");
+    req.comments.push(comment("please look at my plan", t0()));
     assert!(awaits_signoff(&req));
     req.comments.push(comment(
         "ADVISOR SIGNOFF: approved",
@@ -1720,9 +1723,9 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
     ));
     assert!(awaits_signoff(&req));
     let reqs = vec![req];
-    let f = spec_awaiting_signoff_from(&reqs);
-    assert!(f("story-9"));
-    assert!(!f("PR-12"));
+    let f = spec_signoff_from(&reqs);
+    assert_eq!(f("story-9"), Some(true));
+    assert_eq!(f("PR-12"), None);
 }
 
 // Finding 11.
@@ -1786,4 +1789,184 @@ fn word_labelled_criteria_can_be_traced() {
         crate::parse_trace_id_token("trace:STORY-1.TXT").as_deref(),
         Some("STORY-1")
     );
+}
+
+// ── Round 3 (PR #2725 scoped rework) ────────────────────────────────────────
+
+fn blocked_lane_asking(fx: &Fixture, run: &str, question: &str) -> Lane {
+    let d = fx.run_dir(run);
+    std::fs::write(
+        d.join("sessions/h.md"),
+        format!("BLOCKED_ON_HUMAN: {question}\n"),
+    )
+    .unwrap();
+    lane(
+        run,
+        LaneClass::Blocked,
+        &d,
+        &[("state", "blocked"), ("exit", "3")],
+    )
+}
+
+// F1: an unreadable store withholds every gated seat action.
+// trace:STORY-1700.ac2ed84c | ai:claude
+// trace:STORY-1700.acb260c7 | ai:claude
+#[test]
+fn an_unreadable_store_routes_nothing_gated() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let lanes = || {
+        vec![
+            blocked_lane_asking(&fx, "ask", "which port should the server use?"),
+            lane(
+                "crash",
+                LaneClass::Crashed,
+                &fx.run_dir("crash"),
+                &[("state", "running")],
+            ),
+            lane(
+                "api",
+                LaneClass::TerminalApi,
+                &fx.run_dir("api"),
+                &[("exit", "7")],
+            ),
+        ]
+    };
+    let held = || {
+        vec![HeldPr {
+            pr: 3,
+            releasable: true,
+            head: Some("e".repeat(40)),
+            spec: None,
+            approved_at_head: true,
+            changed_paths: Some(vec!["README.md".into()]),
+        }]
+    };
+    let tick = |fake: &mut Fake| {
+        let mut inputs = fx.inputs(&now_clock, lanes(), "joe");
+        inputs.held_prs = held();
+        inputs.unowned_specs = vec![unowned("TASK-1")];
+        inputs.store_readable = false;
+        run_tick(&inputs, &TickHooks::default(), fake)
+    };
+    let mut fake = Fake::default();
+    let report = tick(&mut fake);
+    assert!(
+        fake.due.is_empty(),
+        "no answer, dispatch or ship is routed: {report:?}"
+    );
+    let store_rows: Vec<_> = report.rows.iter().filter(|r| r.lane == "store").collect();
+    assert_eq!(store_rows.len(), 1);
+    assert_eq!(store_rows[0].outcome, Outcome::Refused);
+    assert!(store_rows[0]
+        .why
+        .as_deref()
+        .unwrap()
+        .contains("store unreadable: 4 gated seat action(s) withheld"));
+    // The ungated credits notice still reaches the operator, plus the
+    // store escalation.
+    assert_eq!(fake.notices.len(), 2);
+    // Deduplicated: the next tick ledgers no second refusal.
+    let again = tick(&mut fake);
+    assert!(again.rows.iter().all(|r| r.lane != "store"));
+    assert!(fake.due.is_empty());
+}
+
+// F2: a relay answer is gated like a signoff, and a signoff request needs no
+// keyword to be one.
+// trace:STORY-1700.ac2ed84c | ai:claude
+// trace:STORY-1700.ace038d6 | ai:claude
+#[test]
+fn a_blocked_relay_answer_is_gated_and_a_plain_signoff_request_is_a_signoff() {
+    assert_eq!(DriveAction::Answer.gate_op(), Some(GateOp::SketchSignoff));
+    assert_eq!(DriveAction::Answer.scope(), Some(Scope::SketchSignoff));
+    let gate = || {
+        Ok(HumanGates {
+            ops: [GateOp::SketchSignoff].into_iter().collect(),
+            ..Default::default()
+        })
+    };
+    // A plain question (no spec named) under a sketch-signoff gate.
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(
+        &now_clock,
+        vec![blocked_lane_asking(
+            &fx,
+            "q",
+            "which port should the server use?",
+        )],
+        "joe",
+    );
+    inputs.gates = gate();
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(outcomes(&report), vec![("relay:q".into(), Outcome::Gated)]);
+
+    // A signoff request whose spec never says SKETCH is still a signoff.
+    let mut req = aida_core::Requirement::new("s".into(), String::new());
+    req.spec_id = Some("STORY-9".into());
+    req.comments.push(aida_core::Comment::new(
+        "joe".into(),
+        "here is my plan".into(),
+    ));
+    let reqs = vec![req];
+    let signoff = spec_signoff_from(&reqs);
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let l = blocked_lane_asking(&fx, "s", "please approve the STORY-9 plan");
+    let (action, _, _, spec) = resolving_action(&l, &signoff);
+    assert_eq!(action, DriveAction::SketchSignoff);
+    assert_eq!(spec.as_deref(), Some("STORY-9"));
+    let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
+    inputs.spec_signoff = &signoff;
+    inputs.gates = gate();
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(outcomes(&report), vec![("relay:s".into(), Outcome::Gated)]);
+
+    // A relay naming an operator-only spec takes that floor, even as an Answer.
+    let always = |s: &str| (s == "STORY-9").then(|| "operator-only".to_string());
+    let signed = |s: &str| (s == "STORY-9").then_some(false);
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let l = blocked_lane_asking(&fx, "o", "does STORY-9 need a migration?");
+    let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
+    inputs.spec_signoff = &signed;
+    inputs.spec_always_human = &always;
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(report.rows[0].outcome, Outcome::Gated);
+    assert!(report.rows[0]
+        .why
+        .as_deref()
+        .unwrap()
+        .contains("STORY-9 is operator-only"));
+}
+
+// F10: a future-dated turn stamp is not a live advisor.
+// trace:STORY-1700.acb260c7 | ai:claude
+#[test]
+fn a_future_dated_turn_stamp_is_not_a_live_advisor() {
+    let root = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let home_s = home.path().display().to_string();
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HOME", Some(&home_s)),
+        (crate::seat_authority::GRANT_ENV, None),
+    ]);
+    let me = crate::current_user_id(None);
+    let grant =
+        crate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant);
+    let now = Utc::now();
+    stamp_grant_turn(Some(&grant), now + Duration::minutes(10));
+    assert!(
+        !advisor_live(root.path(), now),
+        "a stamp from the future is clock skew"
+    );
+    assert!(advisor_live(root.path(), now + Duration::minutes(11)));
 }

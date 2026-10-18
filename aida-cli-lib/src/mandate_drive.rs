@@ -86,7 +86,10 @@ impl DriveAction {
             Self::Ship => Some(GateOp::Ship),
             Self::SketchSignoff => Some(GateOp::SketchSignoff),
             Self::Redispatch => Some(GateOp::Dispatch),
-            Self::Answer | Self::FixSetup | Self::OperatorAttention => None,
+            // Answering a blocked relay is an advisor ruling like a signoff:
+            // the same human gate holds it. trace:STORY-1700 | ai:claude
+            Self::Answer => Some(GateOp::SketchSignoff),
+            Self::FixSetup | Self::OperatorAttention => None,
         }
     }
 
@@ -96,7 +99,8 @@ impl DriveAction {
             Self::Ship => Some(Scope::ShipHeld),
             Self::SketchSignoff => Some(Scope::SketchSignoff),
             Self::Redispatch => Some(Scope::Dispatch),
-            Self::Answer | Self::FixSetup | Self::OperatorAttention => None,
+            Self::Answer => Some(Scope::SketchSignoff),
+            Self::FixSetup | Self::OperatorAttention => None,
         }
     }
 }
@@ -160,7 +164,7 @@ pub(crate) enum LaneDecision {
 // trace:STORY-1700 | ai:claude
 pub(crate) fn resolving_action(
     lane: &Lane,
-    awaiting_signoff: &dyn Fn(&str) -> bool,
+    spec_signoff: &dyn Fn(&str) -> Option<bool>,
 ) -> (DriveAction, String, String, Option<String>) {
     let handoff = lane.evidence.field("handoff").map(|h| {
         let p = PathBuf::from(h);
@@ -178,23 +182,30 @@ pub(crate) fn resolving_action(
                 .find(|l| l.contains("BLOCKED_ON_HUMAN"))
                 .map(|l| l.trim().to_string())
         });
-    // A token is the sketch spec only when the store has it awaiting
-    // signoff; `PR-12` or `ADR-77` in the question is just prose.
-    let spec = marker_line.as_deref().and_then(|line| {
+    // The lane's spec is the first token the store knows (`PR-12` in the
+    // question is just prose). It is a signoff request unless the store
+    // records a ruling newer than the spec's last activity (fail closed);
+    // either way the spec's operator-only floor applies.
+    let named = marker_line.as_deref().and_then(|line| {
         spec_ids_in(line)
             .into_iter()
-            .find(|id| awaiting_signoff(id))
+            .find_map(|id| spec_signoff(&id).map(|awaiting| (id, awaiting)))
     });
+    let spec = named.as_ref().map(|(id, _)| id.clone());
     let handoff_text = handoff
         .as_ref()
         .map(|h| h.display().to_string())
         .unwrap_or_else(|| "(no handoff recorded)".into());
-    let (action, resolve) = match &spec {
-        Some(spec) => (
+    let (action, resolve) = match &named {
+        Some((spec, true)) => (
             DriveAction::SketchSignoff,
             format!(
                 "aida show {spec} --comments; then record the ruling: aida comment add {spec} \"ADVISOR SIGNOFF: ...\""
             ),
+        ),
+        Some((spec, false)) => (
+            DriveAction::Answer,
+            format!("answer the question in {handoff_text} (about {spec})"),
         ),
         None => (
             DriveAction::Answer,
@@ -237,8 +248,9 @@ fn spec_ids_in(text: &str) -> Vec<String> {
     re.captures_iter(text).map(|c| c[1].to_string()).collect()
 }
 
-/// Is `req` a spec awaiting a sketch signoff: open, with a comment naming a
-/// SKETCH newer than its last comment starting `ADVISOR SIGNOFF`?
+/// Is `req` a spec awaiting an advisor signoff? Fail closed: an open spec is
+/// awaiting one unless a comment starting `ADVISOR SIGNOFF` is newer than its
+/// every other comment. No keyword in the request is needed.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn awaits_signoff(req: &aida_core::Requirement) -> bool {
     if crate::is_terminal_status_str(&req.status.to_string()) {
@@ -258,18 +270,19 @@ pub(crate) fn awaits_signoff(req: &aida_core::Requirement) -> bool {
         .filter(|c| is_signoff(c))
         .map(|c| c.created_at)
         .max();
-    req.comments.iter().any(|c| {
-        !is_signoff(c)
-            && c.content.to_ascii_uppercase().contains("SKETCH")
-            && last_signoff.is_none_or(|s| c.created_at > s)
-    })
+    let Some(last_signoff) = last_signoff else {
+        return true;
+    };
+    req.comments
+        .iter()
+        .any(|c| !is_signoff(c) && c.created_at > last_signoff)
 }
 
 /// The routing for one relay lane, per the R7 classification table.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn plan_relay_lane(
     lane: &Lane,
-    awaiting_signoff: &dyn Fn(&str) -> bool,
+    spec_signoff: &dyn Fn(&str) -> Option<bool>,
 ) -> LaneDecision {
     let key_lane = format!("relay:{}", lane.run_id);
     let head = format!(
@@ -332,7 +345,7 @@ pub(crate) fn plan_relay_lane(
             None,
         ),
         LaneClass::Blocked => {
-            let (action, command, detail, spec) = resolving_action(lane, awaiting_signoff);
+            let (action, command, detail, spec) = resolving_action(lane, spec_signoff);
             act(action, Route::Advisor, command, detail, spec)
         }
         LaneClass::Crashed => act(
@@ -634,8 +647,11 @@ pub(crate) struct TickInputs<'a> {
     pub inherited_session_env: bool,
     /// `Some(class)` when a spec is always human (operator-only, decide).
     pub spec_always_human: &'a dyn Fn(&str) -> Option<String>,
-    /// Is a spec id the store's spec awaiting a sketch signoff?
-    pub spec_awaiting_signoff: &'a dyn Fn(&str) -> bool,
+    /// `None` = not a store spec; `Some(awaiting a signoff)` otherwise.
+    pub spec_signoff: &'a dyn Fn(&str) -> Option<bool>,
+    /// Could the store be read? When not, every gated seat action is
+    /// withheld: the spec checks it needs cannot be made (fail closed).
+    pub store_readable: bool,
     /// Approved specs and who (if anyone) already owns them (AC1).
     pub unowned_specs: Vec<UnownedSpec>,
 }
@@ -880,10 +896,49 @@ pub(crate) fn run_tick(
     let mut decisions: Vec<LaneDecision> = inp
         .lanes
         .iter()
-        .map(|l| plan_relay_lane(l, inp.spec_awaiting_signoff))
+        .map(|l| plan_relay_lane(l, inp.spec_signoff))
         .collect();
     decisions.extend(inp.held_prs.iter().map(plan_held_pr));
     decisions.extend(inp.unowned_specs.iter().map(plan_unowned_spec));
+    // An unreadable store: no operator-only or signoff check can be made,
+    // so every gated seat action is withheld, with one ledgered refusal and
+    // one operator notice per episode. trace:STORY-1700 | ai:claude
+    const STORE_KEY: &str = "store|unreadable";
+    if inp.store_readable {
+        per.emitted.remove(STORE_KEY);
+    } else {
+        let gated =
+            |d: &LaneDecision| matches!(d, LaneDecision::Act(p) if p.action.gate_op().is_some());
+        let withheld = decisions.iter().filter(|d| gated(d)).count();
+        decisions.retain(|d| !gated(d));
+        if tick.ended.is_none() && !per.emitted.contains(STORE_KEY) {
+            match tick.recheck() {
+                Err(why) => tick.ended = Some(why),
+                Ok(()) => {
+                    let sent = tick.fx.notify_operator(
+                        "AIDA drive: the requirement store is unreadable",
+                        "The drive tick cannot check operator-only specs or signoffs, so it withholds every ship, signoff, answer and dispatch until the store reads again.",
+                    );
+                    if sent.is_ok() {
+                        per.emitted.insert(STORE_KEY.into());
+                    }
+                    tick.row(ActionRow::new(
+                        "store",
+                        "requirement store",
+                        "store-check",
+                        Outcome::Refused,
+                        Some(format!(
+                            "store unreadable: {withheld} gated seat action(s) withheld; {}",
+                            match sent {
+                                Ok(d) => format!("operator notified ({d})"),
+                                Err(e) => format!("notify failed: {e:#}"),
+                            }
+                        )),
+                    ));
+                }
+            }
+        }
+    }
     let mut acted = 0usize;
     for decision in decisions {
         let planned = match decision {
@@ -1272,7 +1327,9 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
             crate::mandate::MANDATE_SEAT,
             now,
         ) && crate::presence::turn_clock_last_seen_in(&clock, &grant_turn_key(id))
-            .is_some_and(|seen| now - seen <= ADVISOR_LIVE_WITHIN)
+            // A future-dated stamp (clock skew) is not evidence of a live
+            // seat. trace:STORY-1700 | ai:claude
+            .is_some_and(|seen| seen <= now && now - seen <= ADVISOR_LIVE_WITHIN)
     })
 }
 
@@ -1330,11 +1387,12 @@ pub(crate) fn spec_always_human_from<'a>(
     }
 }
 
-/// Is `id` a store spec awaiting a sketch signoff ([`awaits_signoff`])?
-pub(crate) fn spec_awaiting_signoff_from(
+/// `None` when `id` is not a store spec, else whether it awaits a signoff
+/// ([`awaits_signoff`]).
+pub(crate) fn spec_signoff_from(
     reqs: &[aida_core::Requirement],
-) -> impl Fn(&str) -> bool + '_ {
-    move |id: &str| find_spec(reqs, id).is_some_and(awaits_signoff)
+) -> impl Fn(&str) -> Option<bool> + '_ {
+    move |id: &str| find_spec(reqs, id).map(awaits_signoff)
 }
 
 /// An approved spec and what already owns it (AC1's dispatch lane).
@@ -1475,12 +1533,14 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
         });
     }
     let principal = crate::current_user_id(None);
-    let reqs: Vec<aida_core::Requirement> = crate::load_store_for_lookup(main_root)
-        .map(|s| s.requirements)
-        .unwrap_or_default();
+    // Never default an unreadable store to "no specs": the tick withholds
+    // every gated action instead (`store_readable`).
+    let store = crate::load_store_for_lookup(main_root);
+    let store_readable = store.is_some();
+    let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();
     let ledger = crate::mandate::read_exclusions(&dir).ok();
     let always_human = spec_always_human_from(&reqs, ledger.as_ref());
-    let awaiting = spec_awaiting_signoff_from(&reqs);
+    let signoff = spec_signoff_from(&reqs);
     let inputs = TickInputs {
         project_root: main_root,
         mandate_dir: &dir,
@@ -1492,7 +1552,8 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
         advisor_live: advisor_live(main_root, now),
         inherited_session_env,
         spec_always_human: &always_human,
-        spec_awaiting_signoff: &awaiting,
+        spec_signoff: &signoff,
+        store_readable,
         unowned_specs: collect_unowned_specs(main_root, &reqs),
     };
     Ok(run_tick(
@@ -1828,10 +1889,10 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
             let reqs: Vec<aida_core::Requirement> = crate::load_store_for_lookup(&root)
                 .map(|s| s.requirements)
                 .unwrap_or_default();
-            let awaiting = spec_awaiting_signoff_from(&reqs);
+            let signoff = spec_signoff_from(&reqs);
             let mut decisions: Vec<LaneDecision> = crate::fleet_lanes::classify_lanes(&root, now)
                 .iter()
-                .map(|l| plan_relay_lane(l, &awaiting))
+                .map(|l| plan_relay_lane(l, &signoff))
                 .collect();
             decisions.extend(collect_held_prs(&root).iter().map(plan_held_pr));
             decisions.extend(
