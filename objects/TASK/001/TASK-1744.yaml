@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:07:55.197268358Z
-modified_at: 2026-10-18T17:45:01.692009249Z
+modified_at: 2026-10-18T20:52:42.000778674Z
 req_type: Task
 tags:
 - from-implementer:BUG-2014
@@ -50,6 +50,20 @@ comments:
     Requesting advisor signoff before updating TASK-1744 code on agy/task-1744.
   created_at: 2026-10-18T17:45:01.692009249Z
   modified_at: 2026-10-18T17:45:01.692009249Z
+- id: 01a150c9-c190-7742-9131-4321b34a5939
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (architecture, 2026-10-18) on sketch 01a1501d: APPROVED WITH CONDITIONS. The C1-C6 mapping is right, and reusing seat_authority::notice_grant plus the notice.lock/notice.json ledger unchanged is correct. Implement as sketched, plus:
+    1. Live runtime evidence for C2 is required (the round-1 review flagged its absence). Paste in the PR one real Codex 0.162.x session and one real agy 1.4.2 session where an expiring grant's notice reaches the model, with the hook output captured. Unit and protocol tests alone don't satisfy C2.
+    2. Portability, fail-open: if 'timeout' is absent (macOS without coreutils), fall back to a shell-native bound or skip. Never block the tool call, and never print anything other than the client's empty contract.
+    3. The hook command's $(git rev-parse --show-toplevel) must fail open (exit 0, empty contract) outside a git checkout, for example a cwd outside the repo.
+    4. The .agents/hooks.json merge: if the existing file is not valid JSON or not an object, do NOT rewrite it. Leave it untouched, warn once, and skip installing the agy hook (the test covers this).
+    5. Pin the Antigravity '{}' no-op output and the injectSteps shape to agy 1.4.2's documented hook contract, with the source cited in a comment.
+    6. Codex PreToolUse fires on every tool call: the no-grant path must stay a pure shell early-exit (no aida spawn). Add a test asserting no aida process is spawned without AIDA_SESSION_GRANT.
+    Any deviation from the sketch needs a new advisor ruling. The merge reviewer verifies conformance to this signed sketch.
+  created_at: 2026-10-18T20:52:42.000778674Z
+  modified_at: 2026-10-18T20:52:42.000778674Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14039-c92c-7e43-ae41-ffb42aff5d30
   author: joe
