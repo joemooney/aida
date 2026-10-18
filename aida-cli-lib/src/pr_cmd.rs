@@ -5573,9 +5573,12 @@ mod pr_ship_environment_tests {
                 .contains("BUG-1188"),
             "pr ship launched from a sibling worktree must see the main clone's hold marker"
         );
+        // BUG-2176: a read keyed by the sibling resolves to the same primary
+        // marker — there is no per-worktree hold store left to read empty.
+        // trace:BUG-2176 | ai:claude
         assert!(
-            crate::merge_hold::read_hold(&sibling, 1188).is_none(),
-            "the regression was reading the sibling worktree's empty .aida directory"
+            crate::merge_hold::read_hold(&sibling, 1188).is_some_and(|r| r.contains("BUG-1188")),
+            "a sibling-rooted read must see the main clone's hold marker"
         );
     }
 

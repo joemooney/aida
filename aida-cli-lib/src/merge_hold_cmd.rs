@@ -446,6 +446,9 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 Err(e) => format!("unknown: {}", e.lines().next().unwrap_or("")),
             };
             let unrecorded_removals = merge_hold::unrecorded_marker_removals(&root);
+            // BUG-2176: a marker left in a linked worktree holds nothing here.
+            // trace:BUG-2176 | ai:claude
+            let strays = merge_hold::stray_worktree_markers(&root);
             // BUG-1562: re-evaluate each live marker's premise at read time
             // (PR head vs the sha it cites; a rework hold's verdict now
             // approved or closed). FLAG only — never auto-clear.
@@ -584,6 +587,8 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         "label_scan": label_scan_state,
                         "label_scan_disagrees": scan_disagrees,
                         "unrecorded_marker_removals": unrecorded_removals,
+                        // trace:BUG-2176 | ai:claude
+                        "stray_worktree_markers": merge_hold::stray_markers_json(&strays, &label_only),
                     })
                 );
                 return Ok(());
@@ -602,6 +607,13 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                 println!(
                     "{}",
                     format!("PR #{pr}: TAMPERING — AIDA recorded a hold placement, but its marker is missing and no clearance record exists.").red()
+                );
+            }
+            for (pr, path) in &strays {
+                println!(
+                    "{}",
+                    merge_hold::stray_marker_warning(*pr, path, &root, label_only.contains(pr))
+                        .yellow()
                 );
             }
             for pr in &scan_disagrees {
