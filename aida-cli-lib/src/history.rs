@@ -2289,7 +2289,9 @@ fn colorize_status(status: &str) -> String {
 // trace:STORY-1478 | ai:claude — the timeline collector reuses this walk.
 // trace:TASK-1737 | ai:antigravity
 pub(crate) fn parse_log_line(line: &str) -> Option<CommitMeta> {
-    let mut parts = line.split('\t');
+    // The trailer block is the last field, so a tab inside a trailer value
+    // stays in that field.
+    let mut parts = line.splitn(4, '\t');
     let sha = parts.next()?.to_string();
     let iso_timestamp = parts.next()?.to_string();
     let git_author = parts.next()?.to_string();
@@ -2445,10 +2447,19 @@ fn diff_modified_with_authority(
     let s_before = effective(before, "status", "custom_status");
     let s_after = effective(after, "status", "custom_status");
     if s_before != s_after {
+        // The trailers describe the whole commit, so only the gated advance
+        // that set them carries the authority — not an ungated flip in the
+        // same batch commit.
+        // trace:TASK-1737 | ai:claude
+        let gated = matches!(
+            (yaml_status(before), yaml_status(after)),
+            (Some(from), Some(to))
+                if aida_core::lifecycle::status_advance_records_authority_trailers(&from, &to)
+        );
         out.push(mk(EventKind::StatusChange {
             from: s_before.clone().unwrap_or_else(|| "—".into()),
             to: s_after.clone().unwrap_or_else(|| "—".into()),
-            authority: authority.cloned(),
+            authority: authority.filter(|_| gated).cloned(),
         }));
     }
 
@@ -2664,6 +2675,11 @@ fn yaml_string(v: &Value, key: &str) -> Option<String> {
 /// Read `key` first; if absent or empty, fall back to `custom_key`. This
 /// mirrors `effective_status()` / `effective_priority()` semantics on the
 /// model side.
+/// The underlying lifecycle enum of a spec snapshot's `status` field.
+fn yaml_status(v: &Value) -> Option<aida_core::models::RequirementStatus> {
+    serde_yaml::from_value(v.get("status")?.clone()).ok()
+}
+
 fn effective(v: &Value, key: &str, custom_key: &str) -> Option<String> {
     if let Some(custom) = yaml_string(v, custom_key) {
         if !custom.is_empty() {

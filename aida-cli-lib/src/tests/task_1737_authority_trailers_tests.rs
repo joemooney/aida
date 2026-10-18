@@ -218,7 +218,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
     // store advance emits NO authority trailer.
     {
         let _ambient = AmbientGuard::hermetic(root, None);
-        assert_eq!(crate::seat_authority::resolve_commit_authority(&store), None);
+        assert_eq!(
+            crate::seat_authority::resolve_commit_authority(&store),
+            None
+        );
         use clap::Parser;
         let cli =
             crate::Cli::try_parse_from(["aida", "edit", "TASK-4", "--status", "approved"]).unwrap();
@@ -247,9 +250,11 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
     // and a store advance never misattributes `Aida-Seat: reviewer`.
     let reviewer_grant = mint_grant_for(root, HERMETIC_TEST_USER, "reviewer", &["advisor"]);
     {
-        let _ambient =
-            AmbientGuard::hermetic_with_grant(root, Some("reviewer"), &reviewer_grant);
-        assert_eq!(crate::seat_authority::resolve_commit_authority(&store), None);
+        let _ambient = AmbientGuard::hermetic_with_grant(root, Some("reviewer"), &reviewer_grant);
+        assert_eq!(
+            crate::seat_authority::resolve_commit_authority(&store),
+            None
+        );
         use clap::Parser;
         let cli =
             crate::Cli::try_parse_from(["aida", "edit", "TASK-5", "--status", "approved"]).unwrap();
@@ -282,7 +287,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
             &[],
             &[("AIDA_ROLE_INSTANCE", Some("companion"))],
         );
-        assert_eq!(crate::seat_authority::resolve_commit_authority(&store), None);
+        assert_eq!(
+            crate::seat_authority::resolve_commit_authority(&store),
+            None
+        );
         use clap::Parser;
         let cli =
             crate::Cli::try_parse_from(["aida", "edit", "TASK-6", "--status", "approved"]).unwrap();
@@ -369,11 +377,11 @@ fn task_1737_history_parser_tolerates_missing_and_unknown_trailers_and_surfaces_
             .unwrap();
     }
 
-    // Commit 2: manual commit with unknown + folded multi-line trailers only (Approved -> InProgress).
+    // Commit 2: manual commit with unknown + folded multi-line trailers only (Approved -> Rejected).
     let yaml_path = store.join("objects/TASK/000/TASK-10.yaml");
     let body = std::fs::read_to_string(&yaml_path)
         .unwrap()
-        .replace("status: Approved", "status: InProgress");
+        .replace("status: Approved", "status: Rejected");
     std::fs::write(&yaml_path, body).unwrap();
     let out = aida_core::git_ops::host_git_command(&store)
         .args([
@@ -385,10 +393,11 @@ fn task_1737_history_parser_tolerates_missing_and_unknown_trailers_and_surfaces_
         .unwrap();
     assert!(out.status.success());
 
-    // Commit 3: manual commit with folded orchestrator trailer + folded unknown trailer (InProgress -> Done).
+    // Commit 3: manual commit with folded orchestrator trailer + folded unknown
+    // trailer on a gated reopen (Rejected -> Done).
     let body = std::fs::read_to_string(&yaml_path)
         .unwrap()
-        .replace("status: InProgress", "status: Done");
+        .replace("status: Rejected", "status: Done");
     std::fs::write(&yaml_path, body).unwrap();
     let out = aida_core::git_ops::host_git_command(&store)
         .args([
@@ -415,13 +424,13 @@ fn task_1737_history_parser_tolerates_missing_and_unknown_trailers_and_surfaces_
     assert_eq!(git_events.len(), 3);
 
     // Newest first:
-    // [0] InProgress -> Done (orchestrator)
-    // [1] Approved -> InProgress (no authority; unknown trailers ignored)
+    // [0] Rejected -> Done (orchestrator)
+    // [1] Approved -> Rejected (no authority; unknown trailers ignored)
     // [2] Draft -> Approved (grant: advisor, prefix)
     assert_eq!(
         git_events[0].kind,
         EventKind::StatusChange {
-            from: "InProgress".into(),
+            from: "Rejected".into(),
             to: "Done".into(),
             authority: Some(EventAuthority {
                 kind: "orchestrator".into(),
@@ -434,7 +443,7 @@ fn task_1737_history_parser_tolerates_missing_and_unknown_trailers_and_surfaces_
         git_events[1].kind,
         EventKind::StatusChange {
             from: "Approved".into(),
-            to: "InProgress".into(),
+            to: "Rejected".into(),
             authority: None,
         }
     );
@@ -478,10 +487,109 @@ fn task_1737_history_parser_tolerates_missing_and_unknown_trailers_and_surfaces_
     assert_eq!(rows[2]["detail"]["authority"]["grant"], prefix);
 }
 
+/// A commit's trailers describe the whole commit, so in a batch commit that
+/// makes one gated advance and one ungated flip, only the gated row carries
+/// the authority; and a tab inside a trailer value does not shift into the
+/// indexed subject.
+// trace:TASK-1737 | ai:claude
+#[test]
+fn task_1737_batch_commit_attributes_authority_only_to_the_gated_row() {
+    let (tmp, store, backend) = setup_store();
+    let root = tmp.path();
+    for (spec_id, status) in [
+        ("TASK-20", RequirementStatus::Draft),
+        ("TASK-21", RequirementStatus::InProgress),
+    ] {
+        let mut req = Requirement::new(format!("title {spec_id}"), "desc".into());
+        req.spec_id = Some(spec_id.into());
+        req.status = status;
+        backend.add_requirement(req).unwrap();
+    }
+
+    let grant_id = mint_grant_for(root, HERMETIC_TEST_USER, "advisor", &[]);
+    {
+        let _ambient = AmbientGuard::hermetic_with_grant(root, Some("advisor"), &grant_id);
+        let mut store_data = backend.load().unwrap();
+        for req in store_data.requirements.iter_mut() {
+            match req.spec_id.as_deref() {
+                Some("TASK-20") => req.status = RequirementStatus::Approved,
+                Some("TASK-21") => req.status = RequirementStatus::Done,
+                _ => {}
+            }
+        }
+        backend.save(&store_data).unwrap();
+    }
+    assert!(head_commit_message(&store).contains("Aida-Authority: grant"));
+
+    let mut opts = default_history_opts();
+    opts.status_changes_only = true;
+    let (git_events, _, _) = collect_filtered_events_git(&store, &opts).unwrap();
+    let db_path = root.join(".aida/history.sqlite");
+    history_cache::rebuild_full_at(&store, &db_path).unwrap();
+    let (cached_events, _, _, _) = collect_filtered_events_sourced(&store, &opts).unwrap();
+    assert_eq!(git_events, cached_events);
+
+    let authority_of = |spec: &str| {
+        git_events
+            .iter()
+            .find(|e| e.spec_id == spec)
+            .map(|e| match &e.kind {
+                EventKind::StatusChange { authority, .. } => authority.clone(),
+                other => panic!("unexpected event {other:?}"),
+            })
+            .unwrap_or_else(|| panic!("no status change for {spec}"))
+    };
+    assert_eq!(
+        authority_of("TASK-20").map(|a| a.kind),
+        Some("grant".to_string())
+    );
+    assert_eq!(authority_of("TASK-21"), None);
+
+    // A literal tab inside a trailer value stays in the trailer field on both
+    // the raw walk and the index (gated reopen Rejected -> Approved).
+    let yaml_path = store.join("objects/TASK/000/TASK-21.yaml");
+    for (from, to, msg) in [
+        ("status: Done", "status: Rejected", "reject TASK-21"),
+        (
+            "status: Rejected",
+            "status: Approved",
+            "reopen TASK-21\n\nAida-Authority: grant\nAida-Seat: adv\tisor",
+        ),
+    ] {
+        let body = std::fs::read_to_string(&yaml_path)
+            .unwrap()
+            .replace(from, to);
+        std::fs::write(&yaml_path, body).unwrap();
+        let out = aida_core::git_ops::host_git_command(&store)
+            .args(["commit", "-am", msg])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+    }
+    history_cache::rebuild_full_at(&store, &db_path).unwrap();
+    let (git_events, _, _) = collect_filtered_events_git(&store, &opts).unwrap();
+    let (cached_events, _, _, _) = collect_filtered_events_sourced(&store, &opts).unwrap();
+    assert_eq!(git_events, cached_events);
+    assert_eq!(
+        git_events[0].kind,
+        EventKind::StatusChange {
+            from: "Rejected".into(),
+            to: "Approved".into(),
+            authority: Some(EventAuthority {
+                kind: "grant".into(),
+                seat: Some("adv\tisor".into()),
+                grant: None,
+            }),
+        }
+    );
+}
+
 /// Condition 3: confirm the store's `commit-msg` and `prepare-commit-msg`
 /// (provenance/store-pair) hooks accept commits carrying `Aida-Authority`,
 /// `Aida-Seat`, and `Aida-Grant` trailers without error or corruption.
 // trace:TASK-1737 | ai:antigravity
+// The store hooks are shell scripts run through `bash`.
+#[cfg(unix)]
 #[test]
 fn task_1737_store_commit_msg_and_provenance_hooks_accept_authority_trailers() {
     let (tmp, store, _backend) = setup_store();
@@ -501,14 +609,8 @@ fn task_1737_store_commit_msg_and_provenance_hooks_accept_authority_trailers() {
     std::fs::create_dir_all(&hook_dir).unwrap();
     let commit_msg_path = hook_dir.join("commit-msg");
     let store_pair_path = hook_dir.join("prepare-commit-msg");
-    std::fs::write(&commit_msg_path, commit_msg_hook).unwrap();
-    std::fs::write(&store_pair_path, store_pair_hook).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&commit_msg_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-        std::fs::set_permissions(&store_pair_path, std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    crate::test_exec::write_executable(&commit_msg_path, commit_msg_hook);
+    crate::test_exec::write_executable(&store_pair_path, store_pair_hook);
 
     // Initialise the project root as a git repo so `aida-store-pair.sh` also
     // exercises its `Aida-Store` trailer-insertion path alongside our trailers.

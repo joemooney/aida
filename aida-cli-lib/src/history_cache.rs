@@ -671,7 +671,11 @@ fn parse_raw_line(line: &str) -> Option<RawChange> {
 }
 
 fn parse_header(line: &str) -> Option<RawCommit> {
-    let mut parts = line.splitn(7, '\t');
+    // The trailer block follows the subject behind a `\x1d` group separator,
+    // so a tab inside a trailer value cannot shift into the subject column.
+    // trace:TASK-1737 | ai:claude
+    let (line, trailers) = line.split_once('\x1d').unwrap_or((line, ""));
+    let mut parts = line.splitn(6, '\t');
     let sha = parts.next()?.to_string();
     let parents = parts
         .next()?
@@ -682,11 +686,8 @@ fn parse_header(line: &str) -> Option<RawCommit> {
     let commit_ts = parts.next()?.trim().parse::<i64>().ok()?;
     let author_iso = parts.next()?.to_string();
     let git_author = parts.next()?.to_string();
-    let sixth = parts.next().unwrap_or("");
-    let (authority, subject) = match parts.next() {
-        Some(subj) => (history::parse_authority_trailers(sixth), subj.to_string()),
-        None => (None, sixth.to_string()),
-    };
+    let subject = parts.next().unwrap_or("").to_string();
+    let authority = history::parse_authority_trailers(trailers);
     Some(RawCommit {
         sha,
         parents,
@@ -729,7 +730,7 @@ impl LogStream {
             "--diff-merges=cc",
             "--root",
             "--no-color",
-            "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%(trailers:key=Aida-Authority,key=Aida-Seat,key=Aida-Grant,only,unfold,separator=%x1f)%x09%s",
+            "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%s%x1d%(trailers:key=Aida-Authority,key=Aida-Seat,key=Aida-Grant,only,unfold,separator=%x1f)",
         ])
         .args(extra)
         .stdout(Stdio::piped())
