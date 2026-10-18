@@ -3,12 +3,12 @@ spec_id: STORY-1655
 agreed_id: STORY-1655
 title: 'Audited per-project solo-human review mode: a TTY-verified human may approve their own claim when [review] solo_human = true'
 description: 'Raised as design question A on BUG-1918 / PR #2485 (2026-10-10). BUG-1918 refuses a human who claimed a spec as its reviewer everywhere, which blocks genuinely solo projects. Add an explicit opt-in config key ([review] solo_human = true, default false). When it is on, a recorder that passes the human-at-TTY floor may approve their own claim, the receipt and verdict record solo_human=true, and doctor/awaiting surface that the project runs solo review. Tests pin both modes. Agents (non-TTY) are never covered.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-18T07:56:01.122098288Z
+modified_at: 2026-10-18T09:38:49.689197372Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -94,6 +94,21 @@ history:
   timestamp: 2026-10-18T07:56:02.341322528Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14e60-ced3-73d3-8ef6-61fa45c258fb
+  author: aida-auto-bump
+  timestamp: 2026-10-18T09:38:49.683648461Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a14e60-ced9-78a1-b3df-72d9dd1a4bf1
+  timestamp: 2026-10-18T09:38:49.689187905Z
+  agent: aida
+  commit_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
+  summary: 'All STORY-1655 acceptance criteria and operator amendments S1-S3 met with named tests; ship gate exempts only the author check for receipt-verified solo approvals; CI green. Non-blocking: no end-to-end positive record-path test, doctor/awaiting print untested, lib.rs trace-comment placement.'
+  review_verdict: approved
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
@@ -102,3 +117,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-18T09:38:49.683644533Z
+  completion_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
