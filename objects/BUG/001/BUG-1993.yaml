@@ -15,13 +15,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-16T09:25:31.241322035Z
+modified_at: 2026-10-18T20:58:09.506536285Z
 req_type: Bug
 tags:
 - batch:drain-20261013
 - batch:shift-20261014-1337
 - performance
 - show
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a150ce-4c30-7a43-8df0-7a0ba858f654
+  created_at: 2026-10-18T20:58:09.506532324Z
+  created_by: joe
 comments:
 - id: 01a13674-e6c8-7301-a928-1e5f83dd6122
   author: joe
@@ -188,6 +194,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a150ce-c713-7f62-a1cb-9b6e43ab98cb
+  author: joe
+  timestamp: 2026-10-18T20:58:11.091266626Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 28dbd53b825a67af3d5dddbf117b99b8de1ab6c2
