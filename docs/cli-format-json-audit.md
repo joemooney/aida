@@ -634,6 +634,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida history approved` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida history closed` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida lint` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida lint constants` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida verify` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida verify constraints` | JSON honoured | verify constraints |
 | `aida lifecycle` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

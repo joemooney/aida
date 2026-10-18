@@ -1295,6 +1295,24 @@ mod bug_1574_unattended_git_mutation_tests {
 /// prelude is NOT a renumbered phase). Each step shells out to the current
 /// `aida` binary; a non-zero exit aborts the prelude so the caller skips the
 /// drain. trace:STORY-265 | ai:claude
+/// The `aida` argv the plan prelude's planning session runs. Interactive
+/// plans use the user-facing `--plan-only`; a headless plan mirrors the
+/// phase-1 headless implementer launch so a `--no-human=both` drain plans
+/// headless too. `--plan-only` is interactive-only and conflicts with
+/// `--no-human`, so the headless plan uses the hidden `--plan-phase` lane.
+// trace:STORY-265 | ai:claude
+// trace:TASK-1794 | ai:claude
+pub(crate) fn plan_session_args(spec: &str, headless: bool) -> Vec<String> {
+    let mut args: Vec<String> = vec!["queue".into(), "work".into(), spec.to_string()];
+    if headless {
+        args.push("--plan-phase".into());
+        args.push("--no-human".into());
+    } else {
+        args.push("--plan-only".into());
+    }
+    args
+}
+
 pub(crate) fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
     use auto_complete::PlanPreludeStep;
     let exe = aida_exe_path();
@@ -1311,18 +1329,7 @@ pub(crate) fn run_plan_prelude(spec: &str, headless_implementer: bool, json: boo
     for step in steps {
         match step {
             PlanPreludeStep::PlanSession { spec: s, headless } => {
-                let mut args: Vec<String> = vec![
-                    "queue".into(),
-                    "work".into(),
-                    s.clone(),
-                    "--plan-only".into(),
-                ];
-                if headless {
-                    // Mirror the phase-1 headless implementer launch onto the
-                    // plan session so a `--no-human=both` drain plans headless
-                    // too. trace:STORY-265 | ai:claude
-                    args.push("--no-human".into());
-                }
+                let args = plan_session_args(&s, headless);
                 let status = std::process::Command::new(&exe)
                     .args(&args)
                     .status_retrying_etxtbsy()
