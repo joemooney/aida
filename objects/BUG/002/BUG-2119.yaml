@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:04:58.283290700Z
-modified_at: 2026-10-18T20:18:40.596602209Z
+modified_at: 2026-10-18T23:21:34.909869618Z
 req_type: Bug
 tags:
 - forge
@@ -33,6 +33,18 @@ comments:
   created_at: 2026-10-18T19:21:46.254707211Z
   modified_at: 2026-10-18T19:21:46.254707211Z
   session_id: 5381fff7-5e31-4278-9d6b-3302c4dba1c2
+- id: 01a15152-0fbd-7b12-9ff1-3ec92b538486
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (two-seat-protocol 5c, credential handling) for PR-2736 at head 2b5fca7031, 2026-10-18. Scope verified from the round-3 PASS and the PR diff (gitlab_project_create.rs, remote_create.rs, test_env.rs, bug_2004 tests):
+    - The GitLab fallback token is supplied only when no operator credential helper matches the host (git config --get-urlmatch credential.helper), and the fallback never emits the helper reset.
+    - A token embedded in the URL keeps its pre-PR precedence (advisor ruling).
+    - percent_decode keeps malformed escapes verbatim.
+    Regression test: gitlab_fallback_token_never_overrides_an_operator_credential_helper (real git credential fill).
+    F2 is tracked as BUG-2181. The signoff covers this head only; any new commit voids it.
+  created_at: 2026-10-18T23:21:34.909869618Z
+  modified_at: 2026-10-18T23:21:34.909869618Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a13789-6625-74a0-8c98-a64393dd8b43
   author: joe
