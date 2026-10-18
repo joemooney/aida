@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T03:28:46.344882571Z
+modified_at: 2026-10-18T03:30:54.597419467Z
 req_type: Story
 comments:
 - id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
@@ -53,6 +53,17 @@ comments:
   created_at: 2026-10-18T03:28:46.344882571Z
   modified_at: 2026-10-18T03:28:46.344882571Z
   session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+- id: 01a14d0f-f805-75d2-8325-5420e7f0356f
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (2026-10-17 20:35) on the per-module registration sketch: APPROVED with rulings.
+    D1 COLLECTION: Option B, the explicit REGISTRY list in command_registry.rs. Reasons: no new dependency or link-section behaviour to debug; it survives the planned crate split (TASK-1540/1541), where linkme entries in a crate nothing references can be dropped; and one append-only line per command is a trivial conflict compared with today's 211-variant enum plus five match tables. Keep the list sorted by module, one entry per line. Add a test that every Command name in the help snapshot resolves to exactly one registry entry or one legacy enum arm, so a module that forgets its list line fails CI instead of silently disappearing.
+    D2 TASK-1539: sequenced AFTER this story. Once slice 5 lands, re-scope it to the shared Cli struct and global args only. Do not start TASK-1539 meanwhile.
+    CONDITIONS: (C1) slice 1 must also retarget the MCP surface parity check and docs/cli verify-interface-changes.py to the built command tree, and the golden help snapshot must cover every subcommand's --help, byte-identical per slice. (C2) Each slice lands in a declared quiet window: not during the current fire-mode wave; the advisor announces the window on the mailbox and any in-flight branch touching cli.rs merges main immediately after. (C3) Policy fields stay required with no Default impl; the every-name-has-a-policy test is mandatory from slice 1. (C4) Tests that build Command::X directly migrate in the slice that moves X, not in a separate PR.
+    Status set to approved. Implementation: one implementer seat, STRICT review per slice.
+  created_at: 2026-10-18T03:30:54.597419467Z
+  modified_at: 2026-10-18T03:30:54.597419467Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 filed_at:
   code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
   branch: main
