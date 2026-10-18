@@ -3,12 +3,12 @@ spec_id: TASK-1801
 agreed_id: TASK-1801
 title: Standalone reviewer hardening follow-ups from the TASK-1786 STRICT r2 review
 description: 'Non-blocking follow-ups from the #2704 review at 0069e89f84. (1) Test the rework call site: a rework_role_input(for_role, resolved) helper, or a handle_queue_rework-level test, so that swapping queue_cmd.rs:8623 to direct(for_role_resolved) fails a test. (2) A FIFO test that the pre-PR symlink_metadata path would fail. (3) Reject a symlinked .aida/review-verdicts dir (openat with O_DIRECTORY|O_NOFOLLOW) and st_nlink>1; move the remaining path-based verdict readers (review_verdict.rs ~1512, ~1605) to the handle-based helper; check that anchor_display is the PR''s backing spec. (4) Document that a direct ''aida session start --role reviewer'' no longer coexists with a live implementer lease (fails closed, intended). STRICT review.'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-17T05:51:51.467054223Z
+modified_at: 2026-10-18T07:55:09.157952517Z
 req_type: Task
 relationships:
 - rel_type:
@@ -57,6 +57,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a14e01-e3e5-7a42-b948-d08f97aa70b7
+  author: aida-orchestrator
+  timestamp: 2026-10-18T07:55:09.157977398Z
+  session_id: 01a14dffb365
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 30e4171bed78120cf272e1eef52649921f028294
   branch: main
@@ -65,3 +73,11 @@ filed_at:
   aida_build_sha: 30e4171bed
   vendor: claude
   session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Anchored handle-based reader is sound and covers every review_verdict.rs reader, but the merge/ship-authoritative verdict readers outside review_verdict.rs still read by path, so a symlinked .aida/review-verdicts dir (AC3) is still honored at ship and orchestrator phase-4; docs overclaim coverage.
+  recovery_hint: address the review findings, move TASK-1801 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-18T07:55:09.157952517Z
