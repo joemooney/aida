@@ -3,12 +3,12 @@ spec_id: STORY-1655
 agreed_id: STORY-1655
 title: 'Audited per-project solo-human review mode: a TTY-verified human may approve their own claim when [review] solo_human = true'
 description: 'Raised as design question A on BUG-1918 / PR #2485 (2026-10-10). BUG-1918 refuses a human who claimed a spec as its reviewer everywhere, which blocks genuinely solo projects. Add an explicit opt-in config key ([review] solo_human = true, default false). When it is on, a recorder that passes the human-at-TTY floor may approve their own claim, the receipt and verdict record solo_human=true, and doctor/awaiting surface that the project runs solo review. Tests pin both modes. Agents (non-TTY) are never covered.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-11T15:21:11.643956175Z
+modified_at: 2026-10-18T03:09:00.790130850Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -64,6 +64,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a14cfb-ebf6-71c0-9055-5b00edf91c54
+  author: aida-session-start
+  timestamp: 2026-10-18T03:09:00.790130252Z
+  session_id: 0b2c1533-d84b-4c4c-b9ce-8447cc0b7f3f
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
