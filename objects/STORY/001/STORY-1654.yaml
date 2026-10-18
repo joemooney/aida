@@ -23,12 +23,12 @@ description: |
   - An end-to-end relay run against a build that includes PR #2485: implementer subagent → separate reviewer process → `aida review record` → `aida pr ship` succeeds with no override. The same flow with an in-process reviewer subagent is refused as AuthorSession, which proves the gate is live.
   - The skills and relay prompts no longer instruct an in-process reviewer subagent.
   - The throughput cost is measured: wall-clock per review, before and after.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:50:54.979925474Z
-modified_at: 2026-10-16T21:17:42.886303043Z
+modified_at: 2026-10-18T02:03:17.806865399Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -286,6 +286,22 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a14cbf-c17f-70f2-866e-e7e3f41907e1
+  author: aida-auto-bump
+  timestamp: 2026-10-18T02:03:17.759537060Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a14cbf-c1ae-7321-9d16-880500b91671
+  timestamp: 2026-10-18T02:03:17.806848786Z
+  agent: advisor
+  commit_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
+  summary: 'All 3 STORY-1654 criteria met: templates route every review through a Bash-launched reviewer process, e2e and throughput recorded on the spec, CI green at 104757447a; 4 non-blocking doc findings'
+  punted:
+  - 'punted: STRICT round 1: the templates prescribe a reviewer flow that fails or hangs at this base. Still held per the 2026-10-15 sequencing ruling (BUG-2139, BUG-2149, BUG-2150, #2485 first)'
+  review_verdict: approved
 filed_at:
   code_sha: 7cad9ce231370e41649618c83aaa709db36cc17f
   branch: main
@@ -294,11 +310,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: d1ebc976-deb4-4770-b036-20a1547772ad
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 3 STORY-1654 criteria have recorded evidence (e2e neg+pos, templates/relay prompts, throughput), but the template launch commands miss two of the advisor''s documented e2e gotchas: no --vendor claude, and no recovery when a launch fails'
-  recovery_hint: address the review findings, move STORY-1654 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-16T21:17:42.886303043Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-18T02:03:17.759522392Z
+  completion_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
