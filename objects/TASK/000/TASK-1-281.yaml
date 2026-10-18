@@ -9,12 +9,12 @@ description: |-
 
   PR: #2583
   Reviewed sha: 55e32d5ea0e9e0e2b810fa919bc9cd4169b1a11b
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-13T12:19:11.082641743Z
-modified_at: 2026-10-18T16:51:30.262619089Z
+modified_at: 2026-10-18T16:51:37.133240613Z
 req_type: Task
 tags:
 - carried-from:BUG-1930
@@ -47,6 +47,14 @@ history:
   timestamp: 2026-10-18T16:51:31.565388963Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14fed-0a2d-74a2-9264-6a91bb8ece53
+  author: aida-pr-open
+  timestamp: 2026-10-18T16:51:37.133239757Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: abbb2552c52b6f7c7e0cd9aba059f58f1ffc86fc
   branch: main
