@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 fn lease_with_worktree(path: PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "abc123".into(),
         scope: "TASK-474".into(),
         slug: "task-474".into(),

@@ -158,6 +158,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     *force_claim,
                     use_pool,
                     !*launch,
+                    // trace:BUG-2169 | ai:claude
+                    mode.contained,
                 )
             };
             // BUG-1918: `--launch` claims FOR the agent it starts; without
@@ -2553,8 +2555,16 @@ pub(crate) fn agent_new_with_config(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2792,8 +2802,16 @@ pub(crate) fn agent_new_bg_dispatch(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -3377,7 +3395,15 @@ pub(crate) fn prepare_agent_launch(
     agent_type: &str,
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
-    prepare_agent_launch_with_cwd(project_root, role, spec, agent_type, custom_name, None)
+    prepare_agent_launch_with_cwd(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        None,
+        false,
+    )
 }
 
 // trace:BUG-2002 | ai:codex
@@ -3388,6 +3414,8 @@ fn prepare_agent_launch_with_cwd(
     agent_type: &str,
     custom_name: Option<String>,
     explicit_cwd: Option<&std::path::Path>,
+    // BUG-2169: the seat runs contained, so its tree may be a private clone.
+    contained_seat: bool,
 ) -> Result<AgentLaunchPlan> {
     // Persona launches never turn an optional `--spec` into ownership. They
     // stay in the project checkout and carry no lease/worktree.
@@ -3503,6 +3531,8 @@ fn prepare_agent_launch_with_cwd(
                     None,
                     /* self_claim */
                     false,
+                    // trace:BUG-2169 | ai:claude
+                    contained_seat,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);
