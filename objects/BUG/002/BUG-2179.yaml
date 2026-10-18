@@ -13,8 +13,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-18T20:18:21.688483900Z
+modified_at: 2026-10-18T20:19:39.214593602Z
 req_type: Bug
+comments:
+- id: 01a150ab-804e-7563-b3ff-4dbebed13b88
+  author: joe
+  content: 'Advisor 2026-10-18 13:19: consequence observed. #2741''s mandate ship scanned for ~10 min, then refused with ''exclusion store has uncommitted evidence'': concurrent store writers (schedule ticks, new specs) dirtied the store during the scan. Besides speeding up the scan, take the store_snapshot under with_store_write_lock (or retry the snapshot a bounded number of times while concurrent writers commit), so a live multi-agent store doesn''t fail every mandate ship. Keep it fail-closed after the bounded retries.'
+  created_at: 2026-10-18T20:19:39.214593602Z
+  modified_at: 2026-10-18T20:19:39.214593602Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 filed_at:
   code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
   branch: main
