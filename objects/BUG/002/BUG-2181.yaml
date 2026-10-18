@@ -8,8 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:06:36.673317847Z
-modified_at: 2026-10-18T22:06:36.673317847Z
+modified_at: 2026-10-18T22:07:21.104285033Z
 req_type: Bug
+tags:
+- forge
+- review-follow-up
+- security
+history:
+- id: 01a1510e-1cbd-7661-bf85-4b7b1342939d
+  author: joe
+  timestamp: 2026-10-18T22:07:21.789196802Z
+  session_id: 5381fff7-5e31-4278-9d6b-3302c4dba1c2
+  changes: []
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
