@@ -419,3 +419,81 @@ while the operator is away, and is not a defense against a malicious agent
 running as the same user. Accepted risk: a process that wraps itself in a
 pseudo-terminal passes the terminal check, as it does for `aida role enter`.
 <!-- trace:STORY-1698 | ai:claude -->
+
+#### Drive mandates
+
+**One line** — `aida mandate start --drive` makes the system drive the open
+list while you are away: the advisor seat may ship held PRs, sign off sketches
+and dispatch fixers, and a 15-minute tick routes every stalled lane.
+
+**What it covers.** `--drive` implies `--ship-held` and covers sensitive specs
+unless you pass `--exclude-supervised`. Everything above still applies: the
+same human-only start and stop, the 24h cap, no extension, sticky exclusion,
+and specs tagged `operator-only` (or in `operator` / `decide` mode) stay
+human-only.
+
+**The tick.** The `mandate-drive` schedule job runs `aida fleet drive --tick`
+every 15 minutes (with no drive mandate it does nothing). The tick runs no
+model and holds no seat grant. It ignores a grant, role or purpose in its
+environment and removes them from anything it starts. For each relay run and
+each held PR:
+
+- **Substrate actions it does itself:** expiring leases of dead sessions,
+  notifying you, and ledgering every decision.
+- **Seat actions it routes to the advisor:** shipping an approved held PR,
+  signing off the sketch a blocked relay waits on, answering a blocked relay's
+  question, and re-dispatching a crashed, capped or slot-starved run. Each one
+  arrives once as a due item in `aida awaiting` and an advisor mail carrying
+  the exact command.
+- **What it sends to you:** an advisor-seat run, a run stopped on API credits,
+  and anything behind a human gate.
+
+It never ships, restarts a relay or clears a hold itself. Before each action
+it re-reads the mandate, so a stop or an expiry takes effect mid-tick.
+
+**No advisor.** If no advisor seat has been active in the last 30 minutes, you
+get one notice per absence. Seat actions wait in `aida awaiting` for the next
+advisor; the substrate actions continue.
+
+**Human gates (opt-in).** List the actions that stay human:
+
+```toml
+[mandate.human_gates]
+ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
+```
+
+- The list is empty by default. An unknown op is a configuration error.
+- It is read from `origin/main:.aida/config.toml` and from
+  `~/.aida/config.toml`, never from the working tree. Each layer can only add
+  gates, so a branch cannot remove one.
+- If the committed layer cannot be read, every action is gated.
+- A PR that changes `.aida/config.toml` or the mandate code
+  (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
+  `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`) never
+  ships under a mandate.
+- `[mandate.drive] max_actions_per_tick` (default 10) is honoured from
+  `~/.aida/config.toml` only.
+- Drive never clears holds; `hold-clear` exists so you can state that
+  explicitly.
+
+**Where you see it.**
+
+- `aida mandate status --line` prints
+  `MANDATE drive · 5h40m left · by joe · <reason> · gates: none`.
+- Every session prints that line at start and on every turn.
+- `aida session handoff --show` prints it first, read live, never copied into
+  the handoff.
+- Each seat sees one line when the mandate expires or is stopped.
+- `aida mandate status` lists the action counts and the last 10 actions, and
+  `aida digest` has a "Mandate-driven" section.
+
+**Before you leave.** `aida mandate start --drive` and
+`aida doctor check mandate-drive` warn in these cases:
+
+- no schedule driver is installed;
+- no enabled job runs the tick;
+- the driver would run as a different user than the one who started the
+  mandate. The fix is `AIDA_USER=<you>` in the driver's environment.
+
+`aida fleet drive` (without `--tick`) previews what a tick would route.
+<!-- trace:STORY-1700 | ai:claude -->

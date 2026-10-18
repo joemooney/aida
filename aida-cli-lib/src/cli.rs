@@ -211,9 +211,19 @@ pub enum MandateAction {
     /// forges files in the AIDA home is outside the threat model (the same
     /// as session grants).
     Start {
-        /// Cover shipping held PRs (the only scope today; required).
+        /// Cover shipping held PRs (required unless --drive).
         #[clap(long)]
         ship_held: bool,
+        /// A DRIVE mandate (ADR-77): also covers advisor signoff of sketches
+        /// and dispatching fixers, and turns on the 15-minute drive tick that
+        /// routes every stalled lane. Implies --ship-held and covers sensitive
+        /// specs unless --exclude-supervised.
+        // trace:STORY-1700 | ai:claude
+        #[clap(long)]
+        drive: bool,
+        /// With --drive: keep sensitive specs human-only.
+        #[clap(long, requires = "drive", conflicts_with = "include_supervised")]
+        exclude_supervised: bool,
         /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
         /// A mandate cannot be extended; stop it and start another.
         #[clap(long)]
@@ -231,6 +241,27 @@ pub enum MandateAction {
     /// Show the current mandate, if any.
     Status {
         /// Print JSON.
+        #[clap(long)]
+        json: bool,
+        /// Print one line while a mandate is active, nothing otherwise.
+        // trace:STORY-1700 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        line: bool,
+    },
+}
+
+/// `aida fleet` — fleet operations.
+// trace:STORY-1700 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum FleetAction {
+    /// The drive-mandate tick (scheduled every 15m while a drive mandate is
+    /// active). Without `--tick`, shows what a tick would route, changing
+    /// nothing.
+    Drive {
+        /// Run one tick: route stalled lanes and ledger every action.
+        #[clap(long)]
+        tick: bool,
+        /// Print the tick report as JSON.
         #[clap(long)]
         json: bool,
     },
@@ -11257,6 +11288,18 @@ pub enum Command {
     Mandate {
         #[clap(subcommand)]
         action: MandateAction,
+    },
+
+    /// Fleet operations over relay runs and lanes.
+    ///
+    /// `drive --tick` runs one drive-mandate tick: it classifies every relay
+    /// lane and routes each stalled one's next action to the advisor seat or
+    /// the operator, under an active drive mandate only. It holds no seat
+    /// grant and runs no model.
+    // trace:STORY-1700 | ai:claude
+    Fleet {
+        #[clap(subcommand)]
+        action: FleetAction,
     },
 
     /// Stream a running session's log — found by id, not by file path.

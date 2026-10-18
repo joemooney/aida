@@ -1097,6 +1097,43 @@ pub(crate) fn emit_notice_time_line() {
             println!("{line}");
         }
     }
+    // STORY-1700: the mandate line, every turn for every seat, plus one line
+    // per seat when it expires or is stopped. The grant's turn stamp lets the
+    // drive tick tell whether an advisor seat is live. Fail-open.
+    // trace:STORY-1700 | ai:claude
+    if let Some(grant) = std::env::var(crate::seat_authority::GRANT_ENV)
+        .ok()
+        .filter(|g| uuid::Uuid::parse_str(g.trim()).is_ok())
+    {
+        presence::stamp_turn_clock(
+            Some(&crate::mandate_drive::grant_turn_key(grant.trim())),
+            false,
+            now.with_timezone(&chrono::Utc),
+        );
+    }
+    if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc)) {
+        println!("{line}");
+    }
+}
+
+/// STORY-1700: the per-turn mandate line for this seat, if any. The gates
+/// are read only while a mandate is active (one `git show`).
+// trace:STORY-1700 | ai:claude
+fn mandate_notice_line(now: chrono::DateTime<chrono::Utc>) -> Option<String> {
+    let dir = crate::mandate::mandate_dir().ok()?;
+    let state = crate::mandate::current_state();
+    let seat = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| canonical_role_name(&s))
+        .unwrap_or_else(|| "default".to_string());
+    let gates = match &state {
+        crate::mandate::MandateState::Active(_) => {
+            crate::mandate_gates::describe(crate::find_main_worktree_root().ok().as_deref())
+        }
+        _ => String::new(),
+    };
+    crate::mandate::notice_line(&dir, &state, now, &seat, &gates)
 }
 
 /// Enforce the per-turn notice's fail-open latency contract across the whole

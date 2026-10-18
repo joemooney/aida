@@ -1599,6 +1599,13 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "relay-stall",
     ),
+    // STORY-1700: an active drive mandate the drive tick would not act on
+    // (no schedule driver, or a driver resolving another principal).
+    // trace:STORY-1700 | ai:claude
+    (
+        &["mandate-drive", "drive-mandate", "mandate"],
+        "mandate-drive",
+    ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
     // a "Quick safety check" modal, so a fresh per-spec worktree strands

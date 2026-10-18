@@ -2452,21 +2452,25 @@ pub(crate) fn pr_ship_handler(
         )
     };
     let mut mandate_cover = mandate_cover_now();
-    let mandate_refusal_note =
-        |cover: &std::result::Result<MandateCover, crate::mandate::MandateRefusal>| match cover {
-            Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
-                let message = r.message(pr_number);
-                crate::events::record_gate_held(
-                    &hold_root,
-                    crate::events::GATE_MANDATE_SHIP,
-                    None,
-                    Some(pr_number),
-                    &message,
-                );
-                format!(" {message}.")
-            }
-            _ => String::new(),
-        };
+    let mandate_refusal_note = |cover: &std::result::Result<
+        MandateCover,
+        crate::mandate::MandateRefusal,
+    >| match cover {
+        Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
+            let message = r.message(pr_number);
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_MANDATE_SHIP,
+                None,
+                Some(pr_number),
+                &message,
+            );
+            // trace:STORY-1700 | ai:claude
+            crate::mandate_drive::emit_session_ship_refusal(&main_worktree, pr_number, &message);
+            format!(" {message}.")
+        }
+        _ => String::new(),
+    };
 
     // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
     // without a live drive and whatever its reason text names. Checked HERE —
@@ -3264,6 +3268,17 @@ pub(crate) fn pr_ship_handler(
                 &StepOutcome::Ok,
             );
             merged_this_run = true;
+        }
+        // STORY-1700: a ship under a mandate is a mandate-driven action.
+        // trace:STORY-1700 | ai:claude
+        if let (true, Some(cover)) = (merged_this_run, &mandate_release) {
+            crate::mandate_drive::emit_session_ship(
+                &main_worktree,
+                &cover.id,
+                pr_number,
+                crate::mandate_drive::Outcome::Done,
+                None,
+            );
         }
     }
 

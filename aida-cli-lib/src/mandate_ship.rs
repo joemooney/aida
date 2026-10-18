@@ -97,6 +97,9 @@ pub(crate) fn mandate_ship_cover(
         &info.head_oid,
     )
     .map_err(&unreadable)?;
+    // STORY-1700 (R1): the files the pinned diff changes, for the gate check.
+    // trace:STORY-1700 | ai:claude
+    let changed_paths: Vec<String> = trace_evidence.paths.iter().cloned().collect();
     let store_root = crate::store_sync::detect_distributed_store_from(project_root)
         .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
     let store_snapshot = crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)?;
@@ -172,6 +175,8 @@ pub(crate) fn mandate_ship_cover(
         override_stale_approval,
         ledger: &ledger,
         hold: &hold,
+        changed_paths: Some(&changed_paths),
+        ship_gate: crate::mandate_gates::ship_gate(main_worktree),
     })?;
     Ok(MandateCover {
         id,

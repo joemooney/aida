@@ -20,6 +20,10 @@ pub(crate) struct Evidence {
     /// Paths for which an item could not safely be attributed. Full-file
     /// union is the conservative fallback, never an empty evidence set.
     pub full_file_fallbacks: BTreeSet<String>,
+    /// STORY-1700 (R1): every path the pinned diff changes (both names of a
+    /// rename), for the mandate's gate-touching check.
+    // trace:STORY-1700 | ai:claude
+    pub paths: BTreeSet<String>,
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
@@ -140,6 +144,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         );
         let path = std::str::from_utf8(fields.next().context("missing raw diff path")?)
             .context("non-UTF8 changed path")?;
+        out.paths.insert(path.to_owned());
         let mut sides = Vec::new();
         for (mode, id) in [(words[0], words[2]), (words[1], words[3])] {
             ensure!(oid(id), "invalid blob ID for {path}");

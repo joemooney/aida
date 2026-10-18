@@ -967,9 +967,25 @@ pub(crate) fn session_handoff_seat(
     // trace:STORY-1693 | ai:claude
     let standing = seat_rotation::render_standing_orders(&project_root, &seat)?;
     let handoff = seat_rotation::read_latest_handoff(&project_root, &seat)?;
+    // STORY-1700: the active mandate, read live, prints first.
+    // trace:STORY-1700 | ai:claude
+    let state = crate::mandate::current_state();
+    let mandate = match &state {
+        crate::mandate::MandateState::Active(_) => crate::mandate::status_line(
+            &state,
+            chrono::Utc::now(),
+            &crate::mandate_gates::describe(Some(&project_root)),
+        ),
+        _ => None,
+    };
     print!(
         "{}",
-        seat_rotation::compose_handoff_show(standing.as_deref(), handoff.as_deref(), &seat)
+        seat_rotation::compose_handoff_show_with_mandate(
+            mandate.as_deref(),
+            standing.as_deref(),
+            handoff.as_deref(),
+            &seat
+        )
     );
     Ok(())
 }

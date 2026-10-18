@@ -2431,6 +2431,12 @@ pub(crate) fn run() -> Result<()> {
         return crate::mandate::handle_mandate(action);
     }
 
+    // STORY-1700: the drive tick reads the AIDA home and the run dirs and
+    // opens the store itself only for spec lookups. trace:STORY-1700 | ai:claude
+    if let Command::Fleet { action } = &cli.command {
+        return crate::mandate_drive::handle_fleet(action);
+    }
+
     // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
     // spec / drain id to the ONE log file that work streams into and tails it.
     // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
@@ -4181,6 +4187,10 @@ pub(crate) fn run() -> Result<()> {
         // trace:STORY-1698 | ai:claude
         Command::Mandate { .. } => {
             unreachable!("mandate is dispatched before storage init")
+        }
+        // trace:STORY-1700 | ai:claude
+        Command::Fleet { .. } => {
+            unreachable!("fleet is dispatched before storage init")
         }
         Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
         Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),

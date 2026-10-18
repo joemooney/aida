@@ -35,6 +35,8 @@ fn active(include_supervised: bool) -> Mandate {
         expires_at: now() + Duration::hours(7),
         revoked_at: None,
         revoked_by: None,
+        scopes: Default::default(),
+        kind: None,
     }
 }
 
@@ -148,6 +150,8 @@ impl Case {
             override_stale_approval: self.override_stale,
             ledger: &self.ledger,
             hold: &self.hold,
+            changed_paths: Some(&[]),
+            ship_gate: None,
         })
     }
 }
