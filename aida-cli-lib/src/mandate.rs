@@ -731,11 +731,66 @@ pub(crate) fn store_history_versions_optional(
     Ok(out)
 }
 
+/// TASK-1800: the stored object IDs whose YAML carried `id` as its `spec_id`
+/// or `agreed_id` in any version on any ref, other than `id` itself. This is
+/// how a DELETED spec named by its agreed_id (stored under a different
+/// spec_id path) is still found and judged. `Err` when the history cannot be
+/// searched; the caller refuses rather than treating the ID as dangling.
+// trace:TASK-1800 | ai:claude
+pub(crate) fn store_history_alias_ids(
+    store_root: &Path,
+    id: &str,
+) -> std::result::Result<Vec<String>, String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!("cannot search store history for {id:?}"));
+    }
+    let pattern = format!("^(spec_id|agreed_id): *['\"]?{id}['\"]? *$");
+    let out = aida_core::git_ops::host_git_command(store_root)
+        .args([
+            "log",
+            "--all",
+            "--format=",
+            "--name-only",
+            "--regexp-ignore-case",
+            &format!("-G{pattern}"),
+            "--",
+            "objects/",
+        ])
+        .output()
+        .map_err(|e| format!("git failed to run: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "cannot search store history for {id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let mut ids: Vec<String> = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let Some(stem) = Path::new(line.trim())
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".yaml"))
+        else {
+            continue;
+        };
+        let stem = stem.to_ascii_uppercase();
+        if !stem.eq_ignore_ascii_case(id) && !ids.contains(&stem) {
+            ids.push(stem);
+        }
+    }
+    Ok(ids)
+}
+
 /// STORY-1698: every version of `spec_id` in the store's git history (all
 /// refs, so a rewritten local branch still shows what the remote saw), each
 /// expanded by its recorded field changes. `Err` when the history cannot be
 /// read or holds no version at all — the caller refuses.
 // trace:STORY-1698 | ai:claude
+#[cfg(test)]
 pub(crate) fn store_history_versions(
     store_root: &Path,
     spec_id: &str,

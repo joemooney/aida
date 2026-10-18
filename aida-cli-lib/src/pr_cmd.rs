@@ -1878,9 +1878,27 @@ pub(crate) fn mandate_ship_cover(
                 }
             }
         }
+        // trace:TASK-1800 | ai:claude
+        // A deleted spec has no current record to name its aliases, so find
+        // every object that ever carried this ID in store history. A history
+        // that cannot be searched refuses below; it never makes the ID dangling.
+        let alias_search = if req.is_none() {
+            crate::mandate::store_history_alias_ids(&store_root, id)
+        } else {
+            Ok(Vec::new())
+        };
+        for alias in alias_search.iter().flatten() {
+            if !aliases.iter().any(|a| a.eq_ignore_ascii_case(alias)) {
+                aliases.push(alias.clone());
+            }
+            if !history_keys.iter().any(|k| k.eq_ignore_ascii_case(alias)) {
+                history_keys.push(alias.clone());
+            }
+        }
         // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
         // across the ID and any resolved alias object path.
         let history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
+            alias_search?;
             let mut all_versions = Vec::new();
             for key in &history_keys {
                 let versions = crate::mandate::store_history_versions_optional(&store_root, key)?;
