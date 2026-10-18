@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T12:59:44.323804571Z
+modified_at: 2026-10-18T13:00:50.164588351Z
 req_type: Story
 tags:
 - docs:impacted
@@ -98,6 +98,21 @@ comments:
     SCHEDULE: slice 1 is developed in an isolated worktree from about 2026-10-18 03:30 -07:00. Landing still waits for a C2 quiet window that the advisor announces.
   created_at: 2026-10-18T06:33:03.884876765Z
   modified_at: 2026-10-18T06:33:03.884876765Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+- id: 01a14f19-c074-7e52-a271-6ca1ea52ee6e
+  author: joe
+  content: |
+    SLICE 1 IMPLEMENTED: draft PR #2727 (branch story-1728-work, worktree ~/ai/aida-story1728). Not merged: it waits for advisor ack of A1–A3 and a C2 quiet window.
+
+    Done: registry + GlobalArgs (A2) + built_command/parse_from/try_parse_from as the only production tree routes (A3, with a source guard) + ratchet at 155 (A1) + golden help snapshot recorded from the untouched CLI (byte-identical after migration) + one-owner/anchor/sort tests + a shadowing regression + verify-interface-changes.py retargeted (C1). away, home and _bg-fetch are migrated. Full aida-cli-lib suite passes (9090/0/3); check-ci-fast passes (30/30); the worktree binary's help output and exit codes match the live binary.
+
+    DESIGN ADDITION needing a ruling: CommandReg.help_after anchors each command after a named predecessor, so help and catalog order stay unchanged while REGISTRY stays sorted by name. That makes list order meaningless, which affects the open ordering question.
+
+    ACCEPTANCE CORRECTIONS proposed: (5) Windows CI is impossible under ADR-72 (Linux-only); drop it. The legacy count was 158, not ~211.
+
+    SPIN-OFF: BUG-2175, a stale `aida graph <ID> --tree` spelling in the queue list --epic help, surfaced by the snapshot.
+  created_at: 2026-10-18T13:00:50.164588351Z
+  modified_at: 2026-10-18T13:00:50.164588351Z
   session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
