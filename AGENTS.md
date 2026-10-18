@@ -332,6 +332,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
 
+## Child launch containment
+
+Headless and interactive reviewer/resume launches strictly inherit
+`AIDA_CONTAINED`, even when a caller passes `contained=false`. Compete pins
+`dontAsk` and validates all vendors before any arm or artifact. Arms use their
+child worktree; judges use the project root with the same write boundary.
+Burndown and intake share the headless Claude posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
+
 ## Cache read behavior
 
 Single-spec `show` uses a zero refresh-wait budget on every CLI format,
