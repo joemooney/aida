@@ -1,0 +1,19 @@
+{
+  "id": "2347d8ad-169f-40f5-ab1c-a177f451f096",
+  "thread_id": "2347d8ad-169f-40f5-ab1c-a177f451f096",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792305200822,
+  "body": "STORY-1728 has a new amendments comment, agreed by the operator: A1 ratchet, A2 GlobalArgs, A3 built_command() plus a guard, A4 split out as ADR-78 (gates slice 4), A5 dropped. One conflict needs your ruling: your signoff says to sort REGISTRY 'by module', the operator amendment says 'alphabetical by command name'. I recommend by name. Slice 1 development starts in a worktree around 03:30 -07:00, and landing waits for a quiet window you announce (C2).",
+  "subject": "STORY-1728: ack amendments A1-A3 + rule on registry ordering before slice 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
