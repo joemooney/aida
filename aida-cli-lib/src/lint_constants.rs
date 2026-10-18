@@ -1,12 +1,10 @@
 //! `aida lint constants` — numeric literals in traced Rust code that the
 //! owning spec never explains (TASK-1785, slice 2 of STORY-1672).
 //!
-//! Traced regions follow the existing trace conventions: a module-level
-//! `//!` anchor covers the whole file (as in `aida trace coverage`), and a
-//! marker inside an item or in its leading comment/blank prefix covers that
-//! item (as in the mandate trace evidence), where items are functions,
-//! `impl` blocks (so an impl-level marker covers its methods), consts and
-//! statics. Every integer/float literal inside a traced region is checked
+//! Traced regions are the shared `trace_regions` rule (file `//!` anchors,
+//! impl-level markers, and item-level markers inside or in the leading
+//! prefix), the same one whole-tree `aida trace coverage` uses. Every
+//! integer/float literal inside a traced region is checked
 //! against the owning specs: it is explained when its normalized value
 //! appears in a spec's description or in a decision linked to that spec.
 //! Only 0, 1 and literals on a line carrying `// arbitrary` are exempt.
@@ -18,7 +16,6 @@ use std::sync::LazyLock;
 
 use anyhow::Result;
 use serde::Serialize;
-use syn::{spanned::Spanned, visit::Visit};
 
 use crate::cli::LintConstantsFailOn;
 use crate::{find_project_root, load_store_for_lookup};
@@ -158,60 +155,6 @@ fn is_arbitrary_marker(comment: &str) -> bool {
     ARBITRARY_RE.is_match(comment)
 }
 
-/// Line ranges (0-based, end-exclusive) of the items that can be traced
-/// regions: functions, impl blocks, methods, trait default methods, consts
-/// and statics. The second field ends the lines whose markers the item owns:
-/// its whole span, except an impl owns only markers up to its `{` line, so
-/// one method's marker never leaks to its siblings.
-#[derive(Default)]
-struct Regions(Vec<(std::ops::Range<usize>, usize)>);
-
-impl Regions {
-    fn push(&mut self, span: proc_macro2::Span) {
-        self.0.push((
-            span.start().line.saturating_sub(1)..span.end().line,
-            span.end().line,
-        ));
-    }
-}
-
-impl<'ast> Visit<'ast> for Regions {
-    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
-        self.push(node.span());
-        syn::visit::visit_item_fn(self, node);
-    }
-    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
-        let span = node.span();
-        self.0.push((
-            span.start().line.saturating_sub(1)..span.end().line,
-            node.brace_token.span.open().start().line,
-        ));
-        syn::visit::visit_item_impl(self, node);
-    }
-    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
-        self.push(node.span());
-        syn::visit::visit_impl_item_fn(self, node);
-    }
-    fn visit_trait_item_fn(&mut self, node: &'ast syn::TraitItemFn) {
-        if node.default.is_some() {
-            self.push(node.span());
-        }
-        syn::visit::visit_trait_item_fn(self, node);
-    }
-    fn visit_item_const(&mut self, node: &'ast syn::ItemConst) {
-        self.push(node.span());
-        syn::visit::visit_item_const(self, node);
-    }
-    fn visit_impl_item_const(&mut self, node: &'ast syn::ImplItemConst) {
-        self.push(node.span());
-        syn::visit::visit_impl_item_const(self, node);
-    }
-    fn visit_item_static(&mut self, node: &'ast syn::ItemStatic) {
-        self.push(node.span());
-        syn::visit::visit_item_static(self, node);
-    }
-}
-
 /// Collect every literal token, macro bodies included (syn does not parse
 /// macro arguments, so walk the raw token stream).
 fn literal_tokens(stream: proc_macro2::TokenStream, out: &mut Vec<proc_macro2::Literal>) {
@@ -225,47 +168,11 @@ fn literal_tokens(stream: proc_macro2::TokenStream, out: &mut Vec<proc_macro2::L
 }
 
 /// The PURE core: every numeric literal inside a traced region of one Rust
-/// source text, with its owning specs and exemption. `None` when the text
-/// does not parse as a Rust file.
+/// source text, with its owning specs and exemption. Regions come from the
+/// shared `trace_regions` rule. `None` when the text does not parse.
 pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
-    let file = syn::parse_file(text).ok()?;
-    let comments = crate::mandate_traces::rust_comments(text)?;
-    let lines: Vec<&str> = text.lines().collect();
-    let anchor = crate::trace::coverage_anchor_re();
-    let ids = |c: &str| -> Vec<String> {
-        anchor
-            .captures_iter(c)
-            .map(|cap| cap[1].to_ascii_uppercase())
-            .collect()
-    };
-
-    // A module-level `//!` anchor covers every line of the file, the
-    // FileAnchor rule of `aida trace coverage`.
-    let file_specs: BTreeSet<String> = comments
-        .iter()
-        .zip(&lines)
-        .filter(|(_, l)| l.trim_start().starts_with("//!"))
-        .flat_map(|((_, c), _)| ids(c))
-        .collect();
-
-    let mut regions = Regions::default();
-    regions.visit_file(&file);
-    // Each item owns the markers in its span plus its leading comment/blank
-    // prefix, attached exactly as the mandate trace evidence attaches it.
-    let owned: Vec<(std::ops::Range<usize>, BTreeSet<String>)> = regions
-        .0
-        .into_iter()
-        .filter_map(|(range, marker_end)| {
-            let start =
-                crate::mandate_traces::leading_comment_start(range.start, &lines, &comments);
-            let specs: BTreeSet<String> = (start..marker_end)
-                .filter_map(|i| comments.get(i))
-                .flat_map(|(_, c)| ids(c))
-                .collect();
-            (!specs.is_empty()).then_some((range, specs))
-        })
-        .collect();
-    if owned.is_empty() && file_specs.is_empty() {
+    let traced = crate::trace_regions::traced_file(text, |_| true)?;
+    if traced.file_specs.is_empty() && traced.items.iter().all(|i| i.specs.is_empty()) {
         return Some(Vec::new());
     }
 
@@ -274,12 +181,7 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
     let mut out = Vec::new();
     for token in tokens {
         let line0 = token.span().start().line.saturating_sub(1);
-        let mut specs = file_specs.clone();
-        for (r, s) in &owned {
-            if r.contains(&line0) {
-                specs.extend(s.iter().cloned());
-            }
-        }
+        let specs = traced.specs_at(line0);
         if specs.is_empty() {
             continue;
         }
@@ -287,7 +189,8 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
         let Some(value) = normalize_rust_literal(&lit) else {
             continue;
         };
-        let marked = comments
+        let marked = traced
+            .comments
             .get(line0)
             .is_some_and(|(_, c)| is_arbitrary_marker(c));
         out.push(TracedLiteral {

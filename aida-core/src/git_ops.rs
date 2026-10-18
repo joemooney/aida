@@ -957,11 +957,27 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     Ok(sha)
 }
 
+mod evidence;
+pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
+
 /// Pull with rebase from remote.
+///
+/// On an AIDA store the rebase runs under the store write lock behind the
+/// hypothesis evidence boundary ([`evidence`]): incompatible evidence refuses
+/// before Git runs, and success waits for the resulting graph to validate.
 pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     // trace:TASK-1604 | ai:codex
     let target = fetch_rebase_target(repo, remote, branch)?;
-    let result = git(repo, &["rebase", "--end-of-options", &target])?;
+    // trace:BUG-2162 | ai:claude
+    evidence::with_sync_lock(repo, || {
+        let gate = evidence::preflight(repo, &target)?;
+        rebase_onto(repo, &target)?;
+        gate.map_or(Ok(()), |gate| gate.finalize(repo))
+    })
+}
+
+fn rebase_onto(repo: &Path, target: &str) -> Result<()> {
+    let result = git(repo, &["rebase", "--end-of-options", target])?;
     if !result.success {
         // A failed pull may have started a rebase and detached HEAD.  Never
         // leave the managed store in that state: later writers could commit
@@ -1008,11 +1024,29 @@ pub enum StorePullOutcome {
 /// parse/merge fails, the rebase is aborted and the function returns an Err —
 /// the caller falls back to the manual-conflict path. We never force-resolve
 /// unknown files and never corrupt the store. trace:STORY-641 | ai:claude
+///
+/// Every success exit, clean or after resolved conflicts, passes the same
+/// hypothesis evidence boundary as [`pull_rebase`]. `Clean` means no textual
+/// conflict; it may include a descendant commit that writes hypothesis locks
+/// the combined graph first established.
 #[cfg(feature = "native")]
 pub fn pull_rebase_auto_merge(repo: &Path, remote: &str, branch: &str) -> Result<StorePullOutcome> {
     // trace:TASK-1604 | ai:codex
     let target = fetch_rebase_target(repo, remote, branch)?;
-    let result = git(repo, &["rebase", "--end-of-options", &target])?;
+    // trace:BUG-2162 | ai:claude
+    evidence::with_sync_lock(repo, || {
+        let gate = evidence::preflight(repo, &target)?;
+        let outcome = rebase_auto_merge_onto(repo, &target)?;
+        if let Some(gate) = gate {
+            gate.finalize(repo)?;
+        }
+        Ok(outcome)
+    })
+}
+
+#[cfg(feature = "native")]
+fn rebase_auto_merge_onto(repo: &Path, target: &str) -> Result<StorePullOutcome> {
+    let result = git(repo, &["rebase", "--end-of-options", target])?;
     if result.success {
         return Ok(StorePullOutcome::Clean);
     }
@@ -1530,8 +1564,59 @@ fn merge_in_progress(repo: &Path) -> bool {
 /// aborts the merge (`git merge --abort`) and returns Err — the caller parks
 /// and surfaces; we never force-resolve unknown files.
 // trace:BUG-714 | ai:claude
+///
+/// The merge passes the hypothesis evidence boundary of [`pull_rebase`],
+/// with `ref_` resolved to one commit before anything reads it.
 #[cfg(feature = "native")]
 pub fn merge_union_auto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullOutcome> {
+    // trace:BUG-2162 | ai:claude
+    evidence::with_sync_lock(repo, || {
+        let target = resolve_commit(repo, ref_)?;
+        let gate = evidence::preflight(repo, &target)?;
+        let outcome = merge_union_onto(repo, &target, message)?;
+        if let Some(gate) = gate {
+            gate.finalize(repo)?;
+        }
+        Ok(outcome)
+    })
+}
+
+/// Fast-forward the store to `ref_` behind the hypothesis evidence boundary,
+/// the reconcile path's counterpart of [`merge_union_auto`]. A lock the
+/// combined graph establishes lands as a descendant commit of `ref_`.
+// trace:BUG-2162 | ai:claude
+#[cfg(feature = "native")]
+pub fn fast_forward_store(repo: &Path, ref_: &str) -> Result<()> {
+    evidence::with_sync_lock(repo, || {
+        let target = resolve_commit(repo, ref_)?;
+        let gate = evidence::preflight(repo, &target)?;
+        let result = git(repo, &["merge", "--ff-only", "--end-of-options", &target])?;
+        anyhow::ensure!(
+            result.success,
+            "fast-forward to {target} failed: {}",
+            result.stderr
+        );
+        gate.map_or(Ok(()), |gate| gate.finalize(repo))
+    })
+}
+
+fn resolve_commit(repo: &Path, ref_: &str) -> Result<String> {
+    reject_option_like("ref", ref_)?;
+    let resolved = git(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{ref_}^{{commit}}"),
+        ],
+    )?;
+    anyhow::ensure!(resolved.success, "cannot resolve {ref_} to a commit");
+    Ok(resolved.stdout)
+}
+
+#[cfg(feature = "native")]
+fn merge_union_onto(repo: &Path, ref_: &str, message: &str) -> Result<StorePullOutcome> {
     // trace:BUG-1622 | ai:claude
     let result = git(
         repo,
@@ -1752,6 +1837,13 @@ pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     // own parser. trace:BUG-1622 trace:BUG-1624 | ai:claude
     reject_option_like("remote", remote)?;
     reject_option_like("branch", branch)?;
+    // A bare pull would bypass the hypothesis evidence boundary.
+    // trace:BUG-2162 | ai:claude
+    anyhow::ensure!(
+        !is_store_tree(repo),
+        "refusing a bare git pull of the AIDA store {}; use pull_rebase, which checks hypothesis evidence",
+        repo.display()
+    );
     let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);

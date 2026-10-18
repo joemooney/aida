@@ -185,6 +185,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 - `sweep --dry-run` — preview which commits reference specs before writing — the safe first pass on a long history.
 - `gate --range` / `coverage --range` — the commit range to check; defaults to "the commits this branch adds." The flag is how a CI job scopes to a PR's range explicitly.
 - `coverage --block` — flip coverage from report-only (CI stays green) to enforcing (CI fails on any uncovered coverable hunk). Report-only first while you tune exemptions; `--block` once the team's ready to require traces.
+- `coverage --all` / `coverage --path <PATH>` — whole-tree mode instead of a diff. It's a gap detector: for each Rust file it lists the functions no live `trace:` marker claims, plus a traced/total count. A function counts as traced when a marker sits inside it, in the comments and blank lines leading up to it, above its `impl` block, or in a module-level `//!` anchor, the same rules `aida lint constants` uses. An untraced function is behavior no spec claims, and it's the cheapest place to look for unspecified semantics. The test, generated and vendored file exemptions still apply. Report-only; `--fail-on uncovered` turns any untraced function into a non-zero exit. `--json` emits per-file counts and names.
 - `check --block` — flip the rot check from report-only (exit 0) to enforcing (exit non-zero on any *dead* trace link). `check` treats a deleted/renumbered target (`unknown`) or a rejected target as hard rot that `--block` fails on; a marker pointing at an *archived* spec still resolves, so it's reported as a soft signal but never blocks.
 - `check --json` — machine-readable rot report (`total_traces`, `resolved`, `dangling`, `dangling_unknown`/`dangling_rejected`, `archived`, `rot_rate_pct`) for dashboards or a CI annotation step.
 
@@ -251,7 +252,7 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Chains with** — `lint <ID>` → `edit --description` to apply any suggestion worth taking → ready for `queue add`.
 
-**`aida lint constants` — unexplained numbers in traced code.** The source-side counterpart: it scans Rust functions and `const`/`static` items that carry a `trace:` marker (inside them or in the comment block directly above) and reports every numeric literal whose value the owning spec never mentions — neither in its description nor in a decision linked to it. Values compare by number, so `0x0F`, `1_5u64` and `15.0` all match a spec that says "15". `0` and `1` are exempt; silence any other deliberate choice with a trailing `// arbitrary` (or `// arbitrary: <reason>`) comment on the literal's line. Test, generated and vendored files are skipped, as in `aida trace coverage`. Each finding is a prompt to either record the value as a fact in the spec or mark it arbitrary.
+**`aida lint constants` — unexplained numbers in traced code.** The source-side counterpart: it scans traced Rust code and reports every numeric literal whose value the owning spec never mentions — neither in its description nor in a decision linked to it. Code is traced under the same rule as `trace coverage --all`: a module-level `//!` anchor covers the file, a marker on an `impl` covers its methods, and a marker inside a function, const or static, or in the comments and blank lines leading up to it, covers that item. A trace id that matches no spec is reported as unresolved. Values compare by number, so `0x0F`, `1_5u64` and `15.0` all match a spec that says "15". `0` and `1` are exempt; silence any other deliberate choice with a trailing `// arbitrary` (or `// arbitrary: <reason>`) comment on the literal's line. Test, generated and vendored files are skipped, as in `aida trace coverage`. Each finding is a prompt to either record the value as a fact in the spec or mark it arbitrary.
 - `--path <PATH>` — scan one file or directory instead of the whole project.
 - `--json` — machine output naming file, line, literal, value and owning spec.
 - `--fail-on unexplained` — exit non-zero when anything is reported. Without it the command is report-only and always exits 0; it never edits the store.
@@ -320,14 +321,27 @@ hide it. There is no unlock flag. Untagged legacy rows keep their normal edit
 behavior. The archived SQLite/Postgres backends and the YAML backend do not
 store or enforce this lock; use the canonical git store for pre-registration.
 
-If a clean text merge rewrites a locked description, the hash no longer
-matches. That row then refuses every change except one that restores the
-frozen text, for example `aida edit <ID>` with the original description from
-store history. Other rows stay writable. Binaries older than this feature do
-not know `hypothesis_lock` and drop it when they rewrite the row, so upgrade
-every clone that writes to the store.
+Store sync between clones (`aida pull`, `aida db sync`, `aida remote
+reconcile` and the coordination refreshes) keeps this evidence too, even when
+Git merges the YAML without a conflict. A sync that would bring in a changed
+locked description, a deleted or renamed locked hypothesis, or two different
+pre-result descriptions for a hypothesis that just reached its first result is
+refused before your store changes; fix the description in one clone and sync
+again. When the first result only exists once both clones are combined (the
+link came from one, the completion from the other), the sync locks the
+hypothesis in an extra store commit. See
+[store sync and pre-registration](10-storage.md#store-sync-and-pre-registration).
+
+A raw `git merge` or `git rebase` of the store bypasses that check. If one
+rewrites a locked description, the hash no longer matches. That row then
+refuses every change except one that restores the frozen text, for example
+`aida edit <ID>` with the original description from store history. Other rows
+stay writable. Binaries older than this feature do not know `hypothesis_lock`
+and drop it when they rewrite the row, so upgrade every clone that writes to
+the store.
 <!-- trace:STORY-1675 | ai:codex -->
 <!-- trace:STORY-1675 | ai:claude -->
+<!-- trace:BUG-2162 | ai:claude -->
 
 ---
 
