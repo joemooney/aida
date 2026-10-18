@@ -1,0 +1,35 @@
+id: 01a1502f-cde7-74d2-b59d-d424f6f7f6b2
+spec_id: STORY-1842
+agreed_id: STORY-1842
+title: 'Review PR-2741: [AI:antigravity] fix(mandate,ship): dangling trace ids + non-GitHub default branch (TASK-1800, TASK-1803)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `agy/ship-1800-1803`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2741>
+  - Branch: `agy/ship-1800-1803` → `main`
+
+  ## Covers
+
+  - TASK-1803
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2741` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T18:04:32.615019065Z
+modified_at: 2026-10-18T18:04:32.615019065Z
+req_type: Story
+filed_at:
+  code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
