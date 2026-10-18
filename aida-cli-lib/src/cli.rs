@@ -6576,8 +6576,22 @@ pub enum QueueCommand {
         /// auto-complete plan-phase is separate; this flag is interactive
         /// only, so it conflicts with --auto-complete for now.
         // trace:STORY-265 | ai:claude
-        #[clap(long, conflicts_with = "auto_complete")]
+        // trace:TASK-1794 | ai:codex — the headless launcher owns a separate
+        // permission posture; plan-only is the documented interactive lane.
+        #[clap(long, conflicts_with_all = ["autonomous", "no_human"])]
         plan_only: bool,
+        /// Internal: the headless planning session the `--with-plan` drain
+        /// prelude launches. Same planning prompt as `--plan-only`, but under
+        /// the headless launcher's own posture; requires `--no-human`.
+        // trace:TASK-1794 | ai:claude — hidden so `--plan-only` stays the only
+        // user-facing plan lane and keeps its interactive-only conflict.
+        #[clap(
+            long,
+            hide = true,
+            requires = "no_human",
+            conflicts_with_all = ["autonomous", "plan_only", "guided"]
+        )]
+        plan_phase: bool,
         /// Guided keystone-implementation mode: launch a structured,
         /// step-by-step decision dialog for the spec instead of a normal
         /// pickup. Runs `/aida-guided-implement <SPEC>` — the agent surfaces
@@ -13998,8 +14012,16 @@ pub enum Command {
     /// prints suggested rewrites as drafts only — it never edits a spec.
     /// Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
     /// every spec of that kind. Read-only and deterministic (no LLM call).
+    /// `aida lint constants` instead lints source: numeric literals in
+    /// traced Rust code that the owning spec never mentions.
     // trace:TASK-0417 | ai:claude
+    #[clap(args_conflicts_with_subcommands = true)]
     Lint {
+        /// Source lints (`constants`). Omit to lint requirement text.
+        // trace:TASK-1785 | ai:claude
+        #[clap(subcommand)]
+        cmd: Option<LintCommand>,
+
         /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
         /// specs.
         spec: Option<String>,
@@ -14598,6 +14620,40 @@ pub enum SkillCommand {
         #[clap(long, short = 'q')]
         quiet: bool,
     },
+}
+
+/// Source lints under `aida lint`. Report-only: they never edit the store.
+// trace:TASK-1785 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum LintCommand {
+    /// Report numeric literals inside traced Rust functions and constants
+    /// that the owning spec never mentions. A literal is explained when its
+    /// value appears in the description of a spec traced on (or directly
+    /// above) the enclosing item, or in a decision linked to that spec.
+    /// 0 and 1 are exempt; mark any other deliberate choice with a trailing
+    /// `// arbitrary` (or `// arbitrary: <reason>`) comment. Report-only:
+    /// exits non-zero only with `--fail-on unexplained`.
+    Constants {
+        /// File or directory to scan (defaults to the project root).
+        #[clap(long, value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Emit the report as JSON for agents / scripts.
+        #[clap(long)]
+        json: bool,
+
+        /// Exit non-zero when the report contains findings of this kind.
+        #[clap(long, value_enum, value_name = "KIND")]
+        fail_on: Option<LintConstantsFailOn>,
+    },
+}
+
+/// What `aida lint constants --fail-on` turns into a non-zero exit.
+// trace:TASK-1785 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LintConstantsFailOn {
+    /// Any literal the owning spec does not explain.
+    Unexplained,
 }
 
 /// The shipped gate library. Read-only.

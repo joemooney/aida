@@ -1,3 +1,13 @@
+Contained plan-only queue pickups select Claude plan mode while retaining
+contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
+Plan-only rejects headless flags before setup; headless drains use --with-plan.
+<!-- trace:TASK-1794 | ai:codex -->
+
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 Standalone reviewer coexistence requires an explicit queue-work role flag plus
 an unambiguous backing spec. Verdict collection reads a size-bounded regular
 file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child

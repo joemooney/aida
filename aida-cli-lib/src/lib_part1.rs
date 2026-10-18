@@ -2833,7 +2833,22 @@ pub(crate) fn run() -> Result<()> {
     // `aida lint` self-loads the store via `load_store_for_lookup` and scores
     // requirement text with the EARS heuristics — read-only, no shared storage
     // handle, no LLM. trace:TASK-0417 | ai:claude
-    if let Command::Lint { spec, scope, json } = &cli.command {
+    if let Command::Lint {
+        cmd,
+        spec,
+        scope,
+        json,
+    } = &cli.command
+    {
+        // trace:TASK-1785 | ai:claude
+        if let Some(crate::cli::LintCommand::Constants {
+            path,
+            json,
+            fail_on,
+        }) = cmd
+        {
+            return lint_constants::handle_lint_constants(path.as_deref(), *json, *fail_on);
+        }
         return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
