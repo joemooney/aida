@@ -18,8 +18,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T10:30:34.998141252Z
+modified_at: 2026-10-18T12:59:44.323804571Z
 req_type: Story
+tags:
+- docs:impacted
 comments:
 - id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
   author: joe
@@ -114,6 +116,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14f18-c0d6-72e3-beca-d40d8a6e65b6
+  author: joe
+  timestamp: 2026-10-18T12:59:44.726688516Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+  changes: []
 filed_at:
   code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
   branch: main
