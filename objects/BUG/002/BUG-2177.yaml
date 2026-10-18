@@ -1,0 +1,20 @@
+id: 01a14f53-a09e-7522-8b07-633643ae8523
+spec_id: BUG-2177
+agreed_id: BUG-2177
+title: 'Approved PRs chase main forever: a clean merge-from-main commit makes the approval stale, and the reviewer refuses to review a branch that is behind main'
+description: 'Observed 2026-10-18 on PR #2713 (TASK-1794). Round-2 PASS at 6ed0a81659. Main moved, so the PR conflicted in AGENTS.md only (BUG-2174). A fixer merged main (70472c4b70, docs-only resolution). aida pr ship then refused: ''approval was recorded at 6ed0a81659 but the PR head is now 70472c4b70 — the new commits were never reviewed''. The re-review then refused: ''base is 1 commit behind origin and overlaps 1 file'', because another PR had landed meanwhile. Each cycle costs 30-60 min on a loaded host, and parallel landings restart it. FIX: in the ship gate, treat an approval as current when every commit after the approved SHA is a merge of the target branch, and the PR''s own diff (git diff <merge-base>..head restricted to PR-touched paths, i.e. range-diff of the PR''s changes) is unchanged except for conflict resolutions in docs-only paths. Record that as ''approval carried across main merges'' in the ship evidence. Code-path conflict resolutions still need a re-review. Pair it with BUG-2174 (stop the AGENTS.md churn) and BUG-2176 (holds markers). Test: approve at A, merge main cleanly at B, ship accepts. Merge main with a code conflict resolution at C, ship refuses.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T14:04:03.102740464Z
+modified_at: 2026-10-18T14:04:03.102740464Z
+req_type: Bug
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
