@@ -1751,17 +1751,20 @@ pub(crate) struct MandateCover {
 
 /// Assemble exclusion subjects only; never use this union for authority inputs.
 // trace:TASK-1790 | ai:codex
+// trace:TASK-1800 | ai:antigravity
 pub(crate) fn mandate_exclusion_specs(
     named: &[String],
     traced: std::collections::BTreeSet<String>,
-    resolve: impl FnMut(&str) -> crate::mandate::ShipSpec,
+    mut resolve: impl FnMut(&str, bool) -> crate::mandate::ShipSpec,
 ) -> Vec<crate::mandate::ShipSpec> {
+    let named_set: std::collections::BTreeSet<String> =
+        normalized_spec_ids(named).into_iter().collect();
     let mut ids = named.to_vec();
     ids.extend(traced);
     normalized_spec_ids(&ids)
         .iter()
         .map(String::as_str)
-        .map(resolve)
+        .map(|id| resolve(id, named_set.contains(id)))
         .collect()
 }
 
@@ -1770,6 +1773,7 @@ pub(crate) fn mandate_exclusion_specs(
 /// instant (never cached); only when one is active does it read the forge,
 /// the verdicts and the store. `head` is read lazily for the same reason.
 // trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn mandate_ship_cover(
     project_root: &std::path::Path,
@@ -1832,7 +1836,7 @@ pub(crate) fn mandate_ship_cover(
         .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
     let store_snapshot = crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)?;
     let store = load_store_for_lookup(project_root);
-    let specs = mandate_exclusion_specs(&ids, trace_evidence.ids, |id| {
+    let specs = mandate_exclusion_specs(&ids, trace_evidence.ids, |id, is_named| {
         let req = store.as_ref().and_then(|store| {
             store
                 .requirements
@@ -1847,10 +1851,68 @@ pub(crate) fn mandate_ship_cover(
                 })
                 .cloned()
         });
-        // STORY-1698: sticky exclusion reads every stored version.
-        let history = crate::mandate::store_history_versions(&store_root, id);
+        // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
+        // so that an agreed_id resolves to its stored spec_id object path for
+        // history, and the ledger check / note_exclusions cover both keys.
+        let mut aliases = Vec::new();
+        let mut history_keys = vec![id.to_owned()];
+        if let Some(ref r) = req {
+            for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                let upper = candidate.trim().to_ascii_uppercase();
+                if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
+                    if !aliases
+                        .iter()
+                        .any(|a: &String| a.eq_ignore_ascii_case(&upper))
+                    {
+                        aliases.push(upper.clone());
+                    }
+                    if !history_keys
+                        .iter()
+                        .any(|k: &String| k.eq_ignore_ascii_case(&upper))
+                    {
+                        history_keys.push(upper);
+                    }
+                }
+            }
+        }
+        // trace:TASK-1800 | ai:claude
+        // A deleted spec has no current record to name its aliases, so find
+        // every object that ever carried this ID in store history. A history
+        // that cannot be searched refuses below; it never makes the ID dangling.
+        let alias_search = if req.is_none() {
+            crate::mandate::store_history_alias_ids(&store_root, id)
+        } else {
+            Ok(Vec::new())
+        };
+        for alias in alias_search.iter().flatten() {
+            if !aliases.iter().any(|a| a.eq_ignore_ascii_case(alias)) {
+                aliases.push(alias.clone());
+            }
+            if !history_keys.iter().any(|k| k.eq_ignore_ascii_case(alias)) {
+                history_keys.push(alias.clone());
+            }
+        }
+        // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
+        // across the ID and any resolved alias object path.
+        let history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
+            alias_search?;
+            let mut all_versions = Vec::new();
+            for key in &history_keys {
+                let versions = crate::mandate::store_history_versions_optional(&store_root, key)?;
+                all_versions.extend(versions);
+            }
+            if is_named && all_versions.is_empty() {
+                return Err(format!("no version of {id} in the store's history"));
+            }
+            Ok(all_versions)
+        })();
         crate::mandate::ShipSpec {
             id: id.to_owned(),
+            aliases,
+            named: is_named,
             current: req,
             history,
         }
@@ -1867,14 +1929,16 @@ pub(crate) fn mandate_ship_cover(
                 .map(crate::mandate::field_change_versions)
                 .unwrap_or_default();
             let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
-            crate::mandate::note_exclusions(
-                dir,
-                &spec.id,
-                spec.current
-                    .iter()
-                    .chain(changes.iter())
-                    .chain(history.iter()),
-            );
+            for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
+                crate::mandate::note_exclusions(
+                    dir,
+                    key,
+                    spec.current
+                        .iter()
+                        .chain(changes.iter())
+                        .chain(history.iter()),
+                );
+            }
         }
     }
     let ledger = match &mandate_dir {
@@ -2296,12 +2360,25 @@ pub(crate) fn pr_ship_handler(
         anyhow::bail!("could not detect current branch (detached HEAD?)");
     }
 
-    // BUG-2164: On the default branch with no explicit PR number, refuse before
-    // any push, trailer guard, or PR creation attempt.
-    // trace:BUG-2164 | ai:antigravity
-    if opts.pr_number.is_none() && ship_is_default_branch(&project_root, &branch) {
-        let approved = find_open_approved_prs(&project_root);
-        anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+    // BUG-2164 / TASK-1795 / TASK-1803: On the default branch (or when the
+    // default branch cannot be determined) with no explicit PR number, refuse
+    // before any push, trailer guard, or PR creation attempt.
+    // trace:BUG-2164 trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+    if opts.pr_number.is_none() {
+        match classify_ship_default_branch(&project_root, &branch) {
+            ShipDefaultBranchDisposition::FeatureBranch => {}
+            ShipDefaultBranchDisposition::OnDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+            }
+            ShipDefaultBranchDisposition::UnknownDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!(
+                    "{}",
+                    pr_ship::format_unknown_default_branch_ship_refusal(&approved)
+                );
+            }
+        }
     }
 
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
@@ -4430,12 +4507,22 @@ pub(crate) fn ship_completion_trailer(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShipDefaultBranchDisposition {
+    FeatureBranch,
+    OnDefaultBranch,
+    UnknownDefaultBranch,
+}
+
 /// Protect conventional mainlines; otherwise require evidence of the default.
-/// Unknown evidence also requires an explicit PR number.
-// trace:TASK-1795 | ai:codex
-pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+/// Unknown evidence is reported distinctly from being on the default branch.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn classify_ship_default_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> ShipDefaultBranchDisposition {
     if matches!(branch, "main" | "master") {
-        return true;
+        return ShipDefaultBranchDisposition::OnDefaultBranch;
     }
     // Only origin/HEAD is local evidence, never a guess from leftover refs.
     // A stale origin/HEAD still wins over the forge, so refresh it when the
@@ -4456,9 +4543,18 @@ pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &st
         .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
         .filter(|name| !name.is_empty());
     match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
-        Some(default) => branch == default,
-        None => true,
+        Some(default) if branch == default => ShipDefaultBranchDisposition::OnDefaultBranch,
+        Some(_) => ShipDefaultBranchDisposition::FeatureBranch,
+        None => ShipDefaultBranchDisposition::UnknownDefaultBranch,
     }
+}
+
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+    !matches!(
+        classify_ship_default_branch(project_root, branch),
+        ShipDefaultBranchDisposition::FeatureBranch
+    )
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.

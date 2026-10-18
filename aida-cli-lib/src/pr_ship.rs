@@ -2262,10 +2262,8 @@ pub(crate) fn parse_open_approved_prs_json(json: &str) -> Vec<OpenApprovedPr> {
         .collect()
 }
 
-/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
-// trace:BUG-2164 | ai:antigravity
-pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
-    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+fn append_open_approved_prs(base: &str, approved: &[OpenApprovedPr]) -> String {
     if approved.is_empty() {
         base.to_string()
     } else {
@@ -2280,6 +2278,21 @@ pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) ->
         }
         msg
     }
+}
+
+/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
+// trace:BUG-2164 trace:TASK-1795 | ai:antigravity
+pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+    append_open_approved_prs(base, approved)
+}
+
+/// TASK-1803: Format the refusal message when `aida pr ship` is invoked without a PR number
+/// and the default branch could not be determined.
+// trace:TASK-1803 | ai:antigravity
+pub(crate) fn format_unknown_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: the default branch could not be determined; run `git remote set-head origin --auto` or pass a PR number (e.g. aida pr ship 8)";
+    append_open_approved_prs(base, approved)
 }
 
 #[cfg(test)]
