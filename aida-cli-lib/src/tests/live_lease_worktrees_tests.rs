@@ -3,6 +3,7 @@ use process_probe::LiveSession;
 
 fn lease_at(id: &str, worktree: &std::path::Path) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: id.to_string(),
         slug: id.to_ascii_lowercase(),

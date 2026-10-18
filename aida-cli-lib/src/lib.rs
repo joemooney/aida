@@ -408,6 +408,7 @@ mod memories_cmd;
 mod merge_hold;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
+mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
@@ -501,6 +502,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
+mod seat_clone;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;

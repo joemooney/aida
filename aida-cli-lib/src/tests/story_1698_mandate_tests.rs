@@ -1219,3 +1219,229 @@ fn task_1790_failed_marker_rearm_emits_no_placement_event() {
     assert!(err.contains("marker could not be rewritten") && err.contains("label unavailable"));
     assert_eq!(crate::events::read_all(tmp.path()).len(), before);
 }
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn additional_trace_spec_can_restrict_but_cannot_supply_ship_authority() {
+    let mut c = Case::ok();
+    assert!(c.decide().is_ok());
+    c.specs.push(tagged("TASK-2", "operator-only"));
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::AlwaysHuman { spec, .. }) if spec == "TASK-2")
+    );
+
+    let mut c = Case::ok();
+    c.specs.push(spec("TASK-2"));
+    c.specs_resolved = false; // No resolved named subject, even with trace IDs.
+    assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
+
+    let mut c = Case::ok();
+    c.candidates.clear();
+    let before = c.decide();
+    assert!(before.is_err());
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), before, "extra exclusions supply no approval");
+
+    let mut c = Case::ok();
+    c.candidates = vec![approval_by(HEAD, ADVISOR)];
+    c.policy = policy(&c.candidates);
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+    c.specs.push(spec("TASK-2"));
+    assert_eq!(c.decide(), Err(MandateRefusal::ApproverIsShipper));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn named_union_trace_assembly_refuses_trace_only_supervised_spec() {
+    let mut c = Case::ok();
+    let named = vec!["TASK-1".to_owned()];
+    let traced = ["TASK-2".to_owned()].into_iter().collect();
+    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id| {
+        let mut value = spec(id);
+        if id == "TASK-2" {
+            value.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Guided);
+        }
+        value
+    });
+    assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { spec, .. }) if spec == "TASK-2"));
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_refuses_invalid_ledger_without_appending() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let seen = vec![("TASK-2".into(), "guided".into(), false)];
+    record_exclusions(tmp.path(), &seen, now()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    for mode in [0o644, 0o4600] {
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert!(private_file_check(&path).is_err());
+        assert!(record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now()
+        )
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::fs::write(&path, b"malformed\n").unwrap();
+    assert!(record_exclusions(tmp.path(), &seen, now()).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), b"malformed\n");
+}
+
+// trace:TASK-1790 | ai:codex
+#[test]
+fn exclusion_writer_fifo_refuses_within_deadline() {
+    use std::os::unix::ffi::OsStrExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join(EXCLUSION_LEDGER);
+    let fifo = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let result = record_exclusions(
+            tmp.path(),
+            &[("TASK-3".into(), "guided".into(), false)],
+            now(),
+        );
+        tx.send(result.is_err()).unwrap();
+    });
+    assert!(rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("FIFO writer blocked"));
+    worker.join().unwrap();
+}
+
+// Exercise the real mandate_ship_cover wiring, not just the union helper. An
+// empty-set mutation at its trace_evidence.ids argument must fail this test.
+// trace:TASK-1800 | ai:codex
+#[test]
+fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git = |dir: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(root, &["init", "-q"]);
+    git(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/fixture/project.git",
+        ],
+    );
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 1; }\n",
+    )
+    .unwrap();
+    git(root, &["add", "code.rs"]);
+    git(root, &["commit", "-qm", "base"]);
+    let base = git(root, &["rev-parse", "HEAD"]);
+    git(root, &["update-ref", "refs/remotes/origin/main", &base]);
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 2; }\n",
+    )
+    .unwrap();
+    git(root, &["add", "code.rs"]);
+    git(root, &["commit", "-qm", "change (TASK-1)"]);
+    let head = git(root, &["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = '.aida-store'\n",
+    )
+    .unwrap();
+    let store = root.join(".aida-store");
+    std::fs::create_dir(&store).unwrap();
+    git(&store, &["init", "-q"]);
+    git(
+        &store,
+        &["commit", "--allow-empty", "-qm", "empty fixture store"],
+    );
+    let gh = root.join("gh-stub");
+    crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
+    let home = root.join("home");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "advisor",
+        &[],
+        &[
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
+    );
+    // The seat fixture seeds registry/team.toml in the canonical store. Commit
+    // that setup before exercising the production clean-store boundary.
+    git(&store, &["add", "-A"]);
+    git(&store, &["commit", "-qm", "seed fixture seat roster"]);
+    assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+    let mut mandate = active(false);
+    mandate.principal = crate::current_user_id(None);
+    mandate.issued_at = Utc::now() - Duration::minutes(1);
+    mandate.expires_at = Utc::now() + Duration::hours(1);
+    plant(&mandate_dir().unwrap(), &mandate, 0o600);
+    let result = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (TASK-1)".into()],
+        },
+        || {
+            crate::pr_cmd::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &["TASK-1".into()],
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                |check| {
+                    assert!(
+                        check.specs_resolved,
+                        "fixture must reach the resolved decision"
+                    );
+                    assert_eq!(
+                        check
+                            .specs
+                            .iter()
+                            .map(|s| s.id.as_str())
+                            .collect::<Vec<_>>(),
+                        vec!["SUP-1", "TASK-1"]
+                    );
+                    // No approval/clearance is fabricated: the fixture decision refuses.
+                    Err(MandateRefusal::SpecsUnresolved)
+                },
+            )
+        },
+    );
+    assert!(
+        matches!(result, Err(MandateRefusal::SpecsUnresolved)),
+        "{result:?}"
+    );
+}
