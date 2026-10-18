@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:23:57.732653120Z
-modified_at: 2026-10-18T12:08:06.895088461Z
+modified_at: 2026-10-18T16:38:59.717595854Z
 req_type: Bug
 tags:
 - contained
@@ -34,6 +34,12 @@ comments:
   created_at: 2026-10-12T07:35:59.866925157Z
   modified_at: 2026-10-12T07:35:59.866925157Z
   session_id: 1b110a25-274c-4f06-8af4-81154efaa853
+- id: 01a14fe1-7b85-7743-b981-3c17caf06120
+  author: joe
+  content: 'Triage + fix in PR #2731 (branch claude/bug-1982). On origin/main, #2541''s contained_store_deny_write_paths (aida-cli-lib/src/contained_boundary.rs:162-170) already denies all of <main>/.git. A real-sandbox probe on Claude Code 2.1.302 confirmed commondir, gitdir, config.worktree and .git/config are denied (AC1 met). However, a commit in a linked worktree FAILS with index.lock: Read-only file system. The commit half of AC2 is BUG-2169''s: in a seat clone, the commit succeeds while the same probes are denied. PR #2731 adds the env-gated real-sandbox test aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs, which covers both layouts, and the AC3 doc in OVERVIEW.md. Without AIDA''s deny, CC alone leaves gitdir and HEAD writable, so the test catches a regression. Residual: the deny is coupled to the store grant and is lost only on the git<2.40 path, which every launcher refuses first. Status left for the advisor.'
+  created_at: 2026-10-18T16:38:59.717595854Z
+  modified_at: 2026-10-18T16:38:59.717595854Z
+  session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
 history:
 - id: 01a12e01-9180-79d0-97f9-7bd9da5d92a0
   author: joe
