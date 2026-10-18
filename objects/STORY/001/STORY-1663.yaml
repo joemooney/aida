@@ -16,12 +16,12 @@ description: |
   - A stale head (a new commit after approval or CI) is refused.
   - A rebase ship of a slice PR leaves the owning spec's status unchanged unless the final-slice flag is given.
   - After it lands, the advisor-merge decision's exception for slice stacks is removed and the two-seat docs point at `aida pr ship --rebase`.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:40:48.922607973Z
-modified_at: 2026-10-18T16:53:55.478670775Z
+modified_at: 2026-10-18T16:54:22.454652815Z
 req_type: Story
 tags:
 - groom:approve
@@ -66,6 +66,14 @@ history:
   timestamp: 2026-10-18T16:53:57.029183139Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14fef-8ff6-7923-94c7-cf455ed3e20d
+  author: aida-pr-open
+  timestamp: 2026-10-18T16:54:22.454651649Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
