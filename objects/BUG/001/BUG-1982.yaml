@@ -20,13 +20,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:23:57.732653120Z
-modified_at: 2026-10-18T16:38:59.717595854Z
+modified_at: 2026-10-18T16:50:04.773950722Z
 req_type: Bug
 tags:
 - contained
 - parked:night
 - sandbox
 - security
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a14feb-752c-7273-b843-a8a8c75ea7fe
+  created_at: 2026-10-18T16:50:04.773945980Z
+  created_by: joe
 comments:
 - id: 01a12f0a-327a-7921-8617-7423af4b55d2
   author: joe
@@ -56,6 +62,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14feb-a652-7fa3-903a-a8a3a4b24e4d
+  author: joe
+  timestamp: 2026-10-18T16:50:06.034670089Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
