@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T17:28:07.026066119Z
-modified_at: 2026-10-18T17:28:07.026066119Z
+modified_at: 2026-10-18T17:28:31.811749938Z
 req_type: Task
+comments:
+- id: 01a1500e-d543-7092-9cb1-7e6d2acd4a34
+  author: joe
+  content: Duplicate of TASK-1916; filed twice by a retried command.
+  created_at: 2026-10-18T17:28:31.811749938Z
+  modified_at: 2026-10-18T17:28:31.811749938Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 filed_at:
   code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
   branch: main
