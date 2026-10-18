@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T20:14:45.756475139Z
+modified_at: 2026-10-18T22:59:11.078078394Z
 req_type: Bug
 tags:
 - contained
@@ -113,6 +113,16 @@ history:
   timestamp: 2026-10-18T20:14:41.580147096Z
   session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
   changes: []
+- id: 01a1513d-00c4-7983-96e5-b9c0945e3ba7
+  author: joe
+  timestamp: 2026-10-18T22:58:34.820707693Z
+  session_id: 01a151370a56
+  changes: []
+- id: 01a1513d-902b-7b83-bfa8-4231f8f5a9c0
+  author: joe
+  timestamp: 2026-10-18T22:59:11.531675638Z
+  session_id: 01a151370a56
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
@@ -126,7 +136,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'PARTIAL: wrapper-based raw git status calls bypass host_git_command and the guard (F1); policy A hides uncommitted submodule edits from worktree_is_dirty (F2); criteria unanchored (F3). Full findings on the BUG-1982 record for PR-2731.'
+  detail: BUG-1985 policy A hides uncommitted submodule edits from the CLI-side reap/doctor/gc dirty gates (data loss under worktree remove --force); also host git add -A in compete is ungated. BUG-1982 criteria met.
   recovery_hint: address the review findings, move BUG-1985 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-18T19:25:15.505084268Z
+  shelved_at: 2026-10-18T22:59:11.078078394Z
