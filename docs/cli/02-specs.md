@@ -251,6 +251,11 @@ spec doesn't uniquely identify which comment you mean. Run `aida comment list
 
 **Chains with** — `lint <ID>` → `edit --description` to apply any suggestion worth taking → ready for `queue add`.
 
+**`aida lint constants` — unexplained numbers in traced code.** The source-side counterpart: it scans Rust functions and `const`/`static` items that carry a `trace:` marker (inside them or in the comment block directly above) and reports every numeric literal whose value the owning spec never mentions — neither in its description nor in a decision linked to it. Values compare by number, so `0x0F`, `1_5u64` and `15.0` all match a spec that says "15". `0` and `1` are exempt; silence any other deliberate choice with a trailing `// arbitrary` (or `// arbitrary: <reason>`) comment on the literal's line. Test, generated and vendored files are skipped, as in `aida trace coverage`. Each finding is a prompt to either record the value as a fact in the spec or mark it arbitrary.
+- `--path <PATH>` — scan one file or directory instead of the whole project.
+- `--json` — machine output naming file, line, literal, value and owning spec.
+- `--fail-on unexplained` — exit non-zero when anything is reported. Without it the command is report-only and always exits 0; it never edits the store.
+
 ---
 
 ### `aida defer`
