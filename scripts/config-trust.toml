@@ -255,6 +255,15 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
+# STORY-1700: the drive mandate's human gates. The committed layer is the
+# origin/main blob (never the worktree copy) and the operator layer is
+# ~/.aida/config.toml; the third site is the protected-path list a PR is
+# compared against (no value read).
+# trace:STORY-1700 | ai:claude
+[readers."aida-cli-lib/src/mandate_gates.rs"]
+channels = ["trusted", "home", "probe"]
+sites = 3
+
 [readers."aida-cli-lib/src/maintenance_schedule.rs"]
 channels = ["worktree", "prose"]
 sites = 3

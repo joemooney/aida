@@ -214,7 +214,7 @@ pub enum MandateAction {
         /// Cover shipping held PRs (required unless --drive).
         #[clap(long)]
         ship_held: bool,
-        /// A DRIVE mandate (ADR-77): also covers advisor signoff of sketches
+        /// A DRIVE mandate: also covers advisor signoff of sketches
         /// and dispatching fixers, and turns on the 15-minute drive tick that
         /// routes every stalled lane. Implies --ship-held and covers sensitive
         /// specs unless --exclude-supervised.
