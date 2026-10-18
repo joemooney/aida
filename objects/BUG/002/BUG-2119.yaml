@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:04:58.283290700Z
-modified_at: 2026-10-18T16:51:08.307949037Z
+modified_at: 2026-10-18T19:21:46.254707211Z
 req_type: Bug
 tags:
 - forge
@@ -27,6 +27,12 @@ comments:
   created_at: 2026-10-14T07:15:29.095502909Z
   modified_at: 2026-10-14T07:15:29.095502909Z
   session_id: 3d8fc102-1166-4ecc-afbc-275650aca76e
+- id: 01a15076-82a4-7441-9cec-46f1d2084763
+  author: joe
+  content: 'PR #2736 round-2 rework pushed at aefe00e818. It addresses all 9 verdict findings; the finding-to-code map is at https://github.com/joemooney/aida/pull/2736#issuecomment-6254061627. make check-ci-fast is green, the targeted aida-cli-lib tests pass, and a mutation check confirms the F8 test catches the leak. agy/bug-2119 is not checked out anywhere. Ready for re-review; not merged.'
+  created_at: 2026-10-18T19:21:46.254707211Z
+  modified_at: 2026-10-18T19:21:46.254707211Z
+  session_id: 5381fff7-5e31-4278-9d6b-3302c4dba1c2
 history:
 - id: 01a13789-6625-74a0-8c98-a64393dd8b43
   author: joe
