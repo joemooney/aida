@@ -1,0 +1,131 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1786",
+  "publishes": [
+    {
+      "at": "2026-10-18T06:17:13.916817956Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T23:04:39.932345480Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:04:39.738810154Z",
+      "spec": "TASK-1786",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T05:06:57.193193454Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T05:07:09.579815742Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T07:31:13.075280164Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:10:05.263133354Z",
+      "spec": "TASK-1786",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T18:21:13.627705818Z",
+      "spec": "TASK-1786",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:36:17.031540104Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2704,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7dc2324822ce91c7a7a79fe963c0509dc08e16d7"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:36:18.728556795Z",
+      "spec": "TASK-1786",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT r1: coexistence plumbing untested; rework path treats inferred role as explicit",
+        "recovery_hint": "address the review findings, move TASK-1786 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-18T06:15:01.543554998Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T06:15:13.715818054Z",
+      "spec": "TASK-1786",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2704
+      }
+    },
+    {
+      "ts": "2026-10-18T06:17:13.893855334Z",
+      "spec": "TASK-1786",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "188adef04b9056f190f0f8436ee652f4e4272d00",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
