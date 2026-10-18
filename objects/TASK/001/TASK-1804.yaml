@@ -1,0 +1,20 @@
+id: 01a14d3b-acab-7a90-a70a-eaa1bccc0379
+spec_id: TASK-1804
+agreed_id: TASK-1804
+title: Set AIDA_HARNESS_VERSION from the remaining launchers (queue work headless seats, drain phases)
+description: 'Non-blocking follow-up from the PR #2710 r1 review (TASK-1793): agent new and relay now record the selected harness version for child writes, but aida queue work headless seats and drain phases still do not set AIDA_HARNESS_VERSION, so their write provenance records an unknown harness version. Reuse the #2710 probe (grant-scrubbed, os_wrap-consistent).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T04:18:38.891820342Z
+modified_at: 2026-10-18T04:18:38.891820342Z
+req_type: Task
+filed_at:
+  code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9f0ab97da0
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
