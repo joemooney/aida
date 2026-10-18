@@ -1,0 +1,27 @@
+id: 01a150d1-30a4-7371-a82c-ec7e50a378ee
+spec_id: TASK-1921
+agreed_id: TASK-1921
+title: History stamps a commit's authority trailer onto every status change in that commit, including ungated flips
+description: |
+  aida-cli-lib/src/history.rs diff_modified_with_authority (called from decode_into_events) attaches the commit-level Aida-Authority trailer to every StatusChange decoded from that commit. The store side sets one per-commit flag (aida-core/src/db/git_backend.rs pending_authority_advance, batch write loop). So one update_atomically/save commit that approves TASK-A (Draft->Approved, gated) and flips TASK-B InProgress->Done (ungated) shows 'authority: grant (advisor, xxxxxxxx)' on TASK-B's row too. Fix: attach authority only when aida_core::lifecycle::status_advance_records_authority_trailers(from,to) holds for that row, and add a multi-spec batch test. Otherwise, document the whole-commit semantics.
+
+  Raised in review of PR-2739: https://github.com/joemooney/aida/pull/2739#issuecomment-6255086840
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T21:00:49.188001183Z
+modified_at: 2026-10-18T21:00:49.188001183Z
+req_type: Task
+tags:
+- from-review:PR-2739
+- history
+- severity:minor
+filed_at:
+  code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 01a150cc07be
