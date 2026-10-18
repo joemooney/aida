@@ -15,13 +15,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T16:39:06.713732800Z
+modified_at: 2026-10-18T16:50:10.885547388Z
 req_type: Bug
 tags:
 - contained
 - groom:needs-decision
 - sandbox
 - security
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a14feb-752c-7273-b843-a8a8c75ea7fe
+  created_at: 2026-10-18T16:50:10.885543286Z
+  created_by: joe
 comments:
 - id: 01a12eb3-4551-77e3-8c0e-fe1e3001c9c5
   author: joe
@@ -73,6 +79,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14feb-bce1-7a61-a05c-ff5c914aed93
+  author: joe
+  timestamp: 2026-10-18T16:50:11.809091427Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
