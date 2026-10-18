@@ -8,12 +8,12 @@ description: |-
   - 'aida remote mirror-sync' fails the same way, because the pre-push hook refuses ANY push to refs/heads/main, including a mirror push whose source is refs/remotes/origin/main (a pure fast-forward: gitlab 888dce5 is an ancestor of origin c7534df).
   The guard exists to stop unreviewed direct pushes, but mirroring origin's already-merged tip is not one of those.
   Acceptance: the hook allows a push to a NON-origin remote when the pushed sha equals the current origin/<branch> tip and it is a fast-forward of the remote's ref. Direct pushes to origin main stay refused. mirror-sync succeeds in that case. Tests for both paths. The hub-drift-guard will keep tripping until this is fixed.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T20:06:01.131201098Z
-modified_at: 2026-10-18T16:50:33.651230334Z
+modified_at: 2026-10-18T16:50:39.409753137Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -60,6 +60,14 @@ history:
   timestamp: 2026-10-18T16:50:34.566146087Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14fec-28b1-74b0-b092-b16ddec151ad
+  author: aida-pr-open
+  timestamp: 2026-10-18T16:50:39.409748196Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 7b51e37f2106733490cb01f9a3fb197f611ceccd
   branch: main
