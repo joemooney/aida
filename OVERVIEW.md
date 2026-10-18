@@ -1016,6 +1016,15 @@ archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
 
+Contained `queue work --plan-only` selects Claude's `plan` permission mode
+alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
+to inherited, explicit sandbox and configured containment. Ordinary contained
+pickups retain `dontAsk`; caller permission overrides under contained parents
+and bypass/contained combinations still refuse. The documented interactive-only
+plan lane rejects headless flags at parsing, before lifecycle setup; headless
+planning remains the separate `--with-plan` drain phase.
+<!-- trace:TASK-1794 | ai:codex -->
+
 Standalone reviewer pickup coexists with a live implementer only with explicit
 `queue work --role reviewer` and an unambiguous backing spec. An inferred role
 and direct session starts retain ordinary source-branch conflict handling.
