@@ -1,0 +1,27 @@
+id: 01a14e86-6d80-7950-ad73-99ad0d4459d0
+spec_id: TASK-1809
+agreed_id: TASK-1809
+title: Restore run_plan_prelude rustdoc displaced by plan_session_args (drain_gate.rs)
+description: |
+  aida-cli-lib/src/drain_gate.rs:1288-1305 — PR-2713 inserted the plan_session_args `///` block directly under run_plan_prelude's STORY-265 doc block, so rustdoc attaches run_plan_prelude's doc to plan_session_args and run_plan_prelude is left undocumented. Move the STORY-265 block back above run_plan_prelude.
+
+  Raised in review of PR-2713: https://github.com/joemooney/aida/pull/2713
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T10:19:55.136989580Z
+modified_at: 2026-10-18T10:19:55.136989580Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2713
+- severity:cosmetic
+filed_at:
+  code_sha: 6ed0a81659732ee9b51691e8952a63ea326a1fb9
+  branch: pr-2713
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 01a14e6da419
