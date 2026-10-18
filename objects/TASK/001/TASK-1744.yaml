@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:07:55.197268358Z
-modified_at: 2026-10-18T17:20:56.198158681Z
+modified_at: 2026-10-18T17:45:01.692009249Z
 req_type: Task
 tags:
 - from-implementer:BUG-2014
@@ -24,6 +24,32 @@ relationships:
   target_id: 01a14ff0-3654-7a10-90a2-71f4e5885e7a
   created_at: 2026-10-18T16:55:28.337448751Z
   created_by: joe
+comments:
+- id: 01a1501d-effc-7da2-b434-83f88be66bb4
+  author: joe
+  content: |-
+    ARCHITECTURE SKETCH (TASK-1744 — Codex & Antigravity tool-only grant expiry notices):
+
+    1. Mapping to BUG-2014 C1–C6:
+       - C1 (Zero CLI spawn without grant; <2s bound; no graph/cache/store init):
+         * Without AIDA_SESSION_GRANT, aida-grant-expiry-notice.sh exits 0 before spawning aida (empty stdout for Claude/Codex; '{}' on stdout for Antigravity '--client agy').
+         * With AIDA_SESSION_GRANT, runs 'timeout -k 0.1s 1.8s aida role expiry-notice --client <claude|codex|agy>' under a 2s hook timeout.
+         * Early dispatch in lib_part1.rs -> role_cmd::handle_role_command returns before storage/cache initialization.
+       - C2 (Client hook contracts & live runtime evidence):
+         * Codex (codex-cli 0.162.1): un-matchered PreToolUse entry in aida-core/templates/codex-hooks.json invoking '$(git rev-parse --show-toplevel)/.codex/hooks/aida-grant-expiry-notice.sh --client codex' (timeout: 2), emitting '{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":message}}' with no permissionDecision. Document Codex '/hooks' trust re-approval when hooks.json changes, and capture a live 'codex exec' tool-only probe in docs/testing/bug-2014-grant-expiry-notices.md.
+         * Antigravity (agy 1.4.2): named hook 'aida-grant-expiry-notice' with PreInvocation in aida-core/templates/antigravity-hooks.json invoking '$(git rev-parse --show-toplevel)/.agents/hooks/aida-grant-expiry-notice.sh --client agy' (timeout: 2), emitting '{"injectSteps":[{"ephemeralMessage":message}]}' when a crossing is claimed and '{}' otherwise (no decision or terminationBehavior). Capture a live 'agy -p' tool-only probe in docs/testing/bug-2014-grant-expiry-notices.md.
+       - C3 & C4 (Shared validator, parent minimum, grant-local flock ledger, fail-open):
+         * Reuses seat_authority::notice_grant and <id>.notice.lock + write_atomic(<id>.notice.json) unchanged. Ledger/timeout/command errors emit one stderr line and exit 0 (empty stdout for Claude/Codex; '{}' for Antigravity).
+       - C5 (Non-destructive .agents/hooks.json merge, scoped repair, and .gitignore):
+         * Because .agents/hooks.json is a shared map of named hooks, scaffold_antigravity_hooks parses any existing .agents/hooks.json object and merges only the 'aida-grant-expiry-notice' key (preserving unrelated user/plugin hooks; updating 'aida-grant-expiry-notice' when absent or force=true).
+         * Re-init repair only restores .agents/hooks/aida-grant-expiry-notice.sh when antigravity is enabled or .agents/hooks.json contains 'aida-grant-expiry-notice' (never on unrelated third-party .agents/hooks.json).
+         * Ignore machine-local .agents/hooks/ and .agents/hooks.json in scaffold gitignore rules alongside .codex/hooks/.
+       - C6 (Tests):
+         * Unit + protocol tests covering NoticeClient rendering, --client codex / --client agy shell paths, non-destructive .agents/hooks.json merging, init --agent allow-list, --no-hooks, and re-init repair.
+
+    Requesting advisor signoff before updating TASK-1744 code on agy/task-1744.
+  created_at: 2026-10-18T17:45:01.692009249Z
+  modified_at: 2026-10-18T17:45:01.692009249Z
 history:
 - id: 01a14039-c92c-7e43-ae41-ffb42aff5d30
   author: joe
