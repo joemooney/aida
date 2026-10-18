@@ -12,12 +12,12 @@ description: |-
   - Floors kept: independent attested review, no self-merge, no force-push or rewrite of shared branches, and mandate mint/stop by a human only.
   - Audit: every mandate-driven action is ledgered and visible in 'aida mandate status' and the digest.
   Tier: STRICT. Sketch plus advisor signoff first.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-18T09:05:08.461353893Z
+modified_at: 2026-10-18T09:12:15.188851355Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -143,6 +143,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a14e48-7a54-7cd1-926e-2287d2a9a167
+  author: aida-orchestrator
+  timestamp: 2026-10-18T09:12:15.188881891Z
+  session_id: 01a14e42fb20
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 463b81d02796148deba3c59c47daefce584c35f4
   branch: main
@@ -151,3 +159,11 @@ filed_at:
   aida_build_sha: 463b81d027
   vendor: claude
   session: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'STRICT round 1: core tick/gates/display are solid, but AC1''s approved-unowned-spec dispatch is missing, the mandate rework-release path bypasses R1, the protected-path list misses mandate_traces.rs, and several ACs lack tests or criterion traces'
+  recovery_hint: address the review findings, move STORY-1700 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-18T09:12:15.188851355Z
