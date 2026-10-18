@@ -3,12 +3,12 @@ spec_id: TASK-1737
 agreed_id: TASK-1737
 title: Record the authorizing seat and grant on advisor-gated status advances (commit trailers)
 description: 'Split from BUG-1983 (sketch item D4, approved by the advisor 2026-10-12 with conditions) so the refusal-wording and review-record fix could ship without waiting on it. An advisor-gated status advance should append git trailers to the store commit: Aida-Authority: grant|orchestrator, Aida-Seat, Aida-Grant (an 8-character prefix only, per BUG-1983 condition C2). Today the commit is a bare ''Update <ID>''. Advisor conditions: (1) emit the trailers from the single store-commit path for EVERY advisor-gated status advance, not only aida edit; (2) the history parser must tolerate both missing trailers and unknown trailer keys; (3) confirm the store''s commit-msg and provenance hooks accept them. aida history events then shows the authority on status_change rows that carry the trailers. Build on seat_authority::grant_check (from BUG-1983).'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:27:10.139520803Z
-modified_at: 2026-10-18T16:54:51.608408031Z
+modified_at: 2026-10-18T16:54:59.467540350Z
 req_type: Task
 tags:
 - audit
@@ -39,6 +39,14 @@ history:
   timestamp: 2026-10-18T16:54:53.272669689Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14ff0-208b-7170-b08d-e15911a0f689
+  author: aida-pr-open
+  timestamp: 2026-10-18T16:54:59.467538756Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
