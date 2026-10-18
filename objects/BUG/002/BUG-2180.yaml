@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:30:11.862994119Z
-modified_at: 2026-10-18T21:30:11.862994119Z
+modified_at: 2026-10-18T22:43:14.035244157Z
 req_type: Bug
+comments:
+- id: 01a1512e-f3f3-71b2-b9dc-6b24c0a81e21
+  author: joe
+  content: 'A second write path has the same defect: the reviewer''s follow-up filing (aida add from a PASS review) left objects/TASK/001/TASK-1923.yaml untracked and registry/blocks.yaml modified (PR-2749 review, 2026-10-18 15:41 MST). The fix must cover the reviewer''s follow-up adds as well as the request-changes shelve.'
+  created_at: 2026-10-18T22:43:14.035244157Z
+  modified_at: 2026-10-18T22:43:14.035244157Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
