@@ -264,7 +264,8 @@ pub fn collect_class_report(
     let mut acc: BTreeMap<String, ClassAcc> = BTreeMap::new();
     let mut report = ClassReport::default();
     for (key, path) in files {
-        let Some(round) = std::fs::read_to_string(&path)
+        // trace:TASK-1801 | ai:claude
+        let Some(round) = crate::review_verdict::read_verdict_body(&path)
             .ok()
             .and_then(|b| serde_json::from_str::<RoundView>(&b).ok())
         else {

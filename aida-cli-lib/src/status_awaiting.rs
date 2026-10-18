@@ -638,7 +638,8 @@ pub(crate) fn collect_awaiting_report_inner(
                 let bodies = keys
                     .iter()
                     .map(|key| review_verdict::verdict_path(project_root, key))
-                    .filter_map(|path| std::fs::read_to_string(path).ok())
+                    // trace:TASK-1801 | ai:claude
+                    .filter_map(|path| review_verdict::read_verdict_body(path).ok())
                     .collect();
                 let spec_completed = spec.as_deref().is_some_and(|id| {
                     status_by_spec

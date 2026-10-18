@@ -393,10 +393,10 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                         path
                     }
                 };
-                Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
-                    verdict_root,
-                    key,
-                ))?)?)
+                // trace:TASK-1801 | ai:claude
+                Ok(serde_json::from_str(&rv::read_verdict_body(
+                    rv::verdict_path(verdict_root, key),
+                )?)?)
             },
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)

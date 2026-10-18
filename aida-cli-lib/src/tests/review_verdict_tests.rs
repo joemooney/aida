@@ -2227,3 +2227,69 @@ fn task1801_bounded_reader_rejects_final_symlinks_and_oversize() {
     f.set_len(MAX_COLLECTED_VERDICT_BYTES + 1).unwrap();
     assert!(read_verdict_body(&file).is_err());
 }
+
+/// The merge/ship-authoritative readers outside this module share the anchored
+/// reader: a hard-linked verdict or a symlinked `.aida/review-verdicts` is no
+/// evidence at the ship chokepoint and no verdict at the phase-3/4 handshake.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_ship_and_phase_gates_refuse_linked_verdicts() {
+    use crate::auto_complete::{ReviewerOutcome, Verdict};
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    record_pr(root, "PR-30", "approved", SHA_R1, "reviewer", &[]);
+    let path = verdict_path(root, "PR-30");
+    let dir = root.join(".aida/review-verdicts");
+    let gates_accept = || {
+        let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 30, &[], Some(SHA_R1));
+        let pin = crate::pr_ship::approved_match_head(&cands, Some(SHA_R1));
+        let ship = crate::merge_hold::enforce_corpus_gate_before_merge(root, 30, &[], || {
+            Some(SHA_R1.to_string())
+        });
+        let phase4 = crate::phase_gates::read_verdict_file_for_head(&path, Some(SHA_R1));
+        (cands.len(), pin, ship, phase4)
+    };
+
+    // Baseline: the plain file is approved evidence everywhere.
+    let (n, pin, ship, phase4) = gates_accept();
+    assert_eq!(n, 1);
+    assert!(pin.is_some());
+    assert!(ship.is_ok(), "{ship:?}");
+    assert!(matches!(
+        phase4,
+        Ok(ReviewerOutcome::Verdict(Verdict::Approved))
+    ));
+
+    let refused = |label: &str| {
+        let (n, pin, ship, phase4) = gates_accept();
+        assert_eq!(n, 0, "{label}: no merge-gate candidate");
+        assert!(pin.is_none(), "{label}: no approved head pin");
+        let why = format!("{:#}", ship.expect_err(label));
+        assert!(why.contains("fails closed"), "{label}: {why}");
+        assert!(phase4.is_err(), "{label}: phase 4 has no verdict");
+        assert!(
+            crate::phase_gates::spec_verdict_fallback_for_phase3(
+                root,
+                "PR-30",
+                std::time::UNIX_EPOCH,
+                Some(SHA_R1)
+            )
+            .is_ok_and(|o| o.is_none()),
+            "{label}: phase-3 fallback sees no fresh verdict"
+        );
+    };
+
+    // A second hard link to the current verdict.
+    let link = root.join("verdict-link");
+    std::fs::hard_link(&path, &link).unwrap();
+    refused("hard link");
+    std::fs::remove_file(&link).unwrap();
+    assert_eq!(gates_accept().0, 1);
+
+    // The whole verdict directory redirected through a symlink.
+    let moved = root.join("moved-verdicts");
+    std::fs::rename(&dir, &moved).unwrap();
+    symlink(&moved, &dir).unwrap();
+    refused("symlinked directory");
+}

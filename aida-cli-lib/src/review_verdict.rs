@@ -1726,9 +1726,20 @@ fn open_verdict_entry(
     Ok(unsafe { std::fs::File::from_raw_fd(fd) })
 }
 
+/// The one way to read a verdict artefact: every merge/ship-authoritative
+/// reader outside this module goes through it too, so a linked verdict
+/// directory or a hard-linked file is refused everywhere, not just here.
 // trace:TASK-1801 | ai:codex
-fn read_verdict_body(path: impl AsRef<Path>) -> std::io::Result<String> {
+// trace:TASK-1801 | ai:claude
+pub(crate) fn read_verdict_body(path: impl AsRef<Path>) -> std::io::Result<String> {
     read_verdict_file(path.as_ref()).map(|(body, _)| body)
+}
+
+/// Modification time of a verdict artefact, from the same anchored handle the
+/// body is read through. A linked file or directory has no trustworthy mtime.
+// trace:TASK-1801 | ai:claude
+pub(crate) fn verdict_file_modified(path: impl AsRef<Path>) -> Option<std::time::SystemTime> {
+    read_verdict_file(path.as_ref()).ok()?.1.modified().ok()
 }
 
 fn read_verdict_file(path: &Path) -> std::io::Result<(String, std::fs::Metadata)> {

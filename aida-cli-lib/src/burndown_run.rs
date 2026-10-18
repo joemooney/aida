@@ -1041,7 +1041,8 @@ pub(crate) fn local_verdict_blocks_merge(
     }
     let bodies: Vec<String> = match existing
         .iter()
-        .map(|path| std::fs::read_to_string(path))
+        // trace:TASK-1801 | ai:claude
+        .map(|path| review_verdict::read_verdict_body(path))
         .collect::<Result<_, _>>()
     {
         Ok(bodies) => bodies,

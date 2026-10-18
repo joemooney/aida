@@ -1,8 +1,11 @@
-Verdict readers pin the non-symlink review-verdicts directory and archive
-subdirectories, then validate and read bounded, singly linked regular files by
-handle. Reviewer coexistence checks the anchor against current change credit;
-direct reviewer starts keep ordinary source-lease conflict handling.
+Every production verdict reader (record, archive, ship and merge gates,
+orchestrator phase handshake, drain, status) pins the non-symlink
+review-verdicts directory and archive subdirectories, then validates and reads
+bounded, singly linked regular files by handle. Reviewer coexistence checks
+the anchor against current change credit; direct reviewer starts keep ordinary
+source-lease conflict handling.
 <!-- trace:TASK-1801 | ai:codex -->
+<!-- trace:TASK-1801 | ai:claude -->
 
 Standalone reviewer coexistence requires an explicit queue-work role flag plus
 an unambiguous backing spec. Verdict collection reads a size-bounded regular

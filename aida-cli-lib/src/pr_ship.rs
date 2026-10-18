@@ -2151,7 +2151,15 @@ pub(crate) fn merge_gate_verdict_candidates(
                 continue;
             }
             seen.push(canon);
-            let current = std::fs::read_to_string(&path)
+            // TASK-1801: a current artefact that exists but the anchored
+            // reader refuses (linked file or directory) is not evidence, and
+            // it must not let an archived round answer for the key either.
+            // trace:TASK-1801 | ai:claude
+            let body = crate::review_verdict::read_verdict_body(&path);
+            if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+                continue;
+            }
+            let current = body
                 .ok()
                 .and_then(|body| crate::review_verdict::parse_recorded_verdict(&body));
             let current_at_head = match (&current, head) {

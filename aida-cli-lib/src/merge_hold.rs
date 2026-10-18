@@ -2739,7 +2739,8 @@ pub(crate) fn corpus_gate_bodies(
                 continue;
             }
             seen.push(canon);
-            match std::fs::read_to_string(&path) {
+            // trace:TASK-1801 | ai:claude
+            match crate::review_verdict::read_verdict_body(&path) {
                 Ok(body) => out.push((key.clone(), body)),
                 Err(e) => {
                     return Err(format!(

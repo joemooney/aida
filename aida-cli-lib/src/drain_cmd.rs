@@ -1004,7 +1004,8 @@ pub(crate) fn probe_resume_facts(
             let bodies: Vec<String> = match paths
                 .iter()
                 .filter(|path| path.exists())
-                .map(std::fs::read_to_string)
+                // trace:TASK-1801 | ai:claude
+                .map(review_verdict::read_verdict_body)
                 .collect::<Result<Vec<String>, _>>()
             {
                 Ok(bodies) if !bodies.is_empty() => bodies,

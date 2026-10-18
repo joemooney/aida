@@ -1418,7 +1418,7 @@ pub(crate) fn handle_review_spec(
     // (when it names a commit) before the record below stamps provenance.
     // trace:TASK-1460 | ai:claude
     let _ = review_verdict::adopt_direct_write(&verdict_path);
-    let verdict = std::fs::read_to_string(&verdict_path)
+    let verdict = review_verdict::read_verdict_body(&verdict_path)
         .ok()
         .and_then(|body| reviewer_summary::parse_verdict_file(&body));
 
@@ -3189,7 +3189,7 @@ pub(crate) fn handle_review_record_at(
     // BUG-2136: snapshot the record as it stands so the outcome line can say
     // whether this call added a round or re-recorded an identical one.
     // trace:BUG-2136 | ai:claude
-    let record_before = std::fs::read_to_string(&path)
+    let record_before = review_verdict::read_verdict_body(&path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned());
@@ -4186,7 +4186,8 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
                 verdict_tip_relation(&project_root, branch.as_deref(), v.reviewed_sha.as_deref());
             let actionability = review_verdict::review_actionability(Some(&v), relation);
             if json {
-                let body = std::fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+                let body =
+                    review_verdict::read_verdict_body(&path).unwrap_or_else(|_| "{}".to_string());
                 let mut value: serde_json::Value =
                     serde_json::from_str(body.trim()).unwrap_or(serde_json::Value::Null);
                 if let Some(obj) = value.as_object_mut() {

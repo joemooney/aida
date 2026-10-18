@@ -993,7 +993,8 @@ pub(crate) fn read_review_verdict_for_record(
         .join(".aida")
         .join("review-verdicts")
         .join(format!("{spec_id}.json"));
-    let body = std::fs::read_to_string(path).ok()?;
+    // trace:TASK-1801 | ai:claude
+    let body = crate::review_verdict::read_verdict_body(path).ok()?;
     reviewer_summary::parse_verdict_file(&body)
 }
 

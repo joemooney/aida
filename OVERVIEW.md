@@ -1022,10 +1022,14 @@ regression runs under an exact-test subprocess watchdog.
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
 `O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
-reject `st_nlink != 1`. Current, archived and adoption readers share this path.
+reject `st_nlink != 1`. Every production verdict reader shares this path: record,
+archive and adoption; the ship approval and corpus merge gates; the orchestrator
+phase-3/4 handshake; drain, burndown, rework-release and status readers. A
+present but refused current file contributes no evidence, archived rounds included.
 Reviewer coexistence also verifies that the anchor resolves to a requirement
 credited by the change's title trailer or branch; unavailable metadata refuses
 the exception. Direct `session start --role reviewer` has no coexistence input
 and keeps ordinary conflict handling (headless live-lease refusal, terminal
 conflict prompt). See [sessions](docs/cli/06-roles-sessions.md).
 <!-- trace:TASK-1801 | ai:codex -->
+<!-- trace:TASK-1801 | ai:claude -->
