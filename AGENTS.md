@@ -70,6 +70,11 @@ once a references/verified-by neighbor is Completed (either direction). Persiste
 `hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
 amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+Store rebase/union-merge/fast-forward (`git_ops::pull_rebase*`, `merge_union_auto`,
+`fast_forward_store`) take the store lock, refuse incompatible evidence before
+Git, and commit combined-graph locks before success; check refusals with
+`git_ops::is_evidence_refusal` and never publish after one.
+<!-- trace:BUG-2162 | ai:claude -->
 
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid

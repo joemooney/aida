@@ -539,6 +539,30 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
     format!("{stem}-{hash:016x}")
 }
 
+/// Best-effort store refresh for a coordination write. An unreachable store
+/// keeps the local-only path (`Ok`); a hypothesis evidence refusal is the one
+/// failure that stops the write and its publish (`Err`).
+// trace:BUG-2162 | ai:claude
+fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<(), String>> {
+    match aida_core::git_ops::pull_rebase(store_root, "origin", branch) {
+        Ok(()) => Ok(Ok(())),
+        Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => Err(e),
+        Err(e) => Ok(Err(e.to_string())),
+    }
+}
+
+/// [`refresh_store`] for a void cleanup path: report a refusal and tell the
+/// caller to stop.
+fn refresh_store_or_stop(store_root: &Path, branch: &str) -> bool {
+    match refresh_store(store_root, branch) {
+        Ok(_) => false,
+        Err(e) => {
+            eprintln!("warning: store coordination update skipped: {e:#}");
+            true
+        }
+    }
+}
+
 /// Directory under the store worktree holding the lease claims.
 fn leases_dir(store_root: &Path) -> PathBuf {
     store_root.join(LEASES_SUBDIR)
@@ -702,7 +726,7 @@ pub(crate) fn acquire_claim(
     for attempt in 0..MAX_CAS_RETRIES {
         // Step 1: refresh the store so we see other clones' claims. A failed
         // pull (offline) is NOT fatal — fall through to local-only behavior.
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_root, "origin", &branch) {
+        if let Err(e) = refresh_store(store_root, &branch)? {
             return Ok(AcquireOutcome::Unavailable(format!(
                 "store unreachable ({e})"
             )));
@@ -853,7 +877,9 @@ pub(crate) fn release_claim(store_root: &Path, scope: &str, clone_path: &Path) {
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
     // Best-effort pull so the delete applies on top of the latest store.
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    if refresh_store_or_stop(store_root, &branch) {
+        return;
+    }
     if std::fs::remove_file(&path).is_err() && path.exists() {
         return;
     }
@@ -902,7 +928,7 @@ pub(crate) fn release_stale_foreign_claim(
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
     // Pull first so we judge, and delete, against the latest store state — a
     // peer may already have released or refreshed it.
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    let _ = refresh_store(store_root, &branch)?;
     let Some(existing) = read_claim(&path) else {
         // Already gone (or unreadable) — nothing to release, not an error.
         return Ok(false);
@@ -1093,7 +1119,7 @@ pub(crate) fn acquire_lock_claim(
     let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
 
     for _attempt in 0..MAX_CAS_RETRIES {
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_root, "origin", &branch) {
+        if let Err(e) = refresh_store(store_root, &branch)? {
             return Ok(LockAcquireOutcome::Unavailable(format!(
                 "store unreachable ({e})"
             )));
@@ -1274,7 +1300,9 @@ pub(crate) fn heartbeat_lock_claim(store_root: &Path, kind: LockKind, clone_path
     }
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    if refresh_store_or_stop(store_root, &branch) {
+        return;
+    }
     let path = lock_claim_path(store_root, kind);
     let our_clone = canonical_clone_path(clone_path);
     let Some(mut claim) = read_claim(&path) else {
@@ -1319,7 +1347,9 @@ pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: 
     }
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
+    if refresh_store_or_stop(store_root, &branch) {
+        return;
+    }
     if std::fs::remove_file(&path).is_err() && path.exists() {
         return;
     }
@@ -1861,6 +1891,106 @@ ttl_secs = 1800
             matches!(out, LockAcquireOutcome::Unavailable(_)),
             "got {out:?}"
         );
+    }
+
+    /// BUG-2162: a store refresh refused for hypothesis evidence stops the
+    /// coordination write and its publish; an unreachable store still falls
+    /// back to the local-only path.
+    // trace:BUG-2162 | ai:claude
+    #[test]
+    fn bug_2162_best_effort_callers_stop_on_evidence_refusal() {
+        use aida_core::models::{
+            HypothesisLock, Relationship, RelationshipType, Requirement, RequirementStatus,
+            RequirementType,
+        };
+        use sha2::Digest;
+        let git = |cwd: &Path, args: &[&str]| {
+            let out = std::process::Command::new("git")
+                .args(args)
+                .current_dir(cwd)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        git(dir.path(), &["init", "-q", "--bare", hub.to_str().unwrap()]);
+        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
+        let a = dir.path().join("a").join(".aida-store");
+        std::fs::create_dir_all(&a).unwrap();
+        git(&a, &["init", "-q", "-b", "aida-store"]);
+        let mut h = Requirement::new("prediction".into(), "before".into());
+        h.spec_id = Some("SPIKE-1".into());
+        h.req_type = RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        let mut r = Requirement::new("experiment".into(), "run".into());
+        r.spec_id = Some("TASK-2".into());
+        h.relationships.push(Relationship {
+            rel_type: RelationshipType::References,
+            target_id: r.id,
+            created_at: None,
+            created_by: None,
+        });
+        let write = |store: &Path, row: &Requirement| {
+            aida_core::object_store::write_object(&store.join("objects"), row).unwrap();
+        };
+        let commit = |store: &Path, msg: &str| {
+            git(store, &["add", "-A"]);
+            git(
+                store,
+                &[
+                    "-c",
+                    "user.email=t@example.invalid",
+                    "-c",
+                    "user.name=T",
+                    "commit",
+                    "-q",
+                    "-m",
+                    msg,
+                ],
+            );
+        };
+        std::fs::write(a.join("metadata.yaml"), "name: test\n").unwrap();
+        write(&a, &h);
+        write(&a, &r);
+        commit(&a, "seed");
+        git(&a, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        git(&a, &["push", "-q", "-u", "origin", "aida-store"]);
+        let b = dir.path().join("b").join(".aida-store");
+        git(
+            dir.path(),
+            &["clone", "-q", hub.to_str().unwrap(), b.to_str().unwrap()],
+        );
+        // One clone completes the result and locks the prediction; the other
+        // rewrites the prediction offline.
+        r.status = RequirementStatus::Completed;
+        write(&a, &r);
+        let mut locked = h.clone();
+        locked.hypothesis_lock = Some(HypothesisLock {
+            locked_at: Utc::now(),
+            description_sha256: format!("{:x}", sha2::Sha256::digest(h.description.as_bytes())),
+        });
+        write(&a, &locked);
+        commit(&a, "result");
+        git(&a, &["push", "-q", "origin", "aida-store"]);
+        let mut edited = h.clone();
+        edited.description = "moved goalposts".into();
+        write(&b, &edited);
+        commit(&b, "offline edit");
+
+        let err = acquire_claim(&b, "FR-1", dir.path(), "claude", false, false).unwrap_err();
+        assert!(aida_core::git_ops::is_evidence_refusal(&err), "{err:#}");
+        let err =
+            acquire_lock_claim(&b, LockKind::Solo, dir.path(), "solo", 1800, false).unwrap_err();
+        assert!(aida_core::git_ops::is_evidence_refusal(&err), "{err:#}");
+        assert!(release_stale_foreign_claim(&b, "FR-1", "x", "y").is_err());
+        let path = lock_claim_path(&b, LockKind::Solo);
+        assert!(!path.exists(), "no claim may be written after a refusal");
+
+        // Unreachable: the same calls stay best-effort.
+        git(&b, &["remote", "set-url", "origin", "/nonexistent/hub.git"]);
+        let out = acquire_claim(&b, "FR-1", dir.path(), "claude", false, false).unwrap();
+        assert!(matches!(out, AcquireOutcome::Unavailable(_)), "got {out:?}");
     }
 
     #[test]

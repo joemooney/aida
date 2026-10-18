@@ -1700,8 +1700,11 @@ fn sync_refuses_to_publish_after_pulling_an_unparsable_object() {
     fx.write_store_file("notes/pending.txt", "pending\n");
     let out = fx.run(&["db", "sync", "--pull", "--push"]);
     assert!(!out.status.success(), "{}", text(&out));
+    // The pull's evidence preflight now refuses the changed, unparsable
+    // object before the rebase runs. trace:BUG-2162 | ai:claude
     assert!(
-        text(&out).contains("did not read completely"),
+        text(&out).contains("did not read completely")
+            || text(&out).contains("cannot parse objects/TASK/000/TASK-1.yaml"),
         "{}",
         text(&out)
     );

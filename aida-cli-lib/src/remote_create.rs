@@ -2606,9 +2606,9 @@ fn merge_and_validate(
             continue;
         }
         if git_ops::is_ancestor(store_dir, &head, tip).unwrap_or(false) {
-            if git_out(store_dir, &["merge", "--ff-only", tip]).is_none() {
-                anyhow::bail!("fast-forward to {} failed", short(tip));
-            }
+            // trace:BUG-2162 | ai:claude
+            git_ops::fast_forward_store(store_dir, tip)
+                .map_err(|e| e.context(format!("fast-forward to {} failed", short(tip))))?;
             continue;
         }
         match git_ops::merge_union_auto(

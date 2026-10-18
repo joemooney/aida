@@ -315,14 +315,27 @@ hide it. There is no unlock flag. Untagged legacy rows keep their normal edit
 behavior. The archived SQLite/Postgres backends and the YAML backend do not
 store or enforce this lock; use the canonical git store for pre-registration.
 
-If a clean text merge rewrites a locked description, the hash no longer
-matches. That row then refuses every change except one that restores the
-frozen text, for example `aida edit <ID>` with the original description from
-store history. Other rows stay writable. Binaries older than this feature do
-not know `hypothesis_lock` and drop it when they rewrite the row, so upgrade
-every clone that writes to the store.
+Store sync between clones (`aida pull`, `aida db sync`, `aida remote
+reconcile` and the coordination refreshes) keeps this evidence too, even when
+Git merges the YAML without a conflict. A sync that would bring in a changed
+locked description, a deleted or renamed locked hypothesis, or two different
+pre-result descriptions for a hypothesis that just reached its first result is
+refused before your store changes; fix the description in one clone and sync
+again. When the first result only exists once both clones are combined (the
+link came from one, the completion from the other), the sync locks the
+hypothesis in an extra store commit. See
+[store sync and pre-registration](10-storage.md#store-sync-and-pre-registration).
+
+A raw `git merge` or `git rebase` of the store bypasses that check. If one
+rewrites a locked description, the hash no longer matches. That row then
+refuses every change except one that restores the frozen text, for example
+`aida edit <ID>` with the original description from store history. Other rows
+stay writable. Binaries older than this feature do not know `hypothesis_lock`
+and drop it when they rewrite the row, so upgrade every clone that writes to
+the store.
 <!-- trace:STORY-1675 | ai:codex -->
 <!-- trace:STORY-1675 | ai:claude -->
+<!-- trace:BUG-2162 | ai:claude -->
 
 ---
 

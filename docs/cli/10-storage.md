@@ -18,6 +18,18 @@ What this means in practice: **a normal user needs almost none of the commands b
 
 > `aida fetch`/`pull`/`push`/`rebase` *also* move the store (it's the second of AIDA's two git legs), but they're the everyday sync verbs and live in **[Chapter 4 — Git & lifecycle](04-git-lifecycle.md)**. This chapter is the store's *direct* management surface; reach for Chapter 4 for routine syncing.
 
+### Store sync and pre-registration
+
+Every store sync AIDA runs (the `aida pull` store leg, `aida db sync`, push-retry pulls, `aida remote reconcile` merges and fast-forwards, and the coordination refreshes behind claims and locks) checks [locked hypotheses](02-specs.md#pre-registering-a-hypothesis) on both sides before Git touches the store, and checks the result before reporting success. A clean Git merge is not enough on its own.
+
+- **Compatible changes go through.** Edits to titles, tags, comments or other specs merge as usual, and an existing lock keeps its exact timestamp and hash. If both clones locked the same description independently, the earliest lock wins.
+- **Conflicting evidence is refused before anything changes.** Examples: one clone changed a locked description, deleted or renamed a locked hypothesis, or wrote a different description just as the other recorded the first result. Your branch, index and files are left as they were. Fix the description in one clone, then sync again. There is no override flag.
+- **A lock can be created by the sync itself.** If the first completed result exists only in the combined store (one clone added the link, the other completed the experiment), the sync writes the lock in an extra commit, `aida: lock hypothesis evidence after store sync`, on top of the merged history.
+- **A failure after Git finishes stops the sync without undoing it.** AIDA reports the commits it started from and the commit the store is at now, and pushes nothing. It never resets, force-pushes or stashes. Inspect the store history and repair it explicitly.
+
+The check covers syncs AIDA runs while it holds the store write lock. A raw `git merge` or `git rebase` in `.aida-store/`, or a clone running a binary older than this check, can still combine changed evidence. Readers that do not take the lock can briefly see Git's half-updated working tree. Unrelated store histories (no common commit) may join only while neither side holds hypothesis evidence.
+<!-- trace:BUG-2162 | ai:claude -->
+
 ---
 
 ### `aida db`
