@@ -57,3 +57,46 @@ pub(crate) fn handle_changelog_command(cmd: &cli::ChangelogCommand) -> Result<()
     };
     changelog::run(opts, &project_root)
 }
+
+/// Generate `CHANGELOG.md` mechanically from git tags + the spec
+/// graph. Walks `v*` tags as release boundaries, scans commits
+/// between them for `(SPEC-ID)` references, classifies each spec
+/// (Features / Fixes / Documentation / Infrastructure / Internal /
+/// Other), and renders one structured markdown section per release.
+/// `generate` prints to stdout or `--out`; `refresh` writes
+/// `CHANGELOG.md` (idempotent — same git state → byte-identical
+/// output); `preview` is `[Unreleased]`-only.
+// trace:TASK-299 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "changelog")]
+pub(crate) struct ChangelogArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::ChangelogCommand,
+}
+
+// `aida changelog` is self-contained: git + read-only store, no shared
+// storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
+fn run_changelog(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <ChangelogArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cl_cmd = &args.inner;
+    return self::handle_changelog_command(cl_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CHANGELOG: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "changelog",
+        help_after: "gate",
+        command: <ChangelogArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_changelog,
+    };

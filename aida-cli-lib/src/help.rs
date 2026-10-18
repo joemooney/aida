@@ -467,3 +467,34 @@ pub(crate) fn open_user_guide(dark_mode: bool) -> Result<()> {
         }
     }
 }
+
+/// List the full command surface grouped by topic (same output as
+/// `aida help --all`). Bare `aida` / `aida help` show the curated
+/// Getting-started view instead.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "help-all")]
+pub(crate) struct HelpAllArgs {}
+
+// Help-all / commands are pure text; no storage needed.
+fn run_help_all(
+    _matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    print_help_all();
+    return Ok(());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static HELP_ALL: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "help-all",
+        help_after: "human",
+        command: <HelpAllArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_help_all,
+    };

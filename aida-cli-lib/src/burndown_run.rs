@@ -2987,3 +2987,42 @@ pub(crate) fn handle_burndown_plan(
     }
     Ok(())
 }
+
+// trace:STORY-527 | ai:claude
+/// Plan an autonomous burn-down: list which specs are ready to fan out vs
+/// parked, via the pickability gate. The run itself is the /aida-burndown
+/// skill in Claude Code, not a CLI subcommand — `burndown plan` is the
+/// read-only foundation it drives its worktree fan-out from.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "burndown")]
+pub(crate) struct BurndownArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::BurndownCommand,
+}
+
+// STORY-527: `aida burndown` reads the requirement graph (like `graph` /
+// `plan`) — no shared storage handle needed. Dispatch early.
+// trace:STORY-527 | ai:claude
+fn run_burndown(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <BurndownArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return handle_burndown_command(cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static BURNDOWN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "burndown",
+        help_after: "release",
+        command: <BurndownArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_burndown,
+    };

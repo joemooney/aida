@@ -426,7 +426,9 @@ mod tests {
         // clap `intake` alias reaches the Groom command (STORY-708: groom is
         // canonical; assess/intake are deprecated aliases)
         assert!(matches!(
-            Cli::try_parse_from(["aida", "intake"]).unwrap().command,
+            crate::command_registry::try_parse_from(["aida", "intake"])
+                .unwrap()
+                .command,
             Command::Groom { .. }
         ));
         // TASK-862: the personal-view shortcuts must rewrite exactly as the

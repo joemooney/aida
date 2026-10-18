@@ -694,7 +694,7 @@ mod tests {
 
     #[test]
     fn report_cli_parses_bug_idea_and_recheck_forms() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "report",
             "bug",
@@ -721,8 +721,14 @@ mod tests {
         assert_eq!(title, "bad picker");
         assert_eq!(description.as_deref(), Some("body"));
 
-        let cli =
-            Cli::try_parse_from(["aida", "report", "idea", "--title", "better flow"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "report",
+            "idea",
+            "--title",
+            "better flow",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Command::Report {
@@ -731,7 +737,7 @@ mod tests {
             }
         ));
 
-        let cli = Cli::try_parse_from(["aida", "report", "--recheck"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "report", "--recheck"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::Report {

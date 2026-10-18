@@ -1330,3 +1330,43 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/story_1698_mandate_tests.rs"]
 mod story_1698_mandate_tests;
+
+/// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
+/// advisor seat ship held PRs with an attested, independent approval.
+///
+/// `start` and `stop` need a human at an interactive terminal; `status`
+/// is open to anyone. Operator-only specs always stay human-only.
+// trace:STORY-1698 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mandate")]
+pub(crate) struct MandateArgs {
+    #[clap(subcommand)]
+    pub action: crate::cli::MandateAction,
+}
+
+// STORY-1698: the fire-fighting mandate reads/writes only the user's AIDA
+// home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
+fn run_mandate(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <MandateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let MandateArgs { action } = &args;
+    return self::handle_mandate(action);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MANDATE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "mandate",
+        help_after: "merge-hold",
+        command: <MandateArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_mandate,
+    };

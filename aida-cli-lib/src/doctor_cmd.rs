@@ -8965,7 +8965,7 @@ mod story_462_doctor_tests {
 
     #[test]
     fn doctor_default_flags_parse_without_subcommand() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "doctor",
             "--heal",
@@ -8975,7 +8975,7 @@ mod story_462_doctor_tests {
             "--json",
         ])
         .unwrap();
-        let Command::Doctor {
+        let crate::doctor_cmd::DoctorArgs {
             heal,
             yes,
             category,
@@ -8986,7 +8986,7 @@ mod story_462_doctor_tests {
             fix_sandbox,
             cmd,
             ..
-        } = cli.command
+        } = cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor command");
         };
@@ -9935,10 +9935,16 @@ hostname = "localhost"
 
     #[test]
     fn doctor_check_and_heal_subcommands_parse() {
-        let check =
-            Cli::try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json", "--all"])
-                .unwrap();
-        let Command::Doctor {
+        let check = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "check",
+            "OBE-briefs",
+            "--json",
+            "--all",
+        ])
+        .unwrap();
+        let crate::doctor_cmd::DoctorArgs {
             cmd:
                 Some(cli::DoctorCommand::Check {
                     category,
@@ -9947,7 +9953,7 @@ hostname = "localhost"
                     ..
                 }),
             ..
-        } = check.command
+        } = check.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor check");
         };
@@ -9955,7 +9961,7 @@ hostname = "localhost"
         assert!(all);
         assert!(json);
 
-        let heal = Cli::try_parse_from([
+        let heal = crate::command_registry::try_parse_from([
             "aida",
             "doctor",
             "heal",
@@ -9965,7 +9971,7 @@ hostname = "localhost"
             "--all",
         ])
         .unwrap();
-        let Command::Doctor {
+        let crate::doctor_cmd::DoctorArgs {
             cmd:
                 Some(cli::DoctorCommand::Heal {
                     category,
@@ -9975,7 +9981,7 @@ hostname = "localhost"
                     json,
                 }),
             ..
-        } = heal.command
+        } = heal.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor heal");
         };
@@ -10495,11 +10501,11 @@ User content.
 
     #[test]
     fn legacy_doctor_subcommands_still_parse() {
-        let cli = Cli::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
-        let Command::Doctor {
+        let cli = crate::command_registry::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
+        let crate::doctor_cmd::DoctorArgs {
             cmd: Some(cli::DoctorCommand::Fsck),
             ..
-        } = cli.command
+        } = cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected legacy doctor fsck");
         };
@@ -10513,22 +10519,23 @@ User content.
     fn task_956_hidden_top_level_parents_still_dispatch() {
         // punts / worker / headless are hidden from `aida --help` but still parse.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "punts", "analyze"])
+            crate::command_registry::try_parse_from(["aida", "punts", "analyze"])
                 .unwrap()
                 .command,
             Command::Punts(_)
         ));
         assert!(matches!(
-            Cli::try_parse_from(["aida", "worker", "directives"])
+            crate::command_registry::try_parse_from(["aida", "worker", "directives"])
                 .unwrap()
                 .command,
             Command::Worker(_)
         ));
         assert!(matches!(
-            Cli::try_parse_from(["aida", "headless", "tail"])
+            crate::command_registry::try_parse_from(["aida", "headless", "tail"])
                 .unwrap()
-                .command,
-            Command::Headless(_)
+                .command
+                .registered::<crate::queue_misc::HeadlessArgs>(),
+            crate::queue_misc::HeadlessArgs { inner: _ }
         ));
     }
 
@@ -10537,24 +10544,30 @@ User content.
     fn task_956_hidden_subcommands_still_dispatch() {
         // doctor verify-relationships — hidden under `doctor`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "doctor", "verify-relationships", "--repair"])
-                .unwrap()
-                .command,
-            Command::Doctor {
+            crate::command_registry::try_parse_from([
+                "aida",
+                "doctor",
+                "verify-relationships",
+                "--repair"
+            ])
+            .unwrap()
+            .command
+            .registered::<crate::doctor_cmd::DoctorArgs>(),
+            crate::doctor_cmd::DoctorArgs {
                 cmd: Some(cli::DoctorCommand::VerifyRelationships { repair: true, .. }),
                 ..
             }
         ));
         // queue load — hidden under `queue`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "queue", "load"])
+            crate::command_registry::try_parse_from(["aida", "queue", "load"])
                 .unwrap()
                 .command,
             Command::Queue(cli::QueueCommand::Load { .. })
         ));
         // role repair — hidden under `role`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "role", "repair"])
+            crate::command_registry::try_parse_from(["aida", "role", "repair"])
                 .unwrap()
                 .command,
             Command::Role(cli::RoleCommand::Repair { .. })
@@ -10570,25 +10583,38 @@ User content.
         // changelog generate — hidden, but keeps its stdout/range surface
         // distinct from the canonical `changelog refresh`.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "changelog", "generate", "--since", "v0.7.0"])
-                .unwrap()
-                .command,
-            Command::Changelog(cli::ChangelogCommand::Generate { since: Some(_), .. })
+            crate::command_registry::try_parse_from([
+                "aida",
+                "changelog",
+                "generate",
+                "--since",
+                "v0.7.0"
+            ])
+            .unwrap()
+            .command
+            .registered::<crate::changelog_cmd::ChangelogArgs>(),
+            crate::changelog_cmd::ChangelogArgs {
+                inner: cli::ChangelogCommand::Generate { since: Some(_), .. }
+            }
         ));
         // The canonical `changelog refresh` is unchanged and still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "changelog", "refresh"])
+            crate::command_registry::try_parse_from(["aida", "changelog", "refresh"])
                 .unwrap()
-                .command,
-            Command::Changelog(cli::ChangelogCommand::Refresh { .. })
+                .command
+                .registered::<crate::changelog_cmd::ChangelogArgs>(),
+            crate::changelog_cmd::ChangelogArgs {
+                inner: cli::ChangelogCommand::Refresh { .. }
+            }
         ));
         // doctor fsck — hidden, but keeps its own full-suite logic distinct
         // from the canonical `doctor check` (which requires a category arg).
         assert!(matches!(
-            Cli::try_parse_from(["aida", "doctor", "fsck"])
+            crate::command_registry::try_parse_from(["aida", "doctor", "fsck"])
                 .unwrap()
-                .command,
-            Command::Doctor {
+                .command
+                .registered::<crate::doctor_cmd::DoctorArgs>(),
+            crate::doctor_cmd::DoctorArgs {
                 cmd: Some(cli::DoctorCommand::Fsck),
                 ..
             }
@@ -14175,3 +14201,151 @@ mod bug_1505_review_verdict_doctor_tests {
         );
     }
 }
+
+/// Diagnose and heal AIDA multi-agent state drift. Report-only by
+/// design: exit 0 means the scan RAN, not that it found nothing —
+/// findings print as text/JSON either way. A caller that needs a
+/// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
+/// `doctor check <category> --fail-on-findings`, which exits non-zero
+/// only when that one category has findings.
+// trace:EPIC-19 trace:STORY-462
+#[derive(clap::Parser, Debug)]
+#[clap(name = "doctor")]
+pub(crate) struct DoctorArgs {
+    /// Apply safe fixes after scanning. Without this, doctor is read-only.
+    #[clap(long)]
+    pub heal: bool,
+
+    /// Skip per-category confirmation prompts while healing.
+    #[clap(long, short = 'y')]
+    pub yes: bool,
+
+    /// Restrict scan/heal to one category.
+    #[clap(long, value_name = "CATEGORY")]
+    pub category: Option<String>,
+
+    /// Emit machine-readable JSON.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Permit riskier destructive fixes such as branch deletion.
+    #[clap(long)]
+    pub force: bool,
+
+    /// Show older completed-without-commit findings individually.
+    #[clap(long)]
+    pub all: bool,
+
+    /// Exempt specs completed before this point from the
+    /// completed-without-commit integrity check: a relative duration
+    /// (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
+    /// zone-less ISO datetime (local time), RFC3339, or else a git
+    /// ref/tag whose commit date is the cutoff. An invalid value is an
+    /// error. Quiets noise on legacy history predating trace
+    /// conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var.
+    // trace:TASK-673 | ai:claude
+    // trace:TASK-1509 | ai:claude
+    // trace:BUG-1622 | ai:claude
+    #[clap(long, value_name = "DATE_OR_REF")]
+    pub since: Option<String>,
+
+    /// Print the guided, copy-pasteable steps to bring the OS sandbox
+    /// (bubblewrap write-confinement) up on this host: detect the current
+    /// state, the exact sysctl to persist if the kernel blocks unprivileged
+    /// user namespaces, how to opt in, and the verify command. Prints the
+    /// sequence — sudo steps are clearly marked "run this yourself"; it
+    /// never silently runs sudo. Runs the non-sudo availability re-probe as
+    /// a smoke check.
+    // trace:STORY-665 | ai:claude
+    #[clap(long)]
+    pub fix_sandbox: bool,
+
+    /// Run a store-wide semantic contradiction sweep combining mechanical joins
+    /// in Rust with Jev System One semantic choice queries.
+    // trace:STORY-1426 | ai:antigravity
+    #[clap(long)]
+    pub contradictions: bool,
+
+    /// Maximum contradiction findings to print per page. The default is
+    /// deliberately bounded; use --contradictions-offset to continue or
+    /// --all to request the complete scan.
+    // trace:STORY-1426 | ai:codex
+    #[clap(long, value_name = "N", default_value_t = 25)]
+    pub contradictions_limit: usize,
+
+    /// Zero-based offset into the deterministically ordered contradiction
+    /// findings. Ignored with --all.
+    // trace:STORY-1426 | ai:codex
+    #[clap(long, value_name = "N", default_value_t = 0)]
+    pub contradictions_offset: usize,
+
+    /// Legacy maintenance subcommand or focused doctor action.
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::DoctorCommand>,
+}
+
+// Doctor commands run before storage init — they may need to operate
+// on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
+fn run_doctor(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let DoctorArgs {
+        heal,
+        yes,
+        category,
+        json,
+        force,
+        all,
+        since,
+        fix_sandbox,
+        contradictions,
+        contradictions_limit,
+        contradictions_offset,
+        cmd,
+    } = &args;
+    // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing
+    // bwrap OS-confinement up on a new machine. Short-circuit before the
+    // multi-agent drift scan — it's a standalone setup helper, not a check.
+    // trace:STORY-665 | ai:claude
+    if *fix_sandbox {
+        return self::doctor_fix_sandbox();
+    }
+    // STORY-1426: `aida doctor --contradictions` runs the store-wide semantic
+    // contradiction sweep combining mechanical joins with Jev choice queries.
+    // trace:STORY-1426 | ai:antigravity
+    if *contradictions {
+        return self::doctor_contradictions(
+            *json,
+            *contradictions_limit,
+            *contradictions_offset,
+            *all,
+        );
+    }
+    return self::handle_doctor_command(
+        *heal,
+        *yes,
+        category.as_deref(),
+        *json,
+        *force,
+        *all,
+        since.as_deref(),
+        cmd.as_ref(),
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DOCTOR: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "doctor",
+        help_after: "driver",
+        command: <DoctorArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_doctor,
+    };

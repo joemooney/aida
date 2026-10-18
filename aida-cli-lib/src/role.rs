@@ -405,13 +405,7 @@ pub(crate) fn role_restore_prompt_should_skip(command: &Command) -> bool {
     }
     matches!(
         command,
-        Command::Init { .. }
-            | Command::Role(_)
-            | Command::McpServe
-            | Command::Internal { .. }
-            | Command::Statusline { .. }
-            | Command::Statusbar { .. }
-            | Command::Contract { .. }
+        Command::Init { .. } | Command::Role(_) | Command::McpServe
     )
 }
 

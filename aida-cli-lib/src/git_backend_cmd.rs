@@ -1926,67 +1926,16 @@ pub(crate) fn handle_git_backend_command(
                 branch.as_deref(),
             );
         }
-        Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
-        Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
-        Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
-        Command::Driver(_) => unreachable!("driver is dispatched before storage init"),
-        Command::Release { .. } => unreachable!("release is dispatched before storage init"),
-        Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
-        Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
         }
-        // trace:TASK-1147
-        Command::Autopilot(_) => {
-            unreachable!("autopilot is dispatched before storage init")
-        }
-        Command::Why { .. } => unreachable!("why is dispatched before storage init"),
-        Command::Explain { .. } => unreachable!("explain is dispatched before storage init"),
-        Command::Wiki(_) => unreachable!("wiki is dispatched before storage init"),
-        Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
-        // trace:STORY-696
-        Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
-        // trace:TASK-1167
-        Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
-        Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
-        Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
-        // trace:TASK-1034
-        Command::Integrate { .. } => {
-            unreachable!("integrate is dispatched before storage init")
-        }
-        // trace:TASK-957
-        Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
-        Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
-        Command::Worktree(_) => {
-            unreachable!("worktree subcommands are dispatched before storage init")
-        }
-        Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
-        Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
-        Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
-        Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
-        Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
-        Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
-        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
-        Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
-        Command::Lifecycle { .. } => {
-            unreachable!("lifecycle is dispatched before storage init")
-        }
-        Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
-        Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
-        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
-        Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
-        Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
-        Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
-        Command::Internal { .. } => unreachable!("internal is dispatched before storage init"),
-        Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
-        Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
@@ -1994,13 +1943,6 @@ pub(crate) fn handle_git_backend_command(
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
-        Command::Lock(_) => unreachable!("lock is dispatched before storage init"),
-        Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
-        Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
-        Command::Orchestrator(_) => {
-            unreachable!("orchestrator is dispatched before storage init")
-        }
         // STORY-721: `aida zen <spec>` autonomous implement+ship drive. The
         // introspection subcommands (`zen status` / `finish` / `needs-human`)
         // short-circuit before storage init in `run()`; this arm only sees the
@@ -2057,10 +1999,7 @@ pub(crate) fn handle_git_backend_command(
             let storage = Storage::new(store_path.to_path_buf());
             return run_do_drive(&storage, spec, mode.as_deref(), *force);
         }
-        Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
-        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
-        Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::List {
             shortcut,
             status,
@@ -7499,9 +7438,6 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::Punts(punts_cmd) => {
             handle_punts_command(punts_cmd.clone())?;
-        }
-        Command::Autonomy { command } => {
-            autonomy_cmd::handle_autonomy_command(command.as_ref())?;
         }
         Command::Archive {
             id,

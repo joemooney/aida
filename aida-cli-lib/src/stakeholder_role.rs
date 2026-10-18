@@ -242,7 +242,7 @@ mod stakeholder_cli_policy_tests {
     use super::*;
 
     fn guest_refusal(args: &[&str]) -> anyhow::Error {
-        let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+        let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
         enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
             .expect_err("guest command must be refused")
     }
@@ -271,7 +271,7 @@ mod stakeholder_cli_policy_tests {
             &["aida", "queue", "list"][..],
             &["aida", "mailbox", "inbox", "--peek"][..],
         ] {
-            let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+            let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
             enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
                 .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
         }
@@ -288,7 +288,7 @@ mod stakeholder_cli_policy_tests {
     fn requester_cli_rejects_every_shared_forbidden_intake_field() {
         for field in REQUESTER_INTAKE_FORBIDDEN_FIELDS {
             let flag = format!("--{field}");
-            let mut cli = Cli::try_parse_from([
+            let mut cli = crate::command_registry::try_parse_from([
                 "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
             ])
             .expect("valid CLI command");
@@ -312,10 +312,7 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
         StakeholderAction::Intake
     } else if matches!(
         command,
-        Command::Why { .. }
-            | Command::Explain { .. }
-            | Command::Wiki(_)
-            | Command::List { .. }
+        Command::List { .. }
             | Command::Show { .. }
             | Command::Status { .. }
             | Command::Graph { .. }
@@ -347,8 +344,6 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
                     | RoleCommand::Current { .. },
             )
             | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
-            | Command::Schema { .. }
-            | Command::Contract { .. }
             | Command::Cache(CacheCommand::Status)
             // trace:BUG-1486 | ai:claude — `aida db` gates per-verb: these
             // are pure reads (path/info/status printouts, block
@@ -367,10 +362,7 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             | Command::Usage { .. }
             | Command::Plan(PlanCommand::Verify { fix: false, .. })
             | Command::Plan(PlanCommand::Helpers { append: None, .. })
-            | Command::Ultraplan { .. }
-            | Command::Goal { .. }
             | Command::Criteria { .. }
-            | Command::HelpAll
     ) {
         StakeholderAction::Read
     } else {
@@ -389,10 +381,7 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             Command::Findings { .. } => StakeholderAction::Finding,
             Command::Questions { .. } => StakeholderAction::Question,
             Command::Config(_) => StakeholderAction::Configuration,
-            Command::Zen { .. }
-            | Command::Do { .. }
-            | Command::Ship { .. }
-            | Command::Integrate { .. } => StakeholderAction::BuildLoop,
+            Command::Zen { .. } | Command::Do { .. } => StakeholderAction::BuildLoop,
             _ => StakeholderAction::Write,
         }
     }

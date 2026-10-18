@@ -2110,27 +2110,6 @@ pub(crate) fn run() -> Result<()> {
         return Ok(());
     }
 
-    // Handle upgrade before storage resolution — it needs no DB.
-    // trace:EPIC-1-001 | ai:claude
-    if let Command::Upgrade {
-        check,
-        version,
-        yes,
-        target,
-        diff,
-        cmd,
-    } = &cli.command
-    {
-        let (check, diff) = normalize_upgrade_mode(*check, *diff, cmd.as_ref());
-        return upgrade_cmd::handle_upgrade_command(
-            check,
-            version.as_deref(),
-            *yes,
-            target.as_deref(),
-            diff,
-        );
-    }
-
     // BUG-1977: the hook-only refresh repairs what blocks store writes, so
     // it must not need a resolvable store (the refusal names --project-root).
     // trace:BUG-1977 | ai:claude
@@ -2155,52 +2134,6 @@ pub(crate) fn run() -> Result<()> {
     // it before storage resolution (like init/upgrade). trace:STORY-410
     if let Command::Memories(MemoriesCommand::Check { verbose, json }) = &cli.command {
         return memories_cmd::handle_memories_check(*verbose, *json);
-    }
-
-    // `aida schema` is a pure reflection read — it touches no store, so
-    // dispatch it before storage resolution (like `memories`/`dev`).
-    // trace:STORY-538 | ai:claude
-    if let Command::Schema {
-        object,
-        all,
-        explain,
-        json,
-    } = &cli.command
-    {
-        // `--all` is the whole-catalog dump; a positional `<object>` is a
-        // single-object request. The two are contradictory, so `--all` carries
-        // `conflicts_with = "object"` in the clap definition (cli.rs) — clap
-        // rejects the combination with a clear error before this dispatch runs,
-        // so no runtime guard is needed here. trace:TASK-775 | ai:claude
-        match object.as_deref().map(str::to_lowercase).as_deref() {
-            // `--all` (human) and no-arg `--json` are both a full dump: the
-            // catalog plus every object's reflection-derived field detail in
-            // catalog order. For JSON we always include the per-object fields
-            // (a no-arg `--json` was field-less before), so the machine surface
-            // is a true one-fetch full dump. trace:TASK-799 trace:TASK-775 | ai:claude
-            None if *all || *json => schema::print_all(*json, *explain),
-            // `aida schema --explain` (no object) adds the lifecycle blocks to
-            // the catalog view. trace:STORY-630 | ai:claude
-            None if *explain => schema::print_catalog(*json, true),
-            None => schema::print_catalog(*json, false),
-            Some("requirement") | Some("requirements") | Some("req") => {
-                schema::print_requirement(*json, *explain)
-            }
-            Some(other) if schema::is_catalog_object(other) => {
-                // A catalog object other than Requirement — render its
-                // reflection-derived field table. STORY-538 shipped Requirement
-                // detail only; TASK-714 extended the reflection registry to
-                // every remaining kind. trace:STORY-538 trace:TASK-714
-                schema::print_object(other, *json, *explain)
-            }
-            Some(other) => {
-                anyhow::bail!(
-                    "unknown schema object `{other}` — run `aida schema` for the catalog, \
-                     or `aida schema requirement` for the Requirement detail"
-                );
-            }
-        }
-        return Ok(());
     }
 
     // Handle skill commands before storage resolution — needs no DB.
@@ -2250,51 +2183,6 @@ pub(crate) fn run() -> Result<()> {
         }
     }
 
-    // Handle dev commands before storage resolution — most need no DB.
-    // (Dev::Serve does interact with storage but spawns aida-server which
-    // handles that itself; the wrapper just supervises the children.)
-    // trace:EPIC-1-001 | ai:claude
-    if let Command::Dev(dev_cmd) = &cli.command {
-        return crate::dev_cmd::handle_dev_command(dev_cmd);
-    }
-    // `aida driver` reads/writes `.aida/drivers/` only. trace:STORY-1653 | ai:claude
-    if let Command::Driver(cmd) = &cli.command {
-        return crate::driver_cmd::handle_driver_command(cmd);
-    }
-
-    // STORY-472: `aida release` — a memorable top-level verb wrapping the dev
-    // release flow (store pull → scripts/release.sh → tarball wait → sibling
-    // upgrade). Operates on the repo, not the requirements store, so dispatch
-    // early like `dev`. trace:STORY-472 | ai:claude
-    if let Command::Release {
-        patch,
-        minor,
-        major,
-        check,
-        after_pr,
-        skip_xplat_check,
-        cmd,
-    } = &cli.command
-    {
-        let (patch, minor, major, check) =
-            normalize_release_mode(*patch, *minor, *major, *check, cmd.as_ref());
-        return handle_release(patch, minor, major, check, *after_pr, *skip_xplat_check);
-    }
-
-    // STORY-527: `aida burndown` reads the requirement graph (like `graph` /
-    // `plan`) — no shared storage handle needed. Dispatch early.
-    // trace:STORY-527 | ai:claude
-    if let Command::Burndown(cmd) = &cli.command {
-        return handle_burndown_command(cmd);
-    }
-
-    // STORY-658: `aida health` self-loads the store + probes the runtime
-    // substrate (leases, drain lock, queue) — no shared storage handle needed,
-    // so dispatch early like burndown. trace:STORY-658 | ai:claude
-    if let Command::Health { json, brief } = &cli.command {
-        return health_vitals_cmd::handle_health_vitals_command(*json, *brief);
-    }
-
     // STORY-560: `aida groom` (canonical; `assess`/`intake` are deprecated
     // aliases — STORY-708) self-loads the store to compute its candidate
     // fence and then launches a headless `claude -p` — no shared storage handle
@@ -2320,38 +2208,6 @@ pub(crate) fn run() -> Result<()> {
             *dry_run,
             permission_mode.as_deref(),
         );
-    }
-
-    // TASK-1147: `aida autopilot` (inspect / audit / challenge) is the read-only
-    // auditability + reversal surface over the policy envelope. Like `aida
-    // groom` it self-loads the store to compute its candidate fence and writes
-    // nothing to any spec — dispatch early, no shared storage handle needed.
-    // trace:TASK-1147 | ai:claude
-    if let Command::Autopilot(cmd) = &cli.command {
-        return handle_autopilot_command(cmd);
-    }
-
-    // STORY-547: `aida why <ID>` reads the requirement graph like burndown —
-    // dispatch early, no shared storage handle needed. trace:STORY-547
-    if let Command::Why { id, plain, json } = &cli.command {
-        return handle_why(id, *plain, *json);
-    }
-
-    // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
-    if let Command::Explain {
-        spec,
-        audience,
-        refresh,
-        force,
-        json,
-    } = &cli.command
-    {
-        return exposition::handle_explain_command(spec, audience, *refresh, *force, *json);
-    }
-
-    // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
-    if let Command::Wiki(command) = &cli.command {
-        return wiki::handle_wiki_command(command);
     }
 
     // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
@@ -2400,116 +2256,6 @@ pub(crate) fn run() -> Result<()> {
         emit_notice_time_line();
     }
 
-    // STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
-    // companion to `aida status <spec>`. Like that command it reads the local
-    // session leases + probes pid liveness and self-loads the store read-only
-    // (to find orphaned In-Progress specs), so it needs no shared storage
-    // handle — dispatch early. trace:STORY-696 | ai:claude
-    if let Command::Ps { json, all } = &cli.command {
-        // trace:BUG-1289 | ai:claude
-        return handle_ps(*json || output_format_is_json(), *all);
-    }
-
-    // `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
-    // (reads `.aida/merge-locks/`), needs no store handle — dispatch early like
-    // `aida ps`. trace:STORY-1171 | ai:claude
-    if let Command::MergeLock { json } = &cli.command {
-        return handle_merge_lock_status(*json);
-    }
-
-    // `aida merge-hold list|clear` inspects/clears supervised merge-hold markers.
-    // Read/writes only `.aida/merge-holds/` (+ a best-effort `gh` label/merged
-    // probe), needs no store handle — dispatch early like `aida merge-lock`.
-    // trace:TASK-161 | ai:claude
-    if let Command::MergeHold { action } = &cli.command {
-        return handle_merge_hold(action);
-    }
-
-    // STORY-1698: the fire-fighting mandate reads/writes only the user's AIDA
-    // home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
-    if let Command::Mandate { action } = &cli.command {
-        return crate::mandate::handle_mandate(action);
-    }
-
-    // `aida tail` is `aida ps`'s streaming companion: it resolves a session /
-    // spec / drain id to the ONE log file that work streams into and tails it.
-    // Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
-    // no store, no network — so dispatch early like `aida ps`.
-    // trace:TASK-1167 | ai:claude
-    if let Command::Tail {
-        target,
-        list,
-        json,
-        lines,
-        since,
-        no_follow,
-        with_tools,
-        no_timestamp,
-        annotate,
-    } = &cli.command
-    {
-        return handle_tail_cli(
-            target.clone(),
-            *list,
-            *json,
-            *lines,
-            since.as_deref(),
-            *no_follow,
-            *with_tools,
-            *no_timestamp,
-            *annotate,
-        );
-    }
-
-    // `aida statusbar` — the ambient, read-only terminal-title meter. Like
-    // `aida ps` / `aida integrate` it self-resolves everything it needs
-    // (queue YAML, session leases, cache-backed awaiting channels) and
-    // degrades gracefully offline, so it needs no shared storage handle —
-    // dispatch early. trace:STORY-715 | ai:claude
-    if let Command::Statusbar {
-        interval,
-        once,
-        plain,
-        restore_title,
-    } = &cli.command
-    {
-        return statusbar_cmd::handle_statusbar_command(*interval, *once, *plain, *restore_title);
-    }
-
-    if let Command::Contract { json: _ } = &cli.command {
-        return monitor_contract::print_json();
-    }
-
-    // `aida watch` is a read-only consumer of the slice-1 `.aida/events.jsonl`
-    // stream (STORY-712): it tails the file, classifies each event in cheap
-    // code, and wakes only on actionable verbs. It touches no store/backend, so
-    // dispatch early like `aida ps`. trace:TASK-990 | ai:claude
-    if let Command::Watch {
-        emit_wakes: _,
-        all,
-        json,
-        verbose,
-        once,
-        backlog,
-    } = &cli.command
-    {
-        let project_root =
-            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-        return watch::handle_watch(
-            &project_root,
-            &watch::WatchOpts {
-                all: *all,
-                // trace:BUG-1289 | ai:claude
-                json: *json || output_format_is_json(),
-                // trace:TASK-994 | ai:claude
-                verbose: *verbose,
-                once: *once,
-                backlog: *backlog,
-            },
-        )
-        .and_then(|()| notify::passive_check(&project_root));
-    }
-
     // `aida notify` has no need for the requirement store: it consumes the
     // local event stream plus `.aida/config.toml`, so it is safe for cron and
     // for hooks that run while the cache/store may be locked.
@@ -2518,72 +2264,6 @@ pub(crate) fn run() -> Result<()> {
         let project_root =
             find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
         return notify::handle_notify_command(&project_root, cmd);
-    }
-
-    // `aida integrate` is the integrator front door. Bare remains the read-only
-    // throughput/merge-queue view (TASK-1034); `--run` / `--watch` / `--dry-run`
-    // enter the same serialized engine as `aida queue integrate`, with rebase
-    // enabled by default so Done-with-PR specs land through one current-main
-    // queue instead of racing each other stale. trace:STORY-1024 | ai:codex
-    if let Command::Integrate {
-        json,
-        run,
-        dry_run,
-        watch,
-        interval,
-        max,
-        wait_ci: _,
-        no_wait_ci,
-        no_rebase,
-        strategy,
-        focus,
-        idle_minutes,
-        force,
-        user,
-    } = &cli.command
-    {
-        return handle_integrate(IntegrateCommandOpts {
-            // trace:BUG-1289 | ai:claude
-            json: *json || output_format_is_json(),
-            run: *run,
-            dry_run: *dry_run,
-            watch: *watch,
-            interval: *interval,
-            max: *max,
-            wait_ci: !*no_wait_ci,
-            rebase: !*no_rebase,
-            strategy: *strategy,
-            focus: focus.clone(),
-            idle_minutes: *idle_minutes,
-            force: *force,
-            user: user.clone(),
-        });
-    }
-
-    // TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
-    // resolve the spec id forms, then write/remove a lightweight advisory lease
-    // under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
-    // only the local lease dir + a cache-backed lookup, so they need no shared
-    // storage handle — dispatch early. trace:TASK-957 | ai:claude
-    if let Command::Claim { spec, worktree } = &cli.command {
-        return handle_claim(spec, worktree.as_deref());
-    }
-    if let Command::Unclaim { spec } = &cli.command {
-        return handle_unclaim(spec);
-    }
-
-    // STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
-    // read+write for generate), and may shell out to a headless `claude -p`
-    // running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
-    // shared storage handle — dispatch early. trace:STORY-631 | ai:claude
-    if let Command::Intent {
-        id,
-        audience,
-        refresh,
-        json,
-    } = &cli.command
-    {
-        return handle_intent(id, audience, *refresh, *json);
     }
 
     // STORY-656: `aida spec dryrun <ID>` self-loads the store (read-only) for
@@ -2609,15 +2289,6 @@ pub(crate) fn run() -> Result<()> {
         return handle_spec_interview(id, *apply, *ai, answers.as_deref(), *json);
     }
 
-    // STORY-716: `aida worktree` (EPIC-55 workspace layer) operates on git +
-    // the filesystem; `enter` emits `cd` shell on stdout for the `aida()`
-    // wrapper to auto-eval. Like `role enter` it needs no shared storage
-    // handle and its stdout must stay clean of store-init noise, so it
-    // dispatches early. trace:STORY-716 | ai:claude
-    if let Command::Worktree(wt_cmd) = &cli.command {
-        return handle_worktree_command(wt_cmd);
-    }
-
     // STORY-563: `aida human <subcommand>` self-loads the store like `aida why`
     // / `burndown explain`, or delegates to the top-level presence handlers.
     // Dispatch early, no shared storage handle needed.
@@ -2634,59 +2305,6 @@ pub(crate) fn run() -> Result<()> {
         if human_subcommand_needs_no_storage(human_cmd) {
             return handle_human_subcommand(human_cmd);
         }
-    }
-
-    // Doctor commands run before storage init — they may need to operate
-    // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
-    if let Command::Doctor {
-        heal,
-        yes,
-        category,
-        json,
-        force,
-        all,
-        since,
-        fix_sandbox,
-        contradictions,
-        contradictions_limit,
-        contradictions_offset,
-        cmd,
-    } = &cli.command
-    {
-        // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing
-        // bwrap OS-confinement up on a new machine. Short-circuit before the
-        // multi-agent drift scan — it's a standalone setup helper, not a check.
-        // trace:STORY-665 | ai:claude
-        if *fix_sandbox {
-            return doctor_cmd::doctor_fix_sandbox();
-        }
-        // STORY-1426: `aida doctor --contradictions` runs the store-wide semantic
-        // contradiction sweep combining mechanical joins with Jev choice queries.
-        // trace:STORY-1426 | ai:antigravity
-        if *contradictions {
-            return doctor_cmd::doctor_contradictions(
-                *json,
-                *contradictions_limit,
-                *contradictions_offset,
-                *all,
-            );
-        }
-        return doctor_cmd::handle_doctor_command(
-            *heal,
-            *yes,
-            category.as_deref(),
-            *json,
-            *force,
-            *all,
-            since.as_deref(),
-            cmd.as_ref(),
-        );
-    }
-
-    // Store commands inspect git state, no AIDA storage needed.
-    // trace:EPIC-21 | ai:claude
-    if let Command::Store(store_cmd) = &cli.command {
-        return store_cmd::handle_store_command(store_cmd);
     }
 
     // `aida remote create`/`attach` bootstrap a git origin — they operate on a
@@ -2761,28 +2379,6 @@ pub(crate) fn run() -> Result<()> {
         }
     }
 
-    // Sandbox commands MANAGE a throwaway store directory; they don't read the
-    // project's store, so dispatch before store detection (and so they work
-    // even from a non-AIDA cwd). trace:SPIKE-48 | ai:claude
-    if let Command::Sandbox(sandbox_cmd) = &cli.command {
-        return sandbox_cmd::handle_sandbox_command(sandbox_cmd);
-    }
-
-    // Help-all / commands are pure text; no storage needed.
-    if let Command::HelpAll = &cli.command {
-        print_help_all();
-        return Ok(());
-    }
-    if let Command::Commands {
-        flags,
-        json,
-        hidden,
-    } = &cli.command
-    {
-        help_catalog::print_command_catalog(*flags, *hidden, *json);
-        return Ok(());
-    }
-
     // `aida alias` / `aida alias list` is a built-in-shortcut registry (now also
     // surfacing user-defined aliases) — it reads no requirement store and needs
     // no storage handle, so dispatch it early like help-all. Bare `aida alias`
@@ -2823,55 +2419,6 @@ pub(crate) fn run() -> Result<()> {
         return plan_cmd::handle_plan_command(plan_cmd);
     }
 
-    // `aida deps sweep` self-loads the store via `load_store_for_lookup`
-    // and scans source for trace comments — like `plan helpers`, it needs
-    // no shared storage handle. Read-only. trace:STORY-447 | ai:claude
-    if let Command::Deps(deps_cmd) = &cli.command {
-        return deps_cmd::handle_deps_command(deps_cmd);
-    }
-
-    // `aida lint` self-loads the store via `load_store_for_lookup` and scores
-    // requirement text with the EARS heuristics — read-only, no shared storage
-    // handle, no LLM. trace:TASK-0417 | ai:claude
-    if let Command::Lint { spec, scope, json } = &cli.command {
-        return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
-    }
-
-    // Explicit only: no sync/drain/hook path invokes host probes.
-    // trace:STORY-1673 | ai:codex
-    if let Command::Verify(cmd) = &cli.command {
-        return verify_cmd::handle_verify_command(cmd, cli.globals.file.as_deref());
-    }
-
-    // `aida gate` reads the embedded gate library (and, for `run`, self-loads
-    // the store) — no shared storage handle. trace:STORY-1427 | ai:claude
-    if let Command::Gate(gate_cmd) = &cli.command {
-        return gate_cmd::handle_gate_command(gate_cmd);
-    }
-
-    // `aida lifecycle` (Phase 1, generate-only) is self-contained: it renders a
-    // Mermaid diagram from the declared transition model in aida-core and
-    // optionally pins it against `docs/lifecycle.md`. No storage handle, no LLM,
-    // no behavior change to any other command. trace:TASK-737 | ai:claude
-    if let Command::Lifecycle {
-        diagram,
-        check,
-        write,
-        doc,
-        empirical,
-        diff,
-    } = &cli.command
-    {
-        return lifecycle_cmd::handle_lifecycle_command(
-            *diagram,
-            *check,
-            *write,
-            doc.as_deref(),
-            *empirical,
-            *diff,
-        );
-    }
-
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
     // commit range and self-loads the store via `load_store_for_lookup` to
     // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
@@ -2890,138 +2437,11 @@ pub(crate) fn run() -> Result<()> {
         return handle_trace_coverage(range.as_deref(), *json, *block);
     }
 
-    // `aida changelog` is self-contained: git + read-only store, no shared
-    // storage handle. Dispatch alongside Plan/Ultraplan. trace:TASK-299 | ai:claude
-    if let Command::Changelog(cl_cmd) = &cli.command {
-        return changelog_cmd::handle_changelog_command(cl_cmd);
-    }
-
-    // `aida manual <cmd>` only reads the markdown chapters under docs/cli/ —
-    // no store, no cache, no network. Dispatch it before storage init like
-    // changelog. trace:STORY-600 | ai:claude
-    if let Command::Manual { command } = &cli.command {
-        let project_root =
-            find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
-        return manual::run(command, &project_root);
-    }
-
     // `aida derisk` is a thin advisor-session launcher; it uses the shared
     // agent-new machinery and does not need the shared storage handle.
     // trace:TASK-1235 | ai:codex
     if let Command::Derisk { spec } = &cli.command {
         return handle_derisk_command(spec);
-    }
-
-    // `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
-    // trace:TASK-113 | ai:claude
-    if let Command::Ultraplan {
-        spec,
-        stdout,
-        json,
-        copy: _,
-        no_comments,
-    } = &cli.command
-    {
-        return ultraplan_cmd::handle_ultraplan_command(spec, *stdout, *json, *no_comments);
-    }
-
-    // `aida compete` self-loads the store (to assemble the brief) and
-    // orchestrates worktrees + headless vendor runs + the objective gate.
-    // Dispatch early alongside ultraplan — it doesn't need the shared storage
-    // handle. trace:STORY-659 | ai:claude
-    if let Command::Compete {
-        spec,
-        vendors,
-        gate,
-        dry_run,
-        judge,
-        judge_vendor,
-    } = &cli.command
-    {
-        return compete_cmd::handle_compete_command(
-            spec,
-            vendors,
-            gate.as_deref(),
-            *dry_run,
-            *judge,
-            judge_vendor,
-        );
-    }
-
-    // `aida commit` is self-contained — git + the staged diff (for REQ-ID
-    // inference), no requirements store. Dispatch before storage init like
-    // goal / ultraplan. trace:STORY-663 | ai:claude
-    if let Command::Commit {
-        commit_type,
-        scope,
-        message,
-        spec,
-        ai,
-        no_ai,
-        all,
-        dry_run,
-    } = &cli.command
-    {
-        return commit::handle_commit_command(&commit::CommitArgs {
-            commit_type: commit_type.clone(),
-            scope: scope.clone(),
-            message: message.clone(),
-            spec: spec.clone(),
-            ai: ai.clone(),
-            no_ai: *no_ai,
-            all: *all,
-            dry_run: *dry_run,
-        });
-    }
-
-    // `aida internal advisor-code-gate` is the vendor-agnostic substrate
-    // enforcement of the advisor-no-code-write invariant (STORY-684). The
-    // scaffolded git pre-commit hook shells out to it so ANY vendor's
-    // `git commit` (Codex, raw terminal, headless) hits the same gate the
-    // Claude PreToolUse hook only ever gave Claude. Self-contained (git diff +
-    // env + the solo marker), so it dispatches before storage init.
-    // trace:STORY-684
-    if let Command::Internal { command } = &cli.command {
-        return internal_cmd::handle_internal_command(command);
-    }
-
-    // `aida goal` is a pure condition generator — no store needed.
-    // trace:TASK-242 | ai:claude
-    if let Command::Goal {
-        batch,
-        epic,
-        spec,
-        pr,
-        queue_empty,
-        copy,
-        invoke,
-        as_deep_link,
-    } = &cli.command
-    {
-        return goal_cmd::handle_goal_command(
-            batch.as_deref(),
-            epic.as_deref(),
-            spec.as_deref(),
-            *pr,
-            queue_empty.as_deref(),
-            *copy,
-            *invoke,
-            *as_deep_link,
-        );
-    }
-
-    // `aida tui` is the EPIC-26 TUI shell — a process supervisor that
-    // holds no storage handle (it shells out to `aida` subcommands), so
-    // it dispatches before storage init like Goal / Statusline.
-    // trace:STORY-132 | ai:claude
-    if let Command::Tui {
-        scope,
-        no_recover,
-        launcher,
-        intent_fd,
-    } = &cli.command
-    {
-        return handle_tui_command(scope.clone(), *no_recover, *launcher, *intent_fd);
     }
 
     // `aida config menu` is a navigable TUI view over the resolved config
@@ -3037,38 +2457,6 @@ pub(crate) fn run() -> Result<()> {
     // files at .aida/roles/, statusline reads the cache directly.
     if let Command::Role(role_cmd) = &cli.command {
         return role_cmd::handle_role_command(role_cmd);
-    }
-    if let Command::Statusline {
-        color,
-        title,
-        client,
-        action,
-    } = &cli.command
-    {
-        // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
-        // statusline; with no subcommand we render the one-liner (default).
-        // trace:TASK-896 — `--title` emits the same one-liner wrapped in an
-        // OSC terminal-title escape so the AIDA segment rides the terminal
-        // title bar (the in-agent parity surface for clients without a
-        // command-backed footer, e.g. Codex CLI).
-        // trace:TASK-1479 — `--client` opts into merging a client's live
-        // stdin JSON payload (model/context/activity/VCS) with the AIDA
-        // segment; omitted, behavior is unchanged (no stdin read).
-        match action {
-            Some(cli::StatuslineAction::Title) => {
-                return statusline_cmd::handle_statusline_command(color, true, client.as_deref());
-            }
-            Some(act) => return statusline_cmd::handle_statusline_setup_command(act),
-            None => {
-                if *title {
-                    note_hidden_alias(
-                        concat!("aida statusline ", "--title"),
-                        "aida statusline title",
-                    );
-                }
-                return statusline_cmd::handle_statusline_command(color, *title, client.as_deref());
-            }
-        }
     }
     // Registered store-less commands dispatch here, where the legacy
     // `_bg-fetch` / `away` / `home` arms they replaced ran.
@@ -3146,32 +2534,11 @@ pub(crate) fn run() -> Result<()> {
     if let Command::Terminal(terminal_cmd) = &cli.command {
         return handle_terminal_command(terminal_cmd);
     }
-    // TASK-661 (ADR-3): disposition/triage lease. Dispatched before storage
-    // init — it reads + writes only `.aida/triage-leases/` files and probes
-    // PIDs; no requirement-store handle needed. trace:TASK-661 | ai:claude
-    if let Command::Triage(triage_cmd) = &cli.command {
-        return triage_cmd::handle_triage_command(triage_cmd);
-    }
-    // STORY-711 slice 1: `aida lock` reads/writes only `.aida/sessions/`
-    // lease files (the same registry `aida session leases` uses) — no
-    // requirement-store handle needed, same reasoning as `aida triage`
-    // above. trace:STORY-711 | ai:claude
-    if let Command::Lock(lock_cmd) = &cli.command {
-        return lock_cmd::handle_lock_command(lock_cmd);
-    }
     // EPIC-31 agent launchers supervise external CLIs and write process
     // registry state directly; no requirement store handle needed.
     // trace:STORY-432 | ai:codex
     if let Command::Agent(agent_cmd) = &cli.command {
         return handle_agent_command(agent_cmd);
-    }
-
-    // STORY-90: PR side-effects dispatch before storage init — the
-    // command's side-effects all live in git / gh / self-invoked `aida
-    // add` calls; it doesn't need the global Storage handle.
-    // trace:STORY-90 | ai:claude
-    if let Command::Pr(pr_cmd) = &cli.command {
-        return handle_pr_command(pr_cmd);
     }
 
     // trace:TASK-1583 | ai:antigravity
@@ -3188,42 +2555,6 @@ pub(crate) fn run() -> Result<()> {
         if s == "review" {
             return handle_review_list(*json);
         }
-    }
-
-    // STORY-720: `aida ship` dispatches before storage init for the same
-    // reason as `aida pr` — every side-effect is a git / gh / self-invoked
-    // `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
-    // resolved from the branch / lease, not the requirement store.
-    // trace:STORY-720 | ai:claude
-    if let Command::Ship {
-        spec,
-        message,
-        no_merge,
-        no_pr,
-        keep_worktree,
-        dry_run,
-        no_trailer_check,
-    } = &cli.command
-    {
-        return run_human_finish_ceremony(HumanFinishOptions {
-            spec: spec.clone(),
-            message: message.clone(),
-            no_merge: *no_merge,
-            no_pr: *no_pr,
-            keep_worktree: *keep_worktree,
-            dry_run: *dry_run,
-            no_trailer_check: *no_trailer_check,
-        });
-    }
-
-    // BUG-233 / TASK-336: orchestrator-context introspection. Dispatched
-    // before storage init — it reads only env vars + the `.aida/drain-
-    // state.json` file's `run_uuid` + PID, no requirement store. (Before
-    // TASK-336 it read a sidecar `.aida/orchestrator-runs/<uuid>` marker
-    // file; that has been folded into the drain-state file.)
-    // trace:BUG-233 trace:TASK-336 | ai:claude
-    if let Command::Orchestrator(orch_cmd) = &cli.command {
-        return handle_orchestrator_command(orch_cmd);
     }
 
     // BUG-237: zen-context introspection. Like `orchestrator status`, reads
@@ -3298,20 +2629,6 @@ pub(crate) fn run() -> Result<()> {
         }
     }
 
-    // STORY-301: drain-state introspection. Dispatched before storage init —
-    // it reads only `.aida/drain-state.json`, no requirement store.
-    // trace:STORY-301 | ai:claude
-    if let Command::Drain(drain_cmd) = &cli.command {
-        return handle_drain_command(drain_cmd);
-    }
-
-    // STORY-248: stack-graph introspection. Dispatched before storage
-    // init — reads only `.aida/stacks.json`, no requirement store.
-    // Mirrors the STORY-301 drain dispatch pattern. trace:STORY-248
-    if let Command::Stack(stack_cmd) = &cli.command {
-        return handle_stack_command(stack_cmd);
-    }
-
     // TASK-294: worker-directive introspection. Dispatched before storage
     // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
     // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
@@ -3319,31 +2636,11 @@ pub(crate) fn run() -> Result<()> {
         return handle_worker_command(worker_cmd);
     }
 
-    // TASK-398: headless-log tailer. Dispatched before storage init — reads
-    // only `.aida/headless-logs/`, no requirement store. trace:TASK-398
-    if let Command::Headless(headless_cmd) = &cli.command {
-        return handle_headless_command(headless_cmd);
-    }
-
     // STORY-325: punt ledger CLI command. Dispatched before storage init —
     // it reads only `.aida/punts.jsonl`, no requirement store.
     // trace:STORY-325 | ai:antigravity
     if let Command::Punts(punts_cmd) = &cli.command {
         return handle_punts_command(punts_cmd.clone());
-    }
-
-    // STORY-439: autonomy / calibration surface. Dispatched before storage
-    // init — it reads only `.aida/complexity-calibration/`, no requirement
-    // store. trace:STORY-439 | ai:claude
-    if let Command::Autonomy { command } = &cli.command {
-        return autonomy_cmd::handle_autonomy_command(command.as_ref());
-    }
-
-    // TASK-394: the `--no-human` acknowledgement marker just touches/removes a
-    // file (no requirement store). Dispatch before storage init so it works on
-    // a fresh clone too. trace:TASK-394 | ai:claude
-    if let Command::NoHuman(no_human_cmd) = &cli.command {
-        return handle_no_human_command(no_human_cmd);
     }
 
     // Determine which requirements file to use
@@ -4147,14 +3444,7 @@ pub(crate) fn run() -> Result<()> {
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
-        Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
-        Command::Schema { .. } => unreachable!("schema is dispatched before storage init"),
-        Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
-        Command::Driver(_) => unreachable!("driver is dispatched before storage init"),
-        Command::Release { .. } => unreachable!("release is dispatched before storage init"),
-        Command::Burndown(_) => unreachable!("burndown is dispatched before storage init"),
-        Command::Health { .. } => unreachable!("health is dispatched before storage init"),
         // trace:TASK-1231 | ai:claude
         Command::Autoprogress { .. } => {
             unreachable!("autoprogress is dispatched before storage init")
@@ -4162,68 +3452,12 @@ pub(crate) fn run() -> Result<()> {
         Command::Groom { .. } => {
             unreachable!("groom (assess/intake) is dispatched before storage init")
         }
-        // trace:TASK-1147
-        Command::Autopilot(_) => {
-            unreachable!("autopilot is dispatched before storage init")
-        }
-        Command::Why { .. } => unreachable!("why is dispatched before storage init"),
-        Command::Explain { .. } => unreachable!("explain is dispatched before storage init"),
-        Command::Wiki(_) => unreachable!("wiki is dispatched before storage init"),
-        Command::Intent { .. } => unreachable!("intent is dispatched before storage init"),
-        // trace:STORY-696
-        Command::Ps { .. } => unreachable!("ps is dispatched before storage init"),
-        Command::MergeLock { .. } => {
-            unreachable!("merge-lock is dispatched before storage init")
-        }
-        Command::MergeHold { .. } => {
-            unreachable!("merge-hold is dispatched before storage init")
-        }
-        // trace:STORY-1698 | ai:claude
-        Command::Mandate { .. } => {
-            unreachable!("mandate is dispatched before storage init")
-        }
-        Command::Watch { .. } => unreachable!("watch is dispatched before storage init"),
-        Command::Contract { .. } => unreachable!("contract is dispatched before storage init"),
-        // trace:TASK-1034
-        Command::Integrate { .. } => {
-            unreachable!("integrate is dispatched before storage init")
-        }
-        // trace:TASK-957
-        Command::Claim { .. } => unreachable!("claim is dispatched before storage init"),
-        Command::Unclaim { .. } => unreachable!("unclaim is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
-        Command::Worktree(_) => {
-            unreachable!("worktree subcommands are dispatched before storage init")
-        }
-        Command::Doctor { .. } => unreachable!("doctor is dispatched before storage init"),
-        Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
-        Command::Sandbox(_) => unreachable!("sandbox is dispatched before storage init"),
-        Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
-        Command::Commands { .. } => unreachable!("commands is dispatched before storage init"),
         Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
-        Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
-        Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
-        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
-        Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
-        Command::Lifecycle { .. } => {
-            unreachable!("lifecycle is dispatched before storage init")
-        }
-        Command::Changelog(_) => unreachable!("changelog is dispatched before storage init"),
-        Command::Manual { .. } => unreachable!("manual is dispatched before storage init"),
         Command::Derisk { .. } => unreachable!("derisk is dispatched before storage init"),
-        Command::Ultraplan { .. } => unreachable!("ultraplan is dispatched before storage init"),
-        Command::Compete { .. } => unreachable!("compete is dispatched before storage init"),
-        Command::Goal { .. } => unreachable!("goal is dispatched before storage init"),
-        Command::Commit { .. } => unreachable!("commit is dispatched before storage init"),
-        Command::Internal { .. } => unreachable!("internal is dispatched before storage init"),
-        Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
-        Command::Statusbar { .. } => unreachable!("statusbar is dispatched before storage init"),
-        // trace:TASK-1167
-        Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
-        Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
@@ -4231,13 +3465,6 @@ pub(crate) fn run() -> Result<()> {
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::Triage(_) => unreachable!("triage is dispatched before storage init"),
-        Command::Lock(_) => unreachable!("lock is dispatched before storage init"),
-        Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
-        Command::Ship { .. } => unreachable!("ship is dispatched before storage init"),
-        Command::Orchestrator(_) => {
-            unreachable!("orchestrator is dispatched before storage init")
-        }
         // STORY-721: `aida zen <spec>` autonomous implement+ship drive on the
         // legacy (centralized) storage path. The introspection subcommands
         // short-circuit before storage init; this arm only sees the spec-drive
@@ -4281,13 +3508,8 @@ pub(crate) fn run() -> Result<()> {
                 )?;
             }
         }
-        Command::Drain(_) => unreachable!("drain is dispatched before storage init"),
-        Command::Stack(_) => unreachable!("stack is dispatched before storage init"),
         Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
-        Command::Headless(_) => unreachable!("headless is dispatched before storage init"),
         Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
-        Command::Autonomy { .. } => unreachable!("autonomy is dispatched before storage init"),
-        Command::NoHuman(_) => unreachable!("no-human is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             relationship_cmd::handle_relationship_command(rel_cmd, &storage)?;
         }

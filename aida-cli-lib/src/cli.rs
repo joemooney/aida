@@ -5545,7 +5545,7 @@ mod task_190_comment_source_parser_tests {
     // trace:BUG-1534 | ai:claude
     #[test]
     fn comment_add_accepts_relayed_from() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "comment",
             "add",
@@ -5565,7 +5565,7 @@ mod task_190_comment_source_parser_tests {
 
     #[test]
     fn positional_comment_conflicts_with_body_file_and_stdin() {
-        assert!(Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "comment",
             "add",
@@ -5575,15 +5575,20 @@ mod task_190_comment_source_parser_tests {
             "body.md",
         ])
         .is_err());
-        assert!(Cli::try_parse_from(
-            ["aida", "comment", "add", "TASK-1", "positional", "--stdin",]
-        )
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "comment",
+            "add",
+            "TASK-1",
+            "positional",
+            "--stdin",
+        ])
         .is_err());
     }
 
     #[test]
     fn hidden_content_conflicts_with_body_file_and_stdin() {
-        assert!(Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "comment",
             "add",
@@ -5593,7 +5598,7 @@ mod task_190_comment_source_parser_tests {
             "legacy",
         ])
         .is_err());
-        assert!(Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "comment",
             "add",
@@ -5604,7 +5609,7 @@ mod task_190_comment_source_parser_tests {
             "body.md",
         ])
         .is_err());
-        assert!(Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "comment",
             "add",
@@ -5627,7 +5632,7 @@ mod task_190_comment_source_parser_tests {
             let mut args = vec!["aida", "comment", "add", "TASK-1"];
             args.extend(tail);
             args.push("--interactive");
-            assert!(Cli::try_parse_from(args).is_err());
+            assert!(crate::command_registry::try_parse_from(args).is_err());
         }
 
         for tail in [
@@ -5646,7 +5651,7 @@ mod task_190_comment_source_parser_tests {
             ];
             args.extend(tail);
             args.push("--interactive");
-            assert!(Cli::try_parse_from(args).is_err());
+            assert!(crate::command_registry::try_parse_from(args).is_err());
         }
     }
 }
@@ -10769,20 +10774,6 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Punts(PuntsCommand),
 
-    /// Show AIDA's autonomy ladder and the commands/config knobs for each rung.
-    // trace:STORY-439 | ai:claude
-    Autonomy {
-        #[clap(subcommand)]
-        command: Option<AutonomyCommand>,
-    },
-
-    // trace:TASK-394 | ai:claude
-    /// Persist (or revoke) the one-time `--no-human` scope acknowledgement so
-    /// an overnight `aida queue work --auto-complete --no-human=both` loop
-    /// doesn't re-prompt every iteration.
-    #[clap(subcommand)]
-    NoHuman(NoHumanCommand),
-
     /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
     /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
     // trace:STORY-451 | ai:codex
@@ -10886,43 +10877,6 @@ pub enum Command {
         id: String,
     },
 
-    /// Record a spec-scoped CLAIM so advisor-fanned work is visible to the
-    /// duplicate-dispatch gates.
-    ///
-    /// AIDA-launched work (`aida queue work`, `aida agent new --spec`) writes a
-    /// spec-scoped session lease, so a second pickup of the same spec is
-    /// refused. But when an advisor fans an implementer via the Claude Agent
-    /// tool (a worktree-isolated subagent), that work takes only a generic
-    /// `harness-worktree` lease — NOT spec-scoped — so the gate can't see it.
-    /// `aida claim <spec>` closes that gap: it writes a lightweight advisory
-    /// lease whose scope IS the spec id, keyed to the calling session's pid, so
-    /// the same gate now refuses a duplicate `aida queue work <spec>` and warns
-    /// on `aida edit <spec>`.
-    ///
-    /// Liveness-aware: the claim only holds while the claiming process is alive;
-    /// a dead claimer's claim is ignored (no crash-deadlock). Idempotent —
-    /// re-claiming your own spec is a no-op refresh. Clear it with
-    /// `aida unclaim <spec>`. Surfaces in `aida status <spec>` and `aida ps`.
-    // trace:TASK-957 | ai:claude
-    Claim {
-        /// SPEC-ID, agreed-id, or UUID to claim.
-        spec: String,
-
-        /// Optional worktree path to record on the claim (where the fanned
-        /// implementer is working). Informational; the claim's liveness is the
-        /// claiming process, not this path.
-        #[clap(long, value_name = "PATH")]
-        worktree: Option<String>,
-    },
-
-    /// Inverse of `aida claim` — removes the caller's spec-scoped claim so a
-    /// fresh `aida queue work <spec>` / `aida edit <spec>` no longer sees it.
-    // trace:TASK-957 | ai:claude
-    Unclaim {
-        /// SPEC-ID, agreed-id, or UUID to unclaim.
-        spec: String,
-    },
-
     /// Assign a spec to a team member — sets the durable assignee and routes
     /// the spec into that member's work queue so it shows in their
     /// `aida queue list`. Idempotent: re-running with the same target is a
@@ -10975,14 +10929,6 @@ pub enum Command {
     // trace:STORY-1221 | ai:codex
     #[clap(subcommand)]
     Protocol(ProtocolCommand),
-
-    /// Throwaway sandbox store for drain-testing / scenario play. Creates a
-    /// discardable git-canonical store under a temp dir; point `aida` at it
-    /// with the printed `AIDA_STORE=...` export so drains and test specs never
-    /// touch the project's real store. `reset` re-seeds, `destroy` removes it.
-    // trace:SPIKE-48 | ai:claude
-    #[clap(subcommand)]
-    Sandbox(SandboxCommand),
 
     /// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
     // trace:STORY-493 | ai:claude
@@ -11201,270 +11147,6 @@ pub enum Command {
         // trace:STORY-741 | ai:claude
         #[clap(long)]
         no_ci: bool,
-    },
-
-    /// The global running-work table — one row per active session/agent
-    /// across the project (the `ps`/`docker ps` of AIDA work). Companion to
-    /// `aida status <spec>` (per-spec): where that answers "is THIS spec
-    /// liveness-backed?", `aida ps` answers "what is genuinely running on
-    /// my machine right now, and what only CLAIMS to be?".
-    ///
-    /// Each session row shows: session id, spec (scope), role, worktree, pid,
-    /// started, ELAPSED, and a liveness verdict reusing the same machinery
-    /// `aida status <spec>` and `aida session leases` use
-    /// (live / dormant / STALE).
-    ///
-    /// It ALSO surfaces ORPHANED In-Progress specs — specs at status
-    /// In-Progress with NO spec-scoped lease backing them (the flag-only
-    /// case) — so a crashed or never-started session can't hide behind a
-    /// status flag. AIDA-launched work (`aida queue work` / `aida agent new`)
-    /// gets spec-scoped leases (the rich, spec-linked rows); advisor
-    /// Agent-tool fan-outs take generic `harness-worktree` leases (shown by
-    /// session/worktree, spec unknown).
-    // trace:STORY-696 | ai:claude
-    Ps {
-        /// Machine-readable JSON output: `{ sessions: [...], orphaned: [...] }`.
-        // trace:STORY-696
-        #[clap(long)]
-        json: bool,
-        /// Include STALE (dead-pid / leaked) session rows that the default
-        /// view folds behind a footer count.
-        // trace:STORY-696
-        #[clap(long)]
-        all: bool,
-    },
-    /// Show active branch merge-leases: who is merging to which target branch
-    /// right now, with holder host / pid / age. Read-only; reads
-    /// `.aida/merge-locks/`. The serialization primitive that stops two mergers
-    /// racing to the same branch.
-    MergeLock {
-        /// Machine-readable JSON output.
-        #[clap(long)]
-        json: bool,
-    },
-
-    /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
-    ///
-    /// A hold marker keeps a PR held for human/advisor review — it fails the
-    /// merge-hold-gate required check so the PR cannot be auto-merged. AIDA
-    /// merge paths (`aida pr ship`, the autonomous drain) clear the marker
-    /// automatically when they merge; this is the manual surface for the case
-    /// they cannot see — a PR merged directly (a raw `gh pr merge`) leaves a
-    /// phantom marker behind. `list` shows every marker and flags the ones
-    /// whose PR has already merged as stale; `clear` removes them.
-    // trace:TASK-161 | ai:claude
-    MergeHold {
-        #[clap(subcommand)]
-        action: MergeHoldAction,
-    },
-
-    /// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
-    /// advisor seat ship held PRs with an attested, independent approval.
-    ///
-    /// `start` and `stop` need a human at an interactive terminal; `status`
-    /// is open to anyone. Operator-only specs always stay human-only.
-    // trace:STORY-1698 | ai:claude
-    Mandate {
-        #[clap(subcommand)]
-        action: MandateAction,
-    },
-
-    /// Stream a running session's log — found by id, not by file path.
-    ///
-    /// `aida ps` says WHAT is running; this says what THAT ONE is doing right
-    /// now. Give it any id you already have and it works out which file under
-    /// `.aida/` that work streams into:
-    ///
-    ///   aida tail               # the most recently active log
-    ///   aida tail drain         # the running autonomous drain
-    ///   aida tail <session-id>  # a session id from `aida ps`
-    ///   aida tail <SPEC-ID>     # the newest log for that spec
-    ///   aida tail --list        # every log this project has, and who owns it
-    ///
-    /// Follows by default, like `tail -f`, and renders the readable phase
-    /// lines; `--json` passes the raw stream-json events through instead. A
-    /// session with no log (an interactive one streams to its terminal, not to
-    /// a file) is reported plainly, not as an error.
-    ///
-    /// Each line is stamped with the time of the event behind it, in local
-    /// time, so the gaps between lines show the pacing; `--no-timestamp` drops
-    /// the prefix.
-    // trace:TASK-1167 | ai:claude
-    // trace:TASK-1173 | ai:claude
-    #[clap(verbatim_doc_comment)]
-    Tail {
-        /// A session id from `aida ps`, a spec id, a drain id, or `drain` for
-        /// the running drain. Omit it for the most recently active log.
-        target: Option<String>,
-        /// List every tailable log — drains, running sessions and the log each
-        /// resolves to, and the recent session logs — then exit.
-        #[clap(long, conflicts_with_all = ["target", "lines", "since", "no_follow", "json"])]
-        list: bool,
-        /// Pass the raw stream-json events through instead of rendering them.
-        #[clap(long)]
-        json: bool,
-        /// Start from at most the last N lines of what is already in the log.
-        #[clap(long, short = 'n', value_name = "N")]
-        lines: Option<usize>,
-        /// Skip anything older than this: a relative duration (`30s`, `10m`,
-        /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
-        /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
-        /// datetime (local time), or RFC3339.
-        // trace:TASK-1509 | ai:claude
-        #[clap(long, value_name = "DURATION")]
-        since: Option<String>,
-        /// Print what is already there and exit instead of following.
-        #[clap(long)]
-        no_follow: bool,
-        /// Interleave tool invocations with the assistant text.
-        #[clap(long)]
-        with_tools: bool,
-        /// Drop the leading `[HH:MM:SS]` event time from each line.
-        // trace:TASK-1173 | ai:claude
-        #[clap(long)]
-        no_timestamp: bool,
-        /// Annotate idlewatch transitions such as low-information spinning.
-        // trace:STORY-998 | ai:codex
-        #[clap(long)]
-        annotate: bool,
-    },
-
-    /// The integrator seat: bare shows the merge queue; --run drains it.
-    ///
-    /// One screen, scoped to the active focus, answering "what would I work
-    /// next, and is main actually moving?": the focus-scoped queue (specs + the
-    /// role each is routed to), live throughput (time since the last merge to
-    /// the default branch, recent-merge counts, and a main-idle indicator), and
-    /// the active fan-out (which sessions/agents hold which specs right now).
-    /// A cheap cache-backed read when bare; `--run` is the single serialized
-    /// merge loop over Done-with-PR specs.
-    // trace:TASK-1034 trace:STORY-1024 | ai:claude codex
-    Integrate {
-        /// Emit the view as JSON instead of the human summary.
-        // trace:TASK-1034
-        #[clap(long)]
-        json: bool,
-        /// Drain the merge queue: rebase each Done-with-PR branch onto current
-        /// main, wait/reuse the standing verdict, merge, pull, then continue
-        /// serially. Bare `aida integrate` remains the read-only view.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        run: bool,
-        /// Inspect the merge queue and print what WOULD be driven, without
-        /// merging anything. Alias for `--run --dry-run`.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        dry_run: bool,
-        /// Keep watching for newly-ready Done-with-PR specs and drain them
-        /// serially as they appear.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        watch: bool,
-        /// Idle backstop (seconds) for --watch. Default 60.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long, value_name = "SECS", default_value_t = 60)]
-        interval: u64,
-        /// Cap the number of specs integrated this run. 0 = no cap.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long, value_name = "N", default_value_t = 0)]
-        max: usize,
-        /// Wait for in-flight CI on ready PRs before deciding whether to merge.
-        /// Default for --run; accepted for explicit scripts.
-        // trace:BUG-1052 | ai:codex
-        #[clap(long, conflicts_with = "no_wait_ci")]
-        wait_ci: bool,
-        /// Do not wait for in-flight CI; skip it until a later pass.
-        // trace:BUG-1052 | ai:codex
-        #[clap(long)]
-        no_wait_ci: bool,
-        /// Do not rebase PR branches before merge. The default for top-level
-        /// `integrate --run` is to rebase first so stale-base churn cannot race.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        no_rebase: bool,
-        /// Accumulation strategy for the batch. Falls back to `[integrate]
-        /// strategy` in .aida/config.toml, then `per-item`.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long, value_enum)]
-        strategy: Option<crate::integrate::IntegrateStrategy>,
-        /// Scope the scan to a focus epic/spec and its transitive descendants.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long, value_name = "ID")]
-        focus: Option<String>,
-        /// Idle backstop for `--watch`, in minutes.
-        // trace:STORY-1024 | ai:codex
-        #[clap(long, value_name = "N")]
-        idle_minutes: Option<u64>,
-        /// Bypass the team RBAC guardrail (`[team.permissions] integrate`).
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        force: bool,
-        /// User ID (defaults to AIDA_USER or system user).
-        // trace:STORY-1024 | ai:codex
-        #[clap(long)]
-        user: Option<String>,
-    },
-
-    /// Stream the drain event feed and wake on actionable verbs only.
-    ///
-    /// Follows `.aida/events.jsonl` like `tail -f`, classifies each event in
-    /// cheap code, and prints ONE wake line only when something actionable
-    /// happens (CI terminal, a PR shipped/merged, a punt, a shelve, an
-    /// escalation, the drain finished) — staying silent on the benign majority
-    /// (phase churn, run bookkeeping). Intended to back the harness `Monitor`
-    /// tool so a supervising session burns nothing while nothing is happening.
-    /// If the drain's orchestrator process has died, prints one
-    /// `WAKE drain-crashed` line and exits so a follower never blocks forever.
-    ///
-    /// Follow mode starts at end-of-file (`tail -f` semantics) — only events
-    /// appended after it started are emitted. Use `--once` to classify the
-    /// existing backlog and exit, or `--backlog` to replay then follow.
-    // trace:TASK-990 | ai:claude
-    // trace:TASK-146 | ai:claude
-    Watch {
-        /// Emit wake lines for actionable events (the default behavior — this
-        /// flag makes it explicit for the `Monitor`-tool invocation).
-        #[clap(long)]
-        emit_wakes: bool,
-
-        /// Also surface the benign (non-actionable) events as an indented debug
-        /// feed, not just the wake lines.
-        #[clap(long)]
-        all: bool,
-
-        /// Emit each event as its original JSON object. Requires --all; this is
-        /// the stable read-only follow feed for monitor consumers.
-        // trace:STORY-1352 | ai:codex
-        #[clap(long, requires = "all", conflicts_with = "verbose")]
-        json: bool,
-
-        /// Live-debugging feed: implies --all, and stamps every line with the
-        /// event's local wall-clock time plus the run correlation id, then
-        /// appends the event's raw payload. For a human watching a drain — the
-        /// default (wake-lines-only) feed is what a machine consumer wants.
-        // trace:TASK-994 | ai:claude
-        #[clap(long, short = 'v')]
-        verbose: bool,
-
-        /// Drain the current backlog, classify it, and exit instead of
-        /// following the stream (cron / test mode).
-        #[clap(long)]
-        once: bool,
-
-        /// Replay the whole historical backlog before following, instead of
-        /// starting at end-of-file. Off by default: a fresh follower wakes
-        /// only on events appended after it started (`tail -f` semantics).
-        // trace:TASK-146 | ai:claude
-        #[clap(long)]
-        backlog: bool,
-    },
-
-    /// Print the versioned read-only monitor contract.
-    // trace:STORY-1352 | ai:codex
-    Contract {
-        /// Emit the contract as JSON (the only supported representation).
-        #[clap(long)]
-        json: bool,
     },
 
     /// Operator alerts for stalled drains and escalations.
@@ -11781,56 +11463,6 @@ pub enum Command {
         quiet: bool,
     },
 
-    /// Substrate machinery invoked by hooks / scaffolding, not by humans.
-    /// Hidden from `--help`. Currently carries the vendor-agnostic
-    /// advisor-no-code-write gate the git pre-commit hook calls.
-    // trace:STORY-684
-    #[clap(hide = true)]
-    Internal {
-        #[clap(subcommand)]
-        command: InternalCommand,
-    },
-
-    /// Author a conventional-format-compliant commit and run `git commit`.
-    /// Builds the `[AI:tool]? type(scope): description (REQ-ID)` shape the
-    /// commit-msg hook requires, so a plain-terminal commit can't be rejected
-    /// for format. The REQ-ID is inferred from staged trace comments when a
-    /// single spec is present; `--spec` sets it explicitly. The CLI-native
-    /// counterpart to the `/aida-commit` skill.
-    ///
-    /// Example: aida commit --type fix --scope rel --message "accept --spec alias" --spec <SPEC-ID>
-    // trace:STORY-663 | ai:claude
-    Commit {
-        /// Conventional commit type: feat, fix, docs, style, refactor, perf,
-        /// test, build, ci, chore, revert.
-        #[clap(long = "type", value_name = "TYPE")]
-        commit_type: String,
-        /// Optional scope (component/area), e.g. --scope rel.
-        #[clap(long)]
-        scope: Option<String>,
-        /// The commit description (the part after the colon).
-        // trace:BUG-1294 | ai:claude
-        #[clap(long, short = 'm', allow_hyphen_values = true)]
-        message: String,
-        /// Spec id for the (REQ-ID) trailer, e.g. `--spec BUG-N`. When omitted,
-        /// inferred from staged trace comments if exactly one spec is present.
-        #[clap(long)]
-        spec: Option<String>,
-        /// AI tool for the [AI:tool] prefix (default: claude when AI-authored
-        /// traces are staged). Use --no-ai to force it off.
-        #[clap(long)]
-        ai: Option<String>,
-        /// Omit the [AI:tool] prefix even if AI-authored traces are staged.
-        #[clap(long, conflicts_with = "ai")]
-        no_ai: bool,
-        /// Stage and commit all tracked changes (git commit -a).
-        #[clap(long, short = 'a')]
-        all: bool,
-        /// Print the assembled message without committing.
-        #[clap(long)]
-        dry_run: bool,
-    },
-
     /// Pull code branch AND orphan aida-store branch from origin. Use
     /// --code-only or --store-only to scope. Symmetric to `aida push`:
     /// equivalent to `git pull --ff-only` on the current branch
@@ -11920,50 +11552,6 @@ pub enum Command {
         branch: Option<String>,
     },
 
-    // trace:STORY-472 | ai:claude
-    /// One-verb release: sync the store, run the version bump + tag + push,
-    /// wait for the published tarballs, and upgrade sibling installs. Wraps the
-    /// whole sequence so you don't have to remember it. Use `release check` first to
-    /// preview without acting.
-    Release {
-        /// Bump the patch version (default if no level is given).
-        #[clap(long, hide = true)]
-        patch: bool,
-        /// Bump the minor version.
-        #[clap(long, hide = true)]
-        minor: bool,
-        /// Bump the major version.
-        #[clap(long, hide = true)]
-        major: bool,
-        /// Preview the planned release (current → target version + the step
-        /// sequence + repo/branch/tree state) without acting.
-        #[clap(long, hide = true)]
-        check: bool,
-        /// Land an in-flight PR first: wait for PR-<N>'s checks, merge it
-        /// (--squash --delete-branch), and sync local main before releasing.
-        /// Refuses if the PR's checks fail.
-        #[clap(long, value_name = "N")]
-        after_pr: Option<u64>,
-        /// No-op, kept for compatibility: releases are Linux-only and have no
-        /// cross-platform CI gate.
-        // trace:TASK-1723 | ai:claude
-        #[clap(long, hide = true)]
-        skip_xplat_check: bool,
-
-        /// Release action. With no action, patch is the default.
-        // trace:STORY-1028 | ai:codex
-        #[clap(subcommand)]
-        cmd: Option<ReleaseCommand>,
-    },
-
-    // trace:STORY-527 | ai:claude
-    /// Plan an autonomous burn-down: list which specs are ready to fan out vs
-    /// parked, via the pickability gate. The run itself is the /aida-burndown
-    /// skill in Claude Code, not a CLI subcommand — `burndown plan` is the
-    /// read-only foundation it drives its worktree fan-out from.
-    #[clap(subcommand)]
-    Burndown(BurndownCommand),
-
     /// Product-role supervision helpers for nudging stuck work.
     // trace:STORY-1052 | ai:codex
     #[clap(subcommand)]
@@ -11995,24 +11583,6 @@ pub enum Command {
         /// Report what it WOULD drain without draining.
         #[clap(long)]
         dry_run: bool,
-    },
-
-    /// Vital-signs read: is this project HEALTHY right now? One screen across
-    /// backlog state (ready/stale/blocked/aging work, burn-down direction) and
-    /// coordination state (queue depth, live/stale leases, drains, open
-    /// findings, parked work). Worst-anchored verdict, a remedy per warning.
-    /// Pure + cache-backed; safe to glance at once a day.
-    // trace:STORY-658 | ai:claude
-    Health {
-        /// Machine-readable JSON (overall grade + every vital with its grade,
-        /// value, and remedy).
-        // trace:STORY-658 | ai:claude
-        #[clap(long)]
-        json: bool,
-        /// Print only the one-line headline verdict (good for prompts/scripts).
-        // trace:STORY-658 | ai:claude
-        #[clap(long, conflicts_with = "json")]
-        brief: bool,
     },
 
     // trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
@@ -12072,55 +11642,6 @@ pub enum Command {
         permission_mode: Option<String>,
     },
 
-    // trace:STORY-547 | ai:claude
-    /// Explain why one open spec is still open — a single-spec drill-down using
-    /// the same classifier as `burndown explain`. Answers "what's keeping
-    /// SPEC-ID from being done?" with a bucket + reason derived from store
-    /// signals (status, type, tags, blockers, decisions, live leases).
-    Why {
-        /// A SPEC-ID (why is this spec still open?) OR a code location
-        /// `file[:line]` (why does this code exist?) — a `file:line` resolves the
-        /// nearest code→spec trace comment to the spec's intent (code↔decision).
-        id: String,
-        /// Print the cached plain-English rationale layer for this spec,
-        /// regenerating `docs/plain/<SPEC>.md` only when the spec changed.
-        // trace:STORY-1158 | ai:codex
-        #[clap(long)]
-        plain: bool,
-        /// Machine-readable JSON.
-        #[clap(long)]
-        json: bool,
-    },
-
-    // trace:EPIC-72 trace:TASK-1436 | ai:antigravity
-    /// Generate, audit, and inspect human-friendly spec expositions with freshness,
-    /// bounded drift detection, and human review protection.
-    Explain {
-        /// Requirement ID (UUID or SPEC-ID)
-        spec: String,
-
-        /// Target audience persona (operator, executive, implementer, contributor)
-        #[clap(long, default_value = "operator")]
-        audience: String,
-
-        /// Re-generate exposition even if a sidecar already exists
-        #[clap(long)]
-        refresh: bool,
-
-        /// Override human_reviewed protection and force re-generation
-        #[clap(long)]
-        force: bool,
-
-        /// Machine-readable JSON output
-        #[clap(long)]
-        json: bool,
-    },
-
-    // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
-    /// Living project wiki: build browsable hyperlinked HTML projection and serve locally
-    #[clap(subcommand)]
-    Wiki(WikiCommand),
-
     /// Set, show, or clear the current FOCUS — a persistent, per-worktree
     /// context (an epic or spec) that scopes the read commands to that spec's
     /// transitive subtree. The kubectl-namespace / gcloud-config pattern for
@@ -12161,141 +11682,6 @@ pub enum Command {
     #[clap(subcommand)]
     Spec(SpecCommand),
 
-    // trace:STORY-716 | ai:claude
-    /// Manage epic-scoped git worktrees — the workspace layer that
-    /// mirrors `git worktree`. `aida worktree add <epic>` creates a worktree
-    /// off origin/main (default `~/ai/aida-<epic-slug>` on `<epic>-work`) and
-    /// auto-scopes it to that epic via `aida focus`; `aida worktree enter
-    /// <epic>` creates-if-missing then cd's you in (run it BARE — the `aida()`
-    /// shell wrapper auto-evals the emitted `cd`, NOT wrapped in `eval`);
-    /// `aida worktree list` shows AIDA-managed worktrees + each one's focus.
-    #[clap(subcommand)]
-    Worktree(WorktreeCommand),
-
-    // trace:STORY-631 | ai:claude
-    /// Show the AI-generated plain-terms comprehension of WHY a spec exists —
-    /// its intent, distilled from the spec + its graph neighborhood. Distinct
-    /// from `aida why` (a deterministic state classifier): this is a cached,
-    /// drift-stamped LLM synthesis. Generated on first call (or `--refresh`),
-    /// printed from cache thereafter; a STALE marker shows when the
-    /// neighborhood drifted since generation.
-    Intent {
-        /// The SPEC-ID to comprehend (any story/task/bug/feature id).
-        id: String,
-        /// Which register to print: `layman` (prose for a human skimmer) or
-        /// `llm` (denser/structured, for an agent loading the spec).
-        #[clap(long, value_parser = ["layman", "llm"], default_value = "layman")]
-        audience: String,
-        /// Force regeneration even if a cached comprehension exists and is fresh.
-        #[clap(long)]
-        refresh: bool,
-        /// Machine-readable JSON
-        /// (`{spec, audience, comprehension, generated_at, model, stale}`).
-        #[clap(long)]
-        json: bool,
-    },
-
-    /// AIDA-developer-only commands: activate the in-repo dev binary,
-    /// run dev servers, install shell helpers. End users don't need these.
-    #[clap(subcommand, hide = true)]
-    Dev(DevCommand),
-
-    /// Register, refresh, deregister and list drivers — long-running relays,
-    /// drains and agents that work in-progress specs. `aida ps` and
-    /// `aida list` show the driver beside each in-progress spec's status.
-    /// Operator/developer surface.
-    // trace:STORY-1653 | ai:claude
-    #[clap(subcommand)]
-    Driver(crate::driver_cmd::DriverCommand),
-
-    /// Diagnose and heal AIDA multi-agent state drift. Report-only by
-    /// design: exit 0 means the scan RAN, not that it found nothing —
-    /// findings print as text/JSON either way. A caller that needs a
-    /// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
-    /// `doctor check <category> --fail-on-findings`, which exits non-zero
-    /// only when that one category has findings.
-    // trace:EPIC-19 trace:STORY-462
-    Doctor {
-        /// Apply safe fixes after scanning. Without this, doctor is read-only.
-        #[clap(long)]
-        heal: bool,
-
-        /// Skip per-category confirmation prompts while healing.
-        #[clap(long, short = 'y')]
-        yes: bool,
-
-        /// Restrict scan/heal to one category.
-        #[clap(long, value_name = "CATEGORY")]
-        category: Option<String>,
-
-        /// Emit machine-readable JSON.
-        #[clap(long)]
-        json: bool,
-
-        /// Permit riskier destructive fixes such as branch deletion.
-        #[clap(long)]
-        force: bool,
-
-        /// Show older completed-without-commit findings individually.
-        #[clap(long)]
-        all: bool,
-
-        /// Exempt specs completed before this point from the
-        /// completed-without-commit integrity check: a relative duration
-        /// (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
-        /// zone-less ISO datetime (local time), RFC3339, or else a git
-        /// ref/tag whose commit date is the cutoff. An invalid value is an
-        /// error. Quiets noise on legacy history predating trace
-        /// conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var.
-        // trace:TASK-673 | ai:claude
-        // trace:TASK-1509 | ai:claude
-        // trace:BUG-1622 | ai:claude
-        #[clap(long, value_name = "DATE_OR_REF")]
-        since: Option<String>,
-
-        /// Print the guided, copy-pasteable steps to bring the OS sandbox
-        /// (bubblewrap write-confinement) up on this host: detect the current
-        /// state, the exact sysctl to persist if the kernel blocks unprivileged
-        /// user namespaces, how to opt in, and the verify command. Prints the
-        /// sequence — sudo steps are clearly marked "run this yourself"; it
-        /// never silently runs sudo. Runs the non-sudo availability re-probe as
-        /// a smoke check.
-        // trace:STORY-665 | ai:claude
-        #[clap(long)]
-        fix_sandbox: bool,
-
-        /// Run a store-wide semantic contradiction sweep combining mechanical joins
-        /// in Rust with Jev System One semantic choice queries.
-        // trace:STORY-1426 | ai:antigravity
-        #[clap(long)]
-        contradictions: bool,
-
-        /// Maximum contradiction findings to print per page. The default is
-        /// deliberately bounded; use --contradictions-offset to continue or
-        /// --all to request the complete scan.
-        // trace:STORY-1426 | ai:codex
-        #[clap(long, value_name = "N", default_value_t = 25)]
-        contradictions_limit: usize,
-
-        /// Zero-based offset into the deterministically ordered contradiction
-        /// findings. Ignored with --all.
-        // trace:STORY-1426 | ai:codex
-        #[clap(long, value_name = "N", default_value_t = 0)]
-        contradictions_offset: usize,
-
-        /// Legacy maintenance subcommand or focused doctor action.
-        #[clap(subcommand)]
-        cmd: Option<DoctorCommand>,
-    },
-
-    /// Inspect and align the orphan-store SHA against code commits.
-    /// Pairs with the prepare-commit-msg hook (`aida-store-pair.sh`)
-    /// that pins the store SHA into every code commit's trailer via an
-    /// `Aida-Store: <sha>` line.
-    // trace:EPIC-21 | ai:claude
-    #[clap(subcommand)]
-    Store(StoreCommand),
-
     /// Per-seat job registry: substrate jobs run by the tick, seat jobs
     /// delivered to whoever holds the seat (alias: `aida cron`).
     // trace:STORY-1047 | ai:codex
@@ -12322,96 +11708,6 @@ pub enum Command {
     // trace:STORY-995 | ai:codex
     #[clap(subcommand)]
     Terminal(TerminalCommand),
-
-    /// Advisor-directed worktree lock — a MANUAL bouncer:
-    /// `acquire` stamps `authorized_by` on the session lease covering a
-    /// worktree, `verify` checks a token against it (exit 0/non-zero,
-    /// scriptable), `release` clears it, `status` lists locked worktrees.
-    /// Additive: nothing today calls `verify` automatically.
-    // trace:STORY-711 | ai:claude — spec id kept out of the user-facing about
-    // text (slice 1, generalizes BUG-637).
-    #[clap(subcommand)]
-    Lock(LockCommand),
-
-    /// Acquire / release / inspect a per-scope disposition (triage) lease —
-    /// the intake gate's "one disposing advisor per scope" guard. The
-    /// authority gate decides WHO may dispose; this lease decides HOW MANY
-    /// (exactly one live advisor per scope). A second advisor disposing the
-    /// same scope is refused, naming the holder. Per-scope, so non-
-    /// overlapping subsystem advisors dispose concurrently.
-    // trace:TASK-661 | ai:claude
-    #[clap(subcommand)]
-    Triage(TriageCommand),
-
-    /// The one-shot HUMAN-implementer finish. From inside a worktree where
-    /// you implemented a spec, run the whole finish ceremony in ONE command:
-    /// commit any uncommitted work with the (SPEC-ID) trailer, rebase onto
-    /// current origin/main, push, open the PR, wait for CI green, squash-merge,
-    /// run `aida pull` (Done → Completed auto-bump), and remove the worktree.
-    ///
-    /// It is the orchestrator's finish phases with phase-1 (implement) done by
-    /// you instead of a spawned agent — the human-implementer counterpart to
-    /// `aida queue work <id> --auto-complete`. The spec is resolved from the
-    /// current branch (or the active session lease); pass `<spec>` to override.
-    ///
-    /// Stop earlier with `--no-merge` (open the PR, don't merge) or `--no-pr`
-    /// (just rebase + push). `--keep-worktree` leaves the worktree in place
-    /// after a successful merge.
-    Ship {
-        /// Spec to finish. When omitted, resolved from the current branch
-        /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
-        /// lease covering this worktree.
-        #[clap(value_name = "SPEC")]
-        spec: Option<String>,
-
-        /// Commit subject to use when committing uncommitted work. The
-        /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
-        /// conventional default is used. Ignored when the worktree is clean.
-        // trace:BUG-1294 | ai:claude
-        #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
-        message: Option<String>,
-
-        /// Stop after opening the PR — do not watch CI or merge. The PR is
-        /// left open for a human to review + merge.
-        #[clap(long)]
-        no_merge: bool,
-
-        /// Stop after rebase + push — do not open a PR. Useful when you want
-        /// to open the PR yourself, or when CI is configured to gate on push.
-        #[clap(long, conflicts_with = "no_merge")]
-        no_pr: bool,
-
-        /// Keep the worktree after a successful merge (skip the
-        /// `aida session end` cleanup step).
-        #[clap(long)]
-        keep_worktree: bool,
-
-        /// Print the resolved finish sequence without executing any of it.
-        #[clap(long)]
-        dry_run: bool,
-
-        /// Bypass the client-side trailer spec-ID check before shipping.
-        // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
-        #[clap(long)]
-        no_trailer_check: bool,
-    },
-
-    /// Pull-request side-effects intended to fire from the /aida-pr
-    /// skill. Today: `auto-queue-review` files the reviewer story right
-    /// after `gh pr create` so the trigger lives where context is
-    /// freshest. `aida session end` keeps the same logic as an
-    /// idempotent backup for PRs opened outside the skill.
-    // trace:STORY-90 | ai:claude
-    #[clap(subcommand)]
-    Pr(PrCommand),
-
-    /// Inspect the corroborated orchestrator context — whether this process is
-    /// a genuine `--auto-complete` phase child or a standalone session.
-    /// Hidden: it is a skill / orchestrator-child introspection hook, not a
-    /// daily-driver command.
-    // trace:BUG-233 | ai:claude
-    #[clap(subcommand, hide = true)]
-    Orchestrator(OrchestratorCommand),
 
     /// One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought.
     /// Pass an approved spec id to drive it; pass free text to draft a spec from
@@ -12534,34 +11830,6 @@ pub enum Command {
         command: Option<ZenCommand>,
     },
 
-    /// Inspect the active `aida queue work --auto-complete` drain — what
-    /// command launched it, the batch members and their progress, and what
-    /// happens to the queue when the current session exits. If a spec will
-    /// not drain because it needs guided/operator attention, de-risk it with
-    /// `aida derisk <ID>`.
-    // trace:STORY-301 | ai:claude
-    // trace:TASK-1235 | ai:codex
-    #[clap(subcommand)]
-    Drain(DrainCommand),
-
-    /// Inspect the stacked-branch graph: `aida queue work --stack` records
-    /// each stacked branch's parent in `.aida/stacks.json`; `aida stack
-    /// show` / `list` render the chains. Pairs with the auto-rebase
-    /// cascade that `aida pull --auto` runs when a base merges.
-    // trace:STORY-248 | ai:claude
-    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(subcommand, hide = true)]
-    Stack(StackCommand),
-
-    /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
-    /// non-obvious jq filter (assistant content blocks, text-only by default,
-    /// `--with-tools` to interleave tool calls) so the user gets clean text
-    /// instead of pages of `null`.
-    // trace:TASK-398 | ai:claude
-    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(subcommand, hide = true)]
-    Headless(HeadlessCommand),
-
     /// Inspect the `aida-worker` shell function's directive channel —
     /// `aida worker directives` lists the FIFO of pending directives the
     /// worker will act on next.
@@ -12617,60 +11885,6 @@ pub enum Command {
         cmd: Option<BriefCommand>,
     },
 
-    /// Run one spec through N vendors headless, in isolated worktrees, then an
-    /// objective gate — the neutral cross-vendor quality layer. For each vendor
-    /// AIDA creates a per-vendor worktree+branch, assembles the implementer
-    /// brief from the spec, runs the vendor headless (claude/codex), commits the
-    /// result, and runs a deterministic gate that mirrors PR CI by default
-    /// (fmt-check + build + tests + clippy + glyph-lint, so a gate-passing
-    /// winner is actually mergeable). Reports a
-    /// table, ranks the gate-passers (smaller/focused diff first), optionally
-    /// runs a rubric LLM judge (--judge), and leaves every branch in place to
-    /// pick. Report-only: it recommends a winner but never merges.
-    // trace:STORY-659 trace:STORY-660 | ai:claude
-    Compete {
-        /// SPEC-ID (or UUID) to run through the vendors.
-        spec: String,
-
-        /// Comma-separated vendors to run, e.g. `claude,codex`. Headless
-        /// vendors run directly; a non-headless vendor (antigravity) is emitted
-        /// as a human-run brief instead.
-        #[clap(long, value_delimiter = ',')]
-        vendors: Vec<String>,
-
-        /// Override the deterministic gate command run in each worktree.
-        /// Default mirrors PR CI: fmt-check + build + the aida-cli test suite +
-        /// clippy correctness + glyph-lint, so a gate-passing winner is
-        /// mergeable. Pass your own command for non-Rust repos / custom CI.
-        #[clap(long)]
-        gate: Option<String>,
-
-        /// Assemble the briefs + plan the run and print what WOULD happen
-        /// without spawning any vendor or touching git.
-        #[clap(long)]
-        dry_run: bool,
-
-        /// Add a rubric LLM judge after the gate: spawn a `claude -p` judge over
-        /// the spec + each candidate's diff, scoring spec-adherence / correctness
-        /// / simplicity / test-coverage (1-5) and recommending a winner. Opt-in
-        /// and REPORT-ONLY — it never merges; the human/advisor still picks. The
-        /// cheap deterministic ranking (smaller, focused diff first) is always
-        /// shown regardless of this flag.
-        // trace:STORY-660 | ai:claude
-        #[clap(long)]
-        judge: bool,
-
-        /// Which vendor renders the rubric judgment (claude or codex). The judge
-        /// PROMPT is identical for both — only the executing model changes — so a
-        /// codex judge over a claude-vs-codex run is no longer the same model
-        /// grading itself, removing the self-evaluation caveat. Defaults to
-        /// claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the
-        /// judge binary. Only applies with --judge.
-        // trace:TASK-869 | ai:claude
-        #[clap(long = "judge-vendor", default_value = "claude")]
-        judge_vendor: String,
-    },
-
     /// Launch and track AI agent processes for this AIDA project.
     // trace:STORY-432 | ai:codex
     #[clap(subcommand)]
@@ -12705,99 +11919,6 @@ pub enum Command {
         /// the finding's prose body).
         #[clap(long)]
         json: bool,
-    },
-
-    /// Ambient terminal-title meter — a read-only project pulse riding the
-    /// terminal title bar (any OSC-capable terminal; tmux shows it as the
-    /// window title). On an interval, emits the set-window-title escape with
-    /// a compact meter: queue depth, live/STALE session counts, and how many
-    /// items await you (briefs · findings · mail · punts). Purely an ambient
-    /// signal — it dispatches nothing, launches nothing, writes nothing; all
-    /// sources are cache/local-fast (no network, PRs omitted).
-    ///
-    /// Examples:
-    ///   aida statusbar                 # refresh the title every 15s (Ctrl+C exits)
-    ///   aida statusbar --restore-title # same, restoring the previous title on exit
-    ///   aida statusbar --once          # single title update (shell prompt hooks)
-    ///   aida statusbar --plain         # print the meter as plain text and exit
-    ///
-    /// tmux status-right recipe (plain text, no escapes needed):
-    ///   set -g status-right '#(aida statusbar --plain) '
-    ///   set -g status-interval 15
-    // trace:STORY-715 | ai:claude
-    #[clap(verbatim_doc_comment)]
-    Statusbar {
-        /// Seconds between title refreshes in loop mode (minimum 2).
-        #[clap(long, default_value_t = 15)]
-        interval: u64,
-
-        /// Emit ONE title update and exit — for wiring into a shell
-        /// PROMPT_COMMAND / precmd hook instead of running the loop.
-        #[clap(long)]
-        once: bool,
-
-        /// Print the meter as a plain text line (no escape sequence) and
-        /// exit — the building block for tmux's status-right interpolation.
-        #[clap(long, conflicts_with = "once")]
-        plain: bool,
-
-        /// Save the current terminal title on start and restore it when the
-        /// loop exits (XTerm title-stack escapes). Opt-in: not every
-        /// terminal implements the title stack.
-        #[clap(long)]
-        restore_title: bool,
-    },
-
-    /// One-line project + role summary suitable for shell prompts and
-    /// the `statusLine.command` setting in ~/.claude/settings.json.
-    /// Sub-50ms (reads the cache + the orphan-store queue YAML). Format:
-    ///   aida · <project> · role:<name> · @SPEC · q:N · cache:fresh|stale
-    /// Where `q:N` is the depth of the queue routed to the active role
-    /// (omitted when zero).
-    // trace:FR-1-041 | ai:claude
-    Statusline {
-        /// When to emit ANSI color: `auto` (default — color iff stdout
-        /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
-        #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
-        color: String,
-
-        /// Emit the one-liner wrapped in an OSC terminal-title escape
-        /// sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the
-        /// body, so the AIDA role/queue/inbox segment rides the terminal
-        /// title bar / tmux window name. This is the in-agent parity surface
-        /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
-        /// field set and cannot run `aida statusline` as a command: wire
-        /// `aida statusline title` into the shell prompt
-        /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
-        /// terminal title during the agent session. Forces color off (an
-        /// OSC title string carries no ANSI). Mutually exclusive with the
-        /// `setup` subcommand.
-        // trace:TASK-896
-        #[clap(long, hide = true)]
-        title: bool,
-
-        /// Merge live fields from a client's stdin JSON payload into the
-        /// AIDA segment: model, context-window usage, activity, and VCS
-        /// branch where the client sends them. `claude` parses Claude
-        /// Code's statusLine JSON; `antigravity` (alias `agy`) parses
-        /// Antigravity's live agent-state JSON. Omit for the default,
-        /// AIDA-only segment — this never reads stdin unless a client is
-        /// named, so plain `aida statusline` is unaffected. When stdin is
-        /// a TTY (no payload piped), or a piped read doesn't finish within
-        /// ~200ms (an open pipe with no data waiting), this degrades to
-        /// the AIDA-only segment rather than blocking. See
-        /// docs/agents/statusline-contract.md.
-        // trace:TASK-1479 | ai:claude
-        #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
-        client: Option<String>,
-
-        /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
-        /// renders the one-liner (the default, quiet behavior); the
-        /// `setup` subcommand prints (or installs) client-appropriate
-        /// statusline configuration.
-        // trace:TASK-0414
-        #[clap(subcommand)]
-        action: Option<StatuslineAction>,
     },
 
     /// Operator presence — the home/away state the autonomy ladder keys on.
@@ -12870,41 +11991,6 @@ pub enum Command {
     #[clap(hide = true)]
     Whoami,
 
-    /// Upgrade aida to the latest release (or a specified version).
-    /// Detects how aida was installed (cargo / pre-built binary) and uses
-    /// the matching upgrade strategy. From a developer build with no
-    /// --target, scans common install locations and offers to upgrade
-    /// any stale sibling installs.
-    Upgrade {
-        /// Compare current/sibling versions to latest release; report only, don't install.
-        #[clap(long)]
-        check: bool,
-
-        /// Install a specific version instead of latest. Format: `v0.4.0`.
-        #[clap(long)]
-        version: Option<String>,
-
-        /// Skip confirmation prompt
-        #[clap(long, short = 'y')]
-        yes: bool,
-
-        /// Upgrade a specific binary path instead of the currently-running one.
-        /// Useful from a developer shell to upgrade `~/.local/bin/aida` etc.
-        #[clap(long)]
-        target: Option<String>,
-
-        /// When the dev build is ahead of the latest release tag, print a
-        /// `git log --stat` of the unreleased commits so you can vet what
-        /// `aida dev patch` would ship.
-        #[clap(long, hide = true)]
-        diff: bool,
-
-        /// Upgrade action.
-        // trace:STORY-1028 | ai:codex
-        #[clap(subcommand)]
-        cmd: Option<UpgradeCommand>,
-    },
-
     /// Relationship management commands
     #[clap(subcommand, hide = true)]
     Rel(RelationshipCommand),
@@ -12924,36 +12010,6 @@ pub enum Command {
     /// Requirement type management commands
     #[clap(subcommand, name = "type", hide = true)]
     Type(TypeCommand),
-
-    /// Introspect the storable substrate: object catalog, Requirement fields,
-    /// and the controlled-vocabulary tokens (status/type/priority/relationship)
-    // trace:STORY-538 | ai:claude
-    Schema {
-        /// Optional object to detail (any catalog object: requirement,
-        /// finding, punt, lease, brief, directive, comment, …). Omit for the
-        /// storable-object catalog.
-        // trace:BUG-542
-        object: Option<String>,
-
-        /// Dump every object's full field detail in one pass: the catalog
-        /// followed by each kind's field table, in catalog order.
-        // `conflicts_with = "object"` makes `--all <object>` a clear clap error
-        // — `--all` is the whole catalog, a positional is one object.
-        // trace:TASK-799 trace:TASK-775
-        #[clap(long, conflicts_with = "object")]
-        all: bool,
-
-        /// Add the explanatory layer: per-field semantics (example value,
-        /// who sets it, when/why) plus each object's lifecycle block. Pure
-        /// opt-in — the default output is unchanged.
-        // trace:STORY-630
-        #[clap(long, visible_alias = "details")]
-        explain: bool,
-
-        /// Emit machine-readable JSON instead of the human table.
-        #[clap(long)]
-        json: bool,
-    },
 
     /// Freeze requirements into a deterministic regeneration corpus
     // trace:TASK-1729 | ai:codex
@@ -13353,47 +12409,6 @@ pub enum Command {
     #[clap(subcommand, hide = true)]
     Mcp(McpCommand),
 
-    /// Launch the AIDA TUI — a terminal-UI shell that PTY-hosts Claude
-    /// Code sessions.
-    ///
-    /// The TUI becomes the outer shell: it owns the terminal, reserves a
-    /// bottom status strip, and hosts a Claude session as a PTY child
-    /// (`aida queue work <scope>`). A prefix key (Ctrl-a, configurable
-    /// via `[tui] prefix_key`) toggles command mode; `prefix q` quits and
-    /// `prefix d` detaches (conversations persist on disk).
-    ///
-    // trace:STORY-132 | ai:claude
-    Tui {
-        /// Scope (an EPIC / STORY / … id) to host in the first tab
-        /// (PTY-host mode) or to scope the Sessions section against
-        /// (launcher mode). Omit to open the launcher dashboard / an
-        /// empty PTY-host shell.
-        scope: Option<String>,
-        /// Skip crash-recovery re-attach of orphaned sessions on launch
-        /// and discard any stale `.aida/tui-state.json`. PTY-host-mode
-        /// only — the launcher does not own PTY children.
-        // trace:STORY-135 | ai:claude
-        // trace:TASK-487 | ai:claude
-        #[clap(long)]
-        no_recover: bool,
-        // trace:STORY-244 | ai:claude
-        /// Force launcher mode: the TUI renders the board, and on a user
-        /// action dispatches the chosen command in-process before
-        /// re-entering. Defaults to whatever `[tui] mode` resolves to
-        /// (launcher unless overridden).
-        // trace:STORY-244 STORY-681 | ai:claude
-        #[clap(long)]
-        launcher: bool,
-        /// Power-user / legacy hook: emit one intent line to this file
-        /// descriptor and exit (the legacy single-shot fd-3 protocol an
-        /// external dispatcher consumes) instead of dispatching the intent
-        /// in-process. Omit it — bare `aida tui` is self-sufficient and
-        /// needs no fd-3 pipe or `aida-tui` shell wrapper.
-        // trace:STORY-244 STORY-681 | ai:claude
-        #[clap(long, value_name = "FD", hide = true)]
-        intent_fd: Option<u32>,
-    },
-
     /// Project the requirements graph as a layered docs tree.
     /// Constitution, vision, constraints, decisions, quality, glossary —
     /// each layer rendered from its corresponding RequirementType. The
@@ -13487,19 +12502,6 @@ pub enum Command {
     // trace:STORY-444 | ai:claude
     #[clap(subcommand)]
     Backlog(BacklogCommand),
-
-    /// Inspect, audit, and reverse advisor-autopilot disposition decisions.
-    ///
-    /// A read-only lens over the bounded-authority policy envelope: `inspect`
-    /// dry-runs the four-gate evaluation over the current groom candidates and
-    /// shows, per spec, what it WOULD decide (and which gate stopped it) without
-    /// touching a single spec; `audit` lists the recorded verdicts; `challenge`
-    /// marks a recorded verdict as reversed. `executions` lists the actions
-    /// autopilot actually took, and `revert` undoes one of them from the prior
-    /// state recorded alongside it.
-    // trace:TASK-1147 trace:TASK-1018 | ai:claude
-    #[clap(subcommand)]
-    Autopilot(AutopilotCommand),
 
     /// Top-level alias for `aida queue rework SPEC` — single verb for the
     /// recurring implementer → reviewer → fixup recovery sequence
@@ -13960,89 +12962,6 @@ pub enum Command {
         cmd: Option<HistoryCommand>,
     },
 
-    /// Opt-in EARS-style quality lint for requirement text. AIDA stays a
-    /// graph-first substrate (stable IDs, typed relationships, traces); this
-    /// is an optional clarity lens, never a required schema. Scores a spec's
-    /// description + acceptance criteria for vague triggers, missing expected
-    /// behavior, conflicting constraints, and low-testability wording, and
-    /// prints suggested rewrites as drafts only — it never edits a spec.
-    /// Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
-    /// every spec of that kind. Read-only and deterministic (no LLM call).
-    // trace:TASK-0417 | ai:claude
-    Lint {
-        /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
-        /// specs.
-        spec: Option<String>,
-
-        /// Lint every spec of this kind instead of a single SPEC-ID. One of
-        /// `feature`, `task`, or `story`. `feature` covers the requirement
-        /// types (functional / non-functional / system / user).
-        #[clap(long, value_name = "KIND", conflicts_with = "spec")]
-        scope: Option<String>,
-
-        /// Emit findings as JSON for agents / scripts.
-        #[clap(long)]
-        json: bool,
-    },
-
-    /// Explicit, report-only host verification using built-in probes.
-    /// Never executes a command from the requirements store.
-    // trace:STORY-1673 | ai:codex
-    #[clap(subcommand)]
-    Verify(VerifyCommand),
-
-    /// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
-    /// --diagram` prints a Mermaid state diagram generated from the single
-    /// declared transition model in `aida-core`, so the picture can't drift
-    /// from the code. `--check` pins the committed diagram in
-    /// `docs/lifecycle.md` against the generated one and exits non-zero on
-    /// drift (pre-commit-hook-able); with `--write` it inserts/refreshes the
-    /// committed block instead. Phase 1 is purely additive — no guard
-    /// enforcement, no empirical diffing.
-    // trace:TASK-737 | ai:claude
-    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(hide = true)]
-    Lifecycle {
-        /// Emit the Mermaid `stateDiagram-v2` generated from the declared
-        /// transition model.
-        #[clap(long)]
-        diagram: bool,
-
-        /// Compare the generated diagram against the committed mermaid block
-        /// in `docs/lifecycle.md` (or `--doc <FILE>`). Exits non-zero on
-        /// drift. Pair with `--write` to fix drift in place.
-        #[clap(long)]
-        check: bool,
-
-        /// Insert or refresh the committed mermaid block in the doc with the
-        /// generated diagram. Use with `--check` to auto-fix drift.
-        #[clap(long)]
-        write: bool,
-
-        /// The doc whose first mermaid block is the pinned diagram. Defaults
-        /// to `docs/lifecycle.md` under the project root.
-        #[clap(long, value_name = "FILE")]
-        doc: Option<String>,
-
-        /// Reconstruct the OBSERVED state machine by walking the `history:`
-        /// arrays in the spec store — every recorded status flip becomes one
-        /// observed transition, tallied with counts. On its own, prints the
-        /// observed transitions; pair with `--diff` to compare against the
-        /// declared model.
-        // trace:TASK-742 | ai:claude
-        #[clap(long)]
-        empirical: bool,
-
-        /// Diff the declared model against the observed one: report observed
-        /// transitions the declared model never authorized (undocumented
-        /// flips) and declared transitions never observed (dead edges). Exits
-        /// non-zero when any undocumented flip is found, so it is CI-gate-able.
-        /// Implies `--empirical`.
-        // trace:TASK-742 | ai:claude
-        #[clap(long)]
-        diff: bool,
-    },
-
     /// Work with implementation plans archived under `docs/plans/`:
     /// `verify` lints a plan against the structured template, `helpers`
     /// derives a reusable-helpers section from the trace graph, `promote`
@@ -14052,92 +12971,6 @@ pub enum Command {
     // trace:TASK-778
     #[clap(subcommand)]
     Plan(PlanCommand),
-
-    /// Dependency-graph tooling. Today: `aida deps sweep` lists likely
-    /// dependencies inferred read-only from the trace graph (shared
-    /// trace-link files) plus same-parent siblings — a "did I miss a
-    /// dependency before an overnight drain?" check. Read-only: it never
-    /// writes edges (confirm them by hand with `aida edit <id>
-    /// --blocked-by <dep>`).
-    // trace:STORY-447 | ai:claude
-    #[clap(subcommand)]
-    Deps(DepsCommand),
-
-    /// Named discipline gates, invoked on demand instead of carried as prose.
-    /// `aida gate list` shows the shipped library and which lifecycle moment
-    /// each gate is a default for; `aida gate show <name>` prints one gate's
-    /// checklist; `aida gate run <name> <SPEC>` runs its deterministic tier
-    /// over a spec and prints the checklist an agent answers for the rest.
-    // trace:STORY-1427 | ai:claude
-    #[clap(subcommand)]
-    Gate(GateCommand),
-
-    /// Generate `CHANGELOG.md` mechanically from git tags + the spec
-    /// graph. Walks `v*` tags as release boundaries, scans commits
-    /// between them for `(SPEC-ID)` references, classifies each spec
-    /// (Features / Fixes / Documentation / Infrastructure / Internal /
-    /// Other), and renders one structured markdown section per release.
-    /// `generate` prints to stdout or `--out`; `refresh` writes
-    /// `CHANGELOG.md` (idempotent — same git state → byte-identical
-    /// output); `preview` is `[Unreleased]`-only.
-    // trace:TASK-299 | ai:claude
-    #[clap(subcommand)]
-    Changelog(ChangelogCommand),
-
-    /// Print the CLI-manual rationale section for a command — the *when /
-    /// why / when-not* that sits next to `--help`'s *what*. Greps the manual
-    /// chapters under `docs/cli/*.md` for the command's entry and prints it
-    /// (paged when a pager is available). `aida <cmd> --help` stays the fact
-    /// source — this is the rationale. Exits non-zero with a clear message
-    /// when no manual entry matches.
-    // trace:STORY-600 | ai:claude
-    // trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(hide = true)]
-    Manual {
-        /// The command whose manual entry to print, e.g. `graph` (or
-        /// `aida graph` — the leading `aida ` is optional).
-        command: String,
-    },
-
-    /// Assemble a rich, structured planning prompt for a SPEC. Pulls the
-    /// spec's description, acceptance criteria, related-spec context, the
-    /// spec's enrichment comments, the AIDA plan-template structure, and
-    /// the trace-graph reusable helpers into one prompt — turning a terse
-    /// ask into a fully-contextualised brief for `/aida-plan`, a Plan
-    /// agent, a multi-agent workflow, or a human reviewer. Copies to the
-    /// clipboard by default.
-    // trace:BUG-1177 | ai:codex
-    // trace:TASK-113 TASK-247 | ai:claude
-    Ultraplan {
-        /// SPEC-ID (or UUID) to assemble the planning prompt for.
-        spec: String,
-
-        /// Print the assembled prompt to stdout instead of copying it to
-        /// the clipboard. Also the headless fallback when no clipboard
-        /// tool is available.
-        #[clap(long, conflicts_with = "json")]
-        stdout: bool,
-
-        /// Emit the prompt + metadata (warnings, token estimate) as JSON
-        /// for scripting.
-        #[clap(long)]
-        json: bool,
-
-        /// Copy the assembled prompt to the clipboard (default behavior).
-        /// This flag is an explicit alias for the default, provided for
-        /// command-line discoverability and ease of use.
-        // trace:TASK-514 | ai:antigravity
-        #[clap(long, conflicts_with = "stdout", conflicts_with = "json")]
-        copy: bool,
-
-        /// Omit the `## Comments` section — the spec's enrichment
-        /// comments are pulled in by default; pass this for the
-        /// leaner comment-free prompt.
-        // trace:TASK-247 | ai:claude
-        // trace:TASK-487 | ai:claude
-        #[clap(long)]
-        no_comments: bool,
-    },
 
     /// Import a saved plan file into AIDA conventions: archive it under
     /// `docs/plans/YYYY-MM-DD-<slug>.md` and pin it to its SPEC with a
@@ -14165,54 +12998,6 @@ pub enum Command {
         request_review: bool,
     },
 
-    /// Derive a machine-checkable completion condition from AIDA
-    /// metadata, ready to paste into `/goal` (or `/schedule`). Each flag
-    /// contributes one clause; multiple flags compose with `AND`. Every
-    /// clause carries an explicit verification command so a small
-    /// evaluator can check it deterministically — no vague "make the
-    /// tests pass" conditions that loop forever.
-    // trace:TASK-242 | ai:claude
-    Goal {
-        /// Condition: all specs tagged `batch:<NAME>` reach a terminal
-        /// status (Completed/Rejected). `batch:` prefix optional.
-        #[clap(long, value_name = "NAME")]
-        batch: Option<String>,
-
-        /// Condition: all direct children of EPIC/STORY `<ID>` reach a
-        /// terminal status.
-        #[clap(long, value_name = "ID")]
-        epic: Option<String>,
-
-        /// Condition: spec `<SPEC-ID>` reaches status Completed.
-        #[clap(long, value_name = "SPEC-ID")]
-        spec: Option<String>,
-
-        /// Condition: PR `<N>` is merged.
-        #[clap(long, value_name = "N")]
-        pr: Option<u64>,
-
-        /// Condition: the given role's queue is empty. Accepts
-        /// `implementer` or `role:implementer`.
-        #[clap(long, value_name = "ROLE")]
-        queue_empty: Option<String>,
-
-        /// Copy the assembled `/goal` line to the system clipboard.
-        #[clap(long, conflicts_with = "invoke")]
-        copy: bool,
-
-        /// Print only the bare `/goal <condition>` line, no framing —
-        /// for scripting / command substitution.
-        #[clap(long)]
-        invoke: bool,
-
-        /// Print a `claude-cli://open` deep link with the `/goal …` line
-        /// pre-filled. Click → Claude Code opens in cwd with the prompt
-        /// ready (inert until Enter). Requires Claude Code v2.1.91+.
-        // trace:SPIKE-33 | ai:claude
-        #[clap(long = "as-deep-link", conflicts_with_all = ["copy", "invoke"])]
-        as_deep_link: bool,
-    },
-
     /// The 'human' role vector — the front door to "what needs a person?".
     /// Bare `aida human [--short]` shows the bottleneck view (every spec a
     /// human must decide, review, or triage), the same set as `aida list
@@ -14232,27 +13017,6 @@ pub enum Command {
         short: bool,
         #[clap(subcommand)]
         command: Option<HumanCommand>,
-    },
-
-    /// List the full command surface grouped by topic (same output as
-    /// `aida help --all`). Bare `aida` / `aida help` show the curated
-    /// Getting-started view instead.
-    HelpAll,
-
-    /// List every command and subcommand as grep-able one-line rows.
-    // trace:STORY-1027 | ai:codex
-    Commands {
-        /// Append each command's long options after its summary.
-        #[clap(long)]
-        flags: bool,
-
-        /// Emit a JSON array for tooling.
-        #[clap(long)]
-        json: bool,
-
-        /// Include clap-hidden commands and flags.
-        #[clap(long)]
-        hidden: bool,
     },
 
     /// Stock and local skill tooling.
@@ -15136,7 +13900,7 @@ mod tests {
     #[test]
     fn session_handoff_standing_orders_parses_add_and_list() {
         let so = |args: &[&str]| -> Option<Vec<String>> {
-            let cli = Cli::try_parse_from(args).unwrap();
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
             match cli.command {
                 Command::Session(SessionCommand::Handoff {
                     standing_orders, ..
@@ -15153,14 +13917,16 @@ mod tests {
         let list = [&base[..], &["--standing-orders", "list"]].concat();
         assert_eq!(so(&list), Some(vec!["list".to_string()]));
         let both = [&base[..], &["--show", "--standing-orders", "list"]].concat();
-        assert!(Cli::try_parse_from(both).is_err());
+        assert!(crate::command_registry::try_parse_from(both).is_err());
     }
 
     #[test]
     fn digest_parses_without_format_collision() {
         // Previously panicked at parse. Bare invocation + the renamed flag.
-        assert!(Cli::try_parse_from(["aida", "digest"]).is_ok());
-        let cli = Cli::try_parse_from(["aida", "digest", "--digest-format", "json"]).unwrap();
+        assert!(crate::command_registry::try_parse_from(["aida", "digest"]).is_ok());
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "digest", "--digest-format", "json"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::Digest {
@@ -15169,7 +13935,9 @@ mod tests {
             }
         ));
         // The global --format still parses alongside the digest subcommand.
-        assert!(Cli::try_parse_from(["aida", "--format", "json", "digest"]).is_ok());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "--format", "json", "digest"]).is_ok()
+        );
     }
 
     // trace:TASK-1055 | ai:claude — `--slower-than` accepts a bare number
@@ -15194,7 +13962,9 @@ mod tests {
     // trace:TASK-157 | ai:codex
     #[test]
     fn remote_mirror_push_hook_plumbing_parses() {
-        let cli = Cli::try_parse_from(["aida", "remote", "mirror-push", "origin"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "remote", "mirror-push", "origin"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
@@ -15208,8 +13978,14 @@ mod tests {
     // parse error).
     #[test]
     fn slower_than_flag_accepts_ms_suffix() {
-        let cli = Cli::try_parse_from(["aida", "usage", "--slower-than", "500ms", "events"])
-            .expect("`--slower-than 500ms` must parse");
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "usage",
+            "--slower-than",
+            "500ms",
+            "events",
+        ])
+        .expect("`--slower-than 500ms` must parse");
         match cli.command {
             Command::Usage { slower_than, .. } => {
                 assert_eq!(slower_than, Some(500));
@@ -15221,14 +13997,19 @@ mod tests {
     // trace:TASK-1228 | ai:codex
     #[test]
     fn autonomy_overview_parses_as_bare_command() {
-        let cli = Cli::try_parse_from(["aida", "autonomy"])
+        let cli = crate::command_registry::try_parse_from(["aida", "autonomy"])
             .expect("bare `aida autonomy` should print the overview");
-        assert!(matches!(cli.command, Command::Autonomy { command: None }));
-
-        let cli = Cli::try_parse_from(["aida", "autonomy", "report"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Autonomy {
+            cli.command
+                .registered::<crate::autonomy_cmd::AutonomyArgs>(),
+            crate::autonomy_cmd::AutonomyArgs { command: None }
+        ));
+
+        let cli = crate::command_registry::try_parse_from(["aida", "autonomy", "report"]).unwrap();
+        assert!(matches!(
+            cli.command
+                .registered::<crate::autonomy_cmd::AutonomyArgs>(),
+            crate::autonomy_cmd::AutonomyArgs {
                 command: Some(AutonomyCommand::Report { .. })
             }
         ));
@@ -15237,7 +14018,7 @@ mod tests {
     // trace:TASK-1209 | ai:codex
     #[test]
     fn drain_tail_parses_same_streaming_flags_as_tail_drain() {
-        let tail = Cli::try_parse_from([
+        let tail = crate::command_registry::try_parse_from([
             "aida",
             "tail",
             "drain",
@@ -15252,7 +14033,7 @@ mod tests {
             "--annotate",
         ])
         .expect("`aida tail drain` should parse");
-        let drain_tail = Cli::try_parse_from([
+        let drain_tail = crate::command_registry::try_parse_from([
             "aida",
             "drain",
             "tail",
@@ -15268,7 +14049,7 @@ mod tests {
         ])
         .expect("`aida drain tail` should parse");
 
-        let Command::Tail {
+        let crate::tail_cmd::TailArgs {
             target,
             list,
             json,
@@ -15278,22 +14059,27 @@ mod tests {
             with_tools,
             no_timestamp,
             annotate,
-        } = tail.command
+        } = tail.command.registered::<crate::tail_cmd::TailArgs>()
         else {
             panic!("expected Tail command");
         };
         assert_eq!(target.as_deref(), Some("drain"));
         assert!(!list);
 
-        let Command::Drain(DrainCommand::Tail {
-            json: drain_json,
-            lines: drain_lines,
-            since: drain_since,
-            no_follow: drain_no_follow,
-            with_tools: drain_with_tools,
-            no_timestamp: drain_no_timestamp,
-            annotate: drain_annotate,
-        }) = drain_tail.command
+        let crate::drain_cmd::DrainArgs {
+            inner:
+                DrainCommand::Tail {
+                    json: drain_json,
+                    lines: drain_lines,
+                    since: drain_since,
+                    no_follow: drain_no_follow,
+                    with_tools: drain_with_tools,
+                    no_timestamp: drain_no_timestamp,
+                    annotate: drain_annotate,
+                },
+        } = drain_tail
+            .command
+            .registered::<crate::drain_cmd::DrainArgs>()
         else {
             panic!("expected Drain::Tail command");
         };
@@ -15311,7 +14097,7 @@ mod tests {
     // trace:STORY-1130 | ai:codex
     #[test]
     fn drain_start_and_stop_parse_lifecycle_flags() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "drain",
             "start",
@@ -15337,22 +14123,25 @@ mod tests {
             "--json",
         ])
         .expect("`aida drain start` should parse");
-        match cli.command {
-            Command::Drain(DrainCommand::Start {
-                selector,
-                project,
-                batch,
-                once,
-                no_human,
-                role,
-                max_failures,
-                max_iterations,
-                max_runtime,
-                max_tokens,
-                json,
-                vendor,
-                model,
-            }) => {
+        match cli.command.registered::<crate::drain_cmd::DrainArgs>() {
+            crate::drain_cmd::DrainArgs {
+                inner:
+                    DrainCommand::Start {
+                        selector,
+                        project,
+                        batch,
+                        once,
+                        no_human,
+                        role,
+                        max_failures,
+                        max_iterations,
+                        max_runtime,
+                        max_tokens,
+                        json,
+                        vendor,
+                        model,
+                    },
+            } => {
                 assert_eq!(selector.as_deref(), Some("next3"));
                 assert_eq!(project.as_deref(), Some("/tmp/aida"));
                 assert_eq!(batch, None);
@@ -15370,17 +14159,20 @@ mod tests {
             other => panic!("expected Drain::Start command, got {other:?}"),
         }
 
-        let cli = Cli::try_parse_from(["aida", "drain", "stop", "--now"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "drain", "stop", "--now"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Drain(DrainCommand::Stop { now: true, .. })
+            cli.command.registered::<crate::drain_cmd::DrainArgs>(),
+            crate::drain_cmd::DrainArgs {
+                inner: DrainCommand::Stop { now: true, .. }
+            }
         ));
     }
 
     // trace:TASK-1155 trace:ADR-11 | ai:codex
     #[test]
     fn do_command_parses_spec_positional() {
-        let cli = Cli::try_parse_from(["aida", "do", "TASK-1155"])
+        let cli = crate::command_registry::try_parse_from(["aida", "do", "TASK-1155"])
             .expect("`aida do <spec>` should parse");
         match cli.command {
             Command::Do { spec, mode, force } => {
@@ -15395,8 +14187,15 @@ mod tests {
     // trace:STORY-776 | ai:claude
     #[test]
     fn do_command_parses_mode_override_and_force() {
-        let cli = Cli::try_parse_from(["aida", "do", "TASK-1155", "--mode", "guided", "--force"])
-            .expect("`aida do <spec> --mode <m> --force` should parse");
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "do",
+            "TASK-1155",
+            "--mode",
+            "guided",
+            "--force",
+        ])
+        .expect("`aida do <spec> --mode <m> --force` should parse");
         match cli.command {
             Command::Do { spec, mode, force } => {
                 assert_eq!(spec, "TASK-1155");
@@ -15410,10 +14209,14 @@ mod tests {
     // trace:TASK-1145 | ai:codex
     #[test]
     fn worktree_gc_parses_destructive_heal_flags() {
-        let cli = Cli::try_parse_from(["aida", "worktree", "gc", "--yes", "--force", "--json"])
-            .expect("`aida worktree gc` should parse");
-        match cli.command {
-            Command::Worktree(WorktreeCommand::Gc { yes, force, json }) => {
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "worktree", "gc", "--yes", "--force", "--json",
+        ])
+        .expect("`aida worktree gc` should parse");
+        match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
+            crate::worktree_gc::WorktreeArgs {
+                inner: WorktreeCommand::Gc { yes, force, json },
+            } => {
                 assert!(yes);
                 assert!(force);
                 assert!(json);
@@ -15733,7 +14536,7 @@ mod tests {
     // command's `shortcut` field; `--status` still parses into `status`.
     #[test]
     fn list_positional_status_shortcut_parses() {
-        let cli = Cli::try_parse_from(["aida", "list", "approved"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list", "approved"]).unwrap();
         match cli.command {
             Command::List {
                 shortcut, status, ..
@@ -15744,7 +14547,8 @@ mod tests {
             other => panic!("expected List, got {other:?}"),
         }
 
-        let cli = Cli::try_parse_from(["aida", "list", "--status", "open"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "list", "--status", "open"]).unwrap();
         match cli.command {
             Command::List {
                 shortcut, status, ..
@@ -15759,7 +14563,7 @@ mod tests {
     // trace:BUG-1498 | ai:codex
     #[test]
     fn bug_1498_list_machine_drafts_flag_requires_explicit_draft_status() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "list",
             "--status",
@@ -15781,7 +14585,9 @@ mod tests {
             }
             other => panic!("expected List, got {other:?}"),
         }
-        assert!(Cli::try_parse_from(["aida", "list", "--machine-drafts"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "list", "--machine-drafts"]).is_err()
+        );
     }
 
     // trace:STORY-662 — the `--user <name>` flag parses, and the positional
@@ -15790,7 +14596,8 @@ mod tests {
     #[test]
     fn list_user_flag_and_positional_parse() {
         // --user flag.
-        let cli = Cli::try_parse_from(["aida", "list", "--user", "joe"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "list", "--user", "joe"]).unwrap();
         match cli.command {
             Command::List { user, shortcut, .. } => {
                 assert_eq!(user.as_deref(), Some("joe"));
@@ -15800,7 +14607,7 @@ mod tests {
         }
 
         // Positional `me`.
-        let cli = Cli::try_parse_from(["aida", "list", "me"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list", "me"]).unwrap();
         match cli.command {
             Command::List { shortcut, user, .. } => {
                 assert_eq!(shortcut.as_deref(), Some("me"));
@@ -15810,7 +14617,7 @@ mod tests {
         }
 
         // Positional `user:<name>`.
-        let cli = Cli::try_parse_from(["aida", "list", "user:alice"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list", "user:alice"]).unwrap();
         match cli.command {
             Command::List { shortcut, user, .. } => {
                 assert_eq!(shortcut.as_deref(), Some("user:alice"));
@@ -15826,9 +14633,15 @@ mod tests {
     #[test]
     fn list_recursive_requires_parent() {
         // --recursive + --parent + a status positional: parses, recursive=true.
-        let cli =
-            Cli::try_parse_from(["aida", "list", "open", "--parent", "EPIC-51", "--recursive"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "list",
+            "open",
+            "--parent",
+            "EPIC-51",
+            "--recursive",
+        ])
+        .unwrap();
         match cli.command {
             Command::List {
                 shortcut,
@@ -15844,15 +14657,22 @@ mod tests {
         }
 
         // The `--subtree` alias resolves to the same `recursive` field.
-        let cli =
-            Cli::try_parse_from(["aida", "list", "--parent", "EPIC-51", "--subtree"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "list",
+            "--parent",
+            "EPIC-51",
+            "--subtree",
+        ])
+        .unwrap();
         match cli.command {
             Command::List { recursive, .. } => assert!(recursive),
             other => panic!("expected List, got {other:?}"),
         }
 
         // --recursive WITHOUT --parent errors (the requires-parent guard).
-        let err = Cli::try_parse_from(["aida", "list", "--recursive"]).unwrap_err();
+        let err =
+            crate::command_registry::try_parse_from(["aida", "list", "--recursive"]).unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("--parent"),
@@ -15864,7 +14684,7 @@ mod tests {
     // `aida list --human` sets the flag; both route to the human-attention view.
     #[test]
     fn list_human_positional_and_flag_parse() {
-        let cli = Cli::try_parse_from(["aida", "list", "human"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list", "human"]).unwrap();
         match cli.command {
             Command::List {
                 shortcut, human, ..
@@ -15875,7 +14695,7 @@ mod tests {
             other => panic!("expected List, got {other:?}"),
         }
 
-        let cli = Cli::try_parse_from(["aida", "list", "--human"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list", "--human"]).unwrap();
         match cli.command {
             Command::List {
                 shortcut, human, ..
@@ -15887,7 +14707,8 @@ mod tests {
         }
 
         // Composes with `--short`.
-        let cli = Cli::try_parse_from(["aida", "list", "human", "--short"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "list", "human", "--short"]).unwrap();
         match cli.command {
             Command::List {
                 shortcut,
@@ -15903,8 +14724,13 @@ mod tests {
         }
 
         // `--human` conflicts with `--status` / `--json` / `--tree` at the clap layer.
-        assert!(Cli::try_parse_from(["aida", "list", "--human", "--json"]).is_err());
-        assert!(Cli::try_parse_from(["aida", "list", "--human", "--status", "draft"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "list", "--human", "--json"]).is_err()
+        );
+        assert!(crate::command_registry::try_parse_from([
+            "aida", "list", "--human", "--status", "draft"
+        ])
+        .is_err());
     }
 
     // trace:TASK-900 — `aida list --limit N` parses into the optional
@@ -15913,22 +14739,25 @@ mod tests {
     #[test]
     fn list_limit_flag_parses() {
         // Absent → None (no cap).
-        let cli = Cli::try_parse_from(["aida", "list"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "list"]).unwrap();
         match cli.command {
             Command::List { limit, .. } => assert_eq!(limit, None),
             other => panic!("expected List, got {other:?}"),
         }
 
         // Present → Some(N).
-        let cli = Cli::try_parse_from(["aida", "list", "--limit", "5"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "list", "--limit", "5"]).unwrap();
         match cli.command {
             Command::List { limit, .. } => assert_eq!(limit, Some(5)),
             other => panic!("expected List, got {other:?}"),
         }
 
         // Composes with other filters.
-        let cli =
-            Cli::try_parse_from(["aida", "list", "--status", "open", "--limit", "3"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "list", "--status", "open", "--limit", "3",
+        ])
+        .unwrap();
         match cli.command {
             Command::List { limit, status, .. } => {
                 assert_eq!(limit, Some(3));
@@ -15938,7 +14767,10 @@ mod tests {
         }
 
         // Non-numeric value is a parse error.
-        assert!(Cli::try_parse_from(["aida", "list", "--limit", "notanumber"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "list", "--limit", "notanumber"])
+                .is_err()
+        );
     }
 
     // trace:TASK-900 — the truncation semantics the list handler relies on:
@@ -15974,7 +14806,7 @@ mod tests {
             ("presence", "presence"),
             ("status", "status"),
         ] {
-            let cli = Cli::try_parse_from(["aida", "human", word]).unwrap();
+            let cli = crate::command_registry::try_parse_from(["aida", "human", word]).unwrap();
             match cli.command {
                 Command::Human {
                     short: false,
@@ -16003,7 +14835,9 @@ mod tests {
     // trace:STORY-818 | ai:codex
     #[test]
     fn human_review_guided_short_flag_parses() {
-        let cli = Cli::try_parse_from(["aida", "human", "review", "TASK-123", "-g"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "human", "review", "TASK-123", "-g"])
+                .unwrap();
         match cli.command {
             Command::Human {
                 command: Some(HumanCommand::Review { spec, guided, .. }),
@@ -16020,7 +14854,7 @@ mod tests {
     // requires an autonomous drain, and conflicts with `--single-branch`.
     #[test]
     fn sequential_flag_parses_with_batch_and_autonomous() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "queue",
             "work",
@@ -16049,8 +14883,15 @@ mod tests {
     // `--auto-complete` (or `--drain`) clap rejects it via `requires`.
     #[test]
     fn sequential_requires_autonomous_drain() {
-        let err = Cli::try_parse_from(["aida", "queue", "work", "--batch", "tui", "--sequential"])
-            .unwrap_err();
+        let err = crate::command_registry::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "--batch",
+            "tui",
+            "--sequential",
+        ])
+        .unwrap_err();
         assert!(
             err.to_string().contains("autonomous")
                 || err.to_string().contains("auto-complete")
@@ -16063,7 +14904,7 @@ mod tests {
     // (one accumulating branch) are mutually exclusive drive shapes.
     #[test]
     fn sequential_conflicts_with_single_branch() {
-        let err = Cli::try_parse_from([
+        let err = crate::command_registry::try_parse_from([
             "aida",
             "queue",
             "work",
@@ -16201,7 +15042,7 @@ mod tests {
     // trace:STORY-1028 | ai:codex
     #[test]
     fn mode_flag_subcommands_parse_next_to_hidden_aliases() {
-        let cli = Cli::try_parse_from(["aida", "usage", "slowest"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "usage", "slowest"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::Usage {
@@ -16209,10 +15050,11 @@ mod tests {
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "usage", "--slowest"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "usage", "--slowest"]).unwrap();
         assert!(matches!(cli.command, Command::Usage { slowest: true, .. }));
 
-        let cli = Cli::try_parse_from(["aida", "usage", "drains", "--pattern"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "usage", "drains", "--pattern"])
+            .unwrap();
         assert!(matches!(
             cli.command,
             Command::Usage {
@@ -16220,7 +15062,13 @@ mod tests {
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "usage", "--auto-complete", "--pattern"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "usage",
+            "--auto-complete",
+            "--pattern",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Command::Usage {
@@ -16233,7 +15081,7 @@ mod tests {
         // TASK-1481: `timeline` is subcommand-only (no legacy `--timeline`
         // flag), and composes with the shared --cmd/--slower-than/--limit
         // flags the same way `events` does.
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "usage",
             "--cmd",
@@ -16256,7 +15104,9 @@ mod tests {
             other => panic!("expected Usage{{ action: Timeline, .. }}, got {other:?}"),
         }
 
-        let cli = Cli::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "graph", "blocked-by", "STORY-1"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::Graph {
@@ -16264,7 +15114,9 @@ mod tests {
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "graph", "STORY-1", "--blocked-by"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "graph", "STORY-1", "--blocked-by"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::Graph {
@@ -16274,18 +15126,23 @@ mod tests {
             }
         ));
 
-        let cli = Cli::try_parse_from(["aida", "release", "minor"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "release", "minor"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Release {
+            cli.command
+                .registered::<crate::upgrade_release::ReleaseArgs>(),
+            crate::upgrade_release::ReleaseArgs {
                 cmd: Some(ReleaseCommand::Minor),
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "release", "--minor"]).unwrap();
-        assert!(matches!(cli.command, Command::Release { minor: true, .. }));
+        let cli = crate::command_registry::try_parse_from(["aida", "release", "--minor"]).unwrap();
+        assert!(matches!(
+            cli.command
+                .registered::<crate::upgrade_release::ReleaseArgs>(),
+            crate::upgrade_release::ReleaseArgs { minor: true, .. }
+        ));
 
-        let cli = Cli::try_parse_from(["aida", "focus", "clear"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "focus", "clear"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::Focus {
@@ -16293,61 +15150,86 @@ mod tests {
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "focus", "--clear"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "focus", "--clear"]).unwrap();
         assert!(matches!(cli.command, Command::Focus { clear: true, .. }));
 
-        let cli = Cli::try_parse_from(["aida", "drain", "clear"]).unwrap();
-        assert!(matches!(cli.command, Command::Drain(DrainCommand::Clear)));
-        let cli = Cli::try_parse_from(["aida", "drain", "status", "--clear"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "drain", "clear"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Drain(DrainCommand::Status { clear: true, .. })
+            cli.command.registered::<crate::drain_cmd::DrainArgs>(),
+            crate::drain_cmd::DrainArgs {
+                inner: DrainCommand::Clear
+            }
+        ));
+        let cli = crate::command_registry::try_parse_from(["aida", "drain", "status", "--clear"])
+            .unwrap();
+        assert!(matches!(
+            cli.command.registered::<crate::drain_cmd::DrainArgs>(),
+            crate::drain_cmd::DrainArgs {
+                inner: DrainCommand::Status { clear: true, .. }
+            }
         ));
 
-        let cli = Cli::try_parse_from(["aida", "upgrade", "diff"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "upgrade", "diff"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Upgrade {
+            cli.command.registered::<crate::upgrade_cmd::UpgradeArgs>(),
+            crate::upgrade_cmd::UpgradeArgs {
                 cmd: Some(UpgradeCommand::Diff),
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "upgrade", "--diff"]).unwrap();
-        assert!(matches!(cli.command, Command::Upgrade { diff: true, .. }));
-
-        let cli = Cli::try_parse_from(["aida", "statusline", "title"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "upgrade", "--diff"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Statusline {
+            cli.command.registered::<crate::upgrade_cmd::UpgradeArgs>(),
+            crate::upgrade_cmd::UpgradeArgs { diff: true, .. }
+        ));
+
+        let cli = crate::command_registry::try_parse_from(["aida", "statusline", "title"]).unwrap();
+        assert!(matches!(
+            cli.command
+                .registered::<crate::statusline_cmd::StatuslineArgs>(),
+            crate::statusline_cmd::StatuslineArgs {
                 action: Some(StatuslineAction::Title),
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "statusline", "--title"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "statusline", "--title"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Statusline { title: true, .. }
+            cli.command
+                .registered::<crate::statusline_cmd::StatuslineArgs>(),
+            crate::statusline_cmd::StatuslineArgs { title: true, .. }
         ));
 
         // trace:TASK-1479 | ai:claude
-        let cli = Cli::try_parse_from(["aida", "statusline"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "statusline"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Statusline { client: None, .. }
+            cli.command
+                .registered::<crate::statusline_cmd::StatuslineArgs>(),
+            crate::statusline_cmd::StatuslineArgs { client: None, .. }
         ));
-        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "claude"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "statusline", "--client", "claude"])
+                .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Statusline { client: Some(ref c), .. } if c == "claude"
+            cli.command.registered::<crate::statusline_cmd::StatuslineArgs>(),
+            crate::statusline_cmd::StatuslineArgs { client: Some(ref c), .. } if c == "claude"
         ));
-        let cli = Cli::try_parse_from(["aida", "statusline", "--client", "agy"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "statusline", "--client", "agy"])
+                .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Statusline { client: Some(ref c), .. } if c == "agy"
+            cli.command.registered::<crate::statusline_cmd::StatuslineArgs>(),
+            crate::statusline_cmd::StatuslineArgs { client: Some(ref c), .. } if c == "agy"
         ));
-        assert!(Cli::try_parse_from(["aida", "statusline", "--client", "codex"]).is_err());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "statusline",
+            "--client",
+            "codex"
+        ])
+        .is_err());
 
-        let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16355,7 +15237,7 @@ mod tests {
                 ..
             }
         ));
-        let cli = Cli::try_parse_from(["aida", "history", "--events"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "history", "--events"]).unwrap();
         assert!(matches!(cli.command, Command::History { events: true, .. }));
     }
 
@@ -16368,7 +15250,10 @@ mod tests {
     // trace:BUG-1474 | ai:claude
     #[test]
     fn history_filters_parse_after_events_subcommand() {
-        let cli = Cli::try_parse_from(["aida", "history", "events", "--id", "BUG-1474"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "history", "events", "--id", "BUG-1474",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16379,7 +15264,10 @@ mod tests {
         ));
 
         // Still parses in the pre-existing before-the-subcommand order.
-        let cli = Cli::try_parse_from(["aida", "history", "--id", "BUG-1474", "events"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "history", "--id", "BUG-1474", "events",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16391,7 +15279,7 @@ mod tests {
 
         // A second documented filter (--status-changes) also parses after
         // `events`, not just --id.
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "history",
             "events",
@@ -16418,7 +15306,8 @@ mod tests {
     // trace:TASK-1480 | ai:claude
     #[test]
     fn history_positional_spec_id_parses() {
-        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "history", "TASK-1480"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16430,7 +15319,9 @@ mod tests {
         ));
 
         // Composes with other flags in either order.
-        let cli = Cli::try_parse_from(["aida", "history", "TASK-1480", "--oneline"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "history", "TASK-1480", "--oneline"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16439,7 +15330,9 @@ mod tests {
                 ..
             } if s == "TASK-1480"
         ));
-        let cli = Cli::try_parse_from(["aida", "history", "--full", "TASK-1480"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "history", "--full", "TASK-1480"])
+                .unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16452,7 +15345,7 @@ mod tests {
         // Bare `events` still resolves to the subcommand, not a spec named
         // "events" — no real spec id is shaped like that, and the
         // subcommand keeps priority.
-        let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
         assert!(matches!(
             cli.command,
             Command::History {
@@ -16464,15 +15357,28 @@ mod tests {
 
         // Passing both the positional and --id is refused, not silently
         // resolved one way or the other.
-        assert!(Cli::try_parse_from(["aida", "history", "TASK-1480", "--id", "TASK-9"]).is_err());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "TASK-1480",
+            "--id",
+            "TASK-9"
+        ])
+        .is_err());
     }
 
     // trace:TASK-1427 | ai:codex
     #[test]
     fn token_ledger_usage_subcommands_parse() {
-        let cli =
-            Cli::try_parse_from(["aida", "usage", "rebuild", "--project", "project", "--json"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "usage",
+            "rebuild",
+            "--project",
+            "project",
+            "--json",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             Command::Usage {
@@ -16481,7 +15387,7 @@ mod tests {
             }
         ));
 
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "usage",
             "show",
@@ -16511,7 +15417,9 @@ mod tests {
     // trace:BUG-1294 | ai:claude
     #[test]
     fn add_title_accepts_leading_single_hyphen() {
-        let cli = Cli::try_parse_from(["aida", "add", "--title", "-not-a-flag"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "add", "--title", "-not-a-flag"])
+                .unwrap();
         match cli.command {
             Command::Add { title, .. } => assert_eq!(title.as_deref(), Some("-not-a-flag")),
             other => panic!("expected Command::Add, got {other:?}"),
@@ -16520,7 +15428,7 @@ mod tests {
 
     #[test]
     fn add_title_accepts_leading_double_hyphen() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "add",
             "--title",
@@ -16540,8 +15448,10 @@ mod tests {
     fn add_title_accepts_value_matching_an_existing_flag_name() {
         // "--force" is itself a real flag on `aida add`; the value must still
         // bind to --title rather than being parsed as the --force flag.
-        let cli =
-            Cli::try_parse_from(["aida", "add", "--title", "--force", "--type", "bug"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "add", "--title", "--force", "--type", "bug",
+        ])
+        .unwrap();
         match cli.command {
             Command::Add {
                 title,
@@ -16557,7 +15467,7 @@ mod tests {
 
     #[test]
     fn add_description_accepts_leading_hyphen() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "add",
             "--title",
@@ -16576,7 +15486,7 @@ mod tests {
 
     #[test]
     fn edit_title_accepts_leading_hyphen() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "edit",
             "BUG-1",
@@ -16594,9 +15504,14 @@ mod tests {
 
     #[test]
     fn edit_description_accepts_leading_hyphen() {
-        let cli =
-            Cli::try_parse_from(["aida", "edit", "BUG-1", "--description", "-1 line summary"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "edit",
+            "BUG-1",
+            "--description",
+            "-1 line summary",
+        ])
+        .unwrap();
         match cli.command {
             Command::Edit { description, .. } => {
                 assert_eq!(description.as_deref(), Some("-1 line summary"))
@@ -16607,7 +15522,10 @@ mod tests {
 
     #[test]
     fn edit_title_accepts_value_matching_an_existing_flag_name() {
-        let cli = Cli::try_parse_from(["aida", "edit", "BUG-1", "--title", "--force"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "edit", "BUG-1", "--title", "--force",
+        ])
+        .unwrap();
         match cli.command {
             Command::Edit { title, force, .. } => {
                 assert_eq!(title.as_deref(), Some("--force"));
@@ -16622,7 +15540,8 @@ mod tests {
         // allow_hyphen_values only widens what --title/--description accept
         // as their OWN value; it must not swallow an unrelated mistyped
         // flag that was never bound as a value.
-        let err = Cli::try_parse_from(["aida", "add", "--titel", "probe"]).unwrap_err();
+        let err = crate::command_registry::try_parse_from(["aida", "add", "--titel", "probe"])
+            .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
@@ -16632,7 +15551,9 @@ mod tests {
 
     #[test]
     fn edit_still_rejects_a_genuinely_mistyped_flag() {
-        let err = Cli::try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"]).unwrap_err();
+        let err =
+            crate::command_registry::try_parse_from(["aida", "edit", "BUG-1", "--titel", "probe"])
+                .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("unexpected argument") || msg.contains("unrecognized"),
@@ -16644,7 +15565,7 @@ mod tests {
     // like a real review-record flag. trace:TASK-182 | ai:codex
     #[test]
     fn review_record_finding_accepts_flag_like_prose_and_later_real_flags() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "review",
             "record",
@@ -16688,7 +15609,7 @@ mod tests {
     // trace:STORY-1417 | ai:claude
     #[test]
     fn review_record_accepts_finding_classes_and_classes_parses() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "review",
             "record",
@@ -16708,7 +15629,10 @@ mod tests {
             } => assert_eq!(finding_class, vec!["incomplete-fix".to_string()]),
             other => panic!("expected review record command, got {other:?}"),
         }
-        let cli = Cli::try_parse_from(["aida", "findings", "classes", "--since", "7d"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "findings", "classes", "--since", "7d",
+        ])
+        .unwrap();
         match cli.command {
             Command::Findings {
                 cmd: Some(FindingsCommand::Classes { since, json }),
@@ -16718,8 +15642,10 @@ mod tests {
             }
             other => panic!("expected findings classes command, got {other:?}"),
         }
-        let cli =
-            Cli::try_parse_from(["aida", "review", "classes", "--since", "30d", "--json"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "review", "classes", "--since", "30d", "--json",
+        ])
+        .unwrap();
         match cli.command {
             Command::Review {
                 cmd: Some(ReviewCommand::Classes { since, json }),
@@ -16734,7 +15660,7 @@ mod tests {
 
     #[test]
     fn review_record_still_rejects_an_unbound_mistyped_flag() {
-        let err = Cli::try_parse_from([
+        let err = crate::command_registry::try_parse_from([
             "aida",
             "review",
             "record",
@@ -16755,7 +15681,10 @@ mod tests {
     // trace:TASK-1307 | ai:claude
     #[test]
     fn review_stranded_parses_json_and_fix_flags() {
-        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--json", "--fix"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "review", "stranded", "--json", "--fix",
+        ])
+        .unwrap();
         match cli.command {
             Command::Review {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age }),
@@ -16772,7 +15701,10 @@ mod tests {
     // trace:TASK-1423 | ai:claude
     #[test]
     fn review_stranded_parses_age_flag() {
-        let cli = Cli::try_parse_from(["aida", "review", "stranded", "--age", "--json"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "review", "stranded", "--age", "--json",
+        ])
+        .unwrap();
         match cli.command {
             Command::Review {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age }),
@@ -16789,8 +15721,10 @@ mod tests {
     // trace:TASK-1423 | ai:claude
     #[test]
     fn review_stranded_age_and_fix_are_mutually_exclusive() {
-        let err =
-            Cli::try_parse_from(["aida", "review", "stranded", "--age", "--fix"]).unwrap_err();
+        let err = crate::command_registry::try_parse_from([
+            "aida", "review", "stranded", "--age", "--fix",
+        ])
+        .unwrap_err();
         let msg = err.to_string();
         assert!(
             msg.contains("cannot be used with") || msg.contains("conflicts"),
@@ -16801,9 +15735,16 @@ mod tests {
     // trace:STORY-1415 | ai:claude
     #[test]
     fn review_mode_mass_change_parses() {
-        let cli =
-            Cli::try_parse_from(["aida", "review", "mode", "mass-change", "on", "--days", "5"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "review",
+            "mode",
+            "mass-change",
+            "on",
+            "--days",
+            "5",
+        ])
+        .unwrap();
         match cli.command {
             Command::Review {
                 cmd:
@@ -16818,13 +15759,20 @@ mod tests {
             }
             other => panic!("expected review mode mass-change, got {other:?}"),
         }
-        assert!(Cli::try_parse_from(["aida", "review", "mode", "mass-change", "maybe"]).is_err());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "review",
+            "mode",
+            "mass-change",
+            "maybe"
+        ])
+        .is_err());
     }
 
     // trace:TASK-1307 | ai:claude
     #[test]
     fn review_stranded_defaults_to_read_only() {
-        let cli = Cli::try_parse_from(["aida", "review", "stranded"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "review", "stranded"]).unwrap();
         match cli.command {
             Command::Review {
                 cmd: Some(ReviewCommand::Stranded { json, fix, age }),

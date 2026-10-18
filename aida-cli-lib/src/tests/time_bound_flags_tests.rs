@@ -497,16 +497,17 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
     // covered too.
     let sink = tempfile::TempDir::new().unwrap();
     let bad = format!("--output={}", sink.path().join("pwned.txt").display());
-    let parse = |args: &[&str]| <crate::cli::Cli as clap::Parser>::try_parse_from(args).unwrap();
+    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args).unwrap();
     // The `--flag=value` spelling: clap refuses a dash-led value given as a
     // separate argument, but takes it when fused.
     for flag in ["--since", "--until"] {
         let fused = format!("{flag}={bad}");
         let args = ["aida", "changelog", "generate", fused.as_str()];
         let cli = parse(&args);
-        let crate::cli::Command::Changelog(cmd) = cli.command else {
-            panic!("not a changelog command: {args:?}");
-        };
+        let cmd = cli
+            .command
+            .registered::<crate::changelog_cmd::ChangelogArgs>()
+            .inner;
         let err = crate::changelog_cmd::handle_changelog_command(&cmd)
             .unwrap_err()
             .to_string();

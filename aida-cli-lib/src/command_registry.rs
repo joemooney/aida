@@ -17,8 +17,61 @@ use crate::stakeholder_role::StakeholderAction;
 // trace:STORY-1728 | ai:claude
 pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::session_misc_cmd::BG_FETCH,
+    &crate::autonomy_cmd::AUTONOMY,
+    &crate::autopilot_intake::AUTOPILOT,
     &crate::presence_cmd::AWAY,
+    &crate::burndown_run::BURNDOWN,
+    &crate::changelog_cmd::CHANGELOG,
+    &crate::claim::CLAIM,
+    &crate::help_catalog::COMMANDS,
+    &crate::commit::COMMIT,
+    &crate::compete_cmd::COMPETE,
+    &crate::monitor_contract::CONTRACT,
+    &crate::deps_cmd::DEPS,
+    &crate::dev_cmd::DEV,
+    &crate::doctor_cmd::DOCTOR,
+    &crate::drain_cmd::DRAIN,
+    &crate::driver_cmd::DRIVER,
+    &crate::exposition::EXPLAIN,
+    &crate::gate_cmd::GATE,
+    &crate::goal_cmd::GOAL,
+    &crate::queue_misc::HEADLESS,
+    &crate::health_vitals_cmd::HEALTH,
+    &crate::help::HELP_ALL,
     &crate::presence_cmd::HOME,
+    &crate::ps_integrate::INTEGRATE,
+    &crate::plan_intent::INTENT,
+    &crate::internal_cmd::INTERNAL,
+    &crate::lifecycle_cmd::LIFECYCLE,
+    &crate::lint_cmd::LINT,
+    &crate::lock_cmd::LOCK,
+    &crate::mandate::MANDATE,
+    &crate::manual::MANUAL,
+    &crate::merge_hold_cmd::MERGE_HOLD,
+    &crate::merge_hold_cmd::MERGE_LOCK,
+    &crate::drain_gate::NO_HUMAN,
+    &crate::orchestrator_cmd::ORCHESTRATOR,
+    &crate::pr_cmd::PR,
+    &crate::ps_integrate::PS,
+    &crate::upgrade_release::RELEASE,
+    &crate::sandbox_cmd::SANDBOX,
+    &crate::schema::SCHEMA,
+    &crate::pr_cmd::SHIP,
+    &crate::queue_misc::STACK,
+    &crate::statusbar_cmd::STATUSBAR,
+    &crate::statusline_cmd::STATUSLINE,
+    &crate::store_cmd::STORE,
+    &crate::tail_cmd::TAIL,
+    &crate::triage_cmd::TRIAGE,
+    &crate::tui_entry::TUI,
+    &crate::ultraplan_cmd::ULTRAPLAN,
+    &crate::claim::UNCLAIM,
+    &crate::upgrade_cmd::UPGRADE,
+    &crate::verify_cmd::VERIFY,
+    &crate::watch::WATCH,
+    &crate::plan_intent::WHY,
+    &crate::wiki::WIKI,
+    &crate::worktree_gc::WORKTREE,
 ];
 
 /// Where in `run()` a registered command dispatches: the point at which the
@@ -173,6 +226,19 @@ fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
         globals,
         command: Command::Registered(Invocation { reg, matches: sub }),
     })
+}
+
+/// Tests that inspect a parsed registered command read its typed args here.
+// trace:STORY-1728 | ai:claude
+#[cfg(test)]
+impl Command {
+    pub(crate) fn registered<T: FromArgMatches>(&self) -> T {
+        match self {
+            Command::Registered(invocation) => T::from_arg_matches(&invocation.matches)
+                .unwrap_or_else(|err| panic!("`{}` args: {err}", invocation.reg.name)),
+            other => panic!("expected a registered command, got {other:?}"),
+        }
+    }
 }
 
 #[cfg(test)]

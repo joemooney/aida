@@ -1081,7 +1081,8 @@ mod tests {
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_read_cli_accepts_a_message_prefix() {
-        let cli = Cli::try_parse_from(["aida", "mailbox", "read", "0fa629d6"]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
+            .unwrap();
         match cli.command {
             Command::Mailbox(MailboxCommand::Read { message_id }) => {
                 assert_eq!(message_id, "0fa629d6")
@@ -1371,7 +1372,7 @@ mod tests {
     // trace:TASK-1250 | ai:codex
     #[test]
     fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
-        let from_file = Cli::try_parse_from([
+        let from_file = crate::command_registry::try_parse_from([
             "aida",
             "mailbox",
             "send",
@@ -1397,8 +1398,14 @@ mod tests {
             other => panic!("expected mailbox send, got {other:?}"),
         }
 
-        let from_stdin =
-            Cli::try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"]).unwrap();
+        let from_stdin = crate::command_registry::try_parse_from([
+            "aida",
+            "mailbox",
+            "send",
+            "--broadcast",
+            "--stdin",
+        ])
+        .unwrap();
         match from_stdin.command {
             Command::Mailbox(MailboxCommand::Send { body, stdin, .. }) => {
                 assert!(body.is_none());

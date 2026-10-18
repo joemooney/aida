@@ -361,7 +361,8 @@ mod bug_1973_usage_unused_hint_tests {
                 "hint must name the window as one shell word: {hint}"
             );
             assert!(
-                crate::cli::Cli::try_parse_from(["aida", "usage", "unused", window]).is_ok(),
+                crate::command_registry::try_parse_from(["aida", "usage", "unused", window])
+                    .is_ok(),
                 "hinted command must parse for window {window:?}"
             );
         }
@@ -370,7 +371,7 @@ mod bug_1973_usage_unused_hint_tests {
             "a multi-word window must be quoted in the hint"
         );
         assert!(
-            crate::cli::Cli::try_parse_from(["aida", "usage", "unused"]).is_err(),
+            crate::command_registry::try_parse_from(["aida", "usage", "unused"]).is_err(),
             "bare `aida usage unused` requires DURATION"
         );
     }
@@ -2181,3 +2182,79 @@ where
     })?;
     Ok(count)
 }
+
+// trace:STORY-472 | ai:claude
+/// One-verb release: sync the store, run the version bump + tag + push,
+/// wait for the published tarballs, and upgrade sibling installs. Wraps the
+/// whole sequence so you don't have to remember it. Use `release check` first to
+/// preview without acting.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "release")]
+pub(crate) struct ReleaseArgs {
+    /// Bump the patch version (default if no level is given).
+    #[clap(long, hide = true)]
+    pub patch: bool,
+    /// Bump the minor version.
+    #[clap(long, hide = true)]
+    pub minor: bool,
+    /// Bump the major version.
+    #[clap(long, hide = true)]
+    pub major: bool,
+    /// Preview the planned release (current → target version + the step
+    /// sequence + repo/branch/tree state) without acting.
+    #[clap(long, hide = true)]
+    pub check: bool,
+    /// Land an in-flight PR first: wait for PR-<N>'s checks, merge it
+    /// (--squash --delete-branch), and sync local main before releasing.
+    /// Refuses if the PR's checks fail.
+    #[clap(long, value_name = "N")]
+    pub after_pr: Option<u64>,
+    /// No-op, kept for compatibility: releases are Linux-only and have no
+    /// cross-platform CI gate.
+    // trace:TASK-1723 | ai:claude
+    #[clap(long, hide = true)]
+    pub skip_xplat_check: bool,
+
+    /// Release action. With no action, patch is the default.
+    // trace:STORY-1028 | ai:codex
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::ReleaseCommand>,
+}
+
+// STORY-472: `aida release` — a memorable top-level verb wrapping the dev
+// release flow (store pull → scripts/release.sh → tarball wait → sibling
+// upgrade). Operates on the repo, not the requirements store, so dispatch
+// early like `dev`. trace:STORY-472 | ai:claude
+fn run_release(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <ReleaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ReleaseArgs {
+        patch,
+        minor,
+        major,
+        check,
+        after_pr,
+        skip_xplat_check,
+        cmd,
+    } = &args;
+    let (patch, minor, major, check) =
+        normalize_release_mode(*patch, *minor, *major, *check, cmd.as_ref());
+    return handle_release(patch, minor, major, check, *after_pr, *skip_xplat_check);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static RELEASE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "release",
+        help_after: "rebase",
+        command: <ReleaseArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_release,
+    };

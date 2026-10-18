@@ -1279,3 +1279,44 @@ pub(crate) fn handle_drain_resume(
         }
     }
 }
+
+/// Inspect the active `aida queue work --auto-complete` drain — what
+/// command launched it, the batch members and their progress, and what
+/// happens to the queue when the current session exits. If a spec will
+/// not drain because it needs guided/operator attention, de-risk it with
+/// `aida derisk <ID>`.
+// trace:STORY-301 | ai:claude
+// trace:TASK-1235 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "drain")]
+pub(crate) struct DrainArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DrainCommand,
+}
+
+// STORY-301: drain-state introspection. Dispatched before storage init —
+// it reads only `.aida/drain-state.json`, no requirement store.
+// trace:STORY-301 | ai:claude
+fn run_drain(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <DrainArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let drain_cmd = &args.inner;
+    return handle_drain_command(drain_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DRAIN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "drain",
+        help_after: "zen",
+        command: <DrainArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_drain,
+    };

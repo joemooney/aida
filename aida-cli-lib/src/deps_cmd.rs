@@ -254,3 +254,43 @@ fn deps_sweep(for_spec: Option<&str>, json: bool) -> Result<()> {
 
     Ok(())
 }
+
+/// Dependency-graph tooling. Today: `aida deps sweep` lists likely
+/// dependencies inferred read-only from the trace graph (shared
+/// trace-link files) plus same-parent siblings — a "did I miss a
+/// dependency before an overnight drain?" check. Read-only: it never
+/// writes edges (confirm them by hand with `aida edit <id>
+/// --blocked-by <dep>`).
+// trace:STORY-447 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "deps")]
+pub(crate) struct DepsArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DepsCommand,
+}
+
+// `aida deps sweep` self-loads the store via `load_store_for_lookup`
+// and scans source for trace comments — like `plan helpers`, it needs
+// no shared storage handle. Read-only. trace:STORY-447 | ai:claude
+fn run_deps(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <DepsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let deps_cmd = &args.inner;
+    return self::handle_deps_command(deps_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DEPS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "deps",
+    help_after: "plan",
+    command: <DepsArgs as clap::CommandFactory>::command,
+    phase: crate::command_registry::Phase::PreStore,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: run_deps,
+};

@@ -193,3 +193,78 @@ mod tests {
         assert!(!msg.contains("slash-command prompt"));
     }
 }
+
+/// Assemble a rich, structured planning prompt for a SPEC. Pulls the
+/// spec's description, acceptance criteria, related-spec context, the
+/// spec's enrichment comments, the AIDA plan-template structure, and
+/// the trace-graph reusable helpers into one prompt — turning a terse
+/// ask into a fully-contextualised brief for `/aida-plan`, a Plan
+/// agent, a multi-agent workflow, or a human reviewer. Copies to the
+/// clipboard by default.
+// trace:BUG-1177 | ai:codex
+// trace:TASK-113 TASK-247 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "ultraplan")]
+pub(crate) struct UltraplanArgs {
+    /// SPEC-ID (or UUID) to assemble the planning prompt for.
+    pub spec: String,
+
+    /// Print the assembled prompt to stdout instead of copying it to
+    /// the clipboard. Also the headless fallback when no clipboard
+    /// tool is available.
+    #[clap(long, conflicts_with = "json")]
+    pub stdout: bool,
+
+    /// Emit the prompt + metadata (warnings, token estimate) as JSON
+    /// for scripting.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Copy the assembled prompt to the clipboard (default behavior).
+    /// This flag is an explicit alias for the default, provided for
+    /// command-line discoverability and ease of use.
+    // trace:TASK-514 | ai:antigravity
+    #[clap(long, conflicts_with = "stdout", conflicts_with = "json")]
+    pub copy: bool,
+
+    /// Omit the `## Comments` section — the spec's enrichment
+    /// comments are pulled in by default; pass this for the
+    /// leaner comment-free prompt.
+    // trace:TASK-247 | ai:claude
+    // trace:TASK-487 | ai:claude
+    #[clap(long)]
+    pub no_comments: bool,
+}
+
+// `aida ultraplan` also self-loads the store via `load_store_for_lookup`.
+// trace:TASK-113 | ai:claude
+fn run_ultraplan(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <UltraplanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let UltraplanArgs {
+        spec,
+        stdout,
+        json,
+        copy: _,
+        no_comments,
+    } = &args;
+    return self::handle_ultraplan_command(spec, *stdout, *json, *no_comments);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ULTRAPLAN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "ultraplan",
+        help_after: "manual",
+        command: <UltraplanArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_ultraplan,
+    };

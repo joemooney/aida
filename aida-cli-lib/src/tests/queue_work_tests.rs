@@ -2400,12 +2400,14 @@ fn not_queued_falls_back_when_role_unknown() {
 /// caller opts out.
 #[test]
 fn queue_work_quiet_flag_parses() {
-    let on = Cli::try_parse_from([
+    let on = crate::command_registry::try_parse_from([
         "aida", "queue", "work", "PR-65", "--role", "reviewer", "--quiet",
     ])
     .expect("--quiet parses");
-    let off = Cli::try_parse_from(["aida", "queue", "work", "PR-65", "--role", "reviewer"])
-        .expect("no --quiet parses");
+    let off = crate::command_registry::try_parse_from([
+        "aida", "queue", "work", "PR-65", "--role", "reviewer",
+    ])
+    .expect("no --quiet parses");
     let quiet_of = |c: &Cli| match &c.command {
         Command::Queue(QueueCommand::Work { quiet, .. }) => *quiet,
         _ => panic!("expected queue work command"),
@@ -2419,7 +2421,7 @@ fn queue_work_quiet_flag_parses() {
 // of clap's terse "cannot be used with". trace:TASK-560
 #[test]
 fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "queue",
         "work",
@@ -2461,8 +2463,14 @@ fn resume_autocomplete_conflict_message_explains_and_recovers() {
 
 #[test]
 fn queue_work_force_claim_flag_parses() {
-    let cli = Cli::try_parse_from(["aida", "queue", "work", "TASK-559", "--force-claim"])
-        .expect("--force-claim parses on queue work");
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--force-claim",
+    ])
+    .expect("--force-claim parses on queue work");
     match cli.command {
         Command::Queue(QueueCommand::Work { force_claim, .. }) => {
             assert!(force_claim, "--force-claim should set force_claim=true");

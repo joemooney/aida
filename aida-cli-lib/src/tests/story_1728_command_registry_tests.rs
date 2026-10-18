@@ -101,7 +101,7 @@ fn help_surface_matches_golden_snapshot() {
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.
-const LEGACY_TOP_LEVEL_COMMANDS: usize = 155;
+const LEGACY_TOP_LEVEL_COMMANDS: usize = 102;
 
 // trace:STORY-1728 | ai:claude
 #[test]
@@ -185,7 +185,17 @@ fn every_registered_command_parses_through_the_registry_path() {
         assert_eq!(invocation.reg.name, name);
         let _ = invocation.policy();
     }
-    assert_eq!(REGISTRY.len(), 3, "add the new registration to this test");
+    // Every registration is reachable by name; `--help` short-circuits any
+    // required arguments.
+    for reg in REGISTRY {
+        let err = try_parse_from(["aida", reg.name, "--help"]).expect_err("help exits");
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::DisplayHelp,
+            "`aida {} --help`",
+            reg.name
+        );
+    }
 }
 
 // The presence verbs and the fetch worker keep their legacy policy answers.

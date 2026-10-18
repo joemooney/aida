@@ -679,3 +679,37 @@ fn escape_html(input: &str) -> String {
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
 }
+
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+/// Living project wiki: build browsable hyperlinked HTML projection and serve locally
+#[derive(clap::Parser, Debug)]
+#[clap(name = "wiki")]
+pub(crate) struct WikiArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::WikiCommand,
+}
+
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+fn run_wiki(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <WikiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let command = &args.inner;
+    return self::handle_wiki_command(command);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WIKI: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "wiki",
+    help_after: "explain",
+    command: <WikiArgs as clap::CommandFactory>::command,
+    phase: crate::command_registry::Phase::PreStore,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: run_wiki,
+};

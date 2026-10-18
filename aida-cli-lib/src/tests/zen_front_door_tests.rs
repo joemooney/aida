@@ -136,7 +136,7 @@ fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
     );
 
     // Still runnable: the parser accepts `aida zen status`.
-    let parsed = crate::cli::Cli::try_parse_from(["aida", "zen", "status"]);
+    let parsed = crate::command_registry::try_parse_from(["aida", "zen", "status"]);
     assert!(parsed.is_ok(), "aida zen status must still parse");
 }
 

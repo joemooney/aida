@@ -1379,8 +1379,14 @@ mod tests {
     // trace:STORY-994 | ai:codex
     #[test]
     fn parses_role_enter_no_title_flag() {
-        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
-            .expect("parse role enter");
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "role",
+            "enter",
+            "advisor",
+            "--no-title",
+        ])
+        .expect("parse role enter");
         let Command::Role(RoleCommand::Enter {
             name,
             cd: false,
@@ -1399,7 +1405,7 @@ mod tests {
     // trace:TASK-1592 | ai:antigravity
     #[test]
     fn parses_role_enter_delegate_seat() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "role",
             "enter",
@@ -1429,8 +1435,10 @@ mod tests {
     // trace:TASK-1787 | ai:antigravity
     #[test]
     fn parses_role_enter_ttl() {
-        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--ttl", "72h"])
-            .expect("parse role enter --ttl");
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "role", "enter", "advisor", "--ttl", "72h",
+        ])
+        .expect("parse role enter --ttl");
         let Command::Role(RoleCommand::Enter { name, ttl, .. }) = cli.command else {
             panic!("expected role enter command");
         };

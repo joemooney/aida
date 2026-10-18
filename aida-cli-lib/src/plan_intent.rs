@@ -2207,3 +2207,108 @@ mod why_plain_tests {
         assert!(body.contains("source_modified_at="));
     }
 }
+
+// trace:STORY-547 | ai:claude
+/// Explain why one open spec is still open — a single-spec drill-down using
+/// the same classifier as `burndown explain`. Answers "what's keeping
+/// SPEC-ID from being done?" with a bucket + reason derived from store
+/// signals (status, type, tags, blockers, decisions, live leases).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "why")]
+pub(crate) struct WhyArgs {
+    /// A SPEC-ID (why is this spec still open?) OR a code location
+    /// `file[:line]` (why does this code exist?) — a `file:line` resolves the
+    /// nearest code→spec trace comment to the spec's intent (code↔decision).
+    pub id: String,
+    /// Print the cached plain-English rationale layer for this spec,
+    /// regenerating `docs/plain/<SPEC>.md` only when the spec changed.
+    // trace:STORY-1158 | ai:codex
+    #[clap(long)]
+    pub plain: bool,
+    /// Machine-readable JSON.
+    #[clap(long)]
+    pub json: bool,
+}
+
+// STORY-547: `aida why <ID>` reads the requirement graph like burndown —
+// dispatch early, no shared storage handle needed. trace:STORY-547
+fn run_why(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <WhyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let WhyArgs { id, plain, json } = &args;
+    return handle_why(id, *plain, *json);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "why",
+    help_after: "groom",
+    command: <WhyArgs as clap::CommandFactory>::command,
+    phase: crate::command_registry::Phase::PreStore,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: run_why,
+};
+
+// trace:STORY-631 | ai:claude
+/// Show the AI-generated plain-terms comprehension of WHY a spec exists —
+/// its intent, distilled from the spec + its graph neighborhood. Distinct
+/// from `aida why` (a deterministic state classifier): this is a cached,
+/// drift-stamped LLM synthesis. Generated on first call (or `--refresh`),
+/// printed from cache thereafter; a STALE marker shows when the
+/// neighborhood drifted since generation.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "intent")]
+pub(crate) struct IntentArgs {
+    /// The SPEC-ID to comprehend (any story/task/bug/feature id).
+    pub id: String,
+    /// Which register to print: `layman` (prose for a human skimmer) or
+    /// `llm` (denser/structured, for an agent loading the spec).
+    #[clap(long, value_parser = ["layman", "llm"], default_value = "layman")]
+    pub audience: String,
+    /// Force regeneration even if a cached comprehension exists and is fresh.
+    #[clap(long)]
+    pub refresh: bool,
+    /// Machine-readable JSON
+    /// (`{spec, audience, comprehension, generated_at, model, stale}`).
+    #[clap(long)]
+    pub json: bool,
+}
+
+// STORY-631: `aida intent <ID>` self-loads the store (read for cache-print,
+// read+write for generate), and may shell out to a headless `claude -p`
+// running `/aida-intent`. Like `aida why` / `aida intake`, it needs no
+// shared storage handle — dispatch early. trace:STORY-631 | ai:claude
+fn run_intent(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <IntentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let IntentArgs {
+        id,
+        audience,
+        refresh,
+        json,
+    } = &args;
+    return handle_intent(id, audience, *refresh, *json);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static INTENT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "intent",
+        help_after: "worktree",
+        command: <IntentArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_intent,
+    };

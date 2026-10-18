@@ -652,9 +652,14 @@ mod tests {
     #[test]
     fn corpus_cli_parses_override() {
         use clap::Parser;
-        let cli =
-            crate::cli::Cli::try_parse_from(["aida", "regen", "corpus", "output", "--allow-dirty"])
-                .unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "regen",
+            "corpus",
+            "output",
+            "--allow-dirty",
+        ])
+        .unwrap();
         assert!(matches!(
             cli.command,
             crate::cli::Command::Regen(RegenCommand::Corpus {
@@ -685,7 +690,7 @@ mod tests {
             if let Some(family) = family {
                 args.extend(["--model-family", family]);
             }
-            let parsed = crate::cli::Cli::try_parse_from(args).unwrap();
+            let parsed = crate::command_registry::try_parse_from(args).unwrap();
             match parsed.command {
                 crate::cli::Command::Regen(RegenCommand::Score { model_family, .. }) => {
                     assert_eq!(model_family.as_deref(), family)

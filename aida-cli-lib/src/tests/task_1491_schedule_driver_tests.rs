@@ -997,7 +997,9 @@ fn shift_install_is_gated_and_installs_driver_after_yes() {
 
 #[test]
 fn shift_install_and_schedule_systemd_verbs_parse() {
-    let cli = Cli::try_parse_from(["aida", "shift", "install", "--systemd-user"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "shift", "install", "--systemd-user"])
+            .unwrap();
     assert!(matches!(
         cli.command,
         Command::Shift(ShiftCommand::Install {
@@ -1005,7 +1007,8 @@ fn shift_install_and_schedule_systemd_verbs_parse() {
             cron: false
         })
     ));
-    let cli = Cli::try_parse_from(["aida", "shift", "install", "--cron"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "shift", "install", "--cron"]).unwrap();
     assert!(matches!(
         cli.command,
         Command::Shift(ShiftCommand::Install {
@@ -1013,14 +1016,23 @@ fn shift_install_and_schedule_systemd_verbs_parse() {
             cron: true
         })
     ));
-    assert!(Cli::try_parse_from(["aida", "shift", "install"]).is_err());
-    assert!(Cli::try_parse_from(["aida", "shift", "install", "--cron", "--systemd-user"]).is_err());
-    let cli = Cli::try_parse_from(["aida", "schedule", "install-systemd"]).unwrap();
+    assert!(crate::command_registry::try_parse_from(["aida", "shift", "install"]).is_err());
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "shift",
+        "install",
+        "--cron",
+        "--systemd-user"
+    ])
+    .is_err());
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "schedule", "install-systemd"]).unwrap();
     assert!(matches!(
         cli.command,
         Command::Schedule(MaintenanceScheduleCommand::InstallSystemd)
     ));
-    let cli = Cli::try_parse_from(["aida", "schedule", "uninstall-systemd"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "schedule", "uninstall-systemd"]).unwrap();
     assert!(matches!(
         cli.command,
         Command::Schedule(MaintenanceScheduleCommand::UninstallSystemd)

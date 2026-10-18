@@ -749,10 +749,19 @@ mod tests {
             vec!["--force"],
             vec!["--save-as-template", "x"],
         ] {
-            assert!(Cli::try_parse_from([vec!["aida", "history"], args].concat()).is_err());
+            assert!(crate::command_registry::try_parse_from(
+                [vec!["aida", "history"], args].concat()
+            )
+            .is_err());
         }
-        let c = Cli::try_parse_from(["aida", "history", "events", "--fields", "id,date,event"])
-            .unwrap();
+        let c = crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "events",
+            "--fields",
+            "id,date,event",
+        ])
+        .unwrap();
         assert!(matches!(
             c.command,
             Command::History {
@@ -761,7 +770,21 @@ mod tests {
                 ..
             }
         ));
-        assert!(Cli::try_parse_from(["aida", "history", "templates", "rm", "user:mine"]).is_ok());
-        assert!(Cli::try_parse_from(["aida", "history", "TASK-1", "--template", "{id}"]).is_ok());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "templates",
+            "rm",
+            "user:mine"
+        ])
+        .is_ok());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "TASK-1",
+            "--template",
+            "{id}"
+        ])
+        .is_ok());
     }
 }

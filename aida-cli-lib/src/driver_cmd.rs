@@ -264,3 +264,41 @@ fn parent_pid() -> u32 {
         std::process::id()
     }
 }
+
+/// Register, refresh, deregister and list drivers — long-running relays,
+/// drains and agents that work in-progress specs. `aida ps` and
+/// `aida list` show the driver beside each in-progress spec's status.
+/// Operator/developer surface.
+// trace:STORY-1653 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "driver")]
+pub(crate) struct DriverArgs {
+    #[clap(subcommand)]
+    pub inner: crate::driver_cmd::DriverCommand,
+}
+
+// `aida driver` reads/writes `.aida/drivers/` only. trace:STORY-1653 | ai:claude
+fn run_driver(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <DriverArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return self::handle_driver_command(cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DRIVER: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "driver",
+        help_after: "dev",
+        command: <DriverArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_driver,
+    };

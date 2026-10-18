@@ -1584,26 +1584,34 @@ fn move_to_absolute_position_places_at_requested_slot() {
 #[test]
 fn queue_move_absolute_flags_parse() {
     // --to-front is a visible alias of --top.
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-front"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-front"])
+            .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { top: true, .. })
     ));
     // --to-back is a visible alias of --bottom.
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-back"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-back"])
+            .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { bottom: true, .. })
     ));
     // --to <N> parses an absolute slot.
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to", "3"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to", "3"])
+            .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { to: Some(3), .. })
     ));
     // Existing relative flags still parse (no breaking change).
-    let cli =
-        Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--before", "TASK-2"]).unwrap();
+    let cli = crate::command_registry::try_parse_from([
+        "aida", "queue", "move", "TASK-1", "--before", "TASK-2",
+    ])
+    .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move {
@@ -1612,11 +1620,17 @@ fn queue_move_absolute_flags_parse() {
         })
     ));
     // --to conflicts with the end / relative flags.
-    assert!(
-        Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to", "2", "--to-front",])
-            .is_err()
-    );
-    assert!(Cli::try_parse_from([
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "queue",
+        "move",
+        "TASK-1",
+        "--to",
+        "2",
+        "--to-front",
+    ])
+    .is_err());
+    assert!(crate::command_registry::try_parse_from([
         "aida", "queue", "move", "TASK-1", "--to", "2", "--before", "TASK-2",
     ])
     .is_err());
@@ -1628,12 +1642,16 @@ fn queue_move_absolute_flags_parse() {
 // trace:BUG-249 | ai:claude
 #[test]
 fn queue_move_force_flag_parses() {
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"])
+        .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { force: false, .. })
     ));
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top", "--force"]).unwrap();
+    let cli = crate::command_registry::try_parse_from([
+        "aida", "queue", "move", "TASK-1", "--top", "--force",
+    ])
+    .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { force: true, .. })
@@ -1647,12 +1665,13 @@ fn queue_move_force_flag_parses() {
 // trace:BUG-1487 | ai:claude
 #[test]
 fn queue_move_user_flag_parses() {
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"])
+        .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { user: None, .. })
     ));
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida", "queue", "move", "TASK-1", "--top", "--user", "alice",
     ])
     .unwrap();
@@ -1773,15 +1792,18 @@ fn queue_move_target_ok_for_in_queue_non_terminal() {
 // trace:TASK-491 | ai:claude
 #[test]
 fn queue_move_to_top_alias_parses() {
-    let cli = Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top"])
+            .unwrap();
     assert!(matches!(
         cli.command,
         Command::Queue(QueueCommand::Move { top: true, .. })
     ));
     // Conflict with --to <N> still holds for the new alias.
-    assert!(
-        Cli::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top", "--to", "2",]).is_err()
-    );
+    assert!(crate::command_registry::try_parse_from([
+        "aida", "queue", "move", "TASK-1", "--to-top", "--to", "2",
+    ])
+    .is_err());
 }
 
 /// TASK-280/TASK-491: regression for the shared visible ordering in the
@@ -4731,14 +4753,16 @@ fn test_ultraplan_copy_flag() {
     use clap::Parser;
 
     // No copy flag
-    let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1"]).unwrap();
-    if let Command::Ultraplan {
+    let cli = crate::command_registry::try_parse_from(["aida", "ultraplan", "TASK-1"]).unwrap();
+    if let crate::ultraplan_cmd::UltraplanArgs {
         spec,
         stdout,
         json,
         copy,
         ..
-    } = cli.command
+    } = cli
+        .command
+        .registered::<crate::ultraplan_cmd::UltraplanArgs>()
     {
         assert_eq!(spec, "TASK-1");
         assert!(!stdout);
@@ -4749,14 +4773,17 @@ fn test_ultraplan_copy_flag() {
     }
 
     // With copy flag
-    let cli = Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy"]).unwrap();
-    if let Command::Ultraplan {
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy"]).unwrap();
+    if let crate::ultraplan_cmd::UltraplanArgs {
         spec,
         stdout,
         json,
         copy,
         ..
-    } = cli.command
+    } = cli
+        .command
+        .registered::<crate::ultraplan_cmd::UltraplanArgs>()
     {
         assert_eq!(spec, "TASK-1");
         assert!(!stdout);
@@ -4767,10 +4794,24 @@ fn test_ultraplan_copy_flag() {
     }
 
     // Copy and stdout conflicts
-    assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--stdout"]).is_err());
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "ultraplan",
+        "TASK-1",
+        "--copy",
+        "--stdout"
+    ])
+    .is_err());
 
     // Copy and json conflicts
-    assert!(Cli::try_parse_from(["aida", "ultraplan", "TASK-1", "--copy", "--json"]).is_err());
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "ultraplan",
+        "TASK-1",
+        "--copy",
+        "--json"
+    ])
+    .is_err());
 }
 
 #[test]
@@ -4778,7 +4819,7 @@ fn test_derisk_command_parses_spec() {
     use crate::cli::{Cli, Command};
     use clap::Parser;
 
-    let cli = Cli::try_parse_from(["aida", "derisk", "TASK-1235"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "derisk", "TASK-1235"]).unwrap();
     match cli.command {
         Command::Derisk { spec } => assert_eq!(spec, "TASK-1235"),
         other => panic!("expected Derisk command, got {other:?}"),
@@ -4854,7 +4895,7 @@ fn import_plan_flag_parses() {
     use crate::cli::{Cli, Command};
     use clap::Parser;
 
-    let cli = Cli::try_parse_from(["aida", "import-plan", "plan.md"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "import-plan", "plan.md"]).unwrap();
     if let Command::ImportPlan {
         file,
         spec,
@@ -4868,7 +4909,7 @@ fn import_plan_flag_parses() {
         panic!("expected ImportPlan command");
     }
 
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "import-plan",
         "plan.md",

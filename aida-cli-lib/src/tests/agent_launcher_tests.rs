@@ -37,7 +37,7 @@ fn agent_role_infos_cover_canonical_set_without_fabrications() {
 
 #[test]
 fn parses_agent_new_claude_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -232,7 +232,7 @@ fn derisk_real_launch_plan_leaves_target_spec_and_leases_untouched() {
 
 #[test]
 fn parses_agent_new_codex_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -286,7 +286,9 @@ fn parses_agent_new_codex_flags() {
 // trace:TASK-1232 | ai:codex
 #[test]
 fn parses_agent_new_noexec_aliases() {
-    let cli = Cli::try_parse_from(["aida", "agent", "new", "claude", "--noexec"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", "--noexec"])
+            .unwrap();
     let Command::Agent(AgentCommand::New {
         command: Some(AgentNewCommand::Claude { noexec, .. }),
     }) = cli.command
@@ -295,8 +297,14 @@ fn parses_agent_new_noexec_aliases() {
     };
     assert!(noexec);
 
-    let cli =
-        Cli::try_parse_from(["aida", "agent", "new", "antigravity", "--print-command"]).unwrap();
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "agent",
+        "new",
+        "antigravity",
+        "--print-command",
+    ])
+    .unwrap();
     let Command::Agent(AgentCommand::New {
         command: Some(AgentNewCommand::Antigravity { noexec, .. }),
     }) = cli.command
@@ -379,7 +387,8 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
     // `--no-exec` is the canonical spelling; `--noexec` and `--print-command`
     // remain accepted aliases (TASK-1232 back-compat).
     for flag in ["--no-exec", "--noexec", "--print-command"] {
-        let cli = Cli::try_parse_from(["aida", "agent", "new", "claude", flag]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", flag])
+            .unwrap();
         let Command::Agent(AgentCommand::New {
             command: Some(AgentNewCommand::Claude { noexec, .. }),
         }) = cli.command
@@ -389,7 +398,9 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
         assert!(noexec, "{flag} should set noexec");
     }
 
-    let cli = Cli::try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"])
+            .unwrap();
     let Command::Agent(AgentCommand::New {
         command: Some(AgentNewCommand::Codex { show_prompt, .. }),
     }) = cli.command
@@ -523,7 +534,9 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
 #[test]
 fn parses_agent_new_verbose_flag_for_every_vendor() {
     for vendor in ["claude", "codex", "antigravity"] {
-        let cli = Cli::try_parse_from(["aida", "agent", "new", vendor, "--verbose"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
+                .unwrap();
         let Command::Agent(AgentCommand::New { command }) = cli.command else {
             panic!("expected agent new command");
         };
@@ -875,7 +888,7 @@ fn child_role_picker_prefers_the_active_role_when_one_is_set() {
 
 #[test]
 fn parses_agent_new_antigravity_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -1973,7 +1986,7 @@ fn agent_resume_adapter_args_are_vendor_specific() {
 // trace:STORY-790 | ai:codex
 #[test]
 fn parses_agent_ls_ended_flag() {
-    let cli = Cli::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
     let Command::Agent(AgentCommand::Ls {
         all: false,
         stale: false,
@@ -1986,7 +1999,7 @@ fn parses_agent_ls_ended_flag() {
 
 #[test]
 fn parses_agent_new_context_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -2015,7 +2028,7 @@ fn parses_agent_new_context_flags() {
 // trace:STORY-991 | ai:codex
 #[test]
 fn parses_agent_new_resume_and_duplicate_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -2295,13 +2308,14 @@ fn agent_resume_prompt_config_defaults_to_enabled() {
 // trace:TASK-587 | ai:antigravity
 #[test]
 fn parses_agent_list_roles_flags() {
-    let cli = Cli::try_parse_from(["aida", "agent", "list-roles"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "agent", "list-roles"]).unwrap();
     let Command::Agent(AgentCommand::ListRoles { json }) = cli.command else {
         panic!("expected agent list-roles command");
     };
     assert!(!json);
 
-    let cli_json = Cli::try_parse_from(["aida", "agent", "list-roles", "--json"]).unwrap();
+    let cli_json =
+        crate::command_registry::try_parse_from(["aida", "agent", "list-roles", "--json"]).unwrap();
     let Command::Agent(AgentCommand::ListRoles { json: json_opt }) = cli_json.command else {
         panic!("expected agent list-roles command");
     };
@@ -2313,7 +2327,7 @@ fn parses_agent_list_roles_flags() {
 // clap help, so the interactive picker can take over at a TTY.
 #[test]
 fn parses_bare_agent_new_as_optional_subcommand() {
-    let cli = Cli::try_parse_from(["aida", "agent", "new"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "agent", "new"]).unwrap();
     let Command::Agent(AgentCommand::New { command }) = cli.command else {
         panic!("expected agent new command");
     };
@@ -2418,7 +2432,7 @@ fn explicit_agent_new_disabled_hint_uses_winning_agents_toml() {
 // so the two entry points share one launch path.
 #[test]
 fn picked_type_matches_explicit_subcommand_defaults() {
-    let cli = Cli::try_parse_from(["aida", "agent", "new", "claude"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude"]).unwrap();
     let Command::Agent(AgentCommand::New {
         command: Some(explicit),
     }) = cli.command
@@ -2433,7 +2447,7 @@ fn picked_type_matches_explicit_subcommand_defaults() {
 // trace:TASK-543 | ai:codex
 #[test]
 fn parses_agent_register_flags() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "register",
@@ -2472,7 +2486,7 @@ fn parses_agent_register_flags() {
 // trace:STORY-791 | ai:codex
 #[test]
 fn parses_agent_describe_command() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "describe",
@@ -3283,7 +3297,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
 // trace:BUG-1696 | ai:claude
 #[test]
 fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "agent",
         "new",
@@ -3306,11 +3320,19 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
     // Every dispatch vendor gets the flag, not just codex.
     for vendor in ["claude", "codex", "antigravity"] {
         assert!(
-            Cli::try_parse_from(["aida", "agent", "new", vendor, "--prompt-file", "b.txt"]).is_ok(),
+            crate::command_registry::try_parse_from([
+                "aida",
+                "agent",
+                "new",
+                vendor,
+                "--prompt-file",
+                "b.txt"
+            ])
+            .is_ok(),
             "{vendor} should accept --prompt-file"
         );
         assert!(
-            Cli::try_parse_from([
+            crate::command_registry::try_parse_from([
                 "aida",
                 "agent",
                 "new",
@@ -3324,7 +3346,7 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
             "{vendor} must reject --prompt with --prompt-file"
         );
         assert!(
-            Cli::try_parse_from([
+            crate::command_registry::try_parse_from([
                 "aida",
                 "agent",
                 "new",
@@ -3461,8 +3483,8 @@ fn no_duplicate_check_is_the_escape_hatch_for_the_role_singleton() {
 #[test]
 fn allow_duplicate_keeps_the_duplicate_check_on_unlike_no_duplicate_check() {
     let parse = |extra: &str| {
-        let cli =
-            Cli::try_parse_from(["aida", "agent", "new", "codex", extra]).expect("parse failure");
+        let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", extra])
+            .expect("parse failure");
         let Command::Agent(AgentCommand::New {
             command:
                 Some(AgentNewCommand::Codex {

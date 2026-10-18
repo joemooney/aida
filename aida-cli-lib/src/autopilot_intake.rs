@@ -1046,3 +1046,49 @@ pub(crate) fn build_autopilot_intake_command(
     }
     command
 }
+
+/// Inspect, audit, and reverse advisor-autopilot disposition decisions.
+///
+/// A read-only lens over the bounded-authority policy envelope: `inspect`
+/// dry-runs the four-gate evaluation over the current groom candidates and
+/// shows, per spec, what it WOULD decide (and which gate stopped it) without
+/// touching a single spec; `audit` lists the recorded verdicts; `challenge`
+/// marks a recorded verdict as reversed. `executions` lists the actions
+/// autopilot actually took, and `revert` undoes one of them from the prior
+/// state recorded alongside it.
+// trace:TASK-1147 trace:TASK-1018 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "autopilot")]
+pub(crate) struct AutopilotArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::AutopilotCommand,
+}
+
+// TASK-1147: `aida autopilot` (inspect / audit / challenge) is the read-only
+// auditability + reversal surface over the policy envelope. Like `aida
+// groom` it self-loads the store to compute its candidate fence and writes
+// nothing to any spec — dispatch early, no shared storage handle needed.
+// trace:TASK-1147 | ai:claude
+fn run_autopilot(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <AutopilotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return handle_autopilot_command(cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AUTOPILOT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "autopilot",
+        help_after: "backlog",
+        command: <AutopilotArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_autopilot,
+    };

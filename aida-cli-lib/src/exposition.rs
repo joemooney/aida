@@ -863,3 +863,61 @@ fn render_human_exposition(sidecar: &ExpositionSidecar, is_stale: bool, current_
         println!();
     }
 }
+
+// trace:EPIC-72 trace:TASK-1436 | ai:antigravity
+/// Generate, audit, and inspect human-friendly spec expositions with freshness,
+/// bounded drift detection, and human review protection.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "explain")]
+pub(crate) struct ExplainArgs {
+    /// Requirement ID (UUID or SPEC-ID)
+    pub spec: String,
+
+    /// Target audience persona (operator, executive, implementer, contributor)
+    #[clap(long, default_value = "operator")]
+    pub audience: String,
+
+    /// Re-generate exposition even if a sidecar already exists
+    #[clap(long)]
+    pub refresh: bool,
+
+    /// Override human_reviewed protection and force re-generation
+    #[clap(long)]
+    pub force: bool,
+
+    /// Machine-readable JSON output
+    #[clap(long)]
+    pub json: bool,
+}
+
+// trace:EPIC-72 trace:TASK-1436 | ai:antigravity
+fn run_explain(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <ExplainArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ExplainArgs {
+        spec,
+        audience,
+        refresh,
+        force,
+        json,
+    } = &args;
+    return self::handle_explain_command(spec, audience, *refresh, *force, *json);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static EXPLAIN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "explain",
+        help_after: "why",
+        command: <ExplainArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_explain,
+    };

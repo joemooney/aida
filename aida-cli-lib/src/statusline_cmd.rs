@@ -1104,3 +1104,109 @@ pub(crate) fn wt_divergence_segment(worktree_path: &std::path::Path, slug: &str)
         Some(format!("wt:{}", truncate(basename, SESS_LABEL_MAX)))
     }
 }
+
+/// One-line project + role summary suitable for shell prompts and
+/// the `statusLine.command` setting in ~/.claude/settings.json.
+/// Sub-50ms (reads the cache + the orphan-store queue YAML). Format:
+///   aida · <project> · role:<name> · @SPEC · q:N · cache:fresh|stale
+/// Where `q:N` is the depth of the queue routed to the active role
+/// (omitted when zero).
+// trace:FR-1-041 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "statusline")]
+pub(crate) struct StatuslineArgs {
+    /// When to emit ANSI color: `auto` (default — color iff stdout
+    /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
+    #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
+    pub color: String,
+
+    /// Emit the one-liner wrapped in an OSC terminal-title escape
+    /// sequence (`ESC ] 2 ; <line> BEL`) instead of printing it to the
+    /// body, so the AIDA role/queue/inbox segment rides the terminal
+    /// title bar / tmux window name. This is the in-agent parity surface
+    /// for clients (e.g. Codex CLI) whose built-in footer is a fixed
+    /// field set and cannot run `aida statusline` as a command: wire
+    /// `aida statusline title` into the shell prompt
+    /// (`PROMPT_COMMAND` / `precmd`) and the AIDA segment shows in the
+    /// terminal title during the agent session. Forces color off (an
+    /// OSC title string carries no ANSI). Mutually exclusive with the
+    /// `setup` subcommand.
+    // trace:TASK-896
+    #[clap(long, hide = true)]
+    pub title: bool,
+
+    /// Merge live fields from a client's stdin JSON payload into the
+    /// AIDA segment: model, context-window usage, activity, and VCS
+    /// branch where the client sends them. `claude` parses Claude
+    /// Code's statusLine JSON; `antigravity` (alias `agy`) parses
+    /// Antigravity's live agent-state JSON. Omit for the default,
+    /// AIDA-only segment — this never reads stdin unless a client is
+    /// named, so plain `aida statusline` is unaffected. When stdin is
+    /// a TTY (no payload piped), or a piped read doesn't finish within
+    /// ~200ms (an open pipe with no data waiting), this degrades to
+    /// the AIDA-only segment rather than blocking. See
+    /// docs/agents/statusline-contract.md.
+    // trace:TASK-1479 | ai:claude
+    #[clap(long, value_parser = ["claude", "antigravity", "agy"])]
+    pub client: Option<String>,
+
+    /// Opt-in bootstrap helper. With no subcommand, `aida statusline`
+    /// renders the one-liner (the default, quiet behavior); the
+    /// `setup` subcommand prints (or installs) client-appropriate
+    /// statusline configuration.
+    // trace:TASK-0414
+    #[clap(subcommand)]
+    pub action: Option<crate::cli::StatuslineAction>,
+}
+
+fn run_statusline(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <StatuslineArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let StatuslineArgs {
+        color,
+        title,
+        client,
+        action,
+    } = &args;
+    // trace:TASK-0414 — the opt-in `setup` subcommand bootstraps the
+    // statusline; with no subcommand we render the one-liner (default).
+    // trace:TASK-896 — `--title` emits the same one-liner wrapped in an
+    // OSC terminal-title escape so the AIDA segment rides the terminal
+    // title bar (the in-agent parity surface for clients without a
+    // command-backed footer, e.g. Codex CLI).
+    // trace:TASK-1479 — `--client` opts into merging a client's live
+    // stdin JSON payload (model/context/activity/VCS) with the AIDA
+    // segment; omitted, behavior is unchanged (no stdin read).
+    match action {
+        Some(cli::StatuslineAction::Title) => {
+            return self::handle_statusline_command(color, true, client.as_deref());
+        }
+        Some(act) => return self::handle_statusline_setup_command(act),
+        None => {
+            if *title {
+                note_hidden_alias(
+                    concat!("aida statusline ", "--title"),
+                    "aida statusline title",
+                );
+            }
+            return self::handle_statusline_command(color, *title, client.as_deref());
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STATUSLINE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "statusline",
+        help_after: "statusbar",
+        command: <StatuslineArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+        },
+        run: run_statusline,
+    };

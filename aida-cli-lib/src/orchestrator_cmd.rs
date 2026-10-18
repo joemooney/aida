@@ -234,3 +234,46 @@ pub(crate) fn locate_plan_for_active_session(project_root: &std::path::Path) -> 
     let manifest = session_manifest::load(&path).ok()?;
     manifest.plan.map(|p| p.plan_file)
 }
+
+/// Inspect the corroborated orchestrator context — whether this process is
+/// a genuine `--auto-complete` phase child or a standalone session.
+/// Hidden: it is a skill / orchestrator-child introspection hook, not a
+/// daily-driver command.
+// trace:BUG-233 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "orchestrator")]
+#[clap(hide = true)]
+pub(crate) struct OrchestratorArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::OrchestratorCommand,
+}
+
+// BUG-233 / TASK-336: orchestrator-context introspection. Dispatched
+// before storage init — it reads only env vars + the `.aida/drain-
+// state.json` file's `run_uuid` + PID, no requirement store. (Before
+// TASK-336 it read a sidecar `.aida/orchestrator-runs/<uuid>` marker
+// file; that has been folded into the drain-state file.)
+// trace:BUG-233 trace:TASK-336 | ai:claude
+fn run_orchestrator(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <OrchestratorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let orch_cmd = &args.inner;
+    return handle_orchestrator_command(orch_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ORCHESTRATOR: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "orchestrator",
+        help_after: "pr",
+        command: <OrchestratorArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_orchestrator,
+    };

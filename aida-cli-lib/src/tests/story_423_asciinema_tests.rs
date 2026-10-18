@@ -13,7 +13,9 @@ fn list_lens_aliases_rewrite_to_canonical_commands() {
     let out = rewrite_list_alias(&s(&["aida", "list", "queue", "--batch", "X"]));
     assert_eq!(out, s(&["aida", "queue", "list", "--batch", "X"]));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Queue(QueueCommand::List { .. })
     ));
 
@@ -25,7 +27,9 @@ fn list_lens_aliases_rewrite_to_canonical_commands() {
     let out = rewrite_list_alias(&s(&["aida", "list", "advisor", "--short"]));
     assert_eq!(out, s(&["aida", "advisor", "--short"]));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Advisor { .. }
     ));
 
@@ -79,15 +83,19 @@ fn personal_view_shortcuts_rewrite() {
 
     // The rewrites reach the real commands once clap parses them.
     assert!(matches!(
-        Cli::try_parse_from(rewrite_personal_view_alias(&s(&["aida", "mylist"])))
-            .unwrap()
-            .command,
+        crate::command_registry::try_parse_from(rewrite_personal_view_alias(&s(&[
+            "aida", "mylist"
+        ])))
+        .unwrap()
+        .command,
         Command::List { .. }
     ));
     assert!(matches!(
-        Cli::try_parse_from(rewrite_personal_view_alias(&s(&["aida", "myqueue"])))
-            .unwrap()
-            .command,
+        crate::command_registry::try_parse_from(rewrite_personal_view_alias(&s(&[
+            "aida", "myqueue"
+        ])))
+        .unwrap()
+        .command,
         Command::Queue(_)
     ));
 
@@ -113,18 +121,22 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
 
     // canonical
     assert!(matches!(
-        Cli::try_parse_from(["aida", "groom", "--apply"])
+        crate::command_registry::try_parse_from(["aida", "groom", "--apply"])
             .unwrap()
             .command,
         Command::Groom { apply: true, .. }
     ));
     // clap visible aliases still parse to Groom
     assert!(matches!(
-        Cli::try_parse_from(["aida", "intake"]).unwrap().command,
+        crate::command_registry::try_parse_from(["aida", "intake"])
+            .unwrap()
+            .command,
         Command::Groom { .. }
     ));
     assert!(matches!(
-        Cli::try_parse_from(["aida", "assess"]).unwrap().command,
+        crate::command_registry::try_parse_from(["aida", "assess"])
+            .unwrap()
+            .command,
         Command::Groom { .. }
     ));
 
@@ -134,14 +146,18 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     assert_eq!(out, s(&["aida", "groom", "--apply"]));
     assert_eq!(dep.as_deref(), Some("assess"));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Groom { apply: true, .. }
     ));
     let (out, dep) = rewrite_groom_alias(&s(&["aida", "intake", "--dry-run"]));
     assert_eq!(out, s(&["aida", "groom", "--dry-run"]));
     assert_eq!(dep.as_deref(), Some("intake"));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Groom { dry_run: true, .. }
     ));
     // canonical `groom` is NOT flagged as deprecated.
@@ -153,7 +169,9 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     let out = rewrite_advisor_assess(&s(&["aida", "advisor", "assess", "--dry-run"]));
     assert_eq!(out, s(&["aida", "groom", "--dry-run"]));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Groom { dry_run: true, .. }
     ));
     // unrelated advisor subcommands untouched
@@ -180,7 +198,9 @@ fn bare_agent_defaults_to_agent_new() {
     let out = rewrite_agent_default_new(&s(&["aida", "agent"]));
     assert_eq!(out, s(&["aida", "agent", "new"]));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Agent(AgentCommand::New { command: None })
     ));
 
@@ -215,9 +235,11 @@ fn bare_agent_defaults_to_agent_new() {
 
     // `aida agent ls` still reaches the Ls variant after the rewrite.
     assert!(matches!(
-        Cli::try_parse_from(rewrite_agent_default_new(&s(&["aida", "agent", "ls"])))
-            .unwrap()
-            .command,
+        crate::command_registry::try_parse_from(rewrite_agent_default_new(&s(&[
+            "aida", "agent", "ls"
+        ])))
+        .unwrap()
+        .command,
         Command::Agent(AgentCommand::Ls {
             all: false,
             stale: false,
@@ -225,7 +247,7 @@ fn bare_agent_defaults_to_agent_new() {
         })
     ));
     assert!(matches!(
-        Cli::try_parse_from(rewrite_agent_default_new(&s(&[
+        crate::command_registry::try_parse_from(rewrite_agent_default_new(&s(&[
             "aida",
             "agent",
             "dispatch-health"
@@ -266,7 +288,9 @@ fn bare_queue_defaults_to_queue_list() {
     let out = rewrite_queue_default_list(&s(&["aida", "queue"]));
     assert_eq!(out, s(&["aida", "queue", "list"]));
     assert!(matches!(
-        Cli::try_parse_from(out).unwrap().command,
+        crate::command_registry::try_parse_from(out)
+            .unwrap()
+            .command,
         Command::Queue(QueueCommand::List { .. })
     ));
 
@@ -304,7 +328,7 @@ fn bare_queue_defaults_to_queue_list() {
 
     // `aida queue work TASK-1` still reaches the Work variant after the rewrite.
     assert!(matches!(
-        Cli::try_parse_from(rewrite_queue_default_list(&s(&[
+        crate::command_registry::try_parse_from(rewrite_queue_default_list(&s(&[
             "aida", "queue", "work", "TASK-1"
         ])))
         .unwrap()
@@ -334,7 +358,7 @@ fn bare_queue_defaults_to_queue_list() {
 
 #[test]
 fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "--asciinema",
         "--cast-out",
@@ -373,7 +397,7 @@ fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
 
 #[test]
 fn story_451_effort_flags_and_load_aliases_parse() {
-    let add = Cli::try_parse_from([
+    let add = crate::command_registry::try_parse_from([
         "aida",
         "add",
         "--title",
@@ -391,7 +415,10 @@ fn story_451_effort_flags_and_load_aliases_parse() {
         other => panic!("expected add, got {other:?}"),
     }
 
-    let queue = Cli::try_parse_from(["aida", "queue", "work", "TASK-1", "--effort", "4h"]).unwrap();
+    let queue = crate::command_registry::try_parse_from([
+        "aida", "queue", "work", "TASK-1", "--effort", "4h",
+    ])
+    .unwrap();
     match queue.command {
         Command::Queue(QueueCommand::Work { effort, .. }) => {
             assert_eq!(effort, Some(effort_calibration::EffortBucket::FourHours));
@@ -399,9 +426,12 @@ fn story_451_effort_flags_and_load_aliases_parse() {
         other => panic!("expected queue work, got {other:?}"),
     }
 
-    let ship = Cli::try_parse_from(["aida", "pr", "ship", "--effort", "15m"]).unwrap();
-    match ship.command {
-        Command::Pr(PrCommand::Ship { effort, .. }) => {
+    let ship =
+        crate::command_registry::try_parse_from(["aida", "pr", "ship", "--effort", "15m"]).unwrap();
+    match ship.command.registered::<crate::pr_cmd::PrArgs>() {
+        crate::pr_cmd::PrArgs {
+            inner: PrCommand::Ship { effort, .. },
+        } => {
             assert_eq!(
                 effort,
                 Some(effort_calibration::EffortBucket::FifteenMinutes)
@@ -411,19 +441,19 @@ fn story_451_effort_flags_and_load_aliases_parse() {
     }
 
     assert!(matches!(
-        Cli::try_parse_from(["aida", "load", "queue"])
+        crate::command_registry::try_parse_from(["aida", "load", "queue"])
             .unwrap()
             .command,
         Command::Load(LoadCommand::Queue)
     ));
     assert!(matches!(
-        Cli::try_parse_from(["aida", "queue", "load"])
+        crate::command_registry::try_parse_from(["aida", "queue", "load"])
             .unwrap()
             .command,
         Command::Queue(QueueCommand::Load { .. })
     ));
     assert!(matches!(
-        Cli::try_parse_from(["aida", "backlog", "load"])
+        crate::command_registry::try_parse_from(["aida", "backlog", "load"])
             .unwrap()
             .command,
         Command::Backlog(BacklogCommand::Load)
@@ -437,7 +467,7 @@ fn story_451_effort_flags_and_load_aliases_parse() {
 // is exercised by the Add path it delegates to. trace:TASK-777
 #[test]
 fn task_777_fasttrack_parses_with_default_and_override_type() {
-    match Cli::try_parse_from(["aida", "fasttrack", "fix a typo"])
+    match crate::command_registry::try_parse_from(["aida", "fasttrack", "fix a typo"])
         .unwrap()
         .command
     {
@@ -455,9 +485,15 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
         other => panic!("expected fasttrack, got {other:?}"),
     }
 
-    match Cli::try_parse_from(["aida", "fasttrack", "papercut", "--type", "bug"])
-        .unwrap()
-        .command
+    match crate::command_registry::try_parse_from([
+        "aida",
+        "fasttrack",
+        "papercut",
+        "--type",
+        "bug",
+    ])
+    .unwrap()
+    .command
     {
         Command::Fasttrack {
             title,
@@ -475,7 +511,7 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
 
     // TASK-905: `aida fasttrack status` parses as the lane-status
     // subcommand, not a titled file. trace:TASK-905
-    match Cli::try_parse_from(["aida", "fasttrack", "status"])
+    match crate::command_registry::try_parse_from(["aida", "fasttrack", "status"])
         .unwrap()
         .command
     {
@@ -489,7 +525,7 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
         other => panic!("expected fasttrack status, got {other:?}"),
     }
 
-    match Cli::try_parse_from(["aida", "fasttrack", "status", "--json"])
+    match crate::command_registry::try_parse_from(["aida", "fasttrack", "status", "--json"])
         .unwrap()
         .command
     {
@@ -504,9 +540,14 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
 
     // STORY-692: `--express` parses as the express tier; the title still
     // files and the lane subcommand stays absent. trace:STORY-692
-    match Cli::try_parse_from(["aida", "fasttrack", "fix an easy bug", "--express"])
-        .unwrap()
-        .command
+    match crate::command_registry::try_parse_from([
+        "aida",
+        "fasttrack",
+        "fix an easy bug",
+        "--express",
+    ])
+    .unwrap()
+    .command
     {
         Command::Fasttrack {
             title,
@@ -539,7 +580,7 @@ fn fasttrack_express_is_drain_alias_without_lane_tags() {
 // trace:TASK-1267 | ai:codex
 #[test]
 fn add_accepts_creation_time_execution_mode() {
-    match Cli::try_parse_from([
+    match crate::command_registry::try_parse_from([
         "aida",
         "add",
         "drain this work",

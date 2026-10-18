@@ -65,3 +65,38 @@ mod tests {
         assert_eq!(value["surfaces"][11]["command"], "aida watch --all --json");
     }
 }
+
+/// Print the versioned read-only monitor contract.
+// trace:STORY-1352 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "contract")]
+pub(crate) struct ContractArgs {
+    /// Emit the contract as JSON (the only supported representation).
+    #[clap(long)]
+    pub json: bool,
+}
+
+fn run_contract(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <ContractArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ContractArgs { json: _ } = &args;
+    return self::print_json();
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CONTRACT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "contract",
+        help_after: "watch",
+        command: <ContractArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+        },
+        run: run_contract,
+    };

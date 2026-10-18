@@ -651,3 +651,74 @@ fn dest_writable(dir: &std::path::Path) -> bool {
         Err(_) => false,
     }
 }
+
+/// Upgrade aida to the latest release (or a specified version).
+/// Detects how aida was installed (cargo / pre-built binary) and uses
+/// the matching upgrade strategy. From a developer build with no
+/// --target, scans common install locations and offers to upgrade
+/// any stale sibling installs.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "upgrade")]
+pub(crate) struct UpgradeArgs {
+    /// Compare current/sibling versions to latest release; report only, don't install.
+    #[clap(long)]
+    pub check: bool,
+
+    /// Install a specific version instead of latest. Format: `v0.4.0`.
+    #[clap(long)]
+    pub version: Option<String>,
+
+    /// Skip confirmation prompt
+    #[clap(long, short = 'y')]
+    pub yes: bool,
+
+    /// Upgrade a specific binary path instead of the currently-running one.
+    /// Useful from a developer shell to upgrade `~/.local/bin/aida` etc.
+    #[clap(long)]
+    pub target: Option<String>,
+
+    /// When the dev build is ahead of the latest release tag, print a
+    /// `git log --stat` of the unreleased commits so you can vet what
+    /// `aida dev patch` would ship.
+    #[clap(long, hide = true)]
+    pub diff: bool,
+
+    /// Upgrade action.
+    // trace:STORY-1028 | ai:codex
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::UpgradeCommand>,
+}
+
+// Handle upgrade before storage resolution — it needs no DB.
+// trace:EPIC-1-001 | ai:claude
+fn run_upgrade(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <UpgradeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let UpgradeArgs {
+        check,
+        version,
+        yes,
+        target,
+        diff,
+        cmd,
+    } = &args;
+    let (check, diff) = normalize_upgrade_mode(*check, *diff, cmd.as_ref());
+    return self::handle_upgrade_command(check, version.as_deref(), *yes, target.as_deref(), diff);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static UPGRADE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "upgrade",
+        help_after: "_bg-fetch",
+        command: <UpgradeArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_upgrade,
+    };

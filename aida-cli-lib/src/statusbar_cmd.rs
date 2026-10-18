@@ -584,3 +584,80 @@ mod tests {
         assert_eq!(RESTORE_TITLE, "\x1b[23;0t");
     }
 }
+
+/// Ambient terminal-title meter — a read-only project pulse riding the
+/// terminal title bar (any OSC-capable terminal; tmux shows it as the
+/// window title). On an interval, emits the set-window-title escape with
+/// a compact meter: queue depth, live/STALE session counts, and how many
+/// items await you (briefs · findings · mail · punts). Purely an ambient
+/// signal — it dispatches nothing, launches nothing, writes nothing; all
+/// sources are cache/local-fast (no network, PRs omitted).
+///
+/// Examples:
+///   aida statusbar                 # refresh the title every 15s (Ctrl+C exits)
+///   aida statusbar --restore-title # same, restoring the previous title on exit
+///   aida statusbar --once          # single title update (shell prompt hooks)
+///   aida statusbar --plain         # print the meter as plain text and exit
+///
+/// tmux status-right recipe (plain text, no escapes needed):
+///   set -g status-right '#(aida statusbar --plain) '
+///   set -g status-interval 15
+// trace:STORY-715 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "statusbar")]
+#[clap(verbatim_doc_comment)]
+pub(crate) struct StatusbarArgs {
+    /// Seconds between title refreshes in loop mode (minimum 2).
+    #[clap(long, default_value_t = 15)]
+    pub interval: u64,
+
+    /// Emit ONE title update and exit — for wiring into a shell
+    /// PROMPT_COMMAND / precmd hook instead of running the loop.
+    #[clap(long)]
+    pub once: bool,
+
+    /// Print the meter as a plain text line (no escape sequence) and
+    /// exit — the building block for tmux's status-right interpolation.
+    #[clap(long, conflicts_with = "once")]
+    pub plain: bool,
+
+    /// Save the current terminal title on start and restore it when the
+    /// loop exits (XTerm title-stack escapes). Opt-in: not every
+    /// terminal implements the title stack.
+    #[clap(long)]
+    pub restore_title: bool,
+}
+
+// `aida statusbar` — the ambient, read-only terminal-title meter. Like
+// `aida ps` / `aida integrate` it self-resolves everything it needs
+// (queue YAML, session leases, cache-backed awaiting channels) and
+// degrades gracefully offline, so it needs no shared storage handle —
+// dispatch early. trace:STORY-715 | ai:claude
+fn run_statusbar(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <StatusbarArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let StatusbarArgs {
+        interval,
+        once,
+        plain,
+        restore_title,
+    } = &args;
+    return self::handle_statusbar_command(*interval, *once, *plain, *restore_title);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STATUSBAR: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "statusbar",
+        help_after: "state-snapshot",
+        command: <StatusbarArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+        },
+        run: run_statusbar,
+    };

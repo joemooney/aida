@@ -284,3 +284,50 @@ fn completed_day_for(r: &aida_core::Requirement) -> Option<i64> {
         None => None,
     }
 }
+
+/// Vital-signs read: is this project HEALTHY right now? One screen across
+/// backlog state (ready/stale/blocked/aging work, burn-down direction) and
+/// coordination state (queue depth, live/stale leases, drains, open
+/// findings, parked work). Worst-anchored verdict, a remedy per warning.
+/// Pure + cache-backed; safe to glance at once a day.
+// trace:STORY-658 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "health")]
+pub(crate) struct HealthArgs {
+    /// Machine-readable JSON (overall grade + every vital with its grade,
+    /// value, and remedy).
+    // trace:STORY-658 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Print only the one-line headline verdict (good for prompts/scripts).
+    // trace:STORY-658 | ai:claude
+    #[clap(long, conflicts_with = "json")]
+    pub brief: bool,
+}
+
+// STORY-658: `aida health` self-loads the store + probes the runtime
+// substrate (leases, drain lock, queue) — no shared storage handle needed,
+// so dispatch early like burndown. trace:STORY-658 | ai:claude
+fn run_health(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <HealthArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let HealthArgs { json, brief } = &args;
+    return self::handle_health_vitals_command(*json, *brief);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static HEALTH: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "health",
+        help_after: "autoprogress",
+        command: <HealthArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_health,
+    };

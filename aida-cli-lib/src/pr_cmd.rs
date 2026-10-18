@@ -6298,3 +6298,142 @@ mod task_1458_pr_ship_wiring_guard {
         assert!(gate < opts && opts < merge, "gate → pin → merge order");
     }
 }
+
+/// Pull-request side-effects intended to fire from the /aida-pr
+/// skill. Today: `auto-queue-review` files the reviewer story right
+/// after `gh pr create` so the trigger lives where context is
+/// freshest. `aida session end` keeps the same logic as an
+/// idempotent backup for PRs opened outside the skill.
+// trace:STORY-90 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "pr")]
+pub(crate) struct PrArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PrCommand,
+}
+
+// STORY-90: PR side-effects dispatch before storage init — the
+// command's side-effects all live in git / gh / self-invoked `aida
+// add` calls; it doesn't need the global Storage handle.
+// trace:STORY-90 | ai:claude
+fn run_pr(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let pr_cmd = &args.inner;
+    return handle_pr_command(pr_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PR: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "pr",
+    help_after: "ship",
+    command: <PrArgs as clap::CommandFactory>::command,
+    phase: crate::command_registry::Phase::PreStore,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: run_pr,
+};
+
+/// The one-shot HUMAN-implementer finish. From inside a worktree where
+/// you implemented a spec, run the whole finish ceremony in ONE command:
+/// commit any uncommitted work with the (SPEC-ID) trailer, rebase onto
+/// current origin/main, push, open the PR, wait for CI green, squash-merge,
+/// run `aida pull` (Done → Completed auto-bump), and remove the worktree.
+///
+/// It is the orchestrator's finish phases with phase-1 (implement) done by
+/// you instead of a spawned agent — the human-implementer counterpart to
+/// `aida queue work <id> --auto-complete`. The spec is resolved from the
+/// current branch (or the active session lease); pass `<spec>` to override.
+///
+/// Stop earlier with `--no-merge` (open the PR, don't merge) or `--no-pr`
+/// (just rebase + push). `--keep-worktree` leaves the worktree in place
+/// after a successful merge.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "ship")]
+pub(crate) struct ShipArgs {
+    /// Spec to finish. When omitted, resolved from the current branch
+    /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
+    /// lease covering this worktree.
+    #[clap(value_name = "SPEC")]
+    pub spec: Option<String>,
+
+    /// Commit subject to use when committing uncommitted work. The
+    /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
+    /// conventional default is used. Ignored when the worktree is clean.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
+    pub message: Option<String>,
+
+    /// Stop after opening the PR — do not watch CI or merge. The PR is
+    /// left open for a human to review + merge.
+    #[clap(long)]
+    pub no_merge: bool,
+
+    /// Stop after rebase + push — do not open a PR. Useful when you want
+    /// to open the PR yourself, or when CI is configured to gate on push.
+    #[clap(long, conflicts_with = "no_merge")]
+    pub no_pr: bool,
+
+    /// Keep the worktree after a successful merge (skip the
+    /// `aida session end` cleanup step).
+    #[clap(long)]
+    pub keep_worktree: bool,
+
+    /// Print the resolved finish sequence without executing any of it.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Bypass the client-side trailer spec-ID check before shipping.
+    // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub no_trailer_check: bool,
+}
+
+// STORY-720: `aida ship` dispatches before storage init for the same
+// reason as `aida pr` — every side-effect is a git / gh / self-invoked
+// `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
+// resolved from the branch / lease, not the requirement store.
+// trace:STORY-720 | ai:claude
+fn run_ship(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <ShipArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ShipArgs {
+        spec,
+        message,
+        no_merge,
+        no_pr,
+        keep_worktree,
+        dry_run,
+        no_trailer_check,
+    } = &args;
+    return run_human_finish_ceremony(HumanFinishOptions {
+        spec: spec.clone(),
+        message: message.clone(),
+        no_merge: *no_merge,
+        no_pr: *no_pr,
+        keep_worktree: *keep_worktree,
+        dry_run: *dry_run,
+        no_trailer_check: *no_trailer_check,
+    });
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "ship",
+    help_after: "triage",
+    command: <ShipArgs as clap::CommandFactory>::command,
+    phase: crate::command_registry::Phase::PreStore,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: run_ship,
+};

@@ -23,8 +23,14 @@ fn role_expiry_cli_child() {
         stdout_is_terminal: false,
         stderr_is_terminal: false,
     }));
-    let cli =
-        crate::Cli::try_parse_from(["aida", "role", "expiry", "--refuse-within", "1h"]).unwrap();
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "role",
+        "expiry",
+        "--refuse-within",
+        "1h",
+    ])
+    .unwrap();
     let crate::Command::Role(command) = cli.command else {
         panic!("role command parsed");
     };

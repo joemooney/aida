@@ -5,7 +5,8 @@ use clap::Parser;
 #[test]
 fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
     for flag in ["--comments", "--no-comments"] {
-        let cli = Cli::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
         match cli.command {
             Command::Show {
                 comments,
@@ -18,9 +19,14 @@ fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
             other => panic!("unexpected command: {other:?}"),
         }
     }
-    assert!(
-        Cli::try_parse_from(["aida", "show", "TASK-1", "--comments", "--no-comments"]).is_err()
-    );
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "show",
+        "TASK-1",
+        "--comments",
+        "--no-comments"
+    ])
+    .is_err());
 }
 
 /// BUG-453: headless_log_len returns the byte length of the session's JSONL
@@ -225,14 +231,14 @@ fn pending_brief_sentinel_add_clear_lifecycle() {
 #[test]
 fn show_rels_flag_parses() {
     for arg in ["--rels", "--relations"] {
-        let cli = Cli::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
+        let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
         match cli.command {
             Command::Show { rels, .. } => assert!(rels, "{arg} should set rels"),
             other => panic!("unexpected command: {other:?}"),
         }
     }
     // default: off
-    let cli = Cli::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
     match cli.command {
         Command::Show { rels, .. } => assert!(!rels),
         other => panic!("unexpected command: {other:?}"),
@@ -469,7 +475,7 @@ fn last_findings_round_trip_and_noop() {
 /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
 #[test]
 fn blocked_by_flags_parse_on_add_and_edit() {
-    let add = Cli::try_parse_from([
+    let add = crate::command_registry::try_parse_from([
         "aida",
         "add",
         "--title",
@@ -489,7 +495,7 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let edit = Cli::try_parse_from([
+    let edit = crate::command_registry::try_parse_from([
         "aida",
         "edit",
         "TASK-9",
@@ -514,8 +520,10 @@ fn blocked_by_flags_parse_on_add_and_edit() {
 
 #[test]
 fn brief_cli_parses_canonical_create_shape() {
-    let cli =
-        Cli::try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"]).unwrap();
+    let cli = crate::command_registry::try_parse_from([
+        "aida", "brief", "codex", "TASK-492", "--note", "ship it",
+    ])
+    .unwrap();
     match cli.command {
         Command::Brief {
             agent,
@@ -539,7 +547,7 @@ fn brief_cli_parses_canonical_create_shape() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "codex",
@@ -560,7 +568,7 @@ fn brief_cli_parses_canonical_create_shape() {
 // trace:TASK-1140 | ai:claude
 #[test]
 fn brief_cli_parses_authorized_by_flag() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "codex",
@@ -577,7 +585,8 @@ fn brief_cli_parses_authorized_by_flag() {
     }
 
     // Omitted → None (the overwhelmingly common case).
-    let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
     match cli.command {
         Command::Brief { authorized_by, .. } => {
             assert_eq!(authorized_by, None);
@@ -588,7 +597,7 @@ fn brief_cli_parses_authorized_by_flag() {
 
 #[test]
 fn brief_cli_parses_list_and_ack_subcommands() {
-    let list = Cli::try_parse_from([
+    let list = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "list",
@@ -612,7 +621,8 @@ fn brief_cli_parses_list_and_ack_subcommands() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let ack = Cli::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
+    let ack =
+        crate::command_registry::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
     match ack.command {
         Command::Brief {
             cmd: Some(BriefCommand::Ack { brief_file }),

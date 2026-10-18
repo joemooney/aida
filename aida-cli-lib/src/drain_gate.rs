@@ -1948,3 +1948,41 @@ mod bug_2139_headless_phase_seat_tests {
         preflight_headless_phase_seats(root, auto_complete::NoHumanMode::Both).unwrap();
     }
 }
+
+// trace:TASK-394 | ai:claude
+/// Persist (or revoke) the one-time `--no-human` scope acknowledgement so
+/// an overnight `aida queue work --auto-complete --no-human=both` loop
+/// doesn't re-prompt every iteration.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "no-human")]
+pub(crate) struct NoHumanArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::NoHumanCommand,
+}
+
+// TASK-394: the `--no-human` acknowledgement marker just touches/removes a
+// file (no requirement store). Dispatch before storage init so it works on
+// a fresh clone too. trace:TASK-394 | ai:claude
+fn run_no_human(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <NoHumanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let no_human_cmd = &args.inner;
+    return handle_no_human_command(no_human_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static NO_HUMAN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "no-human",
+        help_after: "autonomy",
+        command: <NoHumanArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_no_human,
+    };

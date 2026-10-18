@@ -838,3 +838,84 @@ pub(crate) fn handle_worker_command(cmd: &WorkerCommand) -> Result<()> {
         }
     }
 }
+
+/// Inspect the stacked-branch graph: `aida queue work --stack` records
+/// each stacked branch's parent in `.aida/stacks.json`; `aida stack
+/// show` / `list` render the chains. Pairs with the auto-rebase
+/// cascade that `aida pull --auto` runs when a base merges.
+// trace:STORY-248 | ai:claude
+// trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "stack")]
+#[clap(hide = true)]
+pub(crate) struct StackArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::StackCommand,
+}
+
+// STORY-248: stack-graph introspection. Dispatched before storage
+// init — reads only `.aida/stacks.json`, no requirement store.
+// Mirrors the STORY-301 drain dispatch pattern. trace:STORY-248
+fn run_stack(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <StackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let stack_cmd = &args.inner;
+    return handle_stack_command(stack_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STACK: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "stack",
+        help_after: "drain",
+        command: <StackArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_stack,
+    };
+
+/// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
+/// non-obvious jq filter (assistant content blocks, text-only by default,
+/// `--with-tools` to interleave tool calls) so the user gets clean text
+/// instead of pages of `null`.
+// trace:TASK-398 | ai:claude
+// trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "headless")]
+#[clap(hide = true)]
+pub(crate) struct HeadlessArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::HeadlessCommand,
+}
+
+// TASK-398: headless-log tailer. Dispatched before storage init — reads
+// only `.aida/headless-logs/`, no requirement store. trace:TASK-398
+fn run_headless(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <HeadlessArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let headless_cmd = &args.inner;
+    return handle_headless_command(headless_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static HEADLESS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "headless",
+        help_after: "stack",
+        command: <HeadlessArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_headless,
+    };

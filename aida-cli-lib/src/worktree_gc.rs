@@ -3572,3 +3572,47 @@ pub(crate) fn print_lease_detail(l: &SessionLease, elapsed_secs: u64) {
         humanize_duration_secs(elapsed_secs)
     );
 }
+
+// trace:STORY-716 | ai:claude
+/// Manage epic-scoped git worktrees — the workspace layer that
+/// mirrors `git worktree`. `aida worktree add <epic>` creates a worktree
+/// off origin/main (default `~/ai/aida-<epic-slug>` on `<epic>-work`) and
+/// auto-scopes it to that epic via `aida focus`; `aida worktree enter
+/// <epic>` creates-if-missing then cd's you in (run it BARE — the `aida()`
+/// shell wrapper auto-evals the emitted `cd`, NOT wrapped in `eval`);
+/// `aida worktree list` shows AIDA-managed worktrees + each one's focus.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "worktree")]
+pub(crate) struct WorktreeArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::WorktreeCommand,
+}
+
+// STORY-716: `aida worktree` (EPIC-55 workspace layer) operates on git +
+// the filesystem; `enter` emits `cd` shell on stdout for the `aida()`
+// wrapper to auto-eval. Like `role enter` it needs no shared storage
+// handle and its stdout must stay clean of store-init noise, so it
+// dispatches early. trace:STORY-716 | ai:claude
+fn run_worktree(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let wt_cmd = &args.inner;
+    return handle_worktree_command(wt_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WORKTREE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "worktree",
+        help_after: "spec",
+        command: <WorktreeArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: run_worktree,
+    };
