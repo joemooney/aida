@@ -582,16 +582,26 @@ pub(crate) fn note_exclusions<'a>(
 
 /// What the ship decision knows about one spec the PR ships.
 // trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
 #[derive(Debug, Clone)]
 pub(crate) struct ShipSpec {
     pub id: String,
+    /// Additional ID keys (e.g., an agreed_id alias when `id` is the canonical
+    /// spec_id, or vice versa) to consult in the append-only exclusion ledger.
+    pub aliases: Vec<String>,
+    /// True when this spec was named by the PR/branch/title (fails closed when
+    /// absent from the store). False when it was only discovered via a trace
+    /// comment in a touched file.
+    pub named: bool,
     /// The spec as the store holds it now; `None` when the store has no such
-    /// spec (fails closed).
+    /// spec currently.
     pub current: Option<aida_core::Requirement>,
     /// Every earlier version of the spec found in the store's git history
     /// (plus what its recorded field changes say it once was). `Err` = the
     /// history could not be read, which refuses (fails closed): exclusion is
     /// sticky, so a version we cannot see may be the one that excludes it.
+    /// `Ok(empty)` means the store git history is readable and holds no version
+    /// of this object on any ref.
     pub history: std::result::Result<Vec<aida_core::Requirement>, String>,
 }
 
@@ -667,12 +677,14 @@ fn parse_version(text: &str) -> std::result::Result<aida_core::Requirement, Stri
     Ok(req)
 }
 
-/// STORY-1698: every version of `spec_id` in the store's git history (all
-/// refs, so a rewritten local branch still shows what the remote saw), each
-/// expanded by its recorded field changes. `Err` when the history cannot be
-/// read or holds no version at all — the caller refuses.
+/// STORY-1698 / TASK-1800: every version of `spec_id` in the store's git
+/// history (all refs, so a rewritten local branch still shows what the remote
+/// saw), each expanded by its recorded field changes. `Ok(empty)` when the
+/// store repository is readable and no ref ever held `spec_id`; `Err` when
+/// git history cannot be read or a stored version cannot be parsed.
 // trace:STORY-1698 | ai:claude
-pub(crate) fn store_history_versions(
+// trace:TASK-1800 | ai:antigravity
+pub(crate) fn store_history_versions_optional(
     store_root: &Path,
     spec_id: &str,
 ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
@@ -706,7 +718,7 @@ pub(crate) fn store_history_versions(
         .filter(|l| !l.is_empty())
         .collect();
     if shas.is_empty() {
-        return Err(format!("no version of {spec_id} in the store's history"));
+        return Ok(Vec::new());
     }
     let mut out = Vec::new();
     for sha in shas {
@@ -715,6 +727,77 @@ pub(crate) fn store_history_versions(
         let req = parse_version(&text).map_err(|e| format!("{spec_id} at {sha}: {e}"))?;
         out.extend(field_change_versions(&req));
         out.push(req);
+    }
+    Ok(out)
+}
+
+/// TASK-1800: the stored object IDs whose YAML carried `id` as its `spec_id`
+/// or `agreed_id` in any version on any ref, other than `id` itself. This is
+/// how a DELETED spec named by its agreed_id (stored under a different
+/// spec_id path) is still found and judged. `Err` when the history cannot be
+/// searched; the caller refuses rather than treating the ID as dangling.
+// trace:TASK-1800 | ai:claude
+pub(crate) fn store_history_alias_ids(
+    store_root: &Path,
+    id: &str,
+) -> std::result::Result<Vec<String>, String> {
+    if id.is_empty()
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(format!("cannot search store history for {id:?}"));
+    }
+    let pattern = format!("^(spec_id|agreed_id): *['\"]?{id}['\"]? *$");
+    let out = aida_core::git_ops::host_git_command(store_root)
+        .args([
+            "log",
+            "--all",
+            "--format=",
+            "--name-only",
+            "--regexp-ignore-case",
+            &format!("-G{pattern}"),
+            "--",
+            "objects/",
+        ])
+        .output()
+        .map_err(|e| format!("git failed to run: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "cannot search store history for {id}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let mut ids: Vec<String> = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let Some(stem) = Path::new(line.trim())
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".yaml"))
+        else {
+            continue;
+        };
+        let stem = stem.to_ascii_uppercase();
+        if !stem.eq_ignore_ascii_case(id) && !ids.contains(&stem) {
+            ids.push(stem);
+        }
+    }
+    Ok(ids)
+}
+
+/// STORY-1698: every version of `spec_id` in the store's git history (all
+/// refs, so a rewritten local branch still shows what the remote saw), each
+/// expanded by its recorded field changes. `Err` when the history cannot be
+/// read or holds no version at all — the caller refuses.
+// trace:STORY-1698 | ai:claude
+#[cfg(test)]
+pub(crate) fn store_history_versions(
+    store_root: &Path,
+    spec_id: &str,
+) -> std::result::Result<Vec<aida_core::Requirement>, String> {
+    let out = store_history_versions_optional(store_root, spec_id)?;
+    if out.is_empty() {
+        return Err(format!("no version of {spec_id} in the store's history"));
     }
     Ok(out)
 }
@@ -1012,6 +1095,7 @@ pub(crate) fn rework_release_decision(
 /// seat, the hold and the specs — everything but the shipping session and
 /// its approval. Shared with [`rework_release_decision`] (STORY-1697).
 // trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
 fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, MandateRefusal> {
     let mandate = match c.state {
         MandateState::None => return Err(MandateRefusal::NoMandate),
@@ -1066,7 +1150,7 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
             }
         }
     }
-    if !c.specs_resolved || c.specs.is_empty() {
+    if !c.specs_resolved || !c.specs.iter().any(|s| s.named) {
         return Err(MandateRefusal::SpecsUnresolved);
     }
     let ledger = c
@@ -1076,12 +1160,17 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
     // Exclusion is STICKY: a spec is judged by every version it ever had —
     // now, in the store's git history, and in its recorded field changes —
     // so stripping a tag never lifts it. Unreadable history refuses.
+    // TASK-1800: a trace-derived ID (never a named ID) with no current version,
+    // no store-history version on any ref, and no ledger entry is a dangling
+    // reference and is dropped. Any history version (deleted spec) is still
+    // judged by that history; named IDs keep fail-closed behaviour.
     // trace:STORY-1698 | ai:claude
+    // trace:TASK-1800 | ai:antigravity
     for spec in c.specs {
         let id = &spec.id;
-        let Some(current) = &spec.current else {
+        if spec.named && spec.current.is_none() {
             return Err(MandateRefusal::SpecsUnresolved);
-        };
+        }
         let history = match &spec.history {
             Ok(history) => history,
             Err(why) => {
@@ -1091,25 +1180,47 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
                 })
             }
         };
-        let current_changes = field_change_versions(current);
-        let versions = std::iter::once(current)
+        if spec.named && history.is_empty() {
+            return Err(MandateRefusal::HistoryUnreadable {
+                spec: id.clone(),
+                why: format!("no version of {id} in the store's history"),
+            });
+        }
+        // The ledger is the first source: once seen excluded, always excluded.
+        // Consult both the ID and any recorded aliases.
+        let mut excluded: Option<String> = None;
+        for key in std::iter::once(id).chain(spec.aliases.iter()) {
+            if let Some(entry) = ledger.get(&key.to_ascii_uppercase()) {
+                if entry.always_human {
+                    return Err(MandateRefusal::AlwaysHuman {
+                        spec: id.clone(),
+                        class: entry.class.clone(),
+                    });
+                }
+                if excluded.is_none() {
+                    excluded = Some(format!(
+                        "{}, recorded {}",
+                        entry.class,
+                        entry.first_seen.to_rfc3339()
+                    ));
+                }
+            }
+        }
+        if !spec.named && spec.current.is_none() && history.is_empty() && excluded.is_none() {
+            // Dangling trace-derived reference: no current version, no store
+            // history on any ref, and no exclusion ledger entry.
+            continue;
+        }
+        let current_changes = spec
+            .current
+            .as_ref()
+            .map(field_change_versions)
+            .unwrap_or_default();
+        let versions = spec
+            .current
+            .iter()
             .chain(current_changes.iter())
             .chain(history.iter());
-        // The ledger is the first source: once seen excluded, always excluded.
-        let mut excluded: Option<String> = None;
-        if let Some(entry) = ledger.get(&id.to_ascii_uppercase()) {
-            if entry.always_human {
-                return Err(MandateRefusal::AlwaysHuman {
-                    spec: id.clone(),
-                    class: entry.class.clone(),
-                });
-            }
-            excluded = Some(format!(
-                "{}, recorded {}",
-                entry.class,
-                entry.first_seen.to_rfc3339()
-            ));
-        }
         for (i, version) in versions.enumerate() {
             if let Some(class) = always_human_class(version) {
                 return Err(MandateRefusal::AlwaysHuman {
@@ -1119,7 +1230,7 @@ fn hold_cover<'a>(c: &ShipCheck<'a>) -> std::result::Result<&'a Mandate, Mandate
             }
             if excluded.is_none() {
                 excluded = excluded_class(version).map(|why| {
-                    if i == 0 {
+                    if i == 0 && spec.current.is_some() {
                         why
                     } else {
                         format!("{why}, in an earlier version")
