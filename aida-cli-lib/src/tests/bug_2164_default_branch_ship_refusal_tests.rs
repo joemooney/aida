@@ -580,6 +580,10 @@ fn task_1803_stripped_path_gh_resolution_finds_fallback_binary() {
     #[cfg(unix)]
     std::os::unix::fs::symlink(&real_git, git_only_bin.join("git")).unwrap();
 
+    // The fallback directories are replaced by one the test owns, so a gh
+    // installed on the host cannot shadow the fixture.
+    let fallback_bin = dir.path().join("fallback-bin");
+    std::fs::create_dir_all(&fallback_bin).unwrap();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         dir.path(),
         "implementer",
@@ -587,14 +591,15 @@ fn task_1803_stripped_path_gh_resolution_finds_fallback_binary() {
         &[
             ("AIDA_TEST_GH_BINARY", None),
             ("PATH", Some(git_only_bin.to_str().unwrap())),
+            (
+                "AIDA_TEST_FORGE_FALLBACK_DIRS",
+                Some(fallback_bin.to_str().unwrap()),
+            ),
         ],
     );
 
-    // Install a working gh in $HOME/.local/bin/gh (resolved by Pass 2 when PATH has no gh).
-    let home = crate::home_dir().expect("home_dir");
-    let local_bin = home.join(".local").join("bin");
-    std::fs::create_dir_all(&local_bin).unwrap();
-    let fallback_gh = local_bin.join("gh");
+    // Install a working gh in the fallback directory (resolved by Pass 2 when PATH has no gh).
+    let fallback_gh = fallback_bin.join("gh");
     let marker = dir.path().join("fallback-gh-called");
     crate::test_exec::write_executable(
         &fallback_gh,

@@ -410,20 +410,26 @@ pub(crate) fn resolve_forge_binary(
     // Pass 2: common absolute paths, in case PATH was mangled or the
     // child process inherited an empty PATH. Conservative list — only
     // dirs where gh is regularly installed by the official installers
-    // or distros. Check user-local installs first so user overrides and
-    // hermetic HOME fixtures precede host system dirs.
+    // or distros.
     let fallbacks: Vec<std::path::PathBuf> = {
-        let mut v = Vec::new();
-        if let Some(home) = crate::home_dir() {
-            v.push(home.join(".local").join("bin").join(&exe_name));
-            v.push(home.join("bin").join(&exe_name));
-        }
-        v.extend([
+        let mut v = vec![
             std::path::PathBuf::from("/usr/bin").join(&exe_name),
             std::path::PathBuf::from("/usr/local/bin").join(&exe_name),
             std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
             std::path::PathBuf::from("/snap/bin").join(&exe_name),
-        ]);
+        ];
+        if let Some(home) = crate::home_dir() {
+            v.push(home.join(".local").join("bin").join(&exe_name));
+            v.push(home.join("bin").join(&exe_name));
+        }
+        // Tests replace the host directories so a fixture cannot be shadowed
+        // by a binary installed on the machine. trace:TASK-1803 | ai:claude
+        #[cfg(test)]
+        if let Some(dirs) = std::env::var_os("AIDA_TEST_FORGE_FALLBACK_DIRS") {
+            v = std::env::split_paths(&dirs)
+                .map(|d| d.join(&exe_name))
+                .collect();
+        }
         v
     };
     for candidate in &fallbacks {
