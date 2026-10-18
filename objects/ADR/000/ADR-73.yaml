@@ -2,7 +2,7 @@ id: 01a12b32-13d9-7a73-b09e-66a524e161ed
 spec_id: ADR-73
 agreed_id: ADR-73
 title: The advisor seat may merge approved PRs only with an independent APPROVE, green CI on the pinned head, no holds, and no recorded authorship of its own
-description: |
+description: |-
   ## Decision
   The **advisor seat may merge approved PRs**, whatever vendor runs it (Claude, Codex, agy, …), only when ALL of the following hold. This replaces a permission that previously lived only in Claude-specific session context.
 
@@ -15,8 +15,8 @@ description: |
   6. **Audit comment.** After merging, comment on the PR or owning spec naming the approval (who, which head), the merged SHA and the CI run.
 
   ## Merge path
-  - Default: `aida pr ship`, the gated path that runs the approval-authority checks.
-  - **Narrow exception: verified mechanical slice stacks** (e.g. the STORY-1488 / TASK-1538 lib.rs split). `aida pr ship` only squash-merges, and these stacks must rebase-merge (FAQ-8). They may merge with `gh pr merge <n> --rebase --match-head-commit <full sha>` only when `scripts/split-lib/verify_stack.py` (from origin/main) passes against the PR's base, the slice tags carry their proofs, and conditions 1–6 hold. The exception ends when `aida pr ship` gains a rebase-merge mode (see the linked story).
+  - `aida pr ship` is the required gated merge path for both squash and rebase merges (`aida pr ship <n> --rebase` / `--merge-method rebase`).
+  - **Verified mechanical slice stacks** (e.g. the STORY-1488 / TASK-1538 lib.rs split) ship via `aida pr ship <n> --rebase` (passing `--final-slice` on the final slice), which pins `--match-head-commit <full sha>`, runs `scripts/split-lib/verify_stack.py` (from `origin/main`) against the PR's base, and enforces conditions 1–6. The temporary raw `gh pr merge <n> --rebase` exception is retired (STORY-1663).
 
   ## Enforcement status: read this before relying on it
   This ADR is policy. Advisors follow it because they have read it; the system does not enforce it yet. Enforcement arrives with BUG-1918's identity-bound approval gate in `aida pr ship`, which is sequenced behind STORY-1654 (separate reviewer processes). Until then, condition 1 depends on the advisor checking the authorship ledger honestly. Do not mistake this ADR for a control.
@@ -31,13 +31,13 @@ description: |
   Recorded 2026-10-11 at the operator's request, after an overnight run in which the (Claude) advisor rebase-merged lib-split runs #2493/#2494/#2507/#2509 and the pre-run PRs #2498/#2508 under these conditions. That surfaced two gaps: the permission was invisible to non-Claude advisors, and the stack merges bypassed `aida pr ship`.
 
   ## Related
-  BUG-1918, STORY-1654, STORY-1662, TASK-1538, FAQ-8, ADR-9 (one engine), the two-seat protocol.
+  BUG-1918, STORY-1654, STORY-1662, STORY-1663, TASK-1538, FAQ-8, ADR-9 (one engine), the two-seat protocol.
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:41:04.601089795Z
-modified_at: 2026-10-14T01:36:19.855545065Z
+modified_at: 2026-10-18T20:23:55.499251569Z
 req_type: Decision
 tags:
 - advisor
@@ -62,6 +62,11 @@ comments:
   created_at: 2026-10-14T01:36:19.855545065Z
   modified_at: 2026-10-14T01:36:19.855545065Z
   session_id: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
+history:
+- id: 01a150af-6a6c-72c3-8ed7-f98843c1d286
+  author: joe
+  timestamp: 2026-10-18T20:23:55.756289036Z
+  changes: []
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
   branch: main
