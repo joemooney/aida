@@ -5241,8 +5241,16 @@ pub(crate) fn drain_batch_pipelined_with_caps(
     let mut launched = 0usize;
     let mut no_more_heads = false;
 
+    struct LatchedHalt {
+        stopped_at: Option<String>,
+        outcome: BatchDrainOutcome,
+        exit_code: i32,
+        serial_leg_broken: bool,
+    }
+    let mut halted: Option<LatchedHalt> = None;
+
     loop {
-        while !no_more_heads && in_flight.len() < depth {
+        while !no_more_heads && halted.is_none() && in_flight.len() < depth {
             if driver.stop_requested() {
                 break;
             }
@@ -5287,16 +5295,13 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             }
             if shipped.iter().any(|s| s == &head) {
                 shipped.retain(|s| s != &head);
-                return BatchDrainResult {
-                    shipped,
-                    punted,
-                    escalated,
-                    shelved,
-                    skipped,
+                halted = Some(LatchedHalt {
                     stopped_at: Some(head),
                     outcome: BatchDrainOutcome::Stalled,
                     exit_code: 1,
-                };
+                    serial_leg_broken: true,
+                });
+                break;
             }
             let handle = driver.start_spec_through_ci(&head);
             launched += 1;
@@ -5304,6 +5309,18 @@ pub(crate) fn drain_batch_pipelined_with_caps(
         }
 
         let Some(member) = in_flight.pop_front() else {
+            if let Some(halt) = halted {
+                return BatchDrainResult {
+                    shipped,
+                    punted,
+                    escalated,
+                    shelved,
+                    skipped,
+                    stopped_at: halt.stopped_at,
+                    outcome: halt.outcome,
+                    exit_code: halt.exit_code,
+                };
+            }
             if cap_stop_out.is_some()
                 || driver.stop_requested()
                 || (max.is_some()
@@ -5353,6 +5370,13 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             && through_ci.shipped_spec_id.is_none()
             && through_ci.punt_reason.is_none()
             && through_ci.escalation.is_none();
+        // TASK-1351: once a halt has latched, do not launch new specs, but
+        // finish draining members already in flight through their review/merge
+        // leg (unless the parent's serial leg itself broke un-shelvably, in
+        // which case the member is recorded in `skipped`) so an in-flight child
+        // is never left running without its serial finish.
+        // trace:TASK-1351 | ai:antigravity
+        let effective_max_failures = if halted.is_some() { None } else { max_failures };
         if !should_finish_serial {
             let env_halt = env_streak.observe(&through_ci, env_halt_after);
             if let Some(done) = apply_batch_result(
@@ -5363,15 +5387,34 @@ pub(crate) fn drain_batch_pipelined_with_caps(
                 &mut escalated,
                 &mut shelved,
                 &mut skipped,
-                max_failures,
+                effective_max_failures,
                 &mut shelve_events,
                 env_halt,
             ) {
-                return done;
+                halted.get_or_insert(LatchedHalt {
+                    stopped_at: done.stopped_at,
+                    outcome: done.outcome,
+                    exit_code: done.exit_code,
+                    serial_leg_broken: false,
+                });
             }
             continue;
         }
+        if halted.as_ref().is_some_and(|h| h.serial_leg_broken) {
+            forget_batch_disposition(
+                &member.spec,
+                &mut shipped,
+                &mut punted,
+                &mut escalated,
+                &mut shelved,
+                &mut skipped,
+            );
+            skipped.push((member.spec, "serial leg broken — PR left open".to_string()));
+            continue;
+        }
         let final_result = driver.finish_spec_after_ci(&member.spec);
+        let serial_unshelved_fail =
+            final_result.exit_code != 0 && final_result.shelved_reason.is_none();
         let env_halt = env_streak.observe(&final_result, env_halt_after);
         if let Some(done) = apply_batch_result(
             member.spec,
@@ -5381,11 +5424,22 @@ pub(crate) fn drain_batch_pipelined_with_caps(
             &mut escalated,
             &mut shelved,
             &mut skipped,
-            max_failures,
+            effective_max_failures,
             &mut shelve_events,
             env_halt,
         ) {
-            return done;
+            if let Some(existing) = halted.as_mut() {
+                if serial_unshelved_fail {
+                    existing.serial_leg_broken = true;
+                }
+            } else {
+                halted = Some(LatchedHalt {
+                    stopped_at: done.stopped_at,
+                    outcome: done.outcome,
+                    exit_code: done.exit_code,
+                    serial_leg_broken: serial_unshelved_fail,
+                });
+            }
         }
     }
 }
@@ -11958,6 +12012,7 @@ mod tests {
         /// BUG-1930: pass each child result through the real sidecar JSON,
         /// as the production child/parent process boundary does.
         via_sidecar: bool,
+        reinsert_on_finish: Option<String>,
     }
 
     impl MockPipelinedBatchDriver {
@@ -11974,6 +12029,7 @@ mod tests {
                 handle_spec: std::collections::HashMap::new(),
                 delayed_child: false,
                 via_sidecar: false,
+                reinsert_on_finish: None,
             }
         }
 
@@ -12081,6 +12137,9 @@ mod tests {
 
         fn finish_spec_after_ci(&mut self, spec: &str) -> OrchestrationResult {
             self.events.push(format!("finish:{spec}"));
+            if self.reinsert_on_finish.as_deref() == Some(spec) {
+                self.heads.insert(0, spec.to_string());
+            }
             self.finish_by_spec.remove(spec).unwrap_or_else(ok_result)
         }
     }
@@ -12786,6 +12845,193 @@ mod tests {
             vec!["C"],
             "the rest of the queue is untouched"
         );
+    }
+
+    /// TASK-1351: at `pipeline_depth 3` (or after a ship refills the pipeline
+    /// before a failure-budget halt), a member already in flight when the halt
+    /// fires is waited on and finishes its parent-serialized review/merge leg
+    /// while no further queued specs are launched.
+    // trace:TASK-1351 | ai:antigravity
+    #[test]
+    fn drain_batch_pipelined_halt_finishes_already_in_flight_member() {
+        let denied = "phase 1 stopped: permission denied for Edit, Write";
+        let mut driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D"], 3)
+            .failing_through_ci_with("A", FailureKind::PermissionDenied, denied)
+            .failing_through_ci_with("B", FailureKind::PermissionDenied, denied);
+        driver.via_sidecar = true;
+        let result = drain_batch_pipelined_with_caps(
+            &mut driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            result.outcome,
+            BatchDrainOutcome::EnvironmentBlocked {
+                cause: "permission-denied"
+            }
+        );
+        assert_eq!(result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(result.stopped_at, Some("B".to_string()));
+        assert_eq!(result.shelved, vec!["A", "B"]);
+        assert_eq!(
+            result.shipped,
+            vec!["C"],
+            "already-in-flight C must complete its parent-serialized finish leg"
+        );
+        assert_eq!(
+            driver.events,
+            vec!["start:A", "start:B", "start:C", "wait:1", "wait:2", "wait:3", "finish:C"]
+        );
+        assert_eq!(driver.heads, vec!["D"], "D must never be started");
+
+        // Same shape when a ship refills the pipeline and the next shelve
+        // exhausts `--max-failures`: D (already in flight when C shelves)
+        // finishes its review/merge leg and E never starts.
+        let mut budget_driver = MockPipelinedBatchDriver::new(&["A", "B", "C", "D", "E"], 2)
+            .shelving_through_ci("A", Phase::Ci)
+            .shelving_through_ci("C", Phase::Ci);
+        let budget_result = drain_batch_pipelined_with_caps(
+            &mut budget_driver,
+            None,
+            Some(2),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(budget_result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(budget_result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(budget_result.stopped_at, Some("C".to_string()));
+        assert_eq!(budget_result.shelved, vec!["A", "C"]);
+        assert_eq!(budget_result.shipped, vec!["B", "D"]);
+        assert!(budget_driver.events.iter().any(|e| e == "finish:D"));
+        assert!(!budget_driver.events.iter().any(|e| e == "start:E"));
+        assert_eq!(budget_driver.heads, vec!["E"]);
+    }
+
+    /// TASK-1351: cover `serial_leg_broken` (un-shelvable finish-leg failure),
+    /// `Stalled` (shipped head reappears), `--max-failures 0` (`Some(0)`), and
+    /// `Mismatched` stops with another member already in flight.
+    // trace:TASK-1351 | ai:antigravity
+    #[test]
+    fn drain_batch_pipelined_halt_covers_serial_broken_stalled_zero_budget_and_mismatched() {
+        // 1. Un-shelvable finish-leg failure on A with B in flight: B is waited
+        // on, its finish leg is NOT called, and B is recorded in `skipped`.
+        let mut broken_driver =
+            MockPipelinedBatchDriver::new(&["A", "B", "C"], 2).failing_finish("A", Phase::Merge);
+        let broken_result = drain_batch_pipelined_with_caps(
+            &mut broken_driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            broken_result.outcome,
+            BatchDrainOutcome::Failed(Phase::Merge)
+        );
+        assert_eq!(broken_result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(broken_result.stopped_at, Some("A".to_string()));
+        assert!(broken_result.shipped.is_empty());
+        assert_eq!(
+            broken_result.skipped,
+            vec![(
+                "B".to_string(),
+                "serial leg broken — PR left open".to_string()
+            )]
+        );
+        assert_eq!(
+            broken_driver.events,
+            vec!["start:A", "start:B", "wait:1", "finish:A", "wait:2"],
+            "B is waited on, finish:B is skipped, and C is never started"
+        );
+
+        // 2. Stalled (shipped head A reappears when refilling pipeline while B
+        // is in flight): B is waited on, finish:B is skipped, and B is recorded
+        // in `skipped`.
+        let mut stalled_driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2);
+        stalled_driver.reinsert_on_finish = Some("A".to_string());
+        let stalled_result = drain_batch_pipelined_with_caps(
+            &mut stalled_driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(stalled_result.outcome, BatchDrainOutcome::Stalled);
+        assert_eq!(stalled_result.exit_code, 1);
+        assert_eq!(stalled_result.stopped_at, Some("A".to_string()));
+        assert!(stalled_result.shipped.is_empty());
+        assert_eq!(
+            stalled_result.skipped,
+            vec![(
+                "B".to_string(),
+                "serial leg broken — PR left open".to_string()
+            )]
+        );
+        assert_eq!(
+            stalled_driver.events,
+            vec!["start:A", "start:B", "wait:1", "finish:A", "wait:2"]
+        );
+
+        // 3. `--max-failures 0` (`Some(0)`) with depth 2 where both A and B
+        // shelve: B's shelve is still recorded in `result.shelved`.
+        let mut zero_driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2)
+            .shelving_through_ci("A", Phase::Ci)
+            .shelving_through_ci("B", Phase::Ci);
+        let zero_result = drain_batch_pipelined_with_caps(
+            &mut zero_driver,
+            None,
+            Some(0),
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(zero_result.outcome, BatchDrainOutcome::Failed(Phase::Ci));
+        assert_eq!(zero_result.exit_code, DRIVE_EXIT_HARD_FAIL);
+        assert_eq!(zero_result.stopped_at, Some("A".to_string()));
+        assert_eq!(
+            zero_result.shelved,
+            vec!["B"],
+            "under --max-failures 0, A is stopped_at and in-flight B's shelve is recorded in shelved"
+        );
+        assert_eq!(zero_driver.heads, vec!["C"]);
+
+        // 4. Mismatched stop (`dispatched != shipped`) on A with B in flight:
+        // B is waited on and finishes its serial leg while C is never started.
+        let mut mismatch_driver = MockPipelinedBatchDriver::new(&["A", "B", "C"], 2);
+        let mut mismatch_res = ok_result();
+        mismatch_res.shipped_spec_id = Some("OTHER".to_string());
+        mismatch_driver
+            .through_ci_by_spec
+            .insert("A".to_string(), mismatch_res);
+        let mismatch_result = drain_batch_pipelined_with_caps(
+            &mut mismatch_driver,
+            None,
+            None,
+            &crate::drain_caps::DrainCaps::default(),
+            std::time::Instant::now(),
+            &mut None,
+        );
+        assert_eq!(
+            mismatch_result.outcome,
+            BatchDrainOutcome::Mismatched {
+                dispatched: "A".to_string(),
+                shipped: "OTHER".to_string(),
+            }
+        );
+        assert_eq!(mismatch_result.exit_code, 0);
+        assert_eq!(mismatch_result.stopped_at, Some("A".to_string()));
+        assert_eq!(mismatch_result.shipped, vec!["OTHER", "B"]);
+        assert_eq!(
+            mismatch_driver.events,
+            vec!["start:A", "start:B", "wait:1", "wait:2", "finish:B"]
+        );
+        assert_eq!(mismatch_driver.heads, vec!["C"]);
     }
 
     /// BUG-1930: resource exhaustion travels the same pipelined path (its
