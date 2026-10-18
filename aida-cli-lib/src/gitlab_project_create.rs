@@ -351,17 +351,19 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
 pub(crate) const GIT_CREDENTIAL_HELPER_SCRIPT: &str =
     "!f() { test \"$1\" = get && printf 'username=%s\\npassword=%s\\n' \"${AIDA_GIT_CREDENTIAL_USER:-oauth2}\" \"$AIDA_GIT_CREDENTIAL_TOKEN\"; }; f";
 
-/// Decode `%XX` escapes in URL userinfo. A malformed escape is kept verbatim.
+/// Decode `%XX` escapes in URL userinfo. A malformed escape (anything but two
+/// ASCII hex digits, so `%+1` too) is kept verbatim.
 // trace:BUG-2119 | ai:claude
-fn percent_decode(s: &str) -> String {
+pub(crate) fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
         let hex = (bytes[i] == b'%')
-            .then(|| s.get(i + 1..i + 3))
+            .then(|| bytes.get(i + 1..i + 3))
             .flatten()
-            .and_then(|h| u8::from_str_radix(h, 16).ok());
+            .filter(|h| h.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|h| u8::from_str_radix(std::str::from_utf8(h).ok()?, 16).ok());
         match hex {
             Some(b) => {
                 out.push(b);
@@ -485,6 +487,21 @@ fn regex_escape(s: &str) -> String {
         .collect()
 }
 
+/// True when the operator's git config already names a credential helper for
+/// `url` (`credential.helper` or a matching `credential.<url>.helper`, after
+/// any empty-value reset).
+// trace:BUG-2119 | ai:claude
+fn operator_credential_helper_configured(dir: &Path, url: &str) -> bool {
+    let mut cmd = if dir.is_dir() {
+        aida_core::git_ops::host_git_command(dir)
+    } else {
+        Command::new("git")
+    };
+    cmd.args(["config", "--get-urlmatch", "credential.helper", url])
+        .output()
+        .is_ok_and(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).trim().is_empty())
+}
+
 /// Configure `cmd` so `git-remote-http` receives a credential-free remote URL
 /// in `argv` and obtains any HTTP(S) token via a host-scoped
 /// `credential.<scheme>://<host>.helper` reading environment variables
@@ -495,8 +512,10 @@ fn regex_escape(s: &str) -> String {
 /// `url.<clean>.insteadOf=<credentialed>` override (through `GIT_CONFIG_*`,
 /// not argv) and the embedded token feeds the helper, so the credential the
 /// operator stored keeps working for later aida and plain `git` runs. A
-/// `url_hint` with userinfo supplies the token when the stored URL is clean;
-/// otherwise a GitLab host falls back to the glab / env token.
+/// `url_hint` with userinfo supplies the token when the stored URL is clean.
+/// With no token in either URL, a GitLab host falls back to the glab / env
+/// token only when the operator has no credential helper for it: their
+/// helper (glab, a store, a keychain) keeps answering, never overridden.
 // trace:BUG-2119 | ai:agy
 // trace:BUG-2119 | ai:claude
 pub(crate) fn configure_git_remote_credentials(
@@ -531,8 +550,15 @@ pub(crate) fn configure_git_remote_credentials(
         return;
     };
 
-    let creds = hint_creds.or(stored_creds).or_else(|| {
-        if crate::forge::detect_forge_kind(&clean_url) != crate::forge::ForgeKind::GitLab {
+    // A token from the URL is the one git used before argv was cleaned, so
+    // it keeps precedence: the empty value resets helpers for this host so
+    // ours answers first, as the URL credential did.
+    let url_creds = hint_creds.or(stored_creds);
+    let reset_operator_helpers = url_creds.is_some();
+    let creds = url_creds.or_else(|| {
+        if crate::forge::detect_forge_kind(&clean_url) != crate::forge::ForgeKind::GitLab
+            || operator_credential_helper_configured(dir, &clean_url)
+        {
             return None;
         }
         let host = crate::forge::forge_host_of(&clean_url)?;
@@ -543,10 +569,11 @@ pub(crate) fn configure_git_remote_credentials(
         cmd.env("AIDA_GIT_CREDENTIAL_USER", user);
         cmd.env("AIDA_GIT_CREDENTIAL_TOKEN", token);
         // Scoped to this host only: a redirect or any other credential
-        // request in the same git run never sees the token. The empty value
-        // resets helpers inherited for this host so ours answers first.
+        // request in the same git run never sees the token.
         let key = format!("credential.{scope}.helper");
-        append_git_config_env(cmd, &key, "");
+        if reset_operator_helpers {
+            append_git_config_env(cmd, &key, "");
+        }
         append_git_config_env(cmd, &key, GIT_CREDENTIAL_HELPER_SCRIPT);
     }
 }

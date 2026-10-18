@@ -667,9 +667,12 @@ fn credentials_scope_to_the_host_and_skip_the_url_override_for_a_clean_remote() 
 // trace:BUG-2119 | ai:claude
 #[test]
 fn a_username_only_url_falls_back_to_the_gitlab_token() {
+    // No operator credential helper may answer for the host here.
     let _guard = crate::test_env::EnvVarsGuard::apply(&[
         ("GITLAB_TOKEN", Some("env-tok")),
         ("AIDA_GITLAB_TOKEN", None),
+        ("GIT_CONFIG_GLOBAL", Some("/dev/null")),
+        ("GIT_CONFIG_NOSYSTEM", Some("1")),
     ]);
     let mut cmd = std::process::Command::new("git");
     crate::gitlab_project_create::configure_git_remote_credentials(
@@ -722,5 +725,115 @@ fn git_config_pairs_append_after_inherited_and_explicit_counts() {
     assert!(
         envs.contains(&("GIT_CONFIG_COUNT".into(), "7".into())),
         "{envs:?}"
+    );
+}
+
+// trace:BUG-2119 | ai:claude
+#[test]
+fn percent_decode_keeps_an_escape_without_two_hex_digits() {
+    use crate::gitlab_project_create::percent_decode;
+    assert_eq!(percent_decode("a%+1b"), "a%+1b");
+    assert_eq!(percent_decode("a%-1b%4"), "a%-1b%4");
+    assert_eq!(percent_decode("%zz%41%2f"), "%zzA/");
+}
+
+/// With no token in the remote URL, an operator's credential helper for the
+/// host must stay in charge; only a host with no helper gets the GitLab
+/// fallback token.
+// trace:BUG-2119 | ai:claude
+#[cfg(unix)]
+#[test]
+fn gitlab_fallback_token_never_overrides_an_operator_credential_helper() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    };
+    let clean_url = "https://gitlab.example.test/ai/x.git";
+    let with_helper = tmp.path().join("with-helper");
+    let without_helper = tmp.path().join("without-helper");
+    for repo in [&with_helper, &without_helper] {
+        fs::create_dir_all(repo).unwrap();
+        git(repo, &["init", "-q"]);
+        git(repo, &["remote", "add", "gitlab", clean_url]);
+    }
+    git(
+        &with_helper,
+        &[
+            "config",
+            "credential.helper",
+            "!f() { echo username=operator; echo password=PAT-X; }; f",
+        ],
+    );
+
+    // A fake git-remote-https that asks git for this host's credential.
+    let exec_dir = tmp.path().join("git-exec");
+    fs::create_dir_all(&exec_dir).unwrap();
+    let fill_out = tmp.path().join("fill.txt");
+    crate::test_exec::write_executable(
+        &exec_dir.join("git-remote-https"),
+        format!(
+            "#!/bin/sh\n\
+             printf 'protocol=https\\nhost=gitlab.example.test\\n\\n' | GIT_TERMINAL_PROMPT=0 git credential fill > '{}' 2>/dev/null\n\
+             while IFS= read -r line; do\n\
+                 case \"$line\" in\n\
+                     capabilities*) printf 'list\\n\\n' ;;\n\
+                     *) printf '\\n' ; break ;;\n\
+                 esac\n\
+             done\n\
+             exit 0\n",
+            fill_out.display()
+        ),
+    );
+    let real_exec_path = String::from_utf8(
+        std::process::Command::new("git")
+            .arg("--exec-path")
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let new_path = format!(
+        "{}:{}:{}",
+        exec_dir.display(),
+        real_exec_path.trim(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("GIT_EXEC_PATH", Some(exec_dir.to_str().unwrap())),
+        ("PATH", Some(&new_path)),
+        ("GITLAB_TOKEN", Some("FALLBACK-Y")),
+        ("AIDA_GITLAB_TOKEN", None),
+    ]);
+
+    let fill_for = |repo: &std::path::Path| {
+        let _ = fs::remove_file(&fill_out);
+        let out = crate::gitlab_project_create::ls_remote_probe(repo, "gitlab")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        fs::read_to_string(&fill_out).unwrap_or_default()
+    };
+    let operator = fill_for(&with_helper);
+    assert!(
+        operator.contains("password=PAT-X") && !operator.contains("FALLBACK-Y"),
+        "the operator's helper must answer, untouched:\n{operator}"
+    );
+    let fallback = fill_for(&without_helper);
+    assert!(
+        fallback.contains("password=FALLBACK-Y"),
+        "with no operator helper, aida's helper supplies the GitLab token:\n{fallback}"
     );
 }
