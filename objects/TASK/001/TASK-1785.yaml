@@ -14,12 +14,12 @@ description: |-
   - Report-only, no store edits, nonzero exit only with explicit `--fail-on`.
   - Keep existing `aida lint` behavior and the first trace-coverage slice intact; update affected command documentation.
   - STANDARD independent gate for this slice, operator merges. Use only this child ID in its completion trailer; parent STORY-1672 stays open until both slices are merged and verified.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:34:37.759524907Z
-modified_at: 2026-10-18T13:38:57.341048317Z
+modified_at: 2026-10-18T14:30:57.059929704Z
 req_type: Task
 tags:
 - docs:impacted
@@ -65,6 +65,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a14f6c-40e6-7372-9e46-9dc822fe04eb
+  author: aida-auto-bump
+  timestamp: 2026-10-18T14:30:56.998768643Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a14f6c-4123-7880-856c-7e9aeb8f49aa
+  timestamp: 2026-10-18T14:30:57.059918989Z
+  agent: aida
+  commit_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  summary: 'Round 2: all round-1 findings addressed; all 8 TASK-1785 criteria met with tests (33 unit + 3 black-box green locally, CI Build green). Remaining issues are non-blocking precision/noise items in a report-only lint, filed as findings.'
+  review_verdict: approved
 filed_at:
   code_sha: a46af7481e794f7ad299631a78a258f55022c503
   branch: main
@@ -73,11 +88,7 @@ filed_at:
   aida_build_sha: 34280b1914
   vendor: codex
   session: 6a42de8e-0a2c-4c7a-9ae5-0fbd9dc93188
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'CI Build red on Run tests (base 9f0ab97 and all neighbouring runs green): new ''aida lint constants'' catalog path is missing from docs/cli-format-json-audit.md, so bug_1502 exhaustive-audit test fails; plus AC1 trace-convention divergence and smaller output/precision gaps.'
-  recovery_hint: address the review findings, move TASK-1785 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T07:34:47.722182224Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-18T14:30:56.998743482Z
+  completion_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
