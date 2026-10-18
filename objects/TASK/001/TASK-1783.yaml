@@ -10,12 +10,12 @@ description: |-
   - Report functions lacking a marker in or directly above them per file; fixture with one traced and one untraced fn reports 1/2 and names the untraced function.
   - Human and JSON output. Report-only; nonzero coverage exit only with explicit --fail-on. Existing diff-scoped mode remains unchanged, with a regression test.
   - No constants scanner in this slice and no store mutation. STANDARD independent gate; operator merges. Parent story remains open until slice 2.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:19:56.748783847Z
-modified_at: 2026-10-18T16:10:45.360435528Z
+modified_at: 2026-10-18T17:27:10.166199053Z
 req_type: Task
 tags:
 - docs:impacted
@@ -33,12 +33,26 @@ comments:
   created_at: 2026-10-18T16:10:45.360435528Z
   modified_at: 2026-10-18T16:10:45.360435528Z
   session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
+- id: 01a1500d-9656-7453-b1ee-ccf7d9cd8872
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (aab6e12) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-18T17:27:10.166198036Z
+  modified_at: 2026-10-18T17:27:10.166198036Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14def-bb52-7a43-b21f-6bcf5e6aa5c2
   author: joe
   timestamp: 2026-10-18T07:35:19.122516001Z
   session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
   changes: []
+- id: 01a1500d-9656-7453-b1ee-cce92a863f57
+  author: aida-auto-bump
+  timestamp: 2026-10-18T17:27:10.166196969Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 0c69debffe439310aacf3756a5efe363d1216474
   branch: main
