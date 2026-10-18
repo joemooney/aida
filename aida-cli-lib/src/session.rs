@@ -1467,6 +1467,11 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
 /// which has no fallback.
 /// trace:STORY-612 | ai:claude
 fn headless_worktree_root() -> PathBuf {
+    // trace:BUG-2001 | ai:antigravity
+    #[cfg(test)]
+    if let Some(cwd) = contained_cwd_seam::cwd() {
+        return crate::find_project_root_from(&cwd).unwrap_or(cwd);
+    }
     crate::find_project_root()
         .ok()
         .or_else(|| std::env::current_dir().ok())
@@ -3244,6 +3249,18 @@ pub(crate) fn os_wrapped_program_and_args(
     if !os_wrap_enabled(worktree_root) {
         return Ok((program.to_string(), program_args));
     }
+    // BUG-2001: fail closed when no git root resolves for `worktree_root`
+    // (e.g. `headless_worktree_root()` fell back to cwd / `$HOME` outside a git
+    // repository). Never bind a non-repository directory read-write in bwrap.
+    // trace:BUG-2001 | ai:antigravity
+    let worktree_root_buf = crate::find_project_root_from(worktree_root).with_context(|| {
+        format!(
+            "[contained] os_wrap is enabled, but {} is not inside a git repository — \
+             refusing to bind a non-repository directory read-write in bubblewrap",
+            worktree_root.display()
+        )
+    })?;
+    let worktree_root = worktree_root_buf.as_path();
     let claude_args = program_args;
     if which_on_path("bwrap").is_none() {
         anyhow::bail!(
@@ -5757,6 +5774,7 @@ mod tests {
         fn wrapped_args(cfg: &str) -> Option<Vec<String>> {
             let tmp = tempfile::tempdir().unwrap();
             let wt = tmp.path();
+            std::fs::create_dir_all(wt.join(".git")).unwrap();
             std::fs::create_dir_all(wt.join(".aida")).unwrap();
             std::fs::write(wt.join(".aida/config.toml"), cfg).unwrap();
             if which_on_path("bwrap").is_none() || bwrap_preflight().is_err() {
@@ -8072,6 +8090,7 @@ mod tests {
         // A worktree with `[contained] os_wrap = true`.
         let tmp = tempfile::tempdir().unwrap();
         let wt = tmp.path();
+        std::fs::create_dir_all(wt.join(".git")).unwrap();
         std::fs::create_dir_all(wt.join(".aida")).unwrap();
         std::fs::write(
             wt.join(".aida/config.toml"),
@@ -8246,6 +8265,7 @@ mod tests {
         // ON via the env override.
         _env.set("1");
         let on_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(on_dir.path().join(".git")).unwrap();
         match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
             Ok((program, out_args)) => {
                 // userns-capable host: bwrap wrap with the resolved binary inside.
@@ -8275,6 +8295,39 @@ mod tests {
                 );
             }
         }
+    }
+
+    // trace:BUG-2001 | ai:antigravity
+    #[test]
+    fn os_wrap_outside_git_refuses_instead_of_binding_cwd_rw() {
+        let mut _env = OsWrapEnvGuard::acquire();
+        _env.set("1");
+
+        let outside_git = tempfile::tempdir().unwrap();
+        let resolved_binary = "/bin/echo";
+        let args = vec!["--print".to_string(), "hi".to_string()];
+
+        let err = os_wrapped_program_and_args(outside_git.path(), resolved_binary, args.clone())
+            .expect_err("os_wrap outside git must refuse before binding non-repo dir read-write");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not inside a git repository")
+                && msg.contains("refusing to bind a non-repository directory read-write"),
+            "refusal must explain non-repository os_wrap failure: {msg}"
+        );
+
+        let _cwd = contained_cwd_seam::pin(outside_git.path());
+        assert_eq!(
+            headless_worktree_root(),
+            outside_git.path().to_path_buf(),
+            "headless_worktree_root must honor contained_cwd_seam in unit tests"
+        );
+        let err2 = claude_program_and_args(&headless_worktree_root(), args)
+            .expect_err("headless claude_program_and_args outside git must refuse os_wrap");
+        assert!(
+            format!("{err2:#}").contains("not inside a git repository"),
+            "headless path must refuse outside-git os_wrap: {err2:#}"
+        );
     }
 
     // trace:BUG-2006 | ai:antigravity
