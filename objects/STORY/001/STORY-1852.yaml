@@ -1,0 +1,34 @@
+id: 01a1515f-2d4b-79e1-b37f-7c166d088c83
+spec_id: STORY-1852
+agreed_id: STORY-1852
+title: 'Review PR-2750: [AI:claude] fix(review): commit a contained reviewer''s request-changes shelve on the host (BUG-2180)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `claude/bug-2180`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2750>
+  - Branch: `claude/bug-2180` → `main`
+
+  ## Covers
+
+  - BUG-2180
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2750` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T23:35:54.443250023Z
+modified_at: 2026-10-18T23:35:54.443250023Z
+req_type: Story
+filed_at:
+  code_sha: f820d565f53e9b781db5f81cc063f4807ce89272
+  branch: claude/bug-2180
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: d6011b46-5b32-4ffc-9be0-3089236d0097
