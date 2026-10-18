@@ -16,12 +16,12 @@ description: |
   - A stale head (a new commit after approval or CI) is refused.
   - A rebase ship of a slice PR leaves the owning spec's status unchanged unless the final-slice flag is given.
   - After it lands, the advisor-merge decision's exception for slice stacks is removed and the two-seat docs point at `aida pr ship --rebase`.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:40:48.922607973Z
-modified_at: 2026-10-18T17:14:18.018359456Z
+modified_at: 2026-10-18T21:34:21.621598395Z
 req_type: Story
 tags:
 - groom:approve
@@ -82,6 +82,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a150ef-e5af-7621-8621-d3930bb03bc2
+  author: aida-auto-bump
+  timestamp: 2026-10-18T21:34:21.615645210Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a150ef-e5b5-7d43-8c7e-c17540163cef
+  timestamp: 2026-10-18T21:34:21.621589774Z
+  agent: aida
+  commit_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  summary: All four STORY-1663 criteria verified by tests; round-1 verifier blockers fixed; CI Build green (run 39164789166). Six non-blocking findings filed.
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 4cced67be8010f2344a52792218949a7a0fc3596
@@ -91,11 +105,7 @@ filed_at:
   aida_build_sha: 9116ba7f23
   vendor: antigravity
   session: e1522f0d-48eb-46fd-bbe5-0f74fc6b516d
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'STORY-1663 rebase ship: gates wired, but the slice-stack verifier is called with one ''base..head'' arg so verify_stack.py exits 2 (usage) and refuses every real slice-stack rebase ship; verifier also fails open. TASK-1800 and TASK-1803 pass.'
-  recovery_hint: address the review findings, move STORY-1663 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T17:14:18.018359456Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-18T21:34:21.615640007Z
+  completion_sha: befc5a2e236ee7b20164f52c22d62a7058613203
