@@ -72,6 +72,7 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod command_registry;
 mod comment_cmd;
 mod commit;
 mod compete;
