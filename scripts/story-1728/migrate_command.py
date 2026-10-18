@@ -387,7 +387,9 @@ def built_order(legacy, regs):
         before = len(pending)
         keep = []
         for r in pending:
-            if r[1] in order:
+            if r[1] == "":
+                order.insert(0, r[0])
+            elif r[1] in order:
                 order.insert(order.index(r[1]) + 1, r[0])
             else:
                 keep.append(r)
@@ -465,9 +467,7 @@ def main():
     regs = registered(SRC)
     order = built_order(legacy_before, regs)
     idx = order.index(cli_name)
-    help_after = order[idx - 1] if idx > 0 else None
-    if help_after is None:
-        raise SystemExit(f"{v}: first command has no predecessor to anchor to")
+    help_after = order[idx - 1] if idx > 0 else ""
 
     if re.search(r"\b(?:struct|enum|type) " + v + r"Args\b", texts[mod_file]):
         struct_lines = [l.replace(f"{v}Args", f"{v}CmdArgs") for l in struct_lines]

@@ -32,6 +32,7 @@ for f in files:
                 r"crate::cli::\1",
                 ty,
             )
+            ty = re.sub(r"(?<![\w:])PathBuf\b", "std::path::PathBuf", ty)
             l = name + ": " + ty
         out.append(l)
         if (

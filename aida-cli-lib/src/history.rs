@@ -4678,3 +4678,918 @@ mod tests {
         );
     }
 }
+
+/// Project activity — what's been touched and how it stands now.
+/// Default mode (no SPEC-ID) is the status flow: one line per status
+/// change, newest first, each with its time, SPEC-ID, old → new status
+/// and title (a spec filed in the window shows as `(new) → <status>`).
+/// It reads the history index; when the index can't answer, you get the
+/// per-spec digest instead, with a one-line note naming the cause and
+/// the fix. `--digest` asks for that digest directly: one row per
+/// requirement sorted by last-touch time, which was the default before
+/// the status flow. Pass a SPEC-ID (`aida history <SPEC-ID>`, short for `--id <SPEC-ID>`) to
+/// switch to that one spec's status-progression view instead — its
+/// status transitions in chronological order, each with a timestamp
+/// and old→new status, in human, TOON and JSON output alike. Add
+/// `--full` (or the `events` subcommand) for the complete edit/comment
+/// trail, not just status changes. Per-event flags (`--status-changes`,
+/// `--comments`, `--oneline`, `--shipped`) switch a multi-spec query to
+/// the events feed. `--to`/`--from <STATUS>` select status transitions
+/// by target and source status, and `--opened` selects the specs filed;
+/// alone they narrow the status flow, and with a SPEC-ID or a per-event
+/// flag they select from the events feed.
+// trace:FR-1-037 | ai:claude
+// trace:STORY-1650 | ai:claude
+// trace:BUG-1635 | ai:claude
+// trace:TASK-1480 | ai:claude
+// trace:TASK-1512 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "history")]
+pub(crate) struct HistoryArgs {
+    /// SPEC-ID to focus on — shorthand for `--id <SPEC-ID>`.
+    /// `aida history <SPEC-ID>` is equivalent to `aida history --id
+    /// <SPEC-ID>`: it selects that one spec's status-progression view.
+    /// Accepts the same forms as `--id` (SPEC-ID, agreed id, or raw
+    /// UUID). Not combinable with `--id` — pass one or the other.
+    // trace:TASK-1480 | ai:claude
+    #[clap(value_name = "SPEC_ID", conflicts_with = "id")]
+    pub spec: Option<String>,
+
+    /// Human event layout: a name (user > project > builtin), or inline when it
+    /// contains `{`. Fields: commit,date[:strftime],author,id,type,priority,title,
+    /// kind,event,from,to,comment. Escape {{/}}. Title is Added/Deleted/TitleChange;
+    /// priority is Added/PriorityChange; otherwise empty. Comment is a count/summary,
+    /// never a body. No literal newlines; max 4096 bytes, rendered line 16384 bytes.
+    // trace:STORY-1477 | ai:codex
+    #[clap(long, global = true, conflicts_with_all = ["fields", "oneline", "full", "events", "kind"])]
+    pub template: Option<String>,
+
+    /// Ordered event columns: commit,date,author,id,type,priority,title,kind,event,
+    /// from,to,comment. Selects the full feed in human/TOON/JSON. Missing values
+    /// are empty cells or JSON null; title/priority/comment are event-local.
+    #[clap(long, global = true, conflicts_with_all = ["oneline", "kind"])]
+    pub fields: Option<String>,
+
+    /// Save the inline template as [user:|project:]NAME; user is the default.
+    /// Names: [A-Za-z][A-Za-z0-9_-]*, max 64 bytes. Project config needs committing.
+    #[clap(long, global = true, requires = "template")]
+    pub save_as_template: Option<String>,
+
+    /// Overwrite a template in the selected scope (only with --save-as-template).
+    #[clap(long, global = true, requires = "save_as_template")]
+    pub force: bool,
+
+    /// Number of items to show. In the status flow (default) this caps
+    /// the number of status changes; with --digest it caps the number
+    /// of distinct requirements; in events mode it caps the number of
+    /// decoded events. Default 20, configurable via `[history] limit`
+    /// in `.aida/config.toml` or env `AIDA_HISTORY_LIMIT` (this flag
+    /// beats env, which beats config).
+    // trace:STORY-1644 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long, short = 'n', global = true)]
+    pub limit: Option<usize>,
+
+    /// Walk at most N commits on the orphan branch. Default 5x --limit
+    /// (at least 50) for --full/events; 250 for the status flow, the
+    /// digest, a single SPEC-ID, and any query with --shipped, --to,
+    /// --from, --opened, --status-changes, --comments or --oneline
+    /// (adding --json does not change it).
+    // trace:BUG-1635 | ai:claude
+    // trace:TASK-1512 | ai:claude
+    #[clap(long, global = true)]
+    pub max_commits: Option<usize>,
+
+    /// Switch to per-event chronological mode — each commit's YAML
+    /// diff is decoded into one event line per change (status
+    /// transitions, comments added, tags edited, etc.). Slower than
+    /// digest because it shells out to `git show` per file per
+    /// commit; useful for inspecting one requirement closely with
+    /// --id, less useful as a general overview. `--full` is the more
+    /// discoverable spelling of the same mode.
+    #[clap(long, hide = true, global = true)]
+    pub events: bool,
+
+    /// The complete edit/event trail — every status change, comment,
+    /// tag edit, and field edit, chronological newest-first.
+    /// Equivalent to the `events` subcommand, but composes naturally
+    /// after a SPEC-ID: `aida history <SPEC-ID> --full`. Without it, a
+    /// single spec (`--id` / positional SPEC-ID) shows the shorter
+    /// status-progression view instead of the full trail.
+    // trace:TASK-1480 | ai:claude
+    #[clap(long, global = true)]
+    pub full: bool,
+
+    /// The per-requirement digest: one row per requirement touched in
+    /// the window, sorted by last-touch time, with its current status
+    /// ("what was I up to last session?"). This was the default before
+    /// the status flow; the output is unchanged. Honors --limit,
+    /// --since, --until, --author, --type and the archive/defer flags.
+    // trace:STORY-1650 | ai:claude
+    #[clap(
+        long,
+        conflicts_with_all = [
+            "spec", "id", "full", "events", "timeline", "status_changes",
+            "comments", "oneline", "shipped", "to", "from", "opened",
+            "template", "fields", "kind",
+        ]
+    )]
+    pub digest: bool,
+
+    /// Only show entries for this requirement (accepts a SPEC-ID, an
+    /// agreed short ID, or the raw UUID `aida show` prints — a UUID
+    /// is resolved to its canonical spec_id). Works both before and
+    /// after the `events` subcommand, e.g. `aida history events --id
+    /// <ID>`. The positional SPEC-ID form (`aida history <SPEC-ID>`)
+    /// is shorthand for this same flag.
+    // trace:BUG-1652 | ai:claude
+    // trace:BUG-1474 | ai:claude — global so it parses after `events`, not
+    // just before it, matching the documented invocation.
+    // trace:TASK-1480 | ai:claude
+    #[clap(long, global = true)]
+    pub id: Option<String>,
+
+    /// Only show entries for requirements of this type (functional,
+    /// bug, …).
+    #[clap(long, global = true)]
+    pub r#type: Option<String>,
+
+    /// Only show entries authored by this user (matches against the
+    /// last_modified_by HLC field if present, else the git committer
+    /// email).
+    #[clap(long, global = true)]
+    pub author: Option<String>,
+
+    /// Only show events after this point. Accepts a relative duration
+    /// meaning "that far before now" (`30m`, `5h`, `7d`, `2w`, or
+    /// `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a
+    /// zone-less ISO datetime (`2026-05-01T10:00`, local time), or a
+    /// full RFC3339 timestamp. The resolved window prints at the top of
+    /// human output so a relative form is never ambiguous.
+    // trace:TASK-1502 | ai:claude
+    #[clap(long, global = true)]
+    pub since: Option<String>,
+
+    /// Only show events before this point. Same forms as `--since`. Rejected if
+    /// it resolves earlier than `--since`.
+    // trace:TASK-1502 | ai:claude
+    #[clap(long, global = true)]
+    pub until: Option<String>,
+
+    /// Filter to status-transition events. Without a SPEC-ID this
+    /// implies events mode (one row per transition, not the per-spec
+    /// digest), as --shipped does. For a single spec (`--id` /
+    /// positional SPEC-ID) without `--full`, status transitions are
+    /// already the default view; paired with `--full`/`events` it
+    /// narrows the complete trail down to just the status changes.
+    // trace:TASK-1480 | ai:claude
+    // trace:BUG-1635 | ai:claude
+    #[clap(long, global = true)]
+    pub status_changes: bool,
+
+    /// Read the local event feed (`.aida/events.jsonl`) instead of the
+    /// spec history, showing only events of this kind — e.g.
+    /// `gate-held`: every gate that refused or held (a merge-hold floor,
+    /// a stale approval, a review in progress, a blocked pickup, a
+    /// closure hold, an ambiguous id), with a per-gate count and the
+    /// merge-hold floor's refusals beside its releases for the same
+    /// window. Honors --since/--until/--limit; `--author me` narrows to
+    /// what YOU tried to do and could not.
+    // trace:STORY-1436 | ai:claude
+    // trace:TASK-1512 | ai:claude — the event feed has no status
+    // transitions, so the transition/creation selectors conflict.
+    #[clap(
+        long,
+        global = true,
+        value_name = "KIND",
+        conflicts_with_all = ["to", "from", "opened"]
+    )]
+    pub kind: Option<String>,
+
+    /// Only transitions into Completed (merged to the default branch),
+    /// from any prior status — the "did my ship register?" view. Unlike
+    /// `--all` (a recency-blind dump of every terminal-status spec), this
+    /// shows just what merged-to-default, newest first. Equivalent to
+    /// `--to completed`, so it cannot be combined with --to or --opened.
+    /// Implies events mode; composes with --since/--until/--limit.
+    // trace:TASK-507 | ai:claude — plain `//` keeps the marker out of `--help`.
+    // trace:BUG-1636 | ai:claude
+    // trace:TASK-1512 | ai:claude
+    #[clap(long, global = true, conflicts_with_all = ["to", "opened"])]
+    pub shipped: bool,
+
+    /// Only status transitions INTO this status, newest first, e.g.
+    /// `--to approved` for what got approved. Accepts the spellings
+    /// `aida edit --status` does (`in-progress`, `needs-attention`, any
+    /// case) plus `accepted` for approved. With --from, both ends must
+    /// match. Narrows the status flow; with --shipped, --status-changes
+    /// or --comments it narrows the events feed. With --status-changes
+    /// it narrows the transitions; with --comments or --opened the
+    /// result is the union of those events and the matching
+    /// transitions.
+    // trace:TASK-1512 | ai:claude
+    #[clap(long, global = true, value_name = "STATUS")]
+    pub to: Option<String>,
+
+    /// Only status transitions OUT OF this status, e.g. `--from
+    /// in-progress --to approved` for work sent back from in progress.
+    /// Alone it matches any transition leaving that status. Same
+    /// spellings and combination rules as --to.
+    /// `--from X --to X` is refused, since a transition always changes
+    /// the status.
+    // trace:TASK-1512 | ai:claude
+    #[clap(long, global = true, value_name = "STATUS")]
+    pub from: Option<String>,
+
+    /// Only spec-creation events: the specs filed in the window,
+    /// whatever status they were filed at (a spec filed straight as
+    /// approved is included). Creation is not a status transition, so
+    /// with --to/--from (or --status-changes/--comments) the result is
+    /// the union of both kinds of event. In the status flow each one
+    /// shows as `(new) → <status>`.
+    // trace:TASK-1512 | ai:claude
+    #[clap(long, global = true, visible_alias = "created")]
+    pub opened: bool,
+
+    /// Filter to comment events. Without a SPEC-ID this implies events
+    /// mode, as --shipped does. For a single spec (`--id` / positional
+    /// SPEC-ID) without `--full`, this switches the status-progression
+    /// view to a comment timeline instead; paired with `--full`/`events`
+    /// it narrows the complete trail to just comments.
+    // trace:TASK-1480 | ai:claude
+    // trace:BUG-1635 | ai:claude
+    #[clap(long, global = true)]
+    pub comments: bool,
+
+    /// Terse one-line-per-event format. Applies to the events feed,
+    /// the status-progression view, and the comment timeline alike.
+    /// Without a SPEC-ID it implies events mode: the per-spec digest
+    /// has no per-event lines, so the flag is never silently ignored.
+    // trace:TASK-1480 | ai:claude
+    // trace:BUG-1635 | ai:claude
+    #[clap(long, global = true)]
+    pub oneline: bool,
+
+    /// Emit JSON (same shape as the MCP history tool): `count`,
+    /// `events`, `window_exhausted`, `source`, `index_tip`. Each event
+    /// row has `id`, `ts`, `author`, `kind`, `from`, `to`, `summary`
+    /// (plus `sha`, `spec_id`, `timestamp`, `req_type`, `detail`) for
+    /// the events feed. Without a SPEC-ID it is the status flow:
+    /// `view`, `count`, `source`, `index_tip`, `window_exhausted` and
+    /// `transitions` rows (`when`, `id`, `from`, `to`, `title`, `kind`,
+    /// `author`, `sha`); with --digest, `view`, `count` and `history`
+    /// rows (`id`, `type`, `status`, `when`, `change`, `title`). With a
+    /// SPEC-ID (and no `--full`) it is the status progression, oldest
+    /// first, adding `view`, `id`, `title`, `current_status`, `order`.
+    /// `--format json` is the same.
+    // trace:BUG-1631 | ai:claude
+    // trace:BUG-1635 | ai:claude
+    #[clap(long, conflicts_with = "template")]
+    pub json: bool,
+
+    /// Include archived AND deferred requirements (everything-escape-hatch).
+    /// Symmetric with `aida list --all`. By default `aida history`
+    /// surfaces every active spec (including freshly-Completed ships) but
+    /// hides archived and deferred rows; `--all` widens to the full union.
+    // trace:STORY-441 | ai:claude — supersedes TASK-64's terminal-status hide.
+    // trace:STORY-584 | ai:claude — now widens the defer axis too.
+    #[clap(long, conflicts_with_all = ["archived", "deferred"], global = true)]
+    pub all: bool,
+
+    /// Show only archived requirements.
+    // trace:STORY-441 | ai:claude
+    #[clap(long, conflicts_with_all = ["all", "deferred"], global = true)]
+    pub archived: bool,
+
+    /// Show only deferred requirements (the primed/conditional shelf).
+    // trace:STORY-584 | ai:claude
+    #[clap(long, conflicts_with_all = ["all", "archived"], global = true)]
+    pub deferred: bool,
+
+    /// Include META requirements (AI prompt customization seeded by
+    /// `aida init`) in the activity view. By default META rows are
+    /// hidden so the 6 seeded prompt templates don't drown a fresh
+    /// project's real work — matching `aida list` and `aida status`,
+    /// which already exclude them. Pass `--include-meta` to see them,
+    /// or filter explicitly with `--type meta`.
+    // trace:STORY-737 | ai:claude
+    #[clap(long, global = true)]
+    pub include_meta: bool,
+
+    /// Where one spec's elapsed time actually went: a chronological list
+    /// of spans, each labelled `work`, `wait` or `unknown`, rebuilt from
+    /// the store's status transitions, the local drain feed, and the
+    /// pull-request and CI timestamps when a forge CLI is available.
+    /// Requires one SPEC-ID. Time that no source accounts for is shown as
+    /// its own `unknown` span and counted separately — it is never folded
+    /// into the span beside it, so the totals cannot overstate how much of
+    /// the window was really measured. Renders human, TOON and JSON; the
+    /// windowing and event-selector flags are refused rather than
+    /// silently producing partial totals that read as complete.
+    // trace:STORY-1478 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(
+        long,
+        conflicts_with_all = [
+            "full", "events", "status_changes", "comments", "oneline",
+            "shipped", "opened", "to", "from", "kind", "since", "until",
+            "max_commits", "type", "author", "all", "archived", "deferred",
+        ]
+    )]
+    pub timeline: bool,
+
+    /// History view. `events` switches to the full chronological feed
+    /// (same as `--full`); most day-to-day use never needs it — the
+    /// bare command (digest) or a SPEC-ID (status progression) covers
+    /// it.
+    // trace:STORY-1028 | ai:codex
+    // trace:TASK-1480 | ai:claude
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::HistoryCommand>,
+}
+
+fn run_history(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <HistoryArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                HistoryArgs {
+                    spec,
+                    template,
+                    fields,
+                    save_as_template,
+                    force,
+                    limit,
+                    max_commits,
+                    events,
+                    full,
+                    digest,
+                    id,
+                    r#type,
+                    author,
+                    since,
+                    until,
+                    status_changes,
+                    kind,
+                    shipped,
+                    to,
+                    from,
+                    opened,
+                    comments,
+                    oneline,
+                    json,
+                    all,
+                    archived,
+                    deferred,
+                    include_meta,
+                    timeline,
+                    cmd,
+                } => {
+                    // STORY-1644: `--limit` beats env `AIDA_HISTORY_LIMIT`, which beats
+                    // `[history] limit`, which beats the built-in 20.
+                    // trace:STORY-1644 | ai:claude
+                    let limit_flag = *limit;
+                    let limit = &crate::effective_history_limit(limit_flag);
+                    // trace:STORY-1477 | ai:codex
+                    use crate::history_layout::{Layout, Templates};
+                    // Reject even a parent-position --json before loading or mutating config.
+                    if matches!(cmd, Some(HistoryCommand::Templates { .. })) && *json {
+                        anyhow::bail!(
+                        "history templates has no JSON projection; use --format human or --format toon"
+                    );
+                    }
+                    let json =
+                        &(*json || matches!(cmd, Some(HistoryCommand::Events { json: true })));
+                    let templates = if template.is_some()
+                        || matches!(cmd, Some(HistoryCommand::Templates { .. }))
+                    {
+                        Some(Templates::load(&crate::find_project_root_from(
+                            &std::env::current_dir()?,
+                        )?)?)
+                    } else {
+                        None
+                    };
+                    if let Some(HistoryCommand::Templates { cmd }) = cmd {
+                        if template.is_some()
+                            || fields.is_some()
+                            || save_as_template.is_some()
+                            || *force
+                        {
+                            anyhow::bail!("invalid combination: templates management cannot be combined with render/save options");
+                        }
+                        let templates = templates.as_ref().unwrap();
+                        match cmd {
+                            Some(crate::cli::HistoryTemplatesCommand::Rm { name }) => {
+                                templates.remove(name)?
+                            }
+                            None => print!("{}", templates.list()),
+                        }
+                        return crate::command_registry::returned(Ok(()));
+                    }
+                    // STORY-1664: the list-shaped views share only the window, type,
+                    // limit, author and archive flags with the rest of `history`;
+                    // a flag that picks a different view is refused, not ignored.
+                    // trace:STORY-1664 | ai:claude
+                    if let Some((view, args)) = cmd.as_ref().and_then(HistoryCommand::view) {
+                        let other_view_flags = [
+                            ("a SPEC-ID", spec.is_some() || id.is_some()),
+                            ("--template", template.is_some()),
+                            ("--fields", fields.is_some()),
+                            ("--full", *full || *events),
+                            ("--digest", *digest),
+                            ("--status-changes", *status_changes),
+                            ("--kind", kind.is_some()),
+                            ("--shipped", *shipped),
+                            ("--to", to.is_some()),
+                            ("--from", from.is_some()),
+                            ("--opened", *opened),
+                            ("--comments", *comments),
+                            ("--oneline", *oneline),
+                            ("--timeline", *timeline),
+                        ];
+                        if let Some((flag, _)) = other_view_flags.iter().find(|(_, set)| *set) {
+                            anyhow::bail!(
+                            "`aida history {}` is its own view; {flag} selects a different one. \
+                             Drop {flag}, or run plain `aida history` with it",
+                            view.name()
+                        );
+                        }
+                        let status = args
+                            .status
+                            .as_deref()
+                            .map(|raw| self::resolve_status_filter("--status", raw))
+                            .transpose()?;
+                        let query = crate::history_views::ViewQuery {
+                            since: since.clone(),
+                            until: until.clone(),
+                            author: author.clone(),
+                            max_commits: *max_commits,
+                            limit: limit_flag,
+                            all_events: args.all_events,
+                            oldest_first: args.oldest_first,
+                            filters: crate::history_views::ViewFilters {
+                                req_type: r#type.clone(),
+                                priority: args.priority.clone(),
+                                tags: args.tags.clone(),
+                                status,
+                                archive: if *all {
+                                    aida_core::ArchiveFilter::Both
+                                } else if *archived {
+                                    aida_core::ArchiveFilter::ArchivedOnly
+                                } else {
+                                    aida_core::ArchiveFilter::NonArchivedOnly
+                                },
+                                defer: if *all || *archived {
+                                    aida_core::DeferFilter::Both
+                                } else if *deferred {
+                                    aida_core::DeferFilter::DeferredOnly
+                                } else {
+                                    aida_core::DeferFilter::NonDeferredOnly
+                                },
+                                include_meta: *include_meta,
+                            },
+                        };
+                        let json = *json || args.json || crate::output_format_is_json();
+                        return crate::command_registry::returned(crate::history_views::run(
+                            backend, store_path, view, &query, json,
+                        ));
+                    }
+                    if template.is_some()
+                        && (*json
+                            || matches!(
+                                crate::output_format_override(),
+                                Some(
+                                    crate::cli::OutputFormat::Json | crate::cli::OutputFormat::Toon
+                                )
+                            )
+                            || matches!(cmd, Some(HistoryCommand::Events { .. })))
+                    {
+                        anyhow::bail!("invalid combination: --template requires human output and cannot be combined with events; use --format human and omit events");
+                    }
+                    let layout = template
+                        .as_deref()
+                        .map(|raw| templates.as_ref().unwrap().resolve(raw))
+                        .transpose()?;
+                    let selected_fields = fields
+                        .as_deref()
+                        .map(crate::history_layout::fields)
+                        .transpose()?;
+                    if let Some(target) = save_as_template {
+                        templates.as_ref().unwrap().validate_save(
+                            target,
+                            template.as_deref(),
+                            *force,
+                        )?;
+                    }
+                    let oneline = &(*oneline || matches!(layout, Some(Layout::Oneline)));
+                    let custom_feed =
+                        matches!(layout, Some(Layout::Custom(_))) || selected_fields.is_some();
+                    // TASK-1480: `aida history <SPEC-ID>` is shorthand for `aida
+                    // history --id <SPEC-ID>` — clap keeps them mutually exclusive
+                    // (`conflicts_with`), so at most one is ever set here.
+                    // trace:TASK-1480 | ai:claude
+                    let requested_id = id.as_ref().or(spec.as_ref());
+                    // STORY-1436: `--kind` reads the local event feed (non-actions
+                    // included) rather than the spec git log. trace:STORY-1436 | ai:claude
+                    // BUG-1631: `--json` / `--format json` is the events feed's
+                    // JSON projection. trace:BUG-1631 | ai:claude
+                    let json = *json || crate::output_format_is_json();
+                    if let Some(kind) = kind {
+                        if json {
+                            anyhow::bail!(
+                            "`aida history --kind` has no JSON projection; use `--format human` or `--format toon`"
+                        );
+                        }
+                        return crate::command_registry::returned(crate::history_kind_report(
+                            kind,
+                            since.as_deref(),
+                            until.as_deref(),
+                            author.as_deref(),
+                            *limit,
+                        ));
+                    }
+                    let explicit_events = match cmd {
+                        Some(HistoryCommand::Events { .. }) => true,
+                        Some(HistoryCommand::Templates { .. }) => unreachable!(),
+                        // trace:STORY-1664 | ai:claude — the list views returned above.
+                        Some(_) => unreachable!(),
+                        None => {
+                            if *events {
+                                note_hidden_alias(
+                                    concat!("aida history ", "--events"),
+                                    "aida history events",
+                                );
+                            }
+                            // trace:TASK-1480 | ai:claude — `--full` is the
+                            // discoverable, non-hidden spelling of the same mode.
+                            *events || *full || matches!(layout, Some(Layout::Full)) || custom_feed
+                        }
+                    };
+                    // TASK-1512: `--to`/`--from` take the status spellings `aida
+                    // edit --status` does; an unknown one fails before any git walk.
+                    // They and `--opened` are event selectors like `--shipped`:
+                    // always the events feed, on the 250-commit default window.
+                    // trace:TASK-1512 | ai:claude
+                    let to_status = to
+                        .as_deref()
+                        .map(|raw| self::resolve_status_filter("--to", raw))
+                        .transpose()?;
+                    let from_status = from
+                        .as_deref()
+                        .map(|raw| self::resolve_status_filter("--from", raw))
+                        .transpose()?;
+                    self::validate_transition_pair(
+                        from_status.as_deref(),
+                        to_status.as_deref(),
+                        "--from",
+                        "--to",
+                    )?;
+                    let event_selector =
+                        *shipped || *opened || to_status.is_some() || from_status.is_some();
+                    // STORY-1650: a query with no SPEC-ID, no feed (`events`,
+                    // `--full`, a custom layout) and no per-event flag (`--shipped`,
+                    // `--status-changes`, `--comments`, `--oneline`) is the bare
+                    // view: the status flow, or the digest with `--digest`.
+                    // `--to`/`--from`/`--opened` narrow the flow as they narrow the
+                    // feed; `--json` picks the flow's JSON.
+                    // trace:STORY-1650 | ai:claude
+                    if *digest && explicit_events {
+                        anyhow::bail!(
+                            "invalid combination: --digest is the per-requirement view and the \
+                         `events` feed is the per-event view; pass one or the other"
+                        );
+                    }
+                    let bare = requested_id.is_none()
+                        && !explicit_events
+                        && !*shipped
+                        && !*status_changes
+                        && !*comments
+                        && !*oneline;
+                    let bare_view = if *digest {
+                        history::BareView::Digest
+                    } else {
+                        history::BareView::Flow
+                    };
+                    // BUG-1635: per-event flags (`--status-changes`, `--comments`,
+                    // `--oneline`, `--json`) switch a multi-spec query to the events
+                    // feed instead of being silently ignored by the digest; with a
+                    // SPEC-ID they shape the status-progression view instead.
+                    // trace:BUG-1635 | ai:claude
+                    let events = !bare
+                        && self::resolve_events_mode(
+                            explicit_events,
+                            requested_id.is_some(),
+                            event_selector,
+                            *status_changes,
+                            *comments,
+                            *oneline,
+                            json,
+                        );
+                    // trace:FR-1-037 | ai:claude
+                    // Default max_commits scales differently per mode: digest only
+                    // touches each commit once (cheap, scan deeper), events shells
+                    // to git per file per commit (expensive, scan shallow).
+                    // BUG-1635: chosen by mode, not output format; see
+                    // `history::default_max_commits`. trace:BUG-1635 | ai:claude
+                    // STORY-1650: the bare view's JSON (flow or digest) walks the
+                    // same 250-commit window as its human and TOON output.
+                    let default_max = self::default_max_commits(
+                        *limit,
+                        explicit_events,
+                        requested_id.is_some(),
+                        json && !bare,
+                        event_selector,
+                        *status_changes,
+                        *comments,
+                        *oneline,
+                    );
+                    // BUG-1617: did the caller pin the window themselves? Gates the
+                    // "window ran out" notice — an explicit --max-commits means they
+                    // already know it's narrow. trace:BUG-1617 | ai:claude
+                    let max_commits_explicit = max_commits.is_some();
+                    let max = max_commits.unwrap_or(default_max);
+                    // STORY-441: archive axis replaces TASK-64's terminal-status
+                    // hide. Default surfaces non-archived rows; `--all` widens to
+                    // the union; `--archived` narrows to archived-only. When
+                    // `--id <ID>` was passed, the user named a single spec so we
+                    // bypass archive filtering for that spec's timeline.
+                    // trace:STORY-441 | ai:claude
+                    let archive = if requested_id.is_some() || *all {
+                        aida_core::ArchiveFilter::Both
+                    } else if *archived {
+                        aida_core::ArchiveFilter::ArchivedOnly
+                    } else {
+                        aida_core::ArchiveFilter::NonArchivedOnly
+                    };
+                    // STORY-584: parallel defer axis. `--id` bypasses (single-spec
+                    // timeline); `--all` and `--archived` keep it open so those audits
+                    // are complete; `--deferred` narrows to the shelf; default hides it.
+                    // trace:STORY-584 | ai:claude
+                    let defer = if requested_id.is_some() || *all || *archived {
+                        aida_core::DeferFilter::Both
+                    } else if *deferred {
+                        aida_core::DeferFilter::DeferredOnly
+                    } else {
+                        aida_core::DeferFilter::NonDeferredOnly
+                    };
+                    // Build the set of archived spec_ids the caller's archive filter
+                    // should hide. Cheap: one indexed SELECT. Empty when archive is
+                    // Both (nothing to hide) or ArchivedOnly (handled by the
+                    // include-set below). trace:STORY-441 | ai:claude
+                    let archived_specs: std::collections::HashSet<String> = match archive {
+                        aida_core::ArchiveFilter::NonArchivedOnly => backend
+                            .list_summaries(&aida_core::ListFilter {
+                                archive: aida_core::ArchiveFilter::ArchivedOnly,
+                                ..Default::default()
+                            })?
+                            .into_iter()
+                            .filter_map(|s| s.spec_id)
+                            .collect(),
+                        _ => std::collections::HashSet::new(),
+                    };
+                    let archived_only_specs: Option<std::collections::HashSet<String>> =
+                        match archive {
+                            aida_core::ArchiveFilter::ArchivedOnly => Some(
+                                backend
+                                    .list_summaries(&aida_core::ListFilter {
+                                        archive: aida_core::ArchiveFilter::ArchivedOnly,
+                                        ..Default::default()
+                                    })?
+                                    .into_iter()
+                                    .filter_map(|s| s.spec_id)
+                                    .collect(),
+                            ),
+                            _ => None,
+                        };
+                    // STORY-584: the same two sets on the defer axis. The DeferredOnly
+                    // ListFilter honors both the flag and legacy `deferred:*` tags.
+                    // trace:STORY-584 | ai:claude
+                    let deferred_specs: std::collections::HashSet<String> = match defer {
+                        aida_core::DeferFilter::NonDeferredOnly => backend
+                            .list_summaries(&aida_core::ListFilter {
+                                defer: aida_core::DeferFilter::DeferredOnly,
+                                archive: aida_core::ArchiveFilter::Both,
+                                ..Default::default()
+                            })?
+                            .into_iter()
+                            .filter_map(|s| s.spec_id)
+                            .collect(),
+                        _ => std::collections::HashSet::new(),
+                    };
+                    let deferred_only_specs: Option<std::collections::HashSet<String>> = match defer
+                    {
+                        aida_core::DeferFilter::DeferredOnly => Some(
+                            backend
+                                .list_summaries(&aida_core::ListFilter {
+                                    defer: aida_core::DeferFilter::DeferredOnly,
+                                    archive: aida_core::ArchiveFilter::Both,
+                                    ..Default::default()
+                                })?
+                                .into_iter()
+                                .filter_map(|s| s.spec_id)
+                                .collect(),
+                        ),
+                        _ => None,
+                    };
+                    // BUG-588: `aida history` filters by spec_id (the orphan-branch git
+                    // log is the source-of-truth for spec-state time series, and each
+                    // event is keyed by the YAML's spec_id). But `aida show` prints the
+                    // raw UUID, and a user who copies that into `--id <uuid>` got an
+                    // empty "(no recent activity)" — the filter never matched because it
+                    // only ever compared against spec_id. Resolve a UUID (or agreed_id)
+                    // to its canonical spec_id here so the documented invocation works.
+                    // Also refuses early and clearly on a malformed id or one that
+                    // resolves to more than one requirement (TASK-1480's "invalid or
+                    // ambiguous IDs get a clear error" acceptance bar); a well-formed
+                    // id that just isn't live right now (deleted, or never existed) is
+                    // NOT rejected here — `history::run` decides that once it knows
+                    // whether the id has any recorded history at all.
+                    // trace:BUG-588 | ai:claude
+                    // trace:TASK-1480 | ai:claude
+                    let id_filter = match requested_id {
+                        Some(raw) => Some(resolve_history_id_filter(backend, raw)?),
+                        None => None,
+                    };
+                    // STORY-1478: the per-spec work/wait/unknown timeline. Checked
+                    // here, right after the ID resolves, because it answers a
+                    // different question from every other history view and shares
+                    // none of their windowing.
+                    // trace:STORY-1478 | ai:claude
+                    if *timeline {
+                        let Some(spec_id) = id_filter.as_deref() else {
+                            anyhow::bail!(
+                                "`aida history --timeline` needs one requirement: \
+                             `aida history <SPEC-ID> --timeline`"
+                            );
+                        };
+                        if matches!(cmd, Some(HistoryCommand::Events { .. })) {
+                            anyhow::bail!(
+                            "`--timeline` and the `events` feed are different views; pass one or the other"
+                        );
+                        }
+                        // A narrowed window would still print totals that look whole.
+                        if limit_flag.is_some_and(|n| n != history_timeline::HISTORY_DEFAULT_LIMIT)
+                        {
+                            anyhow::bail!(
+                            "`--timeline` covers a requirement's whole recorded life, so `--limit` \
+                             does not apply to it"
+                        );
+                        }
+                        let output =
+                            history::HistoryOutput::select(json, false, crate::agent_output_mode());
+                        // Opt out of the forge lookup for an offline or fixture run.
+                        let forge_enabled = std::env::var("AIDA_TIMELINE_NO_FORGE")
+                            .ok()
+                            .filter(|v| !v.trim().is_empty() && v != "0")
+                            .is_none();
+                        return crate::command_registry::returned(history_timeline::run(
+                            store_path,
+                            spec_id,
+                            output,
+                            forge_enabled,
+                        ));
+                    }
+                    // TASK-1480: a single spec (`--id` / positional SPEC-ID) without
+                    // `--full` defaults to the status-progression view — status
+                    // transitions only, so `aida history TASK-1480` reads as a
+                    // timeline rather than a single digest row. An explicit
+                    // `--status-changes`/`--comments` narrows exactly as it always
+                    // has; `--full` (or the `events` subcommand) opts back into the
+                    // complete trail. trace:TASK-1480 | ai:claude
+                    let single_spec_default_progress =
+                        id_filter.is_some() && !events && !*status_changes && !*comments;
+                    let status_changes_only = *status_changes || single_spec_default_progress;
+                    let opts = history::HistoryOpts {
+                        limit: *limit,
+                        max_commits: max.max(*limit),
+                        max_commits_explicit,
+                        // TASK-507: --shipped is an events-mode filter; implied by
+                        // `resolve_events_mode` above.
+                        events_mode: events,
+                        id_filter,
+                        type_filter: r#type.clone(),
+                        author_filter: author.clone(),
+                        since: since.clone(),
+                        until: until.clone(),
+                        status_changes_only,
+                        shipped_only: *shipped,
+                        // trace:TASK-1512 | ai:claude
+                        to_status,
+                        from_status,
+                        opened_only: *opened,
+                        comments_only: *comments,
+                        oneline: *oneline,
+                        archived_specs,
+                        archived_only_specs,
+                        deferred_specs,
+                        deferred_only_specs,
+                        // STORY-737 (delight #4): hide META by default. An explicit
+                        // `--type meta` (or `--include-meta`) keeps them visible — the
+                        // type filter is honored above, so we only need to suppress the
+                        // default-view drowning. trace:STORY-737 | ai:claude
+                        exclude_meta: history_should_exclude_meta(*include_meta, r#type.as_deref()),
+                    };
+                    if custom_feed {
+                        // All parsing, ID/window validation and collection succeed before mutation.
+                        let records = self::collect_event_records(store_path, &opts)?;
+                        let output = if let Some(Layout::Custom(template)) = &layout {
+                            template.render_records(&records)?
+                        } else if json {
+                            format!(
+                                "{}\n",
+                                crate::history_layout::project_json(
+                                    &records,
+                                    selected_fields.as_ref().unwrap()
+                                )?
+                            )
+                        } else {
+                            crate::history_layout::project_table(
+                                &records,
+                                selected_fields.as_ref().unwrap(),
+                                crate::agent_output_mode(),
+                            )
+                        };
+                        if let Some(target) = save_as_template {
+                            templates.as_ref().unwrap().save(
+                                target,
+                                template.as_deref().unwrap(),
+                                *force,
+                            )?;
+                        }
+                        print!("{output}");
+                    } else {
+                        self::run(store_path, &opts, json, bare_view)?;
+                    }
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                HistoryArgs {
+                    kind: Some(kind),
+                    since,
+                    until,
+                    author,
+                    limit,
+                    ..
+                } => {
+                    // STORY-1436: the event feed is local runtime state, readable
+                    // without the orphan store. trace:STORY-1436 | ai:claude
+                    history_kind_report(
+                        kind,
+                        since.as_deref(),
+                        until.as_deref(),
+                        author.as_deref(),
+                        effective_history_limit(*limit),
+                    )?;
+                }
+                HistoryArgs { .. } => {
+                    // History walks the orphan branch; only meaningful in git-canonical
+                    // mode, which is dispatched via handle_git_backend_command. Falling
+                    // through to legacy means the user is on a SQLite-only project.
+                    anyhow::bail!(
+                        "aida history requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida history` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static HISTORY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "history",
+        help_after: "search",
+        command: <HistoryArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_history),
+    };

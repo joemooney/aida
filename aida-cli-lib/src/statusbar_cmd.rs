@@ -657,6 +657,7 @@ pub(crate) static STATUSBAR: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: true,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_statusbar),
     };

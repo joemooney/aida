@@ -273,6 +273,108 @@ pub(crate) static ORCHESTRATOR: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_orchestrator),
+    };
+
+/// Emit the seven-row finish-state preamble (Spec / Branch / PR / Drain
+/// / Tests / Fmt / Plan) deterministically. One source of truth for
+/// every `/aida-pickup` and `/aida-pr` next-steps template — the rows
+/// used to be filled in by hand from `git status`, `gh pr view`,
+/// `aida show`, `aida session show`, and drifted between sibling
+/// skills. Hidden: skill-internal, not a daily-driver command.
+// trace:TASK-391 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "state-snapshot", hide = true)]
+pub(crate) struct StateSnapshotArgs {
+    /// SPEC-ID whose title + status appear on the Spec row.
+    #[clap(long)]
+    pub spec: String,
+
+    /// Free-form summary of the last `cargo test` run, used as the
+    /// Tests row. Default `"not run"` — the caller (skill) is the
+    /// authoritative source for transient runtime state.
+    #[clap(long, default_value = "not run")]
+    pub tests: String,
+
+    /// Free-form summary of the last `cargo fmt --check`, used as the
+    /// Fmt row. Default `"not run"` — same rationale as `--tests`.
+    #[clap(long, default_value = "not run")]
+    pub fmt: String,
+
+    /// Emit the snapshot as JSON instead of the fixed-width text block.
+    /// For Step 5b finding metadata (machine-readable snapshot beside
+    /// the finding's prose body).
+    #[clap(long)]
+    pub json: bool,
+}
+
+fn run_state_snapshot(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <StateSnapshotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                StateSnapshotArgs {
+                    spec,
+                    tests,
+                    fmt,
+                    json,
+                } => {
+                    handle_state_snapshot_command(backend, store_path, spec, tests, fmt, *json)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                StateSnapshotArgs { .. } => {
+                    // The finish-state preamble's Spec row needs git-canonical
+                    // metadata (spec_id + status). trace:TASK-391 | ai:claude
+                    anyhow::bail!(
+                        "aida state-snapshot requires the distributed git-canonical \
+                     store (run `aida init` to migrate, or this project is on \
+                     the deprecated --centralized backend)"
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida state-snapshot` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STATE_SNAPSHOT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "state-snapshot",
+        help_after: "agent",
+        command: <StateSnapshotArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_state_snapshot),
     };

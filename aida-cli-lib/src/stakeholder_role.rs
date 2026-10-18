@@ -175,30 +175,22 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
             }
         }
         "requester" => {
-            if let Command::Add {
-                status,
-                r#type,
-                owner,
-                feature,
-                tags,
-                parent,
-                queue,
-                batch,
-                r#for,
-                interactive,
-                ..
-            } = command
-            {
-                if *interactive {
+            // `aida add` is the requester's one intake write. The refusals run
+            // here, before dispatch; the coercions (draft status, default
+            // type, intake tag) run in the add handler through
+            // `apply_requester_intake`, since parsed args cannot be rewritten
+            // in place. trace:STORY-1728 | ai:claude
+            if let Some(add) = requester_add_args(command) {
+                if add.interactive {
                     return Err(stakeholder_refusal("requester", "interactive add"));
                 }
-                if *queue || batch.is_some() || r#for.is_some() {
+                if add.queue || add.batch.is_some() || add.r#for.is_some() {
                     return Err(stakeholder_refusal("requester", "queueing intake"));
                 }
                 let forbidden_fields = [
-                    ("parent", parent.is_some()),
-                    ("feature", feature.is_some()),
-                    ("owner", owner.is_some()),
+                    ("parent", add.parent.is_some()),
+                    ("feature", add.feature.is_some()),
+                    ("owner", add.owner.is_some()),
                 ];
                 if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
                     forbidden_fields
@@ -210,18 +202,13 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
                         "setting parent, feature, or owner during intake",
                     ));
                 }
-                let req_type = parse_requester_add_type(r#type.as_deref())?;
+                let req_type = parse_requester_add_type(add.r#type.as_deref())?;
                 if !requester_add_type_allowed(&req_type) {
                     return Err(stakeholder_refusal(
                         "requester",
                         "adding anything except change-request, bug, or user specs",
                     ));
                 }
-                *status = Some("draft".to_string());
-                if r#type.is_none() {
-                    *r#type = Some("change-request".to_string());
-                }
-                add_csv_tag(tags, "intake:requester");
                 return Ok(());
             }
             let action = stakeholder_cli_action(command);
@@ -235,6 +222,34 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
         _ => {}
     }
     Ok(())
+}
+
+/// The parsed `aida add` args, when `command` is `aida add`.
+// trace:STORY-1728 | ai:claude
+fn requester_add_args(command: &Command) -> Option<crate::requirements_cli::AddArgs> {
+    let Command::Registered(invocation) = command;
+    (invocation.reg.name == "add")
+        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches).ok())
+        .flatten()
+}
+
+/// Requester intake lands as a Draft change-request (unless typed) tagged
+/// for advisor grooming. Applied by the add handler when the active
+/// stakeholder role is `requester`; the refusals ran before dispatch.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn apply_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    if active_stakeholder_role().as_deref() != Some("requester") {
+        return;
+    }
+    coerce_requester_intake(add);
+}
+
+pub(crate) fn coerce_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    add.status = Some("draft".to_string());
+    if add.r#type.is_none() {
+        add.r#type = Some("change-request".to_string());
+    }
+    add_csv_tag(&mut add.tags, "intake:requester");
 }
 
 #[cfg(test)]
@@ -304,72 +319,7 @@ mod stakeholder_cli_policy_tests {
 }
 
 pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
-    // trace:STORY-1728 | ai:claude
-    if let Command::Registered(invocation) = command {
-        return invocation.policy().stakeholder;
-    }
-    if matches!(command, Command::Add { .. }) {
-        StakeholderAction::Intake
-    } else if matches!(
-        command,
-        Command::List { .. }
-            | Command::Show { .. }
-            | Command::Status { .. }
-            | Command::Graph { .. }
-            | Command::Search { .. }
-            | Command::Digest { .. }
-            | Command::History { .. }
-            | Command::McpServe
-            | Command::Awaiting { .. }
-            | Command::Protocol(_)
-            | Command::Queue(QueueCommand::List { .. })
-            | Command::Queue(QueueCommand::Next { .. })
-            | Command::Queue(QueueCommand::Progress { .. })
-            | Command::Mailbox(MailboxCommand::Inbox { .. })
-            | Command::Mailbox(MailboxCommand::Thread { .. })
-            | Command::Brief {
-                cmd: Some(BriefCommand::List { .. } | BriefCommand::Read { .. }),
-                ..
-            }
-            | Command::Findings {
-                cmd: None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }),
-            }
-            | Command::Comment(CommentCommand::List { .. })
-            | Command::Cache(CacheCommand::Status)
-            // trace:BUG-1486 | ai:claude — `aida db` gates per-verb: these
-            // are pure reads (path/info/status printouts, block
-            // list/status/verify reports) and must not inherit the
-            // "refusing database writes" refusal meant for the genuinely
-            // mutating verbs (Migrate/Sync/MergeGate/ReconcileStatus/
-            // Block::Claim/...), which stay gated below via the
-            // `Command::Db(_) => StakeholderAction::Database` fail-closed
-            // default.
-            | Command::Db(DbCommand::Path)
-            | Command::Db(DbCommand::Info)
-            | Command::Db(DbCommand::Status)
-            | Command::Db(DbCommand::Block {
-                subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
-            })
-            | Command::Usage { .. }
-            | Command::Criteria { .. }
-    ) {
-        StakeholderAction::Read
-    } else {
-        match command {
-            Command::Add { .. } => StakeholderAction::Intake,
-            Command::Edit { .. } => StakeholderAction::EditRequirement,
-            Command::Queue(_) => StakeholderAction::Queue,
-            Command::Db(DbCommand::MergeGate) => StakeholderAction::MergeGate,
-            Command::Db(_) => StakeholderAction::Database,
-            Command::Rel(_) => StakeholderAction::Relationship,
-            Command::Comment(_) => StakeholderAction::Comment,
-            Command::Type(_) => StakeholderAction::Type,
-            Command::Trace(_) => StakeholderAction::Trace,
-            Command::Findings { .. } => StakeholderAction::Finding,
-            Command::Questions { .. } => StakeholderAction::Question,
-            Command::Config(_) => StakeholderAction::Configuration,
-            Command::Zen { .. } | Command::Do { .. } => StakeholderAction::BuildLoop,
-            _ => StakeholderAction::Write,
-        }
-    }
+    // Every command answers through its registration. trace:STORY-1728 | ai:claude
+    let Command::Registered(invocation) = command;
+    invocation.policy().stakeholder
 }

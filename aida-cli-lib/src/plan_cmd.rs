@@ -1841,14 +1841,14 @@ pub(crate) static PLAN: crate::command_registry::CommandReg = crate::command_reg
     name: "plan",
     help_after: "lifecycle",
     command: <PlanArgs as clap::CommandFactory>::command,
-    policy: plan_policy,
+    policy: plan_cli_policy,
     run: crate::command_registry::Handler::Early(run_plan),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Write. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn plan_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn plan_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::PlanCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <PlanArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -1865,5 +1865,6 @@ fn plan_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy
         },
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

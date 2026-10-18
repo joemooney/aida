@@ -875,6 +875,7 @@ pub(crate) static STACK: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_stack),
     };
@@ -914,6 +915,7 @@ pub(crate) static HEADLESS: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_headless),
     };
@@ -949,14 +951,14 @@ pub(crate) static WORKER: crate::command_registry::CommandReg =
         name: "worker",
         help_after: "headless",
         command: <WorkerArgs as clap::CommandFactory>::command,
-        policy: worker_policy,
+        policy: worker_cli_policy,
         run: crate::command_registry::Handler::Early(run_worker),
     };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Write. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn worker_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn worker_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::WorkerCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <WorkerArgs as clap::FromArgMatches>::from_arg_matches(matches)
@@ -969,5 +971,6 @@ fn worker_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPoli
         },
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

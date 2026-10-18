@@ -166,3 +166,70 @@ fn print_memory_drift_recommendation() {
     );
     println!();
 }
+
+/// Starter-memory-pack drift discovery (`aida memories check`)
+// trace:STORY-410 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "memories")]
+pub(crate) struct MemoriesArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::MemoriesCommand,
+}
+
+fn run_memories(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <MemoriesArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-410: `aida memories check` compares the local Claude Code memory
+            // pack to the binary's embedded master — no store access needed, so handle
+            // it before storage resolution (like init/upgrade). trace:STORY-410
+            if let MemoriesArgs {
+                inner: MemoriesCommand::Check { verbose, json },
+            } = &args
+            {
+                return crate::command_registry::returned(memories_cmd::handle_memories_check(
+                    *verbose, *json,
+                ));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            unreachable!("`aida memories` has no centralized-store form")
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MEMORIES: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "memories",
+        help_after: "init",
+        command: <MemoriesArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_memories),
+    };

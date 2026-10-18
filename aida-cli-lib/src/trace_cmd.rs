@@ -714,3 +714,134 @@ fn trace_sweep(
 
     Ok(())
 }
+
+/// Code-to-requirement traceability commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "trace")]
+#[clap(hide = true)]
+pub(crate) struct TraceArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::TraceCommand,
+}
+
+fn run_trace(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <TraceArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-498: `aida trace gate` is self-contained — it reads git for the
+            // commit range and self-loads the store via `load_store_for_lookup` to
+            // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
+            // subcommands still need the shared storage handle and fall through to the
+            // backend path). Exits non-zero on a dead/dangling reference.
+            // trace:STORY-498 | ai:claude
+            if let TraceArgs {
+                inner: TraceCommand::Gate { range, json },
+            } = &args
+            {
+                return crate::command_registry::returned(handle_trace_gate(
+                    range.as_deref(),
+                    *json,
+                ));
+            }
+            // STORY-499: `aida trace coverage` is self-contained the same way `gate` is
+            // — it reads git for the diff + range and self-loads the store to resolve
+            // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
+            // needs the shared storage handle. trace:STORY-499 | ai:claude
+            if let TraceArgs {
+                inner: TraceCommand::Coverage { range, json, block },
+            } = &args
+            {
+                return crate::command_registry::returned(handle_trace_coverage(
+                    range.as_deref(),
+                    *json,
+                    *block,
+                ));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // FR-267: trace commands must resolve spec ids against the resolved
+                // git store — including a SIBLING store in an `aida init --sibling`
+                // workspace. Previously `Command::Trace` fell through to the
+                // "not yet supported for git backend" catch-all, so `aida trace
+                // scan` / `aida trace list` only worked when the store lived inside
+                // the current repo. `store_path` here is whatever
+                // `detect_distributed_store` resolved (the sibling `../aida-store`
+                // for sibling-mode configs), and `Storage::new(<dir>)` delegates
+                // load/save to GitBackend — so the same store-resolution that
+                // already backs `aida add` / `aida show` now backs trace-id
+                // resolution too, regardless of which code repo's CWD invoked it.
+                // (MCP `show_requirement` already routed through the resolved
+                // store_path, so it needed no change.)
+                // trace:FR-267 | ai:claude
+                TraceArgs { inner: trace_cmd } => {
+                    let storage = Storage::new(store_path);
+                    self::handle_trace_command(trace_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                TraceArgs { inner: trace_cmd } => {
+                    self::handle_trace_command(trace_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida trace` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static TRACE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "trace",
+        help_after: "server",
+        command: <TraceArgs as clap::CommandFactory>::command,
+        policy: trace_cli_policy,
+        run: crate::command_registry::Handler::Store(run_trace),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn trace_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::TraceCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <TraceArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Trace,
+        per_write_auto_push: matches!(
+            inner,
+            Some(
+                TraceCommand::Add { .. }
+                    | TraceCommand::Remove { .. }
+                    | TraceCommand::Scan { update: true, .. }
+            )
+        ),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}

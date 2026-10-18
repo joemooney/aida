@@ -97,3 +97,62 @@ pub(crate) fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Resul
 
     Ok(())
 }
+
+/// Requirement type management commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "type", hide = true)]
+pub(crate) struct TypeArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::TypeCommand,
+}
+
+fn run_type(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <TypeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                TypeArgs { inner: type_cmd } => {
+                    self::handle_type_command(type_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida type` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static TYPE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "type",
+    help_after: "config",
+    command: <TypeArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Type,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_type),
+};

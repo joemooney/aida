@@ -146,6 +146,7 @@ pub(crate) static BG_FETCH: CommandReg = CommandReg {
         stakeholder: StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     },
     run: crate::command_registry::Handler::Early(|matches, _| {
         let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
@@ -190,3 +191,46 @@ pub(crate) fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()
     );
     Ok(())
 }
+
+/// Print the caller identity AIDA resolved — role, agent-type, agent-name,
+/// user-id, headless flag, ai-tool, and active session/scope — each line
+/// annotated with where the value came from (env var vs fallback vs
+/// default). Read-only: it runs the SAME resolvers the gating/queue/
+/// provenance code uses, so it answers "why did this refuse?" (role
+/// resolved to a default, not advisor, tripping the advisor-gate) and
+/// "why is my queue empty?" (your user/role identity differs from what
+/// queued the items). No project store is loaded; no state is written.
+///
+/// Hidden alias for `aida node whoami` (identity introspection lives under
+/// the `node` namespace; kept top-level for muscle memory).
+// trace:TASK-784
+// trace:TASK-851 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "whoami")]
+#[clap(hide = true)]
+pub(crate) struct WhoamiArgs {}
+
+// TASK-784: pure read of the caller-identity resolvers (env vars +
+// current_user_id + detect_agent_type). No project store needed.
+// trace:TASK-784
+fn run_whoami(
+    _matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    handle_whoami_command()
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WHOAMI: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "whoami",
+        help_after: "solo",
+        command: <WhoamiArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_whoami),
+    };

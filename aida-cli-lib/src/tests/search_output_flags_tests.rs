@@ -7,8 +7,11 @@ fn search_short_and_aliases_parse() {
     for flag in ["--short", "-q", "--ids-only", "--quiet"] {
         let cli = crate::command_registry::try_parse_from(["aida", "search", "auth", flag])
             .unwrap_or_else(|e| panic!("`{flag}` should parse: {e}"));
-        match cli.command {
-            Command::Search { short, json, .. } => {
+        match cli
+            .command
+            .registered::<crate::requirements_cli::SearchArgs>()
+        {
+            crate::requirements_cli::SearchArgs { short, json, .. } => {
                 assert!(short, "`{flag}` should set short");
                 assert!(!json, "`{flag}` should not set json");
             }
@@ -21,8 +24,11 @@ fn search_short_and_aliases_parse() {
 fn search_json_parses() {
     let cli =
         crate::command_registry::try_parse_from(["aida", "search", "auth", "--json"]).unwrap();
-    match cli.command {
-        Command::Search { short, json, .. } => {
+    match cli
+        .command
+        .registered::<crate::requirements_cli::SearchArgs>()
+    {
+        crate::requirements_cli::SearchArgs { short, json, .. } => {
             assert!(json);
             assert!(!short);
         }

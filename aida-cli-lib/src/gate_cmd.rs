@@ -219,8 +219,8 @@ mod tests {
             "well-formed,testable-acceptance",
         ])
         .unwrap();
-        match cli.command {
-            crate::cli::Command::Add { gates, .. } => {
+        match cli.command.registered::<crate::requirements_cli::AddArgs>() {
+            crate::requirements_cli::AddArgs { gates, .. } => {
                 assert_eq!(gates, vec!["well-formed", "testable-acceptance"])
             }
             other => panic!("unexpected {other:?}"),
@@ -262,6 +262,7 @@ pub(crate) static GATE: crate::command_registry::CommandReg = crate::command_reg
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     },
     run: crate::command_registry::Handler::Early(run_gate),
 };

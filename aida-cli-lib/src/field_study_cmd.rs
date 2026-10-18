@@ -320,3 +320,78 @@ fn field_study_trend_json(t: &Option<field_study::SpanTrend>) -> serde_json::Val
         None => serde_json::Value::Null,
     }
 }
+
+/// Observe-only rule-adherence field study: harvest stated-rule verdicts
+/// from the git log and report adherence vs task span. Opt-in, local-only.
+/// A research/power surface — hidden from top-level --help.
+// trace:SPIKE-67 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "field-study", hide = true)]
+pub(crate) struct FieldStudyArgs {
+    #[clap(subcommand)]
+    pub cmd: crate::cli::FieldStudyCommand,
+}
+
+fn run_field_study(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FieldStudyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                FieldStudyArgs { cmd } => {
+                    // trace:SPIKE-67 | ai:claude — observe-only rule-adherence study
+                    // over the git log; opt-in, local-only, no store load required.
+                    return crate::command_registry::returned(self::handle_field_study_command(
+                        cmd,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                FieldStudyArgs { cmd } => {
+                    // trace:SPIKE-67 | ai:claude — observe-only rule-adherence study
+                    // over the git log; opt-in, local-only.
+                    self::handle_field_study_command(cmd)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida field-study` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FIELD_STUDY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "field-study",
+        help_after: "metrics",
+        command: <FieldStudyArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_field_study),
+    };

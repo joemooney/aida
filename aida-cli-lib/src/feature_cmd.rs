@@ -225,3 +225,64 @@ pub(crate) fn handle_feature_command(cmd: &FeatureCommand, storage: &Storage) ->
 
     Ok(())
 }
+
+/// Feature management commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "feature")]
+#[clap(hide = true)]
+pub(crate) struct FeatureArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::FeatureCommand,
+}
+
+fn run_feature(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FeatureArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                FeatureArgs { inner: feature_cmd } => {
+                    self::handle_feature_command(feature_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida feature` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FEATURE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "feature",
+        help_after: "unassign",
+        command: <FeatureArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_feature),
+    };

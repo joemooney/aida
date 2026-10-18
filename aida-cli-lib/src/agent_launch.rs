@@ -5120,14 +5120,14 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
         name: "session",
         help_after: "role",
         command: <SessionArgs as clap::CommandFactory>::command,
-        policy: session_policy,
+        policy: session_cli_policy,
         run: crate::command_registry::Handler::Early(run_session),
     };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Session. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn session_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::SessionCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -5144,5 +5144,81 @@ fn session_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPol
         },
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: true,
     }
 }
+
+/// Launch and track AI agent processes for this AIDA project.
+// trace:STORY-432 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "agent")]
+pub(crate) struct AgentArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::AgentCommand,
+}
+
+fn run_agent(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // EPIC-31 agent launchers supervise external CLIs and write process
+            // registry state directly; no requirement store handle needed.
+            // trace:STORY-432 | ai:codex
+            if let AgentArgs { inner: agent_cmd } = &args {
+                return crate::command_registry::returned(handle_agent_command(agent_cmd));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                AgentArgs { inner: agent_cmd } => {
+                    return crate::command_registry::returned(handle_agent_command(agent_cmd));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                AgentArgs { inner: agent_cmd } => {
+                    handle_agent_command(agent_cmd)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida agent` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AGENT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "agent",
+        help_after: "compete",
+        command: <AgentArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_agent),
+    };

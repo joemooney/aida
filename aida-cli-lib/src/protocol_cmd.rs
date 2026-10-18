@@ -286,3 +286,78 @@ mod tests {
         }
     }
 }
+
+/// Inspect the META-backed work protocol for each requirement type.
+// trace:STORY-1221 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "protocol")]
+pub(crate) struct ProtocolArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::ProtocolCommand,
+}
+
+fn run_protocol(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ProtocolArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ProtocolArgs {
+                    inner: protocol_cmd,
+                } => {
+                    let storage = Storage::new(store_path);
+                    return crate::command_registry::returned(self::handle_protocol_command(
+                        protocol_cmd,
+                        &storage,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ProtocolArgs { inner: _ } => {
+                    anyhow::bail!(
+                        "`aida protocol` is available in the default (distributed) mode."
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida protocol` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PROTOCOL: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "protocol",
+        help_after: "record",
+        command: <ProtocolArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_protocol),
+    };

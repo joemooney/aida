@@ -491,8 +491,8 @@ mod tests {
         ] {
             let cli = crate::command_registry::try_parse_from(args).unwrap();
             assert!(matches!(
-                cli.command,
-                Command::Usage {
+                cli.command.registered::<crate::usage_cmd::UsageArgs>(),
+                crate::usage_cmd::UsageArgs {
                     action: Some(UsageCommand::Show {
                         provenance: true,
                         cost: false,
@@ -506,8 +506,8 @@ mod tests {
             crate::command_registry::try_parse_from(["aida", "usage", "show", "TASK-1", "--cost"])
                 .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Usage {
+            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
+            crate::usage_cmd::UsageArgs {
                 action: Some(UsageCommand::Show {
                     provenance: false,
                     cost: true,

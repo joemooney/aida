@@ -705,7 +705,7 @@ mod tests {
             "--copy",
         ])
         .unwrap();
-        let Command::Report {
+        let crate::report_cmd::ReportArgs {
             recheck: false,
             command:
                 Some(ReportCommand::Bug {
@@ -714,7 +714,7 @@ mod tests {
                     copy: true,
                     no_file: false,
                 }),
-        } = cli.command
+        } = cli.command.registered::<crate::report_cmd::ReportArgs>()
         else {
             panic!("expected report bug");
         };
@@ -730,8 +730,8 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Report {
+            cli.command.registered::<crate::report_cmd::ReportArgs>(),
+            crate::report_cmd::ReportArgs {
                 recheck: false,
                 command: Some(ReportCommand::Idea { .. })
             }
@@ -739,8 +739,8 @@ mod tests {
 
         let cli = crate::command_registry::try_parse_from(["aida", "report", "--recheck"]).unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Report {
+            cli.command.registered::<crate::report_cmd::ReportArgs>(),
+            crate::report_cmd::ReportArgs {
                 recheck: true,
                 command: None
             }
@@ -1044,3 +1044,90 @@ mod tests {
         assert_ne!(one, store_objects_fingerprint(&store).unwrap());
     }
 }
+
+/// Report generation commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "report")]
+#[clap(hide = true)]
+pub(crate) struct ReportArgs {
+    /// Recheck locally filed upstream AIDA reports against this binary.
+    #[clap(long)]
+    pub recheck: bool,
+
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::ReportCommand>,
+}
+
+fn run_report(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ReportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ReportArgs { recheck, command } => {
+                    let storage = Storage::new(store_path.to_path_buf());
+                    let db_path_str = store_path.display().to_string();
+                    return crate::command_registry::returned(self::handle_report_command(
+                        *recheck,
+                        command.as_ref(),
+                        &storage,
+                        &db_path_str,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ReportArgs {
+                    recheck,
+                    command: report_cmd,
+                } => {
+                    let db_path_str = requirements_path.display().to_string();
+                    self::handle_report_command(
+                        *recheck,
+                        report_cmd.as_ref(),
+                        &storage,
+                        &db_path_str,
+                    )?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida report` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static REPORT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "report",
+        help_after: "review",
+        command: <ReportArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_report),
+    };

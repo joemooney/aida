@@ -494,6 +494,69 @@ pub(crate) static HELP_ALL: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_help_all),
+    };
+
+/// Open the user guide in the default browser
+#[derive(clap::Parser, Debug)]
+#[clap(name = "user-guide")]
+#[clap(hide = true)]
+pub(crate) struct UserGuideArgs {
+    /// Open in dark mode
+    #[clap(long)]
+    pub dark: bool,
+}
+
+fn run_user_guide(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <UserGuideArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                UserGuideArgs { dark } => {
+                    open_user_guide(*dark)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida user-guide` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static USER_GUIDE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "user-guide",
+        help_after: "import",
+        command: <UserGuideArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_user_guide),
     };

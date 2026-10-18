@@ -485,3 +485,79 @@ pub(crate) fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Pat
 
     Ok(())
 }
+
+/// Manage per-clone node identity (acquire/release node ids in the
+/// shared registry, list registered clones). Each clone of an AIDA
+/// project gets a unique node id; that id is the namespace for
+/// node-aware spec ids (e.g. `FR-<node>-<NNN>`) until the merge gate
+/// promotes them to short agreed-ids.
+// trace:EPIC-1-052 | ai:claude
+// trace:TASK-487 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "node")]
+pub(crate) struct NodeArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::NodeCommand,
+}
+
+fn run_node(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <NodeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                NodeArgs { inner: node_cmd } => {
+                    return crate::command_registry::returned(self::handle_node_command(
+                        node_cmd, store_path,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                NodeArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida node commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida node` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static NODE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "node",
+    help_after: "mailbox",
+    command: <NodeArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_node),
+};

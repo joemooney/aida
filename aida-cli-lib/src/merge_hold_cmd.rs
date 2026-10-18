@@ -1152,6 +1152,7 @@ pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_merge_lock),
     };
@@ -1196,6 +1197,7 @@ pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_merge_hold),
     };

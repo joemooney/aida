@@ -396,3 +396,268 @@ fn delete_comment(storage: &Storage, req_id: &str, comment_id: &str) -> Result<(
     println!("{}", "Comment deleted successfully".green());
     Ok(())
 }
+
+/// Manage comments on requirements
+#[derive(clap::Parser, Debug)]
+#[clap(name = "comment")]
+pub(crate) struct CommentArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::CommentCommand,
+}
+
+fn run_comment(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <CommentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                CommentArgs {
+                    inner:
+                        CommentCommand::Add {
+                            id: req_id,
+                            content,
+                            content_positional,
+                            body_file,
+                            stdin,
+                            author,
+                            relayed_from,
+                            ..
+                        },
+                } => {
+                    // BUG-68: lookup first, record activity after the body
+                    // sanity check below also passes. trace:BUG-68 | ai:claude
+                    // BUG-1535: refuse an ambiguous id. trace:BUG-1535 | ai:claude
+                    let mut req =
+                        backend
+                            .get_requirement_unambiguous(req_id)?
+                            .ok_or_else(|| {
+                                not_found::requirement_not_found(req_id, Some(store_path))
+                            })?;
+
+                    // `aida comment add <REQ> "text"` — the text comes through as
+                    // `content_positional`. Earlier the git-backend dispatch only
+                    // looked at `--content`, so positional invocations silently
+                    // wrote empty comments. trace:BUG-28 | ai:claude
+                    let body = resolve_comment_body(
+                        content.clone().or_else(|| content_positional.clone()),
+                        body_file.as_deref(),
+                        *stdin,
+                    )?;
+                    if body.trim().is_empty() {
+                        anyhow::bail!(
+                        "comment body required: pass it positionally `aida comment add {} \"...\"` \
+                         or via `--content`",
+                        req_id
+                    );
+                    }
+
+                    let now = chrono::Utc::now();
+                    let comment_author = author.clone().unwrap_or_else(get_default_author);
+                    // STORY-644: capture @mentions before `body` is moved into the
+                    // comment, so we can notify each mentioned user after the write
+                    // lands. trace:STORY-644 | ai:claude
+                    let mentions = extract_mentions(&body);
+                    let mention_body = body.clone();
+                    let comment = aida_core::Comment {
+                        id: Uuid::now_v7(),
+                        content: body,
+                        author: comment_author.clone(),
+                        created_at: now,
+                        modified_at: now,
+                        parent_id: None,
+                        replies: Vec::new(),
+                        reactions: Vec::new(),
+                        // trace:TASK-330 | ai:claude — stamp the producing session
+                        session_id: resolve_current_session_id(),
+                        harness_version: None,
+                        relayed_from: None,
+                    }
+                    // trace:BUG-1534 | ai:claude — record whose claim this relays.
+                    .with_relayed_from(relayed_from.as_deref());
+
+                    req.comments.push(comment);
+                    req.modified_at = now;
+                    backend.update_requirement(&req)?;
+                    // BUG-68: record after successful write, with the canonical
+                    // spec_id from the resolved req. trace:BUG-68 | ai:claude
+                    record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
+                    println!("Comment added to {}", req_id);
+
+                    // STORY-644: notify each @mentioned user via the mailbox
+                    // (best-effort; STORY-643 auto-sync delivers on their next pull).
+                    // The named identity is routed to directly — matching how the
+                    // mailbox addresses any agent/user id — and a self-mention is
+                    // skipped. trace:STORY-644 | ai:claude
+                    if !mentions.is_empty() {
+                        let display = req.spec_id.as_deref().unwrap_or(req_id);
+                        let snippet = mention_snippet(&mention_body, 80);
+                        for handle in &mentions {
+                            if handle == &comment_author {
+                                continue;
+                            }
+                            send_notification(
+                            store_path,
+                            &comment_author,
+                            handle,
+                            format!("You were mentioned on {display} by {comment_author}: {snippet}"),
+                        );
+                        }
+                    }
+                }
+                CommentArgs {
+                    inner: CommentCommand::List { id },
+                } => {
+                    // trace:TASK-1-020 | ai:claude
+                    // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
+                    let req = backend
+                        .get_requirement_unambiguous_for_read(id)? // read-only; trace:BUG-1670 | ai:claude
+                        .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+                    record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
+                    println!("{}: {}", "Requirement".cyan(), req.title);
+                    println!();
+                    if req.comments.is_empty() {
+                        println!("{}", "No comments yet".dimmed());
+                    } else {
+                        println!("{}:", "Comments".green().bold());
+                        for c in &req.comments {
+                            print_comment(c, 0);
+                        }
+                    }
+                }
+                // SPIKE-2: edit/delete an existing comment on a git-backed store.
+                // Uses prefix-friendly resolution so users can pass the leading 8
+                // chars of the UUID instead of the full 36-char form.
+                // trace:SPIKE-2 | ai:claude
+                CommentArgs {
+                    inner:
+                        CommentCommand::Edit {
+                            req_id,
+                            comment_id,
+                            content,
+                            body_file,
+                            stdin,
+                            interactive,
+                        },
+                } => {
+                    // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
+                    let mut req =
+                        backend
+                            .get_requirement_unambiguous(req_id)?
+                            .ok_or_else(|| {
+                                not_found::requirement_not_found(req_id, Some(store_path))
+                            })?;
+                    record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
+                    let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
+
+                    let new_content =
+                        if *interactive || (content.is_none() && body_file.is_none() && !stdin) {
+                            let existing = req
+                                .find_comment_mut(&comment_uuid)
+                                .map(|c| c.content.clone())
+                                .unwrap_or_default();
+                            inquire::Editor::new("Edit comment")
+                                .with_predefined_text(&existing)
+                                .prompt()
+                                .context("Editor cancelled")?
+                        } else {
+                            resolve_comment_body(content.clone(), body_file.as_deref(), *stdin)?
+                        };
+
+                    let comment = req
+                        .find_comment_mut(&comment_uuid)
+                        .context("Comment not found (vanished between resolve and edit?)")?;
+                    comment.content = new_content;
+                    comment.touch();
+                    req.modified_at = chrono::Utc::now();
+                    backend.update_requirement(&req)?;
+                    println!(
+                        "{} comment {} on {}",
+                        "Updated".green(),
+                        comment_uuid,
+                        req_id
+                    );
+                }
+                CommentArgs {
+                    inner: CommentCommand::Delete { req_id, comment_id },
+                } => {
+                    // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
+                    let mut req =
+                        backend
+                            .get_requirement_unambiguous(req_id)?
+                            .ok_or_else(|| {
+                                not_found::requirement_not_found(req_id, Some(store_path))
+                            })?;
+                    record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
+                    let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
+                    req.delete_comment(&comment_uuid)?;
+                    backend.update_requirement(&req)?;
+                    println!(
+                        "{} comment {} from {}",
+                        "Deleted".green(),
+                        comment_uuid,
+                        req_id
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                CommentArgs { inner: comment_cmd } => {
+                    self::handle_comment_command(comment_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida comment` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static COMMENT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "comment",
+        help_after: "rel-def",
+        command: <CommentArgs as clap::CommandFactory>::command,
+        policy: comment_cli_policy,
+        run: crate::command_registry::Handler::Store(run_comment),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn comment_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::CommentCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <CommentArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(inner, Some(CommentCommand::List { .. })) {
+            SA::Read
+        } else {
+            SA::Comment
+        },
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    }
+}

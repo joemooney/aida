@@ -515,7 +515,10 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
         assert!(err.contains(flag), "{args:?}: {err}");
     }
     let cli = parse(&["aida", "field-study", "scan", &format!("--since={bad}")]);
-    let crate::cli::Command::FieldStudy { cmd } = cli.command else {
+    let crate::field_study_cmd::FieldStudyArgs { cmd } =
+        cli.command
+            .registered::<crate::field_study_cmd::FieldStudyArgs>()
+    else {
         panic!("not a field-study command");
     };
     let err = crate::field_study_cmd::handle_field_study_command(&cmd)

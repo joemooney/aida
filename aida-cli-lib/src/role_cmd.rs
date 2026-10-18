@@ -1614,14 +1614,14 @@ pub(crate) static ROLE: crate::command_registry::CommandReg = crate::command_reg
     name: "role",
     help_after: "schedule",
     command: <RoleArgs as clap::CommandFactory>::command,
-    policy: role_policy,
+    policy: role_cli_policy,
     run: crate::command_registry::Handler::Early(run_role),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
 // gated as Role. An unparseable invocation is not treated as a read.
 // trace:STORY-1728 | ai:claude
-fn role_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn role_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
     use crate::cli::RoleCommand;
     use crate::stakeholder_role::StakeholderAction;
     let read = <RoleArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
@@ -1641,5 +1641,6 @@ fn role_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy
         },
         per_write_auto_push: false,
         skip_role_restore_prompt: true,
+        team_identity_write: false,
     }
 }

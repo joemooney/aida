@@ -44,13 +44,53 @@ def close_of(s, i):
         j += 1
     raise ValueError("unbalanced")
 
+def code_mask(text):
+    """True for each char outside string literals and comments."""
+    mask = [True] * len(text)
+    j = 0
+    while j < len(text):
+        if text[j] == '"':
+            k = j + 1
+            while k < len(text) and text[k] != '"':
+                k += 2 if text[k] == "\\" else 1
+            for x in range(j, min(k + 1, len(text))):
+                mask[x] = False
+            j = k + 1
+        elif text.startswith("//", j):
+            k = text.find("\n", j)
+            k = len(text) if k < 0 else k
+            for x in range(j, k):
+                mask[x] = False
+            j = k
+        else:
+            j += 1
+    return mask
+
+
+def test_mask(text):
+    """True for each char inside an inline `#[cfg(test)] mod … { … }` block."""
+    mask = [False] * len(text)
+    for m in re.finditer(r"^([ \t]*)#\[cfg\(test\)\]\n[ \t]*mod \w+ \{\n", text, re.M):
+        close = re.compile("^" + m.group(1) + "\\}$", re.M).search(text, m.end())
+        end = close.end() if close else len(text)
+        for x in range(m.start(), end):
+            mask[x] = True
+    return mask
+
+
 def rewrite(text, regs):
     text = re.sub(r"\b(?:crate::cli::|crate::|cli::)?Cli::try_parse_from\(", "crate::command_registry::try_parse_from(", text)
     changed = True
     while changed:
         changed = False
+        mask = code_mask(text)
+        tests = test_mask(text)
         for v, path in regs.items():
-            m = re.search(r"(?<![\w:])(?:crate::cli::|crate::|cli::)?Command::" + v + r"\b", text)
+            m = None
+            for cand in re.finditer(r"(?<![\w:])(?:crate::cli::|crate::|cli::)?Command::" + v + r"\b", text):
+                if mask[cand.start()] and (whole_file_is_test or tests[cand.start()]):
+                    m = cand
+                    break
             if not m:
                 continue
             a, b = m.start(), m.end()
@@ -96,10 +136,20 @@ def rewrite(text, regs):
                 expr = text[s0:brace].rstrip()
                 text = text[:s0] + expr + f".registered::<{path}>()" + text[s0 + len(expr):]
             else:
-                # let PAT = EXPR else
+                # let PAT = EXPR else …  /  let PAT = EXPR;
                 eq = text.index("=", a + len(new))
-                el = text.index("else", eq)
-                expr = text[eq + 1 : el].rstrip()
+                j = eq + 1
+                depth = 0
+                while True:
+                    ch = text[j]
+                    if ch in "([{":
+                        depth += 1
+                    elif ch in ")]}":
+                        depth -= 1
+                    elif depth == 0 and (ch == ";" or text.startswith(" else", j)):
+                        break
+                    j += 1
+                expr = text[eq + 1 : j].rstrip()
                 text = text[: eq + 1] + expr + f".registered::<{path}>()" + text[eq + 1 + len(expr):]
             changed = True
     return text
@@ -108,7 +158,12 @@ regs = registrations()
 for f in sys.argv[1:]:
     p = f if os.path.isabs(f) else os.path.join(SRC, f)
     t = open(p).read()
-    n = rewrite(t, regs)
+    whole_file_is_test = "/tests/" in p or os.path.basename(os.path.dirname(p)) == "tests"
+    try:
+        n = rewrite(t, regs)
+    except (ValueError, IndexError) as err:
+        print("SKIPPED", f, err)
+        continue
     if n != t:
         open(p, "w").write(n)
         print("rewrote", f)

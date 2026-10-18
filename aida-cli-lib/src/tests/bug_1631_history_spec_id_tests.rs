@@ -266,7 +266,9 @@ fn bug_1631_history_json_flag_parses_on_both_sides_of_events() {
         let cli = crate::command_registry::try_parse_from(&argv).unwrap();
         // trace:STORY-1477 | ai:codex — each JSON view owns its flag;
         // template management must not inherit JSON capability.
-        let Command::History { json, cmd, .. } = cli.command else {
+        let crate::history::HistoryArgs { json, cmd, .. } =
+            cli.command.registered::<crate::history::HistoryArgs>()
+        else {
             panic!("expected history: {argv:?}");
         };
         assert!(

@@ -624,14 +624,17 @@ fn cli_parses_to_from_opened_and_the_created_alias() {
     ])
     .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::History { to: Some(ref t), from: Some(ref f), .. }
+        cli.command.registered::<crate::history::HistoryArgs>(),
+        crate::history::HistoryArgs { to: Some(ref t), from: Some(ref f), .. }
             if t == "approved" && f == "in-progress"
     ));
     for flag in ["--opened", "--created"] {
         let cli = crate::command_registry::try_parse_from(["aida", "history", flag]).unwrap();
         assert!(
-            matches!(cli.command, Command::History { opened: true, .. }),
+            matches!(
+                cli.command.registered::<crate::history::HistoryArgs>(),
+                crate::history::HistoryArgs { opened: true, .. }
+            ),
             "{flag}"
         );
     }

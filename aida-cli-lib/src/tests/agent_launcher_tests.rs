@@ -59,23 +59,26 @@ fn parses_agent_new_claude_flags() {
         "--verbose",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command:
-            Some(AgentNewCommand::Claude {
-                role,
-                spec,
-                cwd,
-                permission_mode,
-                model,
-                no_context,
-                show_context,
-                prompt,
-                no_prompt,
-                no_default_flags,
-                extra_flags,
-                ..
-            }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Claude {
+                        role,
+                        spec,
+                        cwd,
+                        permission_mode,
+                        model,
+                        no_context,
+                        show_context,
+                        prompt,
+                        no_prompt,
+                        no_default_flags,
+                        extra_flags,
+                        ..
+                    }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new claude command");
     };
@@ -252,22 +255,25 @@ fn parses_agent_new_codex_flags() {
         "--ask-for-approval=never",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command:
-            Some(AgentNewCommand::Codex {
-                role,
-                spec,
-                cwd,
-                bypass_sandbox,
-                model,
-                no_context,
-                show_context,
-                noexec,
-                no_prompt,
-                extra_flags,
-                ..
-            }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Codex {
+                        role,
+                        spec,
+                        cwd,
+                        bypass_sandbox,
+                        model,
+                        no_context,
+                        show_context,
+                        noexec,
+                        no_prompt,
+                        extra_flags,
+                        ..
+                    }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new codex command");
     };
@@ -289,9 +295,12 @@ fn parses_agent_new_noexec_aliases() {
     let cli =
         crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", "--noexec"])
             .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command: Some(AgentNewCommand::Claude { noexec, .. }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command: Some(AgentNewCommand::Claude { noexec, .. }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new claude command");
     };
@@ -305,9 +314,12 @@ fn parses_agent_new_noexec_aliases() {
         "--print-command",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command: Some(AgentNewCommand::Antigravity { noexec, .. }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command: Some(AgentNewCommand::Antigravity { noexec, .. }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new antigravity command");
     };
@@ -389,9 +401,12 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
     for flag in ["--no-exec", "--noexec", "--print-command"] {
         let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", flag])
             .unwrap();
-        let Command::Agent(AgentCommand::New {
-            command: Some(AgentNewCommand::Claude { noexec, .. }),
-        }) = cli.command
+        let crate::agent_launch::AgentArgs {
+            inner:
+                AgentCommand::New {
+                    command: Some(AgentNewCommand::Claude { noexec, .. }),
+                },
+        } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
             panic!("expected agent new claude command");
         };
@@ -401,9 +416,12 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
     let cli =
         crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"])
             .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command: Some(AgentNewCommand::Codex { show_prompt, .. }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command: Some(AgentNewCommand::Codex { show_prompt, .. }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new codex command");
     };
@@ -537,7 +555,10 @@ fn parses_agent_new_verbose_flag_for_every_vendor() {
         let cli =
             crate::command_registry::try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
                 .unwrap();
-        let Command::Agent(AgentCommand::New { command }) = cli.command else {
+        let crate::agent_launch::AgentArgs {
+            inner: AgentCommand::New { command },
+        } = cli.command.registered::<crate::agent_launch::AgentArgs>()
+        else {
             panic!("expected agent new command");
         };
         let verbose = match command.unwrap() {
@@ -906,19 +927,22 @@ fn parses_agent_new_antigravity_flags() {
         "fast",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command:
-            Some(AgentNewCommand::Antigravity {
-                role,
-                spec,
-                cwd,
-                bypass_sandbox,
-                no_context,
-                show_context,
-                extra_flags,
-                ..
-            }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Antigravity {
+                        role,
+                        spec,
+                        cwd,
+                        bypass_sandbox,
+                        no_context,
+                        show_context,
+                        extra_flags,
+                        ..
+                    }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new antigravity command");
     };
@@ -1987,11 +2011,14 @@ fn agent_resume_adapter_args_are_vendor_specific() {
 #[test]
 fn parses_agent_ls_ended_flag() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
-    let Command::Agent(AgentCommand::Ls {
-        all: false,
-        stale: false,
-        ended: true,
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::Ls {
+                all: false,
+                stale: false,
+                ended: true,
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent ls command");
     };
@@ -2010,14 +2037,17 @@ fn parses_agent_new_context_flags() {
         "--show-context",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command:
-            Some(AgentNewCommand::Codex {
-                no_context,
-                show_context,
-                ..
-            }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Codex {
+                        no_context,
+                        show_context,
+                        ..
+                    }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new codex command");
     };
@@ -2042,16 +2072,19 @@ fn parses_agent_new_resume_and_duplicate_flags() {
         "--no-duplicate-check",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command:
-            Some(AgentNewCommand::Codex {
-                no_resume,
-                resume,
-                allow_duplicate,
-                no_duplicate_check,
-                ..
-            }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command:
+                    Some(AgentNewCommand::Codex {
+                        no_resume,
+                        resume,
+                        allow_duplicate,
+                        no_duplicate_check,
+                        ..
+                    }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new codex command");
     };
@@ -2309,14 +2342,22 @@ fn agent_resume_prompt_config_defaults_to_enabled() {
 #[test]
 fn parses_agent_list_roles_flags() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "list-roles"]).unwrap();
-    let Command::Agent(AgentCommand::ListRoles { json }) = cli.command else {
+    let crate::agent_launch::AgentArgs {
+        inner: AgentCommand::ListRoles { json },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
+    else {
         panic!("expected agent list-roles command");
     };
     assert!(!json);
 
     let cli_json =
         crate::command_registry::try_parse_from(["aida", "agent", "list-roles", "--json"]).unwrap();
-    let Command::Agent(AgentCommand::ListRoles { json: json_opt }) = cli_json.command else {
+    let crate::agent_launch::AgentArgs {
+        inner: AgentCommand::ListRoles { json: json_opt },
+    } = cli_json
+        .command
+        .registered::<crate::agent_launch::AgentArgs>()
+    else {
         panic!("expected agent list-roles command");
     };
     assert!(json_opt);
@@ -2328,7 +2369,10 @@ fn parses_agent_list_roles_flags() {
 #[test]
 fn parses_bare_agent_new_as_optional_subcommand() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "new"]).unwrap();
-    let Command::Agent(AgentCommand::New { command }) = cli.command else {
+    let crate::agent_launch::AgentArgs {
+        inner: AgentCommand::New { command },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
+    else {
         panic!("expected agent new command");
     };
     assert!(
@@ -2433,9 +2477,11 @@ fn explicit_agent_new_disabled_hint_uses_winning_agents_toml() {
 #[test]
 fn picked_type_matches_explicit_subcommand_defaults() {
     let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude"]).unwrap();
-    let Command::Agent(AgentCommand::New {
-        command: Some(explicit),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner: AgentCommand::New {
+            command: Some(explicit),
+        },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected explicit agent new claude command");
     };
@@ -2464,14 +2510,17 @@ fn parses_agent_register_flags() {
         "implementation lane",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::Register {
-        pid,
-        agent_type,
-        role,
-        spec,
-        name,
-        description,
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::Register {
+                pid,
+                agent_type,
+                role,
+                spec,
+                name,
+                description,
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent register command");
     };
@@ -2494,7 +2543,10 @@ fn parses_agent_describe_command() {
         "repo master advisor",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::Describe { agent, description }) = cli.command else {
+    let crate::agent_launch::AgentArgs {
+        inner: AgentCommand::Describe { agent, description },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
+    else {
         panic!("expected agent describe command");
     };
     assert_eq!(agent, "codex-advisor-1");
@@ -3306,9 +3358,12 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
         "brief.txt",
     ])
     .unwrap();
-    let Command::Agent(AgentCommand::New {
-        command: Some(AgentNewCommand::Codex { prompt_file, .. }),
-    }) = cli.command
+    let crate::agent_launch::AgentArgs {
+        inner:
+            AgentCommand::New {
+                command: Some(AgentNewCommand::Codex { prompt_file, .. }),
+            },
+    } = cli.command.registered::<crate::agent_launch::AgentArgs>()
     else {
         panic!("expected agent new codex command");
     };
@@ -3485,14 +3540,17 @@ fn allow_duplicate_keeps_the_duplicate_check_on_unlike_no_duplicate_check() {
     let parse = |extra: &str| {
         let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", extra])
             .expect("parse failure");
-        let Command::Agent(AgentCommand::New {
-            command:
-                Some(AgentNewCommand::Codex {
-                    allow_duplicate,
-                    no_duplicate_check,
-                    ..
-                }),
-        }) = cli.command
+        let crate::agent_launch::AgentArgs {
+            inner:
+                AgentCommand::New {
+                    command:
+                        Some(AgentNewCommand::Codex {
+                            allow_duplicate,
+                            no_duplicate_check,
+                            ..
+                        }),
+                },
+        } = cli.command.registered::<crate::agent_launch::AgentArgs>()
         else {
             panic!("expected agent new codex command");
         };

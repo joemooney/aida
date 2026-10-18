@@ -101,7 +101,7 @@ fn help_surface_matches_golden_snapshot() {
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.
-const LEGACY_TOP_LEVEL_COMMANDS: usize = 91;
+const LEGACY_TOP_LEVEL_COMMANDS: usize = 0;
 
 // trace:STORY-1728 | ai:claude
 #[test]
@@ -156,7 +156,7 @@ fn every_top_level_name_has_exactly_one_owner() {
             + REGISTRY.iter().filter(|reg| reg.name == name).count();
         assert_eq!(owners, 1, "`aida {name}` has {owners} owners");
     }
-    for reg in REGISTRY {
+    for reg in REGISTRY.iter().filter(|reg| !reg.help_after.is_empty()) {
         assert!(
             built
                 .get_subcommands()
@@ -166,6 +166,14 @@ fn every_top_level_name_has_exactly_one_owner() {
             reg.help_after
         );
     }
+    assert_eq!(
+        REGISTRY
+            .iter()
+            .filter(|reg| reg.help_after.is_empty())
+            .count(),
+        1,
+        "exactly one command comes first (`help_after: \"\"`)"
+    );
 }
 
 // Every registered command's policy answers for its bare invocation, so the
@@ -250,7 +258,11 @@ fn global_args_reach_registered_and_legacy_commands() {
         );
     }
     let cli = try_parse_from(["aida", "-p", "demo", "--format", "json", "list"]).unwrap();
-    assert!(matches!(cli.command, Command::List { .. }));
+    assert!(matches!(
+        cli.command
+            .registered::<crate::requirements_cli::ListArgs>(),
+        crate::requirements_cli::ListArgs { .. }
+    ));
     assert!(matches!(cli.globals.format, Some(OutputFormat::Json)));
     assert_eq!(cli.globals.project.as_deref(), Some("demo"));
     let cli = try_parse_from(["aida", "--file", "r.yaml", "home"]).unwrap();

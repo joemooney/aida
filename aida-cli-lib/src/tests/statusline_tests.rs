@@ -1588,24 +1588,30 @@ fn queue_move_absolute_flags_parse() {
         crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-front"])
             .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { top: true, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { top: true, .. }
+        }
     ));
     // --to-back is a visible alias of --bottom.
     let cli =
         crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-back"])
             .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { bottom: true, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { bottom: true, .. }
+        }
     ));
     // --to <N> parses an absolute slot.
     let cli =
         crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to", "3"])
             .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { to: Some(3), .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { to: Some(3), .. }
+        }
     ));
     // Existing relative flags still parse (no breaking change).
     let cli = crate::command_registry::try_parse_from([
@@ -1613,11 +1619,13 @@ fn queue_move_absolute_flags_parse() {
     ])
     .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move {
-            before: Some(_),
-            ..
-        })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move {
+                before: Some(_),
+                ..
+            }
+        }
     ));
     // --to conflicts with the end / relative flags.
     assert!(crate::command_registry::try_parse_from([
@@ -1645,16 +1653,20 @@ fn queue_move_force_flag_parses() {
     let cli = crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"])
         .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { force: false, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { force: false, .. }
+        }
     ));
     let cli = crate::command_registry::try_parse_from([
         "aida", "queue", "move", "TASK-1", "--top", "--force",
     ])
     .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { force: true, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { force: true, .. }
+        }
     ));
 }
 
@@ -1668,16 +1680,18 @@ fn queue_move_user_flag_parses() {
     let cli = crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--top"])
         .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { user: None, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { user: None, .. }
+        }
     ));
     let cli = crate::command_registry::try_parse_from([
         "aida", "queue", "move", "TASK-1", "--top", "--user", "alice",
     ])
     .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { user: Some(ref u), .. }) if u == "alice"
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs { inner: QueueCommand::Move { user: Some(ref u), .. } } if u == "alice"
     ));
 }
 
@@ -1796,8 +1810,10 @@ fn queue_move_to_top_alias_parses() {
         crate::command_registry::try_parse_from(["aida", "queue", "move", "TASK-1", "--to-top"])
             .unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Queue(QueueCommand::Move { top: true, .. })
+        cli.command.registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Move { top: true, .. }
+        }
     ));
     // Conflict with --to <N> still holds for the new alias.
     assert!(crate::command_registry::try_parse_from([
@@ -4895,11 +4911,13 @@ fn import_plan_flag_parses() {
     use clap::Parser;
 
     let cli = crate::command_registry::try_parse_from(["aida", "import-plan", "plan.md"]).unwrap();
-    if let Command::ImportPlan {
+    if let crate::import_plan_cmd::ImportPlanArgs {
         file,
         spec,
         request_review,
-    } = cli.command
+    } = cli
+        .command
+        .registered::<crate::import_plan_cmd::ImportPlanArgs>()
     {
         assert_eq!(file, "plan.md");
         assert_eq!(spec, None);
@@ -4917,11 +4935,13 @@ fn import_plan_flag_parses() {
         "--request-review",
     ])
     .unwrap();
-    if let Command::ImportPlan {
+    if let crate::import_plan_cmd::ImportPlanArgs {
         file,
         spec,
         request_review,
-    } = cli.command
+    } = cli
+        .command
+        .registered::<crate::import_plan_cmd::ImportPlanArgs>()
     {
         assert_eq!(file, "plan.md");
         assert_eq!(spec.as_deref(), Some("TASK-516"));

@@ -763,8 +763,8 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(
-            c.command,
-            Command::History {
+            c.command.registered::<crate::history::HistoryArgs>(),
+            crate::history::HistoryArgs {
                 fields: Some(_),
                 cmd: Some(HistoryCommand::Events { .. }),
                 ..

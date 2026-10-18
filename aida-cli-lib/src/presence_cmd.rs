@@ -91,6 +91,7 @@ const PRESENCE_POLICY: CmdPolicy = CmdPolicy {
     stakeholder: StakeholderAction::Write,
     per_write_auto_push: false,
     skip_role_restore_prompt: false,
+    team_identity_write: false,
 };
 
 // trace:STORY-1728 | ai:claude
@@ -166,3 +167,48 @@ pub(crate) fn handle_presence_command() -> Result<()> {
     }
     Ok(())
 }
+
+/// Operator presence — the home/away state the autonomy ladder keys on.
+/// `aida presence` (or `aida presence status`) shows the current state;
+/// `aida presence away` / `aida presence home` set it. While away, an
+/// `aida queue work --auto-complete` with no explicit mode flag defaults to
+/// a headless drain (advisory; integrity gates always apply).
+// trace:TASK-756 | ai:claude
+// trace:TASK-851 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "presence")]
+pub(crate) struct PresenceArgs {
+    #[clap(subcommand)]
+    pub action: Option<crate::cli::PresenceCommand>,
+}
+
+// TASK-851: `aida presence [away|home|status]` is the canonical surface;
+// bare `aida presence` shows status (back-compat). The top-level
+// `aida away` / `aida home` stay as hidden aliases.
+// trace:TASK-851 | ai:claude
+fn run_presence(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PresenceArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match args.action {
+        Some(crate::cli::PresenceCommand::Away) => handle_away_command(),
+        Some(crate::cli::PresenceCommand::Home) => handle_home_command(),
+        Some(crate::cli::PresenceCommand::Status) | None => handle_presence_command(),
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PRESENCE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "presence",
+        help_after: "home",
+        command: <PresenceArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_presence),
+    };

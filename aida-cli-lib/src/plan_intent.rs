@@ -2250,6 +2250,7 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     },
     run: crate::command_registry::Handler::Early(run_why),
 };
@@ -2307,6 +2308,96 @@ pub(crate) static INTENT: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_intent),
     };
+
+// trace:STORY-656 | ai:claude
+/// Spec-quality tooling — checks you run ON a spec before work begins.
+/// Today: `aida spec dryrun <SPEC>` (an implementer-readiness pre-check).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "spec")]
+pub(crate) struct SpecArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::SpecCommand,
+}
+
+fn run_spec(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <SpecArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-656: `aida spec dryrun <ID>` self-loads the store (read-only) for
+            // the deterministic pre-check, and with `--ai` may shell out to a headless
+            // `claude -p`. Like `aida intent`, it needs no shared storage handle —
+            // dispatch early. trace:STORY-656 | ai:claude
+            if let SpecArgs {
+                inner: SpecCommand::Dryrun { id, ai, json },
+            } = &args
+            {
+                return crate::command_registry::returned(handle_spec_dryrun(id, *ai, *json));
+            }
+            // STORY-657: `aida spec interview <ID>` reuses dryrun's scorer to derive
+            // clarifying questions, prompts the human (TTY) or emits them as JSON
+            // (headless), and with `--apply` folds the answers back into the spec. Like
+            // dryrun it self-loads the store; dispatch early. trace:STORY-657 | ai:claude
+            if let SpecArgs {
+                inner:
+                    SpecCommand::Interview {
+                        id,
+                        apply,
+                        ai,
+                        answers,
+                        json,
+                    },
+            } = &args
+            {
+                return crate::command_registry::returned(handle_spec_interview(
+                    id,
+                    *apply,
+                    *ai,
+                    answers.as_deref(),
+                    *json,
+                ));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            unreachable!("`aida spec` has no centralized-store form")
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SPEC: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "spec",
+    help_after: "focus",
+    command: <SpecArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_spec),
+};

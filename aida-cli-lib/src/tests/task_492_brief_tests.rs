@@ -7,8 +7,11 @@ fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
     for flag in ["--comments", "--no-comments"] {
         let cli =
             crate::command_registry::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
-        match cli.command {
-            Command::Show {
+        match cli
+            .command
+            .registered::<crate::requirements_cli::ShowArgs>()
+        {
+            crate::requirements_cli::ShowArgs {
                 comments,
                 no_comments,
                 ..
@@ -232,15 +235,23 @@ fn pending_brief_sentinel_add_clear_lifecycle() {
 fn show_rels_flag_parses() {
     for arg in ["--rels", "--relations"] {
         let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
-        match cli.command {
-            Command::Show { rels, .. } => assert!(rels, "{arg} should set rels"),
+        match cli
+            .command
+            .registered::<crate::requirements_cli::ShowArgs>()
+        {
+            crate::requirements_cli::ShowArgs { rels, .. } => {
+                assert!(rels, "{arg} should set rels")
+            }
             other => panic!("unexpected command: {other:?}"),
         }
     }
     // default: off
     let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
-    match cli.command {
-        Command::Show { rels, .. } => assert!(!rels),
+    match cli
+        .command
+        .registered::<crate::requirements_cli::ShowArgs>()
+    {
+        crate::requirements_cli::ShowArgs { rels, .. } => assert!(!rels),
         other => panic!("unexpected command: {other:?}"),
     }
 }
@@ -488,8 +499,8 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         "TASK-2",
     ])
     .unwrap();
-    match add.command {
-        Command::Add { blocked_by, .. } => {
+    match add.command.registered::<crate::requirements_cli::AddArgs>() {
+        crate::requirements_cli::AddArgs { blocked_by, .. } => {
             assert_eq!(blocked_by, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
         }
         other => panic!("unexpected command: {other:?}"),
@@ -505,8 +516,11 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         "TASK-3",
     ])
     .unwrap();
-    match edit.command {
-        Command::Edit {
+    match edit
+        .command
+        .registered::<crate::requirements_cli::EditArgs>()
+    {
+        crate::requirements_cli::EditArgs {
             blocked_by,
             remove_blocked_by,
             ..
@@ -524,8 +538,8 @@ fn brief_cli_parses_canonical_create_shape() {
         "aida", "brief", "codex", "TASK-492", "--note", "ship it",
     ])
     .unwrap();
-    match cli.command {
-        Command::Brief {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             agent,
             spec,
             note,
@@ -556,8 +570,8 @@ fn brief_cli_parses_canonical_create_shape() {
         "TASK-492",
     ])
     .unwrap();
-    match cli.command {
-        Command::Brief { depends_on, .. } => {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { depends_on, .. } => {
             assert_eq!(depends_on.as_deref(), Some("TASK-492"));
         }
         other => panic!("unexpected command: {other:?}"),
@@ -577,8 +591,8 @@ fn brief_cli_parses_authorized_by_flag() {
         "advisor-a",
     ])
     .unwrap();
-    match cli.command {
-        Command::Brief { authorized_by, .. } => {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by.as_deref(), Some("advisor-a"));
         }
         other => panic!("unexpected command: {other:?}"),
@@ -587,8 +601,8 @@ fn brief_cli_parses_authorized_by_flag() {
     // Omitted → None (the overwhelmingly common case).
     let cli =
         crate::command_registry::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
-    match cli.command {
-        Command::Brief { authorized_by, .. } => {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by, None);
         }
         other => panic!("unexpected command: {other:?}"),
@@ -606,8 +620,8 @@ fn brief_cli_parses_list_and_ack_subcommands() {
         "--include-acked",
     ])
     .unwrap();
-    match list.command {
-        Command::Brief {
+    match list.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             cmd:
                 Some(BriefCommand::List {
                     for_agent,
@@ -623,8 +637,8 @@ fn brief_cli_parses_list_and_ack_subcommands() {
 
     let ack =
         crate::command_registry::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
-    match ack.command {
-        Command::Brief {
+    match ack.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             cmd: Some(BriefCommand::Ack { brief_file }),
             ..
         } => assert_eq!(brief_file, std::path::PathBuf::from("brief.md")),

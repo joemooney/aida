@@ -631,3 +631,165 @@ pub(crate) fn effective_calibration_mode(cfg: &advisor::AdvisorConfig) -> adviso
         _ => cfg.calibration_mode,
     }
 }
+
+/// The advisor seat. Bare `aida advisor` prints the advisor's actionable
+/// worklist — the mirror of bare `aida human`, but grouped by ADVISOR
+/// action (groom drafts, distill decisions, triage findings, bless the
+/// queue, close delivered epics). Subcommands manage the live-advisor
+/// registration the `--no-human=both` orchestrator reads, the dashboard,
+/// and scheduling.
+// trace:STORY-360 trace:STORY-618 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "advisor")]
+pub(crate) struct AdvisorArgs {
+    /// Bare spec-ids from the worklist, one per line — usable in `$(...)` /
+    /// xargs (mirrors `aida human --short`). Ignored when a subcommand is
+    /// given.
+    // trace:STORY-618 | ai:claude
+    #[clap(long)]
+    pub short: bool,
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::AdvisorCommand>,
+}
+
+fn run_advisor(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <AdvisorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-360: live-advisor registration. `aida advisor` writes to
+            // `~/.aida/advisor.toml` (per-user, not per-project) and is intended to
+            // be runnable from anywhere — including outside any AIDA project. Reads
+            // no requirement store. trace:STORY-360 | ai:claude
+            // STORY-262: `aida advisor schedule` needs the requirement store (it
+            // files TASKs into the queue), so it must NOT short-circuit here — it
+            // falls through to the post-storage-init dispatch. Only the
+            // store-less registration subcommands run early.
+            // trace:STORY-262 | ai:claude
+            if let AdvisorArgs { command, .. } = &args {
+                // STORY-559: `advisor status` (default = dashboard) aggregates the
+                // requirement store (burndown / backlog / queue / leases), so it must
+                // fall through to the post-storage dispatch. The narrow
+                // `--registration` view reads only `~/.aida/advisor.toml` and stays in
+                // this store-less early handler so it still works outside a project.
+                // STORY-618: bare `aida advisor` (command = None) IS the worklist, which
+                // reads the store, so it also falls through. trace:STORY-559 STORY-618
+                let needs_store = match command {
+                    None => true,
+                    Some(c) => {
+                        matches!(c, AdvisorCommand::Schedule(_))
+                            || matches!(
+                                c,
+                                AdvisorCommand::Status {
+                                    registration: false,
+                                    ..
+                                }
+                            )
+                    }
+                };
+                if !needs_store {
+                    if let Some(c) = command {
+                        return crate::command_registry::returned(handle_advisor_command(c));
+                    }
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                AdvisorArgs { short, command } => {
+                    // STORY-262 / STORY-559: two advisor subcommands reach storage init
+                    // — `schedule` (files TASKs) and the default `advisor status`
+                    // dashboard (aggregates the store). STORY-618: bare `aida advisor`
+                    // (command = None) reaches here too — it IS the advisor worklist.
+                    // The narrow `advisor status --registration` view and
+                    // register/unregister dispatch before storage init and never reach
+                    // here. trace:STORY-262 trace:STORY-559 trace:STORY-618 | ai:claude
+                    match command {
+                        // STORY-618: bare `aida advisor` → the advisor's actionable
+                        // worklist (the mirror of bare `aida human`).
+                        None => {
+                            return crate::command_registry::returned(handle_advisor_worklist(
+                                *short, backend, store_path,
+                            ));
+                        }
+                        Some(AdvisorCommand::Schedule(sched_cmd)) => {
+                            let project_root = store_path
+                                .parent()
+                                .map(|p| p.to_path_buf())
+                                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                            return crate::command_registry::returned(
+                                schedule_cmd::handle_schedule_command(
+                                    sched_cmd,
+                                    &project_root,
+                                    store_path,
+                                ),
+                            );
+                        }
+                        Some(AdvisorCommand::Status {
+                            json,
+                            registration: false,
+                        }) => {
+                            return crate::command_registry::returned(handle_advisor_dashboard(
+                                *json, backend, store_path,
+                            ));
+                        }
+                        _ => unreachable!(
+                            "non-dashboard/schedule advisor subcommands dispatch early"
+                        ),
+                    }
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                AdvisorArgs { .. } => {
+                    // STORY-360: `aida advisor` (register/unregister/status) dispatches
+                    // before storage resolution. STORY-262's `advisor schedule`
+                    // dispatches in `handle_git_backend_command` (it needs the store).
+                    // This legacy-SQLite arm is unreachable for both. The schedule
+                    // subcommand and the STORY-618 bare worklist additionally require
+                    // the git-canonical store, so a legacy project never reaches it.
+                    // trace:STORY-360 trace:STORY-262 trace:STORY-618 | ai:claude
+                    unreachable!("Command::Advisor dispatched before legacy storage init");
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida advisor` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ADVISOR: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "advisor",
+        help_after: "research",
+        command: <AdvisorArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_advisor),
+    };

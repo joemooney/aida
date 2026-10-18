@@ -2408,8 +2408,10 @@ fn queue_work_quiet_flag_parses() {
         "aida", "queue", "work", "PR-65", "--role", "reviewer",
     ])
     .expect("no --quiet parses");
-    let quiet_of = |c: &Cli| match &c.command {
-        Command::Queue(QueueCommand::Work { quiet, .. }) => *quiet,
+    let quiet_of = |c: &Cli| match &c.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { quiet, .. },
+        } => *quiet,
         _ => panic!("expected queue work command"),
     };
     assert!(quiet_of(&on), "--quiet should set quiet=true");
@@ -2430,12 +2432,15 @@ fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
         "--auto-complete",
     ])
     .expect("--resume + --auto-complete should parse (handler rejects, not clap)");
-    match cli.command {
-        Command::Queue(QueueCommand::Work {
-            resume,
-            auto_complete,
-            ..
-        }) => {
+    match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner:
+                QueueCommand::Work {
+                    resume,
+                    auto_complete,
+                    ..
+                },
+        } => {
             assert!(resume.is_some() && auto_complete.is_some());
         }
         other => panic!("expected queue work command, got {other:?}"),
@@ -2471,8 +2476,10 @@ fn queue_work_force_claim_flag_parses() {
         "--force-claim",
     ])
     .expect("--force-claim parses on queue work");
-    match cli.command {
-        Command::Queue(QueueCommand::Work { force_claim, .. }) => {
+    match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { force_claim, .. },
+        } => {
             assert!(force_claim, "--force-claim should set force_claim=true");
         }
         other => panic!("expected queue work command, got {other:?}"),

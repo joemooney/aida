@@ -32,22 +32,31 @@ fn schedule_install_cron_and_uninstall_cron_parse() {
     let cli =
         crate::command_registry::try_parse_from(["aida", "schedule", "install-cron"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Schedule(MaintenanceScheduleCommand::InstallCron)
+        cli.command
+            .registered::<crate::maintenance_schedule::ScheduleArgs>(),
+        crate::maintenance_schedule::ScheduleArgs {
+            inner: MaintenanceScheduleCommand::InstallCron
+        }
     ));
 
     let cli =
         crate::command_registry::try_parse_from(["aida", "schedule", "uninstall-cron"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Schedule(MaintenanceScheduleCommand::UninstallCron)
+        cli.command
+            .registered::<crate::maintenance_schedule::ScheduleArgs>(),
+        crate::maintenance_schedule::ScheduleArgs {
+            inner: MaintenanceScheduleCommand::UninstallCron
+        }
     ));
 
     // The `aida cron` visible alias still reaches the same subcommands.
     let cli = crate::command_registry::try_parse_from(["aida", "cron", "install-cron"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Schedule(MaintenanceScheduleCommand::InstallCron)
+        cli.command
+            .registered::<crate::maintenance_schedule::ScheduleArgs>(),
+        crate::maintenance_schedule::ScheduleArgs {
+            inner: MaintenanceScheduleCommand::InstallCron
+        }
     ));
 }
 
@@ -61,15 +70,21 @@ fn schedule_tick_hook_and_timer_shapes_parse() {
     let cli =
         crate::command_registry::try_parse_from(["aida", "schedule", "tick", "--hook"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: true })
+        cli.command
+            .registered::<crate::maintenance_schedule::ScheduleArgs>(),
+        crate::maintenance_schedule::ScheduleArgs {
+            inner: MaintenanceScheduleCommand::Tick { hook: true }
+        }
     ));
 
     // The timer/cron shape: no --hook.
     let cli = crate::command_registry::try_parse_from(["aida", "schedule", "tick"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::Schedule(MaintenanceScheduleCommand::Tick { hook: false })
+        cli.command
+            .registered::<crate::maintenance_schedule::ScheduleArgs>(),
+        crate::maintenance_schedule::ScheduleArgs {
+            inner: MaintenanceScheduleCommand::Tick { hook: false }
+        }
     ));
 }
 

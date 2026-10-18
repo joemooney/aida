@@ -120,18 +120,19 @@ pub(crate) fn handle_cache_command(
 /// Dispatch cache modes that must avoid requirements-cache initialization.
 // trace:STORY-1661 | ai:codex
 pub(crate) fn early_refresh(command: &crate::Command) -> Option<Result<()>> {
-    match command {
-        crate::Command::Cache(CacheCommand::Refresh {
+    // trace:STORY-1728 | ai:claude
+    match command.args::<CacheArgs>()?.inner {
+        CacheCommand::Refresh {
             history: true,
             store,
             ..
-        }) => Some(crate::history_indexer::handle_tick(store.as_deref())),
-        crate::Command::Cache(CacheCommand::Refresh {
+        } => Some(crate::history_indexer::handle_tick(store.as_deref())),
+        CacheCommand::Refresh {
             worker: true,
             store: Some(store),
             cache: Some(cache),
             ..
-        }) => Some(run_explicit_refresh_worker(store, cache)),
+        } => Some(run_explicit_refresh_worker(&store, &cache)),
         _ => None,
     }
 }
@@ -634,5 +635,92 @@ fn run_refresh_worker_on(backend: &aida_core::CachedGitBackend) -> Result<()> {
             refresh_request::record_failed_attempt(&cache_path, &format!("{e:#}"))?;
             Err(e)
         }
+    }
+}
+
+/// SQLite cache view commands (git-canonical mode only)
+#[derive(clap::Parser, Debug)]
+#[clap(name = "cache")]
+#[clap(hide = true)]
+pub(crate) struct CacheArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::CacheCommand,
+}
+
+fn run_cache(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <CacheArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                CacheArgs { inner: cache_cmd } => {
+                    return crate::command_registry::returned(self::handle_cache_command(
+                        cache_cmd, backend,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                CacheArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida cache commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init --distributed` first, or pass --file pointing to a git store."
+                );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida cache` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CACHE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "cache",
+        help_after: "db",
+        command: <CacheArgs as clap::CommandFactory>::command,
+        policy: cache_cli_policy,
+        run: crate::command_registry::Handler::Store(run_cache),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn cache_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::CacheCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <CacheArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(inner, Some(CacheCommand::Status)) {
+            SA::Read
+        } else {
+            SA::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

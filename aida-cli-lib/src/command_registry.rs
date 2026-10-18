@@ -17,72 +17,163 @@ use crate::stakeholder_role::StakeholderAction;
 // trace:STORY-1728 | ai:claude
 pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::session_misc_cmd::BG_FETCH,
+    &crate::requirements_cli::ADD,
+    &crate::advisor_cmd_root::ADVISOR,
+    &crate::agent_launch::AGENT,
     &crate::user_alias::ALIAS,
+    &crate::approvals_cmd::APPROVALS,
+    &crate::archive_cmd::ARCHIVE,
+    &crate::assign_cmd::ASSIGN,
     &crate::autonomy_cmd::AUTONOMY,
     &crate::autopilot_intake::AUTOPILOT,
+    &crate::autoprogress::AUTOPROGRESS,
+    &crate::status_awaiting::AWAITING,
     &crate::presence_cmd::AWAY,
+    &crate::backlog::BACKLOG,
+    &crate::brief_cmd::BRIEF,
     &crate::burndown_run::BURNDOWN,
+    &crate::cache_cmd::CACHE,
     &crate::changelog_cmd::CHANGELOG,
     &crate::claim::CLAIM,
     &crate::help_catalog::COMMANDS,
+    &crate::comment_cmd::COMMENT,
     &crate::commit::COMMIT,
     &crate::compete_cmd::COMPETE,
+    &crate::config_cmd::CONFIG,
     &crate::monitor_contract::CONTRACT,
+    &crate::criteria::CRITERIA,
+    &crate::db_cmd::DB,
+    &crate::decide_cmd::DECIDE,
+    &crate::defer_cmd::DEFER,
+    &crate::requirements_cli::DEL,
     &crate::deps_cmd::DEPS,
     &crate::derisk_cmd::DERISK,
     &crate::dev_cmd::DEV,
+    &crate::digest_cmd::DIGEST,
+    &crate::do_dispatch::DO,
+    &crate::doc_cmd::DOC,
+    &crate::doc_cmd::DOCS,
     &crate::doctor_cmd::DOCTOR,
+    &crate::punt_done::DONE,
     &crate::drain_cmd::DRAIN,
     &crate::driver_cmd::DRIVER,
+    &crate::requirements_cli::EDIT,
     &crate::exposition::EXPLAIN,
+    &crate::import_export_cmd::EXPORT,
+    &crate::leases::FASTTRACK,
+    &crate::feature_cmd::FEATURE,
+    &crate::store_push_pull::FETCH,
+    &crate::field_study_cmd::FIELD_STUDY,
+    &crate::findings_gate::FINDINGS,
+    &crate::focus_cmd::FOCUS,
     &crate::gate_cmd::GATE,
+    &crate::tracker_cmd::GITHUB,
+    &crate::tracker_cmd::GITLAB,
     &crate::goal_cmd::GOAL,
+    &crate::graph_cmd::GRAPH,
+    &crate::requirements_cli::GREP,
     &crate::autopilot_intake::GROOM,
+    &crate::harvest::HARVEST,
     &crate::queue_misc::HEADLESS,
     &crate::health_vitals_cmd::HEALTH,
     &crate::help::HELP_ALL,
+    &crate::history::HISTORY,
     &crate::presence_cmd::HOME,
+    &crate::human_cmd::HUMAN,
+    &crate::identity_gate::IDENTITY,
+    &crate::import_export_cmd::IMPORT,
+    &crate::import_plan_cmd::IMPORT_PLAN,
     &crate::init_cmd::INIT,
     &crate::ps_integrate::INTEGRATE,
     &crate::plan_intent::INTENT,
     &crate::internal_cmd::INTERNAL,
+    &crate::tracker_cmd::JIRA,
     &crate::lifecycle_cmd::LIFECYCLE,
     &crate::lint_cmd::LINT,
+    &crate::requirements_cli::LIST,
+    &crate::load_cmd::LOAD,
     &crate::lock_cmd::LOCK,
+    &crate::mailbox_cmd::MAILBOX,
     &crate::mandate::MANDATE,
     &crate::manual::MANUAL,
+    &crate::mcp_cmd::MCP,
+    &crate::mcp::MCP_SERVE,
+    &crate::memories_cmd::MEMORIES,
     &crate::merge_hold_cmd::MERGE_HOLD,
     &crate::merge_hold_cmd::MERGE_LOCK,
+    &crate::metrics_cmd::METRICS,
     &crate::drain_gate::NO_HUMAN,
+    &crate::node_cmd::NODE,
+    &crate::notify::NOTIFY,
     &crate::orchestrator_cmd::ORCHESTRATOR,
     &crate::plan_cmd::PLAN,
     &crate::pr_cmd::PR,
+    &crate::presence_cmd::PRESENCE,
+    &crate::protocol_cmd::PROTOCOL,
     &crate::ps_integrate::PS,
+    &crate::store_push_pull::PULL,
+    &crate::punt_done::PUNT,
     &crate::punt_done::PUNTS,
+    &crate::store_push_pull::PUSH,
+    &crate::questions::QUESTIONS,
+    &crate::queue_cmd::QUEUE,
+    &crate::rebase_cmd::REBASE,
+    &crate::reconstitute::RECONSTITUTE,
+    &crate::record_cmd::RECORD,
+    &crate::regen::REGEN,
+    &crate::relationship_cmd::REL,
+    &crate::rel_def_cmd::REL_DEF,
     &crate::upgrade_release::RELEASE,
     &crate::remote_cmd::REMOTE,
+    &crate::report_cmd::REPORT,
+    &crate::questions::RESEARCH,
+    &crate::review_cmd::REVIEW,
+    &crate::queue_cmd::REWORK,
     &crate::role_cmd::ROLE,
+    &crate::rules_cmd::RULES,
     &crate::sandbox_cmd::SANDBOX,
+    &crate::scaffold_cmd::SCAFFOLD,
+    &crate::maintenance_schedule::SCHEDULE,
     &crate::schema::SCHEMA,
+    &crate::requirements_cli::SEARCH,
+    &crate::server_cmd::SERVER,
     &crate::agent_launch::SESSION,
+    &crate::shift::SHIFT,
     &crate::pr_cmd::SHIP,
+    &crate::requirements_cli::SHOW,
     &crate::skill_cmd::SKILL,
+    &crate::solo_cmd::SOLO,
+    &crate::plan_intent::SPEC,
     &crate::queue_misc::STACK,
+    &crate::orchestrator_cmd::STATE_SNAPSHOT,
+    &crate::status_cmd::STATUS,
     &crate::statusbar_cmd::STATUSBAR,
     &crate::statusline_cmd::STATUSLINE,
     &crate::store_cmd::STORE,
+    &crate::supervise_cmd::SUPERVISE,
     &crate::tail_cmd::TAIL,
+    &crate::team_cmd::TEAM,
+    &crate::terminal_cmd::TERMINAL,
+    &crate::trace_cmd::TRACE,
     &crate::triage_cmd::TRIAGE,
     &crate::tui_entry::TUI,
+    &crate::type_cmd::TYPE,
     &crate::ultraplan_cmd::ULTRAPLAN,
+    &crate::archive_cmd::UNARCHIVE,
+    &crate::assign_cmd::UNASSIGN,
     &crate::claim::UNCLAIM,
+    &crate::defer_cmd::UNDEFER,
     &crate::upgrade_cmd::UPGRADE,
+    &crate::usage_cmd::USAGE,
+    &crate::help::USER_GUIDE,
     &crate::verify_cmd::VERIFY,
     &crate::watch::WATCH,
+    &crate::session_misc_cmd::WHOAMI,
     &crate::plan_intent::WHY,
     &crate::wiki::WIKI,
     &crate::queue_misc::WORKER,
     &crate::worktree_gc::WORKTREE,
+    &crate::zen_cmd::ZEN,
 ];
 
 /// How a registered command runs.
@@ -123,8 +214,19 @@ pub(crate) enum StoreCtx<'a> {
         store_path: &'a std::path::Path,
         backend: &'a aida_core::CachedGitBackend,
     },
+    /// The git-canonical store before its backend is opened, from
+    /// `run_on_distributed_store`. Handlers that need no cached backend
+    /// (regen, mcp-serve, the issue trackers) finish here; everything else
+    /// returns `Flow::Continue` and reaches the git-backend dispatcher.
+    Distributed {
+        store_path: &'a std::path::Path,
+        project_root_hint: Option<&'a std::path::Path>,
+    },
     /// The deprecated centralized store, from the legacy dispatcher in `run()`.
-    Legacy { storage: &'a crate::Storage },
+    Legacy {
+        storage: &'a crate::Storage,
+        requirements_path: &'a std::path::Path,
+    },
 }
 
 /// The per-command answers the cross-cutting gates in `run()` need. Every
@@ -140,6 +242,9 @@ pub(crate) struct CmdPolicy {
     pub per_write_auto_push: bool,
     /// Whether the interactive last-role restore prompt is skipped.
     pub skip_role_restore_prompt: bool,
+    /// Whether the team-identity guard treats the command as a shared-store
+    /// write (refused under a shared `default` identity when required).
+    pub team_identity_write: bool,
 }
 
 /// What a registered handler receives besides its own `ArgMatches`.
@@ -157,7 +262,8 @@ pub(crate) struct DispatchCtx<'a> {
 pub(crate) struct CommandReg {
     /// The subcommand name; must equal the name `command()` builds.
     pub name: &'static str,
-    /// The top-level command this one follows in help and the catalog.
+    /// The top-level command this one follows in help and the catalog; `""`
+    /// for the first.
     pub help_after: &'static str,
     /// The command's clap definition (usually `<Args as CommandFactory>::command`).
     pub command: fn() -> clap::Command,
@@ -231,19 +337,28 @@ pub(crate) fn built_command() -> clap::Command {
         root = root.subcommand((reg.command)());
     }
     // Anchors may themselves be registered, so place entries in rounds until
-    // none moves. Reverse registry order keeps same-anchor siblings sorted.
+    // none moves; `help_after: ""` is the first command. Reverse registry
+    // order keeps same-anchor siblings sorted.
     let mut pending: Vec<&CommandReg> = REGISTRY.iter().rev().copied().collect();
     while !pending.is_empty() {
         let before = pending.len();
-        pending.retain(
-            |reg| match order.iter().position(|name| *name == reg.help_after) {
+        pending.retain(|reg| {
+            let at = if reg.help_after.is_empty() {
+                Some(0)
+            } else {
+                order
+                    .iter()
+                    .position(|name| *name == reg.help_after)
+                    .map(|at| at + 1)
+            };
+            match at {
                 Some(at) => {
-                    order.insert(at + 1, reg.name);
+                    order.insert(at, reg.name);
                     false
                 }
                 None => true,
-            },
-        );
+            }
+        });
         if pending.len() == before {
             // An unknown anchor lands last; a test rejects it.
             order.extend(pending.iter().map(|reg| reg.name));
@@ -292,6 +407,36 @@ fn cli_from_matches(matches: &mut ArgMatches) -> Result<Cli, clap::Error> {
         globals,
         command: Command::Registered(Invocation { reg, matches: sub }),
     })
+}
+
+impl Command {
+    /// The registered command's name (`"show"`, `"queue"`, ...).
+    pub(crate) fn name(&self) -> &'static str {
+        let Command::Registered(invocation) = self;
+        invocation.reg.name
+    }
+
+    /// The command's typed args when it is the command `T` describes, for
+    /// the few cross-cutting hooks in `run()` that key on one command's flags.
+    pub(crate) fn args<T: FromArgMatches + CommandFactory>(&self) -> Option<T> {
+        let Command::Registered(invocation) = self;
+        (T::command().get_name() == invocation.reg.name)
+            .then(|| T::from_arg_matches(&invocation.matches).ok())
+            .flatten()
+    }
+}
+
+/// Tests build a command the way a user types it.
+// trace:STORY-1728 | ai:claude
+#[cfg(test)]
+pub(crate) fn parse_command<I, T>(argv: I) -> Command
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    try_parse_from(argv)
+        .unwrap_or_else(|err| panic!("test argv does not parse: {err}"))
+        .command
 }
 
 /// Tests that inspect a parsed registered command read its typed args here.

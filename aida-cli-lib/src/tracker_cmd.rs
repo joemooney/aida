@@ -1869,3 +1869,252 @@ pub(crate) fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> R
 
     Ok(())
 }
+
+/// GitLab integration commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "gitlab")]
+#[clap(hide = true)]
+pub(crate) struct GitlabArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::GitLabCommand,
+}
+
+fn run_gitlab(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <GitlabArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed {
+            store_path,
+            project_root_hint,
+        }) => {
+            let (store_path, project_root_hint) = (*store_path, *project_root_hint);
+            // Tracker imports (`aida jira/github pull`) write new requirements
+            // through this `Storage`, same as every other distributed-store
+            // write path — they need the same node id and per-write auto-push
+            // `handle_git_backend_command` gives its own callers, just reached
+            // through a different signature (`&Storage`, not `&GitBackend`).
+            // trace:TASK-1487 | ai:claude
+            let _ = project_root_hint;
+            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+                store_path,
+                false,
+                |storage| self::handle_gitlab_command(&args.inner, storage),
+            ))
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                GitlabArgs { inner: gitlab_cmd } => {
+                    self::handle_gitlab_command(gitlab_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida gitlab` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GITLAB: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "gitlab",
+        help_after: "scaffold",
+        command: <GitlabArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_gitlab),
+    };
+
+/// GitHub integration commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "github")]
+#[clap(hide = true)]
+pub(crate) struct GithubArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::GitHubCommand,
+}
+
+fn run_github(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <GithubArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed {
+            store_path,
+            project_root_hint,
+        }) => {
+            let (store_path, project_root_hint) = (*store_path, *project_root_hint);
+            // Tracker imports (`aida jira/github pull`) write new requirements
+            // through this `Storage`, same as every other distributed-store
+            // write path — they need the same node id and per-write auto-push
+            // `handle_git_backend_command` gives its own callers, just reached
+            // through a different signature (`&Storage`, not `&GitBackend`).
+            // trace:TASK-1487 | ai:claude
+            let _ = project_root_hint;
+            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+                store_path,
+                github_cli_policy(matches).per_write_auto_push,
+                |storage| self::handle_github_command(&args.inner, storage),
+            ))
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                GithubArgs { inner: github_cmd } => {
+                    self::handle_github_command(github_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida github` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GITHUB: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "github",
+        help_after: "gitlab",
+        command: <GithubArgs as clap::CommandFactory>::command,
+        policy: github_cli_policy,
+        run: crate::command_registry::Handler::Store(run_github),
+    };
+
+/// Jira integration commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "jira")]
+#[clap(hide = true)]
+pub(crate) struct JiraArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::JiraCommand,
+}
+
+fn run_jira(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <JiraArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed {
+            store_path,
+            project_root_hint,
+        }) => {
+            let (store_path, project_root_hint) = (*store_path, *project_root_hint);
+            // Tracker imports (`aida jira/github pull`) write new requirements
+            // through this `Storage`, same as every other distributed-store
+            // write path — they need the same node id and per-write auto-push
+            // `handle_git_backend_command` gives its own callers, just reached
+            // through a different signature (`&Storage`, not `&GitBackend`).
+            // trace:TASK-1487 | ai:claude
+            let _ = project_root_hint;
+            crate::command_registry::returned(crate::store_sync::run_tracker_command(
+                store_path,
+                jira_cli_policy(matches).per_write_auto_push,
+                |storage| self::handle_jira_command(&args.inner, storage),
+            ))
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                JiraArgs { inner: jira_cmd } => {
+                    self::handle_jira_command(jira_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida jira` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static JIRA: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "jira",
+    help_after: "github",
+    command: <JiraArgs as clap::CommandFactory>::command,
+    policy: jira_cli_policy,
+    run: crate::command_registry::Handler::Store(run_jira),
+};
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn jira_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::JiraCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <JiraArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Write,
+        per_write_auto_push: matches!(inner, Some(JiraCommand::Pull { dry_run: false, .. })),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn github_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::GitHubCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <GithubArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Write,
+        per_write_auto_push: matches!(inner, Some(GitHubCommand::Pull { dry_run: false, .. })),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}

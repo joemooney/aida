@@ -15,8 +15,11 @@ fn list_lens_aliases_rewrite_to_canonical_commands() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Queue(QueueCommand::List { .. })
+            .command
+            .registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::List { .. }
+        }
     ));
 
     // aida list why [--json] → aida burndown explain [--json]
@@ -29,8 +32,9 @@ fn list_lens_aliases_rewrite_to_canonical_commands() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Advisor { .. }
+            .command
+            .registered::<crate::advisor_cmd_root::AdvisorArgs>(),
+        crate::advisor_cmd_root::AdvisorArgs { .. }
     ));
 
     // aida list inflight (and in-flight) → aida burndown status
@@ -87,16 +91,18 @@ fn personal_view_shortcuts_rewrite() {
             "aida", "mylist"
         ])))
         .unwrap()
-        .command,
-        Command::List { .. }
+        .command
+        .registered::<crate::requirements_cli::ListArgs>(),
+        crate::requirements_cli::ListArgs { .. }
     ));
     assert!(matches!(
         crate::command_registry::try_parse_from(rewrite_personal_view_alias(&s(&[
             "aida", "myqueue"
         ])))
         .unwrap()
-        .command,
-        Command::Queue(_)
+        .command
+        .registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs { inner: _ }
     ));
 
     // Plain `aida list` / `aida queue list` are untouched — the default
@@ -206,8 +212,11 @@ fn bare_agent_defaults_to_agent_new() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Agent(AgentCommand::New { command: None })
+            .command
+            .registered::<crate::agent_launch::AgentArgs>(),
+        crate::agent_launch::AgentArgs {
+            inner: AgentCommand::New { command: None }
+        }
     ));
 
     // `aida agent --role X` (a `new` flag, no subcommand) → spliced `new`
@@ -245,12 +254,15 @@ fn bare_agent_defaults_to_agent_new() {
             "aida", "agent", "ls"
         ])))
         .unwrap()
-        .command,
-        Command::Agent(AgentCommand::Ls {
-            all: false,
-            stale: false,
-            ended: false,
-        })
+        .command
+        .registered::<crate::agent_launch::AgentArgs>(),
+        crate::agent_launch::AgentArgs {
+            inner: AgentCommand::Ls {
+                all: false,
+                stale: false,
+                ended: false,
+            }
+        }
     ));
     assert!(matches!(
         crate::command_registry::try_parse_from(rewrite_agent_default_new(&s(&[
@@ -259,8 +271,11 @@ fn bare_agent_defaults_to_agent_new() {
             "dispatch-health"
         ])))
         .unwrap()
-        .command,
-        Command::Agent(AgentCommand::DispatchHealth { force: false })
+        .command
+        .registered::<crate::agent_launch::AgentArgs>(),
+        crate::agent_launch::AgentArgs {
+            inner: AgentCommand::DispatchHealth { force: false }
+        }
     ));
 
     // Help flags + the `help` verb keep clap's parent help (untouched).
@@ -296,8 +311,11 @@ fn bare_queue_defaults_to_queue_list() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Queue(QueueCommand::List { .. })
+            .command
+            .registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::List { .. }
+        }
     ));
 
     // Flags-only `aida queue --for implementer` (no subcommand) → spliced `list`
@@ -338,8 +356,11 @@ fn bare_queue_defaults_to_queue_list() {
             "aida", "queue", "work", "TASK-1"
         ])))
         .unwrap()
-        .command,
-        Command::Queue(QueueCommand::Work { .. })
+        .command
+        .registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { .. }
+        }
     ));
 
     // Help flags + the `help` verb keep clap's parent help (untouched).
@@ -388,12 +409,15 @@ fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
         cli.globals.cast_title.as_deref(),
         Some("Demo: overnight drain")
     );
-    match cli.command {
-        Command::Queue(QueueCommand::Work {
-            batch,
-            auto_complete,
-            ..
-        }) => {
+    match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner:
+                QueueCommand::Work {
+                    batch,
+                    auto_complete,
+                    ..
+                },
+        } => {
             assert_eq!(batch.as_deref(), Some("overnight-X"));
             assert!(auto_complete.is_some());
         }
@@ -414,8 +438,8 @@ fn story_451_effort_flags_and_load_aliases_parse() {
         "1d",
     ])
     .unwrap();
-    match add.command {
-        Command::Add { effort, .. } => {
+    match add.command.registered::<crate::requirements_cli::AddArgs>() {
+        crate::requirements_cli::AddArgs { effort, .. } => {
             assert_eq!(effort, Some(effort_calibration::EffortBucket::OneDay));
         }
         other => panic!("expected add, got {other:?}"),
@@ -425,8 +449,10 @@ fn story_451_effort_flags_and_load_aliases_parse() {
         "aida", "queue", "work", "TASK-1", "--effort", "4h",
     ])
     .unwrap();
-    match queue.command {
-        Command::Queue(QueueCommand::Work { effort, .. }) => {
+    match queue.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { effort, .. },
+        } => {
             assert_eq!(effort, Some(effort_calibration::EffortBucket::FourHours));
         }
         other => panic!("expected queue work, got {other:?}"),
@@ -449,26 +475,35 @@ fn story_451_effort_flags_and_load_aliases_parse() {
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "load", "queue"])
             .unwrap()
-            .command,
-        Command::Load(LoadCommand::Queue)
+            .command
+            .registered::<crate::load_cmd::LoadArgs>(),
+        crate::load_cmd::LoadArgs {
+            inner: LoadCommand::Queue
+        }
     ));
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "queue", "load"])
             .unwrap()
-            .command,
-        Command::Queue(QueueCommand::Load { .. })
+            .command
+            .registered::<crate::queue_cmd::QueueArgs>(),
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Load { .. }
+        }
     ));
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "backlog", "load"])
             .unwrap()
-            .command,
-        Command::Backlog(BacklogCommand::Load)
+            .command
+            .registered::<crate::backlog::BacklogArgs>(),
+        crate::backlog::BacklogArgs {
+            inner: BacklogCommand::Load
+        }
     ));
 }
 
 // TASK-777: `aida fasttrack <title>` parses with `task` as the default type
 // and accepts a `--type` override. The verb rewrites to the equivalent
-// `Command::Add` at dispatch, so this parse test pins the surface; the
+// `crate::requirements_cli::AddArgs {}` at dispatch, so this parse test pins the surface; the
 // filing convention (Approved + queue + batch:fasttrack + lifecycle:no-review)
 // is exercised by the Add path it delegates to. trace:TASK-777
 #[test]
@@ -476,8 +511,9 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     match crate::command_registry::try_parse_from(["aida", "fasttrack", "fix a typo"])
         .unwrap()
         .command
+        .registered::<crate::leases::FasttrackArgs>()
     {
-        Command::Fasttrack {
+        crate::leases::FasttrackArgs {
             title,
             r#type,
             express,
@@ -500,8 +536,9 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     ])
     .unwrap()
     .command
+    .registered::<crate::leases::FasttrackArgs>()
     {
-        Command::Fasttrack {
+        crate::leases::FasttrackArgs {
             title,
             r#type,
             express,
@@ -520,8 +557,9 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     match crate::command_registry::try_parse_from(["aida", "fasttrack", "status"])
         .unwrap()
         .command
+        .registered::<crate::leases::FasttrackArgs>()
     {
-        Command::Fasttrack { title, command, .. } => {
+        crate::leases::FasttrackArgs { title, command, .. } => {
             assert!(title.is_none(), "`status` must not be read as a title");
             assert!(matches!(
                 command,
@@ -534,8 +572,9 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     match crate::command_registry::try_parse_from(["aida", "fasttrack", "status", "--json"])
         .unwrap()
         .command
+        .registered::<crate::leases::FasttrackArgs>()
     {
-        Command::Fasttrack { command, .. } => {
+        crate::leases::FasttrackArgs { command, .. } => {
             assert!(matches!(
                 command,
                 Some(crate::cli::FasttrackCommand::Status { json: true })
@@ -554,8 +593,9 @@ fn task_777_fasttrack_parses_with_default_and_override_type() {
     ])
     .unwrap()
     .command
+    .registered::<crate::leases::FasttrackArgs>()
     {
-        Command::Fasttrack {
+        crate::leases::FasttrackArgs {
             title,
             express,
             command,
@@ -598,8 +638,9 @@ fn add_accepts_creation_time_execution_mode() {
     ])
     .unwrap()
     .command
+    .registered::<crate::requirements_cli::AddArgs>()
     {
-        Command::Add {
+        crate::requirements_cli::AddArgs {
             status,
             queue,
             mode,

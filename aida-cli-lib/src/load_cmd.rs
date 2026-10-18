@@ -144,3 +144,73 @@ pub(crate) fn handle_load_command(cmd: &LoadCommand, storage: &Storage) -> Resul
     }
     Ok(())
 }
+
+/// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
+/// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
+// trace:STORY-451 | ai:codex
+// trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "load")]
+#[clap(hide = true)]
+pub(crate) struct LoadArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::LoadCommand,
+}
+
+fn run_load(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <LoadArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                LoadArgs { inner: load_cmd } => {
+                    let storage = Storage::new(store_path);
+                    self::handle_load_command(load_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                LoadArgs { inner: load_cmd } => {
+                    self::handle_load_command(load_cmd, &storage)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida load` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static LOAD: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "load",
+    help_after: "no-human",
+    command: <LoadArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_load),
+};

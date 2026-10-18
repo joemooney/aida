@@ -10564,8 +10564,11 @@ User content.
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "queue", "load"])
                 .unwrap()
-                .command,
-            Command::Queue(cli::QueueCommand::Load { .. })
+                .command
+                .registered::<crate::queue_cmd::QueueArgs>(),
+            crate::queue_cmd::QueueArgs {
+                inner: cli::QueueCommand::Load { .. }
+            }
         ));
         // role repair — hidden under `role`, still parses.
         assert!(matches!(
@@ -14350,6 +14353,7 @@ pub(crate) static DOCTOR: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_doctor),
     };

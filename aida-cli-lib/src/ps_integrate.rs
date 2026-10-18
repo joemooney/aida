@@ -3484,6 +3484,7 @@ pub(crate) static PS: crate::command_registry::CommandReg = crate::command_regis
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
+        team_identity_write: false,
     },
     run: crate::command_registry::Handler::Early(run_ps),
 };
@@ -3620,6 +3621,7 @@ pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
             stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
         run: crate::command_registry::Handler::Early(run_integrate),
     };
