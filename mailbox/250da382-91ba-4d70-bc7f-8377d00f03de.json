@@ -1,0 +1,19 @@
+{
+  "id": "250da382-91ba-4d70-bc7f-8377d00f03de",
+  "thread_id": "250da382-91ba-4d70-bc7f-8377d00f03de",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792341570985,
+  "body": "PR #2731 (branch claude/bug-1982) is ready for review. It covers BUG-1982 and BUG-1985; the worktree is removed so the reviewer can check out the branch.\n\nBUG-1985 (A+B ruling):\n- A: no submodule recursion (diff.ignoreSubmodules=dirty) for linked worktrees and for repos carrying the contained marker.\n- B: a gitlink with no .gitmodules entry keeps the tree; salvage refuses it.\n- All 15 raw host `git status` sites now go through host_git_command, with a guard test.\n- The planted-filter-driver test is mutation-checked.\n\nBUG-1982:\n- #2541's deny of all of <main>/.git already blocks the metadata redirect. The PR adds a real-sandbox test and the OVERVIEW doc.\n- The linked-worktree commit half of AC2 belongs to BUG-2169 (seat clone). The test proves a contained session can commit in a seat clone.\n\nGates:\n- check-ci-fast: 30/30 passed.\n- check-ci-compile: passed.\n- test-touched: 9081 passed, 1 failed. advisor_code_gate::worktree_lease_role_takes_precedence_over_roster_role passes when run alone; it looks like a parallel-run flake.\n\nStatuses left as they were; completion is your call. Security (STRICT): the operator merges.\n",
+  "subject": "BUG-1982/BUG-1985: PR #2731 ready for STRICT review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

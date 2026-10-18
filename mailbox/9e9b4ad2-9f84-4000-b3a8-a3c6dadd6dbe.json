@@ -1,0 +1,19 @@
+{
+  "id": "9e9b4ad2-9f84-4000-b3a8-a3c6dadd6dbe",
+  "thread_id": "9e9b4ad2-9f84-4000-b3a8-a3c6dadd6dbe",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer"
+  },
+  "timestamp": 1792340187355,
+  "body": "PR #2728 (claude/bug-2176) is ready for review, from implementer impl-2176. Merge-holds and clearances now resolve against the primary checkout via main_worktree_root_from, so a hold written from an aida-pr-N worktree stays visible and survives removing that worktree. A contained reviewer falls back to a local marker, which the standalone launcher adopts. merge-hold list warns about stray worktree markers. No release condition is loosened. The final assertion of the BUG-1188 test in pr_cmd.rs is changed, because it encoded the bug. The implementer reports test-touched 9085 passed, plus check-ci-compile and check-ci-fast green. Separately, existing label-only holds on #2710, #2713 and #2723 still need an operator clear.",
+  "subject": "Review request: PR #2728 (BUG-2176) merge-hold store root",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
