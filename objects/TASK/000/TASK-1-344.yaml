@@ -1,0 +1,28 @@
+id: 01a150ca-cb4c-7f60-83d1-5d28c57d1002
+spec_id: TASK-1-344
+title: '[cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct un…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1803, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct unit tests for malformed lines, multiple HEAD symrefs, a non-refs/heads target or an unsafe branch name. Only the happy path is covered through the GitLab integration test.
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T20:53:50.028446395Z
+modified_at: 2026-10-18T20:53:50.028446395Z
+req_type: Task
+tags:
+- carried-from:TASK-1803
+- finding-hash:2b9d0c59
+- from-review:TASK-1803
+- kind:carried-forward
+filed_at:
+  code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
