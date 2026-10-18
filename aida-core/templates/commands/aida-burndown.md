@@ -17,8 +17,11 @@ Follow the workflow in `.claude/skills/aida-burndown/SKILL.md`:
    Report the parked count + reasons once; act on `ready` only. Empty → stop.
 3. Fan out one worktree-isolated implementer subagent per ready spec (bounded
    wave); each takes ONE spec end-to-end to a PR.
-4. Integrate (you do NOT implement): merge green+clean PRs, reconcile to
-   Completed, pull. HOLD any `review:draft-only` spec as a draft for the operator.
+4. Integrate (you do NOT implement): review each PR in a separate reviewer
+   process launched from Bash (`aida queue work PR-<n> --role reviewer --no-human`,
+   never an Agent-tool reviewer, never a verdict you record), then ship
+   approved green+clean PRs with `aida pr ship <n>`, reconcile to Completed,
+   pull. HOLD any `review:draft-only` spec as a draft for the operator.
 5. Punt-and-continue: a blocker parks ONE spec, never halts the wave. Never stop
    to ask; never down tools.
 6. Re-run `aida burndown plan`, launch the next wave, loop until `ready` empty;

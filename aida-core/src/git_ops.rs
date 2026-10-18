@@ -69,6 +69,20 @@ fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitR
 // trace:BUG-1929 | ai:claude
 pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     let cwd = cwd.as_ref();
+    // BUG-2169: a contained seat's private clone runs seat-written config and
+    // hooks; host git never runs there. Same fixed refusal process as below.
+    // trace:BUG-2169 | ai:claude
+    if let Some(clone_root) = crate::seat_clone_detect::seat_clone_root(cwd) {
+        let mut refused = Command::new("sh");
+        refused
+            .args([
+                "-c",
+                "printf '%s\n' \"$1\" >&2; exit 1",
+                "aida-seat-clone-refusal",
+            ])
+            .arg(crate::seat_clone_detect::host_git_refusal(&clone_root));
+        return refused;
+    }
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
         .args(host_git_hardening(cwd))
@@ -5247,7 +5261,13 @@ fn merge_gate_locked(store_path: &Path) -> Result<Vec<(String, String)>> {
         // doesn't double-allocate it.
         taken_short_ids.insert(agreed.to_ascii_uppercase());
 
+        let prior = req.clone(); // trace:STORY-1674 | ai:codex
         req.agreed_id = Some(agreed.clone());
+        crate::provenance::stamp_write(
+            &mut req,
+            Some(&prior),
+            &crate::provenance::WriteContext::capture(),
+        )?;
         object_store::write_object(&objects_root, &req)?;
         assignments.push((spec_id, agreed));
     }

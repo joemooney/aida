@@ -117,6 +117,7 @@ fn agent_new_same_worktree_adoption_preserves_ownership() {
         "codex",
         Some("rework-test".into()),
         Some(&lease.worktree_path),
+        /* contained_seat */ false,
     )
     .unwrap();
     assert_eq!(plan.lease_id.as_deref(), Some(lease.id.as_str()));
