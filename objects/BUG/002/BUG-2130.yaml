@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T23:34:04.554872418Z
-modified_at: 2026-10-18T21:04:55.417114703Z
+modified_at: 2026-10-18T21:31:21.323275311Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-10-15T04:23:14.569689374Z
   modified_at: 2026-10-15T04:23:14.569689374Z
   session_id: 20233459-56a6-48d3-8cb0-332dcfaf0277
+- id: 01a150ed-256b-7693-b541-74922a9ed76c
+  author: joe
+  content: 'ADVISOR RULING 2026-10-18 (PR-2735 round 2): condition (c) of the 2026-10-14 ruling STANDS. The writer switch lands only after the reader commit 3f7bcd28fd (TASK-1750 steps 1+2) ships in a tagged release, so mixed-version fleets keep reading new locks. PR-2735 stays open until that release exists; the operator cuts it. Before then, also fix the /tmp literal portability failure (bug_2130_liveness_identity_tests.rs:17) and minors 3 and 4 (an adopt-lease recycled-pid test and a legacy rfc3339 lock-blocks test).'
+  created_at: 2026-10-18T21:31:21.323275311Z
+  modified_at: 2026-10-18T21:31:21.323275311Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a13dbb-0d3a-74c3-bfcd-6b2e49d1497b
   author: aida-lease-take
