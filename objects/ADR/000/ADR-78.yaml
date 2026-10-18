@@ -17,8 +17,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T06:32:32.187575640Z
-modified_at: 2026-10-18T06:32:32.187575640Z
+modified_at: 2026-10-18T06:33:08.334613894Z
 req_type: Decision
+comments:
+- id: 01a14db6-cdee-7ce1-95a8-af249a671ef0
+  author: joe
+  content: Gates slice 4 of STORY-1728 (see the A4 amendment there).
+  created_at: 2026-10-18T06:33:08.334613894Z
+  modified_at: 2026-10-18T06:33:08.334613894Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 filed_at:
   code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
   branch: main
