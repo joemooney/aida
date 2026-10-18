@@ -1,0 +1,30 @@
+id: 01a1508f-5253-7432-9704-fefa99db7786
+spec_id: TASK-1919
+agreed_id: TASK-1919
+title: docs/autonomous-drain.md:1260 over-long unwrapped line
+description: 'docs/autonomous-drain.md:1258-1260 (environment-blocked section, edited in PR-2738) has an unwrapped over-long line unlike the surrounding prose. Rewrap. Raised in review of PR-2738: https://github.com/joemooney/aida/pull/2738'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T19:48:52.435364867Z
+modified_at: 2026-10-18T19:49:19.268350895Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2738
+- severity:cosmetic
+history:
+- id: 01a1508f-bc85-7be2-b91e-572c350373b1
+  author: joe
+  timestamp: 2026-10-18T19:49:19.621452499Z
+  session_id: 01a1508cad19
+  changes: []
+filed_at:
+  code_sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+  branch: pr-2738
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 01a1508cad19
