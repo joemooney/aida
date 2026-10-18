@@ -1,0 +1,20 @@
+id: 01a14f55-b5a5-7670-b9cc-08dba1d16c85
+spec_id: TASK-1814
+agreed_id: TASK-1814
+title: 'TASK-1801 follow-ups: nlink race on sibling evidence publish, residual path read in stamp_pr_review_verdict, metadata-only mtime read'
+description: 'Non-blocking findings from PR #2712 round-2 review (PASS). (1) phase_gates.rs:508-509 publishes sibling evidence via hard_link(temp,dest) then remove_file(temp), so dest briefly has st_nlink=2, which the new nlink!=1 rule refuses, and a concurrent collision read (:513) or phase-4/ship read can fail spuriously. Publish with rename (or linkat then unlink before exposing), with a concurrency test. (2) pr_merge_gate.rs:248 stamp_pr_review_verdict re-reads and rewrites the just-recorded verdict by path; route it through the anchored handle reader, or narrow the AGENTS.md/OVERVIEW.md ''every production verdict reader'' claim. (3) review_verdict.rs verdict_file_modified reads the full body (up to 1 MiB) just to get mtime; use a metadata-only handle open.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T14:06:19.557571907Z
+modified_at: 2026-10-18T14:06:19.557571907Z
+req_type: Task
+filed_at:
+  code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
