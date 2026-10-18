@@ -1130,7 +1130,7 @@ pub(crate) fn emit_session_ship(
 /// STORY-1700: the ship path's `refused` row, under the mandate active now
 /// (a refusal names no mandate id of its own).
 // trace:STORY-1700 | ai:claude
-pub(crate) fn emit_session_ship_refusal(root: &Path, pr: u64, message: &str) {
+pub(crate) fn ship_refused(root: &Path, pr: u64, message: &str) {
     let id = match crate::mandate::current_state() {
         MandateState::Active(m) | MandateState::Expired(m) | MandateState::Stopped(m) => m.id,
         MandateState::None => return,

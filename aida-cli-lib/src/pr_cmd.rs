@@ -2452,25 +2452,23 @@ pub(crate) fn pr_ship_handler(
         )
     };
     let mut mandate_cover = mandate_cover_now();
-    let mandate_refusal_note = |cover: &std::result::Result<
-        MandateCover,
-        crate::mandate::MandateRefusal,
-    >| match cover {
-        Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
-            let message = r.message(pr_number);
-            crate::events::record_gate_held(
-                &hold_root,
-                crate::events::GATE_MANDATE_SHIP,
-                None,
-                Some(pr_number),
-                &message,
-            );
-            // trace:STORY-1700 | ai:claude
-            crate::mandate_drive::emit_session_ship_refusal(&main_worktree, pr_number, &message);
-            format!(" {message}.")
-        }
-        _ => String::new(),
-    };
+    let mandate_refusal_note =
+        |cover: &std::result::Result<MandateCover, crate::mandate::MandateRefusal>| match cover {
+            Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
+                let message = r.message(pr_number);
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_MANDATE_SHIP,
+                    None,
+                    Some(pr_number),
+                    &message,
+                );
+                // trace:STORY-1700 | ai:claude
+                crate::mandate_drive::ship_refused(&main_worktree, pr_number, &message);
+                format!(" {message}.")
+            }
+            _ => String::new(),
+        };
 
     // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
     // without a live drive and whatever its reason text names. Checked HERE —
