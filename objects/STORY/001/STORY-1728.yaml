@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T13:00:50.164588351Z
+modified_at: 2026-10-18T13:31:02.390755803Z
 req_type: Story
 tags:
 - docs:impacted
@@ -114,6 +114,18 @@ comments:
   created_at: 2026-10-18T13:00:50.164588351Z
   modified_at: 2026-10-18T13:00:50.164588351Z
   session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+- id: 01a14f35-6776-7331-8799-1a67179644dd
+  author: joe
+  content: |-
+    ADVISOR RULINGS (2026-10-18 06:35, slice 1 / PR #2727).
+    (1) AMENDMENTS: A1, A2 and A3 (widened) ACKED as written. Also acked: A4 split out to ADR-78, which blocks slice 4, and A5 dropped, with misplaced helpers filed as follow-ups on TASK-1540/1541.
+    (2) ORDERING: REGISTRY is sorted alphabetically by command name, per the operator amendment. The signoff's 'by module' is superseded. help_after is ACCEPTED: it keeps aida --help and catalog order byte-identical while the list stays sorted. Conditions, each enforced by a unit test: every help_after anchor names a registered command or a still-legacy variant; anchors form no cycle; resolution is deterministic (ties broken by name); and the golden help snapshot stays the single proof of order. When the last legacy variant migrates, the anchors must resolve without the legacy enum.
+    (3) ACCEPTANCE 5 (Windows CI): RETIRED. ADR-72 makes AIDA Linux-only, and option B removed the linker mechanism AC5 guarded, so it now protects nothing. Replace it with: the ratchet, the source guard and the snapshot test run in Linux CI on every PR. The operator kept AC5 in the 20:33 amendment, but that predates this conflict; the operator may reinstate it.
+    (4) QUIET WINDOW (C2): granted. #2727 goes to an attested independent review once its CI is green and it is marked ready. If the review passes, #2727 ships before any other fire-wave PR, and the advisor holds every other ship until main CI is green on it. Other open PRs then merge main.
+    Still to do: fix BUG-2175 separately, not in slice 1.
+  created_at: 2026-10-18T13:31:02.390755803Z
+  modified_at: 2026-10-18T13:31:02.390755803Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
