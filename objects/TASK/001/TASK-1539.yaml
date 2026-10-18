@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:17:32.747189591Z
-modified_at: 2026-09-26T22:19:11.450664521Z
+modified_at: 2026-10-18T03:28:37.720251986Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -22,3 +22,10 @@ relationships:
   target_id: 01a0dfcc-054b-75a1-860a-cbec372bcace
   created_at: 2026-09-26T22:19:11.450661969Z
   created_by: joe
+comments:
+- id: 01a14d0d-e158-7b32-8b9a-eb7adaabd8c4
+  author: joe
+  content: 'Possible collision: STORY-1728 (per-module clap registration) would dissolve cli.rs into the command modules rather than extract it whole. Sequencing decision is pending advisor signoff on the STORY-1728 sketch.'
+  created_at: 2026-10-18T03:28:37.720251986Z
+  modified_at: 2026-10-18T03:28:37.720251986Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
