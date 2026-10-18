@@ -408,6 +408,7 @@ mod memories_cmd;
 mod merge_hold;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
+mod mandate_ship;
 mod mandate_traces;
 mod merge_lock;
 mod metrics;
