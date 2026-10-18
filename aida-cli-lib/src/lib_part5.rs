@@ -3074,9 +3074,13 @@ pub(crate) fn handle_review_record_at(
         // STORY-1655: the solo mode is consulted only when the author gate
         // would refuse, so its warnings never touch an independent approval.
         // trace:STORY-1655 | ai:claude
-        match review_author_gate(&authors, &recorder, !subjects.is_empty(), human_at_tty, || {
-            crate::solo_review::effective(&project_root)
-        }) {
+        match review_author_gate(
+            &authors,
+            &recorder,
+            !subjects.is_empty(),
+            human_at_tty,
+            || crate::solo_review::effective(&project_root),
+        ) {
             ReviewAuthorGate::Independent => {}
             ReviewAuthorGate::Refused(refusal) => anyhow::bail!(refusal),
             ReviewAuthorGate::SoloSelfApproval => {
