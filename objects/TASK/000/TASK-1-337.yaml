@@ -1,5 +1,6 @@
 id: 01a1502a-3e99-7fa0-b420-3199e4a5175c
 spec_id: TASK-1-337
+agreed_id: TASK-1406
 title: MergeHoldChanged placement events still go to the caller's .aida/events.jsonl (…
 description: 'MergeHoldChanged placement events still go to the caller''s .aida/events.jsonl (merge_hold.rs:633), while BUG-2176 moved hold markers to the primary checkout. As a result, unrecorded_marker_removals from the primary misses placements made from a linked worktree, and TAMPERING detection misses those holds. Not a regression. Fix: emit to hold_store_root(project_root). Raised in review of PR-2728: https://github.com/joemooney/aida/pull/2728#issuecomment-6253220813'
 status: Draft
@@ -15,6 +16,11 @@ tags:
 - kind:observation
 - linked:BUG-2176
 - severity:minor
+history:
+- id: 01a15050-3f40-75a3-a01c-c6a980b1a498
+  author: joe
+  timestamp: 2026-10-18T18:39:58.784784053Z
+  changes: []
 filed_at:
   code_sha: 12359cad47901b8dc374fd0cac345ed7133d1e9f
   branch: pr-2728
