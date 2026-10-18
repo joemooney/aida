@@ -337,13 +337,9 @@ fn is_mention_candidate(handle: &str) -> bool {
     const SOURCE_EXTS: &[&str] = &[
         ".rs", ".md", ".toml", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".py", ".sh",
     ];
-    let is_hex_sha = handle.len() >= 7
-        && handle.len() <= 40
-        && handle.bytes().all(|b| b.is_ascii_hexdigit())
-        && handle.bytes().any(|b| b.is_ascii_digit());
     aida_core::mailbox::recipient_id_rejection(handle).is_none()
         && !SOURCE_EXTS.iter().any(|ext| handle.ends_with(ext))
-        && !is_hex_sha
+        && !aida_core::mailbox::looks_like_hex_sha(handle)
 }
 
 /// BUG-2132: whether an `@token` in comment prose is plausibly a person or

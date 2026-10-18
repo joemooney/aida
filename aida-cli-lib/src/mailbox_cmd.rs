@@ -855,12 +855,9 @@ pub(crate) fn archive_phantom_inboxes(
             continue;
         };
         let trimmed = r.trim();
-        let is_hex_sha = (7..=40).contains(&trimmed.len())
-            && trimmed.chars().all(|c| c.is_ascii_hexdigit())
-            && trimmed.chars().any(|c| c.is_ascii_digit());
         let is_phantom = r != trimmed
             || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
-            || is_hex_sha
+            || aida_core::mailbox::looks_like_hex_sha(trimmed)
             || (msg.body.starts_with("You were mentioned on ")
                 && !known.contains(&trimmed.to_lowercase()));
         if !is_phantom {

@@ -248,6 +248,16 @@ pub enum Recipient {
     Broadcast,
 }
 
+/// TASK-1766: whether `id` has the shape of an abbreviated or full git commit
+/// SHA (7-40 hex chars with at least one digit), so `@6e5727ce3c` in comment
+/// prose is never treated as a mention or recipient. Shape only.
+// trace:TASK-1766 | ai:claude
+pub fn looks_like_hex_sha(id: &str) -> bool {
+    (7..=40).contains(&id.len())
+        && id.bytes().all(|b| b.is_ascii_hexdigit())
+        && id.bytes().any(|b| b.is_ascii_digit())
+}
+
 /// BUG-2132: why `id` cannot be a direct-message recipient, or `None` when its
 /// shape is acceptable. Rejects the shapes word-split arguments and stray
 /// `@` tokens produced (`-include`, `33492`, `BUG-52`, `L4425`): an id that

@@ -1380,7 +1380,8 @@ fn extract_mentions_ignores_inline_and_fenced_code_spans_and_hex_shas() {
                 git show @6e5727ce3c --to @2\n\
                 ```\n\
                 Also commit @6e5727ce3c and src/main.rs:@L4425 vs real @advisor and @claude-reviewer-1.";
-    let mentions = crate::punt_done::extract_mentions(text);
+    // trace:TASK-1766 | ai:claude
+    let mentions = crate::punt_done::extract_mention_candidates(text);
     assert_eq!(
         mentions,
         vec!["advisor".to_string(), "claude-reviewer-1".to_string()]
