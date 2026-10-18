@@ -10930,16 +10930,8 @@ pub(crate) fn honour_auto_complete_sandbox(
     // BUG-2151 ruling). `--permission-mode` must be refused under a contained parent.
     // trace:BUG-2166 | ai:antigravity
     let contained_env = session::aida_contained_env()?;
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     if !sandbox {
         return Ok(());
     }
@@ -10994,16 +10986,8 @@ pub(crate) fn resolve_queue_work_posture(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     let contained = sandbox || contained_env || contained_knob;
     if contained && bypass_knob {
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
@@ -11315,16 +11299,8 @@ pub(crate) fn handle_queue_work(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     let contained = sandbox || contained_env || contained_knob;
     // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
     // on a vendor that cannot apply it is refused HERE — before the queue_add
@@ -12544,6 +12520,9 @@ pub(crate) fn handle_queue_work(
             queue_work_self_claim(no_launch),
             // trace:TASK-1786 | ai:codex
             role_input.review_coexistence(&plan),
+            // trace:BUG-2169 | ai:claude
+            /* contained_seat */
+            contained,
         )
     };
     if no_launch {

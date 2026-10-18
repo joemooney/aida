@@ -56,6 +56,16 @@ pub(crate) fn recent_files_for_branch(
 /// (we treat an unparseable status as clean and let `git worktree
 /// remove --force` produce the authoritative error). trace:BUG-67 | ai:claude
 pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
+    // BUG-2169: never run host git in a contained seat's private clone. Report
+    // it as dirty (one explanatory entry) so every caller keeps the tree
+    // instead of reading the refusal as "clean".
+    // trace:BUG-2169 | ai:claude
+    if let Some(clone_root) = aida_core::seat_clone_detect::seat_clone_root(worktree) {
+        return vec![format!(
+            "?? ({})",
+            aida_core::seat_clone_detect::host_git_refusal(&clone_root)
+        )];
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(worktree)

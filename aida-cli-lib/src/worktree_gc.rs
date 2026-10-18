@@ -723,6 +723,20 @@ pub(crate) fn warn_if_cwd_removed() -> bool {
 /// Uses `git worktree list --porcelain`; the first record is always the
 /// main worktree. Falls back to `start` when git can't be invoked.
 pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a contained seat's private clone is its own first `worktree
+    // list` record, and git must never run inside it from here (its config
+    // and hooks are seat-writable). Resolve it from files instead. A clone
+    // that does not verify is refused: this infallible resolver points it at
+    // a path where every read, write and `git -C` fails, never at the clone.
+    // trace:BUG-2169 | ai:claude
+    match crate::seat_clone::main_for(start) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(clone_root) => {
+            eprintln!("{:#}", crate::seat_clone::unverified_refusal(&clone_root));
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
@@ -732,7 +746,12 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
-                    return std::path::PathBuf::from(p);
+                    let main = std::path::PathBuf::from(p);
+                    // BUG-2169: its clone leases now mark seat clones for
+                    // every host git builder in this process.
+                    // trace:BUG-2169 | ai:claude
+                    aida_core::seat_clone_detect::note_host_main(&main);
+                    return main;
                 }
             }
         }
@@ -743,6 +762,11 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
 /// Convenience wrapper that walks up from cwd. Same fallback semantics.
 pub(crate) fn find_main_worktree_root() -> Result<std::path::PathBuf> {
     let start = find_project_root()?;
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) = crate::seat_clone::main_for(&start)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
     Ok(main_worktree_root_from(&start))
 }
 
@@ -1997,6 +2021,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
                 /* review_coexistence */ None,
+                /* contained_seat */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()

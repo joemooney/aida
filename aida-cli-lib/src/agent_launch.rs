@@ -159,6 +159,8 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     use_pool,
                     !*launch,
                     /* review_coexistence */ None,
+                    // trace:BUG-2169 | ai:claude
+                    mode.contained,
                 )
             };
             // BUG-1918: `--launch` claims FOR the agent it starts; without
@@ -2047,16 +2049,8 @@ pub(crate) fn resolve_claude_new_posture(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if parent_contained {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, parent_contained)?;
     let contained_posture = || -> Result<ClaudeNewPosture> {
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
@@ -2554,8 +2548,16 @@ pub(crate) fn agent_new_with_config(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2793,8 +2795,16 @@ pub(crate) fn agent_new_bg_dispatch(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -3068,13 +3078,8 @@ pub(crate) fn resolve_interactive_launch_mode_under_parent(
     if !parent_contained {
         return resolve_interactive_launch_mode_for_root(flag, sandbox, root);
     }
-    if let Some(m) = flag.filter(|s| !s.is_empty()) {
-        anyhow::bail!(
-            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
-             is contained too — refusing `--permission-mode {m}`, which would run it with a \
-             different posture. Drop --permission-mode, or launch from an uncontained shell."
-        );
-    }
+    // trace:BUG-2172 | ai:codex
+    session::refuse_contained_permission_override(flag.filter(|s| !s.is_empty()), true)?;
     // trace:BUG-2131 | ai:claude
     aida_core::git_ops::ensure_git_supports_contained()?;
     Ok(ResolvedClaudeLaunch {
@@ -3378,7 +3383,15 @@ pub(crate) fn prepare_agent_launch(
     agent_type: &str,
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
-    prepare_agent_launch_with_cwd(project_root, role, spec, agent_type, custom_name, None)
+    prepare_agent_launch_with_cwd(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        None,
+        false,
+    )
 }
 
 // trace:BUG-2002 | ai:codex
@@ -3389,6 +3402,8 @@ fn prepare_agent_launch_with_cwd(
     agent_type: &str,
     custom_name: Option<String>,
     explicit_cwd: Option<&std::path::Path>,
+    // BUG-2169: the seat runs contained, so its tree may be a private clone.
+    contained_seat: bool,
 ) -> Result<AgentLaunchPlan> {
     // Persona launches never turn an optional `--spec` into ownership. They
     // stay in the project checkout and carry no lease/worktree.
@@ -3505,6 +3520,8 @@ fn prepare_agent_launch_with_cwd(
                     /* self_claim */
                     false,
                     /* review_coexistence */ None,
+                    // trace:BUG-2169 | ai:claude
+                    contained_seat,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

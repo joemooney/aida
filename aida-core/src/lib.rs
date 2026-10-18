@@ -148,6 +148,8 @@ pub mod review_config;
 pub mod rollup;
 #[cfg(feature = "native")]
 pub mod scaffolding;
+// trace:BUG-2169 | ai:claude — file-only detection of a contained seat's private clone.
+pub mod seat_clone_detect;
 #[cfg(feature = "native")]
 pub mod storage;
 // trace:TASK-1141 | ai:claude

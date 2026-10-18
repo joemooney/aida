@@ -4,15 +4,33 @@ file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
 process watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
 
+Regen generated-command execution defaults to a 30-second timeout per call;
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
+kills the process group and failed records retain timeout reasons. Each output
+stream is capped at 1 MiB; overflow fails without retaining child diagnostics.
+See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
+<!-- trace:TASK-1791 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.
 <!-- trace:TASK-1789 | ai:codex -->
 
+`aida usage show <SPEC> --provenance` reports persisted write context and
+read-only session-ledger evidence at or before each write. Harness versions
+come only from `AIDA_HARNESS_VERSION`; missing model/effort/token evidence stays
+unknown. Session totals overlap between events and must not be summed.
+See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
+
 Mandate exclusion-ledger reads validate the opened non-symlink regular file,
 mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
 mandate ships restore holds with explicit re-arm context in the placement event.
-Trace-derived exclusions remain separate pending work.
+Mandate exclusions also include committed base/head traces in changed source
+hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
+with full-file fallback when attribution
+fails. Trace IDs grant no completion or author/reviewer authority; unreadable
+evidence or a moving/dirty store refuses mandate coverage. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six
@@ -333,6 +351,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
+
+## Child launch containment
+
+Headless and interactive reviewer/resume launches strictly inherit
+`AIDA_CONTAINED`, even when a caller passes `contained=false`. Compete pins
+`dontAsk` and validates all vendors before any arm or artifact. Arms use their
+child worktree; judges use the project root with the same write boundary.
+Burndown and intake share the headless Claude posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
 
 ## Cache read behavior
 

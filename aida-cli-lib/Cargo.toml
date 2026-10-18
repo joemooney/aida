@@ -35,6 +35,9 @@ signal-hook = "0.3"
 # Pure-Rust unified-diff producer for `aida scaffold diff` (FR-1-027).
 # Lightweight, no hard dep on /usr/bin/diff — works on Windows too.
 similar = "2"
+# Parse committed Rust items for mandate-only exclusion attribution. trace:TASK-1790 | ai:codex
+syn = { version = "2", features = ["full", "visit"] }
+proc-macro2 = { version = "1", features = ["span-locations"] }
 serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
@@ -79,11 +82,6 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 # (PTY host + overlay + multi-tab + crash recovery) is complete, so
 # `aida tui` ships in release binaries. trace:STORY-137 | ai:claude
 tui = ["aida-tui"]
-
-[dev-dependencies]
-# Parse test-module boundaries for the engine guard. trace:TASK-1724 | ai:codex
-syn = { version = "2", features = ["full", "visit"] }
-proc-macro2 = "1"
 
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }
