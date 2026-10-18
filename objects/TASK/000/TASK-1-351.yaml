@@ -1,0 +1,29 @@
+id: 01a150f0-64ce-7380-abcd-1745380f25fb
+spec_id: TASK-1-351
+title: 'minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merg…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1663, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merges titled [k/N] or refactor(cli-lib): extract x.rs never auto-complete and --final-slice is refused for squash
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:34:54.158758776Z
+modified_at: 2026-10-18T21:34:54.158758776Z
+req_type: Task
+tags:
+- carried-from:STORY-1663
+- finding-hash:0e089c50
+- from-review:PR-2732
+- kind:carried-forward
+filed_at:
+  code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
