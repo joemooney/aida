@@ -1,0 +1,29 @@
+id: 01a14db6-40bb-7e71-b9fe-78ca0724425b
+spec_id: ADR-78
+agreed_id: ADR-78
+title: Remove or keep legacy --centralized mode (gates STORY-1728 slice 4)
+description: |
+  Decide whether to remove the legacy centralized (SQLite-canonical) backend, or keep it.
+
+  Context: STORY-1728 slice 4 would migrate the legacy-storage dispatch arms in lib_part1.rs run() into the command registry. The product already tells users this backend is deprecated (lib_part1.rs:4123-4147, "...the deprecated centralized backend with `aida db export-git`"). If the backend is removed, slice 4 becomes a deletion, and the registry's Phase enum only needs pre-store | git-backend.
+
+  Options:
+  1. Remove: delete the legacy-storage dispatch and the `--centralized` init path. `aida db export-git` remains the migration route. Needs a user-facing deprecation and removal note for existing requirements.db projects.
+  2. Keep: slice 4 migrates those arms under Phase::LegacyStorage.
+
+  Owner: Joe (operator) with the advisor. Must be decided before STORY-1728 slice 4 starts.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T06:32:32.187575640Z
+modified_at: 2026-10-18T06:32:32.187575640Z
+req_type: Decision
+filed_at:
+  code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: efcb10bb1c
+  vendor: claude
+  session: 43e47b00-c449-4778-8838-bd89a371ccc2
