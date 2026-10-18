@@ -212,6 +212,7 @@ mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
 mod worktree_gc;
+mod write_provenance;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;
@@ -501,6 +502,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
+mod seat_clone;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;

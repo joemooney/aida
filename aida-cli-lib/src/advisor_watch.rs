@@ -289,6 +289,51 @@ fn cold_boot_and_run(project_root: &Path, vendor: HeadlessVendor, prompt: &str) 
 mod tests {
     use super::*;
 
+    // trace:BUG-2172 | ai:codex
+    #[test]
+    fn cold_boot_inherits_containment_even_with_literal_false_call_site() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+        std::fs::create_dir_all(project.join(".aida")).unwrap();
+        std::fs::write(
+            project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        let fake = tmp.path().join("fake-claude");
+        let capture = tmp.path().join("capture");
+        crate::test_exec::write_executable(
+            &fake,
+            concat!(
+                "#!/bin/sh\n",
+                "printf '%s\\n' \"$AIDA_CONTAINED\" \"$@\" > \"$AIDA_TEST_CAPTURE\"\n",
+            ),
+        );
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &project,
+            "advisor",
+            &["advisor"],
+            &[
+                ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", Some("1")),
+                ("AIDA_TEST_CAPTURE", Some(capture.to_str().unwrap())),
+            ],
+        );
+        cold_boot_and_run(&project, HeadlessVendor::Claude, "prompt").unwrap();
+        let captured = std::fs::read_to_string(&capture).unwrap();
+        assert_eq!(captured.lines().next(), Some("1"));
+        assert!(captured.lines().any(|l| l == "--settings"));
+        assert!(captured.lines().any(|l| l == "--setting-sources"));
+        assert!(!captured.contains("bypassPermissions"));
+        // The same real call site must refuse an unsupported vendor before spawn.
+        std::fs::remove_file(&capture).unwrap();
+        let error = cold_boot_and_run(&project, HeadlessVendor::Codex, "prompt").unwrap_err();
+        assert!(error.to_string().contains("cannot run a contained session"));
+        assert!(!capture.exists());
+    }
+
     // The five existing decision cases, ported to the slice-3 signature with no
     // live event stream (`actionable_event = false`, `event_stream_live = false`)
     // — the degenerate-fallback path, which must behave EXACTLY as before.

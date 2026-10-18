@@ -2241,6 +2241,8 @@ fn doc_coverage_selects_completed_since_tag_without_doc() {
     let before = cutoff - Duration::days(1);
 
     let status_completed = |ts| HistoryEntry {
+        session_id: None,
+        harness_version: None,
         id: uuid::Uuid::new_v4(),
         author: "tester".into(),
         timestamp: ts,
@@ -5469,6 +5471,7 @@ fn entry_scope_session_match_decision_table() {
         added_by_machine: None,
     };
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: "abcdef123456".into(),
         scope: "EPIC-20".into(),
         slug: "epic-20".into(),
@@ -5913,6 +5916,7 @@ fn parent_project_root_for_session_returns_recorded_parent() {
     std::fs::create_dir_all(&leases).unwrap();
 
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: "abcdef123456".into(),
         scope: "EPIC-20".into(),
         slug: "epic-20".into(),

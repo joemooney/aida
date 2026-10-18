@@ -127,7 +127,7 @@ pub(crate) fn handle_doc_command(
                     });
                 }
                 backend.update_requirement(&doc_with_rels)?;
-                aida_core::object_store::write_object(&store_path.join("objects"), &doc_with_rels)?;
+                // trace:STORY-1674 | ai:codex — the backend persisted the stamped row.
             }
 
             println!(
