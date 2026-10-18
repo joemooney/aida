@@ -349,12 +349,15 @@ fn canonical_asciinema_flags_parse_as_top_level_wrapper() {
     ])
     .unwrap();
 
-    assert!(cli.asciinema);
+    assert!(cli.globals.asciinema);
     assert_eq!(
-        cli.cast_out,
+        cli.globals.cast_out,
         Some(std::path::PathBuf::from("/tmp/demo.cast"))
     );
-    assert_eq!(cli.cast_title.as_deref(), Some("Demo: overnight drain"));
+    assert_eq!(
+        cli.globals.cast_title.as_deref(),
+        Some("Demo: overnight drain")
+    );
     match cli.command {
         Command::Queue(QueueCommand::Work {
             batch,

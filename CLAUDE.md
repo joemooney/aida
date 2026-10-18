@@ -18,6 +18,10 @@ needed.
   explicitly for developers/operators.
 - Architecture changes require a sketch on the owning spec and advisor signoff
   before implementation.
+- A new CLI command registers from its own module in
+  `aida-cli-lib/src/command_registry.rs`; do not add variants to the legacy
+  `Command` enum in `cli.rs` (a ratchet test fails). See the repository guide's
+  "Adding or changing a CLI command".
 
 ## Develop AIDA itself
 

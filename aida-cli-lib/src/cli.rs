@@ -114,6 +114,19 @@ pub enum ApprovalCommand {
                   Run `aida help --all` for the full command surface grouped by topic."
 )]
 pub struct Cli {
+    #[clap(flatten)]
+    pub globals: GlobalArgs,
+
+    #[clap(subcommand)]
+    pub command: Command,
+}
+
+// The top-level options, shared by both dispatch paths: a registered command
+// has no `Command` variant to parse through, so its handler reads these from
+// the same `ArgMatches`. No doc comment: on a flattened `Args` struct it would
+// replace the root `about`. trace:STORY-1728 | ai:claude
+#[derive(clap::Args, Debug)]
+pub struct GlobalArgs {
     /// Path to the requirements file (overrides auto-detection)
     #[clap(long)]
     pub file: Option<String>,
@@ -150,9 +163,6 @@ pub struct Cli {
     /// settable via AIDA_OUTPUT_FORMAT (the flag wins).
     #[clap(long, global = true, value_enum, value_name = "FORMAT")]
     pub format: Option<OutputFormat>,
-
-    #[clap(subcommand)]
-    pub command: Command,
 }
 
 /// Hidden substrate machinery invoked by hooks / scaffolding, not by humans.
@@ -12790,34 +12800,6 @@ pub enum Command {
         action: Option<StatuslineAction>,
     },
 
-    /// Mark yourself away from the keyboard. Sets a machine-global presence
-    /// state (a timestamped `~/.aida/presence.toml` file — no daemon) that
-    /// stays `away` until its TTL lapses (default 8h) or you return. An
-    /// interactive command auto-flips you back to `home`.
-    ///
-    /// Presence is ADVISORY input to mode selection: while away, an
-    /// `aida queue work --auto-complete` with no explicit `--no-human` /
-    /// `--escalate-*` flag defaults to a headless drain; explicit flags always
-    /// win and integrity gates (the kickoff scope-ack, CI, merge-on-green) always
-    /// apply. Tune under `[presence]` in `.aida/config.toml`:
-    ///   consumers  = "on" | "off"            (master switch; default on)
-    ///   away_drain = "headless-both"         (default) | "headless-escalate-defaults" | "headless-park"
-    ///   escalation = "defaults" | "park"     (punt handling; unset = derive from away_drain)
-    ///   home_offer = "surface" | "dont-block" (home-side; default surface)
-    ///
-    /// Hidden alias for `aida presence away` (kept for muscle memory).
-    // trace:TASK-756 trace:STORY-561 | ai:claude
-    // trace:TASK-851 | ai:claude
-    #[clap(hide = true)]
-    Away,
-
-    /// Mark yourself back at the keyboard (clears any away state). Hidden alias
-    /// for `aida presence home` (kept for muscle memory).
-    // trace:TASK-756 trace:STORY-561 | ai:claude
-    // trace:TASK-851 | ai:claude
-    #[clap(hide = true)]
-    Home,
-
     /// Operator presence — the home/away state the autonomy ladder keys on.
     /// `aida presence` (or `aida presence status`) shows the current state;
     /// `aida presence away` / `aida presence home` set it. While away, an
@@ -12887,18 +12869,6 @@ pub enum Command {
     // trace:TASK-851 | ai:claude
     #[clap(hide = true)]
     Whoami,
-
-    /// (internal) Background fetch worker spawned by `aida statusline`.
-    /// Fetches `origin/<branch>` for the orphan store at <store-path>,
-    /// updates `~/.aida/cache/last-fetch.toml`, and removes the
-    /// per-project lockfile. Not intended for direct invocation —
-    /// statusline forks this as a detached process with stdio nulled.
-    // trace:STORY-79 | ai:claude
-    #[clap(name = "_bg-fetch", hide = true)]
-    BgFetch {
-        /// Absolute path to the orphan-store worktree (`.aida-store/`).
-        store_path: std::path::PathBuf,
-    },
 
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses
@@ -14305,6 +14275,12 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<AliasCommand>,
     },
+
+    // A command owned by a module in `command_registry::REGISTRY`, parsed by
+    // `command_registry::parse_from`; clap never derives it.
+    // trace:STORY-1728 | ai:claude
+    #[clap(skip)]
+    Registered(crate::command_registry::Invocation),
 }
 
 /// The closed, explicit host-verification command group.
@@ -15153,7 +15129,7 @@ mod tests {
     // reproduce the exact crash path. trace:BUG-1141 | ai:claude
     #[test]
     fn cli_arg_tree_has_no_definition_conflicts() {
-        Cli::command().debug_assert();
+        crate::command_registry::built_command().debug_assert();
     }
 
     // trace:STORY-1693 | ai:claude
@@ -15531,7 +15507,7 @@ mod tests {
     #[test]
     fn help_text_carries_no_trace_markers() {
         let mut leaks = Vec::new();
-        collect_leaks(&Cli::command(), "", &mut leaks);
+        collect_leaks(&crate::command_registry::built_command(), "", &mut leaks);
         assert!(
             leaks.is_empty(),
             "SPEC-ID trace markers leaked into `--help` output — demote the \

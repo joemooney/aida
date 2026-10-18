@@ -20,6 +20,10 @@ common_rg=(
   # trace:BUG-1665 | ai:claude
   --glob '!/CHANGELOG.md'
   --glob '!tests/test_check_removed_flags.sh'
+  # The golden help snapshot is rendered from the clap definitions, which are
+  # scanned at their source; a stale spelling is fixed there and regenerated.
+  # trace:STORY-1728 | ai:claude
+  --glob '!aida-cli-lib/src/tests/golden/**'
 )
 
 literal_patterns=(

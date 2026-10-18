@@ -1987,8 +1987,8 @@ pub(crate) fn handle_git_backend_command(
         Command::Tui { .. } => unreachable!("tui is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
-        Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {
+        Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
+        Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784

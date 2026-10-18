@@ -162,12 +162,11 @@ pub(crate) fn load_table(path: &Path) -> Result<Vec<(String, String)>> {
 }
 
 /// The set of real top-level subcommand names + aliases, derived from the live
-/// clap command tree (`Cli::command()`) — the single source of truth for "what
+/// clap command tree (`command_registry::built_command()`) — the single source of truth for "what
 /// is a real subcommand". A user alias may not shadow any of these.
 /// trace:TASK-877 | ai:claude
 pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
-    use clap::CommandFactory;
-    let cmd = crate::cli::Cli::command();
+    let cmd = crate::command_registry::built_command();
     let mut names = std::collections::HashSet::new();
     for sub in cmd.get_subcommands() {
         names.insert(sub.get_name().to_string());

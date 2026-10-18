@@ -12976,7 +12976,7 @@ mod tests {
 
         for role in ["guest", "requester"] {
             for (argv, mcp_tool) in cases {
-                let mut cli = crate::Cli::try_parse_from(*argv)
+                let mut cli = crate::command_registry::try_parse_from(*argv)
                     .unwrap_or_else(|err| panic!("invalid parity argv {argv:?}: {err}"));
                 let cli_action = crate::stakeholder_cli_action(&cli.command);
                 let cli_result =
