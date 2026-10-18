@@ -2772,9 +2772,15 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String 
     // root, so no write roots (outside git) grants no store paths either: the
     // boundary stays fail closed.
     // trace:BUG-1929 | ai:claude
+    // BUG-1982: `<main>/.git` is denied whatever the store grant, so a launch
+    // that grants no store paths (the git version check below failing) still
+    // keeps the main git directory read-only. trace:BUG-1982.ace25510
+    // trace:BUG-1982 | ai:claude
+    let mut main_git_deny: Vec<PathBuf> = Vec::new();
     let store_paths = match write_roots.first() {
         Some(worktree) => {
             let main = crate::main_worktree_root_from(worktree);
+            main_git_deny.push(main.join(".git"));
             aida_core::db::prime_cache_sidecars(&main.join(".aida").join("cache.db"));
             // Host-owned hooks must exist before the sandbox makes the common
             // git directory read-only. Every later store write re-verifies them
@@ -2808,7 +2814,13 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String 
         }
         None => Vec::new(),
     };
-    contained_settings_json_with_store(&allowed_hosts, managed_only, write_roots, &store_paths)
+    contained_settings_json_with_boundary(
+        &allowed_hosts,
+        managed_only,
+        write_roots,
+        &store_paths,
+        &main_git_deny,
+    )
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2937,6 +2949,34 @@ pub(crate) fn contained_settings_json_with_store(
     write_roots: &[PathBuf],
     store_write_paths: &[PathBuf],
 ) -> String {
+    contained_settings_json_with_boundary(
+        allowed_hosts,
+        managed_domains_only,
+        write_roots,
+        store_write_paths,
+        &[],
+    )
+}
+
+/// [`contained_settings_json_with_store`] plus `extra_deny`: paths denied in
+/// both the sandbox (`denyWrite`) and the direct tool rules even when no store
+/// path is granted (BUG-1982: the main git directory). A path that cannot be
+/// expressed exactly is skipped, as for the store denies.
+// trace:BUG-1982 | ai:claude
+pub(crate) fn contained_settings_json_with_boundary(
+    allowed_hosts: &[String],
+    managed_domains_only: bool,
+    write_roots: &[PathBuf],
+    store_write_paths: &[PathBuf],
+    extra_deny: &[PathBuf],
+) -> String {
+    let mut deny_paths =
+        crate::contained_boundary::contained_store_deny_write_paths(store_write_paths);
+    for path in extra_deny {
+        if !deny_paths.contains(path) {
+            deny_paths.push(path.clone());
+        }
+    }
     let mut sandbox = serde_json::json!({
         "enabled": true,
         "failIfUnavailable": true,
@@ -2962,8 +3002,24 @@ pub(crate) fn contained_settings_json_with_store(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
-    if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
-        sandbox["filesystem"] = filesystem;
+    let extra_entries = crate::contained_boundary::sandbox_allow_write_entries(extra_deny);
+    match crate::contained_boundary::sandbox_filesystem(store_write_paths) {
+        Some(mut filesystem) => {
+            if let Some(entries) = filesystem["denyWrite"].as_array_mut() {
+                for entry in extra_entries {
+                    let entry = serde_json::Value::String(entry);
+                    if !entries.contains(&entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+            sandbox["filesystem"] = filesystem;
+        }
+        // trace:BUG-1982 | ai:claude
+        None if !extra_entries.is_empty() => {
+            sandbox["filesystem"] = serde_json::json!({ "denyWrite": extra_entries });
+        }
+        None => {}
     }
     // Tool writes do not pass through Bash's OS sandbox, so deny the host
     // git authority paths in both layers (including exact pointer files).
@@ -2972,7 +3028,7 @@ pub(crate) fn contained_settings_json_with_store(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths) {
+    for path in &deny_paths {
         if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
             for tool in crate::contained_boundary::WRITE_TOOLS {
                 deny.push(format!("{tool}(/{abs})"));

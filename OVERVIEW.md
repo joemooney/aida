@@ -374,14 +374,19 @@ and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
 A contained session has no write access to the main git directory. Launch
-settings deny all of `<main>/.git` in both the sandbox and the direct tool
-rules. That covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`,
-which would otherwise let a session point host git at a git directory it
-controls. It also covers the shared config, hooks, refs and objects. Claude
-Code also denies writes to a worktree's own `.git` pointer. The remaining
-`<main>/.git` write surface is therefore empty, so a contained seat commits in its own
-private clone (BUG-2169), not in a linked worktree. Real-sandbox evidence:
-`aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
+settings deny all of `<main>/.git` in both the sandbox (`denyWrite`) and the
+direct tool rules, whether or not the store write paths are granted. That
+covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`, which would
+otherwise let a session point host git at a git directory it controls. It also
+covers the shared config, hooks, refs and objects. Claude Code itself denies
+writes to a worktree's own `.git` pointer. While these denies are in place,
+Claude Code (verified on 2.1.302) leaves no writable path under `<main>/.git`.
+This is conditional: it holds only for sessions launched with AIDA's contained
+settings on a Claude Code whose sandbox applies `denyWrite` over its own grants.
+As a consequence, a contained session in a linked worktree cannot commit,
+because its index and objects live under the denied directory. A contained seat
+commits in its own private clone instead (BUG-2169). Real-sandbox and unit
+evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
 <!-- trace:BUG-1982 | ai:claude -->
 
 Host git over a code tree a contained session may have written (a linked

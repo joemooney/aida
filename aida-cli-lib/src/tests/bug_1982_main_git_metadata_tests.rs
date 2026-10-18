@@ -11,6 +11,11 @@
 //!   commits there while the same probes fail. The fixture lives under the
 //!   operator's real `~/.cache`, outside every sandbox-writable temp directory.
 //!
+//! - Unit (CI): `bug_1982_main_git_denied_whatever_the_store_grant` checks the
+//!   launch settings deny `<main>/.git` (sandbox `denyWrite` and tool rules)
+//!   both with the store grant and when the git version check withholds it.
+//! - Doc (CI): `bug_1982_overview_documents_the_main_git_write_surface`.
+//!
 //! trace:BUG-1982 | ai:claude
 
 use std::path::{Path, PathBuf};
@@ -106,10 +111,131 @@ fn run_contained(tree: &Path, home: &Path, script: &str) -> String {
     transcript
 }
 
+/// `sandbox.filesystem.denyWrite` and `permissions.deny` of `settings`.
+fn denies(settings: &serde_json::Value) -> (Vec<String>, Vec<String>) {
+    let strings = |v: &serde_json::Value| -> Vec<String> {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    (
+        strings(&settings["sandbox"]["filesystem"]["denyWrite"]),
+        strings(&settings["permissions"]["deny"]),
+    )
+}
+
+// The launch settings for a contained session in a linked worktree deny the
+// whole main git directory in both layers, which covers
+// `worktrees/<wt>/{commondir,gitdir,config.worktree}`. That holds when the
+// store grant is withheld too (git older than 2.40, or an unparsable
+// version): the deny never depends on the grant.
+// trace:BUG-1982.ace25510 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1982_main_git_denied_whatever_the_store_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let main = parent.join("main");
+    std::fs::create_dir_all(&main).unwrap();
+    run(&main, "git", &["init", "-q", "-b", "main"]);
+    run(
+        &main,
+        "git",
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let worktree = parent.join("wt");
+    run(
+        &main,
+        "git",
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "wt",
+            worktree.to_str().unwrap(),
+        ],
+    );
+    let main_git = main.join(".git");
+    let sandbox_entry = format!("/{}", main_git.display());
+    let tool_rule = format!("Edit(/{}/**)", main_git.display());
+    let roots = crate::contained_boundary::contained_write_roots(&worktree);
+    for version in ["git version 2.43.0", "git version 2.39.5", "not a version"] {
+        aida_core::git_ops::with_host_git_version(version, || {
+            let json = crate::session::claude_contained_settings_json(&roots);
+            let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
+            let (deny_write, deny) = denies(&settings);
+            assert!(
+                deny_write.contains(&sandbox_entry),
+                "{version}: sandbox denyWrite must cover {}: {settings}",
+                main_git.display()
+            );
+            assert!(
+                deny.contains(&tool_rule),
+                "{version}: tool rules must deny {}: {settings}",
+                main_git.display()
+            );
+            let granted = settings["sandbox"]["filesystem"]["allowWrite"]
+                .as_array()
+                .is_some_and(|a| !a.is_empty());
+            assert_eq!(
+                granted,
+                version == "git version 2.43.0",
+                "{version}: store grant only on a supported git: {settings}"
+            );
+        });
+    }
+    // Every redirect target lies under the denied directory.
+    let meta = main_git.join("worktrees").join("wt");
+    for name in ["commondir", "gitdir", "config.worktree"] {
+        assert!(meta.join(name).starts_with(&main_git));
+    }
+}
+
+// The remaining `<main>/.git` write surface, its condition and the
+// linked-worktree commit limit are documented.
+// trace:BUG-1982.ac549f55 | ai:claude
+#[test]
+fn bug_1982_overview_documents_the_main_git_write_surface() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let overview = std::fs::read_to_string(workspace.join("OVERVIEW.md")).unwrap();
+    let start = overview
+        .find("A contained session has no write access to the main git directory")
+        .expect("OVERVIEW.md documents the main git directory boundary");
+    let section = &overview[start..];
+    let section = &section[..section.find("trace:BUG-1982").expect("traced section")];
+    for needle in [
+        "commondir",
+        "gitdir",
+        "config.worktree",
+        "`.git` pointer",
+        "While these denies are in place",
+        "cannot commit",
+        "BUG-2169",
+    ] {
+        assert!(section.contains(needle), "missing {needle:?}: {section}");
+    }
+}
+
 // Costs two model calls, so CI skips it unless `AIDA_TEST_REAL_CLAUDE=1`.
 // Optional: `AIDA_TEST_CLAUDE_BIN` (default `claude`),
 // `AIDA_TEST_REAL_CLAUDE_MODEL` (default `haiku`).
-// trace:BUG-1982 | ai:claude
+// trace:BUG-1982.ac7f9407 | ai:claude
+// trace:BUG-1982.ace25510 | ai:claude
 #[cfg(unix)]
 #[test]
 fn real_claude_contained_session_cannot_redirect_main_git_metadata() {
@@ -217,6 +343,19 @@ fn real_claude_contained_session_cannot_redirect_main_git_metadata() {
         .unwrap_or_else(|e| panic!("the linked-worktree probe never ran: {e}"));
     assert!(!probe.contains("wrote "), "{probe}");
     assert_unchanged("linked worktree", &probe);
+    // A linked worktree's index and objects live under the denied
+    // `<main>/.git`, so a contained session there cannot commit; the seat
+    // clone below is the contained commit path (BUG-2169).
+    assert!(
+        probe.lines().any(|l| l.trim() == "commit-failed"),
+        "a contained session in a linked worktree cannot commit: {probe}"
+    );
+    let pool_head = run(&worktree, "git", &["rev-parse", "HEAD"]);
+    assert_eq!(
+        pool_head,
+        run(&main, "git", &["rev-parse", "main"]),
+        "the linked worktree's branch must not move: {probe}"
+    );
     // The host still resolves the worktree to main's repository.
     let common = run(
         &worktree,
