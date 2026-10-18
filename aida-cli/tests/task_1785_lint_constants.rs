@@ -115,7 +115,7 @@ fn fixture() -> Fixture {
             "// trace:{} | ai:claude\n\
              pub fn throttle(io: u32, cpu: u32) -> bool {{\n\
              \x20   let retries = 7; // arbitrary: retry budget\n\
-             \x20   io > 15 || cpu > 40 || retries == 0\n\
+             \x20   io > 15 || cpu > 0x28 || retries == 0\n\
              }}\n\
              \n\
              pub fn untraced() -> u32 {{ 99 }}\n",
@@ -126,6 +126,26 @@ fn fixture() -> Fixture {
     f
 }
 
+/// Every file under the store's objects directory, with its contents.
+fn store_snapshot(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
+    fn walk(dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else {
+                out.push((path.clone(), std::fs::read(&path).unwrap()));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&f.repo.join(".aida-store/objects"), &mut out);
+    out.sort();
+    out
+}
+
+// trace:TASK-1785.Fixture | ai:claude
+// trace:TASK-1785.acbc344f | ai:claude
 #[test]
 fn only_the_unexplained_literal_is_reported() {
     let f = fixture();
@@ -135,12 +155,14 @@ fn only_the_unexplained_literal_is_reported() {
     assert_eq!(findings.len(), 1, "{out}");
     assert_eq!(findings[0]["file"], "src/lib.rs");
     assert_eq!(findings[0]["line"], 4);
+    assert_eq!(findings[0]["literal"], "0x28");
     assert_eq!(findings[0]["value"], "40");
     assert_eq!(findings[0]["specs"][0], f.spec.as_str());
     assert_eq!(v["explained"], 1);
 
     let human = ok(&f, "implementer", &["lint", "constants"]);
     assert!(human.contains("src/lib.rs:4"), "{human}");
+    assert!(human.contains("0x28 (= 40)"), "{human}");
     assert!(human.contains(&f.spec), "{human}");
     assert!(
         !human.contains("99"),
@@ -148,19 +170,28 @@ fn only_the_unexplained_literal_is_reported() {
     );
 }
 
+// trace:TASK-1785.acc556d1 | ai:claude
 #[test]
 fn nonzero_exit_only_with_fail_on() {
     let f = fixture();
+    let before = store_snapshot(&f);
+    assert!(!before.is_empty(), "fixture store has objects");
     let out = run(
         &f,
         "implementer",
         &["lint", "constants", "--fail-on", "unexplained"],
     );
     assert_eq!(out.status.code(), Some(1));
+    ok(&f, "implementer", &["lint", "constants", "--json"]);
+    assert_eq!(
+        store_snapshot(&f),
+        before,
+        "lint constants must not edit the store"
+    );
     let src = f.repo.join("src/lib.rs");
     let marked = std::fs::read_to_string(&src)
         .unwrap()
-        .replace("cpu > 40 ||", "cpu > 40 || // arbitrary\n   ");
+        .replace("cpu > 0x28 ||", "cpu > 0x28 || // arbitrary\n   ");
     std::fs::write(&src, marked).unwrap();
     ok(
         &f,
@@ -169,6 +200,7 @@ fn nonzero_exit_only_with_fail_on() {
     );
 }
 
+// trace:TASK-1785.ac01c879 | ai:claude
 #[test]
 fn spec_text_lint_is_unchanged() {
     let f = fixture();

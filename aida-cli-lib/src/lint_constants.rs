@@ -1,16 +1,20 @@
 //! `aida lint constants` — numeric literals in traced Rust code that the
 //! owning spec never explains (TASK-1785, slice 2 of STORY-1672).
 //!
-//! A traced region is a Rust function or `const`/`static` item with a
-//! `trace:<SPEC-ID>` marker in its comments or in the comment block directly
-//! above it. Every integer/float literal inside such a region is checked
+//! Traced regions follow the existing trace conventions: a module-level
+//! `//!` anchor covers the whole file (as in `aida trace coverage`), and a
+//! marker inside an item or in its leading comment/blank prefix covers that
+//! item (as in the mandate trace evidence), where items are functions,
+//! `impl` blocks (so an impl-level marker covers its methods), consts and
+//! statics. Every integer/float literal inside a traced region is checked
 //! against the owning specs: it is explained when its normalized value
 //! appears in a spec's description or in a decision linked to that spec.
 //! Only 0, 1 and literals on a line carrying `// arbitrary` are exempt.
 //! Report-only: nothing here writes to the store.
 // trace:TASK-1785 | ai:claude
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use serde::Serialize;
@@ -18,6 +22,16 @@ use syn::{spanned::Spanned, visit::Visit};
 
 use crate::cli::LintConstantsFailOn;
 use crate::{find_project_root, load_store_for_lookup};
+
+/// Numbers in free text: radix-prefixed integers, or decimal digits with
+/// optional `_`/`,` groups and a fraction. Boundaries are checked by hand.
+static TEXT_NUMBER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"(?i)0x[0-9a-f_]+|0o[0-7_]+|0b[01_]+|\d[\d_]*(?:,\d+)*(?:\.\d+)?").unwrap()
+});
+
+/// The `// arbitrary` / `// arbitrary: <reason>` silencing marker.
+static ARBITRARY_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"//\s*arbitrary(?:\s*:|\s|$)").unwrap());
 
 /// One numeric literal found inside a traced region.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +42,7 @@ pub(crate) struct TracedLiteral {
     pub(crate) literal: String,
     /// The normalized value it is compared by (`15`, `4096`).
     pub(crate) value: String,
-    /// Owning spec ids from every enclosing traced region.
+    /// Owning spec ids from the file anchor and every enclosing traced item.
     pub(crate) specs: Vec<String>,
     /// `true` for 0/1 and `// arbitrary`-marked lines.
     pub(crate) exempt: bool,
@@ -53,6 +67,9 @@ pub(crate) struct ConstantsReport {
     pub(crate) literals_checked: usize,
     pub(crate) explained: usize,
     pub(crate) exempt: usize,
+    /// Owning trace ids that resolve to no spec in the store: nothing under
+    /// them can be explained.
+    pub(crate) unresolved_specs: BTreeSet<String>,
     pub(crate) findings: Vec<ConstantFinding>,
 }
 
@@ -88,31 +105,48 @@ pub(crate) fn normalize_rust_literal(lit: &syn::Lit) -> Option<String> {
     }
 }
 
-/// Every number mentioned in free text, normalized the same way as literals:
-/// decimal (with `_` or `,`-thousands separators), decimals with a fraction,
-/// and `0x`/`0o`/`0b` forms. PURE.
+/// Every number mentioned in free text, normalized the same way as literals.
+/// A number glued to an identifier or id (`TASK-1785`, `sha256`, `#12`), or
+/// part of a version, date or time (`v0.15.0`, `2026-10-15`, `08:38`) is not
+/// a mention; a trailing unit (`50MB`, `15s`) is. A comma group reads as one
+/// thousands-separated number (`1,600`, `100,000,000`) when every later group
+/// has three digits and the first is shorter or a later group is `000`;
+/// otherwise as a list (`100,200,300`). PURE.
 pub(crate) fn numbers_in_text(text: &str) -> HashSet<String> {
-    let re = regex::Regex::new(
-        r"(?i)\b0x[0-9a-f_]+\b|\b0o[0-7_]+\b|\b0b[01_]+\b|\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d[\d_]*(?:\.\d+)?",
-    )
-    .unwrap();
+    let bytes = text.as_bytes();
     let mut out = HashSet::new();
-    for m in re.find_iter(text) {
-        let raw = m.as_str().replace(['_', ','], "");
-        let lower = raw.to_ascii_lowercase();
-        let value = if let Some(hex) = lower.strip_prefix("0x") {
-            normalize_number(hex, 16, false)
-        } else if let Some(oct) = lower.strip_prefix("0o") {
-            normalize_number(oct, 8, false)
-        } else if let Some(bin) = lower.strip_prefix("0b") {
-            normalize_number(bin, 2, false)
-        } else if raw.contains('.') {
-            normalize_number(&raw, 10, true)
+    for m in TEXT_NUMBER_RE.find_iter(text) {
+        let before = m.start().checked_sub(1).map(|i| bytes[i]);
+        if before.is_some_and(|b| b.is_ascii_alphanumeric() || b"-._:#".contains(&b)) {
+            continue;
+        }
+        let after = bytes.get(m.end()).copied();
+        let after_digit = bytes.get(m.end() + 1).is_some_and(u8::is_ascii_digit);
+        if after.is_some_and(|b| b"-:.".contains(&b)) && after_digit {
+            continue;
+        }
+        let raw = m.as_str().to_ascii_lowercase();
+        let radix = [("0x", 16), ("0o", 8), ("0b", 2)]
+            .into_iter()
+            .find_map(|(p, r)| raw.strip_prefix(p).map(|d| (d.replace('_', ""), r)));
+        if let Some((digits, radix)) = radix {
+            out.extend(normalize_number(&digits, radix, false));
+            continue;
+        }
+        let groups: Vec<&str> = raw.split(',').collect();
+        let thousands = groups.len() == 1
+            || (groups[1..]
+                .iter()
+                .all(|g| g.split('.').next().is_some_and(|d| d.len() == 3))
+                && (groups[0].len() < 3 || groups[1..].iter().any(|g| g.starts_with("000"))));
+        let parts = if thousands {
+            vec![raw.replace(',', "")]
         } else {
-            normalize_number(&raw, 10, false)
+            groups.iter().map(|g| g.to_string()).collect()
         };
-        if let Some(v) = value {
-            out.insert(v);
+        for part in parts {
+            let digits = part.replace('_', "");
+            out.extend(normalize_number(&digits, 10, digits.contains('.')));
         }
     }
     out
@@ -121,19 +155,23 @@ pub(crate) fn numbers_in_text(text: &str) -> HashSet<String> {
 /// True when a line's comment text carries the `// arbitrary` marker
 /// (optionally `// arbitrary: <reason>`). PURE.
 fn is_arbitrary_marker(comment: &str) -> bool {
-    let re = regex::Regex::new(r"//\s*arbitrary(?:\s*:|\s|$)").unwrap();
-    re.is_match(comment)
+    ARBITRARY_RE.is_match(comment)
 }
 
 /// Line ranges (0-based, end-exclusive) of the items that can be traced
-/// regions: functions, methods, trait default methods, consts and statics.
+/// regions: functions, impl blocks, methods, trait default methods, consts
+/// and statics. The second field ends the lines whose markers the item owns:
+/// its whole span, except an impl owns only markers up to its `{` line, so
+/// one method's marker never leaks to its siblings.
 #[derive(Default)]
-struct Regions(Vec<std::ops::Range<usize>>);
+struct Regions(Vec<(std::ops::Range<usize>, usize)>);
 
 impl Regions {
     fn push(&mut self, span: proc_macro2::Span) {
-        self.0
-            .push(span.start().line.saturating_sub(1)..span.end().line);
+        self.0.push((
+            span.start().line.saturating_sub(1)..span.end().line,
+            span.end().line,
+        ));
     }
 }
 
@@ -141,6 +179,14 @@ impl<'ast> Visit<'ast> for Regions {
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         self.push(node.span());
         syn::visit::visit_item_fn(self, node);
+    }
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        let span = node.span();
+        self.0.push((
+            span.start().line.saturating_sub(1)..span.end().line,
+            node.brace_token.span.open().start().line,
+        ));
+        syn::visit::visit_item_impl(self, node);
     }
     fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
         self.push(node.span());
@@ -186,40 +232,40 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
     let comments = crate::mandate_traces::rust_comments(text)?;
     let lines: Vec<&str> = text.lines().collect();
     let anchor = crate::trace::coverage_anchor_re();
+    let ids = |c: &str| -> Vec<String> {
+        anchor
+            .captures_iter(c)
+            .map(|cap| cap[1].to_ascii_uppercase())
+            .collect()
+    };
+
+    // A module-level `//!` anchor covers every line of the file, the
+    // FileAnchor rule of `aida trace coverage`.
+    let file_specs: BTreeSet<String> = comments
+        .iter()
+        .zip(&lines)
+        .filter(|(_, l)| l.trim_start().starts_with("//!"))
+        .flat_map(|((_, c), _)| ids(c))
+        .collect();
 
     let mut regions = Regions::default();
     regions.visit_file(&file);
-
-    // Each region owns the markers in its span plus in the uninterrupted
-    // comment block directly above it (plain `//` comments sit outside
-    // syn's item span; doc comments and attributes are already inside it).
+    // Each item owns the markers in its span plus its leading comment/blank
+    // prefix, attached exactly as the mandate trace evidence attaches it.
     let owned: Vec<(std::ops::Range<usize>, BTreeSet<String>)> = regions
         .0
         .into_iter()
-        .filter_map(|range| {
-            let mut start = range.start;
-            while start > 0 {
-                let i = start - 1;
-                let comment = comments.get(i).map(|(_, c)| c.trim()).unwrap_or("");
-                if !comment.is_empty() && lines.get(i).map(|l| l.trim()) == Some(comment) {
-                    start -= 1;
-                } else {
-                    break;
-                }
-            }
-            let specs: BTreeSet<String> = (start..range.end)
+        .filter_map(|(range, marker_end)| {
+            let start =
+                crate::mandate_traces::leading_comment_start(range.start, &lines, &comments);
+            let specs: BTreeSet<String> = (start..marker_end)
                 .filter_map(|i| comments.get(i))
-                .flat_map(|(_, c)| {
-                    anchor
-                        .captures_iter(c)
-                        .map(|cap| cap[1].to_ascii_uppercase())
-                        .collect::<Vec<_>>()
-                })
+                .flat_map(|(_, c)| ids(c))
                 .collect();
             (!specs.is_empty()).then_some((range, specs))
         })
         .collect();
-    if owned.is_empty() {
+    if owned.is_empty() && file_specs.is_empty() {
         return Some(Vec::new());
     }
 
@@ -228,11 +274,12 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
     let mut out = Vec::new();
     for token in tokens {
         let line0 = token.span().start().line.saturating_sub(1);
-        let specs: BTreeSet<String> = owned
-            .iter()
-            .filter(|(r, _)| r.contains(&line0))
-            .flat_map(|(_, s)| s.iter().cloned())
-            .collect();
+        let mut specs = file_specs.clone();
+        for (r, s) in &owned {
+            if r.contains(&line0) {
+                specs.extend(s.iter().cloned());
+            }
+        }
         if specs.is_empty() {
             continue;
         }
@@ -255,19 +302,21 @@ pub(crate) fn scan_rust_source(text: &str) -> Option<Vec<TracedLiteral>> {
     Some(out)
 }
 
-/// The numbers each owning spec explains: its description plus the title
-/// and description of every decision linked to it in either direction.
-fn explaining_numbers(store: &aida_core::RequirementsStore, spec_id: &str) -> HashSet<String> {
-    let Some(spec) = store.requirements.iter().find(|r| {
+/// The numbers a spec explains: its description plus the title and
+/// description of every decision linked to it in either direction. `None`
+/// when no spec in the store carries this id.
+fn explaining_numbers(
+    store: &aida_core::RequirementsStore,
+    spec_id: &str,
+) -> Option<HashSet<String>> {
+    let spec = store.requirements.iter().find(|r| {
         r.spec_id
             .as_deref()
             .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
             || r.agreed_id
                 .as_deref()
                 .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-    }) else {
-        return HashSet::new();
-    };
+    })?;
     let mut text = spec.description.clone();
     for d in store
         .requirements
@@ -283,18 +332,19 @@ fn explaining_numbers(store: &aida_core::RequirementsStore, spec_id: &str) -> Ha
             text.push_str(&d.description);
         }
     }
-    numbers_in_text(&text)
+    Some(numbers_in_text(&text))
 }
 
-/// Fold one file's traced literals into the report, resolving explanations
-/// through `explains(spec_id)`. PURE (resolver injected).
+/// Fold one file's traced literals into the report. `explains(spec, value)`
+/// answers whether that spec explains the value, or `None` when the spec id
+/// does not resolve. PURE (resolver injected).
 pub(crate) fn tally_file<F>(
     report: &mut ConstantsReport,
     file: &str,
     literals: Vec<TracedLiteral>,
     explains: &mut F,
 ) where
-    F: FnMut(&str) -> HashSet<String>,
+    F: FnMut(&str, &str) -> Option<bool>,
 {
     for lit in literals {
         report.literals_checked += 1;
@@ -302,7 +352,17 @@ pub(crate) fn tally_file<F>(
             report.exempt += 1;
             continue;
         }
-        if lit.specs.iter().any(|s| explains(s).contains(&lit.value)) {
+        let mut explained = false;
+        for spec in &lit.specs {
+            match explains(spec, &lit.value) {
+                Some(true) => explained = true,
+                Some(false) => {}
+                None => {
+                    report.unresolved_specs.insert(spec.clone());
+                }
+            }
+        }
+        if explained {
             report.explained += 1;
             continue;
         }
@@ -313,6 +373,15 @@ pub(crate) fn tally_file<F>(
             value: lit.value,
             specs: lit.specs,
         });
+    }
+}
+
+/// The literal as written, plus its normalized value when they differ.
+fn display_literal(f: &ConstantFinding) -> String {
+    if f.literal == f.value {
+        f.literal.clone()
+    } else {
+        format!("{} (= {})", f.literal, f.value)
     }
 }
 
@@ -343,12 +412,13 @@ pub(crate) fn handle_lint_constants(
     }
     files.sort();
 
-    let mut cache: std::collections::HashMap<String, HashSet<String>> = Default::default();
-    let mut explains = |id: &str| {
+    let mut cache: HashMap<String, Option<HashSet<String>>> = HashMap::new();
+    let mut explains = |id: &str, value: &str| {
         cache
             .entry(id.to_string())
             .or_insert_with(|| explaining_numbers(&store, id))
-            .clone()
+            .as_ref()
+            .map(|nums| nums.contains(value))
     };
     let mut report = ConstantsReport::default();
     for file in files {
@@ -384,6 +454,7 @@ pub(crate) fn handle_lint_constants(
                 "explained": report.explained,
                 "exempt": report.exempt,
                 "unexplained": report.findings.len(),
+                "unresolved_specs": report.unresolved_specs,
                 "findings": report.findings,
             }))?
         );
@@ -393,12 +464,20 @@ pub(crate) fn handle_lint_constants(
                 "{}:{}  {}  {}",
                 f.file,
                 f.line,
-                f.literal.yellow(),
+                display_literal(f).yellow(),
                 format!("(not in {})", f.specs.join(", ")).dimmed()
             );
         }
         for u in &report.unparsed {
             println!("{} {u}: did not parse, not checked", "skipped".dimmed());
+        }
+        if !report.unresolved_specs.is_empty() {
+            let ids: Vec<&str> = report.unresolved_specs.iter().map(String::as_str).collect();
+            println!(
+                "{} trace id(s) not found in the store, so nothing under them can be explained: {}",
+                "unresolved".yellow(),
+                ids.join(", ")
+            );
         }
         let summary = format!(
             "{} unexplained of {} literal(s) in traced code across {} file(s) \
@@ -431,16 +510,21 @@ pub(crate) fn handle_lint_constants(
 mod tests {
     use super::*;
 
-    fn explains_15(id: &str) -> HashSet<String> {
-        if id == "STORY-1" {
-            numbers_in_text("Pause when io-full reaches 15.")
-        } else {
-            HashSet::new()
-        }
+    fn explains_15(id: &str, value: &str) -> Option<bool> {
+        (id == "STORY-1").then(|| numbers_in_text("Pause when io-full reaches 15.").contains(value))
+    }
+
+    fn values(src: &str) -> Vec<String> {
+        scan_rust_source(src)
+            .unwrap()
+            .into_iter()
+            .map(|l| l.value)
+            .collect()
     }
 
     // The signed acceptance fixture: spec mentions 15; code has 15, 40 and a
     // marked 7 -> only 40 is flagged.
+    // trace:TASK-1785.Fixture | ai:claude
     #[test]
     fn only_the_unmentioned_literal_is_flagged() {
         let src = "\
@@ -467,8 +551,10 @@ fn throttle(io: u32, cpu: u32) -> bool {
         assert_eq!(report.explained, 1);
         // The marked 7 and the 0.
         assert_eq!(report.exempt, 2);
+        assert!(report.unresolved_specs.is_empty());
     }
 
+    // trace:TASK-1785.ac070b6a | ai:claude
     #[test]
     fn untraced_code_is_not_scanned() {
         let src = "\
@@ -480,48 +566,94 @@ fn untraced() -> u32 { 99 }
 // an ordinary comment
 const LIMIT: u32 = 98;
 ";
-        let lits = scan_rust_source(src).unwrap();
-        assert_eq!(lits.len(), 1);
-        assert_eq!(lits[0].value, "40");
+        assert_eq!(values(src), vec!["40"]);
     }
 
+    // The leading prefix crosses blank lines, as in the mandate trace
+    // evidence, and stops at code.
+    // trace:TASK-1785.ac070b6a | ai:claude
     #[test]
-    fn marker_must_be_directly_above_or_inside() {
+    fn leading_marker_attaches_across_blank_lines() {
         let src = "\
 // trace:STORY-1 | ai:claude
 
 fn separated() -> u32 { 40 }
+fn next() -> u32 { 41 }
 
 /// Doc comment.
 #[inline]
 fn inside() -> u32 {
     // trace:STORY-2 | ai:claude
-    41
+    42
 }
 ";
         let lits = scan_rust_source(src).unwrap();
-        assert_eq!(lits.len(), 1);
-        assert_eq!(lits[0].value, "41");
-        assert_eq!(lits[0].specs, vec!["STORY-2".to_string()]);
+        let got: Vec<(&str, Vec<String>)> = lits
+            .iter()
+            .map(|l| (l.value.as_str(), l.specs.clone()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                ("40", vec!["STORY-1".to_string()]),
+                ("42", vec!["STORY-2".to_string()])
+            ]
+        );
     }
 
+    // trace:TASK-1785.ac070b6a | ai:claude
+    #[test]
+    fn file_anchor_covers_the_whole_file() {
+        let src = "\
+//! Module docs. trace:STORY-9 | ai:claude
+
+fn a() -> u32 { 40 }
+const B: u32 = 41;
+";
+        let lits = scan_rust_source(src).unwrap();
+        assert_eq!(lits.len(), 2);
+        assert!(lits.iter().all(|l| l.specs == vec!["STORY-9".to_string()]));
+    }
+
+    // trace:TASK-1785.ac070b6a | ai:claude
+    #[test]
+    fn impl_marker_covers_its_methods() {
+        let src = "\
+// trace:STORY-1 | ai:claude
+impl S {
+    fn f(&self) -> u32 { 40 }
+    // trace:STORY-2 | ai:claude
+    fn g(&self) { println!(\"{}\", 50); }
+}
+";
+        let lits = scan_rust_source(src).unwrap();
+        assert_eq!(lits[0].specs, vec!["STORY-1".to_string()]);
+        assert_eq!(lits[1].value, "50");
+        assert_eq!(
+            lits[1].specs,
+            vec!["STORY-1".to_string(), "STORY-2".to_string()]
+        );
+    }
+
+    // trace:TASK-1785.ac182306 | ai:claude
     #[test]
     fn literals_compare_by_normalized_value() {
         let src = "\
 // trace:STORY-1 | ai:claude
 const SIZES: [u64; 4] = [0x0F, 1_5u64, 15.0 as u64, 4_096];
 ";
-        let lits = scan_rust_source(src).unwrap();
-        let values: Vec<&str> = lits.iter().map(|l| l.value.as_str()).collect();
         // `4` is the array length.
-        assert_eq!(values, vec!["4", "15", "15", "15", "4096"]);
+        assert_eq!(values(src), vec!["4", "15", "15", "15", "4096"]);
+        let nums = numbers_in_text("width 4, rotate at 4,096 or 0xf");
         let mut report = ConstantsReport::default();
-        tally_file(&mut report, "f.rs", lits, &mut |_| {
-            numbers_in_text("width 4, rotate at 4,096 or 0xf")
+        let lits = scan_rust_source(src).unwrap();
+        tally_file(&mut report, "f.rs", lits, &mut |_, v| {
+            Some(nums.contains(v))
         });
         assert!(report.findings.is_empty(), "{:?}", report.findings);
     }
 
+    // trace:TASK-1785.acd368eb | ai:claude
     #[test]
     fn zero_one_exempt_and_strings_ignored() {
         let src = "\
@@ -533,19 +665,7 @@ fn f() -> (u8, f64, &'static str) { (1, 0.0, \"40 // arbitrary\") }
         assert!(lits.iter().all(|l| l.exempt));
     }
 
-    #[test]
-    fn macro_arguments_inside_methods_are_scanned() {
-        let src = "\
-impl S {
-    // trace:STORY-1 | ai:claude
-    fn f(&self) { println!(\"{}\", 50); }
-}
-";
-        let lits = scan_rust_source(src).unwrap();
-        assert_eq!(lits.len(), 1);
-        assert_eq!(lits[0].value, "50");
-    }
-
+    // trace:TASK-1785.acd368eb | ai:claude
     #[test]
     fn arbitrary_marker_shapes() {
         assert!(is_arbitrary_marker("   // arbitrary"));
@@ -555,14 +675,65 @@ impl S {
         assert!(!is_arbitrary_marker("no comment"));
     }
 
+    // trace:TASK-1785.ac182306 | ai:claude
     #[test]
-    fn text_numbers_cover_separators_and_radix() {
-        let nums = numbers_in_text("4 GiB shm, 50 MB, 1,600 lines, 0x10, 2.5 s, 1_000");
-        for v in ["4", "50", "1600", "16", "2.5", "1000"] {
+    fn text_numbers_cover_separators_units_and_radix() {
+        let nums = numbers_in_text(
+            "4 GiB shm, 50MB, 1,600 lines, 100,000,000 rows, 0x10, 2.5 s, 1_000, reaches 15.",
+        );
+        for v in ["4", "50", "1600", "100000000", "16", "2.5", "1000", "15"] {
             assert!(nums.contains(v), "missing {v} in {nums:?}");
         }
+        assert!(!nums.contains("600"), "{nums:?}");
     }
 
+    // Ids, hashes, versions, dates and times are not mentions; a list of
+    // three-digit numbers is not one big number.
+    // trace:TASK-1785.ac182306 | ai:claude
+    #[test]
+    fn text_numbers_skip_ids_versions_dates_and_lists() {
+        let nums = numbers_in_text(
+            "TASK-1785 STORY-1672 ADR-54 sha256 v0.15.0 #2723 2026-10-15 08:38 x86_64",
+        );
+        assert!(nums.is_empty(), "{nums:?}");
+        let list = numbers_in_text("pick 100,200,300");
+        let mut got: Vec<_> = list.into_iter().collect();
+        got.sort();
+        assert_eq!(got, vec!["100", "200", "300"]);
+    }
+
+    // trace:TASK-1785.ac070b6a | ai:claude
+    #[test]
+    fn unresolved_owning_specs_are_reported() {
+        let src = "\
+// trace:STORY-404 | ai:claude
+fn f() -> u32 { 40 }
+";
+        let mut report = ConstantsReport::default();
+        let lits = scan_rust_source(src).unwrap();
+        tally_file(&mut report, "f.rs", lits, &mut explains_15);
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(
+            report.unresolved_specs.into_iter().collect::<Vec<_>>(),
+            vec!["STORY-404".to_string()]
+        );
+    }
+
+    // trace:TASK-1785.acbc344f | ai:claude
+    #[test]
+    fn human_line_names_the_normalized_value() {
+        let finding = |literal: &str, value: &str| ConstantFinding {
+            file: "f.rs".into(),
+            line: 1,
+            literal: literal.into(),
+            value: value.into(),
+            specs: vec![],
+        };
+        assert_eq!(display_literal(&finding("0x28", "40")), "0x28 (= 40)");
+        assert_eq!(display_literal(&finding("40", "40")), "40");
+    }
+
+    // trace:TASK-1785.ac182306 | ai:claude
     #[test]
     fn explanation_reads_spec_description_and_linked_decisions() {
         let mut store = aida_core::RequirementsStore::default();
@@ -581,10 +752,10 @@ impl S {
             created_by: None,
         });
         store.requirements = vec![spec, decision, unlinked];
-        let nums = explaining_numbers(&store, "story-1");
+        let nums = explaining_numbers(&store, "story-1").unwrap();
         assert!(nums.contains("15"));
         assert!(nums.contains("40"));
         assert!(!nums.contains("77"));
-        assert!(explaining_numbers(&store, "STORY-404").is_empty());
+        assert!(explaining_numbers(&store, "STORY-404").is_none());
     }
 }
