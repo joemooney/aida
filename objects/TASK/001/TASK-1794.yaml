@@ -3,12 +3,12 @@ spec_id: TASK-1794
 agreed_id: TASK-1794
 title: Contained plan-only queue work should run Claude plan mode together with the contained flags, not dontAsk
 description: 'From the #2693 review (non-blocking, advisor ruling). Since BUG-2166, a contained parent''s plan-only child runs dontAsk (edits allowed inside the worktree) instead of plan (read-only), which weakens the STORY-265 plan-only contract. Launch plan_only && contained with --permission-mode plan plus claude_contained_flags() and AIDA_CONTAINED=1, if Claude Code accepts plan with those settings; test the argv/env.'
-status: Done
+status: NeedsAttention
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T10:28:56.498956423Z
-modified_at: 2026-10-17T06:06:18.826600668Z
+modified_at: 2026-10-18T07:55:52.643052942Z
 req_type: Task
 relationships:
 - rel_type:
@@ -78,6 +78,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a14e02-8dc3-7a00-a13f-9b9182408955
+  author: aida-orchestrator
+  timestamp: 2026-10-18T07:55:52.643082123Z
+  session_id: 01a14e013490
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 5aa7198cfe4e3a3f5055480c06d7095208e7080b
   branch: main
@@ -89,3 +97,11 @@ filed_at:
 implementation_info:
   implemented: false
   reopened_at_sha: 64072b7e6984043d673e3ba13e5bbe26e218aa76
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Contained plan-only now selects plan with contained flags and AIDA_CONTAINED=1, but the new clap conflict breaks the headless --with-plan drain prelude, which spawns 'queue work <spec> --plan-only --no-human'.
+  recovery_hint: address the review findings, move TASK-1794 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-18T07:55:52.643052942Z
