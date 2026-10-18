@@ -97,6 +97,20 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-1688: lane liveness substrate check reads `.aida/` state
+            // without loading the spec store.
+            // trace:STORY-1688 | ai:antigravity
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::lane_liveness::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::lane_liveness::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
@@ -721,6 +735,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
+    // since it inspects open PRs via gh and session leases via git).
+    // trace:STORY-1688 | ai:antigravity
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::lane_liveness::CATEGORY)?
+    {
+        findings.extend(crate::lane_liveness::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -1093,6 +1117,12 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1699 | ai:claude
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
+        // trace:STORY-1688 | ai:antigravity
+        crate::lane_liveness::CATEGORY => {
+            let route = fail_on_findings
+                && std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+            DoctorReport::from_findings(crate::lane_liveness::scan_and_route(&project_root, route))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };

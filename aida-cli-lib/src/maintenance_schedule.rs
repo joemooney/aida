@@ -1352,7 +1352,8 @@ fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
     let task = config
         .as_ref()
         .and_then(|c| c.tasks.iter().find(|t| t.name == job))
-        .cloned();
+        .cloned()
+        .or_else(|| builtin_routed_seat_task(job));
     if task.is_none() {
         anyhow::bail!("no scheduled job named '{job}' (see `aida schedule list`)");
     }
@@ -1690,19 +1691,77 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
+// trace:STORY-1688 | ai:antigravity
+fn builtin_routed_seat_task(name: &str) -> Option<Task> {
+    let (seat, prompt) = match name {
+        "lane-liveness-advisor" => (
+            "advisor",
+            "Lane liveness findings were routed to the advisor seat. Inspect the routed trip evidence or run `aida doctor check lane-liveness`, then restart or retire dead/stale lanes holding assigned work, answer `awaiting advisor signoff` gates, or reclaim orphaned spec leases.",
+        ),
+        "lane-liveness-merge" => (
+            "merge",
+            "Lane liveness findings were routed to the merge seat. Inspect the routed trip evidence or run `aida doctor check lane-liveness`, then pick up and review `FACTORY READY` PRs that have waited past the review pickup budget.",
+        ),
+        "lane-liveness-operator" => (
+            "operator",
+            "Lane liveness findings were routed to the operator seat. Inspect the routed trip evidence or run `aida doctor check lane-liveness`, then clear or answer `aida:merge-hold` PRs waiting past the gate budget.",
+        ),
+        _ => return None,
+    };
+    Some(Task {
+        name: name.to_string(),
+        kind: JobKind::Seat,
+        seats: vec![seat.to_string()],
+        command: None,
+        prompt: Some(prompt.to_string()),
+        interval: None,
+        on: vec![EventTrigger {
+            kind: "CronJobFired".to_string(),
+            job: Some(name.to_string()),
+        }],
+        when: None,
+        when_raw: None,
+        quiet_hours: None,
+        enabled: true,
+        source: JobSource::Project,
+        problem: None,
+        invalid_command: None,
+    })
+}
+
 /// Due jobs, file-only (config parse + ledger/state reads; no git, no
 /// network). Seat jobs are filtered to `seat` when given; substrate jobs are
 /// included only when no seat filter is given (`include_substrate`).
 // trace:STORY-1226 | ai:claude
 fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool) -> Vec<DueJob> {
-    let Ok(Some(config)) = load_registry(project_root) else {
+    let Ok(config) = load_registry(project_root) else {
         return Vec::new();
     };
-    let state = load_state(project_root).unwrap_or_default();
     let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    let mut tasks = config.map(|c| c.tasks).unwrap_or_default();
+    for builtin_name in [
+        "lane-liveness-advisor",
+        "lane-liveness-merge",
+        "lane-liveness-operator",
+    ] {
+        if ledgers
+            .get(builtin_name)
+            .and_then(|l| l.due_since)
+            .is_some()
+            && !tasks.iter().any(|t| t.name == builtin_name)
+        {
+            if let Some(task) = builtin_routed_seat_task(builtin_name) {
+                tasks.push(task);
+            }
+        }
+    }
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+    let state = load_state(project_root).unwrap_or_default();
     let now = Utc::now();
     let mut out = Vec::new();
-    for task in &config.tasks {
+    for task in &tasks {
         match task.kind {
             JobKind::Seat => {
                 if seat.is_some_and(|s| !task.applies_to_seat(s)) {
@@ -3113,6 +3172,26 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                     "doctor",
                     "check",
                     "relay-stall",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1688: lane liveness substrate job — checks lane process/log
+        // liveness, review pickup, gate waits, and orphaned work leases.
+        // trace:STORY-1688 | ai:antigravity
+        (
+            &[
+                "doctor check lane-liveness --fail-on-findings",
+                "lane-liveness",
+            ],
+            ScheduledCommand {
+                display: "doctor check lane-liveness --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "lane-liveness",
                     "--json",
                     "--fail-on-findings",
                 ],
@@ -4756,6 +4835,8 @@ enabled = true
             "doctor check merged-agent-worktrees --fail-on-findings",
             // trace:STORY-1699 | ai:claude
             "doctor check relay-stall --fail-on-findings",
+            // trace:STORY-1688 | ai:antigravity
+            "doctor check lane-liveness --fail-on-findings",
         ] {
             let tmp = tempfile::tempdir().unwrap();
             let job_name = "guard";

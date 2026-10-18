@@ -1599,6 +1599,18 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "relay-stall",
     ),
+    // STORY-1688: lane liveness (dead lanes, stale logs, unpicked FACTORY READY
+    // PRs, stale gate waits, and orphaned work leases).
+    // trace:STORY-1688 | ai:antigravity
+    (
+        &[
+            "lane-liveness",
+            "lane-liveness-guard",
+            "stalled-lanes",
+            "dead-lanes",
+        ],
+        "lane-liveness",
+    ),
     // BUG-1700: the folder-trust gate on a freshly created worktree. Claude
     // Code stops an INTERACTIVE launch in a directory it has never seen behind
     // a "Quick safety check" modal, so a fresh per-spec worktree strands
