@@ -1,0 +1,32 @@
+id: 01a15037-9a5a-79d0-bc24-38ee9edbb7e4
+spec_id: TASK-1918
+agreed_id: TASK-1918
+title: 'Mailbox phantom cleanup: explicit one-shot command, re-route padded direct mail, SHA/roster precedence, test gaps'
+description: |
+  Follow-up from the PR #2737 (TASK-1766) review, round 1. Deferred minor findings, too large for that rework:
+
+  1. One-shot phantom cleanup. `archive_phantom_inboxes` (aida-cli-lib/src/mailbox_cmd.rs) runs as a side effect of the read-only `mailbox list` and of gc/sync. It re-reads every message plus the agent registry on every call, swallows errors with `let _ =`, and writes archive markers that `mailbox sync` publishes to canonical, judged against this machine's local identity set. Move it to an explicit one-shot command (`aida mailbox gc --phantoms` or a doctor fix) that reports how many it archived and surfaces errors.
+  2. Whitespace-padded direct mail. `is_phantom = r != trimmed` archives real direct (non-mention) mail sent to an id like `advisor `, so its intended reader never sees it. Re-route it to the trimmed recipient instead of archiving it.
+  3. SHA false positives. `aida_core::mailbox::looks_like_hex_sha` (now one shared helper) treats any 7-40 character all-hex id that contains a digit as a commit SHA. A registered agent named like `cafe1234` would be dropped. Check the known-identity roster before applying the SHA rule.
+  4. Test gaps: an end-to-end test that `aida comment add` with an unknown @handle creates no mailbox and prints the warning (git_backend_cmd.rs), the MCP send_message recipient trim (mcp.rs), and the send_notification trim (punt_done.rs).
+
+  ## Acceptance
+  - [ ] Phantom archiving runs only from an explicit command, reports how many it archived, and surfaces errors. `mailbox list` writes nothing.
+  - [ ] Direct mail to a whitespace-padded known id is delivered to the trimmed id, not archived.
+  - [ ] A known agent id with a hex-only name is not treated as a SHA.
+  - [ ] Tests cover the comment-add unknown-mention path and both trim paths.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T18:13:03.706471090Z
+modified_at: 2026-10-18T18:13:03.706471090Z
+req_type: Task
+filed_at:
+  code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 12cbcc42-be90-483c-a316-190f413743c1
