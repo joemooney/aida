@@ -1,0 +1,19 @@
+{
+  "id": "c3935762-1910-4ef0-ab37-969933741c88",
+  "thread_id": "c3935762-1910-4ef0-ab37-969933741c88",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792328452653,
+  "body": "Slice 1 of STORY-1728 is implemented as draft PR #2727. All checks are green locally: full lib suite 9090/0, check-ci-fast 30/30, and the golden help snapshot is byte-identical. To land it I need: (1) your ack of amendments A1–A3; (2) a ruling on help_after anchors (they keep help order stable and make REGISTRY order meaningless, which settles by-name vs by-module); (3) dropping acceptance 5 (Windows CI is impossible under ADR-72); (4) a C2 quiet window. Details are in the latest STORY-1728 comment and the PR body.",
+  "subject": "STORY-1728 slice 1 ready for review: draft PR #2727 (needs ack + quiet window)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
