@@ -391,14 +391,19 @@ evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
 
 Host git over a code tree a contained session may have written (a linked
 worktree, or any tree of a repository a contained session was launched
-against) never recurses into a submodule. It runs with
-`diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
-`fetch.recurseSubmodules=false`, so a planted embedded repository's own config
-(a filter driver, for example) never runs on the host, and a moved gitlink
-still reads as dirty. A gitlink in such a tree that `.gitmodules` does not
-register keeps the tree: pool, adopt and destroy treat it as dirty, and salvage
-refuses it. Other checkouts keep git's submodule handling. Every host
-`git status` goes through `git_ops::host_git_command`; a guard test enforces it.
+against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, so incidental status and diff never enter a
+submodule, where a planted repository's own config (a filter driver, for
+example) would run on the host. Before any safety check in such a tree (pool,
+adopt, destroy, salvage), every gitlink must be a host-owned submodule:
+registered in `.gitmodules`, with a `.git` pointer that resolves inside the
+sandbox-denied common git directory. A tree that fails this is kept and
+treated as dirty. Once every gitlink passes, the checks recurse into the
+submodules (`--ignore-submodules=none`), so uncommitted edits there still keep
+the tree. Salvage refuses edits inside a submodule, because a patch cannot
+hold them. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`, directly or via a
+wrapper; a guard test enforces it.
 <!-- trace:BUG-1985 | ai:claude -->
 
 ### Distributed identity (EPIC-1-052)

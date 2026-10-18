@@ -406,26 +406,43 @@ pub fn is_contained_writable_tree(dir: &Path) -> bool {
 }
 
 /// Refuse host git over a code tree a contained session may have written
-/// ([`is_contained_writable_tree`]) whose index holds a gitlink that
-/// `.gitmodules` does not register (BUG-1985 policy B). A planted embedded
-/// repository staged that way can name commands in its own config, and
-/// `git add -A`, `add -u` and the plumbing diffs recurse into it whatever
-/// `diff.ignoreSubmodules` says. Reads only the index and `.gitmodules`.
-/// No-op in a store tree ([`refuse_embedded_repos`] covers it) and in other
-/// code trees.
+/// ([`is_contained_writable_tree`]) unless every gitlink in its index is a
+/// submodule the host owns (BUG-1985 policy B). The gitlink must be
+/// registered in `.gitmodules`, and its checked-out `.git` (when there is one)
+/// must be a pointer file that resolves inside the repository's common git
+/// directory, which the contained sandbox denies (BUG-1982). A planted
+/// embedded repository fails one of these. Its own config can name commands,
+/// and `git add -A`, `add -u` and the plumbing diffs recurse into it whatever
+/// `diff.ignoreSubmodules` says. A host-owned submodule passes, so the safety
+/// checks may then recurse into it to see uncommitted edits there. Reads only
+/// the index, `.gitmodules` and the pointer files. No-op in a store tree
+/// ([`refuse_embedded_repos`] covers it) and in other code trees.
 // trace:BUG-1985 | ai:claude
-pub fn refuse_unregistered_gitlinks(tree: &Path) -> Result<()> {
+pub fn refuse_untrusted_gitlinks(tree: &Path) -> Result<()> {
     if is_store_tree(tree) || !is_contained_writable_tree(tree) {
         return Ok(());
     }
-    let top = git(tree, &["rev-parse", "--show-toplevel"])?;
+    let dirs = git(
+        tree,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--show-toplevel",
+            "--git-common-dir",
+        ],
+    )?;
     anyhow::ensure!(
-        top.success,
+        dirs.success,
         "git rev-parse failed in {}: {}",
         tree.display(),
-        top.stderr
+        dirs.stderr
     );
-    let top = PathBuf::from(top.stdout);
+    let mut lines = dirs.stdout.lines();
+    let (Some(top), Some(common)) = (lines.next(), lines.next()) else {
+        anyhow::bail!("git rev-parse gave no toplevel in {}", tree.display());
+    };
+    let top = PathBuf::from(top);
+    let common = canonical_best_effort(Path::new(common));
     let staged = git(&top, &["ls-files", "--stage", "-z"])?;
     anyhow::ensure!(
         staged.success,
@@ -460,21 +477,46 @@ pub fn refuse_unregistered_gitlinks(tree: &Path) -> Result<()> {
         .split('\0')
         .filter_map(|entry| entry.split_once('\n').map(|(_, path)| path))
         .collect();
-    let mut unregistered: Vec<&str> = links
-        .into_iter()
-        .filter(|link| !registered.contains(link))
-        .collect();
-    if unregistered.is_empty() {
+    let mut untrusted: Vec<String> = Vec::new();
+    for link in links {
+        if !registered.contains(&link) {
+            untrusted.push(format!("{link} (not in .gitmodules)"));
+        } else if !host_owned_submodule_git(&top.join(link), &common) {
+            untrusted.push(format!("{link} (its .git is not a host-owned submodule)"));
+        }
+    }
+    if untrusted.is_empty() {
         return Ok(());
     }
-    unregistered.sort_unstable();
+    untrusted.sort_unstable();
     anyhow::bail!(
-        "refusing to run git over {}: its index holds a gitlink that .gitmodules does not \
-         register, which a sandboxed session may have planted to run commands on this \
+        "refusing to run git over {}: its index holds a gitlink that is not a host-owned \
+         submodule, which a sandboxed session may have planted to run commands on this \
          machine. Check who added it, then remove it with `git rm --cached <path>`: {}",
         top.display(),
-        unregistered.join(", ")
+        untrusted.join(", ")
     )
+}
+
+/// True when the checked-out submodule at `dir` has no `.git` (git never
+/// enters it) or a `.git` pointer file naming a git directory inside `common`.
+// trace:BUG-1985 | ai:claude
+fn host_owned_submodule_git(dir: &Path, common: &Path) -> bool {
+    let dotgit = dir.join(".git");
+    let Ok(meta) = std::fs::symlink_metadata(&dotgit) else {
+        return true;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    let Ok(text) = std::fs::read_to_string(&dotgit) else {
+        return false;
+    };
+    let Some(target) = text.trim_end().strip_prefix("gitdir: ") else {
+        return false;
+    };
+    let target = dir.join(target);
+    std::fs::canonicalize(&target).is_ok_and(|t| t.starts_with(common) && t != common)
 }
 
 /// Is `dir` the root of an AIDA store worktree? True for a directory named
@@ -2858,6 +2900,18 @@ pub fn preserve_dirty_worktree(
     if worktree_status_porcelain(worktree_path)?.is_empty() {
         return Ok(None);
     }
+    // BUG-1985: a patch of the superproject cannot hold edits inside a
+    // submodule, so a salvage that would leave them behind refuses and the
+    // tree is kept. trace:BUG-1985 | ai:claude
+    let inner = submodules_with_uncommitted_edits(worktree_path)?;
+    if !inner.is_empty() {
+        anyhow::bail!(
+            "{} has uncommitted edits inside a submodule, which a salvage patch cannot \
+             hold; commit or save them in the submodule first: {}",
+            worktree_path.display(),
+            inner.join(", ")
+        );
+    }
     // Raw (untrimmed) diff capture — the shared `git()` helper trims, which we
     // avoid here to keep the patch byte-faithful for `git apply`.
     // A git failure is an error, never an empty section: a patch silently
@@ -3018,16 +3072,56 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
     }
 }
 
+/// The submodules of `worktree_path` with tracked or untracked changes inside
+/// them (`git status --porcelain=v2` submodule state `S?M?` or `S??U`). Run
+/// after [`refuse_untrusted_gitlinks`], since it recurses into submodules.
+// trace:BUG-1985 | ai:claude
+fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
+    let r = git(
+        worktree_path,
+        &["status", "--porcelain=v2", "--ignore-submodules=none"],
+    )?;
+    anyhow::ensure!(
+        r.success,
+        "git status failed in {}: {}",
+        worktree_path.display(),
+        r.stderr
+    );
+    Ok(r.stdout
+        .lines()
+        .filter_map(|line| {
+            // Ordinary (`1`) entries have 9 fields, renames (`2`) 10; the
+            // last one is the path, which may hold spaces.
+            let count = match line.split(' ').next()? {
+                "1" => 9,
+                "2" => 10,
+                _ => return None,
+            };
+            let fields: Vec<&str> = line.splitn(count, ' ').collect();
+            let state = fields.get(2)?.as_bytes();
+            let changed =
+                state.len() == 4 && state[0] == b'S' && (state[2] == b'M' || state[3] == b'U');
+            let path = fields.last()?.split('\t').next()?;
+            changed.then(|| path.to_string())
+        })
+        .collect())
+}
+
 /// `git status --porcelain` for a worktree, failing when git fails, unlike
 /// [`worktree_is_dirty`], which reads a git error as "clean". Callers about
 /// to reset or delete a tree use this so a probe error keeps the tree.
 /// Lines starting `??` are untracked files.
 // trace:BUG-1947 | ai:claude
 pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
-    // BUG-1985: a planted gitlink is an error, so the tree is kept.
+    // BUG-1985: a planted gitlink is an error, so the tree is kept. Once every
+    // gitlink is host-owned, the probe recurses into submodules whatever the
+    // contained-tree hardening says, so their uncommitted edits count.
     // trace:BUG-1985 | ai:claude
-    refuse_unregistered_gitlinks(worktree_path)?;
-    let r = git(worktree_path, &["status", "--porcelain"])?;
+    refuse_untrusted_gitlinks(worktree_path)?;
+    let r = git(
+        worktree_path,
+        &["status", "--porcelain", "--ignore-submodules=none"],
+    )?;
     if !r.success {
         anyhow::bail!(
             "git status failed in {}: {}",
@@ -3041,17 +3135,21 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
 /// True when a worktree has uncommitted changes (tracked or untracked,
 /// gitignored paths excluded). Used to classify a tree as dirty before a
 /// reset/return/destroy so unlanded work is never silently discarded. A tree
-/// holding a planted gitlink ([`refuse_unregistered_gitlinks`]) counts as
-/// dirty, so it is kept for a person to inspect.
+/// holding a planted gitlink ([`refuse_untrusted_gitlinks`]) counts as
+/// dirty, so it is kept for a person to inspect; uncommitted edits inside a
+/// host-owned submodule count too.
 // trace:STORY-714 | ai:claude
 // trace:BUG-1985 | ai:claude
 pub fn worktree_is_dirty(worktree_path: &Path) -> bool {
-    if refuse_unregistered_gitlinks(worktree_path).is_err() {
+    if refuse_untrusted_gitlinks(worktree_path).is_err() {
         return true;
     }
-    git(worktree_path, &["status", "--porcelain"])
-        .map(|r| !r.stdout.is_empty())
-        .unwrap_or(false)
+    git(
+        worktree_path,
+        &["status", "--porcelain", "--ignore-submodules=none"],
+    )
+    .map(|r| !r.stdout.is_empty())
+    .unwrap_or(false)
 }
 
 /// True when the worktree's current HEAD is already an ancestor of `base_ref`
@@ -9487,6 +9585,8 @@ mod tests {
     // BUG-1985: host status over a contained-writable worktree never runs a
     // planted repository's filter driver, and a gitlink .gitmodules does not
     // register keeps the tree (dirty, salvage refused) instead of resetting it.
+    // trace:BUG-1985.ac027ce2 | ai:claude
+    // trace:BUG-1985.acba0e36 | ai:claude
     // trace:BUG-1985 | ai:claude
     #[cfg(unix)]
     #[test]
@@ -9520,44 +9620,34 @@ mod tests {
             "a host git run over the worktree ran the planted filter driver"
         );
 
-        // The session can register its plant in .gitmodules too. The refusal
-        // then passes, and policy A still keeps git out of the repository.
+        // The session can register its plant in .gitmodules too. Its `.git` is
+        // still its own directory, not a pointer into the host-owned common
+        // git directory, so the tree is still refused and kept.
         std::fs::write(
             wt.join(".gitmodules"),
             "[submodule \"sub\"]\n\tpath = sub\n\turl = ./sub\n",
         )
         .unwrap();
-        assert!(refuse_unregistered_gitlinks(&wt).is_ok());
-        let status = worktree_status_porcelain(&wt).unwrap();
-        assert!(status.contains(".gitmodules"), "{status}");
+        let err = refuse_untrusted_gitlinks(&wt).unwrap_err().to_string();
+        assert!(err.contains("host-owned"), "{err}");
         assert!(worktree_is_dirty(&wt));
-        let patch = preserve_dirty_worktree(&wt, &salvage, "t").unwrap();
-        assert!(patch.is_some());
+        assert!(worktree_status_porcelain(&wt).is_err());
+        assert!(preserve_dirty_worktree(&wt, &salvage, "t").is_err());
+
+        // Incidental host git over the tree (policy A) still never enters
+        // it, and still reports the staged gitlink.
+        let status = git(&wt, &["status", "--porcelain"]).unwrap();
+        assert!(status.stdout.contains("sub"), "{}", status.stdout);
         let _ = git(&wt, &["diff", "HEAD"]).unwrap();
         assert!(
             !marker.exists(),
             "a host git run over a registered plant ran its filter driver"
         );
-
-        // A moved gitlink still reads as dirty without recursing.
-        run_git(&wt, &["add", ".gitmodules"]);
-        run_git(&wt, &["commit", "-qm", "register"]);
-        let sub = wt.join("sub");
-        run_git(
-            &sub,
-            &["-c", "filter.evil.clean=cat", "commit", "-qam", "moved"],
-        );
-        let _ = std::fs::remove_file(&marker);
-        let status = worktree_status_porcelain(&wt).unwrap();
-        assert!(
-            status.contains("sub"),
-            "a moved gitlink must read as dirty: {status}"
-        );
-        assert!(!marker.exists());
     }
 
     // BUG-1985: which trees get policy A and B, and that ordinary checkouts
     // keep git's submodule handling.
+    // trace:BUG-1985.acba0e36 | ai:claude
     // trace:BUG-1985 | ai:claude
     #[cfg(unix)]
     #[test]
@@ -9585,7 +9675,7 @@ mod tests {
             .args(["add", "vendor"])
             .output()
             .unwrap();
-        assert!(refuse_unregistered_gitlinks(&main).is_ok());
+        assert!(refuse_untrusted_gitlinks(&main).is_ok());
 
         // Once a contained session is launched against it (the BUG-2131
         // marker in its git directory, or in an own-repository store's), the
@@ -9593,7 +9683,7 @@ mod tests {
         let git_dir = main.join(".git");
         std::fs::write(git_dir.join(crate::store_hooks::CONTAINED_MARKER), "").unwrap();
         assert!(is_contained_writable_tree(&main));
-        let err = refuse_unregistered_gitlinks(&main).unwrap_err().to_string();
+        let err = refuse_untrusted_gitlinks(&main).unwrap_err().to_string();
         assert!(err.contains("vendor"), "{err}");
         std::fs::remove_file(git_dir.join(crate::store_hooks::CONTAINED_MARKER)).unwrap();
         assert!(!is_contained_writable_tree(&main));

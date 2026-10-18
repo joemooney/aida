@@ -6,9 +6,8 @@ use crate::*;
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
 /// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
 pub(crate) fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output()
         .ok()?;
