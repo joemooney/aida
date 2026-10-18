@@ -1,3 +1,8 @@
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
 symref before asking the forge. A stale origin/HEAD wins over forge evidence;
 refresh it after a remote default change. Without that symref, the read-only
