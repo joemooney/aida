@@ -3,12 +3,12 @@ spec_id: TASK-1803
 agreed_id: TASK-1803
 title: 'No-number pr ship: resolve default branch on non-GitHub forges, clarify unknown refusal, use gh PATH-walk'
 description: 'Follow-up from the #2706 TASK-1795 r2 STRICT review (two-round cap; advisor ruled merge-with-follow-up, 2026-10-16). 1) forge.rs:3938 returns unknown for every non-GitHub forge, so a GitLab or pure-git clone without refs/remotes/origin/HEAD refuses every no-number ship on a feature branch, including the first ship that creates the MR. Add a time-limited ''git ls-remote --symref origin HEAD'' probe that works on any forge. 2) The unknown-evidence refusal (pr_cmd.rs:2288-2291) says ''on the default branch; pass a PR number'', which is false on a feature branch. Say the default branch could not be determined and suggest ''git remote set-head origin --auto''. 3) Production resolves bare ''gh'' (forge.rs:3943-3946) instead of the existing PATH-walk fallback. Use the shared resolver. AC: regression tests for a GitLab feature branch without origin/HEAD (ship proceeds via ls-remote), the refusal wording, and a stripped-PATH gh resolution.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T02:21:22.961127976Z
-modified_at: 2026-10-18T16:54:03.735795091Z
+modified_at: 2026-10-18T16:54:25.409826451Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-18T16:54:05.256885106Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14fef-9b81-7de2-83ef-c0db9d5a86a9
+  author: aida-pr-open
+  timestamp: 2026-10-18T16:54:25.409821915Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 28575d74a30eb301b4f425b29fcb07c9d28f8e6d
   branch: main
