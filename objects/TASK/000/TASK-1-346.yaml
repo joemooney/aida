@@ -1,5 +1,6 @@
 id: 01a150d2-8039-7313-8254-15dd07f236e4
 spec_id: TASK-1-346
+agreed_id: TASK-1617
 title: 'non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1351, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:e850c551
 - from-review:TASK-1351
 - kind:carried-forward
+history:
+- id: 01a150ef-9965-7453-8df7-cf232d3889c0
+  author: joe
+  timestamp: 2026-10-18T21:34:02.085272785Z
+  changes: []
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
