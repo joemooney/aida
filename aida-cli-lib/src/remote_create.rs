@@ -806,10 +806,17 @@ pub(crate) fn latest_local_release_tag(project_root: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
+// trace:BUG-2119 | ai:antigravity
 pub(crate) fn remote_tag_head(project_root: &Path, remote: &str, tag: &str) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(project_root);
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut cmd,
+        project_root,
+        remote,
+        None,
+    );
+    let out = cmd
         .args(["ls-remote", "--refs", remote, &format!("refs/tags/{tag}")])
         .output()
         .ok()?;
@@ -1507,6 +1514,13 @@ pub fn run_mirror_push(
             "push",
             "--quiet",
         ]);
+        // trace:BUG-2119 | ai:antigravity
+        crate::gitlab_project_create::configure_git_remote_credentials(
+            &mut command,
+            project_root,
+            mirror,
+            None,
+        );
         if dry_run {
             command.arg("--dry-run");
         }
@@ -1862,9 +1876,16 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 });
                 continue;
             }
-            let out = Command::new("git")
-                .arg("-C")
-                .arg(project_root)
+            let mut push_cmd = Command::new("git");
+            push_cmd.arg("-C").arg(project_root);
+            // trace:BUG-2119 | ai:antigravity
+            crate::gitlab_project_create::configure_git_remote_credentials(
+                &mut push_cmd,
+                project_root,
+                mirror,
+                None,
+            );
+            let out = push_cmd
                 .args([
                     "push",
                     "--quiet",
@@ -2127,11 +2148,23 @@ pub(crate) fn run_remote_mirror(
         // An empty `existing` means `git remote get-url` failed: nothing to probe.
         if let Some(u) = url.filter(|_| !existing.is_empty()) {
             if crate::doctor_cmd::same_remote(&existing, u) {
+                // trace:BUG-2119 | ai:antigravity
+                let (clean_existing, existing_creds) =
+                    crate::gitlab_project_create::split_http_url_userinfo(&existing);
+                if existing_creds.is_some() {
+                    let _ = Command::new("git")
+                        .arg("-C")
+                        .arg(project_root)
+                        .args(["remote", "set-url", name, &clean_existing])
+                        .status();
+                }
+                let (_, u_creds) = crate::gitlab_project_create::split_http_url_userinfo(u);
+                let probe_url = if u_creds.is_some() { u } else { &existing };
                 // trace:BUG-2004 | ai:antigravity
                 crate::gitlab_project_create::ensure_gitlab_project_exists(
                     project_root,
                     name,
-                    &existing,
+                    probe_url,
                     false,
                 )?;
             } else {
@@ -2147,10 +2180,14 @@ pub(crate) fn run_remote_mirror(
         let Some(u) = url else {
             anyhow::bail!("remote `{name}` does not exist — pass --url <clone-url> to add it");
         };
+        // Strip HTTP userinfo before `git remote add` so tokens never appear in
+        // `git remote add` argv or `.git/config` (and thus never in
+        // `git-remote-http` argv). trace:BUG-2119 | ai:antigravity
+        let (clean_u, _) = crate::gitlab_project_create::split_http_url_userinfo(u);
         let add = Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["remote", "add", name, u])
+            .args(["remote", "add", name, &clean_u])
             .status()
             .context("invoking git remote add")?;
         if !add.success() {

@@ -242,14 +242,21 @@ pub(crate) fn create_gitlab_project(
 }
 
 /// Run `git push` with `args` in `dir`, returning stderr on failure.
-fn git_push(dir: &Path, args: &[&str]) -> Result<std::result::Result<(), String>> {
-    let out = Command::new("git")
-        .arg("-C")
+// trace:BUG-2119 | ai:agy
+fn git_push(
+    dir: &Path,
+    remote: &str,
+    url: &str,
+    args: &[&str],
+) -> Result<std::result::Result<(), String>> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(dir)
         .arg("push")
         .args(args)
-        .output()
-        .context("could not launch `git push`")?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, Some(url));
+    let out = cmd.output().context("could not launch `git push`")?;
     if out.status.success() {
         Ok(Ok(()))
     } else {
@@ -275,7 +282,7 @@ pub(crate) fn push_with_create_fallback(
     }
     args.push(remote);
     args.push(branch);
-    let stderr = match git_push(dir, &args)? {
+    let stderr = match git_push(dir, remote, url, &args)? {
         Ok(()) => return Ok(()),
         Err(stderr) => stderr,
     };
@@ -300,7 +307,7 @@ pub(crate) fn push_with_create_fallback(
         crate::glyph(crate::glyphs::Glyph::Warning)
     );
     create_gitlab_project(&host, &namespace, &name, public)?;
-    match git_push(dir, &args)? {
+    match git_push(dir, remote, url, &args)? {
         Ok(()) => Ok(()),
         Err(stderr) => bail!(
             "`git push {}` still failed after creating the project: {}",
@@ -335,28 +342,156 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
     out
 }
 
+/// Credential helper shell snippet configured via `GIT_CONFIG_KEY_*` /
+/// `GIT_CONFIG_VALUE_*`. It reads the username and token from environment
+/// variables (`AIDA_GIT_CREDENTIAL_USER` / `AIDA_GIT_CREDENTIAL_TOKEN`), so
+/// neither `git`, `git-remote-http`, nor `/bin/sh` ever carries the token in
+/// `argv` (`ps` / `/proc/<pid>/cmdline`).
+// trace:BUG-2119 | ai:agy
+pub(crate) const GIT_CREDENTIAL_HELPER_SCRIPT: &str =
+    "!f() { test \"$1\" = get && printf 'username=%s\\npassword=%s\\n' \"${AIDA_GIT_CREDENTIAL_USER:-oauth2}\" \"$AIDA_GIT_CREDENTIAL_TOKEN\"; }; f";
+
+/// Strip embedded `user:secret@` from an `http://` or `https://` URL, returning
+/// `(clean_url, Option<(username, password)>)`. Non-HTTP(S) URLs (such as
+/// `ssh://git@host/...` or `git@host:...`) are returned unchanged with `None`.
+// trace:BUG-2119 | ai:agy
+pub(crate) fn split_http_url_userinfo(url: &str) -> (String, Option<(String, String)>) {
+    let trimmed = url.trim();
+    let Some((scheme, tail)) = trimmed.split_once("://") else {
+        return (url.to_string(), None);
+    };
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return (url.to_string(), None);
+    }
+    let authority_end = tail
+        .find(|c: char| c == '/' || c.is_whitespace())
+        .unwrap_or(tail.len());
+    let Some(at) = tail[..authority_end].rfind('@') else {
+        return (url.to_string(), None);
+    };
+    let userinfo = &tail[..at];
+    let clean_url = format!("{scheme}://{}", &tail[at + 1..]);
+    let creds = match userinfo.split_once(':') {
+        Some((user, pass)) if !pass.is_empty() => Some((
+            if user.is_empty() {
+                "oauth2".to_string()
+            } else {
+                user.to_string()
+            },
+            pass.to_string(),
+        )),
+        Some((user, _)) if !user.is_empty() => Some(("oauth2".to_string(), user.to_string())),
+        None if !userinfo.is_empty() => Some(("oauth2".to_string(), userinfo.to_string())),
+        _ => None,
+    };
+    (clean_url, creds)
+}
+
+// trace:BUG-2119 | ai:agy
+fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
+    let current_count = cmd
+        .get_envs()
+        .find_map(|(k, v)| {
+            (k == "GIT_CONFIG_COUNT")
+                .then(|| {
+                    v.and_then(|s| s.to_str())
+                        .and_then(|s| s.parse::<usize>().ok())
+                })
+                .flatten()
+        })
+        .unwrap_or(0);
+    cmd.env(format!("GIT_CONFIG_KEY_{current_count}"), key);
+    cmd.env(format!("GIT_CONFIG_VALUE_{current_count}"), value);
+    cmd.env("GIT_CONFIG_COUNT", (current_count + 1).to_string());
+}
+
+/// Configure `cmd` so `git-remote-http` receives a credential-free remote URL
+/// in `argv` and obtains any GitLab HTTP(S) token via `credential.helper` and
+/// environment variables (`AIDA_GIT_CREDENTIAL_USER` / `AIDA_GIT_CREDENTIAL_TOKEN`).
+// trace:BUG-2119 | ai:agy
+pub(crate) fn configure_git_remote_credentials(
+    cmd: &mut Command,
+    dir: &Path,
+    remote: &str,
+    url_hint: Option<&str>,
+) {
+    let is_named_remote = !remote.is_empty() && !remote.contains("://") && !remote.contains('@');
+    let stored_url = is_named_remote
+        .then(|| aida_core::git_ops::remote_url(dir, remote))
+        .flatten();
+    let (clean_hint, hint_creds) = url_hint
+        .map(split_http_url_userinfo)
+        .unwrap_or_else(|| (String::new(), None));
+    let (clean_stored, stored_creds) = stored_url
+        .as_deref()
+        .map(split_http_url_userinfo)
+        .unwrap_or_else(|| (String::new(), None));
+    let clean_url = if !clean_stored.is_empty() {
+        clean_stored.as_str()
+    } else {
+        clean_hint.as_str()
+    };
+    let had_embedded_userinfo = stored_url.as_deref().is_some_and(|s| s != clean_stored)
+        || url_hint.is_some_and(|u| u != clean_hint);
+    let is_http = clean_url
+        .split_once("://")
+        .is_some_and(|(s, _)| s.eq_ignore_ascii_case("http") || s.eq_ignore_ascii_case("https"));
+
+    let creds = hint_creds.or(stored_creds).or_else(|| {
+        if !is_http || crate::forge::detect_forge_kind(clean_url) != crate::forge::ForgeKind::GitLab
+        {
+            return None;
+        }
+        let host = crate::forge::forge_host_of(clean_url)?;
+        let (token, _) = crate::remote_create::gitlab_token_for_host(&host)?;
+        Some(("oauth2".to_string(), token))
+    });
+
+    if stored_url.as_deref().is_some_and(|s| s != clean_stored) && !clean_stored.is_empty() {
+        let _ = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["remote", "set-url", remote, &clean_stored])
+            .status();
+    } else if had_embedded_userinfo && !clean_url.is_empty() && is_named_remote {
+        append_git_config_env(cmd, &format!("remote.{remote}.url"), clean_url);
+    }
+    if let Some((user, token)) = creds {
+        cmd.env("AIDA_GIT_CREDENTIAL_USER", user);
+        cmd.env("AIDA_GIT_CREDENTIAL_TOKEN", token);
+        append_git_config_env(cmd, "credential.helper", "");
+        append_git_config_env(cmd, "credential.helper", GIT_CREDENTIAL_HELPER_SCRIPT);
+    }
+}
+
 /// The `git ls-remote --heads <remote>` probe. `GIT_TERMINAL_PROMPT=0` makes an
 /// HTTPS URL without stored credentials fail instead of blocking on a
 /// username prompt.
 // trace:BUG-1972 | ai:claude
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
+    ls_remote_probe_with_url(dir, remote, None)
+}
+
+// trace:BUG-2119 | ai:agy
+fn ls_remote_probe_with_url(dir: &Path, remote: &str, url_hint: Option<&str>) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(dir)
         .args(["ls-remote", "--heads", remote])
         .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, url_hint);
     cmd
 }
 
 /// Construct the `git ls-remote` probe command for a GitLab project existence check.
 /// Returns None for non-GitLab URLs.
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn mirror_probe_command(dir: &Path, remote_name: &str, url: &str) -> Option<Command> {
     if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
         return None;
     }
-    Some(ls_remote_probe(dir, remote_name))
+    Some(ls_remote_probe_with_url(dir, remote_name, Some(url)))
 }
 
 /// `aida remote mirror --url`: probe a GitLab URL with `git ls-remote`; when
@@ -364,7 +499,7 @@ pub(crate) fn mirror_probe_command(dir: &Path, remote_name: &str, url: &str) -> 
 /// project was created. Non-GitLab URLs and non-refusal probe errors are left
 /// alone (the mirror is still wired; the first push reports the real error).
 // trace:STORY-1656 | ai:claude
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn ensure_gitlab_project_exists(
     dir: &Path,
     remote_name: &str,
@@ -396,13 +531,15 @@ pub(crate) fn ensure_gitlab_project_exists(
 }
 
 /// The tip of `branch` on `remote` as the remote itself reports it, or None.
+// trace:BUG-2119 | ai:agy
 fn remote_tip(dir: &Path, remote: &str, branch: &str) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(dir)
         .args(["ls-remote", remote, &format!("refs/heads/{branch}")])
-        .output()
-        .ok()?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, None);
+    let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;
     }
