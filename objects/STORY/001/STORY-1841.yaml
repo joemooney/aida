@@ -1,0 +1,34 @@
+id: 01a14ff0-3654-7a10-90a2-71f4e5885e7a
+spec_id: STORY-1841
+agreed_id: STORY-1841
+title: 'Review PR-2740: [AI:antigravity] feat(hooks): deliver mid-session grant expiry notices to Codex and Antigravity tool-only sessions (TASK-1744)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `agy/task-1744`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2740>
+  - Branch: `agy/task-1744` → `main`
+
+  ## Covers
+
+  - TASK-1744
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2740` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T16:55:05.044830324Z
+modified_at: 2026-10-18T16:55:05.044830324Z
+req_type: Story
+filed_at:
+  code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
