@@ -3,12 +3,12 @@ spec_id: BUG-2176
 agreed_id: BUG-2176
 title: Reviewer rework-hold markers are written into the reviewer's own aida-pr-N worktree, so removing that worktree leaves a label-only hold only a human can clear
 description: 'Observed 2026-10-18 in the fire wave: PRs #2710, #2712, #2713, #2723 and #2725 each got CHANGES REQUESTED in round 1, were fixed, and #2710/#2713/#2723 then got an attested round-2 PASS. But aida pr ship refuses with ''held by the aida:merge-hold label alone (no marker, no recorded reason)'', and aida merge-hold list shows each as label-only. Cause: the headless reviewer runs with project_root = ~/ai/aida-worktrees/aida-pr-N and merge_hold::hold_path(project_root, pr) writes .aida/merge-holds/PR-N there (verified: ~/ai/aida-worktrees/aida-pr-2726/.aida/merge-holds/PR-2726 is a schema_version 2 rework marker). Review verdicts, by contrast, land in the primary checkout''s .aida/review-verdicts. The marker is invisible to aida pr ship / auto-release run from the primary checkout, and it is destroyed when the reviewer worktree is removed, which the next review round requires because the reviewer needs the aida-pr-N path and pr-N branch free. The result: every rework hold becomes a human-only clear, so the designed auto-release on a fresh independent APPROVED verdict never fires and approved PRs stall for hours. FIX: resolve the holds dir (and pr-holds, clearances) against the primary checkout (the git common dir''s worktree, the same resolver review-verdicts uses) in merge_hold.rs holds_dir/hold_path and every writer (pr_claim_surface.rs:407 write_typed_hold, burndown_run.rs:1162, the reviewer record path). Add a regression test: a hold written from a linked worktree is readable by merge-hold list and pr ship from the primary checkout, and survives removing the linked worktree. Also make ''aida merge-hold list'' warn when a label-only hold has a stray marker in any linked worktree.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T13:23:36.178572775Z
-modified_at: 2026-10-18T16:46:20.851827705Z
+modified_at: 2026-10-18T18:40:13.256639594Z
 req_type: Bug
 history:
 - id: 01a14fe8-384c-7af0-b3fb-2f6935b7f6c2
@@ -16,6 +16,20 @@ history:
   timestamp: 2026-10-18T16:46:21.260866973Z
   session_id: 01a14fd62085
   changes: []
+- id: 01a15050-778a-77e0-b11c-638b9c3a6979
+  author: aida-auto-bump
+  timestamp: 2026-10-18T18:40:13.194510932Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15050-77c8-7cb0-9859-bb3491691280
+  timestamp: 2026-10-18T18:40:13.256628083Z
+  agent: aida
+  commit_sha: 555237eca90547a58db236fc5ff333097c6ded8f
+  summary: 'Round 2: all BUG-2176 criteria met — hold/clearance store resolves to the primary checkout without spawning git (memoised), contained-reviewer fallback + launcher adoption, merge-hold list stray-marker warning (text+JSON); 9 new tests + updated sibling-read test pass; CI Build green; round-1 findings all resolved.'
+  review_verdict: approved
 filed_at:
   code_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
   branch: main
@@ -24,11 +38,7 @@ filed_at:
   aida_build_sha: d7a640e944
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Fix is correct and well tested (5 new tests green), but hold_store_root spawns 'git worktree list' on every hold_path/clearance_path call, making read_hold misses O(placed-PRs) git spawns on the merge chokepoint and per-PR status loops.
-  recovery_hint: address the review findings, move BUG-2176 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T16:46:20.851827705Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-18T18:40:13.194506219Z
+  completion_sha: 555237eca90547a58db236fc5ff333097c6ded8f
