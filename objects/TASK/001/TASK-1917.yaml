@@ -1,0 +1,20 @@
+id: 01a1500e-7472-75b0-b70c-1a0aa6090ce7
+spec_id: TASK-1917
+agreed_id: TASK-1917
+title: 'TASK-1783 follow-ups: store-unchanged assertion, same-line fn coverage, non-.rs --path message'
+description: 'From PR #2729 PASS review non-blocking findings: (1) add a black-box assertion that a tree-coverage run leaves the store unchanged (like task_1785); (2) trace_tree_coverage::file_coverage uses specs_at(range.start), so two fns on one line share coverage, and nested fns inside methods are named Type::inner; (3) --path to a non-.rs file reports ''did not parse''; consider skipping #[cfg(test)] fns as in TASK-1812.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T17:28:07.026066119Z
+modified_at: 2026-10-18T17:28:07.026066119Z
+req_type: Task
+filed_at:
+  code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
