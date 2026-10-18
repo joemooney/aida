@@ -574,3 +574,138 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
         "{plain:?}"
     );
 }
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
+fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let main_checkout = parent.join("aida-main");
+    std::fs::create_dir_all(main_checkout.join(".git/hooks")).unwrap();
+    std::fs::create_dir_all(main_checkout.join("src")).unwrap();
+
+    let settings = settings_for(&main_checkout);
+    let home = parent.join("home");
+    let pre_commit = main_checkout.join(".git/hooks/pre-commit");
+    let git_config = main_checkout.join(".git/config");
+    let inside_src = main_checkout.join("src/lib.rs");
+
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&settings, tool, &inside_src, &main_checkout, &home),
+            "{tool} inside main checkout src/ must remain allowed: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &pre_commit, &main_checkout, &home),
+            "{tool} on <main-checkout>/.git/hooks/pre-commit must be denied: {settings}"
+        );
+        assert!(
+            !pre_commit.exists(),
+            "{tool} must not create {}",
+            pre_commit.display()
+        );
+        assert!(
+            !attempt_write(&settings, tool, &git_config, &main_checkout, &home),
+            "{tool} on <main-checkout>/.git/config must be denied: {settings}"
+        );
+        assert!(
+            !git_config.exists(),
+            "{tool} must not create {}",
+            git_config.display()
+        );
+    }
+}
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
+fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
+    let (_tmp, parent, worktree) = pool_fixture();
+    std::fs::create_dir_all(worktree.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+    std::fs::write(
+        worktree.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let fake = parent.join("fake-claude-resume");
+    let args_out = parent.join("resume-args.txt");
+    crate::test_exec::write_executable(
+        &fake,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 0\n",
+            args_out.display()
+        ),
+    );
+    let log_path = parent.join("resume.log");
+    let tee_opts = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &worktree,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+
+    // 1. contained = true -> forwards Some(cwd), producing dontAsk + worktree allow rules
+    let status = crate::session::spawn_claude_headless_resume(
+        "proceed",
+        "sid-1",
+        &log_path,
+        &worktree,
+        &tee_opts,
+        true,
+        "implementer",
+    )
+    .unwrap();
+    assert!(status.success());
+    let captured: Vec<String> = std::fs::read_to_string(&args_out)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        captured
+            .windows(2)
+            .any(|w| w == ["--permission-mode", "dontAsk"]),
+        "contained resume must pass dontAsk: {captured:?}"
+    );
+    let expected: Vec<String> = WRITE_TOOLS
+        .iter()
+        .map(|tool| format!("{tool}(/{}/**)", worktree.display()))
+        .collect();
+    assert_eq!(allow_rules_in_flags(&captured), expected);
+
+    // 2. contained = false -> forwards None, producing bypassPermissions without --settings
+    let status = crate::session::spawn_claude_headless_resume(
+        "proceed",
+        "sid-2",
+        &log_path,
+        &worktree,
+        &tee_opts,
+        false,
+        "implementer",
+    )
+    .unwrap();
+    assert!(status.success());
+    let captured_plain: Vec<String> = std::fs::read_to_string(&args_out)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        !captured_plain.iter().any(|a| a == "--settings"),
+        "uncontained resume must not pass --settings: {captured_plain:?}"
+    );
+    assert!(
+        captured_plain.contains(&"bypassPermissions".to_string()),
+        "uncontained resume must pass bypassPermissions: {captured_plain:?}"
+    );
+}

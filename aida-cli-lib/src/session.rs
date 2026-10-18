@@ -1486,9 +1486,12 @@ fn headless_worktree_root() -> PathBuf {
 /// cannot disagree on a symlinked path. Outside a git repository there is no
 /// worktree, so there are no roots and `dontAsk` denies every edit: the
 /// boundary fails closed instead of widening to cwd (possibly `$HOME`).
-// trace:BUG-1971 | ai:claude
+// trace:BUG-1971 | trace:BUG-2012 | ai:antigravity
 pub(crate) fn contained_session_write_roots() -> Vec<PathBuf> {
-    write_roots_for_git_root(contained_session_git_root().as_deref())
+    contained_session_cwd()
+        .as_deref()
+        .map(contained_session_write_roots_from)
+        .unwrap_or_default()
 }
 
 /// The write roots of a contained session whose process cwd is `cwd`: the git
@@ -1498,22 +1501,24 @@ pub(crate) fn contained_session_write_roots_from(cwd: &Path) -> Vec<PathBuf> {
     write_roots_for_git_root(crate::find_project_root_from(cwd).ok().as_deref())
 }
 
-/// The git root a contained session launched from this process writes in:
-/// the git root of the process cwd, or `None` outside a git repository. Under
-/// `cfg(test)` a [`contained_cwd_seam`] cwd wins, then a pinned hermetic
-/// project root.
-// trace:BUG-1971 | ai:claude
-fn contained_session_git_root() -> Option<PathBuf> {
+// trace:BUG-2012 | ai:antigravity
+fn contained_session_cwd() -> Option<PathBuf> {
     #[cfg(test)]
     if let Some(cwd) = contained_cwd_seam::cwd() {
-        return crate::find_project_root_from(&cwd).ok();
+        return Some(cwd);
     }
     #[cfg(test)]
     if let Some(root) = crate::test_ambient::project_root() {
         return Some(root);
     }
-    let cwd = std::env::current_dir().ok()?;
-    crate::find_project_root_from(&cwd).ok()
+    std::env::current_dir().ok()
+}
+
+/// The git root a contained session launched from this process writes in:
+/// the git root of the process cwd, or `None` outside a git repository.
+// trace:BUG-1971 | trace:BUG-2012 | ai:antigravity
+fn contained_session_git_root() -> Option<PathBuf> {
+    contained_session_write_roots().into_iter().next()
 }
 
 /// BUG-1971: test-only, per-thread stand-in for the process cwd that
@@ -2972,12 +2977,21 @@ pub(crate) fn contained_settings_json_with_store(
     }
     // Tool writes do not pass through Bash's OS sandbox, so deny the host
     // git authority paths in both layers (including exact pointer files).
-    // trace:BUG-1929 | ai:codex
+    // BUG-2012: also deny `<root>/.git` and `<root>/.git/**` for any main
+    // checkout in `write_roots` even when `store_write_paths` is empty.
+    // trace:BUG-1929 | trace:BUG-2012 | ai:antigravity
     let mut deny: Vec<String> = destructive_command_deny_rules()
         .into_iter()
         .map(str::to_owned)
         .collect();
-    for path in crate::contained_boundary::contained_store_deny_write_paths(store_write_paths) {
+    let mut deny_paths =
+        crate::contained_boundary::contained_store_deny_write_paths(store_write_paths);
+    for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
+        if !deny_paths.contains(&path) {
+            deny_paths.push(path);
+        }
+    }
+    for path in deny_paths {
         if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
             for tool in crate::contained_boundary::WRITE_TOOLS {
                 deny.push(format!("{tool}(/{abs})"));

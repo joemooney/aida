@@ -183,6 +183,23 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
     denied
 }
 
+/// BUG-2012: when a contained session's write root is a main checkout (where
+/// `<root>/.git` is a directory, not a linked-worktree `.git` pointer file),
+/// `//<root>/**` covers `<root>/.git/hooks/*` and `<root>/.git/config`. Deny
+/// `<root>/.git` directly from `write_roots` so the Edit/Write boundary
+/// protects git hooks and config even when `store_write_paths` is empty.
+// trace:BUG-2012 | ai:antigravity
+pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut denied = Vec::new();
+    for root in write_roots {
+        let git_entry = root.join(".git");
+        if !git_entry.is_file() && !denied.contains(&git_entry) {
+            denied.push(git_entry);
+        }
+    }
+    denied
+}
+
 /// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from
 /// [`sandbox_allow_write_entries`] and `denyWrite` for each allowed store's
 /// `.git` pointer ([`contained_store_deny_write_paths`]). A store directory
