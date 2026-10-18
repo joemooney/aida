@@ -486,8 +486,10 @@ mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
 mod role_cmd;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
+mod solo_review;
 // trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
