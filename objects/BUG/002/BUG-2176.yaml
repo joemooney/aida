@@ -1,0 +1,20 @@
+id: 01a14f2e-9872-7c12-93a9-5a56d127e7ce
+spec_id: BUG-2176
+agreed_id: BUG-2176
+title: Reviewer rework-hold markers are written into the reviewer's own aida-pr-N worktree, so removing that worktree leaves a label-only hold only a human can clear
+description: 'Observed 2026-10-18 in the fire wave: PRs #2710, #2712, #2713, #2723 and #2725 each got CHANGES REQUESTED in round 1, were fixed, and #2710/#2713/#2723 then got an attested round-2 PASS. But aida pr ship refuses with ''held by the aida:merge-hold label alone (no marker, no recorded reason)'', and aida merge-hold list shows each as label-only. Cause: the headless reviewer runs with project_root = ~/ai/aida-worktrees/aida-pr-N and merge_hold::hold_path(project_root, pr) writes .aida/merge-holds/PR-N there (verified: ~/ai/aida-worktrees/aida-pr-2726/.aida/merge-holds/PR-2726 is a schema_version 2 rework marker). Review verdicts, by contrast, land in the primary checkout''s .aida/review-verdicts. The marker is invisible to aida pr ship / auto-release run from the primary checkout, and it is destroyed when the reviewer worktree is removed, which the next review round requires because the reviewer needs the aida-pr-N path and pr-N branch free. The result: every rework hold becomes a human-only clear, so the designed auto-release on a fresh independent APPROVED verdict never fires and approved PRs stall for hours. FIX: resolve the holds dir (and pr-holds, clearances) against the primary checkout (the git common dir''s worktree, the same resolver review-verdicts uses) in merge_hold.rs holds_dir/hold_path and every writer (pr_claim_surface.rs:407 write_typed_hold, burndown_run.rs:1162, the reviewer record path). Add a regression test: a hold written from a linked worktree is readable by merge-hold list and pr ship from the primary checkout, and survives removing the linked worktree. Also make ''aida merge-hold list'' warn when a label-only hold has a stray marker in any linked worktree.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T13:23:36.178572775Z
+modified_at: 2026-10-18T13:23:36.178572775Z
+req_type: Bug
+filed_at:
+  code_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
