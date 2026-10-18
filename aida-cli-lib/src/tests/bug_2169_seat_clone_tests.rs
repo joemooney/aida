@@ -651,6 +651,7 @@ fn session_start_gives_a_contained_seat_a_private_clone() {
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ true,
     )
     .unwrap();
@@ -694,6 +695,7 @@ fn session_start_gives_a_contained_seat_a_private_clone() {
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ false,
     )
     .unwrap();
@@ -746,6 +748,7 @@ fn session_start_refuses_a_contained_seat_it_cannot_clone_for() {
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ true,
     )
     .unwrap_err();
@@ -798,6 +801,7 @@ fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ true,
     )
     .unwrap_err();
@@ -830,6 +834,7 @@ fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ true,
     )
     .unwrap();

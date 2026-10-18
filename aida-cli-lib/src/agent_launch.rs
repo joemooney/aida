@@ -158,6 +158,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     *force_claim,
                     use_pool,
                     !*launch,
+                    /* review_coexistence */ None,
                     // trace:BUG-2169 | ai:claude
                     mode.contained,
                 )
@@ -3518,6 +3519,7 @@ fn prepare_agent_launch_with_cwd(
                     None,
                     /* self_claim */
                     false,
+                    /* review_coexistence */ None,
                     // trace:BUG-2169 | ai:claude
                     contained_seat,
                 )
