@@ -539,13 +539,21 @@ mod tests {
     }
 
     /// Item 5 (TASK-1739): while a TUI owns the terminal, the rebind note is
-    /// routed into `cache_read_note()` instead of writing to raw stderr.
-    // trace:TASK-1739 | ai:codex
+    /// routed into `cache_read_note()` instead of writing to raw stderr — even
+    /// when the rebind runs on a thread other than the one rendering the note.
+    // trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
     #[test]
     fn rebind_note_routes_to_cache_read_note_while_tui_owns_terminal() {
-        use crate::db::cache_refresh::{cache_read_note, set_tui_owns_terminal, CacheReadScope};
+        use crate::db::cache_refresh::{
+            cache_read_note, reset_cache_read_observations, set_tui_owns_terminal, CacheReadScope,
+            TUI_TERMINAL_TEST_LOCK,
+        };
 
+        let _serial = TUI_TERMINAL_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _scope = CacheReadScope::new();
+        reset_cache_read_observations();
         let prev = set_tui_owns_terminal(true);
         let dir = tempfile::tempdir().unwrap();
         let (path, cache) = cache_with_marker(dir.path(), "holder");
@@ -554,13 +562,17 @@ mod tests {
         rename_over(&CacheFile::Wal.path_for(&path), b"");
         rename_over(&CacheFile::Shm.path_for(&path), b"");
 
-        let reason = cache.rebind_if_replaced().unwrap();
+        let reason = std::thread::spawn(move || cache.rebind_if_replaced().unwrap())
+            .join()
+            .unwrap();
         set_tui_owns_terminal(prev);
 
         assert!(reason.is_some());
         let note = cache_read_note().expect("rebind note recorded for TUI status line");
+        assert!(note.contains(&path.display().to_string()), "{note}");
         assert!(note.contains("changed on disk"), "{note}");
         assert!(note.contains("re-opened it"), "{note}");
+        reset_cache_read_observations();
     }
 
     /// The contained-session topology (Linux): the holder runs in its own

@@ -53,12 +53,14 @@ impl TermGuard {
         // no-ops when their state was never entered.
         // trace:BUG-110 | ai:claude trace:TASK-429 | ai:claude
         TERMINAL_NEEDS_RESTORE.store(true, Ordering::SeqCst);
-        // trace:TASK-1739 | ai:codex
-        aida_core::db::cache_refresh::set_tui_owns_terminal(true);
         terminal::enable_raw_mode().context("failed to enter terminal raw mode")?;
         // Own teardown now. Any `?` past this point drops `guard` on the
         // way out and runs the full restore.
         let guard = Self { active: true };
+        // Only once raw mode is on and the guard will clear it: a failed
+        // enable_raw_mode must not leave cache notes swallowed.
+        // trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
+        aida_core::db::cache_refresh::set_tui_owns_terminal(true);
         let mut out = stdout();
         out.execute(EnterAlternateScreen)
             .context("failed to switch to the alternate screen")?;

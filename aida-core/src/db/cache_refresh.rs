@@ -463,17 +463,34 @@ pub fn set_tui_owns_terminal(owns: bool) -> bool {
     TUI_OWNS_TERMINAL.swap(owns, std::sync::atomic::Ordering::SeqCst)
 }
 
+/// Serializes tests that toggle the process-wide [`TUI_OWNS_TERMINAL`] flag or
+/// read the process-wide recorded note, so parallel tests cannot observe each
+/// other's state.
+// trace:TASK-1739 | ai:claude
+#[cfg(test)]
+pub(crate) static TUI_TERMINAL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // trace:TASK-1739 | ai:codex
 pub fn tui_owns_terminal() -> bool {
     TUI_OWNS_TERMINAL.load(std::sync::atomic::Ordering::SeqCst)
 }
 
-// trace:TASK-1739 | ai:codex
+/// The latest cache note recorded while a TUI owned the terminal. Process-wide
+/// rather than thread-local: a rebind or reopen note can fire on a background
+/// refresh thread, and the TUI reads it on its render thread.
+// trace:TASK-1739 | ai:claude
+static TUI_CACHE_NOTE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
+    TUI_CACHE_NOTE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Record a cache note for [`cache_read_note`], from any thread.
+// trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
 pub fn record_cache_note(note: impl Into<String>) {
-    let note = note.into();
-    COLLECTED.with(|c| {
-        c.borrow_mut().note = Some(note);
-    });
+    *tui_cache_note() = Some(note.into());
 }
 
 /// Emit a one-line cache note: to `cache_read_note()` while a TUI owns the
@@ -496,8 +513,6 @@ struct Collected {
     interactive: bool,
     budget: Option<ReadBudget>,
     stale: Option<StaleServe>,
-    // trace:TASK-1739 | ai:codex
-    note: Option<String>,
     // trace:BUG-1956 | ai:claude
     ladder_waited: Duration,
 }
@@ -559,21 +574,23 @@ pub fn reset_cache_read_observations() {
         let mut c = c.borrow_mut();
         c.touched = false;
         c.stale = None;
-        c.note = None;
         c.wait_deadline = None;
         c.ladder_waited = Duration::ZERO;
     });
+    // trace:TASK-1739 | ai:claude
+    *tui_cache_note() = None;
 }
 
-// trace:TASK-1526 | ai:codex
+/// The status-line note for the current read: the stale-serve note and any
+/// recorded cache note, joined so neither hides the other.
+// trace:TASK-1526 | ai:codex trace:TASK-1739 | ai:claude
 pub fn cache_read_note() -> Option<String> {
-    COLLECTED.with(|c| {
-        let c = c.borrow();
-        c.stale
-            .as_ref()
-            .map(StaleServe::note)
-            .or_else(|| c.note.clone())
-    })
+    let stale = COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note));
+    let recorded = tui_cache_note().clone();
+    match (stale, recorded) {
+        (Some(stale), Some(recorded)) => Some(format!("{stale} | {recorded}")),
+        (stale, recorded) => stale.or(recorded),
+    }
 }
 
 // trace:TASK-1526 | ai:codex
@@ -1147,6 +1164,41 @@ except OSError:
         assert!(RefreshLock::held_by_current_thread(&alias.join("cache.db")));
         drop(inner);
         drop(outer);
+    }
+
+    /// A note recorded on a background thread reaches the render thread, and a
+    /// stale-serve note does not hide it.
+    // trace:TASK-1739 | ai:claude
+    #[test]
+    fn recorded_note_crosses_threads_and_joins_the_stale_note() {
+        let _serial = TUI_TERMINAL_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _scope = CacheReadScope::new();
+        reset_cache_read_observations();
+        let prev = set_tui_owns_terminal(true);
+        std::thread::spawn(|| emit_cache_note("note: background rebind"))
+            .join()
+            .unwrap();
+        set_tui_owns_terminal(prev);
+        assert_eq!(
+            cache_read_note().as_deref(),
+            Some("note: background rebind")
+        );
+
+        record_read(Some(StaleServe {
+            stale: true,
+            cache_head: Some("old".into()),
+            store_head: "new".into(),
+            built_at: None,
+            refreshing: RefreshState::Deferred,
+        }));
+        let note = cache_read_note().unwrap();
+        assert!(note.contains("refresh is deferred"), "{note}");
+        assert!(note.ends_with(" | note: background rebind"), "{note}");
+
+        reset_cache_read_observations();
+        assert_eq!(cache_read_note(), None);
     }
 
     // trace:TASK-1526 | ai:codex
