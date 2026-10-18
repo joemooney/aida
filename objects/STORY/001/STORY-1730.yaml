@@ -1,0 +1,34 @@
+id: 01a14e02-5e40-7cc0-8a25-2d9f1f71bed7
+spec_id: STORY-1730
+agreed_id: STORY-1730
+title: 'Review PR-2724: [AI:claude] feat(review): audited solo-human self-approval mode (STORY-1655)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14cfb`) for branch `story-1655-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2724>
+  - Branch: `story-1655-work` → `main`
+
+  ## Covers
+
+  - STORY-1655
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2724` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T07:55:40.480363830Z
+modified_at: 2026-10-18T07:55:40.480363830Z
+req_type: Story
+filed_at:
+  code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 188adef04b
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
