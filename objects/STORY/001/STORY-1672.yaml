@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-18T03:12:28.517827506Z
+modified_at: 2026-10-18T06:34:20.295085473Z
 req_type: Story
 tags:
 - from:aida-host
@@ -156,6 +156,17 @@ comments:
   created_at: 2026-10-18T03:09:23.737386165Z
   modified_at: 2026-10-18T03:09:23.737386165Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a14db7-e707-79c3-b85a-c97bf772b9d1
+  author: joe
+  content: |
+    Slice PR opened: #2723 (ready), branch story-1672-work, head a9679ba814 — `aida lint constants` (TASK-1785 trailer only; parent stays open).
+    Files: aida-cli-lib/src/lint_constants.rs (new), aida-cli-lib/src/cli.rs (LintCommand::Constants, LintConstantsFailOn; optional subcommand on `lint` with args_conflicts_with_subcommands), aida-cli-lib/src/lib_part1.rs (dispatch), aida-cli-lib/src/lib.rs (mod), aida-cli-lib/src/mandate_traces.rs (rust_comments -> pub(crate)), aida-cli/tests/task_1785_lint_constants.rs (new), docs/cli/02-specs.md.
+    Checks: make test-touched green (aida-cli-lib 9063 passed + 3/3 new black-box tests), make check-ci-compile ok, make check-ci-fast 30/30 gates passed.
+    Reviewer notes: regions are fn/method/trait-default/const/static items with a marker inside or in the comment block directly above; #[cfg(test)] modules not skipped (would be a new exemption); impl-level traces do not cover methods. Repo self-run: 3,102 unexplained of 10,550 traced literals.
+    Note: TASK-1785 and TASK-1783 are still Draft; status not changed by me.
+  created_at: 2026-10-18T06:34:20.295085473Z
+  modified_at: 2026-10-18T06:34:20.295085473Z
+  session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
 history:
 - id: 01a14036-9d75-7782-880c-dfebe1f22dd5
   author: joe
