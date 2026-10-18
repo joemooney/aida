@@ -152,6 +152,7 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ false,
     )
     .unwrap();
@@ -409,6 +410,7 @@ fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_inv
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
         /* contained_seat */ false,
     )
     .unwrap();
@@ -641,6 +643,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         /* force_claim */ true,
         /* use_pool */ None,
         /* self_claim */ crate::queue_cmd::queue_work_self_claim(false),
+        /* review_coexistence */ None,
         /* contained_seat */ false,
     );
     assert!(
@@ -711,7 +714,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         None,
         false,
         /* no_launch */ true,
-        Some("implementer"),
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         true,
         None,
         None,
