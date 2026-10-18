@@ -241,6 +241,13 @@ pub struct RecorderAttestation {
     /// gate re-reads it rather than trusting `human_at_tty` on its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<String>,
+    /// STORY-1655: true when this approval was a solo-human self-approval
+    /// (the global `[review] solo_human_self_approval` key was on, the human
+    /// passed the TTY floor and the typed terminal challenge). Omitted when
+    /// false, so a default-mode attestation serializes unchanged.
+    // trace:STORY-1655 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub solo_human: bool,
 }
 
 impl RecorderAttestation {

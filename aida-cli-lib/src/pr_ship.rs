@@ -1867,6 +1867,13 @@ pub(crate) struct ShipApprovalPolicy {
     /// is anchored and is not an author may use `--override-stale-approval`
     /// ([`stale_override_refusal`]).
     pub shipper: Vec<String>,
+    /// STORY-1655: solo-human self-approval is in force for this project at
+    /// ship time — the global key re-read now, and never for the AIDA
+    /// repository. Off by default.
+    pub solo_human: bool,
+    /// STORY-1655: authority keys of solo approvals whose receipt re-validated
+    /// and itself records a solo approval (`verified_solo_keys`).
+    pub verified_solo: std::collections::BTreeSet<String>,
 }
 
 /// BUG-1918: why the shipping session may NOT use `--override-stale-approval`
@@ -1942,10 +1949,15 @@ pub(crate) fn approval_authority_refusal(
     let Some(attestation) = newest.attestation.as_ref() else {
         return unattested("it was not recorded through `aida review record`");
     };
-    if policy
-        .author_sessions
-        .iter()
-        .any(|s| s.matches(&attestation.identity))
+    // STORY-1655: a verified solo-human self-approval is exempt from the
+    // author check ONLY; every other authority check below still applies.
+    // trace:STORY-1655 | ai:claude
+    let solo = solo_self_approval(newest, policy);
+    if !solo
+        && policy
+            .author_sessions
+            .iter()
+            .any(|s| s.matches(&attestation.identity))
     {
         return Some(ApprovalAuthorityRefusal::AuthorSession { recorded_by });
     }
@@ -1960,7 +1972,7 @@ pub(crate) fn approval_authority_refusal(
     {
         return unattested("it names no recorder identity anchored to a session or process");
     }
-    if policy.author_sessions.iter().any(|s| s.matches(identity)) {
+    if !solo && policy.author_sessions.iter().any(|s| s.matches(identity)) {
         return Some(ApprovalAuthorityRefusal::AuthorSession { recorded_by });
     }
     if !attestation.authorizes(newest.reviewed_sha.as_deref()) {
@@ -1984,6 +1996,45 @@ pub(crate) fn approval_authority_refusal(
         return unattested("it is dated in the future");
     }
     None
+}
+
+/// STORY-1655: is `approval` a solo-human self-approval the ship gate may
+/// honour? The mode must be in force now, the attestation must say solo and
+/// human-at-TTY, and its receipt must have re-validated as a solo receipt.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn solo_self_approval(
+    approval: &crate::review_verdict::RecordedVerdict,
+    policy: &ShipApprovalPolicy,
+) -> bool {
+    let Some(att) = approval.attestation.as_ref() else {
+        return false;
+    };
+    policy.solo_human
+        && att.solo_human
+        && att.human_at_tty
+        && att
+            .authority_key(approval.recorded_at.as_deref())
+            .is_some_and(|k| k.starts_with("receipt:") && policy.verified_solo.contains(&k))
+}
+
+/// STORY-1655: the line `aida pr ship` prints when the approval it merges on
+/// is a solo-human self-approval; `None` otherwise.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn solo_approval_notice(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    policy: &ShipApprovalPolicy,
+) -> Option<String> {
+    let approvals = open_approvals(candidates);
+    let newest = newest_approval(&approvals)?;
+    solo_self_approval(newest, policy).then(|| {
+        format!(
+            "approval: solo-human self-approval by `{}` (review.solo_human_self_approval is on)",
+            newest
+                .recorded_by
+                .as_deref()
+                .unwrap_or("a human at a terminal")
+        )
+    })
 }
 
 /// BUG-1918: the refusal text for an [`ApprovalAuthorityRefusal`].

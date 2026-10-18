@@ -44,6 +44,7 @@ applies. The branch-local copy is *never* used as a fallback.
 | `strategy` | `[integrate]` | No (merge-strategy enum) | Branch-local |
 | `workflow_hints` | `[hints]` | No (display toggle) | Branch-local |
 | `run_acceptance_commands`, `acceptance_command_allow` | `[review]` | **Yes** — gate on the spec-authored commands graded review runs via `bash -c` | **Machine-global `~/.aida/config.toml` only** (repo copy — branch-local and default-branch — ignored; fail-closed to denied) |
+| `solo_human_self_approval` | `[review]` | **Yes** — lets a human at a terminal approve work their own session claimed | **Machine-global `~/.aida/config.toml` only** (a project value is ignored with a warning; never applies in the AIDA repository) |
 
 `[pr-rebase] smoke_check` is the **only** `.aida/config.toml` field that AIDA's
 own drain/CI code reads from the *repo* and then executes as a shell command.
