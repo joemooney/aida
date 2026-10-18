@@ -1,0 +1,34 @@
+id: 01a14de8-d386-7f62-9c51-19d2f264e5ed
+spec_id: STORY-1729
+agreed_id: STORY-1729
+title: 'Review PR-2723: [AI:claude] feat(lint): report unexplained numeric constants in traced Rust code (TASK-1785)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a14cff`) for branch `story-1672-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2723>
+  - Branch: `story-1672-work` → `main`
+
+  ## Covers
+
+  - TASK-1785
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2723` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T07:27:46.566434389Z
+modified_at: 2026-10-18T07:27:46.566434389Z
+req_type: Story
+filed_at:
+  code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 188adef04b
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
