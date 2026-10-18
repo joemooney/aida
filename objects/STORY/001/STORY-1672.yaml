@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-18T06:34:20.295085473Z
+modified_at: 2026-10-18T16:10:34.572701355Z
 req_type: Story
 tags:
 - from:aida-host
@@ -166,6 +166,26 @@ comments:
     Note: TASK-1785 and TASK-1783 are still Draft; status not changed by me.
   created_at: 2026-10-18T06:34:20.295085473Z
   modified_at: 2026-10-18T06:34:20.295085473Z
+  session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
+- id: 01a14fc7-76cc-7951-9d9d-2cb4c2beed79
+  author: joe
+  content: |
+    Second slice PR is open: #2729 (ready, base main), branch task-1783-coverage, head 09bffdc8e7. It adds whole-tree `aida trace coverage --all/--path`. The trailer names only TASK-1783.
+    #2723 (TASK-1785, `aida lint constants`) merged 2026-10-18 at head 2a7d4df2dd, after round-1 rework 92e605a409 and a main merge. With #2729, both slices are delivered. STORY-1672 can close once #2729 merges and is verified.
+    Per the advisor's ruling, "traced" is now ONE shared rule in aida-cli-lib/src/trace_regions.rs, used by both tools: a file `//!` anchor covers the whole file, an impl-level marker covers that impl's methods, and an item-level marker inside or in the leading prefix covers that item.
+    Files in #2729:
+    - aida-cli-lib/src/trace_regions.rs (new)
+    - aida-cli-lib/src/trace_tree_coverage.rs (new)
+    - aida-cli-lib/src/lint_constants.rs (now uses the shared helper)
+    - aida-cli-lib/src/cli.rs (Coverage gains --all/--path/--fail-on; TraceCoverageFailOn)
+    - aida-cli-lib/src/lib_part1.rs and aida-cli-lib/src/trace_cmd.rs (dispatch)
+    - aida-cli-lib/src/lib.rs
+    - aida-cli/tests/task_1783_trace_tree_coverage.rs (new)
+    - docs/cli/02-specs.md
+    Checks: make test-touched green. check-ci-compile ok and check-ci-fast 30/30 after merging main. Unit tests 44/44 (trace_regions, trace_tree_coverage, lint_constants, mandate_traces). Black-box 3/3 for each of task_1783 and task_1785.
+    TASK-1783 now carries the docs:impacted tag. Its status is unchanged (Draft).
+  created_at: 2026-10-18T16:10:34.572701355Z
+  modified_at: 2026-10-18T16:10:34.572701355Z
   session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
 history:
 - id: 01a14036-9d75-7782-880c-dfebe1f22dd5
