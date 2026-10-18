@@ -1,0 +1,20 @@
+id: 01a14e87-54ea-72f1-a99e-68a924cd3dff
+spec_id: TASK-1810
+agreed_id: TASK-1810
+title: 'TASK-1794 doc nits: plan_session_args doc placement and stale --plan-only prelude prose'
+description: 'Cosmetic findings from the PR #2713 round-2 review (PASS). (1) drain_gate.rs:1288-1305: the plan_session_args /// block sits under run_plan_prelude''s STORY-265 doc block, so rustdoc attaches the wrong doc; move the STORY-265 block back above run_plan_prelude. (2) auto_complete.rs:3719 and drain_gate.rs:1290 still say the headless prelude runs --plan-only; it now uses the hidden --plan-phase lane.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T10:20:54.378907934Z
+modified_at: 2026-10-18T10:20:54.378907934Z
+req_type: Task
+filed_at:
+  code_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
