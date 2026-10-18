@@ -1,0 +1,20 @@
+id: 01a14f0b-8d90-7172-a1d8-fea60071fa00
+spec_id: TASK-1812
+agreed_id: TASK-1812
+title: 'aida lint constants follow-ups: skip #[cfg(test)] modules, tuple-index false positives, fixture trace, number-mention precision'
+description: 'From the PR #2723 round-2 review (PASS), TASK-1785 slice. ADVISOR RULING on finding 3: in-file #[cfg(test)] modules are exempt, the same as tests/ files (SPIKE-47 F1 covers ''mod tests'' hunks, and test fns carry trace:<SPEC>.<ac> markers by convention). Dogfooding shows ~77% of findings are in test modules, so this is the main noise fix. Do it. Also: (1) change the fixture tests'' ''trace:TASK-1785.Fixture'' markers (lint_constants.rs:527, task_1785_lint_constants.rs:147) to trace:TASK-1785.ac0ead8d (re-keyed criterion). (2) Skip a literal preceded by ''.'' punct (tuple fields t.2, p.1.1) or walk syn ExprLit. (4) numbers_in_text: count range endpoints (''30-60 s'') and match negatives (''-15''). (5) Don''t merge ''64,128,256'' into one number when the groups aren''t valid thousands groups. (6) Refuse or skip a non-.rs --path. (7) Make a trait-level marker cover default methods, or document it; same for enum discriminants. Share the region rules with TASK-1783 (one helper).'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T12:45:19.632864135Z
+modified_at: 2026-10-18T12:45:19.632864135Z
+req_type: Task
+filed_at:
+  code_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
