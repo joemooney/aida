@@ -400,13 +400,43 @@ impl MergeHoldRecord {
     }
 }
 
+/// BUG-2176: the checkout whose `.aida/merge-holds/` and
+/// `.aida/merge-hold-clearances/` every reader and writer shares — the
+/// primary checkout, resolved the same way the merge chokepoint resolves the
+/// launcher's review verdicts ([`crate::main_worktree_root_from`]). A caller
+/// in a linked worktree (a headless reviewer in `aida-pr-N`) used to write its
+/// marker into that worktree, where `aida pr ship` and auto-release never saw
+/// it and removing the worktree destroyed it. A seat clone that does not
+/// verify keeps its own root, as before, rather than pointing at the
+/// unverified-clone sentinel where every hold read would answer "no hold".
+// trace:BUG-2176 | ai:claude
+pub(crate) fn hold_store_root(project_root: &Path) -> PathBuf {
+    if let crate::seat_clone::MainFor::Unverified(_) = crate::seat_clone::main_for(project_root) {
+        return project_root.to_path_buf();
+    }
+    crate::main_worktree_root_from(project_root)
+}
+
 fn holds_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join("merge-holds")
+    local_holds_dir(&hold_store_root(project_root))
+}
+
+/// `<root>/.aida/merge-holds`, taken literally — no primary-checkout resolution.
+// trace:BUG-2176 | ai:claude
+fn local_holds_dir(root: &Path) -> PathBuf {
+    root.join(".aida").join("merge-holds")
 }
 
 /// The marker path for one PR. Public so callers can log it.
 pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
     holds_dir(project_root).join(format!("PR-{pr}"))
+}
+
+/// The marker path for one PR inside `root` itself — where a contained caller
+/// that cannot write the primary checkout leaves its marker.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn local_hold_path(root: &Path, pr: u64) -> PathBuf {
+    local_holds_dir(root).join(format!("PR-{pr}"))
 }
 
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
@@ -474,8 +504,6 @@ fn write_marker(
     reconcile_route: bool,
     rearmed: bool,
 ) -> std::io::Result<()> {
-    let dir = holds_dir(project_root);
-    std::fs::create_dir_all(&dir)?;
     if record.pr == 0
         || (record.reason_kind == HoldReasonKind::Recusal
             && (record.recused_principals.is_empty()
@@ -497,12 +525,26 @@ fn write_marker(
     }
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    match std::fs::remove_file(clearance_path(project_root, record.pr)) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
+    // BUG-2176: the marker lands in the primary checkout. A contained caller
+    // (a reviewer sandboxed to its worktree) cannot write there; it keeps the
+    // marker locally and the launcher adopts it once the reviewer exits
+    // ([`adopt_worktree_hold`]). Any other failure stays an error.
+    // trace:BUG-2176 | ai:claude
+    let store = hold_store_root(project_root);
+    if let Err(error) = write_marker_files(&store, record.pr, &body) {
+        if store == project_root {
+            return Err(error);
+        }
+        write_marker_files(project_root, record.pr, &body)?;
+        eprintln!(
+            "  warning: could not write PR-{pr}'s merge-hold marker in the primary checkout \
+             ({error}); it was written to {local} instead — the review launcher adopts it, \
+             otherwise copy it to {primary} before removing this worktree",
+            pr = record.pr,
+            local = local_hold_path(project_root, record.pr).display(),
+            primary = local_hold_path(&store, record.pr).display(),
+        );
     }
-    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)?;
     // trace:BUG-1693 | ai:codex
     let mut event = crate::events::Event::new(
         None,
@@ -523,6 +565,118 @@ fn write_marker(
     event.seat = crate::events::active_seat();
     crate::events::emit(project_root, &event);
     Ok(())
+}
+
+/// Retire `root`'s clearance record for `pr` and write its marker, both taken
+/// literally under `root`.
+// trace:BUG-2176 | ai:claude
+fn write_marker_files(root: &Path, pr: u64, body: &[u8]) -> std::io::Result<()> {
+    std::fs::create_dir_all(local_holds_dir(root))?;
+    match std::fs::remove_file(local_clearance_path(root, pr)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    aida_core::fs_atomic::write_atomic(&local_hold_path(root, pr), body)
+}
+
+/// BUG-2176: move a marker a contained reviewer left in its review `worktree`
+/// into the primary checkout, composing with any marker already there (so a
+/// stricter hold stays primary). Only a marker written at or after `since`
+/// (the reviewer's start) is adopted, so a stale copy from an earlier round
+/// cannot re-arm a hold a human has since cleared. Returns whether a marker
+/// was adopted; the worktree copy is removed only after the primary write.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn adopt_worktree_hold(
+    project_root: &Path,
+    worktree: &Path,
+    pr: u64,
+    since: std::time::SystemTime,
+) -> std::io::Result<bool> {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let local = local_hold_path(worktree, pr);
+    if canon(&local) == canon(&hold_path(project_root, pr)) {
+        return Ok(false);
+    }
+    let fresh = std::fs::symlink_metadata(&local)
+        .and_then(|m| m.modified())
+        .is_ok_and(|modified| modified >= since);
+    if !fresh {
+        return Ok(false);
+    }
+    let Some(record) = parse_hold_marker(std::fs::read_to_string(&local), pr) else {
+        return Ok(false);
+    };
+    write_typed_hold(project_root, &record)?;
+    std::fs::remove_file(&local)?;
+    Ok(true)
+}
+
+/// BUG-2176: markers sitting in linked worktrees of `main_root`'s repository,
+/// as `(pr, path)` ascending — where no merge gate reads them and removing the
+/// worktree destroys them. `aida merge-hold list` warns on each.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let primary = canon(&local_holds_dir(main_root));
+    let mut found = Vec::new();
+    for tree in crate::worktree::parse_worktree_paths(&String::from_utf8_lossy(&out.stdout)) {
+        let dir = local_holds_dir(&tree);
+        if canon(&dir) == primary {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if let Some(n) = name
+                .to_string_lossy()
+                .strip_prefix("PR-")
+                .and_then(|s| s.parse::<u64>().ok())
+            {
+                found.push((n, entry.path()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// The `aida merge-hold list` line for one stray marker. A label-only hold
+/// with a stray marker is the BUG-2176 shape: the reviewer's recorded reason
+/// and release condition exist, just not where the gates read.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_marker_warning(
+    pr: u64,
+    path: &Path,
+    main_root: &Path,
+    label_only: bool,
+) -> String {
+    let primary = local_hold_path(main_root, pr);
+    let lead = if label_only {
+        format!(
+            "PR #{pr}: held by the label alone here, but a marker for it sits in a linked worktree"
+        )
+    } else {
+        format!("PR #{pr}: a merge-hold marker sits in a linked worktree")
+    };
+    format!(
+        "{lead} at {} — `aida pr ship` and auto-release do not read it, and removing that worktree destroys it. Copy it to {} to restore it.",
+        path.display(),
+        primary.display()
+    )
 }
 
 /// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
@@ -785,7 +939,13 @@ fn retire_stale_route_briefs(
 /// hold, preserving the merge chokepoint while exposing the diagnostic.
 // trace:STORY-1397 | ai:codex
 pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHoldRecord> {
-    match std::fs::read_to_string(hold_path(project_root, pr)) {
+    parse_hold_marker(std::fs::read_to_string(hold_path(project_root, pr)), pr)
+}
+
+/// The record a marker read yields — `None` only for a missing marker.
+// trace:BUG-2176 | ai:claude
+fn parse_hold_marker(read: std::io::Result<String>, pr: u64) -> Option<MergeHoldRecord> {
+    match read {
         Ok(body) if body.trim_start().starts_with('{') => {
             match serde_json::from_str::<MergeHoldRecord>(&body) {
                 Ok(record) if record.schema_version == 2 && record.pr == pr => Some(record),
@@ -978,8 +1138,12 @@ pub(crate) struct HoldClearance {
 }
 
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
-    project_root
-        .join(".aida")
+    // trace:BUG-2176 | ai:claude
+    local_clearance_path(&hold_store_root(project_root), pr)
+}
+
+fn local_clearance_path(root: &Path, pr: u64) -> PathBuf {
+    root.join(".aida")
         .join("merge-hold-clearances")
         .join(format!("PR-{pr}.json"))
 }
@@ -4801,3 +4965,7 @@ mod tests {
         assert!(write_typed_hold(dir.path(), &invalid).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2176_merge_hold_primary_root_tests.rs"]
+mod bug_2176_merge_hold_primary_root_tests;
