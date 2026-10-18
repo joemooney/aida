@@ -3932,49 +3932,44 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn default_branch_of(project_root: &Path) -> String {
-    // BUG-417: ask the forge for origin's live default branch first. `gh repo
-    // view --json defaultBranchRef` is authoritative even on a fresh clone where
-    // `refs/remotes/origin/HEAD` was never set (the quizdom `master`-default
-    // case that produced a GraphQL base-ref error when AIDA assumed `main`).
-    // Fall back to the local origin/HEAD probe, then `main`. trace:BUG-417 | ai:claude
-    if let Ok(out) = Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "repo",
-            "view",
-            "--json",
-            "defaultBranchRef",
-            "-q",
-            ".defaultBranchRef.name",
-        ])
-        .output()
-    {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
-                return name;
-            }
-        }
+/// Bounded, read-only forge evidence. Unknown is distinct from a guessed PR base.
+// trace:TASK-1795 | ai:codex
+pub(crate) fn probe_default_branch(project_root: &Path) -> Option<String> {
+    if resolve_open_change_forge_kind(project_root) != ForgeKind::GitHub {
+        return None;
     }
+    // Keep the test-binary override out of this production authority probe.
+    #[cfg(test)]
+    let mut cmd = Command::new(crate::kernel::resolve_gh_binary()?);
+    #[cfg(not(test))]
+    let mut cmd = Command::new("gh");
+    cmd.current_dir(project_root).args([
+        "repo",
+        "view",
+        "--json",
+        "defaultBranchRef",
+        "-q",
+        ".defaultBranchRef.name",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let name = std::str::from_utf8(&out.stdout).ok()?.trim();
+    // Validate the entire response: a first-line parser could silently accept
+    // malformed or multi-line evidence and let the guard miss the real default.
+    crate::git_arg_guard::is_shell_safe_branch_name(name).then(|| name.to_owned())
+}
 
-    // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
-    if let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .output()
-    {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if let Some(b) = s.strip_prefix("origin/") {
-                if !b.is_empty() {
-                    return b.to_string();
-                }
-            }
-        }
-    }
-    "main".to_string()
+pub(crate) fn default_branch_of(project_root: &Path) -> String {
+    // PR base callers retain the conventional-ref/main fallback; authority
+    // guards must use probe_default_branch, where unknown never becomes main.
+    // trace:BUG-417 trace:TASK-1795 | ai:codex
+    probe_default_branch(project_root).unwrap_or_else(|| {
+        crate::detect_default_branch_ref(project_root)
+            .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+            .unwrap_or_else(|| "main".to_owned())
+    })
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from

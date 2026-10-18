@@ -346,6 +346,20 @@ fn fifo_symlink_verdict_is_skipped_not_read() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // The PATH isolation helper above guarantees that this watchdog exits only
+    // this exact-test subprocess if a blocking-open regression returns.
+    // trace:TASK-1786 | ai:codex
+    assert!(crate::test_env::is_path_isolated_process());
+    let (done, wait) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if matches!(
+            wait.recv_timeout(std::time::Duration::from_secs(60)),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+        ) {
+            eprintln!("FIFO verdict test exceeded 60 seconds");
+            std::process::exit(124);
+        }
+    });
     let tmp = tempfile::tempdir().unwrap();
     let (result, project) = run_mock_reviewer(tmp.path(), |l, _| {
         let dir = l.worktree.join(".aida/review-verdicts");
@@ -354,6 +368,20 @@ fn fifo_symlink_verdict_is_skipped_not_read() {
             d = dir.display()
         )
     });
+    assert_refused(result, &project, "wrote no verdict file after it started");
+    // A direct FIFO reaches open itself; a symlink-only fixture cannot prove
+    // that O_NONBLOCK is present on the candidate open.
+    let direct = tmp.path().join("direct");
+    std::fs::create_dir(&direct).unwrap();
+    let (result, project) = run_mock_reviewer(&direct, |l, _| {
+        let dir = l.worktree.join(".aida/review-verdicts");
+        format!(
+            "#!/bin/sh\nmkdir -p '{d}'\nmkfifo '{d}/STORY-77.json'\nexit 0\n",
+            d = dir.display()
+        )
+    });
+    drop(done);
+    watchdog.join().unwrap();
     assert_refused(result, &project, "wrote no verdict file after it started");
 }
 
@@ -464,7 +492,8 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
             true,
             true,
             implementer.role.as_deref(),
-            Some("reviewer")
+            Some("reviewer"),
+            Some("STORY-77"),
         ),
         LeaseConflictDecision::Coexist
     );
@@ -477,12 +506,24 @@ fn reviewer_pickup_coexists_with_live_implementer_lease_but_not_second_reviewer(
         Some("rev1".to_string())
     );
     assert_eq!(
-        review_source_branch_conflict_decision(true, true, Some("reviewer"), Some("reviewer")),
+        review_source_branch_conflict_decision(
+            true,
+            true,
+            Some("reviewer"),
+            Some("reviewer"),
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::Refuse
     );
     // A DEAD implementer lease is still ended, as before.
     assert_eq!(
-        review_source_branch_conflict_decision(true, false, Some("implementer"), Some("reviewer")),
+        review_source_branch_conflict_decision(
+            true,
+            false,
+            Some("implementer"),
+            Some("reviewer"),
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::AutoEnd
     );
 }
@@ -556,12 +597,104 @@ fn implementer_pickup_still_conflicts_with_live_implementer_lease() {
             true,
             true,
             implementer.role.as_deref(),
-            Some("implementer")
+            Some("implementer"),
+            Some("STORY-77"),
         ),
         LeaseConflictDecision::Refuse
     );
     assert_eq!(
-        review_source_branch_conflict_decision(true, true, implementer.role.as_deref(), None),
+        review_source_branch_conflict_decision(
+            true,
+            true,
+            implementer.role.as_deref(),
+            None,
+            Some("STORY-77")
+        ),
         LeaseConflictDecision::Refuse
+    );
+}
+
+// trace:TASK-1786 | ai:codex
+#[test]
+fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
+    for (explicit, backing) in [
+        (None, Some("STORY-77")),
+        (Some("reviewer"), None),
+        (Some("reviewer"), Some("")),
+    ] {
+        assert_eq!(
+            review_source_branch_conflict_decision(
+                true,
+                true,
+                Some("implementer"),
+                explicit,
+                backing
+            ),
+            LeaseConflictDecision::Refuse
+        );
+    }
+}
+
+/// Exercise the queue-work input builder passed to session_start, including
+/// rework's stored route. A resolved reviewer role is insufficient authority.
+// trace:TASK-1786 | ai:codex
+#[test]
+fn queue_work_coexistence_input_preserves_explicit_intent() {
+    use crate::queue_cmd::QueueWorkRoleInput;
+
+    let mut spec = aida_core::Requirement::new("Fix the widget".into(), String::new());
+    spec.spec_id = Some("STORY-77".into());
+    let mut plan = standalone_review_plan(ReviewForge::GitHub, 42, &spec, "u");
+    let implementer = lease_with_role("impl", "STORY-77", "implementer");
+    // The plan itself carries a reviewer route even without a CLI override.
+    assert_eq!(infer_queue_work_role(&plan, None).0, "reviewer");
+    for (label, input, expected) in [
+        (
+            "inferred reviewer",
+            QueueWorkRoleInput::direct(None),
+            LeaseConflictDecision::Refuse,
+        ),
+        (
+            "explicit --role reviewer",
+            QueueWorkRoleInput::direct(Some("reviewer")),
+            LeaseConflictDecision::Coexist,
+        ),
+        (
+            "rework inherited reviewer route, no --for",
+            QueueWorkRoleInput::rework(None, Some("reviewer")),
+            LeaseConflictDecision::Refuse,
+        ),
+        (
+            "rework explicit --for reviewer",
+            QueueWorkRoleInput::rework(Some("reviewer"), Some("reviewer")),
+            LeaseConflictDecision::Coexist,
+        ),
+        (
+            "rework explicit --for any",
+            QueueWorkRoleInput::rework(Some("any"), None),
+            LeaseConflictDecision::Refuse,
+        ),
+    ] {
+        let coexistence = input.review_coexistence(&plan);
+        if expected == LeaseConflictDecision::Coexist {
+            assert_eq!(coexistence, Some(("reviewer", "STORY-77")), "{label}");
+        }
+        assert_eq!(
+            review_source_branch_conflict_decision(
+                true,
+                true,
+                implementer.role.as_deref(),
+                coexistence.map(|(role, _)| role),
+                coexistence.map(|(_, spec)| spec),
+            ),
+            expected,
+            "{label}",
+        );
+    }
+    plan.review_target = None;
+    assert_eq!(
+        QueueWorkRoleInput::direct(Some("reviewer")).review_coexistence(&plan),
+        None,
+        "an ordinary work plan cannot authorize review coexistence",
     );
 }

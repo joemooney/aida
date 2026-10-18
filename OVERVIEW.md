@@ -1,3 +1,13 @@
+No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
+symref before asking the forge. A stale origin/HEAD wins over forge evidence;
+refresh it after a remote default change. Without that symref, the read-only
+GitHub probe uses a three-second child-exit deadline. Unknown evidence (including
+timeout, errors, or unsupported forges) requires an explicit PR number. Output
+collection retains the shared helper's existing bounds. PR-base callers retain
+conventional local/remote refs and a final main fallback after the probe fails.
+Approved-change suggestions use numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 Headless drains validate every headless phase seat before queue mutation or
 plan startup, including refusing when the project root cannot be resolved.
 Pooled-worktree reuse revokes the prior occupant's stamped child grant before
@@ -1009,3 +1019,11 @@ and bypass/contained combinations still refuse. The documented interactive-only
 plan lane rejects headless flags at parsing, before lifecycle setup; headless
 planning remains the separate `--with-plan` drain phase.
 <!-- trace:TASK-1794 | ai:codex -->
+
+Standalone reviewer pickup coexists with a live implementer only with explicit
+`queue work --role reviewer` and an unambiguous backing spec. An inferred role
+and direct session starts retain ordinary source-branch conflict handling.
+Verdict collection validates metadata and reads bytes from the same opened
+regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
+regression runs under an exact-test subprocess watchdog.
+<!-- trace:TASK-1786 | ai:codex -->
