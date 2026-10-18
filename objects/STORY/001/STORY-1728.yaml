@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T03:30:58.269601247Z
+modified_at: 2026-10-18T03:34:08.129467173Z
 req_type: Story
 comments:
 - id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
@@ -64,6 +64,18 @@ comments:
   created_at: 2026-10-18T03:30:54.597419467Z
   modified_at: 2026-10-18T03:30:54.597419467Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a14d12-ec01-7e92-823f-0133840027a2
+  author: joe
+  content: |
+    SKETCH AMENDMENT (operator decision, Joe, 2026-10-17 20:33): collection mechanism = option B, an explicit registry list. This supersedes the earlier recommendation of option A (linkme).
+
+    - `command_registry.rs` holds `pub(crate) static REGISTRY: &[&CommandReg]`, one line per command, in alphabetical order by command name. A unit test enforces the order and that names are unique.
+    - Rationale: changes to existing commands (flags, handlers, policy) touch only the owning module under either option, and that is most of the churn. A command in a new module needs a `lib.rs` `mod` line regardless. linkme only saves the list line for a new command in an existing module. With alphabetical order, parallel additions rarely collide, and when they do the resolution is "keep both lines". That small saving does not justify a new dependency, linker-section risk on Windows, link-order sorting, duplicate detection that only a test catches, and the loss of a single greppable command list.
+    - Revisit linkme only if the list itself becomes a measured conflict hotspot. Switching would not change any command module, because CommandReg statics are identical under both options.
+    - Acceptance 5 (Windows CI) stays, but it no longer guards a linker mechanism.
+  created_at: 2026-10-18T03:34:08.129467173Z
+  modified_at: 2026-10-18T03:34:08.129467173Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
