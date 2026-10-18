@@ -1,0 +1,20 @@
+id: 01a150ec-1616-7383-82c8-75ae596b3973
+spec_id: BUG-2180
+agreed_id: BUG-2180
+title: Reviewer request-changes shelve leaves spec writes uncommitted in the store
+description: 'The ''aida queue work PR-N --role reviewer --no-human'' request-changes path shelves each covered spec (status to NeedsAttention, plus failure_reason phase=reviewer, kind=verdict:request-changes, written by aida-orchestrator) and leaves the YAML modified but uncommitted in .aida-store. Observed 2026-10-18 at 14:25 MST: the PR-2746 review (session 01a150de7ea8) left TASK-1526.yaml and TASK-1739.yaml dirty, and the reviewer process had exited. Impact: mandate_traces store_snapshot fails closed (''mandate exclusion store has uncommitted evidence''), so every mandate-covered aida pr ship refuses (PR-2732) until someone commits by hand. Same class as BUG-2178 (timing record), on a different write path. Fix: commit the shelve under the store write lock in the same operation, as BUG-2178 did. Test: run a reviewer request-changes, then assert .aida-store git status is clean. Related: BUG-2179.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T21:30:11.862994119Z
+modified_at: 2026-10-18T21:30:11.862994119Z
+req_type: Bug
+filed_at:
+  code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
