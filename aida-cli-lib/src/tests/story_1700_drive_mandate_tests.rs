@@ -42,6 +42,9 @@ fn lane(run: &str, class: LaneClass, run_dir: &Path, status: &[(&str, &str)]) ->
         .collect();
     map.entry("updated".into())
         .or_insert_with(|| "2026-10-17T11:00:00Z".into());
+    // The run record names the spec the run works (R3-2).
+    map.entry("ticket".into())
+        .or_insert_with(|| "TASK-77".into());
     map.entry("handoff".into())
         .or_insert_with(|| format!("{}/sessions/h.md", run_dir.display()));
     Lane {
@@ -231,7 +234,7 @@ fn blocked_without_a_spec_asks_for_an_answer() {
     let l = lane("r", LaneClass::Blocked, tmp.path(), &[("state", "blocked")]);
     let (action, command, _, spec) = resolving_action(&l, &no_signoff);
     assert_eq!(action, DriveAction::Answer);
-    assert_eq!(spec, None);
+    assert!(spec.is_empty());
     assert!(command.contains("answer the question in"));
 }
 
@@ -1690,7 +1693,7 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
     )
     .unwrap();
     let (action, _, _, spec) = resolving_action(&l, &no_signoff);
-    assert_eq!((action, spec), (DriveAction::Answer, None));
+    assert_eq!((action, spec.is_empty()), (DriveAction::Answer, true));
     std::fs::write(
         &handoff,
         "BLOCKED_ON_HUMAN: per ADR-77 and PR-12, sign off the STORY-9 sketch\n",
@@ -1698,7 +1701,7 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
     .unwrap();
     let (action, _, _, spec) = resolving_action(&l, &story_9_awaits);
     assert_eq!(action, DriveAction::SketchSignoff);
-    assert_eq!(spec.as_deref(), Some("STORY-9"));
+    assert_eq!(spec.first().map(String::as_str), Some("STORY-9"));
 
     // awaits_signoff fails closed: an open spec awaits one unless a ruling
     // is newer than its every other comment, whatever the request says.
@@ -1918,7 +1921,7 @@ fn a_blocked_relay_answer_is_gated_and_a_plain_signoff_request_is_a_signoff() {
     let l = blocked_lane_asking(&fx, "s", "please approve the STORY-9 plan");
     let (action, _, _, spec) = resolving_action(&l, &signoff);
     assert_eq!(action, DriveAction::SketchSignoff);
-    assert_eq!(spec.as_deref(), Some("STORY-9"));
+    assert_eq!(spec.first().map(String::as_str), Some("STORY-9"));
     let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
     inputs.spec_signoff = &signoff;
     inputs.gates = gate();
@@ -1969,4 +1972,142 @@ fn a_future_dated_turn_stamp_is_not_a_live_advisor() {
         "a stamp from the future is clock skew"
     );
     assert!(advisor_live(root.path(), now + Duration::minutes(11)));
+}
+
+// ── Round 3 follow-up (R3-1..R3-3) ──────────────────────────────────────────
+
+// R3-1: every store spec on the BLOCKED_ON_HUMAN line takes the floor.
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn every_spec_a_blocked_relay_names_takes_the_operator_only_floor() {
+    // `ADR-77` and `STORY-9` are both store specs; only STORY-9 is
+    // operator-only, and it is the second one named.
+    let known = |s: &str| matches!(s, "ADR-77" | "STORY-9" | "STORY-8").then_some(false);
+    let always = |s: &str| (s == "STORY-9").then(|| "operator-only".to_string());
+    for question in [
+        "per ADR-77, approve the STORY-9 sketch",
+        "does STORY-8 still block STORY-9?",
+    ] {
+        let fx = Fixture::new();
+        drive_mandate(fx.mandates.path(), "joe");
+        let l = blocked_lane_asking(&fx, "m", question);
+        let (_, _, _, specs) = resolving_action(&l, &known);
+        assert!(specs.contains(&"STORY-9".to_string()), "{specs:?}");
+        assert!(specs.len() == 2, "{specs:?}");
+        let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
+        inputs.spec_signoff = &known;
+        inputs.spec_always_human = &always;
+        let mut fake = Fake::default();
+        let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+        assert!(fake.due.is_empty(), "{question}");
+        assert_eq!(report.rows[0].outcome, Outcome::Gated, "{question}");
+        assert!(report.rows[0]
+            .why
+            .as_deref()
+            .unwrap()
+            .contains("STORY-9 is operator-only"));
+    }
+    // Any one spec awaiting a signoff makes the lane a signoff request.
+    let mixed = |s: &str| match s {
+        "ADR-77" => Some(false),
+        "STORY-9" => Some(true),
+        _ => None,
+    };
+    let fx = Fixture::new();
+    let l = blocked_lane_asking(&fx, "w", "per ADR-77, approve the STORY-9 sketch");
+    let (action, _, _, specs) = resolving_action(&l, &mixed);
+    assert_eq!(action, DriveAction::SketchSignoff);
+    assert_eq!(specs, vec!["STORY-9".to_string(), "ADR-77".to_string()]);
+}
+
+// R3-2: re-dispatching or fixing a run carries the run's spec.
+// trace:STORY-1700.ac2ed84c | ai:claude
+// trace:STORY-1700.ace038d6 | ai:claude
+#[test]
+fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one() {
+    let always = |s: &str| (s == "TASK-9").then(|| "operator-only".to_string());
+    for class in [
+        LaneClass::Crashed,
+        LaneClass::SessionCap,
+        LaneClass::NoSlot,
+        LaneClass::SetupError,
+        LaneClass::UsageBin,
+    ] {
+        // The run record names an operator-only spec: gated by that floor.
+        let fx = Fixture::new();
+        drive_mandate(fx.mandates.path(), "joe");
+        let l = lane("t", class, &fx.run_dir("t"), &[("ticket", "TASK-9")]);
+        let LaneDecision::Act(p) = plan_relay_lane(&l, &no_signoff) else {
+            panic!("{class:?} is a lane")
+        };
+        assert_eq!(p.spec.as_deref(), Some("TASK-9"), "{class:?}");
+        let mut inputs = fx.inputs(&now_clock, vec![l], "joe");
+        inputs.spec_always_human = &always;
+        let mut fake = Fake::default();
+        let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+        assert!(fake.due.is_empty(), "{class:?}");
+        assert_eq!(report.rows[0].outcome, Outcome::Gated, "{class:?}");
+        assert!(report.rows[0]
+            .why
+            .as_deref()
+            .unwrap()
+            .contains("TASK-9 is operator-only"));
+
+        // No spec in the run record: gated, never routed blind.
+        let fx = Fixture::new();
+        drive_mandate(fx.mandates.path(), "joe");
+        let l = lane("u", class, &fx.run_dir("u"), &[("ticket", "")]);
+        assert_eq!(run_spec(&l), None);
+        let mut fake = Fake::default();
+        let report = run_tick(
+            &fx.inputs(&now_clock, vec![l], "joe"),
+            &TickHooks::default(),
+            &mut fake,
+        );
+        assert!(fake.due.is_empty(), "{class:?}");
+        assert_eq!(report.rows[0].outcome, Outcome::Gated, "{class:?}");
+        assert!(report.rows[0]
+            .why
+            .as_deref()
+            .unwrap()
+            .contains("could not be determined"));
+    }
+}
+
+// R3-3: the preview mirrors an unreadable store.
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn the_preview_warns_and_shows_routes_withheld_when_the_store_is_unreadable() {
+    let fx = Fixture::new();
+    let decisions = vec![
+        plan_relay_lane(
+            &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
+            &no_signoff,
+        ),
+        plan_relay_lane(
+            &lane("a", LaneClass::TerminalApi, &fx.run_dir("a"), &[]),
+            &no_signoff,
+        ),
+    ];
+    let readable = preview_lines(&decisions, true);
+    assert!(readable
+        .iter()
+        .all(|l| !l.contains("withheld") && !l.starts_with("warning")));
+    let blind = preview_lines(&decisions, false);
+    assert!(blind[0].starts_with("warning: the requirement store is unreadable"));
+    let crash = blind.iter().find(|l| l.contains("relay run c")).unwrap();
+    assert!(
+        crash.contains("withheld: the requirement store is unreadable"),
+        "{crash}"
+    );
+    let api = blind.iter().find(|l| l.contains("relay run a")).unwrap();
+    assert!(
+        !api.contains("withheld"),
+        "an ungated operator notice is not withheld: {api}"
+    );
+    assert_eq!(
+        preview_lines(&[], false).len(),
+        1,
+        "the warning shows even with no lanes"
+    );
 }

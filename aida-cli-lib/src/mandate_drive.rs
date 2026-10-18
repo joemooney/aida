@@ -130,6 +130,10 @@ pub(crate) struct Planned {
     pub spec: Option<String>,
     /// Gated whatever the config says (e.g. a PR that touches the gates).
     pub forced_gate: Option<String>,
+    /// Further specs the action touches (every store spec a blocked relay
+    /// names); each takes the same always-human floor as `spec`.
+    // trace:STORY-1700 | ai:claude
+    pub other_specs: Vec<String>,
 }
 
 impl Planned {
@@ -165,7 +169,7 @@ pub(crate) enum LaneDecision {
 pub(crate) fn resolving_action(
     lane: &Lane,
     spec_signoff: &dyn Fn(&str) -> Option<bool>,
-) -> (DriveAction, String, String, Option<String>) {
+) -> (DriveAction, String, String, Vec<String>) {
     let handoff = lane.evidence.field("handoff").map(|h| {
         let p = PathBuf::from(h);
         if p.is_absolute() {
@@ -182,32 +186,49 @@ pub(crate) fn resolving_action(
                 .find(|l| l.contains("BLOCKED_ON_HUMAN"))
                 .map(|l| l.trim().to_string())
         });
-    // The lane's spec is the first token the store knows (`PR-12` in the
-    // question is just prose). It is a signoff request unless the store
-    // records a ruling newer than the spec's last activity (fail closed);
-    // either way the spec's operator-only floor applies.
-    let named = marker_line.as_deref().and_then(|line| {
-        spec_ids_in(line)
-            .into_iter()
-            .find_map(|id| spec_signoff(&id).map(|awaiting| (id, awaiting)))
-    });
-    let spec = named.as_ref().map(|(id, _)| id.clone());
+    // Every token the store knows is one of the lane's specs (`PR-12` in the
+    // question is just prose), and each takes the operator-only floor. The
+    // lane is a signoff request if ANY of them awaits one, i.e. the store
+    // records no ruling newer than its last activity (fail closed).
+    let named: Vec<(String, bool)> = marker_line
+        .as_deref()
+        .map(|line| {
+            let mut seen = std::collections::BTreeSet::new();
+            spec_ids_in(line)
+                .into_iter()
+                .filter(|id| seen.insert(id.clone()))
+                .filter_map(|id| spec_signoff(&id).map(|awaiting| (id, awaiting)))
+                .collect()
+        })
+        .unwrap_or_default();
+    let awaiting = named.iter().find(|(_, a)| *a).map(|(id, _)| id.clone());
+    // The awaiting spec (if any) leads, so it is the item's primary spec.
+    let mut specs: Vec<String> = awaiting.iter().cloned().collect();
+    specs.extend(
+        named
+            .iter()
+            .map(|(id, _)| id.clone())
+            .filter(|id| Some(id) != awaiting.as_ref()),
+    );
     let handoff_text = handoff
         .as_ref()
         .map(|h| h.display().to_string())
         .unwrap_or_else(|| "(no handoff recorded)".into());
-    let (action, resolve) = match &named {
-        Some((spec, true)) => (
+    let (action, resolve) = match (&awaiting, specs.first()) {
+        (Some(spec), _) => (
             DriveAction::SketchSignoff,
             format!(
                 "aida show {spec} --comments; then record the ruling: aida comment add {spec} \"ADVISOR SIGNOFF: ...\""
             ),
         ),
-        Some((spec, false)) => (
+        (None, Some(_)) => (
             DriveAction::Answer,
-            format!("answer the question in {handoff_text} (about {spec})"),
+            format!(
+                "answer the question in {handoff_text} (about {})",
+                specs.join(", ")
+            ),
         ),
-        None => (
+        (None, None) => (
             DriveAction::Answer,
             format!("answer the question in {handoff_text}"),
         ),
@@ -238,8 +259,22 @@ pub(crate) fn resolving_action(
             .as_deref()
             .unwrap_or("no BLOCKED_ON_HUMAN marker line found")
     );
-    (action, command, detail, spec)
+    (action, command, detail, specs)
 }
+
+/// The spec a relay run was working, from its run record (`ticket=` in
+/// relay.status). `None` when the record names none.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn run_spec(lane: &Lane) -> Option<String> {
+    ["ticket", "spec"]
+        .iter()
+        .filter_map(|k| lane.evidence.field(k))
+        .find_map(|v| spec_ids_in(v).into_iter().next())
+}
+
+/// Why a lane whose run spec is unknown is gated (fail closed).
+const RUN_SPEC_UNKNOWN: &str =
+    "the spec this relay run was working could not be determined from its run record";
 
 /// Every `PREFIX-123` token in `text`, in order.
 fn spec_ids_in(text: &str) -> Vec<String> {
@@ -296,7 +331,8 @@ pub(crate) fn plan_relay_lane(
         .field("handoff")
         .unwrap_or("(none recorded)")
         .to_string();
-    let act = |action, route, command: String, detail: String, spec| {
+    let act = |action, route, command: String, detail: String, specs: Vec<String>| {
+        let mut specs = specs.into_iter();
         LaneDecision::Act(Planned {
             lane: key_lane.clone(),
             subject: subject.clone(),
@@ -305,9 +341,28 @@ pub(crate) fn plan_relay_lane(
             head: head.clone(),
             command,
             detail,
-            spec,
+            spec: specs.next(),
             forced_gate: None,
+            other_specs: specs.collect(),
         })
+    };
+    // Re-dispatching or fixing a run acts on the spec it was working: carry
+    // it for the floors, and gate the lane when it is unknown (fail closed).
+    // trace:STORY-1700 | ai:claude
+    let act_on_run = |action, command: String, detail: String| {
+        let spec = run_spec(lane);
+        let missing = spec.is_none();
+        let mut d = act(
+            action,
+            Route::Advisor,
+            command,
+            detail,
+            spec.into_iter().collect(),
+        );
+        if let (true, LaneDecision::Act(p)) = (missing, &mut d) {
+            p.forced_gate = Some(RUN_SPEC_UNKNOWN.into());
+        }
+        d
     };
     match lane.class {
         LaneClass::Running | LaneClass::Complete | LaneClass::Acknowledged => LaneDecision::None,
@@ -332,7 +387,7 @@ pub(crate) fn plan_relay_lane(
                 lane.run_id,
                 class.as_str()
             ),
-            None,
+            Vec::new(),
         ),
         LaneClass::TerminalApi => act(
             DriveAction::OperatorAttention,
@@ -342,15 +397,14 @@ pub(crate) fn plan_relay_lane(
                 "relay run {} stopped on a terminal API error (exit 7); handoff: {handoff}",
                 lane.run_id
             ),
-            None,
+            Vec::new(),
         ),
         LaneClass::Blocked => {
             let (action, command, detail, spec) = resolving_action(lane, spec_signoff);
             act(action, Route::Advisor, command, detail, spec)
         }
-        LaneClass::Crashed => act(
+        LaneClass::Crashed => act_on_run(
             DriveAction::Redispatch,
-            Route::Advisor,
             format!(
                 "read {handoff}, then relaunch the run with bin/relay.sh against the same handoff (as a separate session, never an in-session subagent)"
             ),
@@ -358,11 +412,9 @@ pub(crate) fn plan_relay_lane(
                 "relay run {} crashed: its owner died without the exit trap running",
                 lane.run_id
             ),
-            None,
         ),
-        LaneClass::SessionCap => act(
+        LaneClass::SessionCap => act_on_run(
             DriveAction::Redispatch,
-            Route::Advisor,
             format!(
                 "dispatch a continuation: relaunch with bin/relay.sh against {handoff} (a separate session)"
             ),
@@ -370,18 +422,14 @@ pub(crate) fn plan_relay_lane(
                 "relay run {} reached its session cap with the task not complete",
                 lane.run_id
             ),
-            None,
         ),
-        LaneClass::NoSlot => act(
+        LaneClass::NoSlot => act_on_run(
             DriveAction::Redispatch,
-            Route::Advisor,
             format!("relaunch with bin/relay.sh against {handoff} when a relay slot frees"),
             format!("relay run {} found no free relay slot (exit 8)", lane.run_id),
-            None,
         ),
-        LaneClass::SetupError | LaneClass::UsageBin => act(
+        LaneClass::SetupError | LaneClass::UsageBin => act_on_run(
             DriveAction::FixSetup,
-            Route::Advisor,
             format!(
                 "fix the relay's setup (exit {}), then relaunch against {handoff}",
                 lane.evidence.field("exit").unwrap_or("?")
@@ -391,7 +439,6 @@ pub(crate) fn plan_relay_lane(
                 lane.run_id,
                 lane.class.as_str()
             ),
-            None,
         ),
     }
 }
@@ -442,6 +489,7 @@ pub(crate) fn plan_held_pr(pr: &HeldPr) -> LaneDecision {
         ),
         spec: pr.spec.clone(),
         forced_gate,
+        other_specs: Vec::new(),
     })
 }
 
@@ -1017,10 +1065,13 @@ pub(crate) fn run_tick(
                     .and_then(|op| crate::mandate_gates::gate_reason(&inp.gates, op))
             })
             .or_else(|| {
+                // Every spec the action touches takes the floor, not just
+                // the first. trace:STORY-1700 | ai:claude
                 planned
                     .spec
-                    .as_deref()
-                    .and_then(|s| (inp.spec_always_human)(s).map(|c| format!("{s} is {c}")))
+                    .iter()
+                    .chain(planned.other_specs.iter())
+                    .find_map(|s| (inp.spec_always_human)(s).map(|c| format!("{s} is {c}")))
             });
         if let Err(why) = tick.recheck() {
             let r = row(Outcome::Refused, why.clone());
@@ -1442,6 +1493,7 @@ pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
         ),
         spec: Some(s.id.clone()),
         forced_gate: None,
+        other_specs: Vec::new(),
     })
 }
 
@@ -1872,6 +1924,49 @@ fn print_report(report: &TickReport, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// The read-only `aida fleet drive` preview. It mirrors the tick: with an
+/// unreadable store it warns, and every gated seat action shows as
+/// withheld rather than routed. Empty when no lane would act.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) -> Vec<String> {
+    let mut out = Vec::new();
+    for d in decisions {
+        match d {
+            LaneDecision::None => {}
+            LaneDecision::Skip { subject, why, .. } => {
+                out.push(format!("  {subject}: skipped ({why})"));
+            }
+            LaneDecision::Act(p) => {
+                let route = match p.route {
+                    Route::Advisor => "advisor",
+                    Route::Operator => "operator",
+                };
+                let status = if !store_readable && p.action.gate_op().is_some() {
+                    " (withheld: the requirement store is unreadable)".to_string()
+                } else {
+                    p.forced_gate
+                        .as_deref()
+                        .map(|g| format!(" (gated: {g})"))
+                        .unwrap_or_default()
+                };
+                out.push(format!(
+                    "  {}: {} → {route}{status}\n    {}",
+                    p.subject,
+                    p.action.as_str(),
+                    p.command.replace('\n', "\n    ")
+                ));
+            }
+        }
+    }
+    if !store_readable {
+        out.insert(
+            0,
+            "warning: the requirement store is unreadable; a tick would withhold every gated seat action (ship, signoff, answer, dispatch)".to_string(),
+        );
+    }
+    out
+}
+
 /// `aida fleet drive [--tick] [--json]`.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
@@ -1886,9 +1981,10 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
             }
             // Preview: what each lane would route, changing nothing.
             let now = Utc::now();
-            let reqs: Vec<aida_core::Requirement> = crate::load_store_for_lookup(&root)
-                .map(|s| s.requirements)
-                .unwrap_or_default();
+            let store = crate::load_store_for_lookup(&root);
+            let store_readable = store.is_some();
+            let reqs: Vec<aida_core::Requirement> =
+                store.map(|s| s.requirements).unwrap_or_default();
             let signoff = spec_signoff_from(&reqs);
             let mut decisions: Vec<LaneDecision> = crate::fleet_lanes::classify_lanes(&root, now)
                 .iter()
@@ -1900,34 +1996,11 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                     .iter()
                     .map(plan_unowned_spec),
             );
-            let mut shown = 0;
-            for d in &decisions {
-                match d {
-                    LaneDecision::None => {}
-                    LaneDecision::Skip { subject, why, .. } => {
-                        shown += 1;
-                        println!("  {subject}: skipped ({why})");
-                    }
-                    LaneDecision::Act(p) => {
-                        shown += 1;
-                        println!(
-                            "  {}: {} → {}{}\n    {}",
-                            p.subject,
-                            p.action.as_str(),
-                            match p.route {
-                                Route::Advisor => "advisor",
-                                Route::Operator => "operator",
-                            },
-                            p.forced_gate
-                                .as_deref()
-                                .map(|g| format!(" (gated: {g})"))
-                                .unwrap_or_default(),
-                            p.command.replace('\n', "\n    ")
-                        );
-                    }
-                }
+            let lines = preview_lines(&decisions, store_readable);
+            for line in &lines {
+                println!("{line}");
             }
-            if shown == 0 {
+            if lines.is_empty() {
                 println!("No stalled lane to drive.");
             }
             Ok(())
