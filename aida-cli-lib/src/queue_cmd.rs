@@ -5606,6 +5606,7 @@ pub(crate) fn handle_queue_command(
             sandbox,
             no_launch,
             plan_only,
+            plan_phase,
             guided,
             with_plan,
             role,
@@ -6728,8 +6729,10 @@ pub(crate) fn handle_queue_command(
                 *effort,
                 *strict,
                 // STORY-265: plan-only mode — launch /aida-plan in `plan`
-                // permission mode instead of /aida-pickup implement.
-                *plan_only,
+                // permission mode instead of /aida-pickup implement. The
+                // hidden `--plan-phase` is the drain prelude's headless twin.
+                // trace:TASK-1794 | ai:claude
+                *plan_only || *plan_phase,
                 // STORY-735: guided keystone mode — launch
                 // /aida-guided-implement (structured decision dialog) instead
                 // of /aida-pickup. trace:STORY-735 | ai:claude
@@ -10997,7 +11000,12 @@ pub(crate) fn resolve_queue_work_posture(
         // while requesting the planning permission posture.
         // trace:TASK-1794 | ai:codex
         let mode = if plan_only { "plan" } else { "dontAsk" };
-        (Some(mode.to_string()), "contained sandbox")
+        let origin = if plan_only {
+            "contained sandbox + --plan-only"
+        } else {
+            "contained sandbox"
+        };
+        (Some(mode.to_string()), origin)
     } else {
         resolve_queue_work_permission_mode(
             permission_mode,
@@ -11498,7 +11506,11 @@ pub(crate) fn handle_queue_work(
         contained_env,
         contained_knob,
         bypass_knob,
-        plan_only,
+        // The headless launcher never runs Claude plan mode (it owns its own
+        // posture), so only an interactive plan lane resolves to `plan`; the
+        // headless plan phase must not report a mode it will not run.
+        // trace:TASK-1794 | ai:claude
+        plan_only && !no_human,
         env_mode.as_deref(),
         config_mode.as_deref(),
     )?;

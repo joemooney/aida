@@ -325,3 +325,82 @@ fn plan_only_refuses_headless_launch_before_setup() {
         "ordinary headless containment remains supported"
     );
 }
+
+// The `--with-plan` drain prelude's planning argv must parse for both an
+// interactive and a headless implementer: the interactive-only `--plan-only`
+// conflict must not break the headless prelude.
+// trace:TASK-1794 | ai:claude
+#[test]
+fn plan_prelude_session_argv_parses_for_headless_and_interactive() {
+    use clap::Parser;
+    for headless in [false, true] {
+        for step in crate::auto_complete::plan_prelude_steps("TASK-1", true, headless) {
+            let crate::auto_complete::PlanPreludeStep::PlanSession { spec, headless } = step else {
+                continue;
+            };
+            let args = crate::drain_gate::plan_session_args(&spec, headless);
+            let argv = std::iter::once("aida".to_string()).chain(args.iter().cloned());
+            let cli = crate::cli::Cli::try_parse_from(argv)
+                .unwrap_or_else(|e| panic!("headless={headless}: {args:?} rejected: {e}"));
+            let crate::cli::Command::Queue(crate::cli::QueueCommand::Work {
+                plan_only,
+                plan_phase,
+                no_human,
+                ..
+            }) = cli.command
+            else {
+                panic!("headless={headless}: {args:?} did not parse as queue work");
+            };
+            assert_eq!(no_human.is_some(), headless, "{args:?}");
+            assert_eq!(plan_phase, headless, "{args:?}");
+            assert_eq!(plan_only, !headless, "{args:?}");
+        }
+    }
+}
+
+// The hidden headless plan lane cannot be used interactively, nor combined
+// with the autonomous drain or the user-facing plan/guided lanes.
+// trace:TASK-1794 | ai:claude
+#[test]
+fn plan_phase_requires_headless_and_conflicts_with_other_lanes() {
+    use clap::Parser;
+    let error =
+        crate::cli::Cli::try_parse_from(["aida", "queue", "work", "TASK-1", "--plan-phase"])
+            .expect_err("--plan-phase without --no-human must refuse");
+    assert_eq!(
+        error.kind(),
+        clap::error::ErrorKind::MissingRequiredArgument
+    );
+    for other in ["--plan-only", "--guided", "--auto-complete", "--drain"] {
+        let error = crate::cli::Cli::try_parse_from([
+            "aida",
+            "queue",
+            "work",
+            "TASK-1",
+            "--plan-phase",
+            "--no-human",
+            other,
+        ])
+        .expect_err("--plan-phase must conflict");
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::ArgumentConflict,
+            "{other}: {error}"
+        );
+    }
+}
+
+// Operator-facing permission origin names the plan lane, not just containment.
+// trace:TASK-1794 | ai:claude
+#[test]
+fn contained_permission_origin_names_plan_only() {
+    let plan =
+        resolve_queue_work_posture(None, true, false, false, false, true, None, None).unwrap();
+    assert_eq!(
+        plan.permission_mode_origin,
+        "contained sandbox + --plan-only"
+    );
+    let pickup =
+        resolve_queue_work_posture(None, true, false, false, false, false, None, None).unwrap();
+    assert_eq!(pickup.permission_mode_origin, "contained sandbox");
+}
