@@ -1,0 +1,19 @@
+{
+  "id": "fe8169cf-c8ea-4bb1-8db6-1edbdc4e5c18",
+  "thread_id": "fe8169cf-c8ea-4bb1-8db6-1edbdc4e5c18",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792293549419,
+  "body": "STORY-1700 sketch revision 2 is ready for your signoff: PR #2722 (docs only, DO NOT MERGE), head 1cc11da17a.\n\n- Each of your STRICT review changes 1-7 has its own section (R1-R7) with files, functions and named tests.\n- The AC3 note has been added to the spec (change 5).\n- One fork needs your ruling (F1): fleet_lanes::classify_lanes does not exist on origin/main, because STORY-1699 shipped only relay_stall.rs.\n  - Option A (recommended): extract it in this story.\n  - Option B: make it a prerequisite slice.\n\nNo implementation starts until a signoff comment is on the spec. Details: aida show STORY-1700 --comments\n",
+  "subject": "STORY-1700 revised sketch ready for signoff (PR #2722)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
