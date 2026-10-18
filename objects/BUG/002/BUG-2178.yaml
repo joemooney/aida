@@ -1,0 +1,27 @@
+id: 01a15061-52d8-7650-acec-8a3f19db5f67
+spec_id: BUG-2178
+agreed_id: BUG-2178
+title: Completion leaves its timing record uncommitted in the store, so every mandate ship fails closed ('exclusion store has uncommitted evidence')
+description: |-
+  Observed 2026-10-18: the advisor's mandate (active, --include-supervised) refused #2726 and #2728 with: 'the PR's mandate exclusion evidence could not be read (mandate exclusion store has uncommitted evidence; retry after the store write completes)'. Both then needed the operator at a TTY.
+
+  Root cause: completion.rs:239 calls timing_record::publish (STORY-1480), which writes .aida-store/timings/<TYPE>/<NNN>/<ID>.json and never stages or commits it. It relies on some later store commit to sweep it up. mandate_traces.rs:78-88 store_snapshot fails closed on any non-empty 'git status --porcelain --untracked-files=all' in the store. Evidence: after #2728 merged, '?? timings/BUG/002/BUG-2176.json' (written 11:40:16) sat untracked while 415 other timings files are tracked.
+
+  Fix: timing_record::publish stages and commits its file in a store commit under the store write lock (with_store_write_lock), so no completion leaves the store dirty. Keep the mandate snapshot strict: do NOT add a path exemption to the fail-closed check.
+
+  Acceptance: (1) after a spec completes via any into-Completed path, the store worktree has a clean 'git status --porcelain --untracked-files=all' (test); (2) a mandate ship immediately after a completion does not refuse on uncommitted evidence (test at the store_snapshot boundary); (3) best-effort is kept: a commit failure is logged and never fails the completion.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T18:58:37.912954885Z
+modified_at: 2026-10-18T18:58:37.912954885Z
+req_type: Bug
+filed_at:
+  code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: ba665aaf98
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
