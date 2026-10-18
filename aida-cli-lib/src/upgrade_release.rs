@@ -1534,9 +1534,8 @@ pub(crate) fn handle_release(
         match &repo {
             Some(r) => {
                 let branch = current_branch_at(r).unwrap_or_else(|| "?".to_string());
-                let dirty = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(r)
+                // trace:BUG-1985 | ai:claude
+                let dirty = aida_core::git_ops::host_git_command(r)
                     .args(["status", "--porcelain"])
                     .output()
                     .ok()

@@ -1834,9 +1834,9 @@ each commit builds clean.
 /// `git status --porcelain` output (excluding the gitignored store/cache noise
 /// git already omits) counts as dirty. trace:STORY-659
 pub(crate) fn working_tree_is_dirty(project_root: &std::path::Path) -> bool {
-    std::process::Command::new("git")
+    // trace:BUG-1985 | ai:claude
+    aida_core::git_ops::host_git_command(project_root)
         .args(["status", "--porcelain"])
-        .current_dir(project_root)
         .output()
         .map(|o| !o.stdout.is_empty())
         .unwrap_or(false)

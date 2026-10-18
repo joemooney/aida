@@ -66,9 +66,8 @@ pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> 
             aida_core::seat_clone_detect::host_git_refusal(&clone_root)
         )];
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain"])
         .output();
     let Ok(out) = out else { return Vec::new() };
@@ -1037,9 +1036,8 @@ pub(crate) fn classify_untracked_age(
 }
 
 pub(crate) fn print_status_working_tree_section(root: &std::path::Path) {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(root)
         .args(["status", "--porcelain"])
         .output();
     let Ok(out) = out else { return };
@@ -1897,9 +1895,8 @@ pub(crate) fn collect_branch_facts(project_root: &std::path::Path) -> Option<Bra
 }
 
 pub(crate) fn working_tree_clean(project_root: &std::path::Path) -> Option<bool> {
-    let o = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    // trace:BUG-1985 | ai:claude
+    let o = aida_core::git_ops::host_git_command(project_root)
         .args(["status", "--porcelain"])
         .output()
         .ok()?;

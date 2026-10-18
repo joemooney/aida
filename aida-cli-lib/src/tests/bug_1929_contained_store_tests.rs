@@ -989,6 +989,81 @@ fn bug_1929_store_git_guard() {
     );
 }
 
+/// The raw `Command::new("git")` sites in `src` (1-based lines) whose builder
+/// chain, up to its first `;` and at most 12 lines, runs `git status`, and that
+/// carry no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_raw_status_git(src: &str) -> Vec<usize> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let chain = lines[i..lines.len().min(i + 12)].join(" ");
+        let chain = chain.split(';').next().unwrap_or_default();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1985):"));
+        if chain.contains("\"status\"") && !justified {
+            found.push(i + 1);
+        }
+    }
+    found
+}
+
+// BUG-1985 guard: every host `git status` starts at
+// `aida_core::git_ops::host_git_command`, which keeps it out of a planted
+// embedded repository in a tree a contained session may have written. Scans
+// the non-test source of aida-core and aida-cli-lib for a raw
+// `Command::new("git")` whose builder runs `status`.
+// trace:BUG-1985 | ai:claude
+#[test]
+fn bug_1985_host_status_guard() {
+    let sample = "fn a(wt: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \
+                  .arg(\"-C\")\n        .arg(wt)\n        .args([\"status\", \"--porcelain\"])\n        \
+                  .output();\n}\n\
+                  fn b(wt: &Path) {\n    // raw-git-ok(BUG-1985): fixture.\n    \
+                  let _ = Command::new(\"git\").arg(wt).args([\"status\"]).output();\n}\n\
+                  fn c(wt: &Path) { let _ = Command::new(\"git\").args([\"log\"]).output(); }\n\
+                  #[cfg(test)]\nmod t {\n    fn d(w: &Path) { Command::new(\"git\").args([\"status\"]); }\n}\n";
+    assert_eq!(bug_1985_raw_status_git(sample), vec![2]);
+
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut offenders = Vec::new();
+    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
+        let mut stack = vec![workspace.join(crate_src)];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                let name = entry.file_name().to_string_lossy().to_string();
+                if path.is_dir() {
+                    if name != "tests" {
+                        stack.push(path);
+                    }
+                    continue;
+                }
+                if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+                    continue;
+                }
+                let src = std::fs::read_to_string(&path).unwrap();
+                for line in bug_1985_raw_status_git(&src) {
+                    let rel = path.strip_prefix(workspace).unwrap_or(&path);
+                    offenders.push(format!("{}:{line}", rel.display()));
+                }
+            }
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "raw `git status`; build it with `aida_core::git_ops::host_git_command` (or \
+         justify it with `// raw-git-ok(BUG-1985): <why>`): {offenders:?}"
+    );
+}
+
 /// Run git in `dir` with a fixed identity; panics on failure.
 fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")

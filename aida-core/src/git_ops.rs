@@ -172,8 +172,14 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 ///   `submodule.recurse=false` and `fetch.recurseSubmodules=false`, so git
 ///   never descends into a gitlink at all. A fetch that recursed on demand
 ///   into a planted `objects/zz/.git` would run its `remote.origin.uploadpack`
-///   (F1). A code checkout keeps git's submodule handling: a user project
-///   with real submodules must still see them as dirty.
+///   (F1).
+/// - In a code tree a contained session may have written
+///   ([`is_contained_writable_tree`]) `diff.ignoreSubmodules=dirty` plus the
+///   same two recursion switches (BUG-1985): status and porcelain diff still
+///   report a moved gitlink but never run git inside it, where a planted
+///   repository's own config could name a filter driver. Other code checkouts
+///   keep git's submodule handling: a user project with real submodules must
+///   still see them as dirty.
 /// - In a store tree also pin core.hooksPath to verified, host-owned shipped
 ///   hooks. A project hook manager must never load executable store content.
 ///   Store writes refuse when the host profile cannot be verified.
@@ -181,6 +187,13 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
     let mut args = vec!["-c".to_string(), "core.fsmonitor=false".to_string()];
     if !is_store_tree(cwd) {
+        // trace:BUG-1985 | ai:claude
+        if is_contained_writable_tree(cwd) {
+            for setting in CONTAINED_TREE_GIT_CONFIG {
+                args.push("-c".to_string());
+                args.push(setting.to_string());
+            }
+        }
         return args;
     }
     for setting in [
@@ -355,6 +368,113 @@ fn canonical_best_effort(path: &Path) -> PathBuf {
             _ => return path.to_path_buf(),
         }
     }
+}
+
+/// The `-c` settings [`host_git_hardening`] adds in a code tree a contained
+/// session may have written (BUG-1985 policy A).
+// trace:BUG-1985 | ai:claude
+pub const CONTAINED_TREE_GIT_CONFIG: [&str; 3] = [
+    "diff.ignoreSubmodules=dirty",
+    "submodule.recurse=false",
+    "fetch.recurseSubmodules=false",
+];
+
+/// Could a contained session have written the code tree at `dir` (BUG-1985)?
+/// True for a linked worktree, whose `.git` is a pointer file (every pool and
+/// session worktree), and for any tree of a repository a contained session
+/// was launched against: the BUG-2131 marker sits in its git directory or in
+/// its store's. Filesystem reads only, because it runs before every host git
+/// call. Claude Code's sandbox denies writes to a worktree's own `.git`
+/// pointer and to the main git directory, so a contained session cannot
+/// reclassify its tree.
+// trace:BUG-1985 | ai:claude
+pub fn is_contained_writable_tree(dir: &Path) -> bool {
+    let start = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    for ancestor in start.ancestors() {
+        let dotgit = ancestor.join(".git");
+        let Ok(meta) = std::fs::symlink_metadata(&dotgit) else {
+            continue;
+        };
+        if !meta.is_dir() {
+            return true;
+        }
+        return [dotgit, ancestor.join(".aida-store").join(".git")]
+            .iter()
+            .any(|git_dir| git_dir.join(crate::store_hooks::CONTAINED_MARKER).exists());
+    }
+    false
+}
+
+/// Refuse host git over a code tree a contained session may have written
+/// ([`is_contained_writable_tree`]) whose index holds a gitlink that
+/// `.gitmodules` does not register (BUG-1985 policy B). A planted embedded
+/// repository staged that way can name commands in its own config, and
+/// `git add -A`, `add -u` and the plumbing diffs recurse into it whatever
+/// `diff.ignoreSubmodules` says. Reads only the index and `.gitmodules`.
+/// No-op in a store tree ([`refuse_embedded_repos`] covers it) and in other
+/// code trees.
+// trace:BUG-1985 | ai:claude
+pub fn refuse_unregistered_gitlinks(tree: &Path) -> Result<()> {
+    if is_store_tree(tree) || !is_contained_writable_tree(tree) {
+        return Ok(());
+    }
+    let top = git(tree, &["rev-parse", "--show-toplevel"])?;
+    anyhow::ensure!(
+        top.success,
+        "git rev-parse failed in {}: {}",
+        tree.display(),
+        top.stderr
+    );
+    let top = PathBuf::from(top.stdout);
+    let staged = git(&top, &["ls-files", "--stage", "-z"])?;
+    anyhow::ensure!(
+        staged.success,
+        "git ls-files failed in {}: {}",
+        top.display(),
+        staged.stderr
+    );
+    let links: Vec<&str> = staged
+        .stdout
+        .split('\0')
+        .filter_map(|entry| entry.strip_prefix("160000 "))
+        .map(|rest| rest.split_once('\t').map_or(rest, |(_, path)| path))
+        .collect();
+    if links.is_empty() {
+        return Ok(());
+    }
+    // `git config --file` never follows an include from the file, and a
+    // missing `.gitmodules` (or no match) is an empty registry.
+    let modules = git(
+        &top,
+        &[
+            "config",
+            "--file",
+            ".gitmodules",
+            "-z",
+            "--get-regexp",
+            r"^submodule\..*\.path$",
+        ],
+    )?;
+    let registered: Vec<&str> = modules
+        .stdout
+        .split('\0')
+        .filter_map(|entry| entry.split_once('\n').map(|(_, path)| path))
+        .collect();
+    let mut unregistered: Vec<&str> = links
+        .into_iter()
+        .filter(|link| !registered.contains(link))
+        .collect();
+    if unregistered.is_empty() {
+        return Ok(());
+    }
+    unregistered.sort_unstable();
+    anyhow::bail!(
+        "refusing to run git over {}: its index holds a gitlink that .gitmodules does not \
+         register, which a sandboxed session may have planted to run commands on this \
+         machine. Check who added it, then remove it with `git rm --cached <path>`: {}",
+        top.display(),
+        unregistered.join(", ")
+    )
 }
 
 /// Is `dir` the root of an AIDA store worktree? True for a directory named
@@ -2651,10 +2771,9 @@ pub fn preserve_dirty_worktree(
     // A git failure is an error, never an empty section: a patch silently
     // missing the diff would let the caller reset the tree believing the
     // work was saved. trace:BUG-1947 | ai:claude
+    // trace:BUG-1985 | ai:claude
     let raw = |args: &[&str]| -> Result<String> {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(worktree_path)
+        let out = host_git_command(worktree_path)
             .args(args)
             .output()
             .with_context(|| format!("run git {}", args.join(" ")))?;
@@ -2813,6 +2932,9 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
 /// Lines starting `??` are untracked files.
 // trace:BUG-1947 | ai:claude
 pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
+    // BUG-1985: a planted gitlink is an error, so the tree is kept.
+    // trace:BUG-1985 | ai:claude
+    refuse_unregistered_gitlinks(worktree_path)?;
     let r = git(worktree_path, &["status", "--porcelain"])?;
     if !r.success {
         anyhow::bail!(
@@ -2826,9 +2948,15 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
 
 /// True when a worktree has uncommitted changes (tracked or untracked,
 /// gitignored paths excluded). Used to classify a tree as dirty before a
-/// reset/return/destroy so unlanded work is never silently discarded.
+/// reset/return/destroy so unlanded work is never silently discarded. A tree
+/// holding a planted gitlink ([`refuse_unregistered_gitlinks`]) counts as
+/// dirty, so it is kept for a person to inspect.
 // trace:STORY-714 | ai:claude
+// trace:BUG-1985 | ai:claude
 pub fn worktree_is_dirty(worktree_path: &Path) -> bool {
+    if refuse_unregistered_gitlinks(worktree_path).is_err() {
+        return true;
+    }
     git(worktree_path, &["status", "--porcelain"])
         .map(|r| !r.stdout.is_empty())
         .unwrap_or(false)
@@ -9202,6 +9330,185 @@ mod tests {
         std::fs::create_dir_all(custom.join("objects")).unwrap();
         std::fs::write(custom.join("metadata.yaml"), "").unwrap();
         assert!(is_store_tree(&custom));
+    }
+
+    /// A main checkout `<dir>/main` and a linked worktree `<dir>/wt` (the
+    /// shape of every pool and session tree) holding an embedded repository
+    /// staged as a gitlink at `sub`, the way a contained session could plant
+    /// one. Its own config names a `filter.evil.clean` driver, selected by its
+    /// `.gitattributes`, that appends to `marker`; `x.txt` is left stale so a
+    /// status inside it must re-hash the file through the driver. Returns
+    /// (main, wt, marker).
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    fn bug_1985_planted_worktree(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let main = dir.join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test User", "test@example.com").unwrap();
+        std::fs::write(main.join("a.txt"), "a\n").unwrap();
+        run_git(&main, &["add", "a.txt"]);
+        run_git(&main, &["commit", "-qm", "initial"]);
+        let wt = dir.join("wt");
+        run_git(
+            &main,
+            &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+        );
+
+        let marker = dir.join("filter-ran");
+        let driver = dir.join("evil-filter.sh");
+        std::fs::write(
+            &driver,
+            format!("#!/bin/sh\necho ran >> '{}'\ncat\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&driver, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let sub = wt.join("sub");
+        init(&sub).unwrap();
+        configure_user(&sub, "Test User", "test@example.com").unwrap();
+        std::fs::write(sub.join(".gitattributes"), "* filter=evil\n").unwrap();
+        std::fs::write(sub.join("x.txt"), "x\n").unwrap();
+        run_git(&sub, &["add", "."]);
+        run_git(&sub, &["commit", "-qm", "planted"]);
+        run_git(
+            &sub,
+            &["config", "filter.evil.clean", driver.to_str().unwrap()],
+        );
+        let _ = Command::new("git")
+            .current_dir(&wt)
+            .args(["add", "sub"])
+            .output()
+            .unwrap();
+        assert!(run_git(&wt, &["ls-files", "--stage"]).contains("160000 "));
+        // Same size, new mtime: git cannot tell it changed without hashing it.
+        std::fs::write(sub.join("x.txt"), "q\n").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(sub.join("x.txt"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(7200))
+            .unwrap();
+        let _ = std::fs::remove_file(&marker);
+        (main, wt, marker)
+    }
+
+    // BUG-1985: host status over a contained-writable worktree never runs a
+    // planted repository's filter driver, and a gitlink .gitmodules does not
+    // register keeps the tree (dirty, salvage refused) instead of resetting it.
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_planted_filter_driver_never_runs_from_host_git() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_main, wt, marker) = bug_1985_planted_worktree(dir.path());
+
+        // The plant is live: a plain host `git status` runs the driver.
+        let _ = Command::new("git")
+            .current_dir(&wt)
+            .args(["-c", "core.fsmonitor=false", "status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            marker.exists(),
+            "precondition: a plain git status must run the planted filter driver"
+        );
+        std::fs::remove_file(&marker).unwrap();
+
+        assert!(is_contained_writable_tree(&wt));
+        assert!(worktree_is_dirty(&wt), "a planted gitlink keeps the tree");
+        let err = worktree_status_porcelain(&wt).unwrap_err().to_string();
+        assert!(err.contains("gitlink") && err.contains("sub"), "{err}");
+        let salvage = dir.path().join("salvage");
+        assert!(preserve_dirty_worktree(&wt, &salvage, "t").is_err());
+        assert!(!salvage.exists(), "no patch written for a refused tree");
+        let _ = git(&wt, &["status", "--porcelain"]).unwrap();
+        let _ = git(&wt, &["diff", "HEAD"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host git run over the worktree ran the planted filter driver"
+        );
+
+        // The session can register its plant in .gitmodules too. The refusal
+        // then passes, and policy A still keeps git out of the repository.
+        std::fs::write(
+            wt.join(".gitmodules"),
+            "[submodule \"sub\"]\n\tpath = sub\n\turl = ./sub\n",
+        )
+        .unwrap();
+        assert!(refuse_unregistered_gitlinks(&wt).is_ok());
+        let status = worktree_status_porcelain(&wt).unwrap();
+        assert!(status.contains(".gitmodules"), "{status}");
+        assert!(worktree_is_dirty(&wt));
+        let patch = preserve_dirty_worktree(&wt, &salvage, "t").unwrap();
+        assert!(patch.is_some());
+        let _ = git(&wt, &["diff", "HEAD"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host git run over a registered plant ran its filter driver"
+        );
+
+        // A moved gitlink still reads as dirty without recursing.
+        run_git(&wt, &["add", ".gitmodules"]);
+        run_git(&wt, &["commit", "-qm", "register"]);
+        let sub = wt.join("sub");
+        run_git(
+            &sub,
+            &["-c", "filter.evil.clean=cat", "commit", "-qam", "moved"],
+        );
+        let _ = std::fs::remove_file(&marker);
+        let status = worktree_status_porcelain(&wt).unwrap();
+        assert!(
+            status.contains("sub"),
+            "a moved gitlink must read as dirty: {status}"
+        );
+        assert!(!marker.exists());
+    }
+
+    // BUG-1985: which trees get policy A and B, and that ordinary checkouts
+    // keep git's submodule handling.
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_contained_writable_tree_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, wt, _marker) = bug_1985_planted_worktree(dir.path());
+        assert!(!is_contained_writable_tree(dir.path()));
+        assert!(!is_contained_writable_tree(&main));
+        assert_eq!(host_git_hardening(&main), ["-c", "core.fsmonitor=false"]);
+        assert!(is_contained_writable_tree(&wt));
+        let h = host_git_hardening(&wt).join(" ");
+        for setting in CONTAINED_TREE_GIT_CONFIG {
+            assert!(h.contains(setting), "{h}");
+        }
+        // A gitlink in the main checkout is not refused: no contained
+        // session ever ran against this repository.
+        let nested = main.join("vendor");
+        init(&nested).unwrap();
+        configure_user(&nested, "Test User", "test@example.com").unwrap();
+        std::fs::write(nested.join("v.txt"), "v").unwrap();
+        run_git(&nested, &["add", "v.txt"]);
+        run_git(&nested, &["commit", "-qm", "v"]);
+        let _ = Command::new("git")
+            .current_dir(&main)
+            .args(["add", "vendor"])
+            .output()
+            .unwrap();
+        assert!(refuse_unregistered_gitlinks(&main).is_ok());
+
+        // Once a contained session is launched against it (the BUG-2131
+        // marker in its git directory, or in an own-repository store's), the
+        // main checkout is covered too.
+        let git_dir = main.join(".git");
+        std::fs::write(git_dir.join(crate::store_hooks::CONTAINED_MARKER), "").unwrap();
+        assert!(is_contained_writable_tree(&main));
+        let err = refuse_unregistered_gitlinks(&main).unwrap_err().to_string();
+        assert!(err.contains("vendor"), "{err}");
+        std::fs::remove_file(git_dir.join(crate::store_hooks::CONTAINED_MARKER)).unwrap();
+        assert!(!is_contained_writable_tree(&main));
+        let store_git = main.join(".aida-store").join(".git");
+        std::fs::create_dir_all(&store_git).unwrap();
+        std::fs::write(store_git.join(crate::store_hooks::CONTAINED_MARKER), "").unwrap();
+        assert!(is_contained_writable_tree(&main));
     }
 
     // trace:BUG-1969 | ai:claude — each push-failure class from real git /

@@ -368,6 +368,29 @@ Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
+A contained session has no write access to the main git directory. Launch
+settings deny all of `<main>/.git` in both the sandbox and the direct tool
+rules. That covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`,
+which would otherwise let a session point host git at a git directory it
+controls. It also covers the shared config, hooks, refs and objects. Claude
+Code also denies writes to a worktree's own `.git` pointer. The remaining
+`<main>/.git` write surface is therefore empty, so a contained seat commits in its own
+private clone (BUG-2169), not in a linked worktree. Real-sandbox evidence:
+`aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
+<!-- trace:BUG-1982 | ai:claude -->
+
+Host git over a code tree a contained session may have written (a linked
+worktree, or any tree of a repository a contained session was launched
+against) never recurses into a submodule. It runs with
+`diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, so a planted embedded repository's own config
+(a filter driver, for example) never runs on the host, and a moved gitlink
+still reads as dirty. A gitlink in such a tree that `.gitmodules` does not
+register keeps the tree: pool, adopt and destroy treat it as dirty, and salvage
+refuses it. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`; a guard test enforces it.
+<!-- trace:BUG-1985 | ai:claude -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
