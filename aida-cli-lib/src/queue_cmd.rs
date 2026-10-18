@@ -13431,6 +13431,25 @@ pub(crate) fn run_standalone_reviewer(
         ),
     }
 
+    // BUG-2176: a contained reviewer cannot write the primary checkout's
+    // merge-holds either, so its rework marker stays in the review worktree,
+    // invisible to `aida pr ship` and gone once the worktree is removed.
+    // Adopt it whatever the verdict collection decided — a hold only tightens.
+    // trace:BUG-2176 | ai:claude
+    match crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at) {
+        Ok(true) if !quiet => eprintln!(
+            "  {} adopted the reviewer's merge-hold marker for PR-{pr} from {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            worktree.display()
+        ),
+        Ok(_) => {}
+        Err(err) => eprintln!(
+            "  {} could not adopt the reviewer's merge-hold marker for PR-{pr} from {} ({err}) — copy it to the primary checkout's .aida/merge-holds/ before removing the worktree",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            worktree.display()
+        ),
+    }
+
     // STORY-439: tag-along reviewer-side calibration capture. Resolve
     // every spec the PR credits (via the existing title / branch / body
     // precedence used by the squash-subject repair) and write a review
