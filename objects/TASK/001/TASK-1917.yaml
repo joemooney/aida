@@ -3,12 +3,12 @@ spec_id: TASK-1917
 agreed_id: TASK-1917
 title: 'TASK-1783 follow-ups: store-unchanged assertion, same-line fn coverage, non-.rs --path message'
 description: 'From PR #2729 PASS review non-blocking findings: (1) add a black-box assertion that a tree-coverage run leaves the store unchanged (like task_1785); (2) trace_tree_coverage::file_coverage uses specs_at(range.start), so two fns on one line share coverage, and nested fns inside methods are named Type::inner; (3) --path to a non-.rs file reports ''did not parse''; consider skipping #[cfg(test)] fns as in TASK-1812.'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T17:28:07.026066119Z
-modified_at: 2026-10-18T17:28:31.811749938Z
+modified_at: 2026-10-18T17:28:42.566567373Z
 req_type: Task
 comments:
 - id: 01a1500e-d543-7092-9cb1-7e6d2acd4a34
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-18T17:28:31.811749938Z
   modified_at: 2026-10-18T17:28:31.811749938Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+history:
+- id: 01a1500e-ff46-7830-a566-5eca540b432f
+  author: joe
+  timestamp: 2026-10-18T17:28:42.566560644Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
   branch: main
