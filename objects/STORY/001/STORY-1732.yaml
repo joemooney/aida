@@ -1,0 +1,35 @@
+id: 01a14feb-752c-7273-b843-a8a8c75ea7fe
+spec_id: STORY-1732
+agreed_id: STORY-1732
+title: 'Review PR-2731: [AI:claude] fix(containment): keep host git out of planted embedded repos; prove main .git metadata is read-only (BUG-1982, BUG-1985)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/bug-1982`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2731>
+  - Branch: `claude/bug-1982` → `main`
+
+  ## Covers
+
+  - BUG-1982
+  - BUG-1985
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2731` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T16:49:53.452601407Z
+modified_at: 2026-10-18T16:49:53.452601407Z
+req_type: Story
+filed_at:
+  code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
