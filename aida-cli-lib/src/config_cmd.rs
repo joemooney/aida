@@ -210,7 +210,7 @@ pub(crate) fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> R
 /// inherited default at a glance.
 // trace:BUG-533 | ai:claude
 #[derive(Debug, Clone, Copy)]
-enum PolicySource {
+pub(crate) enum PolicySource {
     /// No file or env set this — the built-in default is in force.
     Default,
     /// Set in the project's `.aida/config.toml`.
@@ -262,6 +262,36 @@ impl PolicySource {
             PolicySource::Env(name) => format!("{name} (env)"),
         }
     }
+}
+
+/// STORY-1655: the `[review] solo_human_self_approval` row. The value comes
+/// from the global config only; a project value is named as ignored.
+// trace:STORY-1655 | ai:claude
+fn solo_human_policy_row(project_root: &std::path::Path) -> PolicyRow {
+    let (value, source) = solo_human_policy_value(project_root);
+    PolicyRow {
+        key: "solo_human_self_approval",
+        value,
+        source,
+    }
+}
+
+/// The rendered value and source of [`solo_human_policy_row`].
+// trace:STORY-1655 | ai:claude
+pub(crate) fn solo_human_policy_value(project_root: &std::path::Path) -> (String, PolicySource) {
+    let (mut value, source) = match crate::solo_review::global_value_quiet() {
+        Ok(true) if crate::is_aida_repo(project_root) => (
+            "true (never applies in the AIDA repository)".to_string(),
+            PolicySource::GlobalConfig,
+        ),
+        Ok(true) => ("true".to_string(), PolicySource::GlobalConfig),
+        Ok(false) => ("false".to_string(), PolicySource::Default),
+        Err(reason) => (format!("false ({reason})"), PolicySource::GlobalConfig),
+    };
+    if crate::solo_review::project_value_present(project_root) {
+        value.push_str(" — project .aida/config.toml value ignored");
+    }
+    (value, source)
 }
 
 /// One rendered policy row: a knob's effective value and where it resolved
@@ -596,6 +626,17 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "(none)",
         edit: EditSafety::ReadOnly {
             reason: "code-exec allowlist: edit ~/.aida/config.toml by hand",
+        },
+    },
+    // trace:STORY-1655 | ai:claude — approval-authority opt-in: read ONLY
+    // from ~/.aida/config.toml; a repo-level value is ignored with a warning.
+    KnobSpec {
+        section: "review",
+        key: "solo_human_self_approval",
+        doc: "Let a human at a terminal approve work their own session claimed, after a typed confirmation (global config only; default off; never in the AIDA repository).",
+        default: "false",
+        edit: EditSafety::ReadOnly {
+            reason: "approval-authority opt-in: edit ~/.aida/config.toml by hand",
         },
     },
     // --- [protocol]. trace:TASK-1290 ---
@@ -2461,6 +2502,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     value: allow_value,
                     source: exec_source,
                 },
+                solo_human_policy_row(project_root),
             ],
         }
     });

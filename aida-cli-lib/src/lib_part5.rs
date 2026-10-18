@@ -3053,6 +3053,7 @@ pub(crate) fn handle_review_record_at(
         &review_authority::visible_leases(&project_root),
     );
     let approving = kind == review_verdict::VerdictKind::Approved;
+    let mut solo_human = false;
     if approving {
         // BUG-1918: an approval must name WHO recorded it — a session id or a
         // process — or the ship gate can never tell it from the author's.
@@ -3070,8 +3071,28 @@ pub(crate) fn handle_review_record_at(
             review_pr_subject_from_forge(&project_root, n)
         })?;
         let authors = review_recorder_authors(&project_root, &subjects, author_branch.as_deref());
-        if let Some(refusal) = review_author_refusal(&authors, &recorder, !subjects.is_empty()) {
-            anyhow::bail!(refusal);
+        // STORY-1655: the solo mode is consulted only when the author gate
+        // would refuse, so its warnings never touch an independent approval.
+        // trace:STORY-1655 | ai:claude
+        match review_author_gate(
+            &authors,
+            &recorder,
+            !subjects.is_empty(),
+            human_at_tty,
+            || crate::solo_review::effective(&project_root),
+        ) {
+            ReviewAuthorGate::Independent => {}
+            ReviewAuthorGate::Refused(refusal) => anyhow::bail!(refusal),
+            ReviewAuthorGate::SoloSelfApproval => {
+                let n = pr.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "refused: a solo-human self-approval must name `--pr <N>` so it can be \
+                         confirmed against the pull request"
+                    )
+                })?;
+                crate::solo_review::run_challenge(spec, n)?;
+                solo_human = true;
+            }
         }
     }
     // BUG-1918: a human who passed the TTY floor leaves a receipt in the
@@ -3084,6 +3105,7 @@ pub(crate) fn handle_review_record_at(
                 resolved_sha.as_deref().unwrap_or_default(),
                 spec,
                 &recorder.tokens,
+                solo_human,
             )
             .context("could not write the human-review receipt")?,
         )
@@ -3097,6 +3119,7 @@ pub(crate) fn handle_review_record_at(
         human_at_tty,
         identity: recorder.tokens.clone(),
         receipt_id,
+        solo_human,
     })
     .context("could not serialize the review recorder attestation")?;
 
@@ -3816,6 +3839,38 @@ pub(crate) fn review_author_refusal(
             author.label
         )
     })
+}
+
+/// STORY-1655: what the author gate decides for an approval.
+// trace:STORY-1655 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewAuthorGate {
+    /// The recorder is not one of the work's authors.
+    Independent,
+    /// Refused, with the BUG-1918 text unchanged.
+    Refused(String),
+    /// The recorder authored the work, but solo-human mode is in force and the
+    /// recorder passed the human-at-TTY floor: the typed terminal challenge
+    /// decides.
+    SoloSelfApproval,
+}
+
+/// STORY-1655: the author gate with solo-human mode. Solo applies only to a
+/// recorder that passed the human-at-TTY floor (`human_at_tty`), never to an
+/// agent; `solo_mode` is consulted only when the BUG-1918 check refuses.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn review_author_gate(
+    authors: &[pr_ship::AuthorSession],
+    recorder: &review_authority::RecorderIdentity,
+    subject_resolved: bool,
+    human_at_tty: bool,
+    solo_mode: impl FnOnce() -> bool,
+) -> ReviewAuthorGate {
+    match review_author_refusal(authors, recorder, subject_resolved) {
+        None => ReviewAuthorGate::Independent,
+        Some(_) if human_at_tty && solo_mode() => ReviewAuthorGate::SoloSelfApproval,
+        Some(refusal) => ReviewAuthorGate::Refused(refusal),
+    }
 }
 
 /// Error for `aida review record` when no agent identity is set and the
