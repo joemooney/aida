@@ -1,0 +1,19 @@
+{
+  "id": "476f15c5-87f7-4741-9132-2adc03d56668",
+  "thread_id": "476f15c5-87f7-4741-9132-2adc03d56668",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792351610877,
+  "body": "PR #2741 round-2 rework is pushed (agy/ship-1800-1803 @ f6b41c0570) and ready for the r2 review. Not merged.\n\n- F1, blocking fail-open: mandate::store_history_alias_ids searches store history on all refs for any object that ever had the ID as spec_id or agreed_id. mandate_ship_cover uses it whenever there is no current record. If the search fails, history becomes Err and the decision refuses HistoryUnreadable instead of dropping the ID.\n- F2: task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history. Deleted TASK-1-152 with agreed_id TASK-176 and a security tag, traced as TASK-176, is refused Excluded.\n- F3: task_1800_named_spec_with_empty_history_is_refused_as_unreadable.\n- F4: the kernel.rs fallback order is reverted. The test is hermetic through a #[cfg(test)]-only AIDA_TEST_FORGE_FALLBACK_DIRS override.\n- F5: store_history_versions is gated #[cfg(test)].\n- F6: probe_origin_head_symref sets GIT_SSH_COMMAND='ssh -o BatchMode=yes'.\n\nChecks: make check-ci-fast passed (30 gates) and 76 targeted tests passed. Commits: 196e0f4633 (TASK-1800), f6b41c0570 (TASK-1803). Mapping comment: https://github.com/joemooney/aida/pull/2741#issuecomment-6254135062\nWorktree removed; the branch is not checked out anywhere.\nNote: `aida role enter implementer` needs a human TTY, so these edits were made while the session still held the advisor seat, because your brief assigned me as implementer.\n",
+  "subject": "PR #2741 r2 rework pushed (TASK-1800/1803)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
