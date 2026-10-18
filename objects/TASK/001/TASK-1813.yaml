@@ -1,0 +1,26 @@
+id: 01a14f54-39e8-7c82-8a86-f52783e53b91
+spec_id: TASK-1813
+agreed_id: TASK-1813
+title: Sibling verdict publication hard_link window trips the nlink!=1 reader refusal
+description: |
+  phase_gates.rs:508-509 (sibling_verdict_sweep_for_phase3) publishes evidence with std::fs::hard_link(temp, dest) and then remove_file(temp). Between the two calls dest has st_nlink=2, and TASK-1801's anchored reader refuses any verdict with nlink != 1. A concurrent publisher's collision read (:513) or a concurrent phase-4/ship read in that window fails spuriously with NoVerdict. It fails closed, but it is a real race the new rule introduced. Fix: publish with renameat2(RENAME_NOREPLACE), or retry the collision read once the temp has been unlinked.
+
+  Raised in review of PR-2712: https://github.com/joemooney/aida/pull/2712
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T14:04:42.344676351Z
+modified_at: 2026-10-18T14:04:42.344676351Z
+req_type: Task
+tags:
+- from-review:PR-2712
+- severity:minor
+filed_at:
+  code_sha: 99ca766617d2d2e274c7bea4317b10d8d6147054
+  branch: pr-2712
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 01a14f308f8f
