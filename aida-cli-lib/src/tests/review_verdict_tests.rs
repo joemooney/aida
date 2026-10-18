@@ -2182,3 +2182,70 @@ fn pr_keyed_shaless_round_deduplicates_when_identical_and_counts_as_prior_round_
         "no false surviving-finding attribution from displaced shaless round"
     );
 }
+
+// F5: the per-sha archive keeps the displaced shaless-round count.
+// trace:TASK-1766 | ai:claude
+#[test]
+fn per_sha_archive_carries_unarchived_rounds() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let path = verdict_path(root, "PR-77");
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["a".into()],
+        "x",
+    )
+    .unwrap();
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("approved"),
+        Some(SHA_R1),
+        None,
+        None,
+        &[],
+        "y",
+    )
+    .unwrap();
+    let archive = verdict_archive_dir(&path)
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    let obj: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    assert_eq!(
+        obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+
+    // A later recording at the same sha whose current file has lost the count
+    // (rewritten by a writer that predates it) does not erase it from the archive.
+    let mut current: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    current.as_object_mut().unwrap().remove("unarchived_rounds");
+    std::fs::write(&path, current.to_string()).unwrap();
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("approved"),
+        Some(SHA_R1),
+        None,
+        None,
+        &[],
+        "z",
+    )
+    .unwrap();
+    let archive = verdict_archive_dir(&path)
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    let obj: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    assert_eq!(
+        obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+}

@@ -3901,6 +3901,14 @@ pub enum MailboxCommand {
         /// Whose read-watermark gates archive safety (default: current inbox identities).
         #[clap(long)]
         agent: Option<String>,
+
+        /// Instead of the age sweep, archive mail addressed to phantom
+        /// recipients (flags, numbers, spec IDs, commit SHAs, unknown
+        /// @mention handles) and re-address whitespace-padded recipients,
+        /// printing each message it touches.
+        // trace:TASK-1766 | ai:claude
+        #[clap(long)]
+        phantoms: bool,
     },
 
     /// Show a full conversation thread, oldest-first.

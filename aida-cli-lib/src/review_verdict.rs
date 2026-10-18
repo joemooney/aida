@@ -1515,6 +1515,12 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     if let Some(rounds) = existing.remove("rounds") {
         snapshot.insert("rounds".to_string(), rounds);
     }
+    // TASK-1766: carry the displaced shaless-round count the same way, never
+    // lowering one this archive already holds. trace:TASK-1766 | ai:claude
+    let unarchived = |o: &JsonObj| o.get("unarchived_rounds").and_then(|v| v.as_u64());
+    if let Some(n) = unarchived(&existing).max(unarchived(&snapshot)) {
+        snapshot.insert("unarchived_rounds".to_string(), n.into());
+    }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(&archive, &format!("{body}\n"))

@@ -7802,14 +7802,14 @@ pub(crate) fn handle_git_backend_command(
             println!("Comment added to {}", req_id);
 
             // STORY-644 / TASK-1766: notify each @mentioned user via the mailbox
-            // only when the handle resolves to a known role or registered agent.
+            // only when the handle resolves to a known person, role or registered agent.
             // Unknown handles (including unrecognized all-uppercase handles)
             // emit a warning and are never delivered.
             // trace:STORY-644 | ai:claude
             // trace:TASK-1766 | ai:antigravity
-            if let Some(project_root) = store_path.parent() {
+            {
                 let (mentions, warnings) = crate::punt_done::resolve_comment_mentions(
-                    project_root,
+                    store_path,
                     &comment_author,
                     &mention_body,
                 );

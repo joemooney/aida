@@ -1402,9 +1402,69 @@ fn resolve_comment_mentions_delivers_known_uppercase_and_drops_unknown_with_warn
     .unwrap();
 
     let text = "Ping @QA and @ADVISOR and unknown @CODEX_CI_GIT_URL and @nobody-here";
-    let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(root, "joe", text);
+    let (recipients, warnings) =
+        crate::punt_done::resolve_comment_mentions(&root.join(".aida-store"), "joe", text);
     assert_eq!(recipients, vec!["qa".to_string(), "advisor".to_string()]);
     assert_eq!(warnings.len(), 2, "expected 2 warnings, got {warnings:?}");
     assert!(warnings.iter().any(|w| w.contains("@CODEX_CI_GIT_URL")));
     assert!(warnings.iter().any(|w| w.contains("@nobody-here")));
+}
+
+/// A project whose store's team roster lists the human `Joe` (stored spelling)
+/// and links the alias `jmooney` to it.
+// trace:TASK-1766 | ai:claude
+fn store_with_person_joe() -> (tempfile::TempDir, std::path::PathBuf) {
+    let proj = tempfile::tempdir().unwrap();
+    let store = proj.path().join(".aida-store");
+    std::fs::create_dir_all(store.join("registry")).unwrap();
+    std::fs::write(
+        store.join("registry").join("team.toml"),
+        "[members]\nJoe = [\"advisor\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join("registry").join("aliases.toml"),
+        "[aliases]\njmooney = \"joe\"\n",
+    )
+    .unwrap();
+    (proj, store)
+}
+
+// F1/F2: `@joe` on a comment resolves against the people roster and is
+// delivered under the person's stored spelling, so `Joe`'s inbox shows it.
+// trace:TASK-1766 | ai:claude
+#[test]
+fn comment_mention_of_a_roster_person_is_delivered_under_stored_spelling() {
+    let (proj, store) = store_with_person_joe();
+    let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(
+        &store,
+        "alice",
+        "@joe please look; also @JMOONEY",
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(recipients, vec!["Joe".to_string(), "jmooney".to_string()]);
+
+    crate::punt_done::send_notification(
+        &store,
+        "alice",
+        &recipients[0],
+        "You were mentioned on TASK-1 by alice: @joe please look".into(),
+    );
+    let local = crate::mailbox_store::read_local_messages(proj.path()).unwrap();
+    assert_eq!(
+        aida_core::mailbox::unread_inbox("Joe", &local, None).len(),
+        1
+    );
+}
+
+// F6: the `:`/`/` boundary only suppresses line-ref / path shapes.
+// trace:TASK-1766 | ai:claude
+#[test]
+fn extract_mentions_keeps_cc_colon_prose_but_drops_line_refs_and_paths() {
+    assert_eq!(
+        crate::punt_done::extract_mention_candidates(
+            "cc:@advisor, see main.rs:@L4425, main.rs:47:@reviewer and src/x/@y"
+        ),
+        vec!["advisor".to_string()]
+    );
 }

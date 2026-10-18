@@ -298,10 +298,14 @@ fn extract_raw_mention_tokens(text: &str) -> Vec<String> {
         }
         if chars[i] == '@' {
             // Word-boundary: skip `foo@bar` (email local-part / handle-in-word)
-            // and `file.rs:L4425`-style colon/slash prefixes.
+            // and a `:`/`/` that ends a line-ref or path (`main.rs:@L4425`,
+            // `src/x/@y`), while prose such as `cc:@advisor` still mentions.
+            // trace:TASK-1766 | ai:claude
             let prev_is_word = i > 0 && {
                 let p = chars[i - 1];
-                p.is_alphanumeric() || p == '_' || p == ':' || p == '/'
+                p.is_alphanumeric()
+                    || p == '_'
+                    || ((p == ':' || p == '/') && follows_line_ref_shape(&chars[..i - 1]))
             };
             if !prev_is_word {
                 let mut j = i + 1;
@@ -328,6 +332,19 @@ fn extract_raw_mention_tokens(text: &str) -> Vec<String> {
     out
 }
 
+/// Whether the non-whitespace run ending `before` looks like a source path or
+/// line ref (`main.rs`, `main.rs:47`, `src/x`), so a `:`/`/` after it and
+/// before `@` is part of that reference rather than prose.
+// trace:TASK-1766 | ai:claude
+fn follows_line_ref_shape(before: &[char]) -> bool {
+    let start = before
+        .iter()
+        .rposition(|c| c.is_whitespace())
+        .map_or(0, |k| k + 1);
+    let run = &before[start..];
+    run.last().is_some_and(|c| c.is_ascii_digit()) || run.iter().any(|c| *c == '.' || *c == '/')
+}
+
 /// BUG-2132 / TASK-1766: whether an `@token` in comment prose is a candidate
 /// mention handle (excluding flags, bare numbers, spec IDs, line refs, source
 /// filenames, and hex commit SHAs).
@@ -350,8 +367,9 @@ fn is_mention_handle(handle: &str) -> bool {
 }
 
 /// TASK-1766: resolve `@mention` tokens in comment text against the project's
-/// known mailbox identities (canonical roles, role files, and registered
-/// agents). Returns `(deliverable_handles, warnings)`:
+/// known mailbox recipients (canonical roles, role files, registered agents,
+/// and the people roster), delivering each under its stored spelling.
+/// Returns `(deliverable_handles, warnings)`:
 /// - Known handles (including all-uppercase handles like `@QA` or `@ADVISOR`
 ///   when present in the roster/registry) are returned in `deliverable_handles`.
 /// - Unknown handles (including unknown all-uppercase handles like `@QA`) are
@@ -360,11 +378,13 @@ fn is_mention_handle(handle: &str) -> bool {
 ///   never count as mentions at all.
 // trace:TASK-1766 | ai:antigravity
 pub(crate) fn resolve_comment_mentions(
-    project_root: &std::path::Path,
+    store_root: &std::path::Path,
     comment_author: &str,
     text: &str,
 ) -> (Vec<String>, Vec<String>) {
-    let known = crate::known_mailbox_identities(project_root);
+    // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
+    // are known too, and delivery uses the identity's stored spelling.
+    let known = crate::known_mailbox_recipients(store_root);
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
     let mut warnings = Vec::new();
@@ -373,19 +393,18 @@ pub(crate) fn resolve_comment_mentions(
         if trimmed.eq_ignore_ascii_case(author_trimmed) {
             continue;
         }
-        let canonical = trimmed.to_lowercase();
-        if known.contains(&canonical) {
-            if !deliverable.contains(&canonical) {
-                deliverable.push(canonical);
+        if let Some(canonical) = known.get(&trimmed.to_lowercase()) {
+            if !deliverable.contains(canonical) {
+                deliverable.push(canonical.clone());
             }
         } else if !trimmed.chars().any(|c| c.is_lowercase()) {
             warnings.push(format!(
-                "@{} is an all-uppercase handle matching no known role or registered agent — mention dropped",
+                "@{} is an all-uppercase handle matching no known person, role or registered agent — mention dropped",
                 trimmed
             ));
         } else {
             warnings.push(format!(
-                "@{} matches no known role or registered agent — mention dropped",
+                "@{} matches no known person, role or registered agent — mention dropped",
                 trimmed
             ));
         }

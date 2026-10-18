@@ -144,7 +144,15 @@ pub(crate) fn handle_mailbox_command(
                         "send refused: --to {why}.\n  Pass an agent id or seat name (e.g. advisor, antigravity-implementer-1), or --broadcast."
                     );
                 }
-                Recipient::Agent(agent.to_string())
+                // trace:TASK-1766 | ai:claude — deliver a known identity under
+                // its stored spelling, exactly as an `@mention` of it is.
+                let known = crate::known_mailbox_recipients(store_root);
+                Recipient::Agent(
+                    known
+                        .get(&agent.to_lowercase())
+                        .cloned()
+                        .unwrap_or_else(|| agent.to_string()),
+                )
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
@@ -507,7 +515,6 @@ pub(crate) fn handle_mailbox_command(
             Ok(())
         }
         MailboxCommand::List { stranded } => {
-            let _ = archive_phantom_inboxes(project_root, store_root);
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
@@ -726,8 +733,23 @@ pub(crate) fn handle_mailbox_command(
                 ),
             }
         }
-        MailboxCommand::Gc { older_than, agent } => {
-            let _ = archive_phantom_inboxes(project_root, store_root);
+        MailboxCommand::Gc {
+            older_than,
+            agent,
+            phantoms,
+        } => {
+            if *phantoms {
+                // trace:TASK-1766 | ai:claude — explicit, reported cleanup.
+                let report = archive_phantom_inboxes(store_root)?;
+                for line in &report.lines {
+                    println!("{line}");
+                }
+                println!(
+                    "Archived {} phantom-recipient message(s); re-addressed {}.",
+                    report.archived, report.readdressed
+                );
+                return Ok(());
+            }
             archive_mailbox_older_than(project_root, store_root, agent.as_deref(), older_than)
         }
         MailboxCommand::Thread { thread_id } => {
@@ -750,7 +772,6 @@ pub(crate) fn handle_mailbox_command(
             Ok(())
         }
         MailboxCommand::Sync => {
-            let _ = archive_phantom_inboxes(project_root, store_root);
             // Digest the local layer into the git-canonical layer (orphan
             // store), then stage + commit it. Append-only/id-keyed, so this is
             // idempotent. The orphan branch is pushed by the normal store-sync
@@ -834,19 +855,32 @@ fn read_send_body(
     }
 }
 
-// trace:TASK-1766 | ai:antigravity
-pub(crate) fn archive_phantom_inboxes(
-    project_root: &std::path::Path,
-    store_root: &std::path::Path,
-) -> Result<usize> {
-    use aida_core::mailbox::{merge_dedup, Message, Recipient};
+/// What `aida mailbox gc --phantoms` did: counts plus one line per message.
+// trace:TASK-1766 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct PhantomGcReport {
+    pub archived: usize,
+    pub readdressed: usize,
+    pub lines: Vec<String>,
+}
 
+/// Archive live mail addressed to a phantom recipient — a junk shape `--to`
+/// refuses, a commit SHA, or an `@mention` notice for a handle that is no known
+/// person, role or agent. A recipient that is only whitespace-padded around a
+/// known id is re-addressed to that id (archive + a copy) rather than lost.
+// trace:TASK-1766 | ai:antigravity
+// trace:TASK-1766 | ai:claude
+pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
+    use aida_core::mailbox::{merge_dedup, Message, Recipient};
+    use anyhow::Context as _;
+
+    let project_root = store_root.parent().unwrap_or(store_root);
     let local = mailbox_store::read_local_messages(project_root)?;
     let canonical = mailbox_store::read_canonical_messages(store_root)?;
     let merged = merge_dedup(&local, &canonical);
-    let known = known_mailbox_identities(project_root);
+    let known = crate::known_mailbox_recipients(store_root);
 
-    let mut archived_count = 0usize;
+    let mut report = PhantomGcReport::default();
     for msg in merged {
         if msg.deleted || msg.archived {
             continue;
@@ -855,22 +889,42 @@ pub(crate) fn archive_phantom_inboxes(
             continue;
         };
         let trimmed = r.trim();
+        let padded_known = (r != trimmed)
+            .then(|| known.get(&trimmed.to_lowercase()))
+            .flatten()
+            .cloned();
         let is_phantom = r != trimmed
             || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
             || aida_core::mailbox::looks_like_hex_sha(trimmed)
             || (msg.body.starts_with("You were mentioned on ")
-                && !known.contains(&trimmed.to_lowercase()));
+                && !known.contains_key(&trimmed.to_lowercase()));
         if !is_phantom {
             continue;
         }
+        if let Some(target) = &padded_known {
+            let copy = Message {
+                id: format!("{}-readdressed", msg.id),
+                to: Recipient::Agent(target.clone()),
+                ..msg.clone()
+            };
+            mailbox_store::write_message(project_root, &copy)?;
+            report.readdressed += 1;
+            report
+                .lines
+                .push(format!("re-addressed {} '{r}' -> '{target}'", msg.id));
+        } else {
+            report.archived += 1;
+            report.lines.push(format!("archived {} to '{r}'", msg.id));
+        }
+        let id = msg.id.clone();
         let marker = Message {
             archived: true,
             ..msg
         };
-        mailbox_store::write_message_marker(project_root, &marker)?;
-        archived_count += 1;
+        mailbox_store::write_message_marker(project_root, &marker)
+            .with_context(|| format!("archiving phantom-recipient message {id}"))?;
     }
-    Ok(archived_count)
+    Ok(report)
 }
 
 // trace:TASK-1211 | ai:codex
@@ -1920,12 +1974,25 @@ mod tests {
         assert_eq!(sent.from_role, None);
     }
 
-    // trace:TASK-1766 | ai:antigravity
-    #[test]
-    fn send_trims_recipient_whitespace_and_archive_phantom_inboxes_cleans_all_20_shapes() {
+    /// A store whose team roster lists the human `Joe` (stored spelling).
+    // trace:TASK-1766 | ai:claude
+    fn store_with_person_joe() -> (tempfile::TempDir, std::path::PathBuf) {
         let project = tempfile::tempdir().unwrap();
         let store = project.path().join(".aida-store");
-        std::fs::create_dir_all(&store).unwrap();
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(
+            store.join("registry").join("team.toml"),
+            "[members]\nJoe = [\"advisor\"]\n",
+        )
+        .unwrap();
+        (project, store)
+    }
+
+    // trace:TASK-1766 | ai:antigravity
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn send_trims_recipient_whitespace_and_archive_phantom_inboxes_cleans_all_20_shapes() {
+        let (project, store) = store_with_person_joe();
 
         handle_mailbox_command(&plain_send("  advisor  "), &store).unwrap();
         let sent = mailbox_store::read_local_messages(project.path()).unwrap();
@@ -1964,8 +2031,12 @@ mod tests {
             mailbox_store::write_message(project.path(), &m).unwrap();
         }
 
-        let archived = archive_phantom_inboxes(project.path(), &store).unwrap();
-        assert_eq!(archived, phantoms.len());
+        // A padded real recipient is re-addressed to the trimmed, stored id;
+        // every other shape is archived.
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!(report.archived, phantoms.len() - 2);
+        assert_eq!(report.readdressed, 2);
+        assert_eq!(report.lines.len(), phantoms.len(), "{:?}", report.lines);
 
         let merged = aida_core::mailbox::merge_dedup(
             &mailbox_store::read_local_messages(project.path()).unwrap(),
@@ -1973,13 +2044,62 @@ mod tests {
         );
         let watermarks = mailbox_store::read_all_watermarks(project.path()).unwrap();
         let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+        let mut agents: Vec<&str> = summaries.iter().map(|s| s.agent.as_str()).collect();
+        agents.sort_unstable();
         assert_eq!(
-            summaries
-                .iter()
-                .map(|s| s.agent.as_str())
-                .collect::<Vec<_>>(),
-            vec!["advisor"],
-            "phantom recipients must be archived and excluded from mailbox list"
+            agents,
+            vec!["Joe", "advisor"],
+            "phantom recipients are archived; padded real ones are re-addressed"
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("Joe", &merged, None).len(),
+            1,
+            "the 'joe ' message must reach Joe's inbox"
+        );
+
+        // Idempotent: a second pass finds nothing left to touch.
+        let again = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!((again.archived, again.readdressed), (0, 0));
+    }
+
+    // F1: a human's existing mention mail is never archived as a phantom.
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn archive_phantom_inboxes_keeps_mention_mail_for_roster_people() {
+        let (project, store) = store_with_person_joe();
+        let mut m = message("mention-joe", "thread-joe");
+        m.to = aida_core::mailbox::Recipient::Agent("joe".into());
+        m.body = "You were mentioned on TASK-1 by alice: @joe please look".into();
+        mailbox_store::write_message(project.path(), &m).unwrap();
+
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!((report.archived, report.readdressed), (0, 0));
+        let local = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert!(local.iter().all(|m| !m.archived));
+    }
+
+    // F2: `--to` delivers a known identity under its stored spelling, the same
+    // spelling an `@mention` of it is delivered under.
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn send_to_known_identity_uses_stored_spelling() {
+        let (project, store) = store_with_person_joe();
+        handle_mailbox_command(&plain_send("JOE"), &store).unwrap();
+        handle_mailbox_command(&plain_send("ADVISOR"), &store).unwrap();
+        handle_mailbox_command(&plain_send("NewAgent"), &store).unwrap();
+        let mut to: Vec<_> = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .map(|m| m.to)
+            .collect();
+        to.sort_by_key(|r| format!("{r:?}"));
+        assert_eq!(
+            to,
+            vec![
+                aida_core::mailbox::Recipient::Agent("Joe".into()),
+                aida_core::mailbox::Recipient::Agent("NewAgent".into()),
+                aida_core::mailbox::Recipient::Agent("advisor".into()),
+            ]
         );
     }
 }
