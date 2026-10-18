@@ -1,0 +1,33 @@
+id: 01a15159-4eb3-7e10-bd47-98afd6c14efa
+spec_id: TASK-1925
+agreed_id: TASK-1925
+title: Relay runs record ticket= in relay.status; drive run_spec filters through store-known ids
+description: |
+  Follow-up N1 from the PR #2725 (STORY-1700) review.
+
+  **Problem.** Relay runs write an empty `ticket=` line in `relay.status`. The drive tick looks up a lane's spec with `run_spec` (aida-cli-lib/src/mandate_drive.rs), which reads `ticket=` and then `spec=`. When both are empty, the spec is unknown, and the tick fails closed with `RUN_SPEC_UNKNOWN`. So every Redispatch/FixSetup lane on a relay run is force-gated to the operator, and the drive mandate cannot dispatch relay lanes on its own.
+
+  **Fix.**
+  1. The relay writer records the spec it was launched for as `ticket=<SPEC-ID>` in `relay.status`.
+  2. `run_spec` keeps only candidates the store knows: it pulls the `PREFIX-N` tokens from the `ticket`/`spec` fields and takes the first one present in the loaded requirement store. An id the store does not know must not count as the lane's spec, and an unknown spec still fails closed.
+
+  **Acceptance.**
+  - A relay run started for a spec records a non-empty `ticket=` with that spec's id.
+  - A Redispatch/FixSetup lane whose `ticket=` names a store-known, ungated spec is routed per mandate scope, not force-gated.
+  - A `ticket=` with no store-known id still gates with RUN_SPEC_UNKNOWN (fails closed).
+  - Unit tests cover all three cases.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T23:29:29.779979646Z
+modified_at: 2026-10-18T23:29:29.779979646Z
+req_type: Task
+filed_at:
+  code_sha: e00ecbfffc2261da5430cb4f0dbadf786143ac1a
+  branch: claude/story-1700
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: 18e1ec81-d2bf-4c7e-9fbd-6c54e9fd07cf
