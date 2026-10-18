@@ -10,12 +10,12 @@ description: |-
   Fix: timing_record::publish stages and commits its file in a store commit under the store write lock (with_store_write_lock), so no completion leaves the store dirty. Keep the mandate snapshot strict: do NOT add a path exemption to the fail-closed check.
 
   Acceptance: (1) after a spec completes via any into-Completed path, the store worktree has a clean 'git status --porcelain --untracked-files=all' (test); (2) a mandate ship immediately after a completion does not refuse on uncommitted evidence (test at the store_snapshot boundary); (3) best-effort is kept: a commit failure is logged and never fails the completion.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:58:37.912954885Z
-modified_at: 2026-10-18T19:44:43.010356760Z
+modified_at: 2026-10-18T19:44:52.769574995Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -37,6 +37,14 @@ history:
   timestamp: 2026-10-18T19:44:44.260793631Z
   session_id: 215ca0d7-f49f-42d2-8373-25dcd77e2014
   changes: []
+- id: 01a1508b-aa21-78c2-b2ec-c76079a9fcf1
+  author: aida-pr-open
+  timestamp: 2026-10-18T19:44:52.769572557Z
+  session_id: 215ca0d7-f49f-42d2-8373-25dcd77e2014
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
   branch: main
