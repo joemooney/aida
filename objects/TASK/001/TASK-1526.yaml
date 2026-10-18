@@ -3,12 +3,12 @@ spec_id: TASK-1526
 agreed_id: TASK-1526
 title: Single-flight cache refresh and stale labels (slice B)
 description: 'Slice B of STORY-1484, implemented exactly per the ADVISOR SIGNOFF on STORY-1484: amendments A2-A6 and A9-A13, plus the TASK-1515 review nits folded into the STORY-1484 sketch, and the Q1-Q4 answers there. Acceptance = those amendments, each with its named test; fixtures and fake HOME only.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T18:51:03.515884243Z
-modified_at: 2026-10-18T20:57:25.321637482Z
+modified_at: 2026-10-18T21:25:16.767428052Z
 req_type: Task
 tags:
 - batch:next
@@ -4212,6 +4212,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a150e7-955f-77e2-88de-1e40beddde9d
+  author: aida-orchestrator
+  timestamp: 2026-10-18T21:25:16.767453445Z
+  session_id: 01a150de7ea8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 processing_record:
 - id: 01a0f004-b823-7d11-b622-2c5f123dd4e6
   timestamp: 2026-09-30T01:53:56.259545234Z
@@ -4225,3 +4233,11 @@ implementation_info:
   implemented_by: joe
   completion_sha: 4d42531352783450a847c764c7dfdbe8a2d5708e
   reopened_at_sha: bf65220959c7601427247286abc7eb16278af5a5
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'RequestChanges: CI Build red; TASK-1526 implementation was never released for dispatch and misses V4 amendments A2/A5/A6/A8 plus T4; TASK-1739 items 1-5 implemented with minor defects. Recommend splitting TASK-1739 into its own PR.'
+  recovery_hint: address the review findings, move TASK-1526 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-18T21:25:16.767428052Z
