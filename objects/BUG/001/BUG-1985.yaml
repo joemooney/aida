@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T12:08:18.169187168Z
+modified_at: 2026-10-18T12:08:19.985825252Z
 req_type: Bug
 tags:
 - contained
@@ -45,6 +45,12 @@ comments:
   created_at: 2026-10-12T15:02:13.220016932Z
   modified_at: 2026-10-12T15:02:13.220016932Z
   session_id: 82319681-0b6a-4201-bab0-7d527e4085ad
+- id: 01a14ee9-af11-7660-a86e-a1d37a292fcc
+  author: joe
+  content: Claimed alongside BUG-1982 by session 01a14ee97697 (claude), worktree aida-bug-1982, branch claude/bug-1982.
+  created_at: 2026-10-18T12:08:19.985825252Z
+  modified_at: 2026-10-18T12:08:19.985825252Z
+  session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
 history:
 - id: 01a130a2-bce0-74e2-8634-0063cf48c11a
   author: joe
