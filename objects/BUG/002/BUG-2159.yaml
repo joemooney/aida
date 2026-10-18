@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T20:06:01.131201098Z
-modified_at: 2026-10-18T16:53:04.714434576Z
+modified_at: 2026-10-18T16:56:08.806417351Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -33,6 +33,12 @@ comments:
   created_at: 2026-10-16T18:33:28.372761522Z
   modified_at: 2026-10-16T18:33:28.372761522Z
   session_id: 97da54e4-8024-4969-81a4-fc8651657cf6
+- id: 01a14ff1-2f66-7ed0-9260-ed8043d0dd64
+  author: joe
+  content: 'Advisor 2026-10-18: agy batch-1 attempt (PR #2734) closed after an attested FAIL review. It edited AIDA''s remote_create.rs fetch refspec, a no-op, instead of the aida-relay pre-push hook. The ruling stands: the fix goes to aida-relay/tools/hooks/pre-push (allow a non-origin push whose sha == origin/<branch> tip and is a fast-forward). The spec stays open until it lands there.'
+  created_at: 2026-10-18T16:56:08.806417351Z
+  modified_at: 2026-10-18T16:56:08.806417351Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a1412c-1483-7ab2-a97e-465d7707263c
   author: joe
