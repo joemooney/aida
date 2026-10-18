@@ -336,8 +336,9 @@ pub(crate) fn emit_environment_blocked_lines(cause: &str, stopped: &str, shipped
         stopped.bold(),
         shipped_list
     );
+    // trace:BUG-1930 trace:TASK-1351 | ai:antigravity
     eprintln!(
-        "  {} no further specs were started; a member already running in a pipelined drain is not interrupted",
+        "  {} no further specs were started; any member already in flight was drained to completion",
         "→".dimmed()
     );
 }

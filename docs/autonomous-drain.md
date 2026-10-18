@@ -1255,8 +1255,8 @@ Some failures belong to the machine, not the spec: the agent's tool calls
 were denied (`permission-denied`), or the disk or memory ran out
 (`resource-exhaustion`). The next spec would fail the same way, so after
 **2 consecutive** specs fail with the same one of these causes the drain
-halts before starting another (a member already running in a pipelined
-drain is not interrupted). It prints one `environment blocked` line naming
+halts before starting another (any member already in flight in a pipelined
+drain finishes its run before the drain exits). It prints one `environment blocked` line naming
 the cause and the fix, leaves the rest of the queue untouched, and exits
 `3`. In a `--batches` chain the count runs across batch boundaries. The JSON summary reports `"outcome": "environment-blocked"` and
 `"halt_reason": "<cause>"` (`null` on every other stop). Any other result in
