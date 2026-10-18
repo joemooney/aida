@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T12:08:19.985825252Z
+modified_at: 2026-10-18T16:39:06.713732800Z
 req_type: Bug
 tags:
 - contained
@@ -50,6 +50,12 @@ comments:
   content: Claimed alongside BUG-1982 by session 01a14ee97697 (claude), worktree aida-bug-1982, branch claude/bug-1982.
   created_at: 2026-10-18T12:08:19.985825252Z
   modified_at: 2026-10-18T12:08:19.985825252Z
+  session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
+- id: 01a14fe1-96d9-7e52-96c4-777a2076b55a
+  author: joe
+  content: 'Fixed in PR #2731 (branch claude/bug-1982) per the A+B ruling. git_ops::is_contained_writable_tree (fs-only: a linked worktree or the BUG-2131 marker). A = host_git_hardening adds diff.ignoreSubmodules=dirty, submodule.recurse=false and fetch.recurseSubmodules=false there. B = refuse_unregistered_gitlinks: worktree_is_dirty keeps the tree, and worktree_status_porcelain and salvage refuse. Salvage and all 15 raw git status sites now use host_git_command, enforced by bug_1985_host_status_guard. Test: bug_1985_planted_filter_driver_never_runs_from_host_git, with a positive control and mutation-checked. Finding: git add -A, git add -u and plumbing diff-index/diff-files recurse whatever diff.ignoreSubmodules says, so B is load-bearing. Residual: a .gitmodules-registered plant can still recurse in plumbing diffs, which host code does not run over these trees. Status left for the advisor.'
+  created_at: 2026-10-18T16:39:06.713732800Z
+  modified_at: 2026-10-18T16:39:06.713732800Z
   session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
 history:
 - id: 01a130a2-bce0-74e2-8634-0063cf48c11a
