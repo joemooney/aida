@@ -146,6 +146,8 @@ impl Case {
         let comments = RefCell::new(Vec::new());
         let specs = vec![ShipSpec {
             id: "TASK-37".into(),
+            aliases: Vec::new(),
+            named: true,
             current: Some(self.req.clone()),
             history: Ok(vec![self.req.clone()]),
         }];
