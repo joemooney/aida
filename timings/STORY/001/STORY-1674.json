@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1674",
+  "publishes": [
+    {
+      "at": "2026-10-18T02:15:11.352478867Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T15:02:23.004698589Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:13:19.844473168Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:13:21.871412506Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "PuntFiled",
+        "spec": "STORY-1674"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:36:10.780545074Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:36:10.781125422Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-15T15:44:45.994501234Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-15T15:53:34.800639423Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1674",
+        "branch": "codex/story-1674",
+        "first_seen": "2026-10-15T15:53:34.800516613+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:15:59.459658764Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2682,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "34d75afa70a761c29c3a5bff62889a7adfc90d3c"
+      }
+    },
+    {
+      "ts": "2026-10-16T08:16:01.604772123Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "r1: fallback write events break NeedsAttention exit (ruling: exclude empty-change entries), web types, history consumers, author format, AGENTS.md conflict",
+        "recovery_hint": "address the review findings, move STORY-1674 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-18T02:14:17.569995982Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T02:14:29.178718565Z",
+      "spec": "STORY-1674",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2682
+      }
+    },
+    {
+      "ts": "2026-10-18T02:15:11.336908774Z",
+      "spec": "STORY-1674",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "40a0b7b6e2b0a98e1882e327442c54a8c50ea3b6",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
