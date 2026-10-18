@@ -1,5 +1,6 @@
 id: 01a14cbf-ce30-7013-bfc9-7bb8494f9f05
 spec_id: TASK-1-317
+agreed_id: TASK-1388
 title: 'non-blocking/minor: aida-core/templates/.aida/discipline/fire-mode.md (and the …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1654, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.

@@ -1,5 +1,6 @@
 id: 01a14cbf-e82e-77b3-878b-f192fdd3ff52
 spec_id: TASK-1-320
+agreed_id: TASK-1386
 title: 'cosmetic/doc-drift: docs/agents/aida-repository-guide.md:296 still says /aida-o…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1654, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
