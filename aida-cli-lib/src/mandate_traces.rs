@@ -224,7 +224,7 @@ fn trace_ids(text: &str) -> BTreeSet<String> {
 /// raw strings and test fixtures. Rust doc-comment tokens carry the ORIGINAL
 /// comment span; retain those rather than masking their synthesized #[doc].
 /// If tokenization fails, raw full-file tokens are conservative fallback evidence.
-fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
+pub(crate) fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
     let stream: proc_macro2::TokenStream = text.parse().ok()?;
     let mut offsets = vec![0];
     for (i, b) in text.bytes().enumerate() {
