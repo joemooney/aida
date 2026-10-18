@@ -241,6 +241,13 @@ pub struct RecorderAttestation {
     /// gate re-reads it rather than trusting `human_at_tty` on its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<String>,
+    /// STORY-1655: true when this approval was a solo-human self-approval
+    /// (the global `[review] solo_human_self_approval` key was on, the human
+    /// passed the TTY floor and the typed terminal challenge). Omitted when
+    /// false, so a default-mode attestation serializes unchanged.
+    // trace:STORY-1655 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub solo_human: bool,
 }
 
 impl RecorderAttestation {
@@ -1673,7 +1680,17 @@ const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 /// and neither is anything but a regular file of bounded size — a symlink to
 /// a FIFO or device must not be able to hang or flood the launcher.
 fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
-    let meta = std::fs::symlink_metadata(path).ok()?;
+    // Validate and read the same opened inode. O_NONBLOCK prevents a FIFO
+    // replacement from hanging open; O_NOFOLLOW rejects final-component links.
+    // trace:TASK-1786 | ai:codex
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    let meta = file.metadata().ok()?;
     if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }
@@ -1681,7 +1698,10 @@ fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictC
     if modified < since {
         return None;
     }
-    let body = std::fs::read_to_string(path).ok()?;
+    let mut body = String::new();
+    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
+        .read_to_string(&mut body)
+        .ok()?;
     if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }

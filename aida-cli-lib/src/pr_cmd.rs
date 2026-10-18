@@ -1611,6 +1611,11 @@ pub(crate) fn pr_ship_approval_gate(
         );
         return Err(pr_ship::ShipRefusal::Review.error(message));
     }
+    // STORY-1655: name the mode when a solo-human approval is relied on.
+    // trace:STORY-1655 | ai:claude
+    if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
+        println!("  {notice}");
+    }
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));
     };
@@ -1989,6 +1994,11 @@ pub(crate) fn merge_path_approval_gate(
         );
         return Err(message);
     }
+    // STORY-1655: name the mode when a solo-human approval is relied on.
+    // trace:STORY-1655 | ai:claude
+    if let Some(notice) = pr_ship::solo_approval_notice(&candidates, &policy) {
+        eprintln!("  {notice}");
+    }
     if let Some(refusal) = pr_ship::approval_head_refusal(&candidates, head_sha) {
         let message = pr_ship::approval_head_refusal_message(pr, &refusal);
         crate::events::record_gate_held(
@@ -2046,6 +2056,10 @@ pub(crate) fn ship_approval_policy(
             &crate::review_authority::visible_leases(main_worktree),
         )
         .tokens,
+        // STORY-1655: the solo mode is re-read at ship time, never trusted
+        // from the verdict. trace:STORY-1655 | ai:claude
+        solo_human: crate::solo_review::effective(main_worktree),
+        verified_solo: crate::review_authority::verified_solo_keys(candidates),
     }
 }
 
@@ -2285,12 +2299,9 @@ pub(crate) fn pr_ship_handler(
     // BUG-2164: On the default branch with no explicit PR number, refuse before
     // any push, trailer guard, or PR creation attempt.
     // trace:BUG-2164 | ai:antigravity
-    if opts.pr_number.is_none() {
-        let default_branch = crate::forge::default_branch_of(&project_root);
-        if branch == default_branch {
-            let approved = find_open_approved_prs(&project_root);
-            anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
-        }
+    if opts.pr_number.is_none() && ship_is_default_branch(&project_root, &branch) {
+        let approved = find_open_approved_prs(&project_root);
+        anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
     }
 
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
@@ -4417,6 +4428,37 @@ pub(crate) fn ship_completion_trailer(
         |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
         |id| pr_ship::spec_completion_hold_reason(store, id),
     )
+}
+
+/// Protect conventional mainlines; otherwise require evidence of the default.
+/// Unknown evidence also requires an explicit PR number.
+// trace:TASK-1795 | ai:codex
+pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+    if matches!(branch, "main" | "master") {
+        return true;
+    }
+    // Only origin/HEAD is local evidence, never a guess from leftover refs.
+    // A stale origin/HEAD still wins over the forge, so refresh it when the
+    // remote default changes (git remote set-head origin --auto).
+    let local = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
+        .filter(|name| !name.is_empty());
+    match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
+        Some(default) => branch == default,
+        None => true,
+    }
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.
