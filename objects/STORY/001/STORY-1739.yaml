@@ -1,0 +1,36 @@
+id: 01a14fee-b8cf-7390-85e3-3c796c5199e0
+spec_id: STORY-1739
+agreed_id: STORY-1739
+title: 'Review PR-2732: [AI:antigravity] fix: ship-1800 group (STORY-1663, TASK-1800, TASK-1803)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `agy/ship-1800`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2732>
+  - Branch: `agy/ship-1800` → `main`
+
+  ## Covers
+
+  - STORY-1663
+  - TASK-1803
+  - TASK-1800
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2732` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T16:53:27.375367772Z
+modified_at: 2026-10-18T16:53:27.375367772Z
+req_type: Story
+filed_at:
+  code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 8c4feb441c
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
