@@ -1,0 +1,19 @@
+{
+  "id": "fbb18ec0-73ce-49d8-a043-9974be736197",
+  "thread_id": "fbb18ec0-73ce-49d8-a043-9974be736197",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792292655150,
+  "body": "Mandate (operator, 2026-10-17 20:03 MST): scope=all approved specs NOT in the two agy batches (batch1: TASK-1800 TASK-1803 BUG-2159 BUG-2140 TASK-1332 BUG-2130 BUG-2119 TASK-1766 TASK-1351 STORY-1663 TASK-1737 TASK-1744; batch2: STORY-1688 BUG-1993 TASK-1526 TASK-1527 TASK-1739 BUG-2001 BUG-2012 TASK-1752 BUG-2118 STORY-1667 TASK-0446 STORY-1651) plus open PRs; authority=implement, review, merge on green; ends=2026-10-19T01:26Z (substrate mandate f4e1ab68). Quote: \"you can proceed however you see fit to implement, review and merge to main as many other specs as you can\"",
+  "subject": "fire-mode mandate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
