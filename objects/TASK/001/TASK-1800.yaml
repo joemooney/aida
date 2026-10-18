@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-17T15:51:04.884009230Z
+modified_at: 2026-10-18T02:01:38.620223310Z
 req_type: Task
 relationships:
 - rel_type:
@@ -307,6 +307,12 @@ comments:
     STANDARD independent review requested; code2714 remains separate STRICT gate. No runtime/workspace test, end-to-end mandate replay, author verdict,clearance,merge or CI-green claim. No collector,policy,fallback,path-class,symlink or authority behavior change. Normal own lease cleanup follows. Docs/testing/task-1800-semantic-audit.{md,json}; durable evidence/session10.
   created_at: 2026-10-17T15:50:34.308956017Z
   modified_at: 2026-10-17T15:50:34.308956017Z
+- id: 01a14cbe-3e3c-7721-9f3a-4598742faa27
+  author: joe
+  content: 'ADVISOR RULING 2026-10-17 (operator-approved): the mandate is inert (49/50 refusals) mostly because trace-derived IDs that do not resolve in the store make SpecsUnresolved refuse the whole PR. Change, in aida-cli-lib/src/mandate.rs decide() + pr_cmd.rs mandate_ship_cover: (1) a TRACE-DERIVED id (never a NAMED id) with no current version AND no version in store history on any ref is a dangling reference; it carries no exclusion class and is dropped, not refused. (2) An id with a recorded alias resolves through the alias, then is judged normally. (3) An id with ANY history version (deleted spec) is still judged by that history; unreadable history still refuses. (4) Named ids keep today''s fail-closed behaviour. Tests: dangling trace id allowed; aliased id judged via alias; deleted-with-history excluded spec still refuses; named unknown still refuses. STOP further measurement-only audit slices (#2715-#2721 are sufficient); land this code change next. STRICT review.'
+  created_at: 2026-10-18T02:01:38.620223310Z
+  modified_at: 2026-10-18T02:01:38.620223310Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
