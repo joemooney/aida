@@ -1,0 +1,29 @@
+id: 01a150f0-783f-7883-9e0e-e3a841b92fb9
+spec_id: TASK-1-352
+title: 'cosmetic: db_reconcile.rs:143 marker matches by subject permanently; sha: line …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1663, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: db_reconcile.rs:143 marker matches by subject permanently; sha: line records pre-rebase head that never lands on main
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:34:59.135103185Z
+modified_at: 2026-10-18T21:34:59.135103185Z
+req_type: Task
+tags:
+- carried-from:STORY-1663
+- finding-hash:86b66a5b
+- from-review:PR-2732
+- kind:carried-forward
+filed_at:
+  code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
