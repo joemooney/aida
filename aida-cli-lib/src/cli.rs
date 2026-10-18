@@ -498,12 +498,14 @@ pub enum TraceCommand {
     /// vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`,
     /// which validates the trailer spec-ids; this checks that the changed CODE
     /// is traced. Report-only by default (CI succeeds); `--block` fails CI on
-    /// any uncovered coverable hunk.
+    /// any uncovered coverable hunk. `--all` / `--path` switch to whole-tree
+    /// mode: per Rust file, the functions with no trace marker in or directly
+    /// above them.
     Coverage {
         /// Git revision range to scan (e.g. `origin/main..HEAD`). Defaults to
         /// `<default-branch>..HEAD` (the commits this branch adds), falling
         /// back to `HEAD~20..HEAD` when no default branch resolves.
-        #[clap(long)]
+        #[clap(long, conflicts_with_all = ["all", "path"])]
         range: Option<String>,
 
         /// Emit machine-readable JSON instead of human text.
@@ -512,8 +514,23 @@ pub enum TraceCommand {
 
         /// Fail (exit non-zero) when any coverable changed hunk is uncovered.
         /// Default is report-only: the report prints but CI succeeds.
-        #[clap(long)]
+        #[clap(long, conflicts_with_all = ["all", "path"])]
         block: bool,
+
+        /// Whole-tree mode over the project: report every Rust function no
+        /// trace marker claims, per file.
+        // trace:TASK-1783 | ai:claude
+        #[clap(long, conflicts_with = "path")]
+        all: bool,
+
+        /// Whole-tree mode over one file or directory.
+        #[clap(long, value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Whole-tree mode only: exit non-zero when the report contains
+        /// findings of this kind. Without it the report always exits 0.
+        #[clap(long, value_enum, value_name = "KIND")]
+        fail_on: Option<TraceCoverageFailOn>,
     },
 
     /// Trace-ROT detector: scan source for inline code-to-spec trace markers,
@@ -14654,6 +14671,14 @@ pub enum LintCommand {
 pub enum LintConstantsFailOn {
     /// Any literal the owning spec does not explain.
     Unexplained,
+}
+
+/// What whole-tree `aida trace coverage --fail-on` turns into a non-zero exit.
+// trace:TASK-1783 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceCoverageFailOn {
+    /// Any function no trace marker claims.
+    Uncovered,
 }
 
 /// The shipped gate library. Read-only.
