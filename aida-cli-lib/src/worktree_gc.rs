@@ -2020,6 +2020,7 @@ pub(crate) fn ensure_spec_worktree(
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
+                /* review_coexistence */ None,
                 /* contained_seat */ false,
             )?;
             let lease = list_leases(&main_root)
