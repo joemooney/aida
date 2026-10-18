@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2172",
+  "publishes": [
+    {
+      "at": "2026-10-18T02:11:01.521315912Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T14:07:18.846831543Z",
+      "spec": "BUG-2172",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:11:02.008503039Z",
+      "spec": "BUG-2172",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T17:03:46.571796220Z",
+      "spec": "BUG-2172",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2700,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "e7ae7dcc70b3bd8d92e3a1dbb61448e36e7fda98"
+      }
+    },
+    {
+      "ts": "2026-10-16T17:05:35.862088594Z",
+      "spec": "BUG-2172",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT r1: aida review reviewer path strips containment; compete contained posture lacks dontAsk; compete refuses after side effects",
+        "recovery_hint": "address the review findings, move BUG-2172 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T20:48:55.296393434Z",
+      "spec": "BUG-2172",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-10-18T02:10:23.939258580Z",
+      "spec": "BUG-2172",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T02:10:42.962793221Z",
+      "spec": "BUG-2172",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2700
+      }
+    },
+    {
+      "ts": "2026-10-18T02:11:01.505557946Z",
+      "spec": "BUG-2172",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f45400b507b9a6d4aa25ca9fd2aec3ec077ead50",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
