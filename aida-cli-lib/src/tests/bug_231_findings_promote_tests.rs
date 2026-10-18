@@ -1401,11 +1401,9 @@ fn resolve_comment_mentions_delivers_known_uppercase_and_drops_unknown_with_warn
     .unwrap();
 
     let text = "Ping @QA and @ADVISOR and unknown @CODEX_CI_GIT_URL and @nobody-here";
-    let (recipients, warnings) =
-        crate::punt_done::resolve_comment_mentions(root, "joe", text);
+    let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(root, "joe", text);
     assert_eq!(recipients, vec!["qa".to_string(), "advisor".to_string()]);
     assert_eq!(warnings.len(), 2, "expected 2 warnings, got {warnings:?}");
     assert!(warnings.iter().any(|w| w.contains("@CODEX_CI_GIT_URL")));
     assert!(warnings.iter().any(|w| w.contains("@nobody-here")));
 }
-
