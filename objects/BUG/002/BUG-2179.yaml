@@ -1,0 +1,25 @@
+id: 01a150aa-5178-7321-b9b3-2ba3ee9f3d95
+spec_id: BUG-2179
+agreed_id: BUG-2179
+title: Mandate ship runs an unbounded 'git log --all' per traced spec over the whole store; aida pr ship sits at step 1 for 10-40 min
+description: |-
+  Observed 2026-10-18 shipping #2741 under the mandate: step 1 ran 9+ minutes. Sampling the ship's children shows a serial stream of 'git log --all --format=%H --diff-filter=ACMRT -- objects/TASK/001/TASK-NNNN.yaml', one per spec traced in the PR's changed files, against a store of ~76k commits (a few seconds each warm, minutes cold). This also explains the earlier 'hangs' at step 1 (#2723: 37 min, killed; #2729: killed by a 25-min timeout). TASK-1920 item (1) is the same cost class for deleted aliases.
+
+  Fix: answer the mandate exclusion-history question from an index (history_index / the history cache already used by aida history), or one batched 'git log --all --name-only' pass over the needed paths, instead of N full-history walks. Keep fail-closed when the index is stale or unreadable.
+
+  Acceptance: (1) the exclusion-history lookup for a PR touching files with K traced specs does at most one store history walk, or none with a fresh index (test counts git invocations); (2) results are identical to the per-spec walk on a fixture (test); (3) aida pr ship step 1 on this repo finishes in under 30 s warm (manual evidence in the PR).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T20:18:21.688483900Z
+modified_at: 2026-10-18T20:18:21.688483900Z
+req_type: Bug
+filed_at:
+  code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
