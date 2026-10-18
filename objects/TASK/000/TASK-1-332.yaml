@@ -1,0 +1,28 @@
+id: 01a14f90-67b9-7de3-93dd-578e5b1ea66e
+spec_id: TASK-1-332
+title: 'cosmetic: aida-cli-lib/src/auto_complete.rs:3719 and :3728-3731 — PlanPreludeSt…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1794, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: aida-cli-lib/src/auto_complete.rs:3719 and :3728-3731 — PlanPreludeStep docs still say the headless plan session is 'queue work <spec> --plan-only' with '--no-human' appended; it is now '--plan-phase --no-human' (--plan-only conflicts with --no-human).
+  Reviewed sha: 054907db48b9ad95b5602508229e1041c6b4c66b
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T15:10:26.233880031Z
+modified_at: 2026-10-18T15:10:26.233880031Z
+req_type: Task
+tags:
+- carried-from:TASK-1794
+- finding-hash:8b345c44
+- from-review:TASK-1794
+- kind:carried-forward
+filed_at:
+  code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f14ef5f1e8
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
