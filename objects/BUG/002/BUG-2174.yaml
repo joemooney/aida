@@ -1,0 +1,20 @@
+id: 01a14e01-4463-7c70-a07e-fb242a2de11f
+spec_id: BUG-2174
+agreed_id: BUG-2174
+title: Every PR prepends a 'recent change' paragraph to AGENTS.md/OVERVIEW.md, so each merge re-conflicts every other open PR
+description: 'Observed during the 2026-10-17 fire wave: #2704, #2706, #2710, #2712 and #2713 each needed one or more extra merge-up cycles (20-40 min each) solely because both sides added a paragraph at the top of AGENTS.md and/or OVERVIEW.md. The change log belongs in the substrate (aida digest, PR trail), not in shared hot docs. Fix options: (a) stop requiring per-change paragraphs in AGENTS.md/OVERVIEW.md (update the implementer discipline and any check that demands them); (b) move them to per-change fragment files (docs/changes/<SPEC>.md) assembled at release; (c) a union merge driver for those files via .gitattributes (merge=union) as a stopgap. Recommend (a)+(c).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T07:54:28.323605219Z
+modified_at: 2026-10-18T07:54:28.323605219Z
+req_type: Bug
+filed_at:
+  code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 188adef04b
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
