@@ -101,7 +101,7 @@ fn help_surface_matches_golden_snapshot() {
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.
-const LEGACY_TOP_LEVEL_COMMANDS: usize = 102;
+const LEGACY_TOP_LEVEL_COMMANDS: usize = 96;
 
 // trace:STORY-1728 | ai:claude
 #[test]
@@ -347,4 +347,35 @@ fn production_lines(text: &str) -> Vec<(usize, &str)> {
         i += 1;
     }
     out
+}
+
+// Commands whose read-only verbs stay open to guest stakeholders keep the
+// legacy per-verb answers once registered.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn per_verb_stakeholder_policy_matches_the_legacy_table() {
+    use StakeholderAction::*;
+    for (argv, want) in [
+        (vec!["aida", "plan", "verify", "p.md"], Read),
+        (vec!["aida", "plan", "verify", "p.md", "--fix"], Write),
+        (vec!["aida", "plan", "helpers", "TASK-1"], Read),
+        (vec!["aida", "role", "list"], Read),
+        (vec!["aida", "role", "active"], Read),
+        (vec!["aida", "role", "enter", "advisor"], Role),
+        (vec!["aida", "session", "leases"], Read),
+        (vec!["aida", "session", "end"], Session),
+        (vec!["aida", "worker", "directives"], Read),
+        (vec!["aida", "worker", "gc"], Write),
+        (vec!["aida", "punts", "list"], Read),
+        (vec!["aida", "punts", "analyze"], Write),
+    ] {
+        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        assert_eq!(
+            crate::stakeholder_cli_action(&cli.command),
+            want,
+            "{argv:?}"
+        );
+    }
+    let cli = try_parse_from(["aida", "role", "list"]).unwrap();
+    assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
 }

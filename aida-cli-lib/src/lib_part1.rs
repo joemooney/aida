@@ -2183,33 +2183,6 @@ pub(crate) fn run() -> Result<()> {
         }
     }
 
-    // STORY-560: `aida groom` (canonical; `assess`/`intake` are deprecated
-    // aliases — STORY-708) self-loads the store to compute its candidate
-    // fence and then launches a headless `claude -p` — no shared storage handle
-    // needed. Dispatch early, like burndown. trace:STORY-560 trace:STORY-708 | ai:claude
-    if let Command::Groom {
-        apply,
-        max_approvals,
-        only_tag,
-        exclude_tag,
-        risk,
-        then_drain,
-        dry_run,
-        permission_mode,
-    } = &cli.command
-    {
-        return handle_intake_command(
-            *apply,
-            *max_approvals,
-            only_tag.as_deref(),
-            exclude_tag.as_deref(),
-            risk,
-            *then_drain,
-            *dry_run,
-            permission_mode.as_deref(),
-        );
-    }
-
     // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
     // the local session leases + probes pid liveness and self-loads the store
     // read-only for the spec's lifecycle status. Like `aida why` it needs no
@@ -2411,14 +2384,6 @@ pub(crate) fn run() -> Result<()> {
         }
     }
 
-    // Plan tooling is self-contained: `verify` reads a markdown file +
-    // source files; `helpers` loads the store itself via
-    // `load_store_for_lookup`. Neither needs the shared storage handle, so
-    // dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
-    if let Command::Plan(plan_cmd) = &cli.command {
-        return plan_cmd::handle_plan_command(plan_cmd);
-    }
-
     // STORY-498: `aida trace gate` is self-contained — it reads git for the
     // commit range and self-loads the store via `load_store_for_lookup` to
     // resolve each `(SPEC-ID)` trailer. Dispatch it early (the other `trace`
@@ -2453,11 +2418,6 @@ pub(crate) fn run() -> Result<()> {
         return config_cmd::handle_config_menu_command();
     }
 
-    // Roles + statusline dispatch before storage init — roles are TOML
-    // files at .aida/roles/, statusline reads the cache directly.
-    if let Command::Role(role_cmd) = &cli.command {
-        return role_cmd::handle_role_command(role_cmd);
-    }
     // Registered store-less commands dispatch here, where the legacy
     // `_bg-fetch` / `away` / `home` arms they replaced ran.
     // trace:STORY-1728 | ai:claude
@@ -2524,10 +2484,6 @@ pub(crate) fn run() -> Result<()> {
         // trace:TASK-784
         Command::Whoami => return session_misc_cmd::handle_whoami_command(),
         _ => {}
-    }
-    // trace:FR-1-043 | ai:claude
-    if let Command::Session(session_cmd) = &cli.command {
-        return handle_session_command(session_cmd);
     }
     // trace:STORY-995 | ai:codex — terminal helper installation is user-local
     // and store-independent, so it belongs in the early command tier.
@@ -2627,20 +2583,6 @@ pub(crate) fn run() -> Result<()> {
                 return handle_advisor_command(c);
             }
         }
-    }
-
-    // TASK-294: worker-directive introspection. Dispatched before storage
-    // init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
-    // the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
-    if let Command::Worker(worker_cmd) = &cli.command {
-        return handle_worker_command(worker_cmd);
-    }
-
-    // STORY-325: punt ledger CLI command. Dispatched before storage init —
-    // it reads only `.aida/punts.jsonl`, no requirement store.
-    // trace:STORY-325 | ai:antigravity
-    if let Command::Punts(punts_cmd) = &cli.command {
-        return handle_punts_command(punts_cmd.clone());
     }
 
     // Determine which requirements file to use
@@ -3449,22 +3391,16 @@ pub(crate) fn run() -> Result<()> {
         Command::Autoprogress { .. } => {
             unreachable!("autoprogress is dispatched before storage init")
         }
-        Command::Groom { .. } => {
-            unreachable!("groom (assess/intake) is dispatched before storage init")
-        }
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
-        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Derisk { .. } => unreachable!("derisk is dispatched before storage init"),
-        Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
-        Command::Session(_) => unreachable!("session is dispatched before storage init"),
         // STORY-721: `aida zen <spec>` autonomous implement+ship drive on the
         // legacy (centralized) storage path. The introspection subcommands
         // short-circuit before storage init; this arm only sees the spec-drive
@@ -3508,8 +3444,6 @@ pub(crate) fn run() -> Result<()> {
                 )?;
             }
         }
-        Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
-        Command::Punts(_) => unreachable!("punts is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             relationship_cmd::handle_relationship_command(rel_cmd, &storage)?;
         }

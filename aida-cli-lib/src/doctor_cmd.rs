@@ -10521,14 +10521,16 @@ User content.
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "punts", "analyze"])
                 .unwrap()
-                .command,
-            Command::Punts(_)
+                .command
+                .registered::<crate::punt_done::PuntsArgs>(),
+            crate::punt_done::PuntsArgs { inner: _ }
         ));
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "worker", "directives"])
                 .unwrap()
-                .command,
-            Command::Worker(_)
+                .command
+                .registered::<crate::queue_misc::WorkerArgs>(),
+            crate::queue_misc::WorkerArgs { inner: _ }
         ));
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "headless", "tail"])
@@ -10569,8 +10571,11 @@ User content.
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "role", "repair"])
                 .unwrap()
-                .command,
-            Command::Role(cli::RoleCommand::Repair { .. })
+                .command
+                .registered::<crate::role_cmd::RoleArgs>(),
+            crate::role_cmd::RoleArgs {
+                inner: cli::RoleCommand::Repair { .. }
+            }
         ));
     }
 

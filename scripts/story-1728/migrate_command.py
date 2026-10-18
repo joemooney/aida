@@ -350,7 +350,7 @@ def registered(src_dir):
             continue
         t = open(os.path.join(src_dir, f)).read()
         for m in re.finditer(
-            r'pub\(crate\) static (\w+): (?:crate::command_registry::)?CommandReg = (?:crate::command_registry::)?CommandReg \{\s*name: "([^"]+)",\s*help_after: "([^"]+)"',
+            r'pub\(crate\) static (\w+):\s*(?:crate::command_registry::)?CommandReg\s*=\s*(?:crate::command_registry::)?CommandReg\s*\{\s*name:\s*"([^"]+)",\s*help_after:\s*"([^"]+)"',
             t,
         ):
             regs.append((m.group(2), m.group(3), f[:-3], m.group(1)))
@@ -462,7 +462,7 @@ def main():
     body = [re.sub(r"(?<![\w:])" + module + r"::(?=\w+\()", "self::", l) for l in body]
     leftovers = [l.strip() for l in body if re.search(r"\b(cli|raw_args|storage|backend|project_root_hint)\b", l) and "ctx.globals" not in l]
     run_lines = []
-    run_lines.append(X)
+    run_lines.append(f"fn {fn_name}(matches: &clap::ArgMatches, {'ctx' if uses_ctx else '_ctx'}: &crate::command_registry::DispatchCtx) -> anyhow::Result<()> {{")
     if kind != "unit":
         run_lines.append(f"    let args = <{args_ty} as clap::FromArgMatches>::from_arg_matches(matches)?;")
     for d in destructure(pat_rest, args_ty, binding):

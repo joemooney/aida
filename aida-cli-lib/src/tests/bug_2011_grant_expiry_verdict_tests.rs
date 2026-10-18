@@ -31,9 +31,7 @@ fn role_expiry_cli_child() {
         "1h",
     ])
     .unwrap();
-    let crate::Command::Role(command) = cli.command else {
-        panic!("role command parsed");
-    };
+    let command = cli.command.registered::<crate::role_cmd::RoleArgs>().inner;
     std::fs::write(root.join("entered-expiry-handler"), "entered").unwrap();
     crate::role_cmd::handle_role_command(&command).unwrap();
     std::fs::write(root.join("allowed-expiry-handler"), "allowed").unwrap();

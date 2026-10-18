@@ -5090,3 +5090,60 @@ pub(crate) fn run_tracked_agent(
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+/// Inspect or resume past Claude Code sessions in this project,
+/// enriched with the AIDA role + most-recent spec for each session
+/// (extracted from the SessionStart hook output stored in each
+/// session's `.jsonl`). Wrapper around `claude --resume` since
+/// Claude Code's auto-generated subject can't be customized.
+// trace:FR-1-043 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "session")]
+pub(crate) struct SessionArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::SessionCommand,
+}
+
+// trace:FR-1-043 | ai:claude
+fn run_session(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let session_cmd = &args.inner;
+    return handle_session_command(session_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SESSION: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "session",
+        help_after: "role",
+        command: <SessionArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: session_policy,
+        run: run_session,
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Session. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn session_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::SessionCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            SessionCommand::Leases { .. } | SessionCommand::Show { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Session
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    }
+}

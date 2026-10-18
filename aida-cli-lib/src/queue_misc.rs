@@ -919,3 +919,58 @@ pub(crate) static HEADLESS: crate::command_registry::CommandReg =
         },
         run: run_headless,
     };
+
+/// Inspect the `aida-worker` shell function's directive channel —
+/// `aida worker directives` lists the FIFO of pending directives the
+/// worker will act on next.
+// trace:TASK-294 | ai:claude
+// trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "worker")]
+#[clap(hide = true)]
+pub(crate) struct WorkerArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::WorkerCommand,
+}
+
+// TASK-294: worker-directive introspection. Dispatched before storage
+// init — reads only `.aida/worker.cmd`, no requirement store. Mirrors
+// the STORY-301 drain dispatch pattern exactly. trace:TASK-294 | ai:claude
+fn run_worker(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <WorkerArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let worker_cmd = &args.inner;
+    return handle_worker_command(worker_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WORKER: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "worker",
+        help_after: "headless",
+        command: <WorkerArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: worker_policy,
+        run: run_worker,
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Write. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn worker_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::WorkerCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <WorkerArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .is_ok_and(|args| matches!(args.inner, WorkerCommand::Directives { .. }));
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    }
+}

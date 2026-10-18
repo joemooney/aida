@@ -1928,21 +1928,15 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
-        Command::Groom { .. } => {
-            unreachable!("groom (assess/intake) is dispatched before storage init")
-        }
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
         Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
         Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
-        Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
-        Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
         Command::Whoami => unreachable!("whoami is dispatched before storage init"),
-        Command::Session(_) => unreachable!("session is dispatched before storage init"),
         // STORY-721: `aida zen <spec>` autonomous implement+ship drive. The
         // introspection subcommands (`zen status` / `finish` / `needs-human`)
         // short-circuit before storage init in `run()`; this arm only sees the
@@ -1999,7 +1993,6 @@ pub(crate) fn handle_git_backend_command(
             let storage = Storage::new(store_path.to_path_buf());
             return run_do_drive(&storage, spec, mode.as_deref(), *force);
         }
-        Command::Worker(_) => unreachable!("worker is dispatched before storage init"),
         Command::List {
             shortcut,
             status,
@@ -7435,9 +7428,6 @@ pub(crate) fn handle_git_backend_command(
             lean,
         } => {
             handle_punt_command(id, category, reason, lean.as_deref(), &backend, store_path)?;
-        }
-        Command::Punts(punts_cmd) => {
-            handle_punts_command(punts_cmd.clone())?;
         }
         Command::Archive {
             id,

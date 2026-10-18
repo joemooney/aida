@@ -123,21 +123,24 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "groom", "--apply"])
             .unwrap()
-            .command,
-        Command::Groom { apply: true, .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { apply: true, .. }
     ));
     // clap visible aliases still parse to Groom
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "intake"])
             .unwrap()
-            .command,
-        Command::Groom { .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { .. }
     ));
     assert!(matches!(
         crate::command_registry::try_parse_from(["aida", "assess"])
             .unwrap()
-            .command,
-        Command::Groom { .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { .. }
     ));
 
     // STORY-708: the pre-clap normalization rewrites the deprecated verbs to
@@ -148,8 +151,9 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Groom { apply: true, .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { apply: true, .. }
     ));
     let (out, dep) = rewrite_groom_alias(&s(&["aida", "intake", "--dry-run"]));
     assert_eq!(out, s(&["aida", "groom", "--dry-run"]));
@@ -157,8 +161,9 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Groom { dry_run: true, .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { dry_run: true, .. }
     ));
     // canonical `groom` is NOT flagged as deprecated.
     let (out, dep) = rewrite_groom_alias(&s(&["aida", "groom"]));
@@ -171,8 +176,9 @@ fn groom_assess_intake_and_advisor_assess_all_reach_groom() {
     assert!(matches!(
         crate::command_registry::try_parse_from(out)
             .unwrap()
-            .command,
-        Command::Groom { dry_run: true, .. }
+            .command
+            .registered::<crate::autopilot_intake::GroomArgs>(),
+        crate::autopilot_intake::GroomArgs { dry_run: true, .. }
     ));
     // unrelated advisor subcommands untouched
     assert_eq!(

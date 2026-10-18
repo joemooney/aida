@@ -50,7 +50,7 @@ def rewrite(text, regs):
     while changed:
         changed = False
         for v, path in regs.items():
-            m = re.search(r"(?<![\w:])(?:crate::cli::|cli::)?Command::" + v + r"\b", text)
+            m = re.search(r"(?<![\w:])(?:crate::cli::|crate::|cli::)?Command::" + v + r"\b", text)
             if not m:
                 continue
             a, b = m.start(), m.end()

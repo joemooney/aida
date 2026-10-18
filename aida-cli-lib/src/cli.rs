@@ -10768,12 +10768,6 @@ pub enum Command {
         lean: Option<String>,
     },
 
-    /// Browse and analyze the local design-fork punt ledger.
-    // trace:STORY-325 | ai:claude
-    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(subcommand, hide = true)]
-    Punts(PuntsCommand),
-
     /// Quantitative effort/load views. Effort buckets are 15m, 1h, 4h,
     /// 1d (8 work-hours), and 1w (5 work-days / 40 work-hours).
     // trace:STORY-451 | ai:codex
@@ -11585,63 +11579,6 @@ pub enum Command {
         dry_run: bool,
     },
 
-    // trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
-    /// GROOM the open specs: fire a cold-boot advisor agent that reads all open
-    /// specs, applies worth-doing judgment, and proposes approve/reject/park/
-    /// queue per spec. GROOM is the advisor's canonical verb for deciding a
-    /// draft's fate (distinct from REVIEW, which is code review of a PR).
-    /// PROPOSE-MODE BY DEFAULT — writes NOTHING until `--apply`. The advisor-side
-    /// analog of `aida burndown run` (which fires implementer agents). Policy
-    /// knobs live under `[intake]` in `.aida/config.toml`; the safe defaults work
-    /// with zero config. Also reachable as `aida advisor assess`; `aida assess`
-    /// and `aida intake` are the retained (deprecated) aliases — both normalize
-    /// to `groom`.
-    ///
-    /// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
-    /// session — same model, less context. Autonomy-eligible is not the same as
-    /// worth-doing; keep the propose-mode review load-bearing before `--apply`.
-    // `assess` / `intake` are the deprecated aliases of `groom` (STORY-708):
-    // kept working for back-compat but hidden from top-level help so only
-    // `groom` (canonical) is advertised. The pre-clap rewrite normalizes both
-    // to `groom` and prints a one-line deprecation hint.
-    // trace:TASK-850 trace:STORY-708 | ai:claude
-    #[command(alias = "assess", alias = "intake")]
-    Groom {
-        /// Execute the proposed approvals + queue groom. Without it, `intake`
-        /// is propose-only (the value judgment stays reviewable). Even with
-        /// `--apply`, the do-not-approve classes and `needs-human`/`strategic`
-        /// specs are fenced out — the agent can never bless them.
-        #[clap(long)]
-        apply: bool,
-        /// Cap the number of drafts the agent may approve this run.
-        #[clap(long, value_name = "N")]
-        max_approvals: Option<usize>,
-        /// Only consider specs carrying this tag.
-        #[clap(long, value_name = "TAG")]
-        only_tag: Option<String>,
-        /// Never consider specs carrying this tag.
-        #[clap(long, value_name = "TAG")]
-        exclude_tag: Option<String>,
-        /// Exclude candidates riskier than this ceiling (low / medium / high /
-        /// unknown). Same risk chip `aida backlog list` shows. Default: medium.
-        #[clap(long, value_name = "MAX", default_value = "medium")]
-        risk: String,
-        /// After queuing, chain straight into a burndown drain (overrides the
-        /// `[intake] on_apply` config to `drain` for this run). Only meaningful
-        /// with `--apply`.
-        #[clap(long)]
-        then_drain: bool,
-        /// Show the candidate fence + the exact `claude -p` command that would
-        /// run, then exit without launching.
-        #[clap(long)]
-        dry_run: bool,
-        /// Claude permission mode for the headless pass. Defaults to
-        /// `bypassPermissions` so the unattended advisor can read/edit without
-        /// stalling on prompts. Override with e.g. `acceptEdits`.
-        #[clap(long)]
-        permission_mode: Option<String>,
-    },
-
     /// Set, show, or clear the current FOCUS — a persistent, per-worktree
     /// context (an epic or spec) that scopes the read commands to that spec's
     /// transitive subtree. The kubectl-namespace / gcloud-config pattern for
@@ -11688,21 +11625,6 @@ pub enum Command {
     // trace:STORY-1226 | ai:claude
     #[clap(subcommand, visible_alias = "cron")]
     Schedule(MaintenanceScheduleCommand),
-
-    /// Manage personas / hats — persistent named contexts that resume
-    /// across shells. `aida role enter <name>` switches; `aida role list`
-    /// shows what's defined for this project. State at `.aida/roles/`.
-    #[clap(subcommand)]
-    Role(RoleCommand),
-
-    /// Inspect or resume past Claude Code sessions in this project,
-    /// enriched with the AIDA role + most-recent spec for each session
-    /// (extracted from the SessionStart hook output stored in each
-    /// session's `.jsonl`). Wrapper around `claude --resume` since
-    /// Claude Code's auto-generated subject can't be customized.
-    // trace:FR-1-043 | ai:claude
-    #[clap(subcommand)]
-    Session(SessionCommand),
 
     /// Install or inspect terminal integration helpers.
     // trace:STORY-995 | ai:codex
@@ -11829,14 +11751,6 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<ZenCommand>,
     },
-
-    /// Inspect the `aida-worker` shell function's directive channel —
-    /// `aida worker directives` lists the FIFO of pending directives the
-    /// worker will act on next.
-    // trace:TASK-294 | ai:claude
-    // trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
-    #[clap(subcommand, hide = true)]
-    Worker(WorkerCommand),
 
     /// Generate, list, and acknowledge per-agent pickup briefs.
     // trace:TASK-492 | ai:codex
@@ -12962,16 +12876,6 @@ pub enum Command {
         cmd: Option<HistoryCommand>,
     },
 
-    /// Work with implementation plans archived under `docs/plans/`:
-    /// `verify` lints a plan against the structured template, `helpers`
-    /// derives a reusable-helpers section from the trace graph, `promote`
-    /// moves Approved -> Planned when a plan file exists, and `fan-out`
-    /// plans a whole set. Run `aida plan --help` for the full subcommand list.
-    // trace:TASK-93 | ai:claude
-    // trace:TASK-778
-    #[clap(subcommand)]
-    Plan(PlanCommand),
-
     /// Import a saved plan file into AIDA conventions: archive it under
     /// `docs/plans/YYYY-MM-DD-<slug>.md` and pin it to its SPEC with a
     /// comment. `--request-review` additionally lands a master-review
@@ -13901,10 +13805,13 @@ mod tests {
     fn session_handoff_standing_orders_parses_add_and_list() {
         let so = |args: &[&str]| -> Option<Vec<String>> {
             let cli = crate::command_registry::try_parse_from(args).unwrap();
-            match cli.command {
-                Command::Session(SessionCommand::Handoff {
-                    standing_orders, ..
-                }) => standing_orders,
+            match cli.command.registered::<crate::agent_launch::SessionArgs>() {
+                crate::agent_launch::SessionArgs {
+                    inner:
+                        SessionCommand::Handoff {
+                            standing_orders, ..
+                        },
+                } => standing_orders,
                 _ => panic!("expected session handoff"),
             }
         };

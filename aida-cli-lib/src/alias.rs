@@ -428,8 +428,9 @@ mod tests {
         assert!(matches!(
             crate::command_registry::try_parse_from(["aida", "intake"])
                 .unwrap()
-                .command,
-            Command::Groom { .. }
+                .command
+                .registered::<crate::autopilot_intake::GroomArgs>(),
+            crate::autopilot_intake::GroomArgs { .. }
         ));
         // TASK-862: the personal-view shortcuts must rewrite exactly as the
         // registry advertises (`mylist` -> `list me`, `myqueue` -> `queue list`).

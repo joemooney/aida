@@ -1405,6 +1405,11 @@ mod bug415_status_count_tests;
 /// `AIDA_TEAM_REQUIRE_USER=1`. Conservative: anything not clearly a read is a
 /// write. trace:STORY-640 | ai:claude
 pub(crate) fn is_write_command(command: &Command) -> bool {
+    // A registered command is a write unless its policy marks it a read.
+    // trace:STORY-1728 | ai:claude
+    if let Command::Registered(invocation) = command {
+        return invocation.policy().stakeholder != crate::stakeholder_role::StakeholderAction::Read;
+    }
     matches!(
         command,
         Command::Do { .. }
@@ -1412,7 +1417,6 @@ pub(crate) fn is_write_command(command: &Command) -> bool {
             | Command::Edit { .. }
             | Command::Comment(_)
             | Command::Queue(_)
-            | Command::Session(_)
             | Command::Defer { .. }
             | Command::Undefer { .. }
             | Command::Archive { .. }

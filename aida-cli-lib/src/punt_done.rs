@@ -967,3 +967,60 @@ pub(crate) fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
 
     Ok(())
 }
+
+/// Browse and analyze the local design-fork punt ledger.
+// trace:STORY-325 | ai:claude
+// trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "punts")]
+#[clap(hide = true)]
+pub(crate) struct PuntsArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PuntsCommand,
+}
+
+// STORY-325: punt ledger CLI command. Dispatched before storage init —
+// it reads only `.aida/punts.jsonl`, no requirement store.
+// trace:STORY-325 | ai:antigravity
+fn run_punts(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let punts_cmd = &args.inner;
+    return handle_punts_command(punts_cmd.clone());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUNTS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "punts",
+        help_after: "punt",
+        command: <PuntsArgs as clap::CommandFactory>::command,
+        phase: crate::command_registry::Phase::PreStore,
+        policy: punts_policy,
+        run: run_punts,
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Write. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn punts_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::PuntsCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            PuntsCommand::List { .. } | PuntsCommand::Read { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    }
+}

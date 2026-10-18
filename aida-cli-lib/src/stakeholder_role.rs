@@ -334,16 +334,7 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             | Command::Findings {
                 cmd: None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }),
             }
-            | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
-            | Command::Worker(WorkerCommand::Directives { .. })
             | Command::Comment(CommentCommand::List { .. })
-            | Command::Role(
-                RoleCommand::List
-                    | RoleCommand::Show { .. }
-                    | RoleCommand::Active
-                    | RoleCommand::Current { .. },
-            )
-            | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
             | Command::Cache(CacheCommand::Status)
             // trace:BUG-1486 | ai:claude — `aida db` gates per-verb: these
             // are pure reads (path/info/status printouts, block
@@ -360,8 +351,6 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
                 subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
             })
             | Command::Usage { .. }
-            | Command::Plan(PlanCommand::Verify { fix: false, .. })
-            | Command::Plan(PlanCommand::Helpers { append: None, .. })
             | Command::Criteria { .. }
     ) {
         StakeholderAction::Read
@@ -372,8 +361,6 @@ pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
             Command::Queue(_) => StakeholderAction::Queue,
             Command::Db(DbCommand::MergeGate) => StakeholderAction::MergeGate,
             Command::Db(_) => StakeholderAction::Database,
-            Command::Session(_) => StakeholderAction::Session,
-            Command::Role(_) => StakeholderAction::Role,
             Command::Rel(_) => StakeholderAction::Relationship,
             Command::Comment(_) => StakeholderAction::Comment,
             Command::Type(_) => StakeholderAction::Type,
