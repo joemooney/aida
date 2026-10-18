@@ -336,6 +336,8 @@ mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
 mod lint_cmd;
+// trace:TASK-1785 | ai:claude — `aida lint constants`.
+mod lint_constants;
 mod load_cmd;
 mod lock_cmd;
 // trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
