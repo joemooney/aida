@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1803",
+  "publishes": [
+    {
+      "at": "2026-10-18T20:53:19.759751467Z",
+      "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-18T20:53:38.218938839Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-18T20:34:15.173081267Z",
+      "spec": "TASK-1803",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2741
+      }
+    },
+    {
+      "ts": "2026-10-18T20:53:19.733964347Z",
+      "spec": "TASK-1803",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4d7bf0116964495af7271a6b3d2786e22ddf26f0",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-18T20:53:38.168958082Z",
+      "spec": "TASK-1803",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4d7bf0116964495af7271a6b3d2786e22ddf26f0",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
