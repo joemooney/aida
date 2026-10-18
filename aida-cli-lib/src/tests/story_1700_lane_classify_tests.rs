@@ -30,6 +30,7 @@ fn class_of(state: &str, exit: &str) -> LaneClass {
 }
 
 // T7.1
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn classify_table_covers_every_exit() {
     let table: &[(&str, &str, LaneClass)] = &[
@@ -56,6 +57,7 @@ fn classify_table_covers_every_exit() {
 }
 
 // T7.2
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn running_state_with_free_lock_is_crashed() {
     let tmp = tempfile::tempdir().unwrap();
@@ -69,6 +71,7 @@ fn running_state_with_free_lock_is_crashed() {
 }
 
 // T7.3
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn held_lock_is_running_whatever_status_says() {
     let tmp = tempfile::tempdir().unwrap();

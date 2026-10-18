@@ -205,8 +205,9 @@ impl Case {
                         override_stale_approval: false,
                         ledger: &ledger,
                         hold: &HoldFacts::of(hold.as_ref(), None),
-                        changed_paths: None,
+                        changed_paths: Some(&[]),
                         ship_gate: None,
+                        hold_clear_gate: None,
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },

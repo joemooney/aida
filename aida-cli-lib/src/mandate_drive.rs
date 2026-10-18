@@ -158,7 +158,10 @@ pub(crate) enum LaneDecision {
 /// command, the resume instruction and the acknowledgement step. The tick
 /// itself never restarts or re-execs anything.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn resolving_action(lane: &Lane) -> (DriveAction, String, String, Option<String>) {
+pub(crate) fn resolving_action(
+    lane: &Lane,
+    awaiting_signoff: &dyn Fn(&str) -> bool,
+) -> (DriveAction, String, String, Option<String>) {
     let handoff = lane.evidence.field("handoff").map(|h| {
         let p = PathBuf::from(h);
         if p.is_absolute() {
@@ -175,7 +178,13 @@ pub(crate) fn resolving_action(lane: &Lane) -> (DriveAction, String, String, Opt
                 .find(|l| l.contains("BLOCKED_ON_HUMAN"))
                 .map(|l| l.trim().to_string())
         });
-    let spec = marker_line.as_deref().and_then(spec_id_in);
+    // A token is the sketch spec only when the store has it awaiting
+    // signoff; `PR-12` or `ADR-77` in the question is just prose.
+    let spec = marker_line.as_deref().and_then(|line| {
+        spec_ids_in(line)
+            .into_iter()
+            .find(|id| awaiting_signoff(id))
+    });
     let handoff_text = handoff
         .as_ref()
         .map(|h| h.display().to_string())
@@ -221,18 +230,47 @@ pub(crate) fn resolving_action(lane: &Lane) -> (DriveAction, String, String, Opt
     (action, command, detail, spec)
 }
 
-/// The first `PREFIX-123` spec id in `text`.
-fn spec_id_in(text: &str) -> Option<String> {
+/// Every `PREFIX-123` token in `text`, in order.
+fn spec_ids_in(text: &str) -> Vec<String> {
     static ID: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = ID.get_or_init(|| regex::Regex::new(r"\b([A-Z][A-Z0-9]*-[0-9]+)\b").unwrap());
-    re.captures(text)
-        .map(|c| c[1].to_string())
-        .filter(|id| !id.starts_with("BLOCKED"))
+    re.captures_iter(text).map(|c| c[1].to_string()).collect()
+}
+
+/// Is `req` a spec awaiting a sketch signoff: open, with a comment naming a
+/// SKETCH newer than its last comment starting `ADVISOR SIGNOFF`?
+// trace:STORY-1700 | ai:claude
+pub(crate) fn awaits_signoff(req: &aida_core::Requirement) -> bool {
+    if crate::is_terminal_status_str(&req.status.to_string()) {
+        return false;
+    }
+    // A ruling starts `ADVISOR SIGNOFF`; "READY for advisor signoff" in a
+    // sketch comment is a request, not a ruling.
+    let is_signoff = |c: &aida_core::Comment| {
+        c.content
+            .trim_start()
+            .to_ascii_uppercase()
+            .starts_with("ADVISOR SIGNOFF")
+    };
+    let last_signoff = req
+        .comments
+        .iter()
+        .filter(|c| is_signoff(c))
+        .map(|c| c.created_at)
+        .max();
+    req.comments.iter().any(|c| {
+        !is_signoff(c)
+            && c.content.to_ascii_uppercase().contains("SKETCH")
+            && last_signoff.is_none_or(|s| c.created_at > s)
+    })
 }
 
 /// The routing for one relay lane, per the R7 classification table.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn plan_relay_lane(lane: &Lane) -> LaneDecision {
+pub(crate) fn plan_relay_lane(
+    lane: &Lane,
+    awaiting_signoff: &dyn Fn(&str) -> bool,
+) -> LaneDecision {
     let key_lane = format!("relay:{}", lane.run_id);
     let head = format!(
         "{}/{}",
@@ -294,7 +332,7 @@ pub(crate) fn plan_relay_lane(lane: &Lane) -> LaneDecision {
             None,
         ),
         LaneClass::Blocked => {
-            let (action, command, detail, spec) = resolving_action(lane);
+            let (action, command, detail, spec) = resolving_action(lane, awaiting_signoff);
             act(action, Route::Advisor, command, detail, spec)
         }
         LaneClass::Crashed => act(
@@ -596,6 +634,10 @@ pub(crate) struct TickInputs<'a> {
     pub inherited_session_env: bool,
     /// `Some(class)` when a spec is always human (operator-only, decide).
     pub spec_always_human: &'a dyn Fn(&str) -> Option<String>,
+    /// Is a spec id the store's spec awaiting a sketch signoff?
+    pub spec_awaiting_signoff: &'a dyn Fn(&str) -> bool,
+    /// Approved specs and who (if anyone) already owns them (AC1).
+    pub unowned_specs: Vec<UnownedSpec>,
 }
 
 /// Test seams.
@@ -811,7 +853,11 @@ pub(crate) fn run_tick(
                     "AIDA drive mandate: no advisor seat is live",
                     "The drive tick keeps doing substrate actions; ships, sketch signoffs and dispatches wait in `aida awaiting` for the next advisor seat.",
                 );
-                per.absence_episode = Some(now);
+                // Only a delivered notice opens the episode: a failed one
+                // retries next tick.
+                if sent.is_ok() {
+                    per.absence_episode = Some(now);
+                }
                 per.actions += 1;
                 tick.row(ActionRow::new(
                     "advisor",
@@ -831,8 +877,13 @@ pub(crate) fn run_tick(
         }
     }
 
-    let mut decisions: Vec<LaneDecision> = inp.lanes.iter().map(plan_relay_lane).collect();
+    let mut decisions: Vec<LaneDecision> = inp
+        .lanes
+        .iter()
+        .map(|l| plan_relay_lane(l, inp.spec_awaiting_signoff))
+        .collect();
     decisions.extend(inp.held_prs.iter().map(plan_held_pr));
+    decisions.extend(inp.unowned_specs.iter().map(plan_unowned_spec));
     let mut acted = 0usize;
     for decision in decisions {
         let planned = match decision {
@@ -1225,37 +1276,189 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
     })
 }
 
+/// STORY-1700: the per-turn notice's stamp for the session's seat grant
+/// (`AIDA_SESSION_GRANT`), read back by [`advisor_live`].
+// trace:STORY-1700 | ai:claude
+pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
+    if let Some(g) = grant
+        .map(str::trim)
+        .filter(|g| uuid::Uuid::parse_str(g).is_ok())
+    {
+        crate::presence::stamp_turn_clock(Some(&grant_turn_key(g)), false, now);
+    }
+}
+
 /// The turn-clock key the per-turn notice stamps for a seat grant.
 pub(crate) fn grant_turn_key(grant_id: &str) -> String {
     format!("grant-{grant_id}")
 }
 
+fn find_spec<'a>(
+    reqs: &'a [aida_core::Requirement],
+    id: &str,
+) -> Option<&'a aida_core::Requirement> {
+    reqs.iter().find(|r| {
+        r.spec_id
+            .as_deref()
+            .is_some_and(|x| x.eq_ignore_ascii_case(id))
+            || r.agreed_id
+                .as_deref()
+                .is_some_and(|x| x.eq_ignore_ascii_case(id))
+    })
+}
+
 /// Is `spec` always human (operator-only, decide mode), now or per the
-/// sticky exclusion ledger?
-fn spec_always_human_live(root: &Path) -> impl Fn(&str) -> Option<String> {
-    let store = crate::load_store_for_lookup(root);
-    let ledger = crate::mandate::mandate_dir()
-        .ok()
-        .and_then(|d| crate::mandate::read_exclusions(&d).ok());
+/// sticky exclusion ledger? The ledger wins: once seen always-human, a spec
+/// stays so even after its tag is removed. `ledger = None` (unreadable)
+/// fails closed.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn spec_always_human_from<'a>(
+    reqs: &'a [aida_core::Requirement],
+    ledger: Option<&'a BTreeMap<String, crate::mandate::Exclusion>>,
+) -> impl Fn(&str) -> Option<String> + 'a {
     move |id: &str| {
+        let Some(ledger) = ledger else {
+            return Some("unknown (the exclusion ledger is unreadable)".into());
+        };
         if let Some(e) = ledger
-            .as_ref()
-            .and_then(|l| l.get(&id.to_ascii_uppercase()))
+            .get(&id.to_ascii_uppercase())
             .filter(|e| e.always_human)
         {
             return Some(e.class.clone());
         }
-        store.as_ref().and_then(|s| {
-            s.requirements
-                .iter()
-                .find(|r| {
-                    r.spec_id
-                        .as_deref()
-                        .is_some_and(|x| x.eq_ignore_ascii_case(id))
-                })
-                .and_then(crate::mandate::always_human_class)
-        })
+        find_spec(reqs, id).and_then(crate::mandate::always_human_class)
     }
+}
+
+/// Is `id` a store spec awaiting a sketch signoff ([`awaits_signoff`])?
+pub(crate) fn spec_awaiting_signoff_from(
+    reqs: &[aida_core::Requirement],
+) -> impl Fn(&str) -> bool + '_ {
+    move |id: &str| find_spec(reqs, id).is_some_and(awaits_signoff)
+}
+
+/// An approved spec and what already owns it (AC1's dispatch lane).
+// trace:STORY-1700 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnownedSpec {
+    pub id: String,
+    pub title: String,
+    /// A live claim or spec-scoped session lease.
+    pub live_claim: bool,
+    /// A local or remote branch named for the spec.
+    pub branch: bool,
+    /// An open PR for the spec; `None` = the forge could not say.
+    pub open_pr: Option<bool>,
+}
+
+/// The routing for one approved spec: unowned (no live claim, no branch,
+/// no open PR) is a dispatch for the advisor; an unknown PR state is
+/// skipped once with the reason.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
+    let lane = format!("spec:{}", s.id);
+    if s.live_claim || s.branch || s.open_pr == Some(true) {
+        return LaneDecision::None;
+    }
+    if s.open_pr.is_none() {
+        return LaneDecision::Skip {
+            lane,
+            subject: s.id.clone(),
+            head: "approved".into(),
+            why: "the forge could not say whether it has an open PR".into(),
+        };
+    }
+    LaneDecision::Act(Planned {
+        lane,
+        subject: s.id.clone(),
+        action: DriveAction::Redispatch,
+        route: Route::Advisor,
+        head: "approved".into(),
+        command: format!(
+            "aida agent new claude --spec {} --bg (a separate session, never an in-session subagent)",
+            s.id
+        ),
+        detail: format!(
+            "{} is approved and unowned: no live claim, no branch, no open PR ({})",
+            s.id, s.title
+        ),
+        spec: Some(s.id.clone()),
+        forced_gate: None,
+    })
+}
+
+/// Does a branch name carry `id` as a whole token (`claude/story-17` but
+/// not `story-170`)?
+fn branch_names_spec(branch: &str, id: &str) -> bool {
+    let b = branch.to_ascii_lowercase();
+    let id = id.to_ascii_lowercase();
+    b.match_indices(&id).any(|(i, _)| {
+        let before = b[..i].chars().last();
+        let after = b[i + id.len()..].chars().next();
+        !before.is_some_and(|c| c.is_ascii_alphanumeric())
+            && !after.is_some_and(|c| c.is_ascii_digit())
+    })
+}
+
+/// Approved, non-epic specs from the store with their ownership facts.
+fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<UnownedSpec> {
+    let approved: Vec<&aida_core::Requirement> = reqs
+        .iter()
+        .filter(|r| matches!(r.status, aida_core::RequirementStatus::Approved))
+        .filter(|r| !matches!(r.req_type, aida_core::RequirementType::Epic))
+        .filter(|r| r.spec_id.is_some())
+        .collect();
+    if approved.is_empty() {
+        return Vec::new();
+    }
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    scrub(&mut cmd);
+    let branches: Vec<String> = cmd
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/heads",
+            "refs/remotes",
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let leases = crate::leases::list_leases(root);
+    let live = crate::process_probe::probe_live_claude_sessions();
+    let is_live = crate::leases::lease_is_live(&live, Utc::now());
+    let ids: Vec<String> = approved.iter().filter_map(|r| r.spec_id.clone()).collect();
+    let open = crate::db_reconcile::specs_with_open_prs(root, ids.clone());
+    approved
+        .iter()
+        .filter_map(|r| {
+            let id = r.spec_id.clone()?;
+            let names: Vec<&str> = std::iter::once(id.as_str())
+                .chain(r.agreed_id.as_deref())
+                .collect();
+            Some(UnownedSpec {
+                live_claim: crate::leases::live_spec_claim_by_other(
+                    &leases, None, &names, &is_live,
+                )
+                .is_some(),
+                branch: branches
+                    .iter()
+                    .any(|b| names.iter().any(|n| branch_names_spec(b, n))),
+                open_pr: open.as_ref().map(|m| {
+                    m.keys()
+                        .any(|k| names.iter().any(|n| k.eq_ignore_ascii_case(n)))
+                }),
+                title: r.title.clone(),
+                id,
+            })
+        })
+        .collect()
 }
 
 /// One live tick for the main checkout.
@@ -1272,7 +1475,12 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
         });
     }
     let principal = crate::current_user_id(None);
-    let always_human = spec_always_human_live(main_root);
+    let reqs: Vec<aida_core::Requirement> = crate::load_store_for_lookup(main_root)
+        .map(|s| s.requirements)
+        .unwrap_or_default();
+    let ledger = crate::mandate::read_exclusions(&dir).ok();
+    let always_human = spec_always_human_from(&reqs, ledger.as_ref());
+    let awaiting = spec_awaiting_signoff_from(&reqs);
     let inputs = TickInputs {
         project_root: main_root,
         mandate_dir: &dir,
@@ -1284,6 +1492,8 @@ pub(crate) fn run_tick_live(main_root: &Path, inherited_session_env: bool) -> Re
         advisor_live: advisor_live(main_root, now),
         inherited_session_env,
         spec_always_human: &always_human,
+        spec_awaiting_signoff: &awaiting,
+        unowned_specs: collect_unowned_specs(main_root, &reqs),
     };
     Ok(run_tick(
         &inputs,
@@ -1615,11 +1825,20 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
             }
             // Preview: what each lane would route, changing nothing.
             let now = Utc::now();
+            let reqs: Vec<aida_core::Requirement> = crate::load_store_for_lookup(&root)
+                .map(|s| s.requirements)
+                .unwrap_or_default();
+            let awaiting = spec_awaiting_signoff_from(&reqs);
             let mut decisions: Vec<LaneDecision> = crate::fleet_lanes::classify_lanes(&root, now)
                 .iter()
-                .map(plan_relay_lane)
+                .map(|l| plan_relay_lane(l, &awaiting))
                 .collect();
             decisions.extend(collect_held_prs(&root).iter().map(plan_held_pr));
+            decisions.extend(
+                collect_unowned_specs(&root, &reqs)
+                    .iter()
+                    .map(plan_unowned_spec),
+            );
             let mut shown = 0;
             for d in &decisions {
                 match d {

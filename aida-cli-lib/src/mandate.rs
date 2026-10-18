@@ -860,8 +860,32 @@ pub(crate) struct ShipCheck<'a> {
     pub changed_paths: Option<&'a [String]>,
     /// STORY-1700: why `ship` is a human gate right now (listed in
     /// `[mandate.human_gates]`, or the gate config is unreadable); `None` =
-    /// not gated. Read only by [`ship_decision`].
+    /// not gated. Read by [`ship_decision`] and [`rework_release_decision`].
     pub ship_gate: Option<String>,
+    /// STORY-1700: why `hold-clear` is a human gate right now; `None` = not
+    /// gated. Read by [`rework_release_decision`].
+    pub hold_clear_gate: Option<String>,
+}
+
+/// STORY-1700 (R1): the gate checks every mandate path runs before hold
+/// cover. A PR that touches the mandate or its gates, or whose files cannot
+/// be resolved, is never shipped nor released under a mandate; nor is any PR
+/// while one of `gates` (a human gate in force) names why.
+// trace:STORY-1700 | ai:claude
+fn gate_checks(
+    c: &ShipCheck<'_>,
+    gates: &[&Option<String>],
+) -> std::result::Result<(), MandateRefusal> {
+    let paths = c
+        .changed_paths
+        .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
+    if let Some(path) = crate::mandate_gates::touches_gates(paths) {
+        return Err(MandateRefusal::TouchesGates { path });
+    }
+    if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
+        return Err(MandateRefusal::HumanGated { why: why.clone() });
+    }
+    Ok(())
 }
 
 /// STORY-1698: the merge-hold a mandate would release. A mandate only ever
@@ -1037,19 +1061,9 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
 /// every input is gathered by the caller, at the instant of the decision.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, MandateRefusal> {
-    // STORY-1700 (R1): a PR that touches the mandate or its gates, or whose
-    // files cannot be resolved, never ships under a mandate; nor does any PR
-    // while `ship` is a human gate. Checked before hold cover, on every
-    // mandate ship path. trace:STORY-1700 | ai:claude
-    let paths = c
-        .changed_paths
-        .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
-    if let Some(path) = crate::mandate_gates::touches_gates(paths) {
-        return Err(MandateRefusal::TouchesGates { path });
-    }
-    if let Some(why) = &c.ship_gate {
-        return Err(MandateRefusal::HumanGated { why: why.clone() });
-    }
+    // STORY-1700 (R1): checked before hold cover, on every mandate ship
+    // path. trace:STORY-1700 | ai:claude
+    gate_checks(c, &[&c.ship_gate])?;
     let mandate = hold_cover(c)?;
     let shipper = &c.policy.shipper;
     if !crate::review_authority::has_identity_anchor(shipper) {
@@ -1140,6 +1154,10 @@ pub(crate) fn rework_release_decision(
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
     }
+    // STORY-1700 (R1): a released rework hold lets the PR ship, so the
+    // release takes the same gate checks as a mandate ship, plus hold-clear.
+    // trace:STORY-1700 | ai:claude
+    gate_checks(c, &[&c.ship_gate, &c.hold_clear_gate])?;
     let mandate = hold_cover(c)?;
     if !mandate.include_supervised {
         return Err(MandateRefusal::SupervisedNotIncluded {

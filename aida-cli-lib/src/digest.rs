@@ -1309,7 +1309,9 @@ pub fn render_markdown(report: &DigestReport, opts: &DigestOptions) -> String {
     }
 
     // trace:STORY-1700 | ai:claude
-    if !report.mandate_driven.is_empty() && opts.audience.keep_spec_ids() {
+    // The lines name mandates, outcomes and actions — never a spec id — so
+    // the section shows for every audience, the default included.
+    if !report.mandate_driven.is_empty() {
         s.push_str("## Mandate-driven\n\n");
         for line in &report.mandate_driven {
             s.push_str(&format!("- {line}\n"));
@@ -2061,6 +2063,36 @@ mod tests {
         opts.audience = DigestAudience::Team;
         let team = render_markdown(&report, &opts);
         assert!(team.contains("STORY-50"));
+    }
+
+    // STORY-1700: the drive ledger's section carries no spec ids, so the
+    // default (customer) audience shows it too.
+    // trace:STORY-1700.Audit | ai:claude
+    #[test]
+    fn mandate_driven_section_shows_for_every_audience() {
+        let now = Utc::now();
+        let mut opts = opts_at(now - chrono::Duration::days(7), now);
+        let report = DigestReport {
+            regeneration: None,
+            since: opts.since,
+            until: opts.until,
+            releases: vec![],
+            completed: vec![],
+            cluster_prs: vec![],
+            strategic: vec![],
+            pivots: vec![],
+            next: NextSection::default(),
+            plans: vec![],
+            process: vec![],
+            capabilities: CapabilitiesReport::default(),
+            mandate_driven: vec!["mandate 6f1c1d6e: 2 routed (by action: 2 dispatch)".into()],
+        };
+        for audience in [DigestAudience::Customer, DigestAudience::Team] {
+            opts.audience = audience;
+            let md = render_markdown(&report, &opts);
+            assert!(md.contains("## Mandate-driven"), "{md}");
+            assert!(md.contains("- mandate 6f1c1d6e: 2 routed"), "{md}");
+        }
     }
 
     #[test]

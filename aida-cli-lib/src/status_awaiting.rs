@@ -1101,32 +1101,55 @@ pub(crate) fn emit_notice_time_line() {
     // per seat when it expires or is stopped. The grant's turn stamp lets the
     // drive tick tell whether an advisor seat is live. Fail-open.
     // trace:STORY-1700 | ai:claude
-    if let Some(grant) = std::env::var(crate::seat_authority::GRANT_ENV)
-        .ok()
-        .filter(|g| uuid::Uuid::parse_str(g.trim()).is_ok())
+    let grant = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+    crate::mandate_drive::stamp_grant_turn(grant.as_deref(), now.with_timezone(&chrono::Utc));
+    if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc), session_id.as_deref())
     {
-        presence::stamp_turn_clock(
-            Some(&crate::mandate_drive::grant_turn_key(grant.trim())),
-            false,
-            now.with_timezone(&chrono::Utc),
-        );
-    }
-    if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc)) {
         println!("{line}");
     }
+}
+
+/// STORY-1700: whose expired/stopped line a `.seen` marker records: the
+/// seat grant, else the harness session, else the role (else `default`), so
+/// two role-less sessions each see the line once.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn mandate_seen_key(
+    grant: Option<&str>,
+    session_id: Option<&str>,
+    role: Option<&str>,
+) -> String {
+    let some = |v: Option<&str>| {
+        v.map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+    };
+    if let Some(g) = some(grant).filter(|g| uuid::Uuid::parse_str(g).is_ok()) {
+        return format!("grant-{g}");
+    }
+    if let Some(s) = some(session_id) {
+        return format!("session-{s}");
+    }
+    some(role)
+        .map(|r| canonical_role_name(&r))
+        .unwrap_or_else(|| "default".to_string())
 }
 
 /// STORY-1700: the per-turn mandate line for this seat, if any. The gates
 /// are read only while a mandate is active (one `git show`).
 // trace:STORY-1700 | ai:claude
-fn mandate_notice_line(now: chrono::DateTime<chrono::Utc>) -> Option<String> {
+pub(crate) fn mandate_notice_line(
+    now: chrono::DateTime<chrono::Utc>,
+    session_id: Option<&str>,
+) -> Option<String> {
     let dir = crate::mandate::mandate_dir().ok()?;
     let state = crate::mandate::current_state();
-    let seat = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| canonical_role_name(&s))
-        .unwrap_or_else(|| "default".to_string());
+    let seat = mandate_seen_key(
+        std::env::var(crate::seat_authority::GRANT_ENV)
+            .ok()
+            .as_deref(),
+        session_id,
+        std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
+    );
     let gates = match &state {
         crate::mandate::MandateState::Active(_) => {
             crate::mandate_gates::describe(crate::find_main_worktree_root().ok().as_deref())

@@ -262,7 +262,7 @@ sites = 1
 # trace:STORY-1700 | ai:claude
 [readers."aida-cli-lib/src/mandate_gates.rs"]
 channels = ["trusted", "home", "probe"]
-sites = 3
+sites = 4
 
 [readers."aida-cli-lib/src/maintenance_schedule.rs"]
 channels = ["worktree", "prose"]

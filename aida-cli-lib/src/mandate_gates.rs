@@ -231,20 +231,109 @@ pub(crate) fn gate_reason(
     }
 }
 
-/// For the ship path: why `ship` is gated right now in the main checkout
-/// at `main_worktree`, if it is.
+const UNREADABLE: &str = "unreadable (every action gated)";
+const DESCRIBE_CACHE: &str = "mandate-gates-cache.json";
+
+/// The `origin/main` commit id, read from the ref files without spawning
+/// git when it can be (the per-turn notice's latency budget), else through
+/// one `git rev-parse`.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn ship_gate(main_worktree: &Path) -> Option<String> {
-    let gates = load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
-    gate_reason(&gates, GateOp::Ship)
+pub(crate) fn origin_main_oid(project_root: &Path) -> Option<String> {
+    let dot_git = project_root.join(".git");
+    let git_dir = if dot_git.is_dir() {
+        Some(dot_git)
+    } else {
+        std::fs::read_to_string(&dot_git)
+            .ok()
+            .and_then(|t| {
+                t.trim()
+                    .strip_prefix("gitdir:")
+                    .map(|p| p.trim().to_string())
+            })
+            .map(|p| project_root.join(p))
+    };
+    let common = git_dir.map(|d| match std::fs::read_to_string(d.join("commondir")) {
+        Ok(rel) => d.join(rel.trim()),
+        Err(_) => d,
+    });
+    let is_oid = |s: &str| matches!(s.len(), 40 | 64) && s.bytes().all(|b| b.is_ascii_hexdigit());
+    if let Some(common) = common {
+        if let Ok(text) = std::fs::read_to_string(common.join("refs/remotes/origin/main")) {
+            let oid = text.trim();
+            if is_oid(oid) {
+                return Some(oid.to_string());
+            }
+        }
+        if let Ok(packed) = std::fs::read_to_string(common.join("packed-refs")) {
+            if let Some(oid) = packed.lines().find_map(|l| {
+                l.strip_suffix(" refs/remotes/origin/main")
+                    .filter(|o| is_oid(o))
+            }) {
+                return Some(oid.to_string());
+            }
+        }
+    }
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["rev-parse", "--verify", "--quiet", "origin/main^{commit}"])
+        .output()
+        .ok()?;
+    let oid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (out.status.success() && is_oid(&oid)).then_some(oid)
 }
 
-/// The human gates in force, for display.
+/// What a cached description is keyed on: the committed layer's commit and
+/// the operator layer's modification time.
+fn describe_key(project_root: &Path) -> Option<String> {
+    let oid = origin_main_oid(project_root)?;
+    let home = crate::aida_home_dir()?.join(".aida").join("config.toml");
+    let mtime = match std::fs::metadata(&home) {
+        Ok(meta) => meta
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_nanos()
+            .to_string(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => "absent".into(),
+        Err(_) => return None,
+    };
+    Some(format!("{oid}:{mtime}"))
+}
+
+/// The human gates in force, for display. Cached in
+/// `.aida/mandate-gates-cache.json` keyed on [`describe_key`], so the
+/// per-turn notice spawns no git while neither layer changes; an unreadable
+/// layer is never cached.
 // trace:STORY-1700 | ai:claude
 pub(crate) fn describe(main_worktree: Option<&Path>) -> String {
-    match main_worktree.map(load_human_gates) {
-        Some(Ok(g)) => g.describe(),
-        Some(Err(_)) | None => "unreadable (every action gated)".into(),
+    let Some(root) = main_worktree else {
+        return UNREADABLE.into();
+    };
+    let key = describe_key(root);
+    let cache = root.join(".aida").join(DESCRIBE_CACHE);
+    if let Some(key) = &key {
+        let hit = std::fs::read(&cache)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+            .filter(|v| v["key"].as_str() == Some(key.as_str()))
+            .and_then(|v| v["describe"].as_str().map(str::to_string));
+        if let Some(text) = hit {
+            return text;
+        }
+    }
+    match load_human_gates(root) {
+        Ok(g) => {
+            let text = g.describe();
+            if let Some(key) = key {
+                let body = serde_json::json!({ "key": key, "describe": text });
+                let tmp = cache.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+                if std::fs::write(&tmp, body.to_string()).is_ok() {
+                    let _ = std::fs::rename(&tmp, &cache);
+                }
+            }
+            text
+        }
+        Err(_) => UNREADABLE.into(),
     }
 }
 
@@ -258,6 +347,9 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/mandate_gates.rs",
     "aida-cli-lib/src/mandate_drive.rs",
     "aida-cli-lib/src/mandate_ship.rs",
+    "aida-cli-lib/src/mandate_traces.rs",
+    "aida-cli-lib/src/rework_hold_release.rs",
+    "aida-cli-lib/src/review_authority.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
     "aida-cli-lib/src/seat_authority.rs",
     "aida-cli-lib/src/pr_ship.rs",

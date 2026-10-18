@@ -442,9 +442,13 @@ each held PR:
   notifying you, and ledgering every decision.
 - **Seat actions it routes to the advisor:** shipping an approved held PR,
   signing off the sketch a blocked relay waits on, answering a blocked relay's
-  question, and re-dispatching a crashed, capped or slot-starved run. Each one
-  arrives once as a due item in `aida awaiting` and an advisor mail carrying
-  the exact command.
+  question, re-dispatching a crashed, capped or slot-starved run, and
+  dispatching a fixer for an approved spec nobody owns (no live claim, no
+  branch, no open PR). Each one arrives once as a due item in
+  `aida awaiting` and an advisor mail carrying the exact command. A blocked
+  relay counts as a sketch signoff only when its question names a spec that
+  is open with a sketch comment newer than its last `ADVISOR SIGNOFF`;
+  otherwise it is a question to answer.
 - **What it sends to you:** an advisor-seat run, a run stopped on API credits,
   and anything behind a human gate.
 
@@ -469,8 +473,10 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
 - If the committed layer cannot be read, every action is gated.
 - A PR that changes `.aida/config.toml` or the mandate code
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
+  `mandate_traces.rs`, `rework_hold_release.rs`, `review_authority.rs`,
   `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`) never
-  ships under a mandate.
+  ships under a mandate, and a mandate never releases its rework hold either.
+  Listing `ship` or `hold-clear` stops mandate rework releases too.
 - `[mandate.drive] max_actions_per_tick` (default 10) is honoured from
   `~/.aida/config.toml` only.
 - Drive never clears holds; `hold-clear` exists so you can state that

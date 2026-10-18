@@ -65,6 +65,8 @@ struct Fake {
     rows: Vec<(String, ActionRow)>,
     reaped: usize,
     fail_due_for: Option<String>,
+    /// Fail this many operator notices before delivering.
+    fail_notices: usize,
 }
 
 impl DriveEffects for Fake {
@@ -76,6 +78,10 @@ impl DriveEffects for Fake {
         Ok(())
     }
     fn notify_operator(&mut self, title: &str, body: &str) -> Result<String> {
+        if self.fail_notices > 0 {
+            self.fail_notices -= 1;
+            anyhow::bail!("notify command exited 1");
+        }
         self.notices.push((title.into(), body.into()));
         Ok("sent".into())
     }
@@ -89,6 +95,14 @@ impl DriveEffects for Fake {
 
 fn no_spec(_: &str) -> Option<String> {
     None
+}
+
+fn no_signoff(_: &str) -> bool {
+    false
+}
+
+fn story_9_awaits(id: &str) -> bool {
+    id == "STORY-9"
 }
 
 struct Fixture {
@@ -127,6 +141,8 @@ impl Fixture {
             advisor_live: true,
             inherited_session_env: false,
             spec_always_human: &no_spec,
+            spec_awaiting_signoff: &no_signoff,
+            unowned_specs: Vec::new(),
         }
     }
 }
@@ -145,6 +161,8 @@ fn outcomes(report: &TickReport) -> Vec<(String, Outcome)> {
 
 // ── T7.4: blocked relays ────────────────────────────────────────────────────
 
+// trace:STORY-1700.ace038d6 | ai:claude
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn blocked_due_item_carries_resolving_action_and_no_restart() {
     let fx = Fixture::new();
@@ -170,11 +188,9 @@ fn blocked_due_item_carries_resolving_action_and_no_restart() {
         &[("state", "blocked"), ("exit", "3")],
     )];
     let mut fake = Fake::default();
-    let report = run_tick(
-        &fx.inputs(&now_clock, lanes, "joe"),
-        &TickHooks::default(),
-        &mut fake,
-    );
+    let mut inputs = fx.inputs(&now_clock, lanes, "joe");
+    inputs.spec_awaiting_signoff = &story_9_awaits;
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
 
     assert_eq!(fake.due.len(), 1, "{report:?}");
     let item = &fake.due[0].1;
@@ -212,7 +228,7 @@ fn blocked_due_item_carries_resolving_action_and_no_restart() {
 fn blocked_without_a_spec_asks_for_an_answer() {
     let tmp = tempfile::tempdir().unwrap();
     let l = lane("r", LaneClass::Blocked, tmp.path(), &[("state", "blocked")]);
-    let (action, command, _, spec) = resolving_action(&l);
+    let (action, command, _, spec) = resolving_action(&l, &no_signoff);
     assert_eq!(action, DriveAction::Answer);
     assert_eq!(spec, None);
     assert!(command.contains("answer the question in"));
@@ -220,6 +236,7 @@ fn blocked_without_a_spec_asks_for_an_answer() {
 
 // ── T7.5: two concurrent ticks ──────────────────────────────────────────────
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn concurrent_ticks_one_acts_other_skips() {
     let fx = Fixture::new();
@@ -317,6 +334,7 @@ fn concurrent_ticks_one_acts_other_skips() {
 
 // ── T7.6: inherited session env ─────────────────────────────────────────────
 
+// trace:STORY-1700.ac8eabb8 | ai:claude
 #[test]
 fn inherited_grant_is_scrubbed_and_ignored() {
     let run = |inherited: bool| {
@@ -378,6 +396,7 @@ fn three_lanes(fx: &Fixture) -> Vec<Lane> {
         .collect()
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn mandate_stopped_mid_tick_refuses_remaining() {
     let fx = Fixture::new();
@@ -416,6 +435,7 @@ fn mandate_stopped_mid_tick_refuses_remaining() {
     );
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn mandate_expired_mid_tick_refuses_remaining() {
     let fx = Fixture::new();
@@ -446,6 +466,7 @@ fn mandate_expired_mid_tick_refuses_remaining() {
 
 // ── T7.8: dedup across ticks ────────────────────────────────────────────────
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn due_items_dedup_across_two_ticks() {
     let fx = Fixture::new();
@@ -527,6 +548,7 @@ fn repo_with_committed_gates(ops: &str) -> tempfile::TempDir {
     repo
 }
 
+// trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn gate_removed_in_working_tree_still_enforced_from_origin_main() {
     let repo = repo_with_committed_gates("[\"dispatch\"]");
@@ -567,6 +589,7 @@ fn gate_removed_in_working_tree_still_enforced_from_origin_main() {
     assert_eq!(fake.notices.len(), 1);
 }
 
+// trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn a_tree_without_config_is_an_empty_committed_layer() {
     let repo = tempfile::tempdir().unwrap();
@@ -584,6 +607,7 @@ fn a_tree_without_config_is_an_empty_committed_layer() {
     );
 }
 
+// trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn unreadable_gate_blob_gates_everything() {
     let not_a_repo = tempfile::tempdir().unwrap();
@@ -636,9 +660,11 @@ fn ship_check<'a>(
         hold,
         changed_paths,
         ship_gate: None,
+        hold_clear_gate: None,
     }
 }
 
+// trace:STORY-1700.ac8eabb8 | ai:claude
 #[test]
 fn pr_touching_gate_paths_is_gated() {
     let tmp = tempfile::tempdir().unwrap();
@@ -650,6 +676,9 @@ fn pr_touching_gate_paths_is_gated() {
         ".aida/config.toml",
         "aida-cli-lib/src/mandate.rs",
         "aida-cli-lib/src/mandate_ship.rs",
+        "aida-cli-lib/src/mandate_traces.rs",
+        "aida-cli-lib/src/rework_hold_release.rs",
+        "aida-cli-lib/src/review_authority.rs",
     ] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
@@ -686,6 +715,7 @@ fn pr_touching_gate_paths_is_gated() {
     assert!(p.forced_gate.unwrap().contains(".aida/config.toml"));
 }
 
+// trace:STORY-1700.ac8eabb8 | ai:claude
 #[test]
 fn unresolved_changed_paths_refuses() {
     let tmp = tempfile::tempdir().unwrap();
@@ -719,6 +749,8 @@ fn unresolved_changed_paths_refuses() {
     assert_eq!(plan_held_pr(&quiet), LaneDecision::None);
 }
 
+// trace:STORY-1700.ace038d6 | ai:claude
+// trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn an_approved_held_pr_routes_a_ship_to_the_advisor() {
     let fx = Fixture::new();
@@ -763,6 +795,7 @@ fn an_approved_held_pr_routes_a_ship_to_the_advisor() {
 
 // ── T7.12: principal under the scheduler ────────────────────────────────────
 
+// trace:STORY-1700.ac8eabb8 | ai:claude
 #[test]
 fn principal_mismatch_warns_and_does_nothing() {
     let fx = Fixture::new();
@@ -832,6 +865,7 @@ fn write_record(dir: &Path, body: &serde_json::Value) {
     f.write_all(body.to_string().as_bytes()).unwrap();
 }
 
+// trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn unknown_scope_string_fails_closed() {
     for bogus in ["relay-restart", "bogus"] {
@@ -856,6 +890,7 @@ fn unknown_scope_string_fails_closed() {
     }
 }
 
+// trace:STORY-1700.ac2ed84c | ai:claude
 #[test]
 fn unknown_human_gate_op_is_config_error() {
     use crate::mandate_gates::parse_layer;
@@ -896,6 +931,7 @@ fn unknown_human_gate_op_is_config_error() {
 
 // ── T7.14: kept from revision 1 ─────────────────────────────────────────────
 
+// trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn a_story_1698_record_round_trips_unchanged() {
     let old = serde_json::json!({
@@ -917,6 +953,7 @@ fn a_story_1698_record_round_trips_unchanged() {
     assert_eq!(back, old, "no new keys are written for a ship-held record");
 }
 
+// trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
     /// The record shape #2687 shipped (no `scopes`, no `kind`).
@@ -947,6 +984,7 @@ fn a_drive_record_loads_in_the_story_1698_loader_as_ship_held() {
     );
 }
 
+// trace:STORY-1700.ace038d6 | ai:claude
 #[test]
 fn include_supervised_defaults_on_with_drive() {
     use crate::mandate::drive_includes_supervised as inc;
@@ -977,6 +1015,7 @@ fn include_supervised_defaults_on_with_drive() {
     assert!(parse(&["aida", "fleet", "drive", "--tick"]).is_ok());
 }
 
+// trace:STORY-1700.ac8eabb8 | ai:claude
 #[test]
 fn drive_start_and_stop_refuse_non_tty() {
     let dir = tempfile::tempdir().unwrap();
@@ -996,6 +1035,7 @@ fn drive_start_and_stop_refuse_non_tty() {
     assert!(crate::mandate::stop(dir.path(), &no_tty, "joe", now_clock()).is_err());
 }
 
+// trace:STORY-1700.Durability | ai:claude
 #[test]
 fn line_and_notice_lines() {
     let dir = tempfile::tempdir().unwrap();
@@ -1031,6 +1071,7 @@ fn line_and_notice_lines() {
     assert!(warnings.is_empty(), "{warnings:?}");
 }
 
+// trace:STORY-1700.Durability | ai:claude
 #[test]
 fn handoff_show_order_is_mandate_then_standing_orders_then_handoff() {
     let out = crate::seat_rotation::compose_handoff_show_with_mandate(
@@ -1049,6 +1090,7 @@ fn handoff_show_order_is_mandate_then_standing_orders_then_handoff() {
     );
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn one_operator_escalation_per_absence_episode() {
     let fx = Fixture::new();
@@ -1068,6 +1110,7 @@ fn one_operator_escalation_per_absence_episode() {
     assert_eq!(fake.notices.len(), 2, "a new episode notifies again");
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn mandate_drive_active_predicate_field_type_checks() {
     use crate::schedule_predicate::parse;
@@ -1078,6 +1121,7 @@ fn mandate_drive_active_predicate_field_type_checks() {
     assert!(parse("mandate.drive_active == 3").is_err());
 }
 
+// trace:STORY-1700.Audit | ai:claude
 #[test]
 fn mandate_drive_action_is_emitted_for_every_outcome() {
     let fx = Fixture::new();
@@ -1150,6 +1194,7 @@ fn mandate_drive_action_is_emitted_for_every_outcome() {
     assert!(ledger_rows(root.path(), "other").is_empty());
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn budget_caps_actions_per_tick() {
     let fx = Fixture::new();
@@ -1219,6 +1264,7 @@ fn signal_stops_and_duplicate_launches_are_skipped_once() {
     assert!(second.rows.is_empty());
 }
 
+// trace:STORY-1700.acb260c7 | ai:claude
 #[test]
 fn advisor_seat_and_credit_lanes_route_to_the_operator() {
     let fx = Fixture::new();
@@ -1274,4 +1320,469 @@ fn no_drive_mandate_means_an_idle_tick() {
     );
     assert_eq!(report.idle.as_deref(), Some("no active drive mandate"));
     assert!(report.rows.is_empty() && fake.due.is_empty() && fake.notices.is_empty());
+}
+
+// ── Round 2 (PR #2725 STRICT review) ────────────────────────────────────────
+
+fn unowned(id: &str) -> UnownedSpec {
+    UnownedSpec {
+        id: id.into(),
+        title: format!("{id} title"),
+        live_claim: false,
+        branch: false,
+        open_pr: Some(false),
+    }
+}
+
+// Finding 1: approved unowned specs are a dispatch lane.
+// trace:STORY-1700.ace038d6 | ai:claude
+// trace:STORY-1700.acb260c7 | ai:claude
+#[test]
+fn unowned_approved_spec_routes_a_dispatch_to_the_advisor() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut claimed = unowned("TASK-2");
+    claimed.live_claim = true;
+    let mut branched = unowned("TASK-3");
+    branched.branch = true;
+    let mut pr = unowned("TASK-4");
+    pr.open_pr = Some(true);
+    let mut unknown = unowned("TASK-5");
+    unknown.open_pr = None;
+    let specs = vec![unowned("TASK-1"), claimed, branched, pr, unknown];
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.unowned_specs = specs.clone();
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert_eq!(fake.due.len(), 1, "{report:?}");
+    let item = &fake.due[0].1;
+    assert_eq!(item.action, DriveAction::Redispatch);
+    assert_eq!(item.lane, "spec:TASK-1");
+    assert!(item
+        .command
+        .contains("aida agent new claude --spec TASK-1 --bg"));
+    assert!(item.command.contains("never an in-session subagent"));
+    assert_eq!(
+        outcomes(&report),
+        vec![
+            ("spec:TASK-1".into(), Outcome::Routed),
+            ("spec:TASK-5".into(), Outcome::Skipped),
+        ]
+    );
+    // Deduplicated across ticks.
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.unowned_specs = specs;
+    let again = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(again.rows.is_empty());
+    assert_eq!(fake.due.len(), 1);
+}
+
+// trace:STORY-1700.ace038d6 | ai:claude
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn a_dispatch_gate_or_an_operator_only_spec_keeps_the_dispatch_human() {
+    // `dispatch` in [mandate.human_gates].
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.unowned_specs = vec![unowned("TASK-1")];
+    inputs.gates = Ok(HumanGates {
+        ops: [GateOp::Dispatch].into_iter().collect(),
+        ..Default::default()
+    });
+    let mut fake = Fake::default();
+    let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+    assert!(fake.due.is_empty());
+    assert_eq!(fake.notices.len(), 1);
+    assert_eq!(
+        outcomes(&report),
+        vec![("spec:TASK-1".into(), Outcome::Gated)]
+    );
+    // An operator-only or decide-mode spec, with no gates configured.
+    for class in ["operator-only", "decide-mode"] {
+        let fx = Fixture::new();
+        drive_mandate(fx.mandates.path(), "joe");
+        let always = move |s: &str| (s == "TASK-1").then(|| class.to_string());
+        let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+        inputs.unowned_specs = vec![unowned("TASK-1")];
+        inputs.spec_always_human = &always;
+        let mut fake = Fake::default();
+        let report = run_tick(&inputs, &TickHooks::default(), &mut fake);
+        assert!(fake.due.is_empty(), "{class}");
+        assert_eq!(fake.notices.len(), 1, "{class}");
+        assert_eq!(report.rows[0].outcome, Outcome::Gated);
+        assert!(report.rows[0]
+            .why
+            .as_deref()
+            .unwrap()
+            .contains(&format!("TASK-1 is {class}")));
+    }
+}
+
+#[test]
+fn branch_names_match_the_spec_as_a_whole_token() {
+    assert!(branch_names_spec("claude/story-17", "STORY-17"));
+    assert!(branch_names_spec("origin/story-17-sketch", "STORY-17"));
+    assert!(!branch_names_spec("claude/story-170", "STORY-17"));
+    assert!(!branch_names_spec("claude/xstory-17", "STORY-17"));
+}
+
+// Finding 2: the mandate rework-release path takes the R1 checks too.
+// trace:STORY-1700.ac8eabb8 | ai:claude
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn a_mandate_cannot_release_a_rework_hold_on_a_pr_touching_the_gates() {
+    let tmp = tempfile::tempdir().unwrap();
+    let state = MandateState::Active(drive_mandate(tmp.path(), "joe"));
+    let policy = Default::default();
+    let ledger = Ok(Default::default());
+    let hold = crate::mandate::HoldFacts::Marker {
+        kind: crate::merge_hold::HoldReasonKind::Rework,
+        legacy: false,
+    };
+    for path in [".aida/config.toml", "aida-cli-lib/src/mandate_traces.rs"] {
+        let paths = vec![path.to_string()];
+        let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+        assert_eq!(
+            crate::mandate::rework_release_decision(&c),
+            Err(MandateRefusal::TouchesGates { path: path.into() })
+        );
+    }
+    let c = ship_check(&state, &policy, &ledger, &hold, None);
+    assert_eq!(
+        crate::mandate::rework_release_decision(&c),
+        Err(MandateRefusal::ChangedPathsUnresolved)
+    );
+    let paths = vec!["README.md".to_string()];
+    for (ship, clear) in [(true, false), (false, true)] {
+        let mut c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
+        c.ship_gate = ship.then(|| "`ship` is listed".to_string());
+        c.hold_clear_gate = clear.then(|| "`hold-clear` is listed".to_string());
+        assert!(matches!(
+            crate::mandate::rework_release_decision(&c),
+            Err(MandateRefusal::HumanGated { .. })
+        ));
+    }
+}
+
+// Finding 4: always-human specs, the sticky ledger, empty-by-default gates.
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn spec_always_human_reads_the_store_and_the_sticky_ledger() {
+    let mut plain = aida_core::Requirement::new("plain".into(), String::new());
+    plain.spec_id = Some("TASK-1".into());
+    let mut decide = aida_core::Requirement::new("decide".into(), String::new());
+    decide.spec_id = Some("TASK-2".into());
+    decide.execution_mode = Some(aida_core::ExecutionMode::Decide);
+    let mut tagged = aida_core::Requirement::new("tagged".into(), String::new());
+    tagged.spec_id = Some("TASK-3".into());
+    tagged.tags = ["operator-only".to_string()].into_iter().collect();
+    let reqs = vec![plain, decide, tagged];
+    let dir = tempfile::tempdir().unwrap();
+    // TASK-1 was once operator-only; the tag is gone but the ledger is sticky.
+    crate::mandate::record_exclusions(
+        dir.path(),
+        &[("TASK-1".into(), "operator-only".into(), true)],
+        t0(),
+    )
+    .unwrap();
+    let ledger = crate::mandate::read_exclusions(dir.path()).unwrap();
+    let f = spec_always_human_from(&reqs, Some(&ledger));
+    assert_eq!(f("TASK-1").as_deref(), Some("operator-only"));
+    assert_eq!(f("task-2").as_deref(), Some("decide-mode"));
+    assert_eq!(f("TASK-3").as_deref(), Some("operator-only"));
+    assert_eq!(f("TASK-9"), None);
+    // An unreadable ledger fails closed.
+    let blind = spec_always_human_from(&reqs, None);
+    assert!(blind("TASK-9").unwrap().contains("unreadable"));
+}
+
+// trace:STORY-1700.ac2ed84c | ai:claude
+#[test]
+fn human_gates_are_empty_by_default() {
+    use crate::mandate_gates::{gate_reason, parse_layer, union};
+    let none = parse_layer("[schedule]\nmin_gap = \"60s\"\n", "t").unwrap();
+    let g = union(none, Default::default());
+    assert!(g.ops.is_empty());
+    assert_eq!(g.describe(), "none");
+    let g = Ok(g);
+    for op in [
+        GateOp::Ship,
+        GateOp::SketchSignoff,
+        GateOp::Dispatch,
+        GateOp::HoldClear,
+    ] {
+        assert_eq!(gate_reason(&g, op), None);
+    }
+}
+
+// Finding 5: the ledger read-backs.
+// trace:STORY-1700.Audit | ai:claude
+#[test]
+fn mandate_status_shows_counts_and_the_last_ten_actions_newest_first() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+    for i in 0..12 {
+        let outcome = if i % 3 == 0 {
+            Outcome::Gated
+        } else {
+            Outcome::Routed
+        };
+        let row = ActionRow::new(
+            &format!("relay:r{i}"),
+            &format!("run r{i}"),
+            "dispatch",
+            outcome,
+            None,
+        );
+        emit_action(root.path(), "m-2", "tick", &row);
+    }
+    let json = ledger_json(root.path(), "m-2");
+    assert_eq!(json["counts"]["gated"], 4);
+    assert_eq!(json["counts"]["routed"], 8);
+    let last = json["last"].as_array().unwrap();
+    assert_eq!(last.len(), 10);
+    assert_eq!(last[0]["subject"], "run r11");
+    assert_eq!(last[9]["subject"], "run r2");
+    let text = ledger_text(root.path(), "m-2").unwrap();
+    assert!(
+        text.contains("mandate-driven actions: 4 gated, 8 routed"),
+        "{text}"
+    );
+    assert!(text.contains("last 10:"));
+    assert!(text.find("run r11").unwrap() < text.find("run r2").unwrap());
+    assert!(!text.contains("run r1 "));
+    assert_eq!(ledger_text(root.path(), "none"), None);
+}
+
+// Finding 7: durability on the live paths.
+// trace:STORY-1700.Durability | ai:claude
+#[test]
+fn session_start_hook_prints_the_mandate_line() {
+    let hook = include_str!("../../../aida-core/templates/hooks/aida-session-context.sh");
+    assert!(hook.contains("aida mandate status --line"));
+    assert!(hook.contains("[ -n \"$mandate_note\" ] && printf '%s\\n' \"$mandate_note\""));
+}
+
+// trace:STORY-1700.Durability | ai:claude
+// trace:STORY-1700.acb260c7 | ai:claude
+#[test]
+fn the_notice_stamp_makes_an_advisor_live_for_thirty_minutes() {
+    let root = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let home_s = home.path().display().to_string();
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HOME", Some(&home_s)),
+        (crate::seat_authority::GRANT_ENV, None),
+    ]);
+    let me = crate::current_user_id(None);
+    let grant =
+        crate::seat_authority::test_support::mint_grant_for(root.path(), &me, "advisor", &[]);
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant);
+    let now = Utc::now();
+    assert!(!advisor_live(root.path(), now), "no turn stamped yet");
+    stamp_grant_turn(Some(&grant), now);
+    assert!(advisor_live(root.path(), now + Duration::minutes(29)));
+    assert!(!advisor_live(root.path(), now + Duration::minutes(31)));
+    // A stamp for some other grant does not count.
+    stamp_grant_turn(
+        Some("6f1c1d6e-0000-4000-8000-0000000000ff"),
+        now + Duration::minutes(40),
+    );
+    assert!(!advisor_live(root.path(), now + Duration::minutes(41)));
+}
+
+// trace:STORY-1700.Durability | ai:claude
+#[test]
+fn the_per_turn_notice_reads_the_live_mandate_and_marks_each_session_once() {
+    let home = tempfile::tempdir().unwrap();
+    let home_s = home.path().display().to_string();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HOME", Some(&home_s)),
+        (crate::seat_authority::GRANT_ENV, None),
+        ("AIDA_SESSION_ROLE", None),
+    ]);
+    let dir = crate::mandate::mandate_dir().unwrap();
+    let now = Utc::now();
+    let m = crate::mandate::start_with(
+        &dir,
+        &ok_human,
+        &crate::current_user_id(None),
+        Duration::hours(2),
+        Some("fire".into()),
+        true,
+        true,
+        now,
+    )
+    .unwrap();
+    let line = crate::status_awaiting::mandate_notice_line(now, Some("s1")).unwrap();
+    assert!(line.starts_with("MANDATE drive · "), "{line}");
+    assert!(line.contains(" · fire · gates: "), "{line}");
+    crate::mandate::stop(&dir, &ok_human, &crate::current_user_id(None), now).unwrap();
+    // Two role-less sessions each see the stopped line once.
+    for session in ["s1", "s2"] {
+        let first = crate::status_awaiting::mandate_notice_line(now, Some(session)).unwrap();
+        assert!(first.contains(&format!("MANDATE {} was stopped", m.id)));
+        assert_eq!(
+            crate::status_awaiting::mandate_notice_line(now, Some(session)),
+            None
+        );
+    }
+}
+
+// Finding 8.
+// trace:STORY-1700.Durability | ai:claude
+#[test]
+fn seen_markers_key_on_the_grant_then_the_session_then_the_role() {
+    use crate::status_awaiting::mandate_seen_key as key;
+    let g = "6f1c1d6e-0000-4000-8000-0000000000aa";
+    assert_eq!(
+        key(Some(g), Some("s"), Some("advisor")),
+        format!("grant-{g}")
+    );
+    assert_eq!(
+        key(Some("not-a-uuid"), Some("s"), Some("advisor")),
+        "session-s"
+    );
+    assert_eq!(key(None, None, Some("advisor")), "advisor");
+    assert_eq!(key(None, Some(" "), None), "default");
+}
+
+// Finding 9.
+// trace:STORY-1700.acb260c7 | ai:claude
+#[test]
+fn a_failed_absence_notice_is_retried_next_tick() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let mut fake = Fake {
+        fail_notices: 1,
+        ..Default::default()
+    };
+    let tick = |fake: &mut Fake| {
+        let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+        inputs.advisor_live = false;
+        run_tick(&inputs, &TickHooks::default(), fake)
+    };
+    let first = tick(&mut fake);
+    assert_eq!(first.rows[0].outcome, Outcome::Refused);
+    assert!(fake.notices.is_empty());
+    let second = tick(&mut fake);
+    assert_eq!(second.rows[0].outcome, Outcome::Done);
+    assert_eq!(fake.notices.len(), 1);
+    tick(&mut fake);
+    assert_eq!(fake.notices.len(), 1, "then once per episode");
+}
+
+// Finding 10.
+// trace:STORY-1700.ace038d6 | ai:claude
+#[test]
+fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(tmp.path().join("sessions")).unwrap();
+    let handoff = tmp.path().join("sessions/h.md");
+    let l = lane("r", LaneClass::Blocked, tmp.path(), &[("state", "blocked")]);
+    std::fs::write(
+        &handoff,
+        "BLOCKED_ON_HUMAN: does PR-12 still follow ADR-77?\n",
+    )
+    .unwrap();
+    let (action, _, _, spec) = resolving_action(&l, &no_signoff);
+    assert_eq!((action, spec), (DriveAction::Answer, None));
+    std::fs::write(
+        &handoff,
+        "BLOCKED_ON_HUMAN: per ADR-77 and PR-12, sign off the STORY-9 sketch\n",
+    )
+    .unwrap();
+    let (action, _, _, spec) = resolving_action(&l, &story_9_awaits);
+    assert_eq!(action, DriveAction::SketchSignoff);
+    assert_eq!(spec.as_deref(), Some("STORY-9"));
+
+    // awaits_signoff: an open spec with a SKETCH newer than its last signoff.
+    let mut req = aida_core::Requirement::new("s".into(), String::new());
+    req.spec_id = Some("STORY-9".into());
+    let comment = |text: &str, at: DateTime<Utc>| {
+        let mut c = aida_core::Comment::new("joe".into(), text.into());
+        c.created_at = at;
+        c
+    };
+    assert!(!awaits_signoff(&req));
+    req.comments.push(comment("IMPLEMENTER SKETCH: plan", t0()));
+    assert!(awaits_signoff(&req));
+    req.comments.push(comment(
+        "ADVISOR SIGNOFF: approved",
+        t0() + Duration::minutes(5),
+    ));
+    assert!(!awaits_signoff(&req));
+    req.comments.push(comment(
+        "SKETCH REVISION 2 READY for advisor signoff",
+        t0() + Duration::minutes(9),
+    ));
+    assert!(awaits_signoff(&req));
+    let reqs = vec![req];
+    let f = spec_awaiting_signoff_from(&reqs);
+    assert!(f("story-9"));
+    assert!(!f("PR-12"));
+}
+
+// Finding 11.
+// trace:STORY-1700.Durability | ai:claude
+#[test]
+fn the_gate_description_is_cached_on_the_origin_main_commit() {
+    let repo = repo_with_committed_gates("[\"dispatch\"]");
+    let oid = crate::mandate_gates::origin_main_oid(repo.path()).unwrap();
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "refs/remotes/origin/main"])
+        .current_dir(repo.path())
+        .output()
+        .unwrap();
+    assert_eq!(oid, String::from_utf8_lossy(&out.stdout).trim());
+    assert_eq!(
+        crate::mandate_gates::describe(Some(repo.path())),
+        "dispatch"
+    );
+    let cache = repo.path().join(".aida/mandate-gates-cache.json");
+    assert!(cache.exists());
+    // A forged cache entry under the current key is what describe returns
+    // (no git run), and a new origin/main commit invalidates it.
+    let mut v: serde_json::Value = serde_json::from_slice(&std::fs::read(&cache).unwrap()).unwrap();
+    v["describe"] = "cached".into();
+    std::fs::write(&cache, v.to_string()).unwrap();
+    assert_eq!(crate::mandate_gates::describe(Some(repo.path())), "cached");
+    std::fs::write(
+        repo.path().join(".aida/config.toml"),
+        "[mandate.human_gates]\nops = [\"ship\"]\n",
+    )
+    .unwrap();
+    git(repo.path(), &["commit", "-qam", "ship gate"]);
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    assert_eq!(crate::mandate_gates::describe(Some(repo.path())), "ship");
+}
+
+// trace:STORY-1700 | ai:claude
+#[test]
+fn word_labelled_criteria_can_be_traced() {
+    assert_eq!(
+        crate::parse_trace_id_token("// trace:STORY-1700.Durability | ai:claude").as_deref(),
+        Some("STORY-1700.DURABILITY")
+    );
+    assert_eq!(
+        crate::parse_trace_id_token("// trace:STORY-1700.Audit | ai:claude").as_deref(),
+        Some("STORY-1700.AUDIT")
+    );
+    // Existing shapes are unchanged; a lowercase or all-caps word is not a label.
+    assert_eq!(
+        crate::parse_trace_id_token("trace:STORY-1700.ac2ed84c").as_deref(),
+        Some("STORY-1700.AC2ED84C")
+    );
+    assert_eq!(
+        crate::parse_trace_id_token("trace:STORY-1.rs").as_deref(),
+        Some("STORY-1")
+    );
+    assert_eq!(
+        crate::parse_trace_id_token("trace:STORY-1.TXT").as_deref(),
+        Some("STORY-1")
+    );
 }

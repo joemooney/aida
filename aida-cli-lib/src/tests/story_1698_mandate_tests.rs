@@ -152,6 +152,7 @@ impl Case {
             hold: &self.hold,
             changed_paths: Some(&[]),
             ship_gate: None,
+            hold_clear_gate: None,
         })
     }
 }

@@ -100,6 +100,7 @@ pub(crate) fn mandate_ship_cover(
     // STORY-1700 (R1): the files the pinned diff changes, for the gate check.
     // trace:STORY-1700 | ai:claude
     let changed_paths: Vec<String> = trace_evidence.paths.iter().cloned().collect();
+    let gates = crate::mandate_gates::load_human_gates(main_worktree).map_err(|e| format!("{e:#}"));
     let store_root = crate::store_sync::detect_distributed_store_from(project_root)
         .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
     let store_snapshot = crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)?;
@@ -176,7 +177,11 @@ pub(crate) fn mandate_ship_cover(
         ledger: &ledger,
         hold: &hold,
         changed_paths: Some(&changed_paths),
-        ship_gate: crate::mandate_gates::ship_gate(main_worktree),
+        ship_gate: crate::mandate_gates::gate_reason(&gates, crate::mandate_gates::GateOp::Ship),
+        hold_clear_gate: crate::mandate_gates::gate_reason(
+            &gates,
+            crate::mandate_gates::GateOp::HoldClear,
+        ),
     })?;
     Ok(MandateCover {
         id,

@@ -405,6 +405,18 @@ pub(crate) fn criterion_trace_suffix(suffix: &str) -> bool {
     {
         return false;
     }
+    // STORY-1700: an explicit word label (`Durability: ...` in the spec's
+    // acceptance) yields criterion id `<SPEC>.Durability`; accept that shape
+    // (capitalised, letters only) so such a criterion can be traced at all.
+    // trace:STORY-1700 | ai:claude
+    let mut chars = suffix.chars();
+    if chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        && suffix.len() >= 2
+        && chars.clone().all(|c| c.is_ascii_alphabetic())
+        && chars.any(|c| c.is_ascii_lowercase())
+    {
+        return true;
+    }
     let upper = suffix.to_ascii_uppercase();
     let Some(rest) = upper.strip_prefix("AC") else {
         return upper
