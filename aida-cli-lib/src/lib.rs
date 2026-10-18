@@ -166,6 +166,7 @@ mod freshness_gate;
 mod git_arg_guard;
 mod git_backend_cmd;
 // trace:TASK-1522 | ai:antigravity
+mod fleet_lanes;
 pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
