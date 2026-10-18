@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-18T03:15:40.437504085Z
+modified_at: 2026-10-18T03:18:57.506197401Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -92,6 +92,12 @@ comments:
   content: 'AC NOTE (AC3 reading), per the advisor STRICT review of 2026-10-16, change 5: with no live advisor, ships, sketch signoffs and dispatches WAIT for the advisor seat. The STORY-1698 ship gate needs an anchored advisor grant, and the drive tick holds no grant. The tick notifies the operator once per absence episode and keeps doing substrate actions: lease expiry on dead pids, mail nudges, lane classification, due-item emission and the ledger. AC3''s ''performs the next action itself'' is satisfied by those substrate actions plus routed due items. Relay restart is out of scope for this story (moved to STORY-1706).'
   created_at: 2026-10-18T03:15:40.437504085Z
   modified_at: 2026-10-18T03:15:40.437504085Z
+  session_id: 49568076-7fe3-49cb-a8e6-1262df7e870a
+- id: 01a14d05-06e2-7fe1-bb19-fc8dc07528df
+  author: joe
+  content: 'SKETCH REVISION 2 READY for advisor signoff: PR #2722 (docs only, DO NOT MERGE; the plan folds into the implementation PR). Head 1cc11da17a on story-1700-sketch, which merged origin/main 9f0ab97da0. File: docs/plans/2026-10-15-story-1700-drive-mandate.md. It covers changes 1-7 in sections R1-R7, each with files, functions and named tests T7.1-T7.14, plus answers to the non-blocking points. Relay restart is removed from the tick (STORY-1706). OPEN FORK F1 needs a ruling: fleet_lanes::classify_lanes does not exist on origin/main (STORY-1699 shipped only relay_stall.rs). Option A (recommended): extract it in this story from relay_stall''s parse_status, owner_alive and is_acknowledged. Option B: a prerequisite slice. AC3 note added as a spec comment (change 5). Checks: make check-ci-fast passed (30 gates). Docs only, so no cargo. No implementation until a signoff comment.'
+  created_at: 2026-10-18T03:18:57.506197401Z
+  modified_at: 2026-10-18T03:18:57.506197401Z
   session_id: 49568076-7fe3-49cb-a8e6-1262df7e870a
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
