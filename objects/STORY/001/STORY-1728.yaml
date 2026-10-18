@@ -18,8 +18,41 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T03:28:13.919339215Z
+modified_at: 2026-10-18T03:28:46.344882571Z
 req_type: Story
+comments:
+- id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
+  author: joe
+  content: |
+    SKETCH (awaiting advisor signoff): per-module clap command registration
+
+    Studied on main 9f0ab97da0 (2026-10-17).
+
+    MECHANISM
+    - New `command_registry.rs`: `pub(crate) struct CommandReg { name, augment: fn(clap::Command)->clap::Command, phase: Phase, policy: fn(&ArgMatches)->CmdPolicy, run: fn(&ArgMatches, &mut DispatchCtx)->Result<()> }`. Each module declares one static per command, built from its own `#[derive(Args|Subcommand)]` type via `augment_args` / `FromArgMatches`.
+    - Collection, option A (recommended): `linkme::distributed_slice`. Zero shared lines per command. Supported on Linux/macOS/Windows (MSVC and GNU). Adds one dependency.
+    - Collection, option B: an explicit `REGISTRY: &[&CommandReg]` list in command_registry.rs. One append-only line per command still lands in a shared file, but it conflicts trivially and needs no linker tricks.
+    - Help ordering: use the `display_order` field on each entry, so output does not depend on link order.
+    - `DispatchCtx` carries what each phase provides today (project root, Storage, git backend handle). A handler requests its phase's context, not globals.
+
+    MIGRATION (strangler, one PR per slice)
+    1. Registry, combined parse path and golden help snapshot. Migrate the trivial store-less leaves (away, home, bg-fetch) as proof.
+    2. The remaining pre-storage early handlers in run() (alias, identity, remote, advisor --registration, ...).
+    3. The git-backend dispatch in git_backend_cmd.rs, in batches by owning module (cache, record, human, queue, mailbox, pr, ...).
+    4. The legacy-storage arms in lib_part1.rs.
+    5. Delete the residual `Command` enum and the four policy match tables.
+    Tests that construct `Command::X { .. }` directly (for example story_1463 tests) move to parsing through the registry.
+
+    RISKS
+    - Losing exhaustive-match coverage of stakeholder/role policy. Mitigation: required fields, plus a test that every registered name maps to a policy. This is stronger than `matches!` lists, which silently default.
+    - Aliases, MCP surface parity and docs/cli verify-interface-changes.py all assume cli.rs is the CLI surface. Each needs retargeting to the built command tree (slice 1).
+    - Collision with TASK-1539 (extract cli.rs into aida-cli-base). This plan dissolves cli.rs into the command modules instead of extracting it whole. The advisor should decide: either sequence TASK-1539 after this story, or re-scope TASK-1539 to the shared Cli/global args only.
+    - Build throughput: no claim. Everything stays in one crate, so the benefit is merge safety, not compile time.
+
+    OWNER: one implementer seat under guided-implement (architecture class). Every in-flight branch that touches cli.rs is in the blast radius, so slices land in declared quiet windows, like STORY-1488 slice 1.
+  created_at: 2026-10-18T03:28:46.344882571Z
+  modified_at: 2026-10-18T03:28:46.344882571Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 filed_at:
   code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
   branch: main
