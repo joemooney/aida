@@ -1841,9 +1841,8 @@ pub(crate) static PLAN: crate::command_registry::CommandReg = crate::command_reg
     name: "plan",
     help_after: "lifecycle",
     command: <PlanArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: plan_policy,
-    run: run_plan,
+    run: crate::command_registry::Handler::Early(run_plan),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is

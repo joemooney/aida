@@ -1913,8 +1913,8 @@ pub(crate) fn run() -> Result<()> {
     // `_bg-fetch` / `away` / `home` arms they replaced ran.
     // trace:STORY-1728 | ai:claude
     if let Command::Registered(invocation) = &cli.command {
-        match invocation.reg.phase {
-            crate::command_registry::Phase::PreStore => return invocation.run(&cli.globals),
+        if invocation.run_early(&cli.globals)? == crate::command_registry::Flow::Return {
+            return Ok(());
         }
     }
     // TASK-756: operator-presence primitive. Dispatched before storage init —
@@ -2883,7 +2883,15 @@ pub(crate) fn run() -> Result<()> {
             unreachable!("autoprogress is dispatched before storage init")
         }
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
-        Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
+        // trace:STORY-1728 | ai:claude
+        Command::Registered(invocation) => {
+            let store = crate::command_registry::StoreCtx::Legacy { storage: &storage };
+            if invocation.run_store(store, Some(&cli.globals))?
+                == crate::command_registry::Flow::Return
+            {
+                return Ok(());
+            }
+        }
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }

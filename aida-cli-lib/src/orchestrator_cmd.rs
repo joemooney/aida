@@ -269,11 +269,10 @@ pub(crate) static ORCHESTRATOR: crate::command_registry::CommandReg =
         name: "orchestrator",
         help_after: "pr",
         command: <OrchestratorArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_orchestrator,
+        run: crate::command_registry::Handler::Early(run_orchestrator),
     };

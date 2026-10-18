@@ -2246,13 +2246,12 @@ pub(crate) static WHY: crate::command_registry::CommandReg = crate::command_regi
     name: "why",
     help_after: "groom",
     command: <WhyArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_why,
+    run: crate::command_registry::Handler::Early(run_why),
 };
 
 // trace:STORY-631 | ai:claude
@@ -2304,11 +2303,10 @@ pub(crate) static INTENT: crate::command_registry::CommandReg =
         name: "intent",
         help_after: "worktree",
         command: <IntentArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_intent,
+        run: crate::command_registry::Handler::Early(run_intent),
     };

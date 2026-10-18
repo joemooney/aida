@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 
-use crate::command_registry::{CmdPolicy, CommandReg, Phase};
+use crate::command_registry::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
 
 use colored::Colorize;
@@ -98,9 +98,8 @@ pub(crate) static AWAY: CommandReg = CommandReg {
     name: "away",
     help_after: "statusline",
     command: <AwayArgs as clap::CommandFactory>::command,
-    phase: Phase::PreStore,
     policy: |_| PRESENCE_POLICY,
-    run: |_, _| handle_away_command(),
+    run: crate::command_registry::Handler::Early(|_, _| handle_away_command()),
 };
 
 // trace:STORY-1728 | ai:claude
@@ -108,9 +107,8 @@ pub(crate) static HOME: CommandReg = CommandReg {
     name: "home",
     help_after: "away",
     command: <HomeArgs as clap::CommandFactory>::command,
-    phase: Phase::PreStore,
     policy: |_| PRESENCE_POLICY,
-    run: |_, _| handle_home_command(),
+    run: crate::command_registry::Handler::Early(|_, _| handle_home_command()),
 };
 
 /// `aida presence` — print current effective presence.

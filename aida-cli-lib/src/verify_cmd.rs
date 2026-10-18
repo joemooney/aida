@@ -394,7 +394,10 @@ fn run_verify(
     use crate::*;
     let args = <VerifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
-    return self::handle_verify_command(cmd, ctx.globals.file.as_deref());
+    return self::handle_verify_command(
+        cmd,
+        ctx.globals.and_then(|globals| globals.file.as_deref()),
+    );
 }
 
 // trace:STORY-1728 | ai:claude
@@ -403,11 +406,10 @@ pub(crate) static VERIFY: crate::command_registry::CommandReg =
         name: "verify",
         help_after: "lint",
         command: <VerifyArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_verify,
+        run: crate::command_registry::Handler::Early(run_verify),
     };

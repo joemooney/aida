@@ -85,15 +85,46 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::worktree_gc::WORKTREE,
 ];
 
-/// Where in `run()` a registered command dispatches: the point at which the
-/// legacy handlers it replaces ran, so every hook ahead of that point still
-/// applies to it.
+/// How a registered command runs.
+// trace:STORY-1728 | ai:claude
+#[derive(Clone, Copy)]
+pub(crate) enum Handler {
+    /// Runs once, before project discovery and storage init, alongside the
+    /// other store-less handlers, and always finishes the invocation there.
+    Early(fn(&ArgMatches, &DispatchCtx) -> Result<()>),
+    /// Runs first at the early point with no store (`ctx.store` is `None`),
+    /// where it may finish (`Flow::Return`) or defer (`Flow::Continue`); then
+    /// once more inside whichever storage dispatcher serves the project.
+    /// There, `Flow::Return` returns from the dispatcher (skipping its
+    /// post-dispatch hooks, as a legacy arm's `return` did) and
+    /// `Flow::Continue` falls through to them.
+    Store(fn(&ArgMatches, &DispatchCtx) -> Result<Flow>),
+}
+
+/// Whether a store-phase handler finished the invocation.
 // trace:STORY-1728 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Phase {
-    /// Before project discovery and storage init, alongside the other
-    /// store-less handlers.
-    PreStore,
+pub(crate) enum Flow {
+    Return,
+    Continue,
+}
+
+/// A `return <Result<()>>` from a legacy dispatcher arm, as a `Flow`.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn returned(result: Result<()>) -> Result<Flow> {
+    result.map(|()| Flow::Return)
+}
+
+/// The open store a store-phase handler runs against.
+// trace:STORY-1728 | ai:claude
+pub(crate) enum StoreCtx<'a> {
+    /// The git-canonical store, from `handle_git_backend_command`.
+    Git {
+        store_path: &'a std::path::Path,
+        backend: &'a aida_core::CachedGitBackend,
+    },
+    /// The deprecated centralized store, from the legacy dispatcher in `run()`.
+    Legacy { storage: &'a crate::Storage },
 }
 
 /// The per-command answers the cross-cutting gates in `run()` need. Every
@@ -114,7 +145,11 @@ pub(crate) struct CmdPolicy {
 /// What a registered handler receives besides its own `ArgMatches`.
 // trace:STORY-1728 | ai:claude
 pub(crate) struct DispatchCtx<'a> {
-    pub globals: &'a GlobalArgs,
+    /// The top-level options; `None` inside the git-backend dispatcher, which
+    /// has never received them.
+    pub globals: Option<&'a GlobalArgs>,
+    /// The open store; `None` at the early dispatch point.
+    pub store: Option<StoreCtx<'a>>,
 }
 
 /// One command's complete registration.
@@ -126,9 +161,8 @@ pub(crate) struct CommandReg {
     pub help_after: &'static str,
     /// The command's clap definition (usually `<Args as CommandFactory>::command`).
     pub command: fn() -> clap::Command,
-    pub phase: Phase,
     pub policy: fn(&ArgMatches) -> CmdPolicy,
-    pub run: fn(&ArgMatches, &DispatchCtx) -> Result<()>,
+    pub run: Handler,
 }
 
 impl std::fmt::Debug for CommandReg {
@@ -152,8 +186,29 @@ impl Invocation {
         (self.reg.policy)(&self.matches)
     }
 
-    pub(crate) fn run(&self, globals: &GlobalArgs) -> Result<()> {
-        (self.reg.run)(&self.matches, &DispatchCtx { globals })
+    /// The early dispatch point, before storage init.
+    pub(crate) fn run_early(&self, globals: &GlobalArgs) -> Result<Flow> {
+        let ctx = DispatchCtx {
+            globals: Some(globals),
+            store: None,
+        };
+        match self.reg.run {
+            Handler::Early(run) => run(&self.matches, &ctx).map(|()| Flow::Return),
+            Handler::Store(run) => run(&self.matches, &ctx),
+        }
+    }
+
+    /// A storage dispatcher. Early handlers always finish before storage
+    /// init, so only store-phase handlers reach here.
+    pub(crate) fn run_store(&self, store: StoreCtx, globals: Option<&GlobalArgs>) -> Result<Flow> {
+        let ctx = DispatchCtx {
+            globals,
+            store: Some(store),
+        };
+        match self.reg.run {
+            Handler::Early(_) => unreachable!("`{}` finished before storage init", self.reg.name),
+            Handler::Store(run) => run(&self.matches, &ctx),
+        }
     }
 }
 

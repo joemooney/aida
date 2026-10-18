@@ -323,11 +323,10 @@ pub(crate) static MANUAL: crate::command_registry::CommandReg =
         name: "manual",
         help_after: "changelog",
         command: <ManualArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_manual,
+        run: crate::command_registry::Handler::Early(run_manual),
     };

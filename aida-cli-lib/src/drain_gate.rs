@@ -1978,11 +1978,10 @@ pub(crate) static NO_HUMAN: crate::command_registry::CommandReg =
         name: "no-human",
         help_after: "autonomy",
         command: <NoHumanArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_no_human,
+        run: crate::command_registry::Handler::Early(run_no_human),
     };

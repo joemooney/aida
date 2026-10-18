@@ -319,13 +319,12 @@ pub(crate) static CLAIM: crate::command_registry::CommandReg =
         name: "claim",
         help_after: "undefer",
         command: <ClaimArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_claim,
+        run: crate::command_registry::Handler::Early(run_claim),
     };
 
 /// Inverse of `aida claim` — removes the caller's spec-scoped claim so a
@@ -353,11 +352,10 @@ pub(crate) static UNCLAIM: crate::command_registry::CommandReg =
         name: "unclaim",
         help_after: "claim",
         command: <UnclaimArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_unclaim,
+        run: crate::command_registry::Handler::Early(run_unclaim),
     };

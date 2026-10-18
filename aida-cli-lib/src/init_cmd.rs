@@ -6668,11 +6668,10 @@ pub(crate) static INIT: crate::command_registry::CommandReg = crate::command_reg
     name: "init",
     help_after: "report",
     command: <InitArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: true,
     },
-    run: run_init,
+    run: crate::command_registry::Handler::Early(run_init),
 };

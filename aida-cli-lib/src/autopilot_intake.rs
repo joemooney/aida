@@ -1084,13 +1084,12 @@ pub(crate) static AUTOPILOT: crate::command_registry::CommandReg =
         name: "autopilot",
         help_after: "backlog",
         command: <AutopilotArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_autopilot,
+        run: crate::command_registry::Handler::Early(run_autopilot),
     };
 
 // trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
@@ -1189,11 +1188,10 @@ pub(crate) static GROOM: crate::command_registry::CommandReg =
         name: "groom",
         help_after: "health",
         command: <GroomArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_groom,
+        run: crate::command_registry::Handler::Early(run_groom),
     };

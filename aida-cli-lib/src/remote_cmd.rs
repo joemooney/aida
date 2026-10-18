@@ -70,11 +70,10 @@ pub(crate) static REMOTE: crate::command_registry::CommandReg =
         name: "remote",
         help_after: "digest",
         command: <RemoteArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_remote,
+        run: crate::command_registry::Handler::Early(run_remote),
     };

@@ -3480,13 +3480,12 @@ pub(crate) static PS: crate::command_registry::CommandReg = crate::command_regis
     name: "ps",
     help_after: "awaiting",
     command: <PsArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_ps,
+    run: crate::command_registry::Handler::Early(run_ps),
 };
 
 /// The integrator seat: bare shows the merge queue; --run drains it.
@@ -3617,11 +3616,10 @@ pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
         name: "integrate",
         help_after: "tail",
         command: <IntegrateArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_integrate,
+        run: crate::command_registry::Handler::Early(run_integrate),
     };

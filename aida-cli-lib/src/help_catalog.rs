@@ -767,11 +767,10 @@ pub(crate) static COMMANDS: crate::command_registry::CommandReg =
         name: "commands",
         help_after: "help-all",
         command: <CommandsArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_commands,
+        run: crate::command_registry::Handler::Early(run_commands),
     };

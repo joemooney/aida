@@ -714,11 +714,10 @@ pub(crate) static UPGRADE: crate::command_registry::CommandReg =
         name: "upgrade",
         help_after: "_bg-fetch",
         command: <UpgradeArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_upgrade,
+        run: crate::command_registry::Handler::Early(run_upgrade),
     };

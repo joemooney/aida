@@ -8,7 +8,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::command_registry::{CmdPolicy, CommandReg, Phase};
+use crate::command_registry::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
 use crate::*;
 
@@ -142,16 +142,15 @@ pub(crate) static BG_FETCH: CommandReg = CommandReg {
     name: "_bg-fetch",
     help_after: "whoami",
     command: <BgFetchArgs as clap::CommandFactory>::command,
-    phase: Phase::PreStore,
     policy: |_| CmdPolicy {
         stakeholder: StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: |matches, _| {
+    run: crate::command_registry::Handler::Early(|matches, _| {
         let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
         handle_bg_fetch_command(&args.store_path)
-    },
+    }),
 };
 
 pub(crate) fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {

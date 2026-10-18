@@ -260,11 +260,10 @@ pub(crate) static ULTRAPLAN: crate::command_registry::CommandReg =
         name: "ultraplan",
         help_after: "manual",
         command: <UltraplanArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_ultraplan,
+        run: crate::command_registry::Handler::Early(run_ultraplan),
     };

@@ -272,11 +272,10 @@ pub(crate) static AUTONOMY: crate::command_registry::CommandReg =
         name: "autonomy",
         help_after: "punts",
         command: <AutonomyArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_autonomy,
+        run: crate::command_registry::Handler::Early(run_autonomy),
     };

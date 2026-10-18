@@ -500,13 +500,12 @@ def main():
         f'    name: "{cli_name}",',
         f'    help_after: "{help_after}",',
         f"    command: <{args_ty} as clap::CommandFactory>::command,",
-        "    phase: crate::command_registry::Phase::PreStore,",
         "    policy: |_| crate::command_registry::CmdPolicy {",
         f"        stakeholder: crate::stakeholder_role::StakeholderAction::{stakeholder},",
         f"        per_write_auto_push: {'true' if push else 'false'},",
         f"        skip_role_restore_prompt: {'true' if skip else 'false'},",
         "    },",
-        f"    run: {fn_name},",
+        f"    run: crate::command_registry::Handler::Early({fn_name}),",
         "};",
     ]
     generated = ["", *struct_lines, "", *comments, *run_lines, "", *reg, ""]

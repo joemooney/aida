@@ -1614,9 +1614,8 @@ pub(crate) static ROLE: crate::command_registry::CommandReg = crate::command_reg
     name: "role",
     help_after: "schedule",
     command: <RoleArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: role_policy,
-    run: run_role,
+    run: crate::command_registry::Handler::Early(run_role),
 };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is

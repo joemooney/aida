@@ -5120,9 +5120,8 @@ pub(crate) static SESSION: crate::command_registry::CommandReg =
         name: "session",
         help_after: "role",
         command: <SessionArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: session_policy,
-        run: run_session,
+        run: crate::command_registry::Handler::Early(run_session),
     };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is

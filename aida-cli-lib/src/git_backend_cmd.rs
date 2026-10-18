@@ -1928,7 +1928,16 @@ pub(crate) fn handle_git_backend_command(
         }
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
-        Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
+        // trace:STORY-1728 | ai:claude
+        Command::Registered(invocation) => {
+            let store = crate::command_registry::StoreCtx::Git {
+                store_path,
+                backend: &backend,
+            };
+            if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
+                return Ok(());
+            }
+        }
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }

@@ -286,11 +286,10 @@ pub(crate) static DEPS: crate::command_registry::CommandReg = crate::command_reg
     name: "deps",
     help_after: "plan",
     command: <DepsArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_deps,
+    run: crate::command_registry::Handler::Early(run_deps),
 };

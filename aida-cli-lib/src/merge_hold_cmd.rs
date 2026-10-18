@@ -1148,13 +1148,12 @@ pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
         name: "merge-lock",
         help_after: "ps",
         command: <MergeLockArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_merge_lock,
+        run: crate::command_registry::Handler::Early(run_merge_lock),
     };
 
 /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
@@ -1193,11 +1192,10 @@ pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
         name: "merge-hold",
         help_after: "merge-lock",
         command: <MergeHoldArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_merge_hold,
+        run: crate::command_registry::Handler::Early(run_merge_hold),
     };

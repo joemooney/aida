@@ -6330,13 +6330,12 @@ pub(crate) static PR: crate::command_registry::CommandReg = crate::command_regis
     name: "pr",
     help_after: "ship",
     command: <PrArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Write,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_pr,
+    run: crate::command_registry::Handler::Early(run_pr),
 };
 
 /// The one-shot HUMAN-implementer finish. From inside a worktree where
@@ -6429,11 +6428,10 @@ pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_reg
     name: "ship",
     help_after: "triage",
     command: <ShipArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_ship,
+    run: crate::command_registry::Handler::Early(run_ship),
 };

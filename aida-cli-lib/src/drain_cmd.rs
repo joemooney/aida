@@ -1312,11 +1312,10 @@ pub(crate) static DRAIN: crate::command_registry::CommandReg =
         name: "drain",
         help_after: "zen",
         command: <DrainArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_drain,
+        run: crate::command_registry::Handler::Early(run_drain),
     };

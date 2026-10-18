@@ -236,11 +236,10 @@ pub(crate) static INTERNAL: crate::command_registry::CommandReg =
         name: "internal",
         help_after: "fetch",
         command: <InternalArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: true,
         },
-        run: run_internal,
+        run: crate::command_registry::Handler::Early(run_internal),
     };

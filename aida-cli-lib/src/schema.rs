@@ -1857,11 +1857,10 @@ pub(crate) static SCHEMA: crate::command_registry::CommandReg =
         name: "schema",
         help_after: "type",
         command: <SchemaArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_schema,
+        run: crate::command_registry::Handler::Early(run_schema),
     };

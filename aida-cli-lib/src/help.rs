@@ -490,11 +490,10 @@ pub(crate) static HELP_ALL: crate::command_registry::CommandReg =
         name: "help-all",
         help_after: "human",
         command: <HelpAllArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_help_all,
+        run: crate::command_registry::Handler::Early(run_help_all),
     };

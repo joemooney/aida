@@ -871,13 +871,12 @@ pub(crate) static STACK: crate::command_registry::CommandReg =
         name: "stack",
         help_after: "drain",
         command: <StackArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_stack,
+        run: crate::command_registry::Handler::Early(run_stack),
     };
 
 /// Read `.aida/headless-logs/<spec>-<lease>.jsonl` cleanly — wraps the
@@ -911,13 +910,12 @@ pub(crate) static HEADLESS: crate::command_registry::CommandReg =
         name: "headless",
         help_after: "stack",
         command: <HeadlessArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_headless,
+        run: crate::command_registry::Handler::Early(run_headless),
     };
 
 /// Inspect the `aida-worker` shell function's directive channel —
@@ -951,9 +949,8 @@ pub(crate) static WORKER: crate::command_registry::CommandReg =
         name: "worker",
         help_after: "headless",
         command: <WorkerArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: worker_policy,
-        run: run_worker,
+        run: crate::command_registry::Handler::Early(run_worker),
     };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is

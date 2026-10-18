@@ -92,11 +92,10 @@ pub(crate) static CONTRACT: crate::command_registry::CommandReg =
         name: "contract",
         help_after: "watch",
         command: <ContractArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: true,
         },
-        run: run_contract,
+        run: crate::command_registry::Handler::Early(run_contract),
     };

@@ -34,11 +34,10 @@ pub(crate) static DERISK: crate::command_registry::CommandReg =
         name: "derisk",
         help_after: "do",
         command: <DeriskArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_derisk,
+        run: crate::command_registry::Handler::Early(run_derisk),
     };

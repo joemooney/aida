@@ -506,11 +506,10 @@ pub(crate) static STORE: crate::command_registry::CommandReg =
         name: "store",
         help_after: "doctor",
         command: <StoreArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_store,
+        run: crate::command_registry::Handler::Early(run_store),
     };

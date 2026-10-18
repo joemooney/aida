@@ -649,11 +649,10 @@ pub(crate) static SANDBOX: crate::command_registry::CommandReg =
         name: "sandbox",
         help_after: "protocol",
         command: <SandboxArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: |_| crate::command_registry::CmdPolicy {
             stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
         },
-        run: run_sandbox,
+        run: crate::command_registry::Handler::Early(run_sandbox),
     };

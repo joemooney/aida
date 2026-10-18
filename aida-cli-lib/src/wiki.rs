@@ -705,11 +705,10 @@ pub(crate) static WIKI: crate::command_registry::CommandReg = crate::command_reg
     name: "wiki",
     help_after: "explain",
     command: <WikiArgs as clap::CommandFactory>::command,
-    phase: crate::command_registry::Phase::PreStore,
     policy: |_| crate::command_registry::CmdPolicy {
         stakeholder: crate::stakeholder_role::StakeholderAction::Read,
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
     },
-    run: run_wiki,
+    run: crate::command_registry::Handler::Early(run_wiki),
 };

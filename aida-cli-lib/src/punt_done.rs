@@ -997,9 +997,8 @@ pub(crate) static PUNTS: crate::command_registry::CommandReg =
         name: "punts",
         help_after: "punt",
         command: <PuntsArgs as clap::CommandFactory>::command,
-        phase: crate::command_registry::Phase::PreStore,
         policy: punts_policy,
-        run: run_punts,
+        run: crate::command_registry::Handler::Early(run_punts),
     };
 
 // The read-only verbs stay open to guest stakeholders; every other verb is
