@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:09:32.180659596Z
-modified_at: 2026-10-18T21:06:14.767300043Z
+modified_at: 2026-10-18T21:48:34.504390458Z
 req_type: Task
 tags:
 - from-implementer:STORY-1679
@@ -64,6 +64,32 @@ comments:
     Verification plan: strict schema/duplicate/version/mode negatives; valid UUID + exact clause; missing mapping; unavailable committed evidence; stale corpus and live-description/owner references; remapped display alias; ambiguous clause text; unchanged report-only store; mapped draft parent in the real Storage atomic seam; repeat filing/dedup and existing different-parent conflict. Existing STORY-1679 tests remain green. No production code until advisor explicitly signs this schema/trust/parent policy or supplies revisions.
   created_at: 2026-10-17T05:55:29.511662883Z
   modified_at: 2026-10-17T05:55:59.808315753Z
+- id: 01a150fc-e948-79d0-80a6-0a2102251ba9
+  author: joe
+  content: |-
+    ARCHITECTURE SKETCH v2 (TASK-0446 — Consensus check-to-clause mapping & parented draft amendments, requesting advisor signoff before rework on #2745):
+
+    1. Schema (.aida/regen-check-map.toml in the trusted code repo):
+       - format_version = 1 (strictly parsed; unknown versions/fields or duplicate exact check names invalidate the map).
+       - [[checks]]: name = '<exact case-sensitive oracle check>', spec_uuid = '<canonical requirement UUID>', description_sha256 = '<64 lowercase hex chars>', clauses = [{ text = '<exact UTF-8 acceptance excerpt>', sha256 = '<64 lowercase hex chars>' }].
+       - Bounded blob size (<= 1 MiB) and entry counts; regular blob mode (100644/100755) only; no symlink/gitlink/path-override/command execution.
+
+    2. Trust Boundary & Provenance:
+       - Resolve the code repository from the store path via crate::project_root_from_store_hint (matching score::load_config).
+       - Resolve the trusted default-branch tip via trusted_default_branch_sha(code_repo). Never fall back to refs/heads/aida-store or any agent-writable branch when default-branch resolution fails; missing/unresolvable default branch or non-ancestor oracle_sha yields MapStatus::Unavailable with an explicit diagnostic and no links.
+       - Read only <oracle_sha>:.aida/regen-check-map.toml at the consensus-pinned commit. No special-casing of synthetic oracle_sha strings (e.g. 'oracle') in production code; non-hex or unresolvable oracle_sha yields MapStatus::Unavailable.
+       - Reconstruct the version-1 corpus from committed store_sha and verify its content_sha256 matches the consensus population. Validate spec_uuid, description_sha256, and unique (overlapping-aware) clause occurrence against that reconstructed corpus; any mismatch/missing/archived owner or non-unique clause yields MapStatus::Stale.
+
+    3. Reporting & Opt-In --file Parent Linking:
+       - Report-only by default; control/newline characters in rendered titles and check names are escaped with escape_debug so report lines remain single-line.
+       - Under --file, revalidate the mapped owner UUID, non-archived state, and description_sha256/clauses against the live graph inside Storage::update_atomically.
+       - When valid, link the newly created or existing deduplicated draft as a child of the mapped owner via graph.add_relationship(..., Parent, ...). Never swallow add_relationship errors: if linking fails, surface the error in diagnostics and keep the draft description consistent with the actual unlinked state.
+       - Existing deduplicated draft parent policy (for signoff): if an active draft for the exact-check gap tag already exists and has no Parent relationship, --file adds the validated Parent relationship and records a provenance comment without overwriting title/description/status. If it already has the same Parent, --file is a no-op. If it already has a different Parent, --file never replaces it and reports an explicit parent-conflict diagnostic without filing a duplicate.
+
+    4. Verification Plan:
+       - Fixtures with a real main/default branch holding the map commit covering: Valid mapping + parented draft + remapped display alias; Missing map file at valid oracle_sha and map missing the check; Invalid map blob (malformed TOML, duplicate check, non-regular mode); Unavailable (unresolvable default branch, oracle_sha not ancestor of default branch); Stale (description_sha256 change, archived/missing owner UUID, overlapping/ambiguous clause, corpus content_sha256 mismatch, and live-graph drift between trial and --file); and idempotent repeat --file plus existing-draft add-only parenting and different-parent conflict.
+  created_at: 2026-10-18T21:48:34.504390458Z
+  modified_at: 2026-10-18T21:48:34.504390458Z
 history:
 - id: 01a14039-91e8-7f70-9646-6686cc0e631b
   author: joe
