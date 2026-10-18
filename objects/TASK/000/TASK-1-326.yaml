@@ -1,5 +1,6 @@
 id: 01a14f6c-76bc-7b62-ae00-e3afb00a699b
 spec_id: TASK-1-326
+agreed_id: TASK-1393
 title: 'major (design, needs advisor ruling): in-file ''#[cfg(test)]'' modules are scanne…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1785, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,12 @@ tags:
 - finding-hash:2ce82e2a
 - from-review:TASK-1785
 - kind:carried-forward
+history:
+- id: 01a14f90-061c-7572-b9e2-44571bb66419
+  author: joe
+  timestamp: 2026-10-18T15:10:01.244732734Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes: []
 filed_at:
   code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
   branch: main
