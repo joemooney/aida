@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-18T03:06:55.158264935Z
+modified_at: 2026-10-18T03:07:19.855117859Z
 req_type: Story
 tags:
 - from:aida-host
@@ -98,6 +98,58 @@ comments:
   created_at: 2026-10-15T15:38:08.235770405Z
   modified_at: 2026-10-15T15:38:08.235770405Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14cfa-61af-7a82-b1d5-0752032d4eed
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work STORY-1672 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `tool-exit`
+    - Seat: implementer (session role: advisor)
+    - Parent spec: STORY-1672
+    - Branch under test: main
+    - Commit under test: 9f0ab97da0df
+    - Recorded at: 2026-10-18T03:06:57.168439750+00:00
+
+    ### Failure
+
+    phase 1 workspace resolver mismatch for STORY-1672: branch `main` (worktree ``) does not name STORY-1672, so it is not the workspace the pickup resolver (`aida queue work STORY-1672`) would use; refused before taking a lease
+
+    Failure kind: `tool-exit`
+
+    ### Recovery hint shown to the operator
+
+    Continue the implementer session: `aida queue work STORY-1672 --resume`
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-10-18T03:06:57.168439750+00:00
+
+    ### Phase durations
+
+      (none recorded)
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"STORY-1672","started_at":"2026-10-18T03:06:52.863791377+00:00","completed_at":"2026-10-18T03:06:57.168439750+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"tool-exit","failure_message":"phase 1 workspace resolver mismatch for STORY-1672: branch `main` (worktree ``) does not name STORY-1672, so it is not the workspace the pickup resolver (`aida queue work STORY-1672`) would use; refused before taking a lease","phase_durations":[],"total_ms":23,"binary_sha":"28575d74a3"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent STORY-1672 --title "drain phase 1 (implementer) failure on STORY-1672" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-10-18T03:07:19.855081781Z
+  modified_at: 2026-10-18T03:07:19.855081781Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14036-9d75-7782-880c-dfebe1f22dd5
   author: joe
