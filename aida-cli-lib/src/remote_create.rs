@@ -1805,9 +1805,11 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
             }
             continue;
         };
-        // Make sure origin's tip is in the local object database; a push by
-        // sha needs the objects, and the local branch may be behind origin
-        // (a forge-side merge) or ahead of it (unpushed work).
+        // Make sure origin's tip is in the local object database and
+        // `refs/remotes/origin/<branch>` reflects the fetched tip so a
+        // default-branch pre-push hook inspecting `origin/<branch>` sees the
+        // current SHA when `mirror-sync` fast-forwards mirror hubs.
+        // trace:BUG-1622 trace:BUG-2159 | ai:antigravity
         let fetched = Command::new("git")
             .arg("-C")
             .arg(project_root)
@@ -1816,8 +1818,8 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 "--quiet",
                 crate::git_arg_guard::END_OF_OPTIONS,
                 "origin",
-                &format!("refs/heads/{branch}"),
-            ]) // trace:BUG-1622 | ai:claude
+                &format!("+refs/heads/{branch}:refs/remotes/origin/{branch}"),
+            ])
             .output();
         let fetch_error = match fetched {
             Ok(o) if o.status.success() => None,
@@ -4271,5 +4273,177 @@ host = \"should.not.count\"
         assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
         let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
         assert!(body.contains("# operator wip") && body.contains("mirror"));
+    }
+
+    // trace:BUG-2159 | ai:antigravity
+    fn default_branch_pre_push_guard_script() -> &'static str {
+        r#"#!/usr/bin/env bash
+set -uo pipefail
+remote_name="${1:-origin}"
+OVERRIDE_VAR=AIDA_ALLOW_MAIN_PUSH
+
+aida_resolve_default_branch() {
+    local remote="$1" head_ref=""
+    head_ref=$(git symbolic-ref --quiet --short "refs/remotes/$remote/HEAD" 2>/dev/null)
+    head_ref="${head_ref#"$remote/"}"
+    if [ -n "$head_ref" ]; then
+        printf '%s\n' "$head_ref"
+        return 0
+    fi
+    printf 'main\n'
+}
+
+# BUG-2159: allow a push to a NON-origin remote when the pushed sha equals the
+# current origin/<branch> tip and it is a fast-forward of the remote's ref.
+aida_is_allowed_mirror_fast_forward() {
+    local remote="$1" branch="$2" local_sha="$3" remote_sha="$4" origin_tip=""
+    [ "$remote" != "origin" ] || return 1
+    case "$local_sha" in
+        *[^0]*) ;;
+        *) return 1 ;;
+    esac
+    origin_tip=$(git rev-parse --verify --quiet "refs/remotes/origin/$branch" 2>/dev/null) || return 1
+    [ -n "$origin_tip" ] && [ "$local_sha" = "$origin_tip" ] || return 1
+    case "${remote_sha:-}" in
+        '' | *[![:xdigit:]]*) return 1 ;;
+        *[^0]*)
+            git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null || return 1
+            ;;
+    esac
+    return 0
+}
+
+default_branch="$(aida_resolve_default_branch "$remote_name")"
+protected_ref="refs/heads/$default_branch"
+
+if [ -t 0 ]; then
+    exit 0
+fi
+
+offenders=()
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "${remote_ref:-}" ] && continue
+    if [ "$remote_ref" = "$protected_ref" ]; then
+        if aida_is_allowed_mirror_fast_forward "$remote_name" "$default_branch" "$local_sha" "${remote_sha:-}"; then
+            continue
+        fi
+        case "$local_sha" in
+            *[^0]*) offenders+=("$remote_ref  <-  ${local_ref:-?} ($(printf '%.12s' "$local_sha"))") ;;
+            *)      offenders+=("$remote_ref  <-  DELETION (remote is $(printf '%.12s' "${remote_sha:-?}"))") ;;
+        esac
+    fi
+done
+
+if [ "${#offenders[@]}" -eq 0 ]; then
+    exit 0
+fi
+
+if [ "${!OVERRIDE_VAR:-}" = "1" ]; then
+    exit 0
+fi
+
+printf 'pre-push: REFUSING to push to %s — the default branch.\n' "$default_branch" >&2
+exit 1
+"#
+    }
+
+    // trace:BUG-2159 | ai:antigravity
+    #[cfg(unix)]
+    #[test]
+    fn bug_2159_pre_push_hook_refuses_origin_main_and_allows_mirror_sync_fast_forward() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (project, origin, mirror) = two_hub_fixture(tmp.path());
+
+        // Seed mirror with initial main so subsequent sync is a real fast-forward
+        // (non-zero remote_sha -> new origin/main sha).
+        let initial_report = mirror_sync_hubs(&project).unwrap();
+        assert!(initial_report.failures().is_empty(), "{initial_report:?}");
+        let initial_main = tip(&origin, "main").unwrap();
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(initial_main.as_str()));
+
+        // Install the default-branch pre-push guard hook in project/.git/hooks/pre-push.
+        let hook_path = project.join(".git/hooks/pre-push");
+        crate::test_exec::write_executable(&hook_path, default_branch_pre_push_guard_script());
+
+        // 1. Direct push to origin main is refused by the hook.
+        let unreviewed = commit_file(
+            &project,
+            "direct.txt",
+            "direct\n",
+            "unreviewed direct commit",
+        );
+        let direct_push = Command::new("git")
+            .arg("-C")
+            .arg(&project)
+            .args(["push", "origin", "main"])
+            .output()
+            .unwrap();
+        assert!(
+            !direct_push.status.success(),
+            "direct push to origin main must be refused"
+        );
+        let stderr = String::from_utf8_lossy(&direct_push.stderr);
+        assert!(
+            stderr.contains("REFUSING to push to main"),
+            "expected REFUSING message, got: {stderr}"
+        );
+        assert_eq!(tip(&origin, "main").as_deref(), Some(initial_main.as_str()));
+
+        // 2. Direct push of a local-only commit (not at origin/main) to the mirror is also refused.
+        let unmerged_mirror_push = Command::new("git")
+            .arg("-C")
+            .arg(&project)
+            .args(["push", "mirror", &format!("{unreviewed}:refs/heads/main")])
+            .output()
+            .unwrap();
+        assert!(
+            !unmerged_mirror_push.status.success(),
+            "pushing a commit to mirror main that does not match origin/main must be refused"
+        );
+        assert_eq!(tip(&mirror, "main").as_deref(), Some(initial_main.as_str()));
+
+        // Reset local main back to initial_main and advance origin/main (simulating a merged PR).
+        git(&project, &["reset", "--hard", &initial_main]);
+        let merged_sha = advance_on_origin(tmp.path(), &origin, "main", "pr95.txt");
+        assert_ne!(merged_sha, initial_main);
+
+        // 3. `mirror_sync_hubs` fetches origin/main (updating refs/remotes/origin/main)
+        // and fast-forwards `mirror` main through the pre-push hook!
+        let sync_report = mirror_sync_hubs(&project).unwrap();
+        assert!(
+            sync_report.failures().is_empty(),
+            "mirror-sync must succeed when fast-forwarding mirror to origin/main: {sync_report:?}"
+        );
+        assert_eq!(
+            tip(&mirror, "main").as_deref(),
+            Some(merged_sha.as_str()),
+            "mirror main must advance to origin/main tip"
+        );
+
+        // 4. A non-fast-forward push to mirror main (even if origin/main was rewound) is refused.
+        let mirror_tmp = tempfile::tempdir().unwrap();
+        let mirror_ahead =
+            advance_on_origin(mirror_tmp.path(), &mirror, "main", "mirror-ahead.txt");
+        assert_ne!(mirror_ahead, merged_sha);
+        let non_ff_push = Command::new("git")
+            .arg("-C")
+            .arg(&project)
+            .args([
+                "push",
+                "--force",
+                "mirror",
+                &format!("{merged_sha}:refs/heads/main"),
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            !non_ff_push.status.success(),
+            "non-fast-forward push to mirror main must be refused by the hook"
+        );
+        let non_ff_stderr = String::from_utf8_lossy(&non_ff_push.stderr);
+        assert!(
+            non_ff_stderr.contains("REFUSING to push to main"),
+            "expected hook refusal on non-fast-forward mirror push, got: {non_ff_stderr}"
+        );
     }
 }
