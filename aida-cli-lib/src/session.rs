@@ -8985,7 +8985,14 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_exec_vendor_headless_command_exports_only_for_claude() {
-        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+        // TASK-1794: also pin os_wrap off — an ambient or racing
+        // AIDA_OS_WRAP=1 routes the contained launch through the bwrap
+        // preflight, which fails closed on userns-restricted CI runners.
+        // trace:TASK-1794 | ai:claude
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", None),
+        ]);
         // Claude contained -> exported
         let cmd_claude_contained = build_exec_vendor_headless_command(
             HeadlessVendor::Claude,

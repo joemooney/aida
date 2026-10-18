@@ -1166,6 +1166,9 @@ pub(crate) fn pull_store_before_id_allocation(
         });
         match pulled {
             Ok(checked) => return checked,
+            // Refused evidence is not transient and has no rebase to abort.
+            // trace:BUG-2162 | ai:claude
+            Err(e) if git_ops::is_evidence_refusal(&e) => return Err(e),
             Err(e) if attempt + 1 < cfg.retry_max => {
                 eprintln!(
                     "{} store allocation pull failed ({}) — retrying ({}/{})",

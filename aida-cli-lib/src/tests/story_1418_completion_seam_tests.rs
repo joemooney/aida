@@ -30,23 +30,125 @@ fn rust_sources(dir: &Path, files: &mut Vec<PathBuf>) {
 fn scanned_files() -> Vec<(String, String)> {
     let cli_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let core_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("../aida-core/src");
+    scanned_files_under(&[("aida-cli-lib", cli_src), ("aida-core", core_src)])
+}
+
+/// Every non-test source under each labelled root, keyed `label/relative`.
+/// A file reachable only as an out-of-line `#[cfg(test)] mod name;` (or
+/// `#[cfg(test)] #[path = "..."] mod name;`) is a test fixture for the same
+/// reason an inline `#[cfg(test)] mod { }` block is (TASK-1476), so it is
+/// left out — e.g. `aida-core/git_ops/evidence/tests.rs`.
+// trace:BUG-2162 | ai:claude
+fn scanned_files_under(roots: &[(&str, PathBuf)]) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    for (label, root) in [("aida-cli-lib", cli_src), ("aida-core", core_src)] {
+    for (label, root) in roots {
         let mut files = Vec::new();
-        rust_sources(&root, &mut files);
-        for path in files {
+        rust_sources(root, &mut files);
+        let sources: Vec<(PathBuf, String)> = files
+            .into_iter()
+            .map(|path| {
+                let source = std::fs::read_to_string(&path).unwrap();
+                (path, source)
+            })
+            .collect();
+        let test_only: std::collections::BTreeSet<PathBuf> = sources
+            .iter()
+            .flat_map(|(path, source)| cfg_test_module_files(path, source))
+            .collect();
+        for (path, source) in sources {
+            if test_only.contains(&path) {
+                continue;
+            }
             let rel = path
-                .strip_prefix(&root)
+                .strip_prefix(root)
                 .unwrap()
                 .to_string_lossy()
                 .replace('\\', "/");
-            out.push((
-                format!("{label}/{rel}"),
-                std::fs::read_to_string(&path).unwrap(),
-            ));
+            out.push((format!("{label}/{rel}"), source));
         }
     }
     out
+}
+
+/// The files `source` (at `path`) declares as out-of-line `#[cfg(test)]`
+/// modules, resolved the way rustc does: a `#[path]` is relative to the
+/// declaring file's directory; otherwise `name.rs` / `name/mod.rs` sits next
+/// to a `lib.rs`/`main.rs`/`mod.rs`, or under `<stem>/` for any other file.
+/// Both candidate spellings are returned; only the one that exists matters.
+// trace:BUG-2162 | ai:claude
+fn cfg_test_module_files(path: &Path, source: &str) -> Vec<PathBuf> {
+    let source = source.replace("\r\n", "\n");
+    let dir = path.parent().unwrap_or(Path::new(""));
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let module_dir = if matches!(stem, "lib" | "main" | "mod") {
+        dir.to_path_buf()
+    } else {
+        dir.join(stem)
+    };
+    let needle = "#[cfg(test)]";
+    let mut out = Vec::new();
+    let mut from = 0usize;
+    while let Some(rel) = source[from..].find(needle) {
+        let start = from + rel + needle.len();
+        from = start;
+        if let Some((path_attr, ident)) = out_of_line_mod_after(&source, start) {
+            match path_attr {
+                Some(p) => out.push(dir.join(p)),
+                None => {
+                    out.push(module_dir.join(format!("{ident}.rs")));
+                    out.push(module_dir.join(&ident).join("mod.rs"));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// From `start` (just past `#[cfg(test)]`), skip trivia and further
+/// attributes (remembering a `#[path = "..."]`), then require `mod <ident>;`.
+/// Returns `(path attribute, ident)`, or `None` for anything else — notably
+/// an inline `mod x { }`, which `strip_cfg_test_mod_blocks` handles.
+fn out_of_line_mod_after(source: &str, start: usize) -> Option<(Option<String>, String)> {
+    let mut i = start;
+    let mut path_attr = None;
+    loop {
+        i = skip_trivia(source, i);
+        if !source[i..].starts_with('#') {
+            break;
+        }
+        let open = skip_trivia(source, i + 1);
+        if !source[open..].starts_with('[') {
+            return None;
+        }
+        let end = matching_bracket_end(source, open)?;
+        let body = source[open + 1..end - 1].trim();
+        if let Some(value) = body.strip_prefix("path") {
+            if let Some(value) = value.trim_start().strip_prefix('=') {
+                path_attr = Some(value.trim().trim_matches('"').to_string());
+            }
+        }
+        i = end;
+    }
+    let rest = source[i..].strip_prefix("mod")?;
+    if rest.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    i = skip_trivia(source, i + "mod".len());
+    let ident_start = i;
+    while source[i..]
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_alphanumeric() || c == '_')
+    {
+        i += source[i..].chars().next().unwrap().len_utf8();
+    }
+    if i == ident_start {
+        return None;
+    }
+    let ident = source[ident_start..i].to_string();
+    source[skip_trivia(source, i)..]
+        .starts_with(';')
+        .then_some((path_attr, ident))
 }
 
 /// Direct `... = RequirementStatus::Completed;` assignments and
@@ -96,10 +198,9 @@ fn allowed_direct_writes() -> BTreeMap<&'static str, usize> {
 /// Also normalises `\r\n` to `\n` first so the byte offsets this function
 /// computes line up regardless of the source file's line endings.
 ///
-/// Out-of-line `#[cfg(test)] #[path = "tests/..."] mod name;` declarations
-/// have no `{ }` body here — the referenced file lives under a `tests/`
-/// directory, which `rust_sources` already skips entirely — so they pass
-/// through untouched.
+/// Out-of-line `#[cfg(test)] mod name;` declarations have no `{ }` body
+/// here, so they pass through untouched; the file they name is dropped from
+/// the scan instead (`scanned_files_under`).
 // trace:TASK-1476 | ai:claude
 fn strip_cfg_test_mod_blocks(source: &str) -> String {
     let source = source.replace("\r\n", "\n");
@@ -454,6 +555,52 @@ mod tests {
 }
 "##;
     assert_eq!(direct_completed_writes(source), 1);
+}
+
+/// BUG-2162: a file reachable only as an out-of-line `#[cfg(test)]` module
+/// (sibling `<stem>/tests.rs`, `tests.rs` next to `mod.rs`, or a
+/// `#[path = "..."]` target) is not scanned, while a production module
+/// declared the same way without `#[cfg(test)]` still is and still counts.
+// trace:BUG-2162 | ai:claude
+#[test]
+fn out_of_line_cfg_test_module_files_are_ignored_but_production_still_counts() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let root = tmp.path().join("src");
+    let write = |rel: &str, body: &str| {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    };
+    let completed = concat!("    req.status = RequirementStatus::", "Completed;\n");
+    write(
+        "lib.rs",
+        "mod prod;\nmod gate;\npub mod nested;\n#[cfg(test)]\n#[path = \"lib_fixtures.rs\"]\nmod fixtures;\n",
+    );
+    write("lib_fixtures.rs", &format!("fn f() {{\n{completed}}}\n"));
+    write("prod.rs", &format!("fn ship() {{\n{completed}}}\n"));
+    write("gate.rs", "fn g() {}\n#[cfg(test)]\nmod tests;\n");
+    write("gate/tests.rs", &format!("fn t() {{\n{completed}}}\n"));
+    write(
+        "nested/mod.rs",
+        "// a comment\r\n#[cfg(test)]\r\nmod tests;\r\n",
+    );
+    write("nested/tests.rs", &format!("fn t() {{\n{completed}}}\n"));
+
+    let files: BTreeMap<String, String> = scanned_files_under(&[("crate", root)])
+        .into_iter()
+        .collect();
+    let names: Vec<&str> = files.keys().map(String::as_str).collect();
+    assert_eq!(
+        names,
+        [
+            "crate/gate.rs",
+            "crate/lib.rs",
+            "crate/nested/mod.rs",
+            "crate/prod.rs"
+        ],
+        "only the cfg(test)-only module files are dropped"
+    );
+    assert_eq!(direct_completed_writes(&files["crate/prod.rs"]), 1);
 }
 
 #[test]

@@ -1,3 +1,8 @@
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
 symref before asking the forge. A stale origin/HEAD wins over forge evidence;
 refresh it after a remote default change. Without that symref, the read-only
@@ -465,6 +470,14 @@ edits direct amendments to comments. CLI and MCP share this preflight, including
 indirect lock writes when an experiment completes. See
 [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+AIDA-owned store syncs keep that evidence across clones: rebase, union merge
+and reconcile fast-forward pin both tips and their merge bases, refuse a
+changed, deleted or divergent locked description before Git runs, and commit
+any lock the combined graph first establishes before reporting success. A
+failure after Git is reported with exact commits and is never reset. Raw Git,
+older binaries and lock-free readers are outside this guarantee. See
+[store sync](docs/cli/10-storage.md#store-sync-and-pre-registration).
+<!-- trace:BUG-2162 | ai:claude -->
 
 ## Feature surface (high level)
 
@@ -1010,6 +1023,15 @@ the protected canonical edit flow; YAML row roundtrips preserve the data, while
 archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
+
+Contained `queue work --plan-only` selects Claude's `plan` permission mode
+alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
+to inherited, explicit sandbox and configured containment. Ordinary contained
+pickups retain `dontAsk`; caller permission overrides under contained parents
+and bypass/contained combinations still refuse. The documented interactive-only
+plan lane rejects headless flags at parsing, before lifecycle setup; headless
+planning remains the separate `--with-plan` drain phase.
+<!-- trace:TASK-1794 | ai:codex -->
 
 Standalone reviewer pickup coexists with a live implementer only with explicit
 `queue work --role reviewer` and an unambiguous backing spec. An inferred role

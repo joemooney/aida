@@ -219,6 +219,28 @@ pub enum PrCommand {
         // trace:BUG-1919 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_complete: bool,
+
+        /// Rebase-merge the PR (`gh pr merge --rebase --match-head-commit <SHA>`)
+        /// instead of squash-merging, preserving each slice commit on the base
+        /// branch. Runs the same approval, authority, CI, and merge-hold gates
+        /// as squash. Rebase merges produce no squash subject and complete no
+        /// spec unless `--final-slice` is also passed.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long)]
+        rebase: bool,
+
+        /// Explicit merge method (`squash` or `rebase`). Equivalent to `--rebase`
+        /// when set to `rebase`.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long, value_enum, value_name = "METHOD", conflicts_with = "rebase")]
+        merge_method: Option<crate::pr_ship::ShipMergeMethod>,
+
+        /// Complete the PR's resolved spec(s) after a `--rebase` merge lands.
+        /// Without this flag, a rebase merge treats the PR as a non-completing
+        /// slice and leaves the owning spec's status unchanged.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long, visible_alias = "complete-spec", conflicts_with = "no_complete")]
+        final_slice: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but

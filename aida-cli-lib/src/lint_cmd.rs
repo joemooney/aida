@@ -7,6 +7,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "lint_cmd_args.rs"]
+pub(crate) mod lint_cmd_args;
+pub(crate) use lint_cmd_args::*;
+
 use crate::{find_project_root, load_store_for_lookup};
 
 /// `aida lint [<SPEC>|--scope feature|task|story] [--json]` — opt-in EARS-style
@@ -192,10 +197,18 @@ pub(crate) fn handle_lint_command(
 /// prints suggested rewrites as drafts only — it never edits a spec.
 /// Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
 /// every spec of that kind. Read-only and deterministic (no LLM call).
+/// `aida lint constants` instead lints source: numeric literals in
+/// traced Rust code that the owning spec never mentions.
 // trace:TASK-0417 | ai:claude
 #[derive(clap::Parser, Debug)]
 #[clap(name = "lint")]
+#[clap(args_conflicts_with_subcommands = true)]
 pub(crate) struct LintArgs {
+    /// Source lints (`constants`). Omit to lint requirement text.
+    // trace:TASK-1785 | ai:claude
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::LintCommand>,
+
     /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
     /// specs.
     pub spec: Option<String>,
@@ -220,7 +233,21 @@ fn run_lint(
 ) -> anyhow::Result<()> {
     use crate::*;
     let args = <LintArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    let LintArgs { spec, scope, json } = &args;
+    let LintArgs {
+        cmd,
+        spec,
+        scope,
+        json,
+    } = &args;
+    // trace:TASK-1785 | ai:claude
+    if let Some(crate::cli::LintCommand::Constants {
+        path,
+        json,
+        fail_on,
+    }) = cmd
+    {
+        return lint_constants::handle_lint_constants(path.as_deref(), *json, *fail_on);
+    }
     return self::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
 }
 

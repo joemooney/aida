@@ -585,8 +585,22 @@ pub enum QueueCommand {
         /// auto-complete plan-phase is separate; this flag is interactive
         /// only, so it conflicts with --auto-complete for now.
         // trace:STORY-265 | ai:claude
-        #[clap(long, conflicts_with = "auto_complete")]
+        // trace:TASK-1794 | ai:codex — the headless launcher owns a separate
+        // permission posture; plan-only is the documented interactive lane.
+        #[clap(long, conflicts_with_all = ["autonomous", "no_human"])]
         plan_only: bool,
+        /// Internal: the headless planning session the `--with-plan` drain
+        /// prelude launches. Same planning prompt as `--plan-only`, but under
+        /// the headless launcher's own posture; requires `--no-human`.
+        // trace:TASK-1794 | ai:claude — hidden so `--plan-only` stays the only
+        // user-facing plan lane and keeps its interactive-only conflict.
+        #[clap(
+            long,
+            hide = true,
+            requires = "no_human",
+            conflicts_with_all = ["autonomous", "plan_only", "guided"]
+        )]
+        plan_phase: bool,
         /// Guided keystone-implementation mode: launch a structured,
         /// step-by-step decision dialog for the spec instead of a normal
         /// pickup. Runs `/aida-guided-implement <SPEC>` — the agent surfaces

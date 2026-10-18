@@ -75,8 +75,22 @@ pub(crate) fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Res
         TraceCommand::Gate { range, json } => {
             crate::handle_trace_gate(range.as_deref(), *json)?;
         }
-        TraceCommand::Coverage { range, json, block } => {
-            crate::handle_trace_coverage(range.as_deref(), *json, *block)?;
+        TraceCommand::Coverage {
+            range,
+            json,
+            block,
+            all,
+            path,
+            fail_on,
+        } => {
+            crate::trace_tree_coverage::dispatch_coverage(
+                range.as_deref(),
+                *json,
+                *block,
+                *all,
+                path.as_deref(),
+                *fail_on,
+            )?;
         }
         TraceCommand::Check { path, json, block } => {
             crate::handle_trace_check(path.as_deref(), *json, *block)?;
@@ -757,13 +771,25 @@ fn run_trace(
             // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
             // needs the shared storage handle. trace:STORY-499 | ai:claude
             if let TraceArgs {
-                inner: TraceCommand::Coverage { range, json, block },
+                inner:
+                    TraceCommand::Coverage {
+                        range,
+                        json,
+                        block,
+                        all,
+                        path,
+                        fail_on,
+                    },
             } = &args
             {
-                return crate::command_registry::returned(handle_trace_coverage(
+                // trace:TASK-1783 | ai:claude
+                return crate::command_registry::returned(trace_tree_coverage::dispatch_coverage(
                     range.as_deref(),
                     *json,
                     *block,
+                    *all,
+                    path.as_deref(),
+                    *fail_on,
                 ));
             }
             Ok(crate::command_registry::Flow::Continue)

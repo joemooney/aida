@@ -366,7 +366,9 @@ Commands:
                 vague triggers, missing expected behavior, conflicting constraints, and
                 low-testability wording, and prints suggested rewrites as drafts only — it never
                 edits a spec. Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
-                every spec of that kind. Read-only and deterministic (no LLM call)
+                every spec of that kind. Read-only and deterministic (no LLM call). `aida lint
+                constants` instead lints source: numeric literals in traced Rust code that the
+                owning spec never mentions
   verify        Explicit, report-only host verification using built-in probes. Never executes a
                 command from the requirements store
   plan          Work with implementation plans archived under `docs/plans/`: `verify` lints a plan
@@ -12839,6 +12841,25 @@ Options:
           `Non-completing slice` has the same effect; and the branch-name fallback is skipped on its
           own when the spec carries `closure:pending` or has open slice children
 
+      --rebase
+          Rebase-merge the PR (`gh pr merge --rebase --match-head-commit <SHA>`) instead of
+          squash-merging, preserving each slice commit on the base branch. Runs the same approval,
+          authority, CI, and merge-hold gates as squash. Rebase merges produce no squash subject and
+          complete no spec unless `--final-slice` is also passed
+
+      --merge-method <METHOD>
+          Explicit merge method (`squash` or `rebase`). Equivalent to `--rebase` when set to
+          `rebase`
+          
+          [possible values: squash, rebase]
+
+      --final-slice
+          Complete the PR's resolved spec(s) after a `--rebase` merge lands. Without this flag, a
+          rebase merge treats the PR as a non-completing slice and leaves the owning spec's status
+          unchanged
+          
+          [aliases: --complete-spec]
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -16328,7 +16349,9 @@ Commands:
             trailer), per the deterministic coverage definition + exemptions (tests / generated /
             docs / config / vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`,
             which validates the trailer spec-ids; this checks that the changed CODE is traced.
-            Report-only by default (CI succeeds); `--block` fails CI on any uncovered coverable hunk
+            Report-only by default (CI succeeds); `--block` fails CI on any uncovered coverable
+            hunk. `--all` / `--path` switch to whole-tree mode: per Rust file, the functions with no
+            trace marker in or directly above them
   check     Trace-ROT detector: scan source for inline code-to-spec trace markers, resolve each
             referenced id against the live requirement graph, and flag dangling traces — markers
             whose target no longer exists (deleted, renumbered) or resolves to a rejected spec.
@@ -16541,7 +16564,8 @@ code-to-spec provenance (an inline trace comment OR a live commit `(SPEC-ID)` tr
 deterministic coverage definition + exemptions (tests / generated / docs / config / vendored /
 pure-deletion / fmt-only / trivial). Distinct from `gate`, which validates the trailer spec-ids;
 this checks that the changed CODE is traced. Report-only by default (CI succeeds); `--block` fails
-CI on any uncovered coverable hunk
+CI on any uncovered coverable hunk. `--all` / `--path` switch to whole-tree mode: per Rust file, the
+functions with no trace marker in or directly above them
 
 Usage: aida trace coverage [OPTIONS]
 
@@ -16557,6 +16581,20 @@ Options:
       --block
           Fail (exit non-zero) when any coverable changed hunk is uncovered. Default is report-only:
           the report prints but CI succeeds
+
+      --all
+          Whole-tree mode over the project: report every Rust function no trace marker claims, per
+          file
+
+      --path <PATH>
+          Whole-tree mode over one file or directory
+
+      --fail-on <KIND>
+          Whole-tree mode only: exit non-zero when the report contains findings of this kind.
+          Without it the report always exits 0
+
+          Possible values:
+          - uncovered: Any function no trace marker claims
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -19728,11 +19766,6 @@ Options:
           drain (`--auto-complete` / `--drain`). Composes with `--no-human` (the plan phase runs
           headless too when the implementer does)
 
-      --role <NAME>
-          Override the inferred role. Without this, the role is derived from the queue items'
-          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
-          items). Falls back to active shell role when items have no `for_role`
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -19742,6 +19775,11 @@ Options:
           - human: Human-readable tables / emoji (the interactive default at a TTY)
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
+
+      --role <NAME>
+          Override the inferred role. Without this, the role is derived from the queue items'
+          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
+          items). Falls back to active shell role when items have no `for_role`
 
       --no-pull
           Skip the pre-pickup `aida db sync --pull`. By default queue work pulls the orphan-store
@@ -22521,9 +22559,20 @@ typed relationships, traces); this is an optional clarity lens, never a required
 spec's description + acceptance criteria for vague triggers, missing expected behavior, conflicting
 constraints, and low-testability wording, and prints suggested rewrites as drafts only — it never
 edits a spec. Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep every spec of
-that kind. Read-only and deterministic (no LLM call)
+that kind. Read-only and deterministic (no LLM call). `aida lint constants` instead lints source:
+numeric literals in traced Rust code that the owning spec never mentions
 
 Usage: aida lint [OPTIONS] [SPEC]
+       aida lint <COMMAND>
+
+Commands:
+  constants  Report numeric literals inside traced Rust functions and constants that the owning spec
+             never mentions. A literal is explained when its value appears in the description of a
+             spec traced on (or directly above) the enclosing item, or in a decision linked to that
+             spec. 0 and 1 are exempt; mark any other deliberate choice with a trailing `//
+             arbitrary` (or `// arbitrary: <reason>`) comment. Report-only: exits non-zero only with
+             `--fail-on unexplained`
+  help       Print this message or the help of the given subcommand(s)
 
 Arguments:
   [SPEC]
@@ -22537,6 +22586,40 @@ Options:
 
       --json
           Emit findings as JSON for agents / scripts
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lint constants
+Report numeric literals inside traced Rust functions and constants that the owning spec never
+mentions. A literal is explained when its value appears in the description of a spec traced on (or
+directly above) the enclosing item, or in a decision linked to that spec. 0 and 1 are exempt; mark
+any other deliberate choice with a trailing `// arbitrary` (or `// arbitrary: <reason>`) comment.
+Report-only: exits non-zero only with `--fail-on unexplained`
+
+Usage: aida lint constants [OPTIONS]
+
+Options:
+      --path <PATH>
+          File or directory to scan (defaults to the project root)
+
+      --json
+          Emit the report as JSON for agents / scripts
+
+      --fail-on <KIND>
+          Exit non-zero when the report contains findings of this kind
+
+          Possible values:
+          - unexplained: Any literal the owning spec does not explain
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -35864,6 +35947,11 @@ Options:
         "help": "Implementer's actual effort spent: 15m, 1h, 4h, 1d, or 1w. Captured to `.aida/effort-calibration/<SPEC>.yaml` as the ship/implementation touchpoint. `1d` is 8 work-hours; `1w` is 40 work-hours"
       },
       {
+        "name": "final-slice",
+        "takes_value": false,
+        "help": "Complete the PR's resolved spec(s) after a `--rebase` merge lands. Without this flag, a rebase merge treats the PR as a non-completing slice and leaves the owning spec's status unchanged"
+      },
+      {
         "name": "force-delete-branch",
         "takes_value": false,
         "help": "Delete the merged branch even when branches/PRs are stacked on it. Without this, ship keeps the branch alive when it detects stacked children, so deleting it can't auto-close their PRs; pass this to orphan the children deliberately"
@@ -35877,6 +35965,11 @@ Options:
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "merge-method",
+        "takes_value": true,
+        "help": "Explicit merge method (`squash` or `rebase`). Equivalent to `--rebase` when set to `rebase`"
       },
       {
         "name": "no-cleanup",
@@ -35907,6 +36000,11 @@ Options:
         "name": "override-stale-check",
         "takes_value": false,
         "help": "Ship even when the PR's green check completed before a CI-definition file (a workflow, or a script it invokes directly) changed on the base branch. Without this, ship refuses so a green that no longer means what it looks like doesn't merge unnoticed. A plain test-file change on the base branch only warns and never needs this flag"
+      },
+      {
+        "name": "rebase",
+        "takes_value": false,
+        "help": "Rebase-merge the PR (`gh pr merge --rebase --match-head-commit <SHA>`) instead of squash-merging, preserving each slice commit on the base branch. Runs the same approval, authority, CI, and merge-hold gates as squash. Rebase merges produce no squash subject and complete no spec unless `--final-slice` is also passed"
       },
       {
         "name": "wait",
@@ -39753,12 +39851,22 @@ Options:
       "trace",
       "coverage"
     ],
-    "about": "CI trace-COVERAGE check: walk a diff and report which changed source hunks carry the required code-to-spec provenance (an inline trace comment OR a live commit `(SPEC-ID)` trailer), per the deterministic coverage definition + exemptions (tests / generated / docs / config / vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`, which validates the trailer spec-ids; this checks that the changed CODE is traced. Report-only by default (CI succeeds); `--block` fails CI on any uncovered coverable hunk",
+    "about": "CI trace-COVERAGE check: walk a diff and report which changed source hunks carry the required code-to-spec provenance (an inline trace comment OR a live commit `(SPEC-ID)` trailer), per the deterministic coverage definition + exemptions (tests / generated / docs / config / vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`, which validates the trailer spec-ids; this checks that the changed CODE is traced. Report-only by default (CI succeeds); `--block` fails CI on any uncovered coverable hunk. `--all` / `--path` switch to whole-tree mode: per Rust file, the functions with no trace marker in or directly above them",
     "flags": [
+      {
+        "name": "all",
+        "takes_value": false,
+        "help": "Whole-tree mode over the project: report every Rust function no trace marker claims, per file"
+      },
       {
         "name": "block",
         "takes_value": false,
         "help": "Fail (exit non-zero) when any coverable changed hunk is uncovered. Default is report-only: the report prints but CI succeeds"
+      },
+      {
+        "name": "fail-on",
+        "takes_value": true,
+        "help": "Whole-tree mode only: exit non-zero when the report contains findings of this kind. Without it the report always exits 0"
       },
       {
         "name": "format",
@@ -39774,6 +39882,11 @@ Options:
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON instead of human text"
+      },
+      {
+        "name": "path",
+        "takes_value": true,
+        "help": "Whole-tree mode over one file or directory"
       },
       {
         "name": "range",
@@ -43158,6 +43271,11 @@ Options:
         "help": "Plan-only mode: launch a PLANNING session for the spec instead of an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`) and defaults the permission mode to `plan` (read-only) so the session writes a `docs/plans/` file without touching code. After the plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets you plan work ahead while another spec is being implemented (the parallel-pipelining workflow). Headless auto-complete plan-phase is separate; this flag is interactive only, so it conflicts with --auto-complete for now"
       },
       {
+        "name": "plan-phase",
+        "takes_value": false,
+        "help": "Internal: the headless planning session the `--with-plan` drain prelude launches. Same planning prompt as `--plan-only`, but under the headless launcher's own posture; requires `--no-human`"
+      },
+      {
         "name": "quiet",
         "takes_value": false,
         "help": "Suppress the end-of-command summary a standalone `aida queue work <PR-N> --role reviewer` prints (verdict, cost, artifact paths). For scripted consumers that read the verdict file `.aida/review-verdicts/PR-N.json` directly. No effect on non-reviewer or orchestrator-driven runs"
@@ -45578,7 +45696,7 @@ Options:
       "aida",
       "lint"
     ],
-    "about": "Opt-in EARS-style quality lint for requirement text. AIDA stays a graph-first substrate (stable IDs, typed relationships, traces); this is an optional clarity lens, never a required schema. Scores a spec's description + acceptance criteria for vague triggers, missing expected behavior, conflicting constraints, and low-testability wording, and prints suggested rewrites as drafts only — it never edits a spec. Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep every spec of that kind. Read-only and deterministic (no LLM call)",
+    "about": "Opt-in EARS-style quality lint for requirement text. AIDA stays a graph-first substrate (stable IDs, typed relationships, traces); this is an optional clarity lens, never a required schema. Scores a spec's description + acceptance criteria for vague triggers, missing expected behavior, conflicting constraints, and low-testability wording, and prints suggested rewrites as drafts only — it never edits a spec. Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep every spec of that kind. Read-only and deterministic (no LLM call). `aida lint constants` instead lints source: numeric literals in traced Rust code that the owning spec never mentions",
     "flags": [
       {
         "name": "format",
@@ -45599,6 +45717,42 @@ Options:
         "name": "scope",
         "takes_value": true,
         "help": "Lint every spec of this kind instead of a single SPEC-ID. One of `feature`, `task`, or `story`. `feature` covers the requirement types (functional / non-functional / system / user)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lint",
+      "constants"
+    ],
+    "about": "Report numeric literals inside traced Rust functions and constants that the owning spec never mentions. A literal is explained when its value appears in the description of a spec traced on (or directly above) the enclosing item, or in a decision linked to that spec. 0 and 1 are exempt; mark any other deliberate choice with a trailing `// arbitrary` (or `// arbitrary: <reason>`) comment. Report-only: exits non-zero only with `--fail-on unexplained`",
+    "flags": [
+      {
+        "name": "fail-on",
+        "takes_value": true,
+        "help": "Exit non-zero when the report contains findings of this kind"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Emit the report as JSON for agents / scripts"
+      },
+      {
+        "name": "path",
+        "takes_value": true,
+        "help": "File or directory to scan (defaults to the project root)"
       }
     ],
     "hidden": false
