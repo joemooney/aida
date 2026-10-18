@@ -1,4 +1,12 @@
 - user_id: role:implementer
+  requirement_id: 01a15037-319b-7e92-850d-affbbac2a99d
+  position: 295000
+  added_by: role:implementer
+  note: 'Operator-approved 2026-10-18: addressable agent handles (statusline + agent ls + mailbox send). Architecture-touching (session-start hooks for 3 clients, registry, mailbox resolution): post a sketch on the spec and get advisor signoff before implementing.'
+  added_at: 2026-10-18T18:32:13.699076950Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
   requirement_id: 01a11874-024a-71b2-935d-56a2a7e89778
   position: 296000
   added_by: role:implementer
