@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:34:37.759524907Z
-modified_at: 2026-10-18T14:30:57.059929704Z
+modified_at: 2026-10-18T16:10:47.973736154Z
 req_type: Task
 tags:
 - docs:impacted
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-10-18T13:38:57.341046774Z
   modified_at: 2026-10-18T13:38:57.341046774Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a14fc7-ab25-7091-b677-7af8f42518bd
+  author: joe
+  content: |
+    Implemented in PR #2723 (merged at 2a7d4df2dd); details on STORY-1672.
+  created_at: 2026-10-18T16:10:47.973736154Z
+  modified_at: 2026-10-18T16:10:47.973736154Z
+  session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
 history:
 - id: 01a14de9-1903-7cc3-aaec-13d5664dbfe1
   author: joe
