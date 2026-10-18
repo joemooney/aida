@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-18T08:45:00.357150382Z
+modified_at: 2026-10-18T09:03:58.123527844Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -110,6 +110,12 @@ comments:
   content: Commit 98fe343d08 references this requirement
   created_at: 2026-10-18T08:45:00.357150382Z
   modified_at: 2026-10-18T08:45:00.357150382Z
+  session_id: 71d347d5-57a7-4c97-b5cd-5ac563246710
+- id: 01a14e40-e4ab-7650-8219-02205a40372c
+  author: joe
+  content: 'IMPLEMENTATION PR READY: #2725 (ready, not merged), head 98fe343d08 on claude/story-1700; origin/main merged in at 188adef04b (TASK-1800 had not landed, so it is not re-implemented, per C2). #2722 is closed and its plan doc is folded in. Commits: plan doc; C1 pure move into mandate_ship.rs; F1 Option A (fleet_lanes::classify_lanes; story_1699 tests unchanged and green); R1-R7 (mandate.rs, new modules mandate_gates.rs and mandate_drive.rs, events, the predicate field, schedule jobs in .aida/config.toml, the doctor category, the digest section, display in the session-context hook template, awaiting --notice and handoff --show); test-touched fixes. Files: 33 changed, including the new modules mandate_ship.rs, fleet_lanes.rs, mandate_gates.rs, mandate_drive.rs and the tests story_1700_lane_classify_tests.rs and story_1700_drive_mandate_tests.rs (T7.1-T7.14). Checks: make check-ci-fast 30/30 gates at head; make check-ci-compile passed; make test-touched found 2 failures, both fixed and now passing (config-trust inventory entry for mandate_gates.rs; spec id removed from a --help doc line); STRICT area lib run 208 passed; story_1700 tests 10 runs in a row green. Notes: Antigravity has no SessionStart or per-turn hook, so I filed TASK-1806 for its mandate display. The tick''s lanes are relay runs plus approved, releasable held PRs; there is no separate approved-unowned-spec lane (dispatch comes from crashed, capped and no-slot runs). This PR touches mandate code, so its merge goes to the operator after an attested STRICT approve.'
+  created_at: 2026-10-18T09:03:58.123527844Z
+  modified_at: 2026-10-18T09:03:58.123527844Z
   session_id: 71d347d5-57a7-4c97-b5cd-5ac563246710
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
