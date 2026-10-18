@@ -389,7 +389,9 @@ unknown. `aida agent new` probes the selected executable with `--version`
 launch. The probe retains at most 257 output bytes, including a trailing newline. A
 successful UTF-8 single-line value of at most 256 bytes supplies the value;
 failed, empty or invalid output clears an inherited value and leaves provenance
-unknown. Launch previews do not run this probe. Other launchers must supply the
+unknown. The probe runs inside the same `[contained] os_wrap` sandbox as the
+child it stamps and carries none of the launching seat's grant, role or purpose.
+Launch previews do not run this probe. Other launchers must supply the
 variable themselves.
 <!-- trace:TASK-1793 | ai:codex -->
 

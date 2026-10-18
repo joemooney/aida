@@ -4363,6 +4363,36 @@ pub(crate) fn resolved_agent_program_and_args(
 ) -> Result<(std::ffi::OsString, Vec<String>)> {
     let mut all_args: Vec<String> = config.default_args.clone();
     all_args.extend(prompt_args.iter().cloned());
+    wrapped_agent_program_and_args(binary, config, plan, all_args, wrap_claude)
+}
+
+/// The `--version` probe for [`apply_harness_version`], resolved through the
+/// SAME os_wrap decision as the child it stamps: when the child runs inside
+/// bwrap, so does the probe (and a wrap that cannot be set up fails closed
+/// rather than probing unconfined).
+// trace:TASK-1793 | ai:claude
+pub(crate) fn harness_version_probe_program_and_args(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    wrap_claude: bool,
+) -> Result<(std::ffi::OsString, Vec<String>)> {
+    wrapped_agent_program_and_args(
+        binary,
+        config,
+        plan,
+        vec!["--version".to_string()],
+        wrap_claude,
+    )
+}
+
+fn wrapped_agent_program_and_args(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    all_args: Vec<String>,
+    wrap_claude: bool,
+) -> Result<(std::ffi::OsString, Vec<String>)> {
     if wrap_claude && config.agent_type == "claude" {
         let (prog, args) = crate::session::os_wrapped_program_and_args(
             &plan.launch_cwd,
@@ -4697,11 +4727,16 @@ pub(crate) fn render_agent_show_prompt(
 
 /// Ask the selected executable, never the launching session, for its version.
 /// A failed probe clears inherited context so a different vendor cannot receive
-/// its parent's version. Previews do not call this helper.
+/// its parent's version. Previews do not call this helper. `probe` is the
+/// program + argv from [`harness_version_probe_program_and_args`], so the probe
+/// runs under the same os_wrap boundary as the child.
 // trace:TASK-1793 | ai:codex
-fn apply_harness_version(command: &mut std::process::Command, binary: &std::path::Path) {
+fn apply_harness_version(
+    command: &mut std::process::Command,
+    (program, args): (std::ffi::OsString, Vec<String>),
+) {
     command.env_remove("AIDA_HARNESS_VERSION");
-    if let Some(version) = reported_harness_version(binary, command.get_current_dir()) {
+    if let Some(version) = reported_harness_version(&program, &args, command.get_current_dir()) {
         command.env("AIDA_HARNESS_VERSION", version);
     }
 }
@@ -4709,29 +4744,39 @@ fn apply_harness_version(command: &mut std::process::Command, binary: &std::path
 // trace:TASK-1793 | ai:codex
 #[cfg(unix)]
 fn reported_harness_version(
-    binary: &std::path::Path,
+    program: &std::ffi::OsStr,
+    args: &[String],
     cwd: Option<&std::path::Path>,
 ) -> Option<String> {
+    use crate::notify::ChildPoll;
     use std::io::Read;
     use std::os::fd::AsRawFd;
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
 
     let start = std::time::Instant::now();
-    let mut probe = Command::new(binary);
+    let mut probe = Command::new(program);
     if let Some(cwd) = cwd {
         probe.current_dir(cwd);
     }
+    // The probe carries no seat authority: both launch paths strip the
+    // launching seat's grant from the child, so the probe must not hold it
+    // either (nor the seat's role or purpose).
+    // trace:TASK-1793 | ai:claude
+    probe
+        .env_remove(seat_authority::GRANT_ENV)
+        .env_remove("AIDA_SESSION_ROLE")
+        .env_remove("AIDA_SESSION_PURPOSE");
     let mut child = probe
-        .arg("--version")
+        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .process_group(0)
         .spawn_retrying_etxtbsy()
         .ok()?;
-    let pid = child.id();
-    let result = (|| {
+    let mut reaped = None;
+    let output = (|| {
         let mut stdout = child.stdout.take()?;
         let fd = stdout.as_raw_fd();
         // SAFETY: fd belongs to this live stdout pipe; these fcntl operations
@@ -4758,17 +4803,17 @@ fn reported_harness_version(
                 Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(_) => return None,
             }
-            if let Some(status) = child.try_wait().ok()? {
-                if !status.success() {
-                    return None;
-                }
-                if eof {
-                    let output = String::from_utf8(bytes).ok()?;
-                    let value = output.trim();
-                    return (!value.is_empty()
-                        && value.len() <= 256
-                        && !value.chars().any(char::is_control))
-                    .then(|| value.to_string());
+            // Linux observes the exit WITHOUT reaping, so the leader's pid
+            // stays reserved as the group id until the cleanup below.
+            match crate::notify::poll_exit(&mut child).ok()? {
+                ChildPoll::Running => {}
+                ChildPoll::ExitedUnreaped if eof => return Some(bytes),
+                ChildPoll::ExitedUnreaped => {}
+                ChildPoll::Reaped(status) => {
+                    reaped = Some(status);
+                    if eof {
+                        return Some(bytes);
+                    }
                 }
             }
             if start.elapsed() >= std::time::Duration::from_secs(2) {
@@ -4777,17 +4822,31 @@ fn reported_harness_version(
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
     })();
-    // Terminate the probe group even when its leader has already exited. No
-    // pipe-reader threads survive a timeout or an oversized output stream.
-    crate::kill_process_group(pid);
-    let _ = child.kill();
-    let _ = child.wait();
-    result
+    // Signal the probe group only while its leader is unreaped: its pid is
+    // then still the group id and cannot have been recycled. This also ends
+    // descendants of an exited leader that still hold the pipe. A leader
+    // already reaped by the non-Linux poll is never group-signalled.
+    let status = match reaped {
+        Some(status) => status,
+        None => {
+            crate::kill_process_group(child.id());
+            let _ = child.kill();
+            child.wait().ok()?
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+    let output = String::from_utf8(output?).ok()?;
+    let value = output.trim();
+    (!value.is_empty() && value.len() <= 256 && !value.chars().any(char::is_control))
+        .then(|| value.to_string())
 }
 
 #[cfg(not(unix))]
 fn reported_harness_version(
-    _binary: &std::path::Path,
+    _program: &std::ffi::OsStr,
+    _args: &[String],
     _cwd: Option<&std::path::Path>,
 ) -> Option<String> {
     None
@@ -4820,7 +4879,11 @@ pub(crate) fn build_agent_new_bg_command(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    apply_harness_version(&mut command, binary);
+    // The `--bg` child is the bare binary (never os-wrapped), so is its probe.
+    apply_harness_version(
+        &mut command,
+        harness_version_probe_program_and_args(binary, config, plan, false)?,
+    );
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
@@ -5023,7 +5086,10 @@ pub(crate) fn run_tracked_agent(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
-    apply_harness_version(&mut command, binary);
+    apply_harness_version(
+        &mut command,
+        harness_version_probe_program_and_args(binary, config, plan, true)?,
+    );
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
