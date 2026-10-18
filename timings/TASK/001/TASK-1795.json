@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1795",
+  "publishes": [
+    {
+      "at": "2026-10-18T04:51:36.103939531Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T14:07:20.316258911Z",
+      "spec": "TASK-1795",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T18:33:20.136663191Z",
+      "spec": "TASK-1795",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T18:48:57.255071753Z",
+      "spec": "TASK-1795",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1795",
+        "branch": "codex/task-1795",
+        "first_seen": "2026-10-16T18:48:57.255002752+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T19:31:43.995458283Z",
+      "spec": "TASK-1795",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2706,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5ddfe391b42bdf77cad5a7f7d9777a28bcde41cd"
+      }
+    },
+    {
+      "ts": "2026-10-16T19:31:45.777717718Z",
+      "spec": "TASK-1795",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT r1: default-branch ship guard fails open (local-ref guess; probe timeout -> 'main')",
+        "recovery_hint": "address the review findings, move TASK-1795 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-18T04:50:52.457004610Z",
+      "spec": "TASK-1795",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T04:51:12.566323918Z",
+      "spec": "TASK-1795",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2706
+      }
+    },
+    {
+      "ts": "2026-10-18T04:51:36.042638257Z",
+      "spec": "TASK-1795",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "efcb10bb1c6400bba797a6bd337bf1991d66550f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
