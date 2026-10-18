@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1654",
+  "publishes": [
+    {
+      "at": "2026-10-18T02:03:19.988023797Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T08:08:37.707374795Z",
+      "spec": "STORY-1654",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T17:55:54.794440843Z",
+      "spec": "STORY-1654",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2661,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "43343de15d82f06ff441b644cd4382a7c9c28eaf"
+      }
+    },
+    {
+      "ts": "2026-10-15T17:55:57.082630094Z",
+      "spec": "STORY-1654",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT round 1: the templates prescribe a reviewer flow that fails or hangs at this base. Still held per the 2026-10-15 sequencing ruling (BUG-2139, BUG-2149, BUG-2150, #2485 first)",
+        "recovery_hint": "address the review findings, move STORY-1654 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-18T02:02:52.072057777Z",
+      "spec": "STORY-1654",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T02:03:03.562303602Z",
+      "spec": "STORY-1654",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2661
+      }
+    },
+    {
+      "ts": "2026-10-18T02:03:19.972240106Z",
+      "spec": "STORY-1654",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "d96f18d4d5f831ee26fdab95b483708a607d8d0f",
+        "pr": 2661,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
