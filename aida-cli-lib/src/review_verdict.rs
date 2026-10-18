@@ -483,6 +483,91 @@ pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<(
     }
 }
 
+/// Move the staged file `temp` to `dest` only when `dest` does not exist, so
+/// the first publisher wins and a later one gets `AlreadyExists`. The rename
+/// never gives `dest` a second link, which the singly-linked rule in
+/// [`read_verdict_file_with_hook`] would refuse. When the kernel or
+/// filesystem lacks a no-replace rename, the fallback links and then unlinks
+/// `temp`, and if that unlink fails it removes `dest` again rather than leave
+/// a verdict every reader refuses. On error, `temp` may still exist.
+// trace:TASK-1801 | ai:claude
+pub(crate) fn publish_verdict_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    match rename_no_replace(temp, dest) {
+        Err(e)
+            if matches!(
+                e.raw_os_error(),
+                Some(libc::EINVAL) | Some(libc::ENOSYS) | Some(libc::ENOTSUP)
+            ) =>
+        {
+            link_then_unlink(temp, dest, |p| std::fs::remove_file(p))
+        }
+        other => other,
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
+    let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
+    // The raw syscall works with every libc, including musl builds.
+    // SAFETY: both paths are valid NUL-terminated strings for the call.
+    let rc = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
+    let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
+    // SAFETY: both paths are valid NUL-terminated strings for the call.
+    let rc = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+fn rename_no_replace(_temp: &Path, _dest: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::from_raw_os_error(libc::ENOSYS))
+}
+
+/// The fallback for [`publish_verdict_no_replace`]. `unlink` is a parameter so
+/// a test can make it fail.
+fn link_then_unlink(
+    temp: &Path,
+    dest: &Path,
+    unlink: impl Fn(&Path) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    std::fs::hard_link(temp, dest)?;
+    if let Err(e) = unlink(temp) {
+        // `dest` is our own link, made just above. Remove it so no reader
+        // finds a doubly linked verdict.
+        let _ = std::fs::remove_file(dest);
+        return Err(std::io::Error::new(
+            e.kind(),
+            format!("could not finish publishing {}: {e}", dest.display()),
+        ));
+    }
+    Ok(())
+}
+
 pub fn verdict_path(project_root: &Path, spec: &str) -> PathBuf {
     project_root
         .join(".aida")
@@ -1529,7 +1614,15 @@ pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
 // trace:TASK-1460 | ai:claude
 pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<PathBuf> {
     let path = verdict_path(project_root, key);
-    let current_at_sha = read_verdict_body(&path)
+    // TASK-1801: a current file that exists but the anchored reader refuses
+    // (linked file or directory) is not evidence, and it must not let an
+    // archived round answer for the key either. Same rule as the merge gate.
+    // trace:TASK-1801 | ai:claude
+    let body = read_verdict_body(&path);
+    if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+        return None;
+    }
+    let current_at_sha = body
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)

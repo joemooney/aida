@@ -466,9 +466,11 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
     };
 
     // Publish without overwriting a verdict that appeared at the canonical
-    // path after the caller's initial probe. A hard link is an atomic,
-    // complete-file, no-clobber publication boundary. On collision, include
-    // that evidence in the same reconciliation and leave its bytes untouched.
+    // path after the caller's initial probe. A no-replace rename is an atomic,
+    // complete-file, no-clobber publication boundary that never leaves the
+    // canonical file doubly linked (TASK-1801). On collision, include that
+    // evidence in the same reconciliation and leave its bytes untouched.
+    // trace:TASK-1801 | ai:claude
     let dest_dir = project_root.join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&dest_dir).map_err(|e| {
         auto_complete::PhaseFailure::of(
@@ -505,8 +507,10 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             format!("could not stage canonical verdict evidence: {e}"),
         ));
     }
-    let publication = std::fs::hard_link(&temp, &dest);
-    let _ = std::fs::remove_file(&temp);
+    let publication = review_verdict::publish_verdict_no_replace(&temp, &dest);
+    if publication.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
     match publication {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {

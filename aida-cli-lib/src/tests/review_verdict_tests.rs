@@ -2293,3 +2293,55 @@ fn task1801_ship_and_phase_gates_refuse_linked_verdicts() {
     symlink(&moved, &dir).unwrap();
     refused("symlinked directory");
 }
+
+// TASK-1801: publication never gives the canonical file a second link. The
+// first publisher wins, a second gets AlreadyExists and leaves it untouched.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_no_replace_publication_keeps_one_link_and_first_writer() {
+    use std::os::unix::fs::MetadataExt;
+    let tmp = TempDir::new().unwrap();
+    let dest = tmp.path().join("PR-1.json");
+    let first = tmp.path().join(".first");
+    let second = tmp.path().join(".second");
+    std::fs::write(&first, r#"{"verdict":"approved"}"#).unwrap();
+    std::fs::write(&second, r#"{"verdict":"request-changes"}"#).unwrap();
+
+    publish_verdict_no_replace(&first, &dest).unwrap();
+    assert!(!first.exists(), "the staged file is moved, not linked");
+    assert_eq!(std::fs::metadata(&dest).unwrap().nlink(), 1);
+    assert!(read_verdict_body(&dest).is_ok());
+
+    let err = publish_verdict_no_replace(&second, &dest).unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(
+        read_verdict_body(&dest).unwrap(),
+        r#"{"verdict":"approved"}"#
+    );
+    assert_eq!(std::fs::metadata(&dest).unwrap().nlink(), 1);
+}
+
+// TASK-1801: when the fallback cannot unlink its staged file, it must not
+// leave a doubly linked verdict that every reader would refuse forever.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_failed_fallback_publication_leaves_no_refused_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let dest = tmp.path().join("PR-1.json");
+    let temp = tmp.path().join(".staged");
+    std::fs::write(&temp, r#"{"verdict":"approved"}"#).unwrap();
+
+    let err = link_then_unlink(&temp, &dest, |_| {
+        Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied))
+    })
+    .unwrap_err();
+    assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+    assert!(
+        std::fs::symlink_metadata(&dest).is_err(),
+        "no canonical file may remain after a failed publication"
+    );
+
+    // The working fallback ends singly linked and readable.
+    link_then_unlink(&temp, &dest, |p| std::fs::remove_file(p)).unwrap();
+    assert!(read_verdict_body(&dest).is_ok());
+}
