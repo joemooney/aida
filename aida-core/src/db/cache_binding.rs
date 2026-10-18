@@ -19,6 +19,7 @@
 //! refusing anything.
 // trace:BUG-1984 | ai:claude
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -64,6 +65,69 @@ fn identity(path: &Path) -> Option<(u64, u64)> {
     }
 }
 
+/// Open descriptors in `/proc/self/fd` (excluding `excluded`) whose `readlink`
+/// target matches `path` (including when the kernel suffixes `" (deleted)"`),
+/// paired with `stat("/proc/self/fd/N")`'s `(dev, ino)`. Reading metadata from
+/// `/proc/self/fd/N` inspects the open file without opening a new handle, so
+/// SQLite's POSIX advisory locks are never dropped.
+// trace:TASK-1739 | ai:codex
+#[cfg(target_os = "linux")]
+fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(entries) = std::fs::read_dir("/proc/self/fd") else {
+        return Vec::new();
+    };
+    let canonical = std::fs::canonicalize(path).ok();
+    let parent_canonical = path
+        .parent()
+        .and_then(|p| std::fs::canonicalize(p).ok())
+        .and_then(|p| path.file_name().map(|n| p.join(n)));
+    let mut matches = Vec::new();
+    for entry in entries.flatten() {
+        let Ok(fd_num) = entry.file_name().to_string_lossy().parse::<u32>() else {
+            continue;
+        };
+        if excluded.contains(&fd_num) {
+            continue;
+        }
+        let Ok(link) = std::fs::read_link(entry.path()) else {
+            continue;
+        };
+        let link_str = link.to_string_lossy();
+        let clean = Path::new(link_str.strip_suffix(" (deleted)").unwrap_or(&link_str));
+        let same_target = clean == path
+            || canonical.as_deref() == Some(clean)
+            || parent_canonical.as_deref() == Some(clean);
+        if !same_target {
+            continue;
+        }
+        if let Ok(meta) = std::fs::metadata(entry.path()) {
+            matches.push((fd_num, (meta.dev(), meta.ino())));
+        }
+    }
+    matches
+}
+
+/// `(dev, ino)` of SQLite's open descriptor for `path` from `/proc/self/fd`,
+/// or `None` on non-Linux or when no descriptor is open for `path`.
+// trace:TASK-1739 | ai:codex
+fn fd_identity(path: &Path, excluded: &HashSet<u32>) -> Option<(u64, u64)> {
+    #[cfg(target_os = "linux")]
+    {
+        let fds = matching_fds(path, excluded);
+        let now = identity(path);
+        if let Some((_, mismatch)) = fds.iter().copied().find(|(_, id)| Some(*id) != now) {
+            return Some(mismatch);
+        }
+        fds.first().map(|(_, id)| *id)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (path, excluded);
+        None
+    }
+}
+
 #[derive(Debug)]
 struct BoundFile {
     path: PathBuf,
@@ -76,48 +140,106 @@ struct BoundFile {
 pub(crate) struct CacheBinding {
     files: Vec<BoundFile>,
     next_check: Instant,
+    pinned: bool,
+    excluded_fds: HashSet<u32>,
 }
 
 impl CacheBinding {
-    /// Record what each cache file's path names right after the connection
-    /// opened it.
+    /// Descriptor numbers in `/proc/self/fd` already open on `cache_path` and
+    /// its sidecars before a new connection is opened, so the new handle's
+    /// binding inspects only its own connection's descriptors.
+    // trace:TASK-1739 | ai:codex
+    pub(crate) fn open_fds_for(cache_path: &Path) -> HashSet<u32> {
+        #[cfg(target_os = "linux")]
+        {
+            let empty = HashSet::new();
+            CacheFile::ALL
+                .iter()
+                .flat_map(|file| matching_fds(&file.path_for(cache_path), &empty))
+                .map(|(fd, _)| fd)
+                .collect()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = cache_path;
+            HashSet::new()
+        }
+    }
+
+    /// Record what each cache file's open descriptor (or path on non-Linux)
+    /// names right after the connection opened it.
     pub(crate) fn capture(cache_path: &Path) -> Self {
+        Self::capture_with_excluded(cache_path, HashSet::new())
+    }
+
+    // trace:TASK-1739 | ai:codex
+    pub(crate) fn capture_with_excluded(cache_path: &Path, excluded_fds: HashSet<u32>) -> Self {
         Self {
             files: CacheFile::ALL
                 .iter()
                 .map(|file| {
                     let path = file.path_for(cache_path);
                     BoundFile {
-                        bound: identity(&path),
+                        bound: fd_identity(&path, &excluded_fds).or_else(|| identity(&path)),
                         path,
                     }
                 })
                 .collect(),
             next_check: Instant::now() + BINDING_CHECK_INTERVAL,
+            pinned: false,
+            excluded_fds,
+        }
+    }
+
+    /// A handle pinned to a single read transaction (`Cache::read_snapshot`):
+    /// never runs the identity check or swaps out its connection.
+    // trace:TASK-1739 | ai:codex
+    pub(crate) fn pinned() -> Self {
+        Self {
+            files: Vec::new(),
+            next_check: Instant::now() + BINDING_CHECK_INTERVAL,
+            pinned: true,
+            excluded_fds: HashSet::new(),
         }
     }
 
     /// True (and the next check is scheduled) when a rate-limited check is due.
     pub(crate) fn due(&mut self, now: Instant) -> bool {
-        if now < self.next_check {
+        if self.pinned || now < self.next_check {
             return false;
         }
         self.next_check = now + BINDING_CHECK_INTERVAL;
         true
     }
 
-    /// Make the next `due` call fire (retry after a failed re-open; tests).
+    /// Make the next `due` call fire (tests).
     pub(crate) fn expire(&mut self) {
         self.next_check = Instant::now();
     }
 
+    /// Back off for one full check interval after a failed re-open so callers
+    /// do not retry the broken open on every `conn()` access.
+    // trace:TASK-1739 | ai:codex
+    pub(crate) fn backoff(&mut self) {
+        self.next_check = Instant::now() + BINDING_CHECK_INTERVAL;
+    }
+
     /// Why the bound handles no longer match the paths, or `None` when they
     /// still do. A sidecar SQLite had not created yet at capture is adopted
-    /// the first time it is seen.
+    /// the first time it is seen, cross-checked against `/proc/self/fd` on
+    /// Linux so a replacement before that first check is still caught.
+    // trace:BUG-1984 trace:TASK-1739 | ai:claude
     pub(crate) fn stale_reason(&mut self) -> Option<String> {
+        if self.pinned {
+            return None;
+        }
         let mut reasons = Vec::new();
         for file in &mut self.files {
             let now = identity(&file.path);
+            let fd_now = fd_identity(&file.path, &self.excluded_fds);
+            if file.bound.is_none() {
+                file.bound = fd_now;
+            }
             let name = file
                 .path
                 .file_name()
@@ -126,7 +248,7 @@ impl CacheBinding {
             match (file.bound, now) {
                 (None, now) => file.bound = now,
                 (Some(_), None) => reasons.push(format!("{name} was deleted")),
-                (Some(bound), Some(now)) if bound != now => {
+                (Some(bound), Some(now)) if bound != now || fd_now.is_some_and(|fd| fd != now) => {
                     reasons.push(format!("{name} was replaced"))
                 }
                 _ => {}
@@ -263,6 +385,182 @@ mod tests {
         assert!(!binding.due(start + BINDING_CHECK_INTERVAL));
         binding.expire();
         assert!(binding.due(Instant::now()));
+    }
+
+    /// A1 (TASK-1739): if a host replacement happens inside the open bind
+    /// window (after SQLite opens its fds, before `CacheBinding::capture`
+    /// records `stat(path)`), or before a sidecar is first adopted at a later
+    /// check, `/proc/self/fd` still carries SQLite's open inode and detects
+    /// the split.
+    // trace:TASK-1739 | ai:codex
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn holder_rebinds_when_replaced_inside_bind_window_or_before_sidecar_adoption() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, cache) = cache_with_marker(dir.path(), "holder");
+        let wal = CacheFile::Wal.path_for(&path);
+        let shm = CacheFile::Shm.path_for(&path);
+
+        let (_donor_dir, donor) = donor_db("host");
+        std::fs::rename(&donor, &path).unwrap();
+        rename_over(&wal, b"");
+        rename_over(&shm, b"");
+
+        // Simulate `CacheBinding::capture` running AFTER the host already
+        // replaced the files during `open_at`, and also clear the sidecars'
+        // bound state to exercise lazy sidecar adoption after replacement.
+        let mut recaptured = CacheBinding::capture(&path);
+        for file in &mut recaptured.files[1..] {
+            file.bound = None;
+        }
+        let reason = recaptured
+            .stale_reason()
+            .expect("detects split via /proc/self/fd");
+        for name in [
+            "cache.db was replaced",
+            "cache.db-wal was replaced",
+            "cache.db-shm was replaced",
+        ] {
+            assert!(reason.contains(name), "{reason}");
+        }
+
+        let rebound = cache.rebind_if_replaced().unwrap().expect("rebinds");
+        assert!(rebound.contains("cache.db was replaced"), "{rebound}");
+        assert_eq!(cache.source_head_sha().unwrap().as_deref(), Some("host"));
+    }
+
+    /// Item 2 (TASK-1739): `rebind_if_replaced` disables checkpoint-on-close
+    /// (`SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`) before closing the stale connection,
+    /// so closing the last handle to the old database never folds its WAL into
+    /// the old database inode or unlinks the replacement WAL by name.
+    // trace:TASK-1739 | ai:codex
+    #[test]
+    fn rebind_does_not_checkpoint_stale_wal_into_old_db_on_close() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cache.db");
+        let cache = Cache::open(&path).unwrap();
+        cache.set_source_head_sha("initial").unwrap();
+        drop(cache);
+
+        let cache = Cache::open(&path).unwrap();
+        let old_db_link = dir.path().join("old-inode.db");
+        std::fs::hard_link(&path, &old_db_link).unwrap();
+
+        let marker = "uncheckpointed-stale-wal-marker-1739";
+        cache.set_source_head_sha(marker).unwrap();
+        assert!(
+            !std::fs::read(&old_db_link)
+                .unwrap()
+                .windows(marker.len())
+                .any(|w| w == marker.as_bytes()),
+            "marker must sit in the WAL before close, not in the main db pages"
+        );
+
+        let (_donor_dir, donor) = donor_db("host");
+        std::fs::rename(&donor, &path).unwrap();
+        rename_over(&CacheFile::Wal.path_for(&path), b"replacement-wal");
+        rename_over(&CacheFile::Shm.path_for(&path), b"");
+
+        cache.rebind_if_replaced().unwrap().expect("rebinds");
+        assert!(
+            !std::fs::read(&old_db_link)
+                .unwrap()
+                .windows(marker.len())
+                .any(|w| w == marker.as_bytes()),
+            "stale connection must not checkpoint its WAL into the old db inode on close"
+        );
+        assert!(
+            CacheFile::Wal.path_for(&path).exists(),
+            "closing the stale connection must not unlink the replacement WAL by name"
+        );
+        assert_eq!(cache.source_head_sha().unwrap().as_deref(), Some("host"));
+    }
+
+    /// Item 3 (TASK-1739): a failed reopen backs off for one check interval
+    /// instead of expiring the timer and retrying on every `conn()` call.
+    // trace:TASK-1739 | ai:codex
+    #[test]
+    fn failed_reopen_backs_off_instead_of_retrying_on_every_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, cache) = cache_with_marker(dir.path(), "holder");
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+
+        cache.expire_binding_check();
+        assert!(cache.rebind_if_replaced().is_err());
+
+        let now = Instant::now();
+        assert!(
+            !cache.binding.lock().unwrap().due(now),
+            "failed reopen must back off instead of firing on the very next use"
+        );
+        assert!(
+            cache
+                .binding
+                .lock()
+                .unwrap()
+                .due(now + BINDING_CHECK_INTERVAL),
+            "re-checks once the backoff interval has elapsed"
+        );
+    }
+
+    /// Item 4 (TASK-1739): `read_snapshot` handles are pinned to a single read
+    /// transaction and must skip the identity check even if they outlive the
+    /// 60s check interval.
+    // trace:TASK-1739 | ai:codex
+    #[test]
+    fn read_snapshot_skips_the_identity_check_even_after_expiry() {
+        let dir = tempfile::tempdir().unwrap();
+        let (path, cache) = cache_with_marker(dir.path(), "holder");
+        let snap = cache.read_snapshot().unwrap();
+        assert_eq!(snap.source_head_sha().unwrap().as_deref(), Some("holder"));
+
+        let (_donor_dir, donor) = donor_db("host");
+        std::fs::rename(&donor, &path).unwrap();
+        rename_over(&CacheFile::Wal.path_for(&path), b"");
+        rename_over(&CacheFile::Shm.path_for(&path), b"");
+
+        snap.expire_binding_check();
+        assert_eq!(snap.rebind_if_replaced().unwrap(), None);
+        assert_eq!(
+            snap.source_head_sha().unwrap().as_deref(),
+            Some("holder"),
+            "snapshot handle stays pinned to its transaction's files"
+        );
+
+        assert!(cache.rebind_if_replaced().unwrap().is_some());
+        assert_eq!(cache.source_head_sha().unwrap().as_deref(), Some("host"));
+        assert_eq!(
+            cache.rebind_if_replaced().unwrap(),
+            None,
+            "fresh handle ignores the snapshot handle's still-open old descriptors"
+        );
+    }
+
+    /// Item 5 (TASK-1739): while a TUI owns the terminal, the rebind note is
+    /// routed into `cache_read_note()` instead of writing to raw stderr.
+    // trace:TASK-1739 | ai:codex
+    #[test]
+    fn rebind_note_routes_to_cache_read_note_while_tui_owns_terminal() {
+        use crate::db::cache_refresh::{cache_read_note, set_tui_owns_terminal, CacheReadScope};
+
+        let _scope = CacheReadScope::new();
+        let prev = set_tui_owns_terminal(true);
+        let dir = tempfile::tempdir().unwrap();
+        let (path, cache) = cache_with_marker(dir.path(), "holder");
+        let (_donor_dir, donor) = donor_db("host");
+        std::fs::rename(&donor, &path).unwrap();
+        rename_over(&CacheFile::Wal.path_for(&path), b"");
+        rename_over(&CacheFile::Shm.path_for(&path), b"");
+
+        let reason = cache.rebind_if_replaced().unwrap();
+        set_tui_owns_terminal(prev);
+
+        assert!(reason.is_some());
+        let note = cache_read_note().expect("rebind note recorded for TUI status line");
+        assert!(note.contains("changed on disk"), "{note}");
+        assert!(note.contains("re-opened it"), "{note}");
     }
 
     /// The contained-session topology (Linux): the holder runs in its own

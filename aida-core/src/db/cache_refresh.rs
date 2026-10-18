@@ -452,6 +452,42 @@ impl StaleServe {
     }
 }
 
+static TUI_OWNS_TERMINAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mark whether a full-screen TUI currently owns the terminal (raw mode /
+/// alternate screen). While set, [`emit_cache_note`] routes cache notes into
+/// [`cache_read_note`] for the TUI status line instead of writing raw bytes to
+/// stderr.
+// trace:TASK-1739 | ai:codex
+pub fn set_tui_owns_terminal(owns: bool) -> bool {
+    TUI_OWNS_TERMINAL.swap(owns, std::sync::atomic::Ordering::SeqCst)
+}
+
+// trace:TASK-1739 | ai:codex
+pub fn tui_owns_terminal() -> bool {
+    TUI_OWNS_TERMINAL.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+// trace:TASK-1739 | ai:codex
+pub fn record_cache_note(note: impl Into<String>) {
+    let note = note.into();
+    COLLECTED.with(|c| {
+        c.borrow_mut().note = Some(note);
+    });
+}
+
+/// Emit a one-line cache note: to `cache_read_note()` while a TUI owns the
+/// terminal, or to stderr otherwise.
+// trace:TASK-1739 | ai:codex
+pub fn emit_cache_note(note: impl Into<String>) {
+    let note = note.into();
+    if tui_owns_terminal() {
+        record_cache_note(note);
+    } else {
+        eprintln!("{note}");
+    }
+}
+
 // trace:TASK-1526 | ai:codex
 #[derive(Default)]
 struct Collected {
@@ -460,6 +496,8 @@ struct Collected {
     interactive: bool,
     budget: Option<ReadBudget>,
     stale: Option<StaleServe>,
+    // trace:TASK-1739 | ai:codex
+    note: Option<String>,
     // trace:BUG-1956 | ai:claude
     ladder_waited: Duration,
 }
@@ -521,6 +559,7 @@ pub fn reset_cache_read_observations() {
         let mut c = c.borrow_mut();
         c.touched = false;
         c.stale = None;
+        c.note = None;
         c.wait_deadline = None;
         c.ladder_waited = Duration::ZERO;
     });
@@ -528,7 +567,13 @@ pub fn reset_cache_read_observations() {
 
 // trace:TASK-1526 | ai:codex
 pub fn cache_read_note() -> Option<String> {
-    COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note))
+    COLLECTED.with(|c| {
+        let c = c.borrow();
+        c.stale
+            .as_ref()
+            .map(StaleServe::note)
+            .or_else(|| c.note.clone())
+    })
 }
 
 // trace:TASK-1526 | ai:codex
