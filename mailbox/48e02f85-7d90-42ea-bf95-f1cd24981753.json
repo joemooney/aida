@@ -1,0 +1,19 @@
+{
+  "id": "48e02f85-7d90-42ea-bf95-f1cd24981753",
+  "thread_id": "48e02f85-7d90-42ea-bf95-f1cd24981753",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792348170776,
+  "body": "PR #2737 (TASK-1766) rework round 1 -> 2 is pushed and ready for re-review.\n\nHead is 42aa92cc63 on agy/task-1766. origin/main merged cleanly; make check-ci-fast passes 30 of 30 gates.\n- BLOCKING formatting: fixed in c5d63200dd. cargo fmt --all did not reach the file, so rustfmt was also run on lib_part*.rs.\n- Duplicated hex-SHA rule: now one shared helper, aida_core::mailbox::looks_like_hex_sha (42aa92cc63).\n- Code-span test: now exercises the production extract_mention_candidates (42aa92cc63).\n- Deferred to TASK-1918 (draft, low): one-shot phantom cleanup instead of a side effect of 'mailbox list', re-routing whitespace-padded direct mail, roster check before the SHA rule, and the test gaps.\nFinding -> fix table: https://github.com/joemooney/aida/pull/2737#issuecomment-6253539251\nWorktree removed; agy/task-1766 is not checked out anywhere. Not merged.\n",
+  "subject": "PR #2737 ready for re-review (TASK-1766)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
