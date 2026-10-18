@@ -114,7 +114,7 @@ fn zen_dry_run_renders_drafted_spec() {
 /// still PARSE.
 #[test]
 fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
-    let mut cli = crate::cli::Cli::command();
+    let mut cli = crate::command_registry::built_command();
     let zen = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "zen")
@@ -126,7 +126,7 @@ fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
     );
     // The visible-subcommand list must be empty (all three are hidden).
     assert!(
-        crate::cli::Cli::command()
+        crate::command_registry::built_command()
             .get_subcommands()
             .find(|c| c.get_name() == "zen")
             .unwrap()

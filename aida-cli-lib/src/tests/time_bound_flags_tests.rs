@@ -158,7 +158,7 @@ fn collect(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
 
 #[test]
 fn every_time_bound_flag_is_classified() {
-    let cmd = <crate::cli::Cli as clap::CommandFactory>::command();
+    let cmd = crate::command_registry::built_command();
     let mut found = Vec::new();
     collect(&cmd, "aida", &mut found);
     found.sort();

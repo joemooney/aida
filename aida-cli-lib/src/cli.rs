@@ -14946,7 +14946,7 @@ mod tests {
     // trace:TASK-185 | ai:claude
     #[test]
     fn sequential_help_does_not_claim_concurrency_is_pinned() {
-        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let mut cmd = crate::command_registry::built_command();
         let help = find_subcommand_help(&mut cmd, &["queue", "work"]);
         // clap wraps long help at the terminal width, so flatten runs of
         // whitespace before matching any multi-word phrase — a line break in
@@ -14973,7 +14973,7 @@ mod tests {
     // trace:BUG-1552 | ai:claude
     #[test]
     fn doctor_help_names_fail_on_findings_gate() {
-        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let mut cmd = crate::command_registry::built_command();
         let help = find_subcommand_help(&mut cmd, &["doctor"]);
         let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
@@ -14985,7 +14985,7 @@ mod tests {
     // trace:TASK-200 | ai:codex
     #[test]
     fn agent_new_help_discloses_foreground_blocking_behavior() {
-        let mut cmd = <Cli as clap::CommandFactory>::command();
+        let mut cmd = crate::command_registry::built_command();
         let help = find_subcommand_help(&mut cmd, &["agent", "new"]);
         let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(
@@ -15000,7 +15000,7 @@ mod tests {
     // trace:BUG-1920 | ai:claude
     #[test]
     fn edit_type_help_lists_faq() {
-        let cmd = <Cli as clap::CommandFactory>::command();
+        let cmd = crate::command_registry::built_command();
         let edit = cmd
             .get_subcommands()
             .find(|s| s.get_name() == "edit")
@@ -15795,7 +15795,7 @@ mod seat_help_tests {
     // trace:TASK-1607 | ai:codex
     #[test]
     fn session_seat_generated_help_contains_no_internal_spec_ids() {
-        let mut cli = Cli::command();
+        let mut cli = crate::command_registry::built_command();
         let session = cli.find_subcommand_mut("session").unwrap();
         let seat = session.find_subcommand_mut("seat").unwrap();
         let help = seat.render_long_help().to_string();

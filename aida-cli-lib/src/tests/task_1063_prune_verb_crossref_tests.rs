@@ -2,7 +2,7 @@ use clap::{CommandFactory, Parser};
 
 /// Render the --help for a nested `queue <sub>` subcommand.
 fn queue_sub_help(sub: &str) -> String {
-    let mut cli = crate::cli::Cli::command();
+    let mut cli = crate::command_registry::built_command();
     let queue = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "queue")

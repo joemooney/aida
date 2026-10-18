@@ -82,7 +82,7 @@ fn schedule_tick_hook_and_timer_shapes_parse() {
 #[test]
 fn schedule_tick_has_no_json_capability() {
     use clap::CommandFactory;
-    let root = Cli::command();
+    let root = crate::command_registry::built_command();
     let schedule = root
         .get_subcommands()
         .find(|c| c.get_name() == "schedule")

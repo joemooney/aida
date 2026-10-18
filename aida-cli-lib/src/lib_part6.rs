@@ -262,9 +262,10 @@ mod bug_1807_handoff_tests {
     #[test]
     fn reviewer_pickup_commands_parse_for_both_forges() {
         for label in ["MR-35", "PR-35"] {
-            assert!(
-                crate::command_registry::try_parse_from(["aida", "queue", "work", label, "--role", "reviewer"]).is_ok()
-            );
+            assert!(crate::command_registry::try_parse_from([
+                "aida", "queue", "work", label, "--role", "reviewer"
+            ])
+            .is_ok());
         }
     }
 

@@ -681,7 +681,7 @@ fn cli_parses_to_from_opened_and_the_created_alias() {
 #[test]
 fn help_describes_the_flags_without_spec_ids() {
     use clap::CommandFactory;
-    let mut cmd = Cli::command();
+    let mut cmd = crate::command_registry::built_command();
     let history = cmd
         .find_subcommand_mut("history")
         .expect("history subcommand");

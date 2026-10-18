@@ -4831,7 +4831,7 @@ fn test_derisk_help_keeps_internal_tokens_out() {
     use crate::cli::Cli;
     use clap::CommandFactory;
 
-    let mut cli = Cli::command();
+    let mut cli = crate::command_registry::built_command();
     let derisk = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "derisk")

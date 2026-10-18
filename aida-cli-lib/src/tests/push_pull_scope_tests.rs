@@ -269,7 +269,7 @@ fn dry_run_flags_parse() {
 #[test]
 fn push_pull_fetch_leg_flags_describe_the_leg_they_keep() {
     use clap::CommandFactory;
-    let cmd = Cli::command();
+    let cmd = crate::command_registry::built_command();
     for verb in ["push", "pull", "fetch"] {
         let sub = cmd
             .get_subcommands()
