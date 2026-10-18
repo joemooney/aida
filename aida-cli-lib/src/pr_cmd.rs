@@ -2082,12 +2082,25 @@ pub(crate) fn pr_ship_handler(
         anyhow::bail!("could not detect current branch (detached HEAD?)");
     }
 
-    // BUG-2164: On the default branch with no explicit PR number, refuse before
-    // any push, trailer guard, or PR creation attempt.
-    // trace:BUG-2164 | ai:antigravity
-    if opts.pr_number.is_none() && ship_is_default_branch(&project_root, &branch) {
-        let approved = find_open_approved_prs(&project_root);
-        anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+    // BUG-2164 / TASK-1795 / TASK-1803: On the default branch (or when the
+    // default branch cannot be determined) with no explicit PR number, refuse
+    // before any push, trailer guard, or PR creation attempt.
+    // trace:BUG-2164 trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+    if opts.pr_number.is_none() {
+        match classify_ship_default_branch(&project_root, &branch) {
+            ShipDefaultBranchDisposition::FeatureBranch => {}
+            ShipDefaultBranchDisposition::OnDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+            }
+            ShipDefaultBranchDisposition::UnknownDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!(
+                    "{}",
+                    pr_ship::format_unknown_default_branch_ship_refusal(&approved)
+                );
+            }
+        }
     }
 
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
@@ -4229,12 +4242,22 @@ pub(crate) fn ship_completion_trailer(
     )
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShipDefaultBranchDisposition {
+    FeatureBranch,
+    OnDefaultBranch,
+    UnknownDefaultBranch,
+}
+
 /// Protect conventional mainlines; otherwise require evidence of the default.
-/// Unknown evidence also requires an explicit PR number.
-// trace:TASK-1795 | ai:codex
-pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+/// Unknown evidence is reported distinctly from being on the default branch.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn classify_ship_default_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> ShipDefaultBranchDisposition {
     if matches!(branch, "main" | "master") {
-        return true;
+        return ShipDefaultBranchDisposition::OnDefaultBranch;
     }
     // Only origin/HEAD is local evidence, never a guess from leftover refs.
     // A stale origin/HEAD still wins over the forge, so refresh it when the
@@ -4255,9 +4278,18 @@ pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &st
         .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
         .filter(|name| !name.is_empty());
     match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
-        Some(default) => branch == default,
-        None => true,
+        Some(default) if branch == default => ShipDefaultBranchDisposition::OnDefaultBranch,
+        Some(_) => ShipDefaultBranchDisposition::FeatureBranch,
+        None => ShipDefaultBranchDisposition::UnknownDefaultBranch,
     }
+}
+
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+    !matches!(
+        classify_ship_default_branch(project_root, branch),
+        ShipDefaultBranchDisposition::FeatureBranch
+    )
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.

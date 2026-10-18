@@ -89,6 +89,8 @@ fn plain() -> aida_core::Requirement {
 fn spec(id: &str) -> ShipSpec {
     ShipSpec {
         id: id.into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(plain()),
         history: Ok(vec![plain()]),
     }
@@ -404,6 +406,8 @@ fn unresolved_specs_fail_closed() {
     let mut c = Case::ok();
     c.specs = vec![ShipSpec {
         id: "TASK-404".into(),
+        aliases: Vec::new(),
+        named: true,
         current: None,
         history: Ok(Vec::new()),
     }];
@@ -581,6 +585,8 @@ fn a_tag_stripped_in_a_later_version_is_still_refused() {
     let mut c = Case::ok();
     c.specs = vec![ShipSpec {
         id: "TASK-5".into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(plain()),
         history: Ok(vec![once_secure, plain()]),
     }];
@@ -610,8 +616,10 @@ fn a_tag_stripped_by_a_recorded_edit_is_still_refused() {
     let mut c = Case::ok();
     c.specs = vec![ShipSpec {
         id: "TASK-6".into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(current),
-        history: Ok(Vec::new()),
+        history: Ok(vec![plain()]),
     }];
     assert!(matches!(c.decide(), Err(MandateRefusal::Excluded { .. })));
 }
@@ -624,6 +632,8 @@ fn operator_mode_anywhere_in_history_is_always_refused() {
     c.state = MandateState::Active(active(true));
     c.specs = vec![ShipSpec {
         id: "TASK-7".into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(plain()),
         history: Ok(vec![once_operator]),
     }];
@@ -642,6 +652,8 @@ fn unreadable_history_is_refused_even_with_include_supervised() {
     c.state = MandateState::Active(active(true));
     c.specs = vec![ShipSpec {
         id: "TASK-8".into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(plain()),
         history: Err("git failed".into()),
     }];
@@ -699,6 +711,8 @@ fn store_git_history_keeps_a_stripped_tag_visible() {
     let mut c = Case::ok();
     c.specs = vec![ShipSpec {
         id: "TASK-9".into(),
+        aliases: Vec::new(),
+        named: true,
         current: Some(req),
         history: Ok(history),
     }];
@@ -1261,8 +1275,9 @@ fn named_union_trace_assembly_refuses_trace_only_supervised_spec() {
     let mut c = Case::ok();
     let named = vec!["TASK-1".to_owned()];
     let traced = ["TASK-2".to_owned()].into_iter().collect();
-    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id| {
+    c.specs = crate::pr_cmd::mandate_exclusion_specs(&named, traced, |id, is_named| {
         let mut value = spec(id);
+        value.named = is_named;
         if id == "TASK-2" {
             value.current.as_mut().unwrap().execution_mode = Some(aida_core::ExecutionMode::Guided);
         }
@@ -1435,9 +1450,9 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                         check
                             .specs
                             .iter()
-                            .map(|s| s.id.as_str())
+                            .map(|s| (s.id.as_str(), s.named))
                             .collect::<Vec<_>>(),
-                        vec!["SUP-1", "TASK-1"]
+                        vec![("SUP-1", false), ("TASK-1", true)]
                     );
                     // No approval/clearance is fabricated: the fixture decision refuses.
                     Err(MandateRefusal::SpecsUnresolved)
@@ -1499,4 +1514,420 @@ fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
         hold_clear_gate: None,
     });
     assert_eq!(release, Err(MandateRefusal::SoloSelfApproval));
+}
+
+// ── TASK-1800 advisor ruling (2026-10-17) ──────────────────────────────────
+
+// trace:TASK-1800 | ai:antigravity
+#[test]
+fn task_1800_dangling_trace_id_is_allowed_while_named_unknown_still_refuses() {
+    let mut c = Case::ok();
+    // A trace-derived ID with no current version, no store history on any ref,
+    // and no exclusion ledger entry is a dangling reference and is dropped.
+    c.specs.push(ShipSpec {
+        id: "EPIC-1-001".into(),
+        aliases: Vec::new(),
+        named: false,
+        current: None,
+        history: Ok(Vec::new()),
+    });
+    assert_eq!(c.decide(), Ok(active(false).id));
+
+    // A named ID with no current version still fails closed with SpecsUnresolved.
+    let mut c = Case::ok();
+    c.specs.push(ShipSpec {
+        id: "TASK-404".into(),
+        aliases: Vec::new(),
+        named: true,
+        current: None,
+        history: Ok(Vec::new()),
+    });
+    assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
+
+    // Unreadable history on a trace-derived ID still fails closed.
+    let mut c = Case::ok();
+    c.specs.push(ShipSpec {
+        id: "EPIC-1-001".into(),
+        aliases: Vec::new(),
+        named: false,
+        current: None,
+        history: Err("git log failed".into()),
+    });
+    assert!(matches!(
+        c.decide(),
+        Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "EPIC-1-001"
+    ));
+
+    // A trace-only list with no named spec still fails closed.
+    let mut c = Case::ok();
+    c.specs = vec![ShipSpec {
+        id: "TASK-2".into(),
+        aliases: Vec::new(),
+        named: false,
+        current: Some(plain()),
+        history: Ok(vec![plain()]),
+    }];
+    assert_eq!(c.decide(), Err(MandateRefusal::SpecsUnresolved));
+}
+
+// trace:TASK-1800 | ai:antigravity
+#[test]
+fn task_1800_deleted_spec_with_history_is_judged_by_history() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q"]);
+    let rel = aida_core::object_store::relative_object_path("TASK-99").unwrap();
+    let path = root.join(&rel);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut req = plain();
+    req.spec_id = Some("TASK-99".into());
+    req.tags.insert("security".into());
+    std::fs::write(&path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "add excluded spec"]);
+    std::fs::remove_file(&path).unwrap();
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "delete spec"]);
+
+    let history = store_history_versions_optional(root, "TASK-99").unwrap();
+    assert_eq!(history.len(), 1);
+    let mut c = Case::ok();
+    c.specs.push(ShipSpec {
+        id: "TASK-99".into(),
+        aliases: Vec::new(),
+        named: false,
+        current: None,
+        history: Ok(history),
+    });
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::Excluded { ref spec, ref why }) if spec == "TASK-99" && why.contains("earlier version")),
+        "{:?}",
+        c.decide()
+    );
+    c.state = MandateState::Active(active(true));
+    assert_eq!(c.decide(), Ok(active(true).id));
+}
+
+// trace:TASK-1800 | ai:antigravity
+#[test]
+fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git_out = |dir: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git_out(root, &["init", "-q"]);
+    git_out(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/fixture/project.git",
+        ],
+    );
+    // Trace comment uses agreed_id TASK-176 (stored under origin spec_id TASK-1-152)
+    // plus a dangling trace FR-0042 that never existed in the store.
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:TASK-176\n//! trace:FR-0042\nfn changed() { let x = 1; }\n",
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "base"]);
+    let base = git_out(root, &["rev-parse", "HEAD"]);
+    git_out(root, &["update-ref", "refs/remotes/origin/main", &base]);
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:TASK-176\n//! trace:FR-0042\nfn changed() { let x = 2; }\n",
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "change (TASK-1)"]);
+    let head = git_out(root, &["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = '.aida-store'\n",
+    )
+    .unwrap();
+    let store = root.join(".aida-store");
+    std::fs::create_dir(&store).unwrap();
+    git_out(&store, &["init", "-q"]);
+
+    // Seed named TASK-1 (ordinary) and aliased TASK-1-152 (agreed_id = TASK-176).
+    // First version of TASK-1-152 had `security` tag in history, stripped in v2.
+    let rel1 = aida_core::object_store::relative_object_path("TASK-1").unwrap();
+    let path1 = store.join(&rel1);
+    std::fs::create_dir_all(path1.parent().unwrap()).unwrap();
+    let mut req1 = plain();
+    req1.spec_id = Some("TASK-1".into());
+    std::fs::write(&path1, serde_yaml::to_string(&req1).unwrap()).unwrap();
+
+    let rel_alias = aida_core::object_store::relative_object_path("TASK-1-152").unwrap();
+    let path_alias = store.join(&rel_alias);
+    std::fs::create_dir_all(path_alias.parent().unwrap()).unwrap();
+    let mut req_alias = plain();
+    req_alias.spec_id = Some("TASK-1-152".into());
+    req_alias.agreed_id = Some("TASK-176".into());
+    req_alias.tags.insert("security".into());
+    std::fs::write(&path_alias, serde_yaml::to_string(&req_alias).unwrap()).unwrap();
+    git_out(&store, &["add", "-A"]);
+    git_out(&store, &["commit", "-qm", "v1 store"]);
+
+    // Strip the security tag on TASK-1-152 so only its store history (under TASK-1-152) holds it.
+    req_alias.tags.clear();
+    std::fs::write(&path_alias, serde_yaml::to_string(&req_alias).unwrap()).unwrap();
+    git_out(&store, &["add", "-A"]);
+    git_out(&store, &["commit", "-qm", "v2 strip tag"]);
+
+    let gh = root.join("gh-stub");
+    crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "advisor",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+    git_out(&store, &["add", "-A"]);
+    git_out(
+        &store,
+        &["commit", "--allow-empty", "-qm", "seed fixture seat roster"],
+    );
+
+    let mut mandate = active(false);
+    mandate.principal = crate::current_user_id(None);
+    mandate.issued_at = Utc::now() - Duration::minutes(1);
+    mandate.expires_at = Utc::now() + Duration::hours(1);
+    plant(&mandate_dir().unwrap(), &mandate, 0o600);
+
+    let hold = crate::merge_hold::typed_hold(
+        42,
+        crate::merge_hold::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+
+    // Run mandate_ship_cover and verify that:
+    // 1. Dangling FR-0042 does not cause HistoryUnreadable or SpecsUnresolved.
+    // 2. Aliased TASK-176 resolves its history via TASK-1-152 and is refused as Excluded!
+    let result = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (TASK-1)".into()],
+        },
+        || {
+            crate::pr_cmd::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &["TASK-1".into()],
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                crate::mandate::ship_decision,
+            )
+        },
+    );
+    assert!(
+        matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
+        "expected Excluded for aliased TASK-176 via TASK-1-152 history, got: {result:?}"
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn task_1800_named_spec_with_empty_history_is_refused_as_unreadable() {
+    let mut c = Case::ok();
+    c.specs = vec![ShipSpec {
+        id: "TASK-9".into(),
+        aliases: Vec::new(),
+        named: true,
+        current: Some(plain()),
+        history: Ok(Vec::new()),
+    }];
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "TASK-9"),
+        "{:?}",
+        c.decide()
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn task_1800_alias_search_outside_a_store_repository_is_an_error() {
+    let tmp = tempfile::tempdir().unwrap();
+    assert!(crate::mandate::store_history_alias_ids(tmp.path(), "TASK-176").is_err());
+    assert!(crate::mandate::store_history_alias_ids(tmp.path(), "TASK 176;").is_err());
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let git_out = |dir: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git_out(root, &["init", "-q"]);
+    git_out(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/fixture/project.git",
+        ],
+    );
+    // The trace names the deleted spec by its agreed_id TASK-176.
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:TASK-176\nfn changed() { let x = 1; }\n",
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "base"]);
+    let base = git_out(root, &["rev-parse", "HEAD"]);
+    git_out(root, &["update-ref", "refs/remotes/origin/main", &base]);
+    std::fs::write(
+        root.join("code.rs"),
+        "//! trace:TASK-176\nfn changed() { let x = 2; }\n",
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "change (TASK-1)"]);
+    let head = git_out(root, &["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = '.aida-store'\n",
+    )
+    .unwrap();
+    let store = root.join(".aida-store");
+    std::fs::create_dir(&store).unwrap();
+    git_out(&store, &["init", "-q"]);
+
+    let rel1 = aida_core::object_store::relative_object_path("TASK-1").unwrap();
+    let path1 = store.join(&rel1);
+    std::fs::create_dir_all(path1.parent().unwrap()).unwrap();
+    let mut req1 = plain();
+    req1.spec_id = Some("TASK-1".into());
+    std::fs::write(&path1, serde_yaml::to_string(&req1).unwrap()).unwrap();
+
+    // Stored under spec_id TASK-1-152 with agreed_id TASK-176 and an excluded
+    // tag, then deleted: only its store history under TASK-1-152 remains.
+    let rel_alias = aida_core::object_store::relative_object_path("TASK-1-152").unwrap();
+    let path_alias = store.join(&rel_alias);
+    std::fs::create_dir_all(path_alias.parent().unwrap()).unwrap();
+    let mut req_alias = plain();
+    req_alias.spec_id = Some("TASK-1-152".into());
+    req_alias.agreed_id = Some("TASK-176".into());
+    req_alias.tags.insert("security".into());
+    std::fs::write(&path_alias, serde_yaml::to_string(&req_alias).unwrap()).unwrap();
+    git_out(&store, &["add", "-A"]);
+    git_out(&store, &["commit", "-qm", "v1 store"]);
+    std::fs::remove_file(&path_alias).unwrap();
+    git_out(&store, &["add", "-A"]);
+    git_out(&store, &["commit", "-qm", "delete TASK-1-152"]);
+
+    assert_eq!(
+        crate::mandate::store_history_alias_ids(&store, "TASK-176").unwrap(),
+        vec!["TASK-1-152".to_string()]
+    );
+
+    let gh = root.join("gh-stub");
+    crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "advisor",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+    git_out(&store, &["add", "-A"]);
+    git_out(
+        &store,
+        &["commit", "--allow-empty", "-qm", "seed fixture seat roster"],
+    );
+
+    let mut mandate = active(false);
+    mandate.principal = crate::current_user_id(None);
+    mandate.issued_at = Utc::now() - Duration::minutes(1);
+    mandate.expires_at = Utc::now() + Duration::hours(1);
+    plant(&mandate_dir().unwrap(), &mandate, 0o600);
+
+    let hold = crate::merge_hold::typed_hold(
+        42,
+        crate::merge_hold::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    crate::merge_hold::write_typed_hold(root, &hold).unwrap();
+
+    let result = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (TASK-1)".into()],
+        },
+        || {
+            crate::pr_cmd::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &["TASK-1".into()],
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                crate::mandate::ship_decision,
+            )
+        },
+    );
+    assert!(
+        matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
+        "a deleted spec named by its agreed_id must be judged, not dropped: {result:?}"
+    );
 }
