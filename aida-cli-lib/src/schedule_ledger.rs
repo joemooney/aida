@@ -364,40 +364,67 @@ pub(crate) fn write_cas_opts(
         eprintln!("  schedule ledger for '{job}' not written this tick: {err}");
         return Ok(false);
     }
+
     let branch = git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
     let local_only = !push || !git_ops::has_remote(store_root, "origin");
 
     for attempt in 0..MAX_RETRIES {
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+        // trace:TASK-1930 | ai:agy
+        enum StepOutcome {
+            Return(bool),
+            NeedPush(String),
         }
-        let prev = load(store_root, job);
-        let mut next = prev.clone().unwrap_or_else(|| JobLedger::new(job));
-        mutate(&mut next);
-        if !should_write(prev.as_ref(), &next) {
-            return Ok(false);
-        }
-        save(store_root, &next)?;
-        let rel = ledger_rel(job);
-        git_ops::add(store_root, &[rel.as_str()])?;
-        let msg = format!(
-            "schedule: {} {}",
-            job,
-            next.result.as_deref().unwrap_or("update")
-        );
-        if !git_ops::commit(store_root, &msg)? {
-            // Nothing staged (identical bytes) — treat as written.
-            return Ok(true);
-        }
-        if local_only {
-            return Ok(true);
-        }
-        match git_ops::push(store_root, "origin", &branch) {
+        let step =
+            match aida_core::db::with_store_write_lock(store_root, || -> Result<StepOutcome> {
+                if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
+                    eprintln!("  schedule ledger for '{job}' not written this tick: {err}");
+                    return Ok(StepOutcome::Return(false));
+                }
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+                }
+                let prev = load(store_root, job);
+                let mut next = prev.clone().unwrap_or_else(|| JobLedger::new(job));
+                mutate(&mut next);
+                if !should_write(prev.as_ref(), &next) {
+                    return Ok(StepOutcome::Return(false));
+                }
+                save(store_root, &next)?;
+                let rel = ledger_rel(job);
+                git_ops::add(store_root, &[rel.as_str()])?;
+                let msg = format!(
+                    "schedule: {} {}",
+                    job,
+                    next.result.as_deref().unwrap_or("update")
+                );
+                if !git_ops::commit(store_root, &msg)? {
+                    // Nothing staged (identical bytes) — treat as written.
+                    return Ok(StepOutcome::Return(true));
+                }
+                if local_only {
+                    return Ok(StepOutcome::Return(true));
+                }
+                Ok(StepOutcome::NeedPush(git_ops::head_sha(store_root)?))
+            }) {
+                Ok(step) => step,
+                Err(err) => {
+                    if let Err(unsafe_err) = git_ops::ensure_store_write_safe(store_root) {
+                        eprintln!(
+                            "  schedule ledger for '{job}' not written this tick: {unsafe_err}"
+                        );
+                        return Ok(false);
+                    }
+                    return Err(err);
+                }
+            };
+        let committed_sha = match step {
+            StepOutcome::Return(v) => return Ok(v),
+            StepOutcome::NeedPush(sha) => sha,
+        };
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 continue;
             }
             Err(e) => {
@@ -513,38 +540,67 @@ pub(crate) fn write_batch_cas_opts(
     let local_only = !push || !git_ops::has_remote(store_root, "origin");
 
     for attempt in 0..MAX_RETRIES {
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+        // trace:TASK-1930 | ai:agy
+        enum BatchStepOutcome {
+            Return(usize),
+            NeedPush(usize, String),
         }
-        let writes = changed(&load_all(store_root));
-        if writes.is_empty() {
-            return Ok(0);
-        }
-        for (_, ledger) in &writes {
-            save(store_root, ledger)?;
-        }
-        let rels = writes
-            .iter()
-            .map(|(job, _)| ledger_rel(job))
-            .collect::<Vec<_>>();
-        let refs = rels.iter().map(String::as_str).collect::<Vec<_>>();
-        git_ops::add(store_root, &refs)?;
-        let msg = format!("schedule: tick ({} jobs)", writes.len());
-        if !git_ops::commit(store_root, &msg)? || local_only {
-            return Ok(writes.len());
-        }
-        match git_ops::push(store_root, "origin", &branch) {
-            Ok(true) => return Ok(writes.len()),
+        let step = match aida_core::db::with_store_write_lock(
+            store_root,
+            || -> Result<BatchStepOutcome> {
+                if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
+                    eprintln!("  schedule ledgers not written this tick: {err}");
+                    return Ok(BatchStepOutcome::Return(0));
+                }
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
+                }
+                let writes = changed(&load_all(store_root));
+                if writes.is_empty() {
+                    return Ok(BatchStepOutcome::Return(0));
+                }
+                for (_, ledger) in &writes {
+                    save(store_root, ledger)?;
+                }
+                let rels = writes
+                    .iter()
+                    .map(|(job, _)| ledger_rel(job))
+                    .collect::<Vec<_>>();
+                let refs = rels.iter().map(String::as_str).collect::<Vec<_>>();
+                git_ops::add(store_root, &refs)?;
+                let msg = format!("schedule: tick ({} jobs)", writes.len());
+                if !git_ops::commit(store_root, &msg)? || local_only {
+                    return Ok(BatchStepOutcome::Return(writes.len()));
+                }
+                Ok(BatchStepOutcome::NeedPush(
+                    writes.len(),
+                    git_ops::head_sha(store_root)?,
+                ))
+            },
+        ) {
+            Ok(step) => step,
+            Err(err) => {
+                if let Err(unsafe_err) = git_ops::ensure_store_write_safe(store_root) {
+                    eprintln!("  schedule ledgers not written this tick: {unsafe_err}");
+                    return Ok(0);
+                }
+                return Err(err);
+            }
+        };
+        let (count, committed_sha) = match step {
+            BatchStepOutcome::Return(n) => return Ok(n),
+            BatchStepOutcome::NeedPush(n, sha) => (n, sha),
+        };
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
+            Ok(true) => return Ok(count),
             Ok(false) => {
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
             }
             Err(e) => {
                 eprintln!(
                     "note: schedule tick committed locally; push failed ({e}) — it uploads on the next `aida push`"
                 );
-                return Ok(writes.len());
+                return Ok(count);
             }
         }
     }

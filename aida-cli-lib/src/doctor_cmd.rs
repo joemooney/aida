@@ -12792,32 +12792,36 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     let affected_source_uuids: std::collections::HashSet<uuid::Uuid> =
         dangling.iter().map(|d| d.source_uuid).collect();
     let mut fixed = 0usize;
-    for mut req in reqs.into_iter() {
-        if !affected_source_uuids.contains(&req.id) {
-            continue;
+    // trace:TASK-1930 | ai:agy
+    aida_core::db::with_store_write_lock(&store_path, || -> Result<()> {
+        for mut req in reqs.into_iter() {
+            if !affected_source_uuids.contains(&req.id) {
+                continue;
+            }
+            let prior = req.clone(); // trace:STORY-1674 | ai:codex
+            let before = req.relationships.len();
+            req.relationships
+                .retain(|r| !dangling_target_uuids.contains(&r.target_id));
+            if req.relationships.len() != before {
+                aida_core::provenance::stamp_write(
+                    &mut req,
+                    Some(&prior),
+                    &aida_core::provenance::WriteContext::capture(),
+                )?;
+                aida_core::object_store::write_object(&store_path.join("objects"), &req)?;
+                fixed += 1;
+            }
         }
-        let prior = req.clone(); // trace:STORY-1674 | ai:codex
-        let before = req.relationships.len();
-        req.relationships
-            .retain(|r| !dangling_target_uuids.contains(&r.target_id));
-        if req.relationships.len() != before {
-            aida_core::provenance::stamp_write(
-                &mut req,
-                Some(&prior),
-                &aida_core::provenance::WriteContext::capture(),
-            )?;
-            aida_core::object_store::write_object(&store_path.join("objects"), &req)?;
-            fixed += 1;
-        }
-    }
-    let _ = aida_core::git_ops::add(&store_path, &["objects"]);
-    let _ = aida_core::git_ops::commit(
-        &store_path,
-        &format!(
-            "chore(repair): strip {} dangling relationship target(s)",
-            dangling.len()
-        ),
-    );
+        let _ = aida_core::git_ops::add(&store_path, &["objects"]);
+        let _ = aida_core::git_ops::commit(
+            &store_path,
+            &format!(
+                "chore(repair): strip {} dangling relationship target(s)",
+                dangling.len()
+            ),
+        );
+        Ok(())
+    })?;
     println!(
         "{} repaired {} requirement(s).",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
@@ -13245,19 +13249,25 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
 
     let stale_indices: Vec<usize> = stale.iter().map(|(i, _)| *i).collect();
     let count = stale_indices.len();
-    for idx in stale_indices {
-        let b = &mut blocks.blocks[idx];
-        b.next = b.range_end + 1;
-    }
-    blocks.save(&blocks_path)?;
-    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
-    let _ = aida_core::git_ops::commit(
-        &store_path,
-        &format!(
-            "chore(registry): tombstone {} stale block(s) (no node owner)",
-            count
-        ),
-    );
+    // trace:TASK-1930 | ai:agy
+    aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+        aida_core::db::with_store_write_lock(&store_path, || -> Result<()> {
+            for idx in stale_indices {
+                let b = &mut blocks.blocks[idx];
+                b.next = b.range_end + 1;
+            }
+            blocks.save(&blocks_path)?;
+            let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+            let _ = aida_core::git_ops::commit(
+                &store_path,
+                &format!(
+                    "chore(registry): tombstone {} stale block(s) (no node owner)",
+                    count
+                ),
+            );
+            Ok(())
+        })
+    })?;
 
     println!(
         "{} tombstoned {} block(s).",
@@ -13957,41 +13967,47 @@ fn doctor_migrate_counter_scope(
 
     // Apply: mark our per-type blocks exhausted (next = range_end + 1) so
     // the dispenser skips them. Then append the new `*` block.
-    for b in registry.blocks.iter_mut() {
-        if b.node_id == node_id && !b.is_exhausted() {
-            b.next = b.range_end + 1;
-        }
-    }
-    let owner = aida_core::git_ops::git_config_get("user.email")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "unknown".to_string());
-    registry.claim_block_with_floor(
-        node_id.clone(),
-        owner,
-        hostname(),
-        aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
-        new_block_size,
-        highest_end,
-    );
-    registry.save(&blocks_path)?;
+    // trace:TASK-1930 | ai:agy
+    aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+        aida_core::db::with_store_write_lock(&store_path, || -> Result<()> {
+            for b in registry.blocks.iter_mut() {
+                if b.node_id == node_id && !b.is_exhausted() {
+                    b.next = b.range_end + 1;
+                }
+            }
+            let owner = aida_core::git_ops::git_config_get("user.email")
+                .ok()
+                .or_else(|| std::env::var("USER").ok())
+                .unwrap_or_else(|| "unknown".to_string());
+            registry.claim_block_with_floor(
+                node_id.clone(),
+                owner,
+                hostname(),
+                aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
+                new_block_size,
+                highest_end,
+            );
+            registry.save(&blocks_path)?;
 
-    // Update config.toml — preserve the file by line-rewriting; if
-    // counter_scope already exists (it shouldn't given the early check),
-    // overwrite. Otherwise append after the [id_format] section.
-    update_config_counter_scope(&config_path, "global")?;
+            // Update config.toml — preserve the file by line-rewriting; if
+            // counter_scope already exists (it shouldn't given the early check),
+            // overwrite. Otherwise append after the [id_format] section.
+            update_config_counter_scope(&config_path, "global")?;
 
-    // Stage + commit the registry change. The lease symlink in the
-    // session worktree means `git -C <store_path>` operates on the
-    // shared orphan branch.
-    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
-    let _ = aida_core::git_ops::commit(
-        &store_path,
-        &format!(
-            "chore(registry): migrate node {} to global counter (*-{}..{})",
-            node_id, new_start, new_end
-        ),
-    );
+            // Stage + commit the registry change. The lease symlink in the
+            // session worktree means `git -C <store_path>` operates on the
+            // shared orphan branch.
+            let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+            let _ = aida_core::git_ops::commit(
+                &store_path,
+                &format!(
+                    "chore(registry): migrate node {} to global counter (*-{}..{})",
+                    node_id, new_start, new_end
+                ),
+            );
+            Ok(())
+        })
+    })?;
 
     println!();
     println!(

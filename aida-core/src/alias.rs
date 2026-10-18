@@ -230,40 +230,47 @@ pub fn link_cas(store_root: &Path, a: &str, b: &str) -> std::io::Result<bool> {
     let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
 
     for attempt in 0..MAX_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                }
 
-        // Step 2: load → merge our link → save. A redundant link is a no-op:
-        // nothing changed → no commit.
-        let mut registry = AliasRegistry::load(store_root);
-        if !registry.link(a, b) {
+                // Step 2: load → merge our link → save. A redundant link is a no-op:
+                // nothing changed → no commit.
+                let mut registry = AliasRegistry::load(store_root);
+                if !registry.link(a, b) {
+                    return Ok(None);
+                }
+                registry.save(store_root)?;
+
+                // Step 3: stage + commit.
+                git_ops::add(store_root, &["registry/aliases.toml"])?;
+                let msg = format!(
+                    "chore(registry): link identity {} = {}",
+                    canonical_user_id(a),
+                    canonical_user_id(b)
+                );
+                git_ops::commit(store_root, &msg)?;
+                Ok(Some(git_ops::head_sha(store_root)?))
+            })
+            .map_err(io_err)?;
+        let Some(committed_sha) = committed_sha else {
             return Ok(false);
-        }
-        registry.save(store_root)?;
-
-        // Step 3: stage + commit.
-        git_ops::add(store_root, &["registry/aliases.toml"]).map_err(io_err)?;
-        let msg = format!(
-            "chore(registry): link identity {} = {}",
-            canonical_user_id(a),
-            canonical_user_id(b)
-        );
-        git_ops::commit(store_root, &msg).map_err(io_err)?;
+        };
 
         // Step 4: push (or stop here when solo).
         if local_only {
             return Ok(true);
         }
-        match git_ops::push(store_root, "origin", &branch) {
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly, then retry.
-                let _ = crate::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 continue;
             }
             Err(e) => return Err(io_err(e)),
