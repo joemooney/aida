@@ -351,10 +351,39 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
 pub(crate) const GIT_CREDENTIAL_HELPER_SCRIPT: &str =
     "!f() { test \"$1\" = get && printf 'username=%s\\npassword=%s\\n' \"${AIDA_GIT_CREDENTIAL_USER:-oauth2}\" \"$AIDA_GIT_CREDENTIAL_TOKEN\"; }; f";
 
-/// Strip embedded `user:secret@` from an `http://` or `https://` URL, returning
-/// `(clean_url, Option<(username, password)>)`. Non-HTTP(S) URLs (such as
-/// `ssh://git@host/...` or `git@host:...`) are returned unchanged with `None`.
+/// Decode `%XX` escapes in URL userinfo. A malformed escape is kept verbatim.
+// trace:BUG-2119 | ai:claude
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%')
+            .then(|| s.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|h| u8::from_str_radix(h, 16).ok());
+        match hex {
+            Some(b) => {
+                out.push(b);
+                i += 3;
+            }
+            None => {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Strip an embedded `user:secret@` from an `http://` or `https://` URL,
+/// returning `(clean_url, Option<(username, password)>)` with both parts
+/// percent-decoded. Only a non-empty password counts as a credential: a
+/// username-only userinfo (`joe@`, `joe:@`) carries no secret, so the URL is
+/// returned unchanged with `None`. Non-HTTP(S) URLs (such as
+/// `ssh://git@host/...` or `git@host:...`) are also returned unchanged.
 // trace:BUG-2119 | ai:agy
+// trace:BUG-2119 | ai:claude
 pub(crate) fn split_http_url_userinfo(url: &str) -> (String, Option<(String, String)>) {
     let trimmed = url.trim();
     let Some((scheme, tail)) = trimmed.split_once("://") else {
@@ -369,46 +398,107 @@ pub(crate) fn split_http_url_userinfo(url: &str) -> (String, Option<(String, Str
     let Some(at) = tail[..authority_end].rfind('@') else {
         return (url.to_string(), None);
     };
-    let userinfo = &tail[..at];
-    let clean_url = format!("{scheme}://{}", &tail[at + 1..]);
-    let creds = match userinfo.split_once(':') {
-        Some((user, pass)) if !pass.is_empty() => Some((
-            if user.is_empty() {
-                "oauth2".to_string()
-            } else {
-                user.to_string()
-            },
-            pass.to_string(),
-        )),
-        Some((user, _)) if !user.is_empty() => Some(("oauth2".to_string(), user.to_string())),
-        None if !userinfo.is_empty() => Some(("oauth2".to_string(), userinfo.to_string())),
-        _ => None,
+    let Some((user, pass)) = tail[..at].split_once(':').filter(|(_, p)| !p.is_empty()) else {
+        return (url.to_string(), None);
     };
-    (clean_url, creds)
+    let user = if user.is_empty() {
+        "oauth2".to_string()
+    } else {
+        percent_decode(user)
+    };
+    let clean_url = format!("{scheme}://{}", &tail[at + 1..]);
+    (clean_url, Some((user, percent_decode(pass))))
 }
 
+/// `scheme://host[:port]` of an HTTP(S) URL, any userinfo dropped: the
+/// `credential.<url>.*` scope that matches this host and no other.
+// trace:BUG-2119 | ai:claude
+fn http_credential_scope(url: &str) -> Option<String> {
+    let (scheme, tail) = url.trim().split_once("://")?;
+    if !scheme.eq_ignore_ascii_case("http") && !scheme.eq_ignore_ascii_case("https") {
+        return None;
+    }
+    let authority = &tail[..tail.find('/').unwrap_or(tail.len())];
+    let host = authority.rsplit('@').next().unwrap_or(authority);
+    (!host.is_empty()).then(|| format!("{}://{host}", scheme.to_ascii_lowercase()))
+}
+
+/// Append one `GIT_CONFIG_KEY_n` / `GIT_CONFIG_VALUE_n` pair after any pairs
+/// already set on `cmd` or, when `cmd` sets none, inherited from this process
+/// (a CI `safe.directory`, say), so neither is overwritten.
 // trace:BUG-2119 | ai:agy
+// trace:BUG-2119 | ai:claude
 fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
-    let current_count = cmd
+    let parse = |s: &str| s.trim().parse::<usize>().ok();
+    let explicit = cmd
         .get_envs()
-        .find_map(|(k, v)| {
-            (k == "GIT_CONFIG_COUNT")
-                .then(|| {
-                    v.and_then(|s| s.to_str())
-                        .and_then(|s| s.parse::<usize>().ok())
-                })
-                .flatten()
-        })
-        .unwrap_or(0);
+        .find(|(k, _)| *k == "GIT_CONFIG_COUNT")
+        .map(|(_, v)| v.and_then(|s| s.to_str()).and_then(parse));
+    let current_count = match explicit {
+        Some(count) => count.unwrap_or(0),
+        None => std::env::var("GIT_CONFIG_COUNT")
+            .ok()
+            .as_deref()
+            .and_then(parse)
+            .unwrap_or(0),
+    };
     cmd.env(format!("GIT_CONFIG_KEY_{current_count}"), key);
     cmd.env(format!("GIT_CONFIG_VALUE_{current_count}"), value);
     cmd.env("GIT_CONFIG_COUNT", (current_count + 1).to_string());
 }
 
+/// Every `remote.<name>.url` and `remote.<name>.pushurl` value exactly as
+/// configured (before any `insteadOf` rewrite), in git's order.
+// trace:BUG-2119 | ai:claude
+fn configured_remote_urls(dir: &Path, remote: &str) -> Vec<String> {
+    let out = aida_core::git_ops::host_git_command(dir)
+        .args([
+            "config",
+            "--get-regexp",
+            &format!("^remote\\.{}\\.(url|pushurl)$", regex_escape(remote)),
+        ])
+        .output();
+    let Ok(out) = out else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| line.split_once(' ').map(|(_, v)| v.trim().to_string()))
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
+/// Escape POSIX ERE metacharacters so a remote name matches literally.
+// trace:BUG-2119 | ai:claude
+fn regex_escape(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| {
+            let special = "\\^$.|?*+()[]{}".contains(c);
+            special
+                .then_some('\\')
+                .into_iter()
+                .chain(std::iter::once(c))
+        })
+        .collect()
+}
+
 /// Configure `cmd` so `git-remote-http` receives a credential-free remote URL
-/// in `argv` and obtains any GitLab HTTP(S) token via `credential.helper` and
-/// environment variables (`AIDA_GIT_CREDENTIAL_USER` / `AIDA_GIT_CREDENTIAL_TOKEN`).
+/// in `argv` and obtains any HTTP(S) token via a host-scoped
+/// `credential.<scheme>://<host>.helper` reading environment variables
+/// (`AIDA_GIT_CREDENTIAL_USER` / `AIDA_GIT_CREDENTIAL_TOKEN`).
+///
+/// The persisted remote configuration is never modified. When a configured
+/// URL embeds `user:token@`, this one invocation gets a
+/// `url.<clean>.insteadOf=<credentialed>` override (through `GIT_CONFIG_*`,
+/// not argv) and the embedded token feeds the helper, so the credential the
+/// operator stored keeps working for later aida and plain `git` runs. A
+/// `url_hint` with userinfo supplies the token when the stored URL is clean;
+/// otherwise a GitLab host falls back to the glab / env token.
 // trace:BUG-2119 | ai:agy
+// trace:BUG-2119 | ai:claude
 pub(crate) fn configure_git_remote_credentials(
     cmd: &mut Command,
     dir: &Path,
@@ -416,51 +506,48 @@ pub(crate) fn configure_git_remote_credentials(
     url_hint: Option<&str>,
 ) {
     let is_named_remote = !remote.is_empty() && !remote.contains("://") && !remote.contains('@');
-    let stored_url = is_named_remote
-        .then(|| aida_core::git_ops::remote_url(dir, remote))
-        .flatten();
+    let stored_urls = if is_named_remote {
+        configured_remote_urls(dir, remote)
+    } else {
+        Vec::new()
+    };
+    let mut clean_stored: Option<String> = None;
+    let mut stored_creds = None;
+    for stored in &stored_urls {
+        let (clean, creds) = split_http_url_userinfo(stored);
+        if creds.is_some() {
+            // Only a credentialed URL is rewritten: a clean stored URL needs
+            // no override, and appending one would duplicate the push target.
+            append_git_config_env(cmd, &format!("url.{clean}.insteadOf"), stored);
+            stored_creds = stored_creds.or(creds);
+        }
+        clean_stored.get_or_insert(clean);
+    }
     let (clean_hint, hint_creds) = url_hint
         .map(split_http_url_userinfo)
         .unwrap_or_else(|| (String::new(), None));
-    let (clean_stored, stored_creds) = stored_url
-        .as_deref()
-        .map(split_http_url_userinfo)
-        .unwrap_or_else(|| (String::new(), None));
-    let clean_url = if !clean_stored.is_empty() {
-        clean_stored.as_str()
-    } else {
-        clean_hint.as_str()
+    let clean_url = clean_stored.unwrap_or(clean_hint);
+    let Some(scope) = http_credential_scope(&clean_url) else {
+        return;
     };
-    let had_embedded_userinfo = stored_url.as_deref().is_some_and(|s| s != clean_stored)
-        || url_hint.is_some_and(|u| u != clean_hint);
-    let is_http = clean_url
-        .split_once("://")
-        .is_some_and(|(s, _)| s.eq_ignore_ascii_case("http") || s.eq_ignore_ascii_case("https"));
 
     let creds = hint_creds.or(stored_creds).or_else(|| {
-        if !is_http || crate::forge::detect_forge_kind(clean_url) != crate::forge::ForgeKind::GitLab
-        {
+        if crate::forge::detect_forge_kind(&clean_url) != crate::forge::ForgeKind::GitLab {
             return None;
         }
-        let host = crate::forge::forge_host_of(clean_url)?;
+        let host = crate::forge::forge_host_of(&clean_url)?;
         let (token, _) = crate::remote_create::gitlab_token_for_host(&host)?;
         Some(("oauth2".to_string(), token))
     });
-
-    if stored_url.as_deref().is_some_and(|s| s != clean_stored) && !clean_stored.is_empty() {
-        let _ = Command::new("git")
-            .arg("-C")
-            .arg(dir)
-            .args(["remote", "set-url", remote, &clean_stored])
-            .status();
-    } else if had_embedded_userinfo && !clean_url.is_empty() && is_named_remote {
-        append_git_config_env(cmd, &format!("remote.{remote}.url"), clean_url);
-    }
     if let Some((user, token)) = creds {
         cmd.env("AIDA_GIT_CREDENTIAL_USER", user);
         cmd.env("AIDA_GIT_CREDENTIAL_TOKEN", token);
-        append_git_config_env(cmd, "credential.helper", "");
-        append_git_config_env(cmd, "credential.helper", GIT_CREDENTIAL_HELPER_SCRIPT);
+        // Scoped to this host only: a redirect or any other credential
+        // request in the same git run never sees the token. The empty value
+        // resets helpers inherited for this host so ours answers first.
+        let key = format!("credential.{scope}.helper");
+        append_git_config_env(cmd, &key, "");
+        append_git_config_env(cmd, &key, GIT_CREDENTIAL_HELPER_SCRIPT);
     }
 }
 

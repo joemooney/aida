@@ -330,9 +330,16 @@ fn add_origin_and_push(project_root: &Path, url: &str, branch: &str) -> Result<(
     if !add.success() {
         anyhow::bail!("`git remote add origin {url}` failed");
     }
-    let push = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    let mut push = Command::new("git");
+    push.arg("-C").arg(project_root);
+    // trace:BUG-2119 | ai:claude
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut push,
+        project_root,
+        "origin",
+        Some(url),
+    );
+    let push = push
         .args(["push", "-u", "origin", branch])
         .status()
         .context("invoking git push -u origin")?;
@@ -1122,9 +1129,16 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
     if !no_fetch {
         for r in &remotes {
             for b in &DRIFT_BRANCHES {
-                let ok = Command::new("git")
-                    .arg("-C")
-                    .arg(project_root)
+                let mut fetch = Command::new("git");
+                fetch.arg("-C").arg(project_root);
+                // trace:BUG-2119 | ai:claude
+                crate::gitlab_project_create::configure_git_remote_credentials(
+                    &mut fetch,
+                    project_root,
+                    r,
+                    None,
+                );
+                let ok = fetch
                     .args(["fetch", "--quiet", r, b])
                     .output()
                     .map(|o| o.status.success())
@@ -1148,7 +1162,7 @@ pub fn handle_remote_status(project_root: &Path, json: bool, no_fetch: bool) -> 
     for b in &DRIFT_BRANCHES {
         let mut standings = Vec::new();
         for r in &remotes {
-            let head = aida_core::git_ops::remote_branch_head_sha(project_root, r, b);
+            let head = remote_branch_head(project_root, r, b);
             let ahead_behind =
                 aida_core::git_ops::ahead_behind(project_root, b, &format!("{r}/{b}"));
             standings.push(RemoteBranchStanding {
@@ -1473,8 +1487,9 @@ pub fn run_mirror_push(
         .into_iter()
         .filter(|refspec| {
             let (sha, remote_ref) = refspec.split_once(':').unwrap();
-            let accepted = git_out(
+            let accepted = git_out_remote(
                 project_root,
+                "origin",
                 &["ls-remote", "--refs", "--", "origin", remote_ref],
             )
             .and_then(|out| {
@@ -1576,10 +1591,16 @@ pub fn run_mirror_push(
 /// objects before pushing by SHA. Never reads the local branch.
 // trace:BUG-1803 | ai:codex
 pub(crate) fn origin_code_refspec(repo: &Path, branch: &str) -> Result<String> {
-    let sha = aida_core::git_ops::remote_branch_head_sha(repo, "origin", branch)
+    let sha = remote_branch_head(repo, "origin", branch)
         .ok_or_else(|| anyhow::anyhow!("origin/{branch} is absent or unreachable"))?;
     let remote_ref = format!("refs/heads/{branch}");
-    if git_out(repo, &["fetch", "--quiet", "--", "origin", &remote_ref]).is_none() {
+    if git_out_remote(
+        repo,
+        "origin",
+        &["fetch", "--quiet", "--", "origin", &remote_ref],
+    )
+    .is_none()
+    {
         anyhow::bail!("could not fetch origin/{branch}; no code refs mirrored");
     }
     Ok(format!("{sha}:{remote_ref}"))
@@ -1793,12 +1814,7 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
     // is unreachable or empty: report it once and do not mark every hub failed.
     let sources: Vec<(String, Option<String>)> = branches
         .iter()
-        .map(|b| {
-            (
-                b.clone(),
-                git_ops::remote_branch_head_sha(project_root, "origin", b),
-            )
-        })
+        .map(|b| (b.clone(), remote_branch_head(project_root, "origin", b)))
         .collect();
     if sources.iter().all(|(_, sha)| sha.is_none()) {
         report.skipped.push(format!(
@@ -1822,9 +1838,16 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
         // Make sure origin's tip is in the local object database; a push by
         // sha needs the objects, and the local branch may be behind origin
         // (a forge-side merge) or ahead of it (unpushed work).
-        let fetched = Command::new("git")
-            .arg("-C")
-            .arg(project_root)
+        let mut fetch = Command::new("git");
+        fetch.arg("-C").arg(project_root);
+        // trace:BUG-2119 | ai:claude
+        crate::gitlab_project_create::configure_git_remote_credentials(
+            &mut fetch,
+            project_root,
+            "origin",
+            None,
+        );
+        let fetched = fetch
             .args([
                 "fetch",
                 "--quiet",
@@ -1865,7 +1888,7 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 });
                 continue;
             }
-            let current = git_ops::remote_branch_head_sha(project_root, mirror, branch);
+            let current = remote_branch_head(project_root, mirror, branch);
             if current.as_deref() == Some(source.as_str()) {
                 report.rows.push(MirrorSyncRow {
                     mirror: mirror.clone(),
@@ -1898,7 +1921,7 @@ pub fn mirror_sync_hubs(project_root: &Path) -> Result<MirrorSyncReport> {
                 // Verify the hub really moved: a push that "succeeds" without
                 // landing is exactly the silent drift this sync exists to end.
                 Ok(o) if o.status.success() => {
-                    match git_ops::remote_branch_head_sha(project_root, mirror, branch) {
+                    match remote_branch_head(project_root, mirror, branch) {
                         Some(now) if now == *source => MirrorSyncOutcome::Pushed {
                             from: current,
                             to: source.clone(),
@@ -2148,16 +2171,10 @@ pub(crate) fn run_remote_mirror(
         // An empty `existing` means `git remote get-url` failed: nothing to probe.
         if let Some(u) = url.filter(|_| !existing.is_empty()) {
             if crate::doctor_cmd::same_remote(&existing, u) {
+                // The stored URL is left as configured; the probe keeps any
+                // embedded token out of argv per invocation.
                 // trace:BUG-2119 | ai:antigravity
-                let (clean_existing, existing_creds) =
-                    crate::gitlab_project_create::split_http_url_userinfo(&existing);
-                if existing_creds.is_some() {
-                    let _ = Command::new("git")
-                        .arg("-C")
-                        .arg(project_root)
-                        .args(["remote", "set-url", name, &clean_existing])
-                        .status();
-                }
+                // trace:BUG-2119 | ai:claude
                 let (_, u_creds) = crate::gitlab_project_create::split_http_url_userinfo(u);
                 let probe_url = if u_creds.is_some() { u } else { &existing };
                 // trace:BUG-2004 | ai:antigravity
@@ -2180,14 +2197,18 @@ pub(crate) fn run_remote_mirror(
         let Some(u) = url else {
             anyhow::bail!("remote `{name}` does not exist — pass --url <clone-url> to add it");
         };
-        // Strip HTTP userinfo before `git remote add` so tokens never appear in
-        // `git remote add` argv or `.git/config` (and thus never in
-        // `git-remote-http` argv). trace:BUG-2119 | ai:antigravity
-        let (clean_u, _) = crate::gitlab_project_create::split_http_url_userinfo(u);
+        // The URL is stored as given: an embedded token is the operator's
+        // only credential for this hub, and dropping it would break every
+        // later push. This one `git remote add` carries no more than this
+        // aida invocation's own argv already did; every fetch, push and
+        // ls-remote keeps it out of `git-remote-http` argv per invocation.
+        // trace:BUG-2119 | ai:antigravity
+        // trace:BUG-2119 | ai:claude
+        let (_, u_creds) = crate::gitlab_project_create::split_http_url_userinfo(u);
         let add = Command::new("git")
             .arg("-C")
             .arg(project_root)
-            .args(["remote", "add", name, &clean_u])
+            .args(["remote", "add", name, u])
             .status()
             .context("invoking git remote add")?;
         if !add.success() {
@@ -2201,6 +2222,14 @@ pub(crate) fn run_remote_mirror(
             "{check} added remote `{name}` → {}",
             crate::gitlab_project_create::redact_url_userinfo(u)
         );
+        if u_creds.is_some() {
+            eprintln!(
+                "{warn} the URL for `{name}` embeds a token, now saved in .git/config; aida keeps \
+                 it out of process listings, but a git credential helper is safer \
+                 (`git remote set-url {name} {}` once the helper holds the token)",
+                crate::gitlab_project_create::redact_url_userinfo(u)
+            );
+        }
         // A GitLab group that refuses push-to-create gets the project made
         // through the API (private), so the first mirror push lands. A
         // missing token leaves the remote wired and exits non-zero with the
@@ -2267,6 +2296,45 @@ fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
     } else {
         None
     }
+}
+
+/// [`git_out`] for a command that contacts `remote`, with any HTTP token kept
+/// out of `git-remote-http` argv.
+// trace:BUG-2119 | ai:claude
+fn git_out_remote(repo: &Path, remote: &str, args: &[&str]) -> Option<String> {
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    crate::gitlab_project_create::configure_git_remote_credentials(&mut cmd, repo, remote, None);
+    let out = cmd.args(args).output().ok()?;
+    if out.status.success() {
+        Some(String::from_utf8_lossy(&out.stdout).to_string())
+    } else {
+        None
+    }
+}
+
+/// [`git_ops::remote_branch_head_sha`] with `remote`'s HTTP token kept out of
+/// `git-remote-http` argv.
+// trace:BUG-2119 | ai:claude
+fn remote_branch_head(repo: &Path, remote: &str, branch: &str) -> Option<String> {
+    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    cmd.env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"));
+    crate::gitlab_project_create::configure_git_remote_credentials(&mut cmd, repo, remote, None);
+    let out = cmd
+        .args([
+            "ls-remote",
+            "--end-of-options",
+            remote,
+            &format!("refs/heads/{branch}"),
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
 }
 
 /// One hub's standing for the store branch during a reconcile.
@@ -2342,9 +2410,14 @@ pub fn handle_remote_reconcile(
     let local = git_ops::head_sha(&store_dir)?;
     let mut hubs: Vec<HubStanding> = Vec::new();
     for r in &remotes {
-        let sha = git_ops::remote_branch_head_sha(project_root, r, STORE_BRANCH);
+        let sha = remote_branch_head(project_root, r, STORE_BRANCH);
         if sha.is_some() {
-            let _ = aida_core::git_ops::host_git_command(&store_dir)
+            let mut fetch = aida_core::git_ops::host_git_command(&store_dir);
+            // trace:BUG-2119 | ai:claude
+            crate::gitlab_project_create::configure_git_remote_credentials(
+                &mut fetch, &store_dir, r, None,
+            );
+            let _ = fetch
                 .args(["fetch", "--quiet", r, &format!("refs/heads/{STORE_BRANCH}")])
                 .status();
         }

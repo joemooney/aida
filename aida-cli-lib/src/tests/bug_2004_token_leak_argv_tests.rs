@@ -154,7 +154,17 @@ fn gitlab_release_exists_without_token_does_not_pass_stdin_or_header() {
 fn gitlab_release_exists_curl_failures_do_not_leak_token() {
     // trace:BUG-1994 | ai:claude
     // trace:BUG-2119 | ai:antigravity
-    if crate::test_env::run_path_isolated_test() {
+    const SECRET: &str = "glpat-failure-secret-998877";
+    // The fake curl echoes its stdin (the PRIVATE-TOKEN header) to stderr,
+    // so inheriting curl's stderr or logging the header on failure puts the
+    // token in this child's output. trace:BUG-2119 | ai:claude
+    if let Some(out) = crate::test_env::run_path_isolated_test_output() {
+        for (stream, bytes) in [("stdout", &out.stdout), ("stderr", &out.stderr)] {
+            assert!(
+                !String::from_utf8_lossy(bytes).contains(SECRET),
+                "the token reached the process {stream} on a curl failure"
+            );
+        }
         return;
     }
     let tmp = TempDir::new().unwrap();
@@ -164,7 +174,7 @@ fn gitlab_release_exists_curl_failures_do_not_leak_token() {
 
     let old_path = std::env::var("PATH").unwrap_or_default();
     let new_path = format!("{}:{}", bin.display(), old_path);
-    let secret = "glpat-failure-secret-998877";
+    let secret = SECRET;
 
     let _guard = crate::test_env::EnvVarsGuard::apply(&[
         ("PATH", Some(&new_path)),
@@ -177,7 +187,7 @@ fn gitlab_release_exists_curl_failures_do_not_leak_token() {
     let script_exit_22 = format!(
         "#!/bin/sh\n\
          for a in \"$@\"; do printf '%s\\n' \"$a\" >> '{}'; done\n\
-         cat >/dev/null\n\
+         cat >&2\n\
          echo 'curl: (22) The requested URL returned error: 502' >&2\n\
          exit 22\n",
         rec_argv.display()
@@ -196,7 +206,7 @@ fn gitlab_release_exists_curl_failures_do_not_leak_token() {
     let script_http_500 = format!(
         "#!/bin/sh\n\
          for a in \"$@\"; do printf '%s\\n' \"$a\" >> '{}'; done\n\
-         cat >/dev/null\n\
+         cat >&2\n\
          printf '{{\"message\":\"500 Internal Server Error\"}}\\n500\\n'\n\
          exit 0\n",
         rec_argv.display()
@@ -295,9 +305,10 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
         .success());
     let secret = "glpat-secret-in-remote-http-777";
     let secret_url = format!("https://oauth2:{secret}@gitlab.example.test/group/my-project.git");
-    // Even if .git/config had the credentialed URL from an earlier setup,
-    // configure_git_remote_credentials must override remote.<name>.url to the
-    // clean URL and supply the token through credential.helper.
+    // When .git/config holds the credentialed URL from an earlier setup,
+    // configure_git_remote_credentials rewrites it to the clean URL for this
+    // invocation only and supplies the token through a host-scoped helper,
+    // leaving the stored URL (the operator's only credential) untouched.
     assert!(std::process::Command::new("git")
         .arg("-C")
         .arg(&repo)
@@ -313,6 +324,8 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
     fs::create_dir_all(&exec_dir).unwrap();
     let helper_argv_file = tmp.path().join("git_remote_https_argv.txt");
     let cred_out_file = tmp.path().join("git_credential_fill.txt");
+    let other_host_file = tmp.path().join("git_credential_fill_other.txt");
+    let inherited_file = tmp.path().join("inherited_config.txt");
     let fake_remote_https = exec_dir.join("git-remote-https");
     let helper_script = format!(
         "#!/bin/sh\n\
@@ -320,6 +333,8 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
              printf '%s\\n' \"$a\" >> '{}'\n\
          done\n\
          printf 'protocol=https\\nhost=gitlab.example.test\\n\\n' | git credential fill > '{}'\n\
+         printf 'protocol=https\\nhost=other.example.test\\n\\n' | GIT_TERMINAL_PROMPT=0 git credential fill > '{}' 2>/dev/null\n\
+         git config --get aida.inherited > '{}'\n\
          while IFS= read -r line; do\n\
              case \"$line\" in\n\
                  capabilities*) printf 'list\\n\\n' ;;\n\
@@ -329,7 +344,9 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
          done\n\
          exit 0\n",
         helper_argv_file.display(),
-        cred_out_file.display()
+        cred_out_file.display(),
+        other_host_file.display(),
+        inherited_file.display()
     );
     crate::test_exec::write_executable(&fake_remote_https, helper_script);
 
@@ -351,6 +368,11 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
     let _guard = crate::test_env::EnvVarsGuard::apply(&[
         ("GIT_EXEC_PATH", Some(exec_dir.to_str().unwrap())),
         ("PATH", Some(&new_path)),
+        // A parent-supplied GIT_CONFIG_* pair (CI's safe.directory, say)
+        // must survive the pairs aida appends. trace:BUG-2119 | ai:claude
+        ("GIT_CONFIG_COUNT", Some("1")),
+        ("GIT_CONFIG_KEY_0", Some("aida.inherited")),
+        ("GIT_CONFIG_VALUE_0", Some("kept")),
     ]);
 
     let mut cmd =
@@ -384,13 +406,39 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
         cred_out.contains(&format!("password={secret}")),
         "credential helper must supply password=<secret>:\n{cred_out}"
     );
+
+    // trace:BUG-2119 | ai:claude
+    let other_host = fs::read_to_string(&other_host_file).unwrap_or_default();
+    assert!(
+        !other_host.contains(secret),
+        "the helper must answer only for the remote's host:\n{other_host}"
+    );
+    assert_eq!(
+        fs::read_to_string(&inherited_file)
+            .unwrap_or_default()
+            .trim(),
+        "kept",
+        "an inherited GIT_CONFIG_* pair must not be overwritten"
+    );
+    let stored = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&repo)
+        .args(["config", "--get", "remote.my-gitlab-remote.url"])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&stored.stdout).trim(),
+        secret_url,
+        "a probe must never rewrite the stored remote URL"
+    );
 }
 
 #[cfg(unix)]
 #[test]
-fn run_remote_mirror_fresh_add_and_rerun_pass_remote_name_and_scrub_credentials() {
+fn run_remote_mirror_fresh_add_and_rerun_keep_stored_credentials_out_of_probe_argv() {
     // trace:BUG-1994 | ai:claude
     // trace:BUG-2119 | ai:antigravity
+    // trace:BUG-2119 | ai:claude
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -468,8 +516,8 @@ fn run_remote_mirror_fresh_add_and_rerun_pass_remote_name_and_scrub_credentials(
     .unwrap();
     assert_eq!(
         stored_fresh_url.trim(),
-        "https://gitlab.example.test/ai/fresh.git",
-        "fresh-add must store clean URL without credentials in .git/config"
+        fresh_url,
+        "fresh-add must keep the operator's credential, not discard it"
     );
 
     // 2. Re-run branch (remote_create.rs:2133) where .git/config previously had credentials.
@@ -503,15 +551,19 @@ fn run_remote_mirror_fresh_add_and_rerun_pass_remote_name_and_scrub_credentials(
     .unwrap();
     assert_eq!(
         stored_rerun_url.trim(),
-        "https://gitlab.example.test/ai/existing.git",
-        "re-run must scrub embedded credentials from .git/config"
+        dirty_existing_url,
+        "a re-run must never rewrite the stored URL"
     );
 
     let all_git_argv = fs::read_to_string(&rec_git_argv).unwrap_or_default();
-    assert!(
-        !all_git_argv.contains(fresh_secret),
-        "fresh-add secret must never appear in any git argv:\n{all_git_argv}"
-    );
+    // Only `git remote add` — which carries no more than aida's own `--url`
+    // argv — sees the fresh secret; no probe, fetch or push does.
+    for line in all_git_argv.lines().filter(|l| l.contains(fresh_secret)) {
+        assert!(
+            line.contains(" remote add gitlab "),
+            "fresh-add secret must reach only `git remote add`:\n{all_git_argv}"
+        );
+    }
     assert!(
         !all_git_argv.contains(rerun_secret),
         "re-run secret must never appear in any git argv:\n{all_git_argv}"
@@ -523,5 +575,152 @@ fn run_remote_mirror_fresh_add_and_rerun_pass_remote_name_and_scrub_credentials(
     assert!(
         all_git_argv.contains("ls-remote --heads gitlab-rerun\n"),
         "re-run must invoke `git ls-remote --heads gitlab-rerun` (remote name, not URL):\n{all_git_argv}"
+    );
+}
+
+// trace:BUG-2119 | ai:claude
+#[test]
+fn split_http_url_userinfo_takes_only_a_password_as_a_credential() {
+    use crate::gitlab_project_create::split_http_url_userinfo as split;
+    for url in [
+        "https://joe@gitlab.com/x.git",
+        "https://joe:@gitlab.com/x.git",
+        "https://gitlab.com/x.git",
+        "ssh://git:pw@gitlab.com/x.git",
+    ] {
+        assert_eq!(split(url), (url.to_string(), None), "{url}");
+    }
+    assert_eq!(
+        split("https://oauth2:p%40ss%2Fw%3Ard@gitlab.com/x.git"),
+        (
+            "https://gitlab.com/x.git".to_string(),
+            Some(("oauth2".to_string(), "p@ss/w:rd".to_string()))
+        )
+    );
+    assert_eq!(
+        split("https://j%2Boe:tok@gitlab.com:8443/x.git"),
+        (
+            "https://gitlab.com:8443/x.git".to_string(),
+            Some(("j+oe".to_string(), "tok".to_string()))
+        )
+    );
+    assert_eq!(
+        split("https://:tok@gitlab.com/x.git").1,
+        Some(("oauth2".to_string(), "tok".to_string()))
+    );
+}
+
+fn command_envs(cmd: &std::process::Command) -> Vec<(String, String)> {
+    cmd.get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
+        .collect()
+}
+
+// trace:BUG-2119 | ai:claude
+#[test]
+fn credentials_scope_to_the_host_and_skip_the_url_override_for_a_clean_remote() {
+    // Serialise against the GIT_CONFIG_COUNT swap below: the git runs here
+    // read it.
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("GIT_CONFIG_COUNT", None)]);
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path();
+    for args in [
+        &["init", "-q"][..],
+        &[
+            "remote",
+            "add",
+            "gitlab",
+            "https://gitlab.example.test:8443/ai/x.git",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let mut cmd = std::process::Command::new("git");
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut cmd,
+        repo,
+        "gitlab",
+        Some("https://oauth2:hint-tok@gitlab.example.test:8443/ai/x.git"),
+    );
+    let envs = command_envs(&cmd);
+    let values: Vec<&str> = envs
+        .iter()
+        .filter(|(k, _)| k.starts_with("GIT_CONFIG_KEY_"))
+        .map(|(_, v)| v.as_str())
+        .collect();
+    assert!(
+        values
+            .iter()
+            .all(|k| *k == "credential.https://gitlab.example.test:8443.helper"),
+        "a clean stored URL needs only the host-scoped helper: {values:?}"
+    );
+    assert_eq!(values.len(), 2, "{values:?}");
+    assert!(envs.contains(&("AIDA_GIT_CREDENTIAL_TOKEN".into(), "hint-tok".into())));
+}
+
+// trace:BUG-2119 | ai:claude
+#[test]
+fn a_username_only_url_falls_back_to_the_gitlab_token() {
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("GITLAB_TOKEN", Some("env-tok")),
+        ("AIDA_GITLAB_TOKEN", None),
+    ]);
+    let mut cmd = std::process::Command::new("git");
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut cmd,
+        std::path::Path::new("/nonexistent"),
+        "gitlab",
+        Some("https://joe@gitlab.com/ai/x.git"),
+    );
+    let envs = command_envs(&cmd);
+    assert!(
+        envs.contains(&("AIDA_GIT_CREDENTIAL_TOKEN".into(), "env-tok".into())),
+        "a username is not a token: {envs:?}"
+    );
+}
+
+// trace:BUG-2119 | ai:claude
+#[test]
+fn git_config_pairs_append_after_inherited_and_explicit_counts() {
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("GIT_CONFIG_COUNT", Some("2"))]);
+    let mut inherited = std::process::Command::new("git");
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut inherited,
+        std::path::Path::new("/nonexistent"),
+        "gitlab",
+        Some("https://oauth2:t@gitlab.com/x.git"),
+    );
+    let envs = command_envs(&inherited);
+    assert!(
+        envs.contains(&("GIT_CONFIG_COUNT".into(), "4".into())),
+        "{envs:?}"
+    );
+    assert!(
+        envs.iter().any(|(k, _)| k == "GIT_CONFIG_KEY_2"),
+        "{envs:?}"
+    );
+    assert!(
+        !envs.iter().any(|(k, _)| k == "GIT_CONFIG_KEY_0"),
+        "{envs:?}"
+    );
+
+    let mut explicit = std::process::Command::new("git");
+    explicit.env("GIT_CONFIG_COUNT", "5");
+    crate::gitlab_project_create::configure_git_remote_credentials(
+        &mut explicit,
+        std::path::Path::new("/nonexistent"),
+        "gitlab",
+        Some("https://oauth2:t@gitlab.com/x.git"),
+    );
+    let envs = command_envs(&explicit);
+    assert!(
+        envs.contains(&("GIT_CONFIG_COUNT".into(), "7".into())),
+        "{envs:?}"
     );
 }
