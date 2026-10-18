@@ -313,8 +313,10 @@ pub(crate) fn resolve_forge_binary(
     test_env: &str,
     debug_env: &str,
 ) -> Option<std::path::PathBuf> {
-    if let Ok(test_path) = std::env::var(test_env) {
-        return Some(std::path::PathBuf::from(test_path));
+    if !test_env.is_empty() {
+        if let Ok(test_path) = std::env::var(test_env) {
+            return Some(std::path::PathBuf::from(test_path));
+        }
     }
     let debug = std::env::var(debug_env)
         .map(|v| !v.is_empty() && v != "0")
@@ -408,18 +410,20 @@ pub(crate) fn resolve_forge_binary(
     // Pass 2: common absolute paths, in case PATH was mangled or the
     // child process inherited an empty PATH. Conservative list — only
     // dirs where gh is regularly installed by the official installers
-    // or distros.
+    // or distros. Check user-local installs first so user overrides and
+    // hermetic HOME fixtures precede host system dirs.
     let fallbacks: Vec<std::path::PathBuf> = {
-        let mut v = vec![
-            std::path::PathBuf::from("/usr/bin").join(&exe_name),
-            std::path::PathBuf::from("/usr/local/bin").join(&exe_name),
-            std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
-            std::path::PathBuf::from("/snap/bin").join(&exe_name),
-        ];
+        let mut v = Vec::new();
         if let Some(home) = crate::home_dir() {
             v.push(home.join(".local").join("bin").join(&exe_name));
             v.push(home.join("bin").join(&exe_name));
         }
+        v.extend([
+            std::path::PathBuf::from("/usr/bin").join(&exe_name),
+            std::path::PathBuf::from("/usr/local/bin").join(&exe_name),
+            std::path::PathBuf::from("/opt/homebrew/bin").join(&exe_name),
+            std::path::PathBuf::from("/snap/bin").join(&exe_name),
+        ]);
         v
     };
     for candidate in &fallbacks {
@@ -462,6 +466,18 @@ pub(crate) fn resolve_forge_binary(
 /// trace:BUG-74 trace:STORY-621 | ai:claude
 pub(crate) fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
+}
+
+/// Resolve `gh` using the shared BUG-74/79 PATH-walk and fallback directories,
+/// while ignoring `AIDA_TEST_GH_BINARY` in non-test builds so production
+/// authority probes cannot be redirected by test environment variables.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn resolve_gh_binary_for_probe() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    let test_env = "AIDA_TEST_GH_BINARY";
+    #[cfg(not(test))]
+    let test_env = "";
+    resolve_forge_binary("gh", test_env, "AIDA_DEBUG_GH")
 }
 
 /// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a

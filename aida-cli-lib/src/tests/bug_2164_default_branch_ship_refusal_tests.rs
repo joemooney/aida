@@ -226,7 +226,8 @@ fn pr_ship_handler_bypasses_default_branch_guard_on_feature_branch() {
     if let Err(err) = res {
         let err_str = err.to_string();
         assert!(
-            !err_str.contains("aida pr ship: on the default branch; pass a PR number"),
+            !err_str.contains("aida pr ship: on the default branch; pass a PR number")
+                && !err_str.contains("the default branch could not be determined"),
             "should not fail with default branch refusal on feature branch, got: {err_str}"
         );
     }
@@ -416,7 +417,10 @@ fn task_1795_leftover_main_ref_is_not_default_branch_evidence() {
         None, false, false, true, false, None, None, false, false, false, None, false,
     )
     .unwrap_err();
-    assert!(error.to_string().contains("pass a PR number"), "{error:#}");
+    assert!(
+        error.to_string().contains("on the default branch"),
+        "{error:#}"
+    );
     assert!(dir.path().join("gh-calls").exists());
 }
 
@@ -466,4 +470,147 @@ fn task_1795_probe_errors_and_bad_answers_remain_unknown() {
         assert!(crate::forge::probe_default_branch(dir.path()).is_none());
         assert!(ship_is_default_branch(dir.path(), "trunk"), "{body}");
     }
+}
+
+// trace:TASK-1803 | ai:antigravity
+#[test]
+fn task_1803_gitlab_feature_branch_without_origin_head_proceeds_via_ls_remote() {
+    let origin = create_test_repo_on_branch("trunk");
+    let work = create_test_repo_on_branch("feature-work");
+    assert!(std::process::Command::new("git")
+        .arg("-C")
+        .arg(work.path())
+        .args(["remote", "add", "origin", origin.path().to_str().unwrap()])
+        .status()
+        .unwrap()
+        .success());
+    let gh = fake_default_branch_gh(work.path(), "gitlab", "echo unexpected");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        work.path(),
+        "implementer",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+
+    assert_eq!(
+        crate::forge::probe_default_branch(work.path()).as_deref(),
+        Some("trunk")
+    );
+    assert_eq!(
+        classify_ship_default_branch(work.path(), "feature-work"),
+        ShipDefaultBranchDisposition::FeatureBranch
+    );
+    assert!(!ship_is_default_branch(work.path(), "feature-work"));
+    assert!(!work.path().join("gh-calls").exists());
+
+    // Dry-run ship on the GitLab feature branch proceeds past the default-branch guard.
+    let res = pr_ship_handler(
+        None, false, false, true, false, None, None, true, false, false, None, false,
+    );
+    if let Err(err) = res {
+        let err_str = err.to_string();
+        assert!(
+            !err_str.contains("on the default branch")
+                && !err_str.contains("the default branch could not be determined"),
+            "unexpected default-branch refusal on GitLab feature branch: {err_str}"
+        );
+    }
+}
+
+// trace:TASK-1803 | ai:antigravity
+#[test]
+fn task_1803_unknown_default_branch_refusal_wording_suggests_set_head_auto() {
+    let dir = create_test_repo_on_branch("feature-work");
+    let gh = fake_default_branch_gh(dir.path(), "github", "exit 1");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        dir.path(),
+        "implementer",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+
+    assert_eq!(
+        classify_ship_default_branch(dir.path(), "feature-work"),
+        ShipDefaultBranchDisposition::UnknownDefaultBranch
+    );
+    let err = pr_ship_handler(
+        None, false, false, true, false, None, None, false, false, false, None, false,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("the default branch could not be determined"),
+        "expected unknown default branch wording, got: {err}"
+    );
+    assert!(
+        err.contains("git remote set-head origin --auto"),
+        "expected git remote set-head origin --auto suggestion, got: {err}"
+    );
+    assert!(
+        !err.contains("on the default branch"),
+        "must not claim to be on the default branch when unknown, got: {err}"
+    );
+}
+
+// trace:TASK-1803 | ai:antigravity
+#[test]
+fn task_1803_stripped_path_gh_resolution_finds_fallback_binary() {
+    // trace:BUG-1994 | ai:antigravity
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let dir = create_test_repo_on_branch("feature-work");
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(
+        dir.path().join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+
+    // Build a stripped PATH directory containing only `git` (no `gh`), so `git`
+    // subcommands still function while `gh` must be found via Pass 2 fallback.
+    let git_only_bin = dir.path().join("git-only-bin");
+    std::fs::create_dir_all(&git_only_bin).unwrap();
+    let real_git = std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|p| std::env::split_paths(&p).collect::<Vec<_>>())
+        .map(|d| d.join("git"))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| std::path::PathBuf::from("/usr/bin/git"));
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&real_git, git_only_bin.join("git")).unwrap();
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        dir.path(),
+        "implementer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", None),
+            ("PATH", Some(git_only_bin.to_str().unwrap())),
+        ],
+    );
+
+    // Install a working gh in $HOME/.local/bin/gh (resolved by Pass 2 when PATH has no gh).
+    let home = crate::home_dir().expect("home_dir");
+    let local_bin = home.join(".local").join("bin");
+    std::fs::create_dir_all(&local_bin).unwrap();
+    let fallback_gh = local_bin.join("gh");
+    let marker = dir.path().join("fallback-gh-called");
+    crate::test_exec::write_executable(
+        &fallback_gh,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'gh version 2.0.0'\n  exit 0\nfi\necho called >> '{}'\necho trunk\n",
+            marker.display()
+        ),
+    );
+
+    assert_eq!(
+        crate::forge::probe_default_branch(dir.path()).as_deref(),
+        Some("trunk")
+    );
+    assert!(marker.exists(), "expected fallback gh to be invoked");
+    assert_eq!(
+        classify_ship_default_branch(dir.path(), "feature-work"),
+        ShipDefaultBranchDisposition::FeatureBranch
+    );
 }
