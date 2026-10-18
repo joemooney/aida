@@ -2901,8 +2901,24 @@ pub(crate) fn run() -> Result<()> {
     // — it reads git for the diff + range and self-loads the store to resolve
     // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
     // needs the shared storage handle. trace:STORY-499 | ai:claude
-    if let Command::Trace(TraceCommand::Coverage { range, json, block }) = &cli.command {
-        return handle_trace_coverage(range.as_deref(), *json, *block);
+    if let Command::Trace(TraceCommand::Coverage {
+        range,
+        json,
+        block,
+        all,
+        path,
+        fail_on,
+    }) = &cli.command
+    {
+        // trace:TASK-1783 | ai:claude
+        return trace_tree_coverage::dispatch_coverage(
+            range.as_deref(),
+            *json,
+            *block,
+            *all,
+            path.as_deref(),
+            *fail_on,
+        );
     }
 
     // `aida changelog` is self-contained: git + read-only store, no shared
