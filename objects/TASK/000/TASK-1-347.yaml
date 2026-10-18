@@ -1,0 +1,27 @@
+id: 01a150d2-93a3-7223-bcc5-20e1c1621b7c
+spec_id: TASK-1-347
+title: 'non-blocking (cosmetic): the Stalled latch (auto_complete.rs:5298-5303) sets se…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1351, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (cosmetic): the Stalled latch (auto_complete.rs:5298-5303) sets serial_leg_broken, so in-flight members get skip reason 'serial leg broken — PR left open', which mislabels a stalled queue.
+  Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:02:20.067101414Z
+modified_at: 2026-10-18T21:02:20.067101414Z
+req_type: Task
+tags:
+- carried-from:TASK-1351
+- finding-hash:8623d09c
+- from-review:TASK-1351
+- kind:carried-forward
+filed_at:
+  code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
