@@ -14,12 +14,12 @@ description: |-
   - Report-only, no store edits, nonzero exit only with explicit `--fail-on`.
   - Keep existing `aida lint` behavior and the first trace-coverage slice intact; update affected command documentation.
   - STANDARD independent gate for this slice, operator merges. Use only this child ID in its completion trailer; parent STORY-1672 stays open until both slices are merged and verified.
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:34:37.759524907Z
-modified_at: 2026-10-18T11:17:19.654184743Z
+modified_at: 2026-10-18T13:38:57.341048317Z
 req_type: Task
 tags:
 - docs:impacted
@@ -34,6 +34,13 @@ relationships:
   target_id: 01a14de8-d386-7f62-9c51-19d2f264e5ed
   created_at: 2026-10-18T07:28:02.907649078Z
   created_by: joe
+comments:
+- id: 01a14f3c-a6bd-7262-98d9-d5736981bbe2
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (f14ef5f) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-18T13:38:57.341046774Z
+  modified_at: 2026-10-18T13:38:57.341046774Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14de9-1903-7cc3-aaec-13d5664dbfe1
   author: joe
@@ -50,6 +57,14 @@ history:
   timestamp: 2026-10-18T11:17:20.021655012Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a14f3c-a6bd-7262-98d9-d565ca2b5dfe
+  author: aida-auto-bump
+  timestamp: 2026-10-18T13:38:57.341045417Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: a46af7481e794f7ad299631a78a258f55022c503
   branch: main
