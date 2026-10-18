@@ -338,7 +338,7 @@ pub(crate) fn emit_environment_blocked_lines(cause: &str, stopped: &str, shipped
     );
     // trace:BUG-1930 trace:TASK-1351 | ai:antigravity
     eprintln!(
-        "  {} no further specs were started; any member already in flight was drained to completion",
+        "  {} no further specs were started; any member already in flight was drained to completion (or recorded in skipped if the serial finish leg broke)",
         "→".dimmed()
     );
 }

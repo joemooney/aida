@@ -1256,7 +1256,8 @@ were denied (`permission-denied`), or the disk or memory ran out
 (`resource-exhaustion`). The next spec would fail the same way, so after
 **2 consecutive** specs fail with the same one of these causes the drain
 halts before starting another (any member already in flight in a pipelined
-drain finishes its run before the drain exits). It prints one `environment blocked` line naming
+drain finishes its run — or is recorded in `skipped` with its PR left open if
+the parent's serial leg broke un-shelvably — before the drain exits). It prints one `environment blocked` line naming
 the cause and the fix, leaves the rest of the queue untouched, and exits
 `3`. In a `--batches` chain the count runs across batch boundaries. The JSON summary reports `"outcome": "environment-blocked"` and
 `"halt_reason": "<cause>"` (`null` on every other stop). Any other result in
@@ -1278,8 +1279,10 @@ each batch. The same cap applies to a queue-wide `--drain` with no batch.
 
 The drain stops as soon as the Nth shelve lands, before it starts another
 spec: with `--max-failures 1`, the first shelved failure ends the drain
-(exit `3`) and nothing else is dispatched. A member already running in a
-pipelined drain when the budget runs out is not interrupted.
+(exit `3`) and nothing else is dispatched. Any member already in flight in a
+pipelined drain when the budget runs out finishes its run (or is recorded in
+`skipped` with its PR left open if the parent's serial leg broke un-shelvably)
+before the drain exits.
 
 The cap counts shelve **events**, not distinct specs. If a spec shelves, is
 requeued (by a human, an advisor, or an automatic in-drain retry), and shelves
