@@ -331,7 +331,7 @@ remains acknowledged; no signal accommodation belongs in this feature.
   run under `with_store_write_lock` on store trees; fetch stays outside the lock.
   `finalize_sync` re-runs `plan_sync` with the candidate as one more tip, so
   candidate-revealed eligibility meets the same body-agreement rule.
-- **Deviation 1 — selective strict read (needs advisor ack).** Parsing every
+- **Deviation 1 — selective strict read (advisor ACK 2026-10-18).** Parsing every
   object of every pinned tree measured ~1.2 s per tree on the live store's size
   (5,368 objects, 25 MB, agent profile). The reader lists every tree strictly
   (symlink/submodule/non-file refuse) and strictly parses every blob that
@@ -343,7 +343,7 @@ remains acknowledged; no signal accommodation belongs in this feature.
   the clean worktree instead of `cat-file`. Measured pull overhead on that
   store: ~0.4–0.9 s on a loaded host (was ~7 s). Malformed YAML in such an
   untouched, evidence-free row no longer refuses the sync.
-- **Deviation 2 — unrelated histories (needs advisor ack).** `root_commits`
+- **Deviation 2 — unrelated histories (advisor ACK 2026-10-18).** `root_commits`
   documents stores that joined unrelated histories in practice, so the refusal
   applies only when a tip holds evidence (a stamp or a hypothesis-tagged row) or
   the plan is non-empty; evidence-free unrelated joins keep their old behavior.
@@ -357,6 +357,20 @@ remains acknowledged; no signal accommodation belongs in this feature.
   two-clone fixtures, plain rebase / auto-merge / union parameterized where
   meaningful) and `aida-cli-lib`
   `coordination::tests::bug_2162_best_effort_callers_stop_on_evidence_refusal`.
+- **Round 2 (PR #2726 review).** A worktree text is reused only when its raw
+  bytes hash to the listed blob (`git hash-object --no-filters`), so filters
+  and eol conversion cannot substitute different text. A lock the sync
+  materializes is stamped with the latest `modified_at` of the hypothesis and
+  the completed rows that make it eligible instead of the clock, so two
+  clones that race to write it produce equal lock commits and a plain
+  coordination rebase drops the second as already applied. `remote reconcile`
+  no longer runs its preimage rollback on an evidence refusal. Refusal
+  coverage for every caller lives in
+  `aida-cli-lib/src/tests/bug_2162_evidence_refusal_tests.rs` and
+  `aida-cli/tests/task_1717_store_writer_lock.rs`
+  (`remote_reconcile_evidence_refusal_skips_the_rollback`). The STORY-1418
+  seam scanner skips files reachable only as out-of-line `#[cfg(test)]`
+  modules (`evidence/tests.rs` was counted as production).
 
 ## Followups
 

@@ -10,6 +10,23 @@
 //! reports success. The post-Git check is a success gate, not a rollback: on a
 //! failure there it returns an error naming the pinned and resulting commits
 //! and never resets, force-pushes or repairs.
+//!
+//! Two deviations from the signed sketch (91e80f4901), both accepted by the
+//! advisor on BUG-2162:
+//! - Selective strict read. The sketch parsed every canonical object of
+//!   every input strictly. Only rows that can affect the evidence decision
+//!   are parsed: any row that differs between inputs, mentions a hypothesis,
+//!   does not plainly name its own file's ID, or shares a UUID with a
+//!   hypothesis or stamped row or one of its edge targets. A skipped row is
+//!   byte-identical in every input, so the refusal set is unchanged
+//!   ([`SnapshotReader::graphs`]).
+//! - Unrelated histories. The sketch refused every pull without a merge
+//!   base. The refusal fires only when either side holds evidence; without
+//!   evidence there is nothing to lose.
+//!
+//! A lock this gate materializes is stamped from its eligibility source (the
+//! latest `modified_at` of the hypothesis and the results that make it
+//! eligible), not the clock, so racing clones write equal lock commits.
 // trace:BUG-2162 | ai:claude
 use super::{
     commit_paths, git, head_sha, host_git_command, is_store_tree, merge_in_progress,
@@ -202,6 +219,54 @@ impl SnapshotReader {
         Ok(())
     }
 
+    /// The working-tree text of each `(blob, path)` whose raw file bytes hash
+    /// to that blob (`git hash-object --no-filters`). A file that is missing,
+    /// not UTF-8 or hashes differently is left out, so the caller reads its
+    /// blob from Git. The store write lock is held, so no AIDA writer changes
+    /// a file between the read and the hash.
+    // trace:BUG-2162 | ai:claude
+    fn verified_worktree_text(
+        repo: &Path,
+        candidates: HashMap<&str, &str>,
+    ) -> Vec<(String, String)> {
+        let read: Vec<(&str, &str, String)> = candidates
+            .into_iter()
+            .filter_map(|(oid, path)| {
+                let text = std::fs::read_to_string(repo.join(path)).ok()?;
+                Some((oid, path, text))
+            })
+            .collect();
+        if read.is_empty() {
+            return Vec::new();
+        }
+        let mut input = read
+            .iter()
+            .map(|(_, path, _)| *path)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into_bytes();
+        input.push(b'\n');
+        // Any failure here only costs the shortcut: every blob is then read
+        // from Git instead.
+        let Ok(hashed) = git_bytes(
+            repo,
+            &["hash-object", "--no-filters", "--stdin-paths"],
+            Some(input),
+        ) else {
+            return Vec::new();
+        };
+        let hashed = String::from_utf8_lossy(&hashed);
+        let hashed: Vec<&str> = hashed.lines().collect();
+        if hashed.len() != read.len() {
+            return Vec::new();
+        }
+        read.into_iter()
+            .zip(hashed)
+            .filter(|((oid, _, _), got)| got.trim() == *oid)
+            .map(|((oid, _, text), _)| (oid.to_string(), text))
+            .collect()
+    }
+
     fn parse(&mut self, oid: &str, path: &str, commit: &str) -> Result<()> {
         if self.parsed.contains_key(oid) {
             return Ok(());
@@ -222,7 +287,10 @@ impl SnapshotReader {
     /// neither carry evidence nor join an edge to a parsed row, is left out.
     ///
     /// `worktree` is a listed commit the clean working tree matches; such a
-    /// row's text is read from its file rather than decompressed by Git.
+    /// row's text is read from its file rather than decompressed by Git, but
+    /// only when the file's raw bytes hash to the listed blob
+    /// ([`Self::verified_worktree_text`]), so a clean/smudge filter or eol
+    /// conversion can never substitute different text for the blob.
     fn graphs(
         &mut self,
         repo: &Path,
@@ -244,20 +312,24 @@ impl SnapshotReader {
             .collect();
         let on_disk = worktree.is_some_and(|c| listings.iter().any(|l| l.commit == c));
         let mut wanted = HashSet::new();
+        let mut from_disk: HashMap<&str, &str> = HashMap::new();
         for listing in listings {
             for (path, oid) in &listing.entries {
                 if self.text.contains_key(oid) {
                     continue;
                 }
                 if on_disk && !changed.contains(oid.as_str()) {
-                    if let Ok(text) = std::fs::read_to_string(repo.join(path)) {
-                        self.text.insert(oid.clone(), text);
-                        continue;
-                    }
+                    from_disk.entry(oid.as_str()).or_insert(path.as_str());
+                } else {
+                    wanted.insert(oid.clone());
                 }
-                wanted.insert(oid.clone());
             }
         }
+        for (oid, text) in Self::verified_worktree_text(repo, from_disk.clone()) {
+            from_disk.remove(oid.as_str());
+            self.text.insert(oid, text);
+        }
+        wanted.extend(from_disk.into_keys().map(str::to_string));
         let label = listings
             .iter()
             .map(|l| l.commit.as_str())
@@ -385,7 +457,6 @@ pub(super) struct EvidenceGate {
     bases: Vec<Listing>,
     tips: Vec<Listing>,
     reader: SnapshotReader,
-    now: chrono::DateTime<chrono::Utc>,
 }
 
 /// Input graphs (bases, tips) and, when given, the candidate's graph.
@@ -446,10 +517,9 @@ pub(super) fn preflight(repo: &Path, target: &str) -> Result<Option<EvidenceGate
         bases,
         tips,
         reader,
-        now: chrono::Utc::now(),
     };
     let (bases, tips, _) = gate.graphs(repo, None)?;
-    let plan = plan_sync(&refs(&bases), &refs(&tips), gate.now).map_err(refusal)?;
+    let plan = plan_sync(&refs(&bases), &refs(&tips)).map_err(refusal)?;
     // Without a base a deletion cannot be told from a row the other side never
     // had, so unrelated histories may only join while neither holds evidence.
     if gate.local.is_some()
@@ -486,7 +556,7 @@ impl EvidenceGate {
     fn check(&mut self, repo: &Path, commit: &str) -> Result<Vec<Requirement>> {
         let listing = self.reader.list(repo, commit)?;
         let (bases, tips, candidate) = self.graphs(repo, Some(&listing))?;
-        finalize_sync(&refs(&bases), &refs(&tips), &candidate, self.now).map_err(refusal)
+        finalize_sync(&refs(&bases), &refs(&tips), &candidate).map_err(refusal)
     }
 
     /// The success gate after Git finished: validate the resulting graph,

@@ -314,14 +314,20 @@ fn index_snapshot(graph: &[Requirement]) -> std::result::Result<Indexed<'_>, Str
 /// the frozen body and converge on the earliest stamp, as [`preserve_merge`]
 /// does. Every extant tip version must carry the frozen body and identity; a
 /// row present in a base but missing from a tip is a deletion. A hypothesis
-/// that the union of all inputs links to a completed result is newly locked
-/// at `now`, but only when every extant tip agrees on its body: there is no
-/// causality guess between divergent pre-result descriptions.
+/// that the union of all inputs links to a completed result is newly locked,
+/// but only when every extant tip agrees on its body: there is no causality
+/// guess between divergent pre-result descriptions.
+///
+/// A newly materialized lock is stamped from its eligibility source, not the
+/// clock: the latest `modified_at` of any input version of the hypothesis
+/// and of the completed rows that make it eligible. Two clones that both
+/// materialize the same lock from the same rows therefore write byte-equal
+/// lock commits, and replaying one onto the other in a plain rebase drops
+/// as already applied instead of conflicting on `locked_at`.
 // trace:BUG-2162 | ai:claude
 pub(crate) fn plan_sync(
     bases: &[&[Requirement]],
     tips: &[&[Requirement]],
-    now: chrono::DateTime<chrono::Utc>,
 ) -> std::result::Result<SyncPlan, String> {
     let bases = bases
         .iter()
@@ -388,11 +394,11 @@ pub(crate) fn plan_sync(
         .collect();
     let hypotheses: HashSet<_> = rows().filter(|r| is_hypothesis(r)).map(|r| r.id).collect();
     let completed: HashSet<_> = rows().filter(|r| is_completed(r)).map(|r| r.id).collect();
-    let mut newly: Vec<Uuid> =
-        eligible_edges(&result_edges(rows(), &known), &hypotheses, &completed)
-            .into_iter()
-            .filter(|id| !plan.contains_key(id))
-            .collect();
+    let edges = result_edges(rows(), &known);
+    let mut newly: Vec<Uuid> = eligible_edges(&edges, &hypotheses, &completed)
+        .into_iter()
+        .filter(|id| !plan.contains_key(id))
+        .collect();
     newly.sort();
     for id in newly {
         let versions: Vec<&Requirement> = tips
@@ -412,12 +418,26 @@ pub(crate) fn plan_sync(
                 first.display_id()
             ));
         }
+        let sources: HashSet<Uuid> = edges
+            .iter()
+            .filter_map(|&(source, target)| match (source == id, target == id) {
+                (true, _) if completed.contains(&target) => Some(target),
+                (_, true) if completed.contains(&source) => Some(source),
+                _ => None,
+            })
+            .chain([id])
+            .collect();
+        let locked_at = rows()
+            .filter(|r| sources.contains(&r.id))
+            .map(|r| r.modified_at)
+            .max()
+            .unwrap_or(first.modified_at);
         plan.insert(
             id,
             Frozen {
                 spec: spec_of(first)?,
                 lock: HypothesisLock {
-                    locked_at: now,
+                    locked_at,
                     description_sha256: sha256_hex(&first.description),
                 },
             },
@@ -472,11 +492,10 @@ pub(crate) fn finalize_sync(
     bases: &[&[Requirement]],
     tips: &[&[Requirement]],
     candidate: &[Requirement],
-    now: chrono::DateTime<chrono::Utc>,
 ) -> std::result::Result<Vec<Requirement>, String> {
     let mut with_candidate = tips.to_vec();
     with_candidate.push(candidate);
-    let plan = plan_sync(bases, &with_candidate, now)?;
+    let plan = plan_sync(bases, &with_candidate)?;
     let rows: HashMap<_, _> = candidate.iter().map(|r| (r.id, r)).collect();
     let mut writes = Vec::new();
     for (id, frozen) in &plan {

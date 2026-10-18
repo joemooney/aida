@@ -497,9 +497,13 @@ fn bug_2162_strict_snapshot_read_failures_refuse() {
     write(&c.b, &other);
     commit(&c.b, "unrelated");
     run(&c.b, &["branch", "-q", "-M", "aida-store"]);
+    let before = head_sha(&c.b).unwrap();
     let err = pull_rebase(&c.b, "origin", "aida-store").unwrap_err();
     assert!(is_evidence_refusal(&err), "{err:#}");
     assert!(format!("{err:#}").contains("share no history"), "{err:#}");
+    assert_eq!(head_sha(&c.b).unwrap(), before, "unrelated histories");
+    assert!(!rebase_in_progress(&c.b), "unrelated histories");
+    assert!(tracked_clean(&c.b), "unrelated histories");
 }
 
 #[test]
@@ -615,4 +619,86 @@ fn bug_2162_refusal_survives_context() {
         .context("coordination");
     assert!(is_evidence_refusal(&err));
     assert!(!is_evidence_refusal(&anyhow::anyhow!("offline")));
+}
+
+/// Two clones that each materialize the same newly eligible lock before
+/// either pushes write byte-equal lock commits: the stamp comes from the
+/// eligibility source, so the second clone's plain rebase drops its own lock
+/// commit as already applied instead of conflicting on `locked_at`.
+// trace:BUG-2162 | ai:claude
+#[test]
+fn bug_2162_racing_lock_materialization_converges_on_plain_rebase() {
+    let (h, r) = rows();
+    let c = clones(&[h.clone(), r.clone()]);
+    let third = c.tmp.join("c");
+    let hub = c.tmp.join("hub.git");
+    run(
+        &c.tmp,
+        &[
+            "clone",
+            "-q",
+            hub.to_str().unwrap(),
+            third.to_str().unwrap(),
+        ],
+    );
+    for (k, v) in [("user.email", "t@example.invalid"), ("user.name", "T")] {
+        run(&third, &["config", k, v]);
+    }
+    // An older writer pushes the link and the completion without a stamp.
+    let mut linked = h.clone();
+    link(&mut linked, &r);
+    write(&c.a, &linked);
+    let mut done = r.clone();
+    done.status = RequirementStatus::Completed;
+    publish(&c.a, &done, "link and complete");
+
+    for clone in [&c.b, &third] {
+        pull_rebase(clone, "origin", "aida-store").unwrap();
+        assert_eq!(
+            subject(clone),
+            "aida: lock hypothesis evidence after store sync"
+        );
+    }
+    let stamp = read(&c.b, "SPIKE-1").hypothesis_lock.unwrap();
+    assert_eq!(read(&third, "SPIKE-1").hypothesis_lock, Some(stamp.clone()));
+    assert_eq!(
+        stamp.locked_at,
+        linked.modified_at.max(done.modified_at),
+        "the stamp is the latest change among the hypothesis and its result"
+    );
+    run(&c.b, &["push", "-q", "origin", "aida-store"]);
+    let published = run(&c.b, &["rev-parse", "HEAD"]);
+
+    pull_rebase(&third, "origin", "aida-store").unwrap();
+    assert_eq!(head_sha(&third).unwrap(), published);
+    assert!(!rebase_in_progress(&third));
+    assert!(tracked_clean(&third));
+}
+
+/// A working-tree file whose bytes differ from its blob (an index flag, a
+/// clean/smudge filter or eol conversion can make `git status` call it clean)
+/// is never read in place of the blob: here the on-disk copy carries a stamp
+/// that no longer matches its description, the blob is intact, and the sync
+/// succeeds from the blob.
+// trace:BUG-2162 | ai:claude
+#[test]
+fn bug_2162_worktree_text_is_used_only_when_it_hashes_to_the_blob() {
+    let (mut h, mut r) = rows();
+    link(&mut h, &r);
+    r.status = RequirementStatus::Completed;
+    h.hypothesis_lock = Some(lock(&h.description, 3));
+    let c = clones(&[h.clone(), r.clone()]);
+    let mut retitled = r.clone();
+    retitled.title = "renamed experiment".into();
+    publish(&c.a, &retitled, "retitle");
+
+    let rel = crate::object_store::relative_object_path("SPIKE-1").unwrap();
+    let mut tampered = h.clone();
+    tampered.description = "not what the blob says".into();
+    write(&c.b, &tampered);
+    run(&c.b, &["update-index", "--assume-unchanged", &rel]);
+    assert!(tracked_clean(&c.b), "git must report the tree clean");
+
+    pull_rebase(&c.b, "origin", "aida-store").unwrap();
+    assert_eq!(read(&c.b, "TASK-2").title, "renamed experiment");
 }

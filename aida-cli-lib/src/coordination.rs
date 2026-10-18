@@ -1893,106 +1893,6 @@ ttl_secs = 1800
         );
     }
 
-    /// BUG-2162: a store refresh refused for hypothesis evidence stops the
-    /// coordination write and its publish; an unreachable store still falls
-    /// back to the local-only path.
-    // trace:BUG-2162 | ai:claude
-    #[test]
-    fn bug_2162_best_effort_callers_stop_on_evidence_refusal() {
-        use aida_core::models::{
-            HypothesisLock, Relationship, RelationshipType, Requirement, RequirementStatus,
-            RequirementType,
-        };
-        use sha2::Digest;
-        let git = |cwd: &Path, args: &[&str]| {
-            let out = std::process::Command::new("git")
-                .args(args)
-                .current_dir(cwd)
-                .output()
-                .unwrap();
-            assert!(out.status.success(), "git {args:?}: {out:?}");
-        };
-        let dir = tempfile::tempdir().unwrap();
-        let hub = dir.path().join("hub.git");
-        git(dir.path(), &["init", "-q", "--bare", hub.to_str().unwrap()]);
-        git(&hub, &["symbolic-ref", "HEAD", "refs/heads/aida-store"]);
-        let a = dir.path().join("a").join(".aida-store");
-        std::fs::create_dir_all(&a).unwrap();
-        git(&a, &["init", "-q", "-b", "aida-store"]);
-        let mut h = Requirement::new("prediction".into(), "before".into());
-        h.spec_id = Some("SPIKE-1".into());
-        h.req_type = RequirementType::Spike;
-        h.tags.insert("hypothesis".into());
-        let mut r = Requirement::new("experiment".into(), "run".into());
-        r.spec_id = Some("TASK-2".into());
-        h.relationships.push(Relationship {
-            rel_type: RelationshipType::References,
-            target_id: r.id,
-            created_at: None,
-            created_by: None,
-        });
-        let write = |store: &Path, row: &Requirement| {
-            aida_core::object_store::write_object(&store.join("objects"), row).unwrap();
-        };
-        let commit = |store: &Path, msg: &str| {
-            git(store, &["add", "-A"]);
-            git(
-                store,
-                &[
-                    "-c",
-                    "user.email=t@example.invalid",
-                    "-c",
-                    "user.name=T",
-                    "commit",
-                    "-q",
-                    "-m",
-                    msg,
-                ],
-            );
-        };
-        std::fs::write(a.join("metadata.yaml"), "name: test\n").unwrap();
-        write(&a, &h);
-        write(&a, &r);
-        commit(&a, "seed");
-        git(&a, &["remote", "add", "origin", hub.to_str().unwrap()]);
-        git(&a, &["push", "-q", "-u", "origin", "aida-store"]);
-        let b = dir.path().join("b").join(".aida-store");
-        git(
-            dir.path(),
-            &["clone", "-q", hub.to_str().unwrap(), b.to_str().unwrap()],
-        );
-        // One clone completes the result and locks the prediction; the other
-        // rewrites the prediction offline.
-        r.status = RequirementStatus::Completed;
-        write(&a, &r);
-        let mut locked = h.clone();
-        locked.hypothesis_lock = Some(HypothesisLock {
-            locked_at: Utc::now(),
-            description_sha256: format!("{:x}", sha2::Sha256::digest(h.description.as_bytes())),
-        });
-        write(&a, &locked);
-        commit(&a, "result");
-        git(&a, &["push", "-q", "origin", "aida-store"]);
-        let mut edited = h.clone();
-        edited.description = "moved goalposts".into();
-        write(&b, &edited);
-        commit(&b, "offline edit");
-
-        let err = acquire_claim(&b, "FR-1", dir.path(), "claude", false, false).unwrap_err();
-        assert!(aida_core::git_ops::is_evidence_refusal(&err), "{err:#}");
-        let err =
-            acquire_lock_claim(&b, LockKind::Solo, dir.path(), "solo", 1800, false).unwrap_err();
-        assert!(aida_core::git_ops::is_evidence_refusal(&err), "{err:#}");
-        assert!(release_stale_foreign_claim(&b, "FR-1", "x", "y").is_err());
-        let path = lock_claim_path(&b, LockKind::Solo);
-        assert!(!path.exists(), "no claim may be written after a refusal");
-
-        // Unreachable: the same calls stay best-effort.
-        git(&b, &["remote", "set-url", "origin", "/nonexistent/hub.git"]);
-        let out = acquire_claim(&b, "FR-1", dir.path(), "claude", false, false).unwrap();
-        assert!(matches!(out, AcquireOutcome::Unavailable(_)), "got {out:?}");
-    }
-
     #[test]
     fn acquire_lock_is_unavailable_without_origin_remote() {
         let dir = tempfile::tempdir().unwrap();
@@ -2422,3 +2322,7 @@ ttl_secs = 1800
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2162_evidence_refusal_tests.rs"]
+mod bug_2162_evidence_refusal_tests;
