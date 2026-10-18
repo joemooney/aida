@@ -7,6 +7,11 @@ source-lease conflict handling.
 <!-- trace:TASK-1801 | ai:codex -->
 <!-- trace:TASK-1801 | ai:claude -->
 
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
 Standalone reviewer coexistence requires an explicit queue-work role flag plus
 an unambiguous backing spec. Verdict collection reads a size-bounded regular
 file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
