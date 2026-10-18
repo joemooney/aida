@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T03:39:38.395425629Z
-modified_at: 2026-10-18T17:11:48.038752172Z
+modified_at: 2026-10-18T19:04:43.868606842Z
 req_type: Task
 tags:
 - mailbox
@@ -54,6 +54,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a15066-ea04-7602-a4a4-75d696ab0052
+  author: joe
+  timestamp: 2026-10-18T19:04:44.292771878Z
+  session_id: 01a1506213ca
+  changes: []
 filed_at:
   code_sha: defb55f88bc4108334f0ec266e20a5afed5a83f3
   branch: main
@@ -66,7 +71,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'All 7 TASK-1766 acceptance items met in code+tests (CI Run tests green), but CI is red: Check formatting fails on this PR''s own diff (bug_231_findings_promote_tests.rs:1404,1410). Run cargo fmt --all and push; address minor findings optionally.'
+  detail: Code spans, uppercase warnings, trimming and shaless round counting work and CI is green, but known-identity mention resolution drops @mentions of human users (STORY-644 regression) and the phantom cleanup archives their existing mention mail
   recovery_hint: address the review findings, move TASK-1766 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-18T17:11:48.038752172Z
+  shelved_at: 2026-10-18T19:04:43.868606842Z
