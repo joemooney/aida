@@ -1,0 +1,28 @@
+id: 01a14e60-ef0c-7533-8536-5b2a17bfa860
+spec_id: TASK-1-321
+title: 'minor/test-coverage: solo record path in handle_review_record_at (lib_part5.rs:…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1655, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor/test-coverage: solo record path in handle_review_record_at (lib_part5.rs:3077-3123) has no end-to-end positive test proving verdict JSON + ~/.aida receipt both carry solo_human:true and that the CLI-recorded solo approval clears approval_authority_refusal; add an injectable challenge seam on the record path
+  Reviewed sha: 8839b6bb32ad549b1933c3af154dc504d3d6c0c8
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T09:38:57.932267867Z
+modified_at: 2026-10-18T09:38:57.932267867Z
+req_type: Task
+tags:
+- carried-from:STORY-1655
+- finding-hash:1f9fbb5c
+- from-review:STORY-1655
+- kind:carried-forward
+filed_at:
+  code_sha: d7a640e94406bcf1de862645b8e8cc6c9f63f07b
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 188adef04b
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
