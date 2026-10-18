@@ -209,6 +209,10 @@ mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
 mod trace;
+// trace:TASK-1783 | ai:claude — whole-tree `aida trace coverage`.
+// trace:TASK-1783 | ai:claude — region rule shared by lint constants and tree coverage.
+mod trace_regions;
+mod trace_tree_coverage;
 mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;

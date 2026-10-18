@@ -2510,6 +2510,12 @@ pub fn handle_remote_reconcile(
             &mut merge_notes,
         ) {
             Ok(union) => Ok(Some((union, frontier, merge_notes))),
+            // trace:BUG-2162 | ai:claude — the evidence gate never resets: it
+            // refused before its own Git step, or stopped after Git with the
+            // pinned and resulting commits named for explicit recovery.
+            Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => {
+                Err(evidence_stop(&store_dir, &pre, e))
+            }
             Err(e) => Err(rollback_to_preimage(&store_dir, &pre, e)),
         }
     })?;
@@ -2606,9 +2612,9 @@ fn merge_and_validate(
             continue;
         }
         if git_ops::is_ancestor(store_dir, &head, tip).unwrap_or(false) {
-            if git_out(store_dir, &["merge", "--ff-only", tip]).is_none() {
-                anyhow::bail!("fast-forward to {} failed", short(tip));
-            }
+            // trace:BUG-2162 | ai:claude
+            git_ops::fast_forward_store(store_dir, tip)
+                .map_err(|e| e.context(format!("fast-forward to {} failed", short(tip))))?;
             continue;
         }
         match git_ops::merge_union_auto(
@@ -2740,6 +2746,26 @@ fn merge_and_validate(
     }
 
     Ok(union)
+}
+
+/// A hypothesis evidence refusal stops reconcile WITHOUT the preimage
+/// rollback: every merge already finished passed the evidence gate, and a
+/// stop after Git keeps its state for explicit recovery, as for any other
+/// store sync. Says where the store is, and that nothing was pushed or reset.
+// trace:BUG-2162 | ai:claude
+fn evidence_stop(store_dir: &Path, pre: &str, err: anyhow::Error) -> anyhow::Error {
+    let at = match aida_core::git_ops::head_sha(store_dir) {
+        Ok(head) if head == pre => format!("the local store is still at {}", short(pre)),
+        Ok(head) => format!(
+            "the local store is at {} (it was at {}); merges that already passed the evidence check are kept",
+            short(&head),
+            short(pre)
+        ),
+        Err(e) => format!("the store HEAD could not be read ({e}); inspect {}", store_dir.display()),
+    };
+    err.context(format!(
+        "reconcile stopped at the hypothesis evidence check; nothing was pushed or reset; {at}"
+    ))
 }
 
 /// Undo an invocation's own partial reconcile: reset the store to the
