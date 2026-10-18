@@ -9,6 +9,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "memories_cmd_args.rs"]
+pub(crate) mod memories_cmd_args;
+pub(crate) use memories_cmd_args::*;
+
 use crate::{
     compute_memory_drift_into, current_version, project_memory_dir, MemoryDriftReport,
     MemoryDriftRow, MemoryDriftState,

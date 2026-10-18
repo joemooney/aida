@@ -6,6 +6,11 @@ use std::collections::HashSet;
 use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "report_cmd_args.rs"]
+pub(crate) mod report_cmd_args;
+pub(crate) use report_cmd_args::*;
+
 use aida_core::{
     models::{Requirement, RequirementStatus, RequirementType},
     ReportFormat, ReportGenerator, Storage,

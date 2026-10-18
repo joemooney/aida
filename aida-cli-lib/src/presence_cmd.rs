@@ -6,6 +6,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "presence_cmd_args.rs"]
+pub(crate) mod presence_cmd_args;
+pub(crate) use presence_cmd_args::*;
+
 use crate::command_registry::{CmdPolicy, CommandReg};
 use crate::stakeholder_role::StakeholderAction;
 

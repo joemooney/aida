@@ -10,6 +10,11 @@ use crate::*;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
+// trace:STORY-1728 | ai:claude
+#[path = "drain_cmd_args.rs"]
+pub(crate) mod drain_cmd_args;
+pub(crate) use drain_cmd_args::*;
+
 const DRAIN_STOP_FILE: &str = "drain-stop.json";
 const DRAIN_STOP_ENV: &str = "AIDA_DRAIN_STOP_FILE";
 

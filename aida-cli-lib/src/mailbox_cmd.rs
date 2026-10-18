@@ -18,6 +18,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::Read;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mailbox_cmd_args.rs"]
+pub(crate) mod mailbox_cmd_args;
+pub(crate) use mailbox_cmd_args::*;
+
 use crate::cli::MailboxCommand;
 use crate::*;
 

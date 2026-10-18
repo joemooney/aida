@@ -15,6 +15,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "node_cmd_args.rs"]
+pub(crate) mod node_cmd_args;
+pub(crate) use node_cmd_args::*;
+
 use crate::*;
 
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree

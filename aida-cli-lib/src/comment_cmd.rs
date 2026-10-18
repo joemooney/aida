@@ -12,6 +12,11 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use uuid::Uuid;
 
+// trace:STORY-1728 | ai:claude
+#[path = "comment_cmd_args.rs"]
+pub(crate) mod comment_cmd_args;
+pub(crate) use comment_cmd_args::*;
+
 use aida_core::Comment;
 use aida_core::Storage;
 

@@ -1,5 +1,10 @@
 use anyhow::{bail, Result};
 
+// trace:STORY-1728 | ai:claude
+#[path = "protocol_cmd_args.rs"]
+pub(crate) mod protocol_cmd_args;
+pub(crate) use protocol_cmd_args::*;
+
 use aida_core::{
     get_type_protocol, resolve_protocol, seed_missing_type_protocols, CachedGitBackend,
     DatabaseBackend, ListFilter, Requirement, RequirementType, RequirementsStore, Storage,

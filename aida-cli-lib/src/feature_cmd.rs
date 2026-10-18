@@ -7,6 +7,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "feature_cmd_args.rs"]
+pub(crate) mod feature_cmd_args;
+pub(crate) use feature_cmd_args::*;
+
 use aida_core::Requirement;
 use aida_core::Storage;
 

@@ -5,6 +5,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "zen_cmd_args.rs"]
+pub(crate) mod zen_cmd_args;
+pub(crate) use zen_cmd_args::*;
+
 /// `aida zen status` — print the corroborated zen context of the current
 /// process. The bare status word (`zen` / `interactive`) goes to stdout so a
 /// skill can branch on it cleanly; any informational note goes to stderr.

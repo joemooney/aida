@@ -7,6 +7,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "human_cmd_args.rs"]
+pub(crate) mod human_cmd_args;
+pub(crate) use human_cmd_args::*;
+
 use crate::{find_project_root, handle_list_human, last_drain};
 
 /// STORY-562: `aida list human` (and `aida list --human`) — the discoverable

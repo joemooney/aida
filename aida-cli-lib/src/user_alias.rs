@@ -30,6 +30,11 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "user_alias_args.rs"]
+pub(crate) mod user_alias_args;
+pub(crate) use user_alias_args::*;
+
 use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Item, Table, Value};
 

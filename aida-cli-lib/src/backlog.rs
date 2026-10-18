@@ -6,6 +6,11 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "backlog_args.rs"]
+pub(crate) mod backlog_args;
+pub(crate) use backlog_args::*;
+
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use colored::Colorize;

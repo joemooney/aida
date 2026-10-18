@@ -15,6 +15,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "store_cmd_args.rs"]
+pub(crate) mod store_cmd_args;
+pub(crate) use store_cmd_args::*;
+
 use crate::*;
 
 pub(crate) fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {

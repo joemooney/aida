@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "upgrade_release_args.rs"]
+pub(crate) mod upgrade_release_args;
+pub(crate) use upgrade_release_args::*;
+
 /// Register this binary's identity (version, build SHA, filing agent vendor)
 /// with the core filing-provenance capture, so every spec this process files
 /// is stamped with the tooling that filed it. Uses the existing version /

@@ -13,6 +13,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+// trace:STORY-1728 | ai:claude
+#[path = "notify_args.rs"]
+pub(crate) mod notify_args;
+pub(crate) use notify_args::*;
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};

@@ -8,6 +8,11 @@ use aida_core::{DatabaseBackend, Storage};
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "record_cmd_args.rs"]
+pub(crate) mod record_cmd_args;
+pub(crate) use record_cmd_args::*;
+
 pub(crate) fn handle_record_command(
     cmd: &crate::cli::RecordCommand,
     backend: &aida_core::CachedGitBackend,

@@ -11,6 +11,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "triage_cmd_args.rs"]
+pub(crate) mod triage_cmd_args;
+pub(crate) use triage_cmd_args::*;
+
 use crate::cli::TriageCommand;
 use crate::*;
 

@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "gate_cmd_args.rs"]
+pub(crate) mod gate_cmd_args;
+pub(crate) use gate_cmd_args::*;
+
 use aida_core::gates::{self, GateDef, GateVerdict};
 
 use crate::cli::GateCommand;

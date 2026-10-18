@@ -3,6 +3,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "approvals_cmd_args.rs"]
+pub(crate) mod approvals_cmd_args;
+pub(crate) use approvals_cmd_args::*;
+
 /// List or write proxy-approval ledger comments.
 ///
 /// A proxy approval is stored as an ordinary spec comment carrying the

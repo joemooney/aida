@@ -11,6 +11,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "deps_cmd_args.rs"]
+pub(crate) mod deps_cmd_args;
+pub(crate) use deps_cmd_args::*;
+
 pub(crate) fn handle_deps_command(cmd: &DepsCommand) -> Result<()> {
     match cmd {
         DepsCommand::Sweep { for_spec, json } => deps_sweep(for_spec.as_deref(), *json),

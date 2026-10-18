@@ -15,6 +15,11 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use uuid::Uuid;
 
+// trace:STORY-1728 | ai:claude
+#[path = "trace_cmd_args.rs"]
+pub(crate) mod trace_cmd_args;
+pub(crate) use trace_cmd_args::*;
+
 use aida_core::{ArtifactType, Storage, TraceLink};
 
 use crate::cli::TraceCommand;

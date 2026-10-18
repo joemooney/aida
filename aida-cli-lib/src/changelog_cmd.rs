@@ -7,6 +7,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "changelog_cmd_args.rs"]
+pub(crate) mod changelog_cmd_args;
+pub(crate) use changelog_cmd_args::*;
+
 use crate::changelog;
 use crate::cli;
 

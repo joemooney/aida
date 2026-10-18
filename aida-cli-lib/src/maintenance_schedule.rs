@@ -47,6 +47,11 @@ use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
+// trace:STORY-1728 | ai:claude
+#[path = "maintenance_schedule_args.rs"]
+pub(crate) mod maintenance_schedule_args;
+pub(crate) use maintenance_schedule_args::*;
+
 use crate::cli::MaintenanceScheduleCommand;
 use crate::events::{self, Event, EventKind};
 use crate::schedule_ledger::{self, EpisodeTransition, JobLedger, LastBy};

@@ -12,6 +12,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "statusline_cmd_args.rs"]
+pub(crate) mod statusline_cmd_args;
+pub(crate) use statusline_cmd_args::*;
+
 use crate::*;
 
 pub(crate) fn handle_statusline_command(

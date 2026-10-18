@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "queue_misc_args.rs"]
+pub(crate) mod queue_misc_args;
+pub(crate) use queue_misc_args::*;
+
 /// STORY-106: best-effort emit the "queue empty for this role" workflow
 /// hint after a successful `queue done` (or `edit --status completed` on
 /// a queue-tracked spec). Detects role+scope from the session env / lease,

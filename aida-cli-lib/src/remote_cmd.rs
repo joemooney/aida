@@ -3,6 +3,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "remote_cmd_args.rs"]
+pub(crate) mod remote_cmd_args;
+pub(crate) use remote_cmd_args::*;
+
 /// Set up a git `origin` for a project that has none — guided origin
 /// bootstrap. `create` offers GitHub (via gh), personal-GitLab
 /// push-to-create over SSH (no glab/token needed), or attach-existing;

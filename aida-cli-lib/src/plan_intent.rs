@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "plan_intent_args.rs"]
+pub(crate) mod plan_intent_args;
+pub(crate) use plan_intent_args::*;
+
 /// STORY-750: run `aida <args>` as a child, INHERITING stdio so nested prompts /
 /// sessions work, and surface a non-zero exit as an error.
 pub(crate) fn self_invoke_aida(args: &[&str]) -> Result<()> {

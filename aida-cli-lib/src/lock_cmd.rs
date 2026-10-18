@@ -11,6 +11,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "lock_cmd_args.rs"]
+pub(crate) mod lock_cmd_args;
+pub(crate) use lock_cmd_args::*;
+
 use crate::cli::LockCommand;
 use crate::*;
 

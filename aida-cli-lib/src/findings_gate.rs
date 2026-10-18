@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "findings_gate_args.rs"]
+pub(crate) mod findings_gate_args;
+pub(crate) use findings_gate_args::*;
+
 /// BUG-1637: record a caller-authored (human-class) status transition
 /// `from -> req.status` under the caller's identity ([`get_default_author`])
 /// through the one shared helper, `aida_core::conflict::record_status_transition`.

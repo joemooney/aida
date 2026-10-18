@@ -13,6 +13,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "sandbox_cmd_args.rs"]
+pub(crate) mod sandbox_cmd_args;
+pub(crate) use sandbox_cmd_args::*;
+
 use crate::*;
 
 /// Default sandbox store location: a stable per-user dir under the system temp

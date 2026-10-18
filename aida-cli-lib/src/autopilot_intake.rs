@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "autopilot_intake_args.rs"]
+pub(crate) mod autopilot_intake_args;
+pub(crate) use autopilot_intake_args::*;
+
 /// STORY-472: `aida release` — a memorable top-level verb over the dev release
 /// flow. `--check` previews the planned release (read-only); otherwise it
 /// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the

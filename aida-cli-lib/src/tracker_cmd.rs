@@ -7,6 +7,11 @@ use crate::*;
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "tracker_cmd_args.rs"]
+pub(crate) mod tracker_cmd_args;
+pub(crate) use tracker_cmd_args::*;
+
 /// Handle Jira integration commands.
 // trace:ARCH-jira-integration | ai:claude
 pub(crate) fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {

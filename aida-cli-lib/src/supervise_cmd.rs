@@ -11,6 +11,11 @@ use crate::process_retry::RetryEtxtbsy;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "supervise_cmd_args.rs"]
+pub(crate) mod supervise_cmd_args;
+pub(crate) use supervise_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use chrono::Utc;

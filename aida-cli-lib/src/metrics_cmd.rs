@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "metrics_cmd_args.rs"]
+pub(crate) mod metrics_cmd_args;
+pub(crate) use metrics_cmd_args::*;
+
 use crate::{auto_complete_telemetry, metrics, parse_days_arg, usage};
 use aida_core::storage::Storage;
 

@@ -10,6 +10,11 @@ use crate::{
 };
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "internal_cmd_args.rs"]
+pub(crate) mod internal_cmd_args;
+pub(crate) use internal_cmd_args::*;
+
 // trace:STORY-684 | ai:claude
 /// Dispatch for the hidden `aida internal <…>` family — substrate machinery
 /// invoked by hooks/scaffolding, not by humans. Today it carries the

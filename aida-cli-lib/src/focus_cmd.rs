@@ -9,6 +9,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "focus_cmd_args.rs"]
+pub(crate) mod focus_cmd_args;
+pub(crate) use focus_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 
 use crate::find_project_root;

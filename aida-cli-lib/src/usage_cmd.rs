@@ -11,6 +11,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "usage_cmd_args.rs"]
+pub(crate) mod usage_cmd_args;
+pub(crate) use usage_cmd_args::*;
+
 use aida_core::RequirementsStore;
 
 use crate::{

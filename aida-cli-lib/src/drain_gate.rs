@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "drain_gate_args.rs"]
+pub(crate) mod drain_gate_args;
+pub(crate) use drain_gate_args::*;
+
 /// TASK-306: the decision the `--no-human` kickoff gate makes — split from
 /// its terminal/stdin I/O so it is unit-testable. `acknowledged` is whether
 /// `AIDA_NO_HUMAN_ACKNOWLEDGED=1` is set. STORY-276 dropped `BothUnavailable`

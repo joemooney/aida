@@ -16,6 +16,11 @@ use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "init_cmd_args.rs"]
+pub(crate) mod init_cmd_args;
+pub(crate) use init_cmd_args::*;
+
 use crate::*;
 
 #[derive(Debug, Clone)]

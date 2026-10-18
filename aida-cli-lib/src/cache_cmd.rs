@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "cache_cmd_args.rs"]
+pub(crate) mod cache_cmd_args;
+pub(crate) use cache_cmd_args::*;
+
 use crate::CacheCommand;
 
 pub(crate) fn handle_cache_command(

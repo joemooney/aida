@@ -9,6 +9,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "config_cmd_args.rs"]
+pub(crate) mod config_cmd_args;
+pub(crate) use config_cmd_args::*;
+
 use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
 use crate::*;
 use toml_edit::{value, Array, DocumentMut, Item, Table};

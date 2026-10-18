@@ -7,6 +7,11 @@
 
 use std::collections::HashSet;
 
+// trace:STORY-1728 | ai:claude
+#[path = "rules_cmd_args.rs"]
+pub(crate) mod rules_cmd_args;
+pub(crate) use rules_cmd_args::*;
+
 use anyhow::Result;
 use colored::Colorize;
 

@@ -7,6 +7,11 @@ use aida_core::RequirementsStore;
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "doc_cmd_args.rs"]
+pub(crate) mod doc_cmd_args;
+pub(crate) use doc_cmd_args::*;
+
 /// Render the docs tree, called from the legacy (Storage facade) dispatch.
 // trace:EPIC-1-052 | ai:claude
 // trace:FR-1-077 | ai:claude

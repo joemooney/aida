@@ -14,6 +14,11 @@
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "plan_cmd_args.rs"]
+pub(crate) mod plan_cmd_args;
+pub(crate) use plan_cmd_args::*;
+
 pub(crate) fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),

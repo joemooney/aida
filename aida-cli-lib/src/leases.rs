@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "leases_args.rs"]
+pub(crate) mod leases_args;
+pub(crate) use leases_args::*;
+
 // trace:TASK-714
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
 pub(crate) struct SessionLease {

@@ -6,6 +6,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mcp_cmd_args.rs"]
+pub(crate) mod mcp_cmd_args;
+pub(crate) use mcp_cmd_args::*;
+
 /// STORY-361: management commands for the MCP coordination surface.
 pub(crate) fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
     match cmd {

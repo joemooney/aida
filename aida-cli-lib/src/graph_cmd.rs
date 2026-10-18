@@ -6,6 +6,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "graph_cmd_args.rs"]
+pub(crate) mod graph_cmd_args;
+pub(crate) use graph_cmd_args::*;
+
 use aida_core::RelationshipType;
 
 use crate::{agent_output_mode, parse_requirement_id, toon_status_token};

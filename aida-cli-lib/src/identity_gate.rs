@@ -44,6 +44,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// trace:STORY-1728 | ai:claude
+#[path = "identity_gate_args.rs"]
+pub(crate) mod identity_gate_args;
+pub(crate) use identity_gate_args::*;
+
 /// First comment line of the standalone identity pre-push hook — the
 /// installer recognizes its own generated hook by this banner (same pattern
 /// as `remote_create::MIRROR_HOOK_HEADER`).

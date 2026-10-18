@@ -8,6 +8,11 @@ use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
+// trace:STORY-1728 | ai:claude
+#[path = "pr_cmd_args.rs"]
+pub(crate) mod pr_cmd_args;
+pub(crate) use pr_cmd_args::*;
+
 /// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {

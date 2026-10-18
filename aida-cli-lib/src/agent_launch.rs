@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "agent_launch_args.rs"]
+pub(crate) mod agent_launch_args;
+pub(crate) use agent_launch_args::*;
+
 pub(crate) fn validate_session_start_args(args: &[String]) -> Result<()> {
     let has_owns = args
         .iter()

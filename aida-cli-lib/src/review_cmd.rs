@@ -3,6 +3,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "review_cmd_args.rs"]
+pub(crate) mod review_cmd_args;
+pub(crate) use review_cmd_args::*;
+
 /// Drive human review of a held spec, or generate review prompts.
 ///
 /// `aida review <SPEC>` is the human-review counterpart to `aida queue

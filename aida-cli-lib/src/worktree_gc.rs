@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "worktree_gc_args.rs"]
+pub(crate) mod worktree_gc_args;
+pub(crate) use worktree_gc_args::*;
+
 /// Is this worktree one of the AIDA/Agent-tool managed isolation worktrees that
 /// accumulate? Matched on EITHER the conventional path segment
 /// (`.claude/worktrees/agent-<id>`) OR the conventional branch name

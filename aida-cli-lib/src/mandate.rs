@@ -31,6 +31,11 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mandate_args.rs"]
+pub(crate) mod mandate_args;
+pub(crate) use mandate_args::*;
+
 const MANDATE_DIR: &str = "mandates";
 const EXCLUSION_LEDGER: &str = "exclusions.jsonl";
 /// The only scope a mandate can carry today.

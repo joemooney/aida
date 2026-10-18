@@ -6,6 +6,11 @@
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "solo_cmd_args.rs"]
+pub(crate) mod solo_cmd_args;
+pub(crate) use solo_cmd_args::*;
+
 /// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
 /// from the existing (individually-safe) commands by shelling out to this same
 /// binary. Order: garden (hygiene) → assess+queue (advisor sign-off, keystone

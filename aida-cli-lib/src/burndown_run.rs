@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "burndown_run_args.rs"]
+pub(crate) mod burndown_run_args;
+pub(crate) use burndown_run_args::*;
+
 /// Install a per-invocation `--order` override by exporting
 /// `AIDA_BURNDOWN_ORDER`, the top tier of [`resolved_burndown_ready_order`].
 /// Exporting (rather than threading a parameter) means the headless drain

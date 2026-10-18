@@ -14,6 +14,11 @@ use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "scaffold_cmd_args.rs"]
+pub(crate) mod scaffold_cmd_args;
+pub(crate) use scaffold_cmd_args::*;
+
 // trace:FR-0260 | ai:claude:high
 pub(crate) fn handle_scaffold_command(
     cmd: &ScaffoldCommand,

@@ -9,6 +9,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "relationship_cmd_args.rs"]
+pub(crate) mod relationship_cmd_args;
+pub(crate) use relationship_cmd_args::*;
+
 pub(crate) fn handle_relationship_command(
     cmd: &RelationshipCommand,
     storage: &Storage,

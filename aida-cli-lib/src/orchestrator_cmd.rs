@@ -5,6 +5,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "orchestrator_cmd_args.rs"]
+pub(crate) mod orchestrator_cmd_args;
+pub(crate) use orchestrator_cmd_args::*;
+
 /// `aida orchestrator status` — print the corroborated orchestrator context
 /// of the current process. The bare status word goes to stdout (so a skill can
 /// branch on it cleanly); any informational note goes to stderr.

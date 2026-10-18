@@ -13,6 +13,11 @@ use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "dev_cmd_args.rs"]
+pub(crate) mod dev_cmd_args;
+pub(crate) use dev_cmd_args::*;
+
 pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     match cmd {
         DevCommand::Activate {

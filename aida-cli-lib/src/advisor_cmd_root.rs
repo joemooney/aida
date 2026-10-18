@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "advisor_cmd_root_args.rs"]
+pub(crate) mod advisor_cmd_root_args;
+pub(crate) use advisor_cmd_root_args::*;
+
 /// STORY-363 (SPIKE-10 Track B): write a checked-in advisor handoff brief into
 /// a sibling project. The brief lands at `<to>/docs/<date>-advisor-handoff.md`
 /// and carries five sections — parent identity (auto-derived from the current

@@ -13,6 +13,11 @@ use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "wiki_args.rs"]
+pub(crate) mod wiki_args;
+pub(crate) use wiki_args::*;
+
 /// Default `aida wiki serve` port, registered as `aida-wiki` in the operator's
 /// global port registry (`~/.ports`).
 // trace:TASK-1470 | ai:claude

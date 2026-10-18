@@ -4,6 +4,11 @@ use crate::cli::VerifyCommand;
 use aida_core::constraints::{verify_constraints, ConstraintResult, Status};
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "verify_cmd_args.rs"]
+pub(crate) mod verify_cmd_args;
+pub(crate) use verify_cmd_args::*;
+
 // trace:STORY-1673 | ai:codex
 pub(crate) fn apply_verify_edit(
     req: &mut aida_core::Requirement,

@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "punt_done_args.rs"]
+pub(crate) mod punt_done_args;
+pub(crate) use punt_done_args::*;
+
 pub(crate) fn locate_for_status(
     reg: &advisor::AdvisorRegistration,
 ) -> Option<advisor::LiveAdvisor> {

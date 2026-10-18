@@ -5,9 +5,14 @@
 //! (reached via `crate::client`).
 
 use crate::cli::ServerCommand;
+
+// trace:STORY-1728 | ai:claude
+#[path = "server_cmd_args.rs"]
+pub(crate) mod server_cmd_args;
 #[cfg(feature = "remote")]
 use crate::client;
 use anyhow::Result;
+pub(crate) use server_cmd_args::*;
 
 pub(crate) fn handle_server_command(cmd: &ServerCommand, server_addr: Option<&str>) -> Result<()> {
     let server_addr = server_addr.ok_or_else(|| {

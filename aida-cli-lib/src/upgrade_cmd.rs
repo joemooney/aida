@@ -15,6 +15,11 @@ use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "upgrade_cmd_args.rs"]
+pub(crate) mod upgrade_cmd_args;
+pub(crate) use upgrade_cmd_args::*;
+
 /// Query GitHub for the latest release tag. Uses curl; no extra dep needed.
 fn fetch_latest_release_tag() -> Result<String> {
     let out = std::process::Command::new("curl")

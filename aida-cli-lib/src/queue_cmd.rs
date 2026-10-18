@@ -9,6 +9,11 @@ use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use std::path::Path;
 
+// trace:STORY-1728 | ai:claude
+#[path = "queue_cmd_args.rs"]
+pub(crate) mod queue_cmd_args;
+pub(crate) use queue_cmd_args::*;
+
 /// Collect commit and requirement-reference evidence introduced since the
 /// current branch diverged from the default branch. `None` means the range
 /// could not be read and intentionally makes the ownership gate fail closed.

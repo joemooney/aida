@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "field_study_cmd_args.rs"]
+pub(crate) mod field_study_cmd_args;
+pub(crate) use field_study_cmd_args::*;
+
 use crate::field_study;
 use crate::rule_violation;
 

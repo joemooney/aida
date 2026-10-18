@@ -13,6 +13,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "db_cmd_args.rs"]
+pub(crate) mod db_cmd_args;
+pub(crate) use db_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 
 use crate::cli::DbCommand;

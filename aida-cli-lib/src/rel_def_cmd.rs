@@ -6,6 +6,11 @@ use aida_core::{Cardinality, RelationshipDefinition, Storage};
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "rel_def_cmd_args.rs"]
+pub(crate) mod rel_def_cmd_args;
+pub(crate) use rel_def_cmd_args::*;
+
 pub(crate) fn handle_rel_def_command(cmd: &RelDefCommand, storage: &Storage) -> Result<()> {
     match cmd {
         RelDefCommand::List => {

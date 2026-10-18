@@ -16,6 +16,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command as ProcessCommand;
 
+// trace:STORY-1728 | ai:claude
+#[path = "history_args.rs"]
+pub(crate) mod history_args;
+pub(crate) use history_args::*;
+
 /// Options threaded down from the CLI handler. Keeps the public function
 /// signature stable when new filters get added.
 #[derive(Debug, Clone)]

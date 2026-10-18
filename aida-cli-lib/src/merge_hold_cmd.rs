@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "merge_hold_cmd_args.rs"]
+pub(crate) mod merge_hold_cmd_args;
+pub(crate) use merge_hold_cmd_args::*;
+
 pub(crate) fn slugify(s: &str) -> String {
     let lower = s.to_lowercase();
     let mut out = String::with_capacity(lower.len());

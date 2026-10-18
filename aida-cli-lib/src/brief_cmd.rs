@@ -12,6 +12,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "brief_cmd_args.rs"]
+pub(crate) mod brief_cmd_args;
+pub(crate) use brief_cmd_args::*;
+
 use crate::*;
 
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.

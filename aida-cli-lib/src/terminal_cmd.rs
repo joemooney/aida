@@ -7,6 +7,11 @@ use crate::process_retry::RetryEtxtbsy;
 use std::path::Path;
 use std::process::Command;
 
+// trace:STORY-1728 | ai:claude
+#[path = "terminal_cmd_args.rs"]
+pub(crate) mod terminal_cmd_args;
+pub(crate) use terminal_cmd_args::*;
+
 use anyhow::{Context, Result};
 use colored::Colorize;
 use serde::Serialize;

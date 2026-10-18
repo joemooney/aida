@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "autonomy_cmd_args.rs"]
+pub(crate) mod autonomy_cmd_args;
+pub(crate) use autonomy_cmd_args::*;
+
 use crate::cli::{AutonomyCommand, CalibrationSubcommand};
 use crate::{
     calibration, complexity_calibration, find_project_root, main_worktree_root_from, punt,

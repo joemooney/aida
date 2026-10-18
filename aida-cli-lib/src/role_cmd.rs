@@ -15,6 +15,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::IsTerminal;
 
+// trace:STORY-1728 | ai:claude
+#[path = "role_cmd_args.rs"]
+pub(crate) mod role_cmd_args;
+pub(crate) use role_cmd_args::*;
+
 pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     // The hook path must not initialize storage or statusline/cache context.
     // trace:BUG-2014 | ai:codex
