@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-18T03:18:57.506197401Z
+modified_at: 2026-10-18T03:19:42.010161312Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -99,6 +99,12 @@ comments:
   created_at: 2026-10-18T03:18:57.506197401Z
   modified_at: 2026-10-18T03:18:57.506197401Z
   session_id: 49568076-7fe3-49cb-a8e6-1262df7e870a
+- id: 01a14d05-b4ba-7bb2-b2e8-891cdfdd951d
+  author: joe
+  content: 'ADVISOR SIGNOFF (fire mode, 2026-10-17 20:25) on sketch revision 2 (PR #2722, docs/plans/2026-10-15-story-1700-drive-mandate.md): APPROVED, implement now. R1-R7 accepted as written. F1 RULING: Option A (this story creates fleet_lanes::classify_lanes, moving relay_stall helpers; story_1699_relay_stall tests must stay green UNCHANGED). CONDITIONS: (C1) GATE_PROTECTED_PATHS must not list pr_cmd.rs as a whole file (it is touched by most PRs and would gate nearly everything); instead move the mandate ship-cover code (mandate_ship_cover, mandate_exclusion_specs, pr_gate_subject''s mandate use) out of pr_cmd.rs into a new aida-cli-lib/src/mandate_ship.rs as a pure move in its own commit, and protect that file. (C2) agy is concurrently implementing the TASK-1800 dangling-trace-id ruling in mandate.rs/pr_cmd.rs; merge origin/main before opening the PR and rebase onto it if it lands first; do not re-implement TASK-1800. Per R1 this PR itself touches mandate code, so its merge goes to the operator after an attested STRICT approve. Do not merge #2722 (plan folds into the implementation PR).'
+  created_at: 2026-10-18T03:19:42.010161312Z
+  modified_at: 2026-10-18T03:19:42.010161312Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
   author: joe
