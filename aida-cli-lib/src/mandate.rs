@@ -949,6 +949,7 @@ pub(crate) enum MandateRefusal {
     ChangedPathsUnresolved,
     TouchesGates { path: String },
     HumanGated { why: String },
+    SoloSelfApproval,
 }
 
 impl MandateRefusal {
@@ -1015,6 +1016,7 @@ impl MandateRefusal {
                 "it changes `{path}`, part of the mandate and its human gates; a human must merge it"
             ),
             Self::HumanGated { why } => format!("shipping is a human gate ({why})"),
+            Self::SoloSelfApproval => "the approval is a solo-human self-approval, not an independent review; a human must ship it".to_string(),
         };
         format!("PR-{pr}: the fire-fighting mandate does not cover this ship: {why}")
     }
@@ -1105,6 +1107,13 @@ fn approver_is_not_shipper(c: &ShipCheck<'_>) -> std::result::Result<(), Mandate
     let Some(newest) = crate::pr_ship::newest_approval(&approvals) else {
         return Ok(());
     };
+    // STORY-1700: a STORY-1655 solo-human SELF-approval is not the
+    // independent review a mandate needs: it may clear the author check for
+    // a human shipping by hand, never a mandate ship or release.
+    // trace:STORY-1700 | ai:claude
+    if crate::pr_ship::solo_self_approval(newest, c.policy) {
+        return Err(MandateRefusal::SoloSelfApproval);
+    }
     let recorder = newest
         .attestation
         .as_ref()

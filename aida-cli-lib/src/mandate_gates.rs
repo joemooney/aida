@@ -350,6 +350,7 @@ pub(crate) const GATE_PROTECTED_PATHS: &[&str] = &[
     "aida-cli-lib/src/mandate_traces.rs",
     "aida-cli-lib/src/rework_hold_release.rs",
     "aida-cli-lib/src/review_authority.rs",
+    "aida-cli-lib/src/solo_review.rs",
     "aida-cli-lib/src/fleet_lanes.rs",
     "aida-cli-lib/src/seat_authority.rs",
     "aida-cli-lib/src/pr_ship.rs",

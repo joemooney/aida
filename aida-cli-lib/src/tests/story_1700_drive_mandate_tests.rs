@@ -679,6 +679,7 @@ fn pr_touching_gate_paths_is_gated() {
         "aida-cli-lib/src/mandate_traces.rs",
         "aida-cli-lib/src/rework_hold_release.rs",
         "aida-cli-lib/src/review_authority.rs",
+        "aida-cli-lib/src/solo_review.rs",
     ] {
         let paths = vec!["README.md".to_string(), path.to_string()];
         let c = ship_check(&state, &policy, &ledger, &hold, Some(&paths));
