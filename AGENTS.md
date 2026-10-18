@@ -4,6 +4,12 @@ file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
 process watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
 
+No-number `pr ship` protects main/master, then uses only origin/HEAD as local
+default-branch evidence before a bounded, read-only forge probe. Unknown evidence
+requires a PR number. PR-base callers retain conventional-ref/main fallbacks.
+Refusal suggestions show numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 Regen generated-command execution defaults to a 30-second timeout per call;
 `AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
 kills the process group and failed records retain timeout reasons. Each output
