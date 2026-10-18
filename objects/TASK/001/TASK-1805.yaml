@@ -1,0 +1,27 @@
+id: 01a14da2-ca86-7d03-8ea2-30ba73b9bdc2
+spec_id: TASK-1805
+agreed_id: TASK-1805
+title: Test session_start's consumption of review_coexistence (explicit role + unambiguous backing re-resolution)
+description: |
+  TASK-1786's tests cover the QueueWorkRoleInput builder and the pure review_source_branch_conflict_decision, but not session_start.rs:1620-1632, where review_coexistence is mapped into the decision and the backing ID is re-resolved with get_requirement_unambiguous. Replacing that mapping with launch_role.as_deref(), or dropping the re-resolution, still passes every test. Add a session_start-level (or extracted-helper) test: an explicit reviewer with an ambiguous or unknown backing ID must refuse.
+
+  Raised in review of PR-2704: https://github.com/joemooney/aida/pull/2704#issuecomment-6246426026
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T06:11:16.742915922Z
+modified_at: 2026-10-18T06:11:16.742915922Z
+req_type: Task
+tags:
+- from-review:PR-2704
+- severity:minor
+- tests
+filed_at:
+  code_sha: efcb10bb1c6400bba797a6bd337bf1991d66550f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: efcb10bb1c
+  vendor: claude
+  session: 01a14d8dfa09
