@@ -2113,3 +2113,72 @@ fn an_identical_re_recording_reports_unchanged() {
     let changed = record_and_describe(dir.path(), "request-changes", sha, &["x".into()]);
     assert!(changed.ends_with("(round 2)"), "{changed}");
 }
+
+// trace:TASK-1766 | ai:antigravity
+#[test]
+fn pr_keyed_shaless_round_deduplicates_when_identical_and_counts_as_prior_round_when_replaced() {
+    let dir = TempDir::new().unwrap();
+    let path = verdict_path(dir.path(), "PR-99");
+
+    // Round 1: PR-keyed handshake write with no reviewed_sha/head.
+    let first_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(None, &first_obj),
+        RecordOutcome::Recorded { round: 1 }
+    );
+    write_verdict_object(&path, &first_obj).unwrap();
+
+    // Re-recording the exact same shaless round is Unchanged.
+    let repeat_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(Some(&first_obj), &repeat_obj),
+        RecordOutcome::Unchanged
+    );
+
+    // Replacing the shaless round with a commit-identified round reports round 2
+    // without pushing the shaless round into `rounds` (avoiding false survivors).
+    let sha = "4444444444444444444444444444444444444444";
+    let second_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("approved"),
+        Some(sha),
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(Some(&first_obj), &second_obj),
+        RecordOutcome::Recorded { round: 2 }
+    );
+    assert!(
+        second_obj.get("rounds").is_none(),
+        "unidentifiable round must still not enter `rounds`"
+    );
+    assert!(
+        findings_surviving_round(&serde_json::Value::Object(second_obj).to_string()).is_empty(),
+        "no false surviving-finding attribution from displaced shaless round"
+    );
+}

@@ -135,15 +135,16 @@ pub(crate) fn handle_mailbox_command(
             let recipient = if *broadcast {
                 Recipient::Broadcast
             } else if let Some(agent) = to {
+                let agent = agent.trim();
                 // BUG-2132: a junk id (flag, number, spec ID, line ref) opens a
                 // mailbox nobody reads; refuse it instead of warning.
-                // trace:BUG-2132 | ai:claude
+                // trace:BUG-2132 trace:TASK-1766 | ai:claude
                 if let Some(why) = aida_core::mailbox::recipient_id_rejection(agent) {
                     anyhow::bail!(
                         "send refused: --to {why}.\n  Pass an agent id or seat name (e.g. advisor, antigravity-implementer-1), or --broadcast."
                     );
                 }
-                Recipient::Agent(agent.clone())
+                Recipient::Agent(agent.to_string())
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
@@ -506,6 +507,7 @@ pub(crate) fn handle_mailbox_command(
             Ok(())
         }
         MailboxCommand::List { stranded } => {
+            let _ = archive_phantom_inboxes(project_root, store_root);
             let local = mailbox_store::read_local_messages(project_root)?;
             let canonical = mailbox_store::read_canonical_messages(store_root)?;
             let merged = merge_dedup(&local, &canonical);
@@ -725,6 +727,7 @@ pub(crate) fn handle_mailbox_command(
             }
         }
         MailboxCommand::Gc { older_than, agent } => {
+            let _ = archive_phantom_inboxes(project_root, store_root);
             archive_mailbox_older_than(project_root, store_root, agent.as_deref(), older_than)
         }
         MailboxCommand::Thread { thread_id } => {
@@ -747,6 +750,7 @@ pub(crate) fn handle_mailbox_command(
             Ok(())
         }
         MailboxCommand::Sync => {
+            let _ = archive_phantom_inboxes(project_root, store_root);
             // Digest the local layer into the git-canonical layer (orphan
             // store), then stage + commit it. Append-only/id-keyed, so this is
             // idempotent. The orphan branch is pushed by the normal store-sync
@@ -828,6 +832,48 @@ fn read_send_body(
             "choose exactly one mailbox body source; valid forms: `aida mailbox send <BODY>`, `aida mailbox send --body-file <PATH>`, or `aida mailbox send --stdin`"
         ),
     }
+}
+
+// trace:TASK-1766 | ai:antigravity
+pub(crate) fn archive_phantom_inboxes(
+    project_root: &std::path::Path,
+    store_root: &std::path::Path,
+) -> Result<usize> {
+    use aida_core::mailbox::{merge_dedup, Message, Recipient};
+
+    let local = mailbox_store::read_local_messages(project_root)?;
+    let canonical = mailbox_store::read_canonical_messages(store_root)?;
+    let merged = merge_dedup(&local, &canonical);
+    let known = known_mailbox_identities(project_root);
+
+    let mut archived_count = 0usize;
+    for msg in merged {
+        if msg.deleted || msg.archived {
+            continue;
+        }
+        let Recipient::Agent(ref r) = msg.to else {
+            continue;
+        };
+        let trimmed = r.trim();
+        let is_hex_sha = (7..=40).contains(&trimmed.len())
+            && trimmed.chars().all(|c| c.is_ascii_hexdigit())
+            && trimmed.chars().any(|c| c.is_ascii_digit());
+        let is_phantom = r != trimmed
+            || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
+            || is_hex_sha
+            || (msg.body.starts_with("You were mentioned on ")
+                && !known.contains(&trimmed.to_lowercase()));
+        if !is_phantom {
+            continue;
+        }
+        let marker = Message {
+            archived: true,
+            ..msg
+        };
+        mailbox_store::write_message_marker(project_root, &marker)?;
+        archived_count += 1;
+    }
+    Ok(archived_count)
 }
 
 // trace:TASK-1211 | ai:codex
@@ -1875,5 +1921,68 @@ mod tests {
             .find(|m| m.body == "no-role")
             .unwrap();
         assert_eq!(sent.from_role, None);
+    }
+
+    // trace:TASK-1766 | ai:antigravity
+    #[test]
+    fn send_trims_recipient_whitespace_and_archive_phantom_inboxes_cleans_all_20_shapes() {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+
+        handle_mailbox_command(&plain_send("  advisor  "), &store).unwrap();
+        let sent = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert_eq!(
+            sent[0].to,
+            aida_core::mailbox::Recipient::Agent("advisor".into()),
+            "recipient whitespace must be trimmed before storing"
+        );
+
+        let phantoms = [
+            "110",
+            "2",
+            "4211",
+            "AIDA_AGENT_NAME",
+            "CODEX_CI_GIT_URL",
+            "L4425",
+            "PR-219",
+            "PR-220",
+            "STORY-752",
+            "TASK-605",
+            "TASK-810",
+            "TYPE",
+            "YES",
+            "--body-file",
+            "--from",
+            "--intent",
+            "--to",
+            "6e5727ce3c",
+            "advisor ",
+            "joe ",
+        ];
+        for (idx, phantom) in phantoms.iter().enumerate() {
+            let mut m = message(&format!("phantom-{idx}"), &format!("thread-{idx}"));
+            m.to = aida_core::mailbox::Recipient::Agent((*phantom).to_string());
+            m.body = format!("You were mentioned on TASK-1 by joe (@{phantom}):\n\n  hi");
+            mailbox_store::write_message(project.path(), &m).unwrap();
+        }
+
+        let archived = archive_phantom_inboxes(project.path(), &store).unwrap();
+        assert_eq!(archived, phantoms.len());
+
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        let watermarks = mailbox_store::read_all_watermarks(project.path()).unwrap();
+        let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+        assert_eq!(
+            summaries
+                .iter()
+                .map(|s| s.agent.as_str())
+                .collect::<Vec<_>>(),
+            vec!["advisor"],
+            "phantom recipients must be archived and excluded from mailbox list"
+        );
     }
 }

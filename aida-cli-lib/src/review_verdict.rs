@@ -987,8 +987,7 @@ pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<Re
 ///
 /// The unidentifiable case is live rather than historical: the PR-keyed
 /// handshake writer still emits verdicts with no reviewed commit recorded.
-// trace:BUG-1466 | ai:claude
-// trace:STORY-1391 | ai:claude
+// trace:BUG-1466 trace:STORY-1391 trace:TASK-1766 | ai:claude
 fn archive_current_round(
     obj: &mut serde_json::Map<String, serde_json::Value>,
     incoming: &RecordingKey,
@@ -999,16 +998,9 @@ fn archive_current_round(
     if verdict.trim().is_empty() {
         return;
     }
-    if round_sha(obj).is_none() {
-        // Unidentifiable round — see the note above. Refusing is the safe side.
-        return;
-    }
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
-    let mut rounds = obj
-        .get("rounds")
-        .and_then(|v| v.as_array().cloned())
-        .unwrap_or_default();
+    snapshot.remove("unarchived_rounds");
     // Retain iff something would otherwise be LOST. A byte-identical
     // re-recording carries nothing new; anything else does — including a
     // second reviewer at the SAME commit, which is the collision this spec
@@ -1017,6 +1009,26 @@ fn archive_current_round(
     if &key == incoming {
         return;
     }
+    if round_sha(obj).is_none() {
+        // Unidentifiable round — see the note above. Refusing to push to
+        // `rounds` avoids false surviving-finding attribution, while
+        // counting the displaced round preserves `record_outcome`'s round
+        // number when a commit-identified review replaces a PR-keyed
+        // handshake verdict.
+        let prev = obj
+            .get("unarchived_rounds")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        obj.insert(
+            "unarchived_rounds".to_string(),
+            serde_json::Value::Number((prev + 1).into()),
+        );
+        return;
+    }
+    let mut rounds = obj
+        .get("rounds")
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
     if rounds
         .iter()
         .filter_map(|r| r.as_object())
@@ -2406,10 +2418,13 @@ pub(crate) enum RecordOutcome {
 /// when there was no file) with the object about to be written (`after`).
 /// Uses the same [`recording_key`] that decides round retention, so the
 /// printed outcome can never disagree with what the record kept.
-// trace:BUG-2136 | ai:claude
+// trace:BUG-2136 trace:TASK-1766 | ai:claude
 pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
     let identical = before.is_some_and(|prev| {
-        round_sha(prev).is_some() && recording_key(prev) == recording_key(after)
+        prev.get("verdict")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty())
+            && recording_key(prev) == recording_key(after)
     });
     if identical {
         return RecordOutcome::Unchanged;
@@ -2418,8 +2433,12 @@ pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> Recor
         .get("rounds")
         .and_then(|v| v.as_array())
         .map_or(0, Vec::len);
+    let unarchived = after
+        .get("unarchived_rounds")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
     RecordOutcome::Recorded {
-        round: retained + 1,
+        round: retained + unarchived + 1,
     }
 }
 

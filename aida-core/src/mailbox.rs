@@ -646,6 +646,9 @@ pub fn unread_counts(
     let mut unread = 0usize;
     let mut urgent = 0usize;
     for m in inbox_for(agent, messages) {
+        if m.archived {
+            continue;
+        }
         if m.timestamp > mark {
             unread += 1;
             if m.urgent {
@@ -711,6 +714,7 @@ pub fn agent_summaries(
 /// example the role registry). Broadcasts are delivered lazily, so a known
 /// agent with no materialized inbox still has pending broadcast mail.
 // trace:BUG-513 | ai:codex
+// trace:TASK-1766 | ai:antigravity
 pub fn agent_summaries_for_agents<'a, I>(
     messages: &[Message],
     watermarks: &std::collections::HashMap<String, i64>,
@@ -723,8 +727,12 @@ where
     // Known agents = every explicit direct-recipient + every sender (so an
     // agent that has only ever sent still shows once it receives a broadcast)
     // + every agent with a recorded watermark + externally-known recipients.
+    // Archived/deleted messages do not materialize a phantom recipient.
     let mut agents: BTreeSet<String> = BTreeSet::new();
     for m in messages {
+        if m.deleted || m.archived {
+            continue;
+        }
         agents.insert(m.from.clone());
         if let Recipient::Agent(a) = &m.to {
             agents.insert(a.clone());
@@ -742,7 +750,10 @@ where
 
     let mut out: Vec<AgentMailSummary> = Vec::new();
     for agent in agents {
-        let inbox = inbox_for(&agent, messages);
+        let inbox: Vec<&Message> = inbox_for(&agent, messages)
+            .into_iter()
+            .filter(|m| !m.archived)
+            .collect();
         if inbox.is_empty() {
             continue; // only list agents that actually have mail waiting
         }
@@ -793,6 +804,7 @@ pub struct StrandedRecipient {
 /// CLI surface and `aida doctor` compose over it without re-deriving the
 /// classification.
 // trace:BUG-679 | ai:claude
+// trace:TASK-1766 | ai:antigravity
 pub fn stranded_recipients<F>(
     messages: &[Message],
     watermarks: &std::collections::HashMap<String, i64>,
@@ -802,10 +814,10 @@ where
     F: Fn(&str) -> bool,
 {
     use std::collections::BTreeSet;
-    // Distinct direct-recipient strings across all live (non-deleted) mail.
+    // Distinct direct-recipient strings across all live (non-deleted, non-archived) mail.
     let mut recipients: BTreeSet<&str> = BTreeSet::new();
     for m in messages {
-        if m.deleted {
+        if m.deleted || m.archived {
             continue;
         }
         if let Recipient::Agent(a) = &m.to {
@@ -821,7 +833,12 @@ where
         // recipient's own sends excluded to mirror `inbox_for` semantics).
         let direct: Vec<&Message> = messages
             .iter()
-            .filter(|m| !m.deleted && m.from != r && matches!(&m.to, Recipient::Agent(a) if a == r))
+            .filter(|m| {
+                !m.deleted
+                    && !m.archived
+                    && m.from != r
+                    && matches!(&m.to, Recipient::Agent(a) if a == r)
+            })
             .collect();
         if direct.is_empty() {
             continue;
@@ -860,7 +877,7 @@ pub fn unread_inbox<'a>(
     let mark = read_watermark.unwrap_or(i64::MIN);
     inbox_for(agent, messages)
         .into_iter()
-        .filter(|m| m.timestamp > mark)
+        .filter(|m| !m.archived && m.timestamp > mark)
         .collect()
 }
 
