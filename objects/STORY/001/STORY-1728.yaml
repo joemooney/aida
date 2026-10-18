@@ -13,12 +13,12 @@ description: |
   3. A golden snapshot of `aida --help`, `aida help-all` and every subcommand's `--help` is byte-identical before and after each migration slice. The help-leak guard (cli.rs collect_leaks) walks the combined command tree.
   4. After full migration, a PR that adds a new flag to a migrated command changes zero lines in cli.rs, lib.rs, lib_part*.rs, git_backend_cmd.rs, stakeholder_role.rs and role.rs (checked by a demo PR).
   5. `make check-ci-fast` and the Windows CI job pass with the registry mechanism.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T03:30:54.597419467Z
+modified_at: 2026-10-18T03:30:58.269601247Z
 req_type: Story
 comments:
 - id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
@@ -64,6 +64,15 @@ comments:
   created_at: 2026-10-18T03:30:54.597419467Z
   modified_at: 2026-10-18T03:30:54.597419467Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+history:
+- id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
+  author: joe
+  timestamp: 2026-10-18T03:30:58.269592695Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
   branch: main
