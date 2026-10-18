@@ -1,0 +1,29 @@
+id: 01a14cbf-ce30-7013-bfc9-7bb8494f9f05
+spec_id: TASK-1-317
+title: 'non-blocking/minor: aida-core/templates/.aida/discipline/fire-mode.md (and the …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1654, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking/minor: aida-core/templates/.aida/discipline/fire-mode.md (and the .aida/discipline mirror) 'The two-round cap' still says the advisor rules 'merge and file the remaining findings as follow-ups' with no caveat. aida-fire.md now says the merge still needs an approval at head recorded by a reviewer process, and that a round-2 RequestChanges means park the PR or hand it to the operator. The two documents disagree; fire-mode.md should carry the same caveat.
+
+  PR: #2661
+  Reviewed sha: 104757447a2c3586d3e3be2e1c35479a71b8c308
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T02:03:21.008225929Z
+modified_at: 2026-10-18T02:03:21.008225929Z
+req_type: Task
+tags:
+- carried-from:STORY-1654
+- finding-hash:eaa7d31a
+- from-review:PR-2661
+- kind:carried-forward
+filed_at:
+  code_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 28575d74a3
+  vendor: claude
