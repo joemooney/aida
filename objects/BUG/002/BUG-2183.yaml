@@ -1,0 +1,29 @@
+id: 01a15165-3529-7c51-9486-69658a11f64a
+spec_id: BUG-2183
+agreed_id: BUG-2183
+title: 'Policy B check-then-recurse window: a live contained process can swap a submodule .git pointer between refuse_untrusted_gitlinks and the recursing status'
+description: |-
+  Follow-up from the #2731 review (BUG-1985, finding 3). refuse_untrusted_gitlinks reads each submodule .git pointer file, which lives in the session-writable tree. The safety checks then run git status --ignore-submodules=none, which recurses: worktree_is_dirty, worktree_status_porcelain, submodules_with_uncommitted_edits and status_sections::worktree_dirty_entries. A sandboxed process still running in the tree can replace sub/.git with a directory carrying a hostile config between the check and the recursing status.
+
+  ## Acceptance
+  - The recursing status cannot run a config swapped in after the check. Options: verify worktree_holders shows no live process in the tree before recursing, re-verify the pointers afterwards and discard the result on change, or document no live contained process in the tree as a precondition enforced by callers.
+  - A test swaps the pointer between the check and the status and asserts no planted driver runs.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T23:42:29.673877976Z
+modified_at: 2026-10-18T23:42:29.673877976Z
+req_type: Bug
+tags:
+- contained
+- sandbox
+- security
+filed_at:
+  code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
