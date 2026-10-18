@@ -26,7 +26,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T22:41:47.731555387Z
-modified_at: 2026-10-16T04:02:00.887323709Z
+modified_at: 2026-10-18T10:17:36.017893694Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1675
@@ -71,6 +71,16 @@ comments:
   created_at: 2026-10-16T04:02:00.887323709Z
   modified_at: 2026-10-16T04:02:00.887323709Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a14e84-4e11-7880-94ff-cce7cf558c59
+  author: joe
+  content: |-
+    IMPLEMENTED per signed sketch 91e80f4901 — PR #2726 (ready, not merged), branch claude/bug-2162, head a0e9bacaf19f69a3f30eb728ed0a1050d11cb52c on main 188adef04b. Took over stale lease 01a141cd (codex) and the stopped fixer's worktree aida-bug-2162-claude; plan doc carried over with Implementation notes.
+    Files: aida-core/src/git_ops/evidence.rs (new gate), aida-core/src/git_ops/evidence/tests.rs (new, 14 tests), aida-core/src/git_ops.rs (pull_rebase/pull_rebase_auto_merge/merge_union_auto wrapped; new fast_forward_store; bare pull refuses store trees), aida-core/src/hypothesis.rs (plan_sync/finalize_sync, EvidenceRefusal, is_evidence_refusal), aida-cli-lib/src/{remote_create,coordination,db_block,store_sync}.rs, aida-cli/tests/task_1717_store_writer_lock.rs (one assertion accepts the earlier preflight refusal), AGENTS.md, OVERVIEW.md, docs/cli/02-specs.md, docs/cli/10-storage.md, docs/plans/2026-10-15-bug-2162-hypothesis-sync-boundary.md.
+    Checks: bug_2162 core 14/14 + cli-lib 1/1; core hypothesis/pull/merge/conflict filters 106 pass; bug_1929_store_git_guard pass; make test-touched pass; STRICT integration binaries (task_1717 42, task_1486, task_1487, bug_1929_embedded, bug_1926, bug_1683, task_1335, bug_1940, bug_1947, bug_1952) pass; make check-ci-compile ok after rebase; make check-ci-fast 30/30.
+    ADVISOR ACK NEEDED on two deviations (plan doc Implementation notes): (1) selective strict read — full strict parse of every object cost ~1.2s/tree (~7s/pull) on the live store size; now only rows byte-identical in every input that never mention hypothesis, name their own ID and share no UUID with a hypothesis/stamped row or its targets are skipped (~0.4-0.9s/pull); sketch-literal read is a one-line revert. (2) unrelated-history refusal only when evidence is present (root_commits documents real unrelated joins). Adversarial STRICT review of refuse-before-mutate / no-escape-hatch requested per signoff. No verdict, hold clearance or merge by me.
+  created_at: 2026-10-18T10:17:36.017893694Z
+  modified_at: 2026-10-18T10:17:36.017893694Z
+  session_id: 3eddb1b2-687b-4ce3-a3e1-4068f625a097
 history:
 - id: 01a141c6-b057-7392-ad89-19972df8e386
   author: joe
