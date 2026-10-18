@@ -1,0 +1,35 @@
+id: 01a150cd-748d-73b3-b645-ff8a13d2a873
+spec_id: STORY-1848
+agreed_id: STORY-1848
+title: 'Review PR-2746: [AI:antigravity] cache-1739-1526 group (TASK-1739, TASK-1526)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `agy2/cache-1739-1526`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2746>
+  - Branch: `agy2/cache-1739-1526` → `main`
+
+  ## Covers
+
+  - TASK-1526
+  - TASK-1739
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2746` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T20:56:44.429234020Z
+modified_at: 2026-10-18T20:56:44.429234020Z
+req_type: Story
+filed_at:
+  code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
