@@ -1,0 +1,27 @@
+id: 01a150d2-8039-7313-8254-15dd07f236e4
+spec_id: TASK-1-346
+title: 'non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1351, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt has latched, a second in-flight member whose result is Held, Inconclusive, or an un-shelvable failure makes apply_batch_result return Some(...) without recording it, and halted.get_or_insert discards that result, so the member appears in no summary list (not shipped/shelved/skipped). Record it (e.g. in skipped with its stop reason).
+  Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-18T21:02:15.097047273Z
+modified_at: 2026-10-18T21:02:15.097047273Z
+req_type: Task
+tags:
+- carried-from:TASK-1351
+- finding-hash:e850c551
+- from-review:TASK-1351
+- kind:carried-forward
+filed_at:
+  code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 555237eca9
+  vendor: claude
