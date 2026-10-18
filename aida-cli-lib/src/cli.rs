@@ -2613,8 +2613,13 @@ pub enum RoleCommand {
 
     /// Emit a deduplicated informational tool-hook expiry notice.
     // trace:BUG-2014 | ai:codex
+    // trace:TASK-1744 | ai:antigravity
     #[clap(hide = true)]
-    ExpiryNotice,
+    ExpiryNotice {
+        /// Target hook client protocol (`claude`, `codex`, or `agy`).
+        #[clap(long, default_value = "claude")]
+        client: String,
+    },
 
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`

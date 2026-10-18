@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Claude PreToolUse expiry notice protocol, without a compiled CLI."""
+"""Claude, Codex, and Antigravity expiry notice hook protocol, without a compiled CLI."""
 # trace:BUG-2014 | ai:codex
+# trace:TASK-1744 | ai:antigravity
 import json
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / '.claude/hooks/aida-grant-expiry-notice.sh'
 MESSAGE = 'The advisor seat grant expired. Renew: aida role enter advisor'
 PAYLOAD = {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': MESSAGE}}
+AGY_PAYLOAD = {'injectSteps': [{'ephemeralMessage': MESSAGE}]}
 
 
 class NoticeHook(unittest.TestCase):
@@ -26,14 +28,14 @@ class NoticeHook(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def run_hook(self, body, grant='fixture'):
+    def run_hook(self, body, grant='fixture', args=()):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             fake = path / 'aida'
             fake.write_text('#!/bin/sh\n' + body)
             fake.chmod(0o755)
             env = dict(os.environ, PATH=str(path) + ':' + os.environ['PATH'], AIDA_SESSION_GRANT=grant)
-            result = subprocess.run([str(HOOK)], input=json.dumps({'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': 'true'}}), text=True, capture_output=True, env=env, timeout=3)
+            result = subprocess.run([str(HOOK), *args], input=json.dumps({'hook_event_name': 'PreToolUse', 'tool_name': 'Bash', 'tool_input': {'command': 'true'}}), text=True, capture_output=True, env=env, timeout=3)
             return result
 
     def test_no_grant_never_spawns_cli(self):
@@ -46,9 +48,15 @@ class NoticeHook(unittest.TestCase):
                     env = dict(os.environ, PATH=directory + ':' + os.environ['PATH'])
                     env.pop('AIDA_SESSION_GRANT', None)
                     result = subprocess.run([str(HOOK)], env=env, text=True, capture_output=True, timeout=3)
+                    codex_result = subprocess.run([str(HOOK), '--client', 'codex'], env=env, text=True, capture_output=True, timeout=3)
+                    agy_result = subprocess.run([str(HOOK), '--client', 'agy'], env=env, text=True, capture_output=True, timeout=3)
             else:
                 result = self.run_hook('echo SPAWNED\nexit 9\n', grant)
+                codex_result = self.run_hook('echo SPAWNED\nexit 9\n', grant, args=('--client', 'codex'))
+                agy_result = self.run_hook('echo SPAWNED\nexit 9\n', grant, args=('--client', 'agy'))
             self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
+            self.assertEqual((codex_result.returncode, codex_result.stdout, codex_result.stderr), (0, '', ''))
+            self.assertEqual((agy_result.returncode, json.loads(agy_result.stdout), agy_result.stderr), (0, {}, ''))
 
     def test_real_hook_json_without_user_prompt(self):
         result = self.run_hook("[ \"$*\" = 'role expiry-notice' ] || exit 5\nprintf '%s\\n' '" + json.dumps(PAYLOAD) + "'\n")
@@ -56,6 +64,84 @@ class NoticeHook(unittest.TestCase):
         self.assertEqual(json.loads(result.stdout), PAYLOAD)
         self.assertEqual(result.stderr, '')
         self.assertNotIn('permissionDecision', result.stdout)
+
+        codex_result = self.run_hook(
+            "[ \"$*\" = 'role expiry-notice --client codex' ] || exit 5\nprintf '%s\\n' '" + json.dumps(PAYLOAD) + "'\n",
+            args=('--client', 'codex'),
+        )
+        self.assertEqual(codex_result.returncode, 0)
+        self.assertEqual(json.loads(codex_result.stdout), PAYLOAD)
+        self.assertEqual(codex_result.stderr, '')
+        self.assertNotIn('permissionDecision', codex_result.stdout)
+
+    # trace:TASK-1744 | ai:antigravity
+    def test_antigravity_pre_invocation_hook_json_and_fail_open(self):
+        result = self.run_hook(
+            "[ \"$*\" = 'role expiry-notice --client agy' ] || exit 5\nprintf '%s\\n' '" + json.dumps(AGY_PAYLOAD) + "'\n",
+            args=('--client', 'agy'),
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(json.loads(result.stdout), AGY_PAYLOAD)
+        self.assertEqual(result.stderr, '')
+        self.assertNotIn('decision', result.stdout)
+        self.assertNotIn('terminationBehavior', result.stdout)
+
+        failed = self.run_hook("echo PARTIAL\nexit 7\n", args=('--client', 'agy'))
+        self.assertEqual((failed.returncode, json.loads(failed.stdout)), (0, {}))
+        self.assertEqual(len(failed.stderr.splitlines()), 1)
+
+    # trace:TASK-1744 | ai:antigravity
+    def test_missing_timeout_command_fails_open(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = dict(os.environ, PATH=directory, AIDA_SESSION_GRANT='fixture')
+            for args, expected_stdout in [
+                ((), ''),
+                (('--client', 'codex'), ''),
+                (('--client', 'agy'), '{}\n'),
+            ]:
+                result = subprocess.run(
+                    ['/bin/sh', str(HOOK), *args],
+                    env=env,
+                    text=True,
+                    capture_output=True,
+                    timeout=3,
+                )
+                self.assertEqual((result.returncode, result.stdout), (0, expected_stdout), args)
+                self.assertIn('timeout command missing', result.stderr)
+                self.assertEqual(len(result.stderr.splitlines()), 1)
+
+    # trace:TASK-1744 | ai:antigravity
+    def test_template_commands_fail_open_outside_git_checkout(self):
+        codex_template = json.loads((ROOT / 'aida-core/templates/codex-hooks.json').read_text())
+        codex_cmd = next(
+            hook['command']
+            for entry in codex_template['hooks']['PreToolUse']
+            for hook in entry['hooks']
+            if 'aida-grant-expiry-notice.sh' in hook['command']
+        )
+        agy_template = json.loads((ROOT / 'aida-core/templates/antigravity-hooks.json').read_text())
+        agy_cmd = agy_template['aida-grant-expiry-notice']['PreInvocation'][0]['command']
+
+        with tempfile.TemporaryDirectory() as non_git_dir, tempfile.TemporaryDirectory() as bare_git_dir:
+            subprocess.run(['git', 'init', '-q'], cwd=bare_git_dir, check=True, capture_output=True)
+            for cwd in [non_git_dir, bare_git_dir]:
+                codex_res = subprocess.run(
+                    ['/bin/sh', '-c', codex_cmd],
+                    cwd=cwd,
+                    text=True,
+                    capture_output=True,
+                    timeout=3,
+                )
+                self.assertEqual((codex_res.returncode, codex_res.stdout, codex_res.stderr), (0, '', ''), cwd)
+
+                agy_res = subprocess.run(
+                    ['/bin/sh', '-c', agy_cmd],
+                    cwd=cwd,
+                    text=True,
+                    capture_output=True,
+                    timeout=3,
+                )
+                self.assertEqual((agy_res.returncode, json.loads(agy_res.stdout), agy_res.stderr), (0, {}, ''), cwd)
 
     def test_ledger_failure_is_silent_fail_open(self):
         result = self.run_hook("echo 'Expiry notice unavailable: invalid ledger' >&2\nexit 0\n")
@@ -76,11 +162,20 @@ class NoticeHook(unittest.TestCase):
         self.assertEqual(len(result.stderr.splitlines()), 1)
 
     def test_every_tool_registration_and_early_store_free_dispatch(self):
-        settings = json.loads((ROOT / 'aida-core/templates/settings.json').read_text())
-        matches = [entry for entry in settings['hooks']['PreToolUse'] if any('aida-grant-expiry-notice.sh' in hook['command'] for hook in entry['hooks'])]
-        self.assertEqual(len(matches), 1)
-        self.assertNotIn('matcher', matches[0])
-        self.assertEqual(matches[0]['hooks'][0]['timeout'], 2)
+        for template_rel in ['aida-core/templates/settings.json', 'aida-core/templates/codex-hooks.json']:
+            settings = json.loads((ROOT / template_rel).read_text())
+            matches = [entry for entry in settings['hooks']['PreToolUse'] if any('aida-grant-expiry-notice.sh' in hook['command'] for hook in entry['hooks'])]
+            self.assertEqual(len(matches), 1, template_rel)
+            self.assertNotIn('matcher', matches[0], template_rel)
+            self.assertEqual(matches[0]['hooks'][0]['timeout'], 2, template_rel)
+            if template_rel.endswith('codex-hooks.json'):
+                self.assertIn('--client codex', matches[0]['hooks'][0]['command'])
+        agy = json.loads((ROOT / 'aida-core/templates/antigravity-hooks.json').read_text())
+        agy_hooks = agy['aida-grant-expiry-notice']['PreInvocation']
+        self.assertEqual(len(agy_hooks), 1)
+        self.assertIn('.agents/hooks/aida-grant-expiry-notice.sh', agy_hooks[0]['command'])
+        self.assertIn('"$h" --client agy', agy_hooks[0]['command'])
+        self.assertEqual(agy_hooks[0]['timeout'], 2)
         source = (ROOT / 'aida-cli-lib/src/lib_part1.rs').read_text()
         dispatch = source.index('return role_cmd::handle_role_command(role_cmd);')
         # Pin the actual early return and unreachable late dispatch contract.
@@ -88,7 +183,7 @@ class NoticeHook(unittest.TestCase):
         self.assertLess(dispatch, storage)
         self.assertLess(dispatch, source.index('role is dispatched before storage init'))
         role = (ROOT / 'aida-cli-lib/src/role_cmd.rs').read_text()
-        self.assertLess(role.index('return crate::grant_expiry_notice::handle();'), role.index('let project_root = statusline_project_root();'))
+        self.assertLess(role.index('return crate::grant_expiry_notice::handle(client);'), role.index('let project_root = statusline_project_root();'))
         notice = (ROOT / 'aida-cli-lib/src/grant_expiry_notice.rs').read_text()
         self.assertNotIn('Storage::', notice)
         self.assertNotIn('cache.db', notice.split('#[cfg(test)]')[0])
