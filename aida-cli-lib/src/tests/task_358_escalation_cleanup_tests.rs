@@ -11,6 +11,7 @@ fn write_test_lease(
     let sessions = leases_dir(project_root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
@@ -45,6 +46,7 @@ fn write_test_lease(
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     };
     let path = sessions.join(format!("{id}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&lease).unwrap()).unwrap();

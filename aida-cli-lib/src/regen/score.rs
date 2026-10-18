@@ -12,8 +12,13 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+mod command; // trace:TASK-1791 | ai:codex
+use command::{CommandOutputLimitExceeded, CommandTimedOut};
+
 mod adapter; // trace:TASK-1732 | ai:codex
+mod completeness; // trace:STORY-1677 | ai:codex
 mod controls; // trace:TASK-1731 | ai:codex
+mod diagnostics; // trace:STORY-1676 | ai:codex
 mod fresh; // trace:TASK-1731 | ai:codex
 mod guards; // trace:TASK-1730 | ai:codex
 mod oracle; // trace:TASK-1730 | ai:codex
@@ -28,6 +33,12 @@ struct RegenConfig {
     oracle_paths: Vec<String>,
     #[serde(default = "default_reference_repeats")]
     reference_repeats: usize,
+    #[serde(default = "diagnostics::default_crash_share")]
+    crash_failure_share_percent: u8,
+    #[serde(default = "completeness::default_min_bytes")]
+    min_bytes: usize,
+    #[serde(default)]
+    components: BTreeMap<String, completeness::ComponentConfig>,
     install_command: Option<Vec<String>>,
     #[serde(default)]
     required_tools: Vec<String>,
@@ -46,6 +57,10 @@ impl RegenConfig {
             .clone()
             .try_into()?;
         validate_argv(&config.oracle_command)?;
+        anyhow::ensure!(
+            config.crash_failure_share_percent <= 100,
+            "crash_failure_share_percent must be 0..100"
+        );
         anyhow::ensure!(
             config.reference_repeats >= 1,
             "reference_repeats must be >= 1"
@@ -69,6 +84,7 @@ impl RegenConfig {
             );
             anyhow::ensure!(tools.insert(tool), "duplicate required tool: {tool}");
         }
+        completeness::validate_config(&config)?;
         Ok(config)
     }
 }
@@ -142,6 +158,10 @@ pub(super) struct TrialRecord {
     // trace:TASK-1733 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) gaps: Option<serde_json::Value>,
+    // Independently versioned completeness evidence; absent on older trials.
+    // trace:STORY-1677 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) completeness: Option<serde_json::Value>,
     // Additive, independently versioned R2 evidence; absent on legacy trials/controls.
     // trace:TASK-1732 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -172,6 +192,12 @@ pub(super) struct TrialRecord {
     pub(super) oracle_sha: String,
     pub(super) oracle_bundle_sha256: String,
     pub(super) model: String,
+    // Optional on legacy trials; explicit identity, never derived from model/vendor.
+    // trace:STORY-1676 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) model_family: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) failure_diagnostics: Option<serde_json::Value>,
     pub(super) vendor: String,
     pub(super) harness: String,
     pub(super) started_at: DateTime<Utc>,
@@ -248,11 +274,29 @@ struct ScoreEnv {
     path: std::ffi::OsString,
     bwrap: Option<PathBuf>,
     install_ran: std::cell::Cell<bool>,
+    // trace:TASK-1791 | ai:codex
+    command_timeout: std::time::Duration,
     // Explicitly captured interface inputs, supplied only to the oracle.
     // trace:TASK-1732 | ai:codex
     oracle_environment: BTreeMap<String, String>,
+    diagnostic_bytes: std::cell::RefCell<Option<Vec<u8>>>,
     #[cfg(test)]
     _guard_cache: tempfile::TempDir,
+}
+
+// A run-local setting, captured before generated code receives its clean env.
+// Invalid values refuse scoring instead of silently removing the deadline.
+// trace:TASK-1791 | ai:codex
+fn command_timeout(value: Option<std::ffi::OsString>) -> Result<std::time::Duration> {
+    let seconds = match value {
+        None => 30,
+        Some(value) => value
+            .to_str()
+            .and_then(|s| s.parse::<u64>().ok())
+            .filter(|s| (1..=86400).contains(s))
+            .context("AIDA_REGEN_COMMAND_TIMEOUT_SECS must be an integer from 1 to 86400")?,
+    };
+    Ok(std::time::Duration::from_secs(seconds))
 }
 
 fn phase_dirs(root: &Path) -> Result<()> {
@@ -277,6 +321,7 @@ impl ScoreEnv {
     }
 
     fn for_project(config: &RegenConfig, unconfined: bool, project: &Path) -> Result<Self> {
+        let command_timeout = command_timeout(std::env::var_os("AIDA_REGEN_COMMAND_TIMEOUT_SECS"))?;
         let bwrap = if unconfined {
             None
         } else {
@@ -318,7 +363,9 @@ impl ScoreEnv {
             path: Default::default(),
             bwrap,
             install_ran: std::cell::Cell::new(false),
+            command_timeout,
             oracle_environment: BTreeMap::new(),
+            diagnostic_bytes: Default::default(),
             #[cfg(test)]
             _guard_cache: guard_cache,
         };
@@ -364,6 +411,16 @@ impl ScoreEnv {
             bundle.verify()?;
             reads.push(bundle.root.to_string_lossy().into_owned());
         }
+        // Only the oracle receives this scorer-owned file, created after install.
+        // Keep the original descriptor: a replaced pathname is never read back.
+        // trace:STORY-1676 | ai:codex
+        let sidecar = if bundle.is_some() {
+            Some(diagnostics::Sidecar::new(
+                &phase_root.join("run/check-results.jsonl"),
+            )?)
+        } else {
+            None
+        };
         let mut cmd = if let Some(bwrap) = &self.bwrap {
             let mut cmd = Command::new(bwrap);
             // Reuse the existing strict-read arm, rather than the convenience
@@ -400,6 +457,7 @@ impl ScoreEnv {
             self.path.clone()
         };
         cmd.args(&argv[1..])
+            .stdin(std::process::Stdio::null())
             .current_dir(dir)
             .env_clear()
             .env("PATH", path)
@@ -417,12 +475,22 @@ impl ScoreEnv {
             cmd.env("PREFIX", &self.prefix);
         } else {
             cmd.envs(&self.oracle_environment);
+            cmd.env(
+                "AIDA_REGEN_CHECK_RESULTS",
+                phase_root.join("run/check-results.jsonl"),
+            );
             if self.install_ran.get() {
                 cmd.env("AIDA_REGEN_PREFIX", &self.prefix);
             }
         }
-        cmd.output()
-            .with_context(|| format!("run regen command {}", argv[0]))
+        // Bound process exit and pipe completion together; a generated --help, installer
+        // or oracle must not prevent the caller from persisting failed evidence.
+        // trace:TASK-1791 | ai:codex
+        let output = command::run(cmd, self.command_timeout)?;
+        if let Some(sidecar) = sidecar {
+            *self.diagnostic_bytes.borrow_mut() = sidecar.read();
+        }
+        Ok(output)
     }
 
     fn require_source_hidden(&self, dir: &Path, source: &Path) -> Result<()> {
@@ -464,13 +532,28 @@ fn execute(
             .is_file()
             .then(|| vec!["./install.sh".into()])
     });
-    if let Some(installer) = installer.filter(|_| record.kind != "control-stub") {
+    // Generated stubs deliberately have no installer. Every actual system must.
+    // trace:STORY-1676 | ai:codex
+    if record.kind != "control-stub" {
+        let Some(installer) = installer else {
+            record.status = "install_failed".into();
+            record.error = Some("no declared installer or ./install.sh".into());
+            return Ok(());
+        };
         env.install_ran.set(true);
         let install = match env.run(dir, &installer) {
             Ok(output) => output,
             Err(error) => {
                 record.status = "install_failed".into();
-                record.error = Some(format!("installer launch failed: {error:#}"));
+                if error.downcast_ref::<CommandTimedOut>().is_some() {
+                    record.flags.push("installer_timeout".into());
+                    record.error = Some("installer timed out".into());
+                } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                    record.flags.push("installer_output_limit".into());
+                    record.error = Some("installer output limit exceeded".into());
+                } else {
+                    record.error = Some(format!("installer launch failed: {error:#}"));
+                }
                 return Ok(());
             }
         };
@@ -489,11 +572,37 @@ fn execute(
         true,
     )?;
     let _snapshot = roots::Quarantine::snapshot(&[dir.to_path_buf(), env.prefix.clone()])?;
-    let oracle = env
-        .run_with_bundle(dir, &bundle.command(&config.oracle_command)?, Some(bundle))
-        .context(
-            "oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required",
-        )?;
+    // No host file inspection before installer roots have been quarantined.
+    // Help uses the same score confinement; isolate its survivors before oracle.
+    // trace:STORY-1677 | ai:codex
+    let _help_snapshots = if record.kind != "control-stub" {
+        let (completeness, survivors, snapshots) = completeness::check(config, dir, env)?;
+        record.survivors_detected += survivors;
+        record.completeness = Some(serde_json::to_value(completeness)?);
+        snapshots
+    } else {
+        Vec::new()
+    };
+    let oracle = match env.run_with_bundle(
+        dir,
+        &bundle.command(&config.oracle_command)?,
+        Some(bundle),
+    ) {
+        Ok(output) => output,
+        Err(error) => {
+            record.status = "error".into();
+            if error.downcast_ref::<CommandTimedOut>().is_some() {
+                record.flags.push("oracle_timeout".into());
+                record.error = Some("oracle timed out".into());
+            } else if error.downcast_ref::<CommandOutputLimitExceeded>().is_some() {
+                record.flags.push("oracle_output_limit".into());
+                record.error = Some("oracle output limit exceeded".into());
+            } else {
+                record.error = Some(format!("oracle launch failed; GNU coreutils /usr/bin/env with --chdir support is required: {error:#}"));
+            }
+            return Ok(());
+        }
+    };
     record.oracle_exit = oracle.status.code();
     if !oracle.status.success() {
         record.flags.push("oracle_nonzero_exit".into());
@@ -509,6 +618,11 @@ fn execute(
                         .collect::<String>()
                 )
             })?;
+    record.failure_diagnostics = Some(serde_json::to_value(diagnostics::capture(
+        env.diagnostic_bytes.borrow().as_deref(),
+        &record.checks,
+        config.crash_failure_share_percent,
+    ))?);
     let passed = record.checks.iter().filter(|c| c.passed).count();
     let total = record.checks.len();
     record.aggregate = Some(Aggregate {
@@ -591,6 +705,7 @@ fn initial_record(
     TrialRecord {
         format_version: 1,
         gaps: None,
+        completeness: None,
         adapter: None,
         kind: trial_kind(),
         root_fresh: false,
@@ -607,6 +722,8 @@ fn initial_record(
         oracle_sha: bundle.sha.clone(),
         oracle_bundle_sha256: bundle.hash.clone(),
         model: model.into(),
+        model_family: None,
+        failure_diagnostics: None,
         vendor: vendor.into(),
         harness: harness.into(),
         started_at: Utc::now(),
@@ -728,10 +845,17 @@ pub(super) fn handle_score(
     control: Option<crate::cli::RegenControl>,
     corpus: &Path,
     model: &str,
+    model_family: Option<&str>,
     vendor: &str,
     harness: &str,
     unconfined: bool,
 ) -> Result<()> {
+    if let Some(family) = model_family {
+        anyhow::ensure!(
+            diagnostics::valid_family(family),
+            "model family must be nonempty, trimmed, at most 128 bytes, without control characters"
+        );
+    }
     let project = crate::project_root_from_store_hint(store).canonicalize()?;
     let (config, oracle_sha) = load_config(&project)?;
     let manifest = read_manifest(corpus)?;
@@ -806,6 +930,7 @@ pub(super) fn handle_score(
                 repeats: control.map(|_| repeats),
             }),
         )?;
+        record.model_family = model_family.map(str::to_owned);
         adapter::apply_gate(&mut record, gate.as_ref());
         if let Some(adapter) = adapter {
             // Capture from the same private, pre-execution input as the adapter.
@@ -823,10 +948,15 @@ pub(super) fn handle_score(
                 gate.as_ref(),
             )?;
         }
+        // Quality warnings follow execution/control validation, and never
+        // contaminate generated controls or turn a score into gate refusal.
+        // trace:STORY-1676 | ai:codex
+        diagnostics::flag_trial(&mut record);
+        completeness::finish(&mut record);
         persist(store, &record)?;
         // A refused trial is durable diagnostic evidence, never a reported score.
         anyhow::ensure!(
-            record.status == "scored",
+            matches!(record.status.as_str(), "scored" | "incomplete"),
             "trial {} recorded as {}: {}",
             record.trial_id,
             record.status,
@@ -835,6 +965,12 @@ pub(super) fn handle_score(
         println!("{}", serde_json::to_string_pretty(&record)?);
     }
     Ok(())
+}
+
+// One committed-evidence reader for reports and consensus, never cache/disk JSON.
+// trace:STORY-1679 | ai:codex
+pub(super) fn read_committed_trials(store: &Path) -> Result<Vec<TrialRecord>> {
+    controls::read_records(store)
 }
 
 #[cfg(test)]
@@ -848,7 +984,10 @@ mod tests {
             oracle_command: oracle.iter().map(|s| (*s).into()).collect(),
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 3,
-            install_command: None,
+            crash_failure_share_percent: 50,
+            install_command: Some(vec!["/bin/true".into()]),
+            min_bytes: 64,
+            components: BTreeMap::new(),
             required_tools: vec!["regen-fixture-tool".into()],
         }
     }
@@ -861,6 +1000,162 @@ mod tests {
             content_sha256: "b".repeat(64),
             row_count: 0,
             dirty: false,
+        }
+    }
+
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn command_timeout_setting_defaults_and_refuses_unbounded_values() {
+        use std::ffi::OsString;
+        assert_eq!(command_timeout(None).unwrap().as_secs(), 30);
+        assert_eq!(command_timeout(Some("120".into())).unwrap().as_secs(), 120);
+        for value in [
+            "",
+            "0",
+            "-1",
+            "1.5",
+            "never",
+            "86401",
+            "18446744073709551615",
+        ] {
+            assert!(
+                command_timeout(Some(OsString::from(value))).is_err(),
+                "{value}"
+            );
+        }
+    }
+
+    // Exercise ScoreEnv, rather than only the generic timeout helper, with a
+    // generated tool that sleeps on --help and forks a pipe-holding descendant.
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn generated_tool_help_timeout_kills_group_and_retains_reason() {
+        let cfg = config(&["/bin/true"]);
+        let mut env = ScoreEnv::new(&cfg, true).unwrap();
+        env.command_timeout = std::time::Duration::from_secs(1);
+        let tool = env.prefix.join("bin/regen-fixture-tool");
+        std::fs::write(&tool, "#!/bin/sh\ntest \"$1\" = --help || exit 1\nsleep 60 &\necho $! > descendant.pid\nwait\n").unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let dir = TempDir::new().unwrap();
+        let start = std::time::Instant::now();
+        let error = env
+            .run(
+                dir.path(),
+                &[tool.to_string_lossy().into_owned(), "--help".into()],
+            )
+            .unwrap_err();
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+        assert!(
+            error.downcast_ref::<CommandTimedOut>().is_some(),
+            "{error:#}"
+        );
+        assert!(error.to_string().contains("timed out"), "{error:#}");
+        let pid: u32 = std::fs::read_to_string(dir.path().join("descendant.pid"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        // Killed orphan descendants may remain zombies until init reaps them.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while aida_core::liveness::pid_is_alive(pid) && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            !aida_core::liveness::pid_is_alive(pid),
+            "sleeping descendant {pid} survived the group timeout"
+        );
+    }
+
+    // Both failure paths must yield serializable failed evidence, including an
+    // oracle that prints a passing marker before hanging (never a partial score).
+    // trace:TASK-1791 | ai:codex
+    #[test]
+    fn installer_and_oracle_limits_produce_private_failed_trial_records() {
+        for (installer, output_limit) in
+            [(true, false), (false, false), (true, true), (false, true)]
+        {
+            let dir = TempDir::new().unwrap();
+            let repo = TempDir::new().unwrap();
+            super::super::git(repo.path(), &["init", "-b", "main"]).unwrap();
+            super::super::git(repo.path(), &["config", "user.name", "Test"]).unwrap();
+            super::super::git(repo.path(), &["config", "user.email", "test@example.com"]).unwrap();
+            let script = if output_limit {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\nprivate-test-value\\n'\nhead -c 1048577 /dev/zero\nsleep 60\n"
+            } else {
+                "#!/bin/sh\nprintf 'ok   - premature pass\\n'\nsleep 60\n"
+            };
+            std::fs::write(repo.path().join("oracle.sh"), script).unwrap();
+            std::fs::set_permissions(
+                repo.path().join("oracle.sh"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            super::super::git(repo.path(), &["add", "."]).unwrap();
+            super::super::git(repo.path(), &["commit", "-m", "oracle"]).unwrap();
+            let sha =
+                String::from_utf8(super::super::git(repo.path(), &["rev-parse", "HEAD"]).unwrap())
+                    .unwrap();
+            let cfg = config(&["oracle.sh"]);
+            let mut cfg = cfg;
+            if installer {
+                cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), script.into()]);
+            }
+            let cache = tempfile::tempdir_in("/var/tmp").unwrap();
+            let bundle = OracleBundle::freeze_in_cache(
+                repo.path(),
+                sha.trim().into(),
+                &cfg.oracle_paths,
+                dir.path(),
+                cache.path(),
+            )
+            .unwrap();
+            let mut env = ScoreEnv::new(&cfg, true).unwrap();
+            env.command_timeout = std::time::Duration::from_secs(1);
+            // A mapped input activates R1/R2 diagnostic privacy filtering.
+            env.oracle_environment
+                .insert("FIXTURE_INPUT".into(), "private-test-value".into());
+            let start = std::time::Instant::now();
+            let record = run_trial_in_env(
+                &cfg,
+                dir.path(),
+                manifest(),
+                "fixture",
+                "test",
+                "test",
+                true,
+                env,
+                &bundle,
+                None,
+            )
+            .unwrap();
+            assert!(start.elapsed() < std::time::Duration::from_secs(5));
+            assert_eq!(
+                record.status,
+                if installer { "install_failed" } else { "error" }
+            );
+            let reason = if output_limit {
+                "output limit exceeded"
+            } else {
+                "timed out"
+            };
+            assert!(record.error.as_ref().unwrap().contains(reason));
+            assert!(record.flags.iter().any(|flag| flag
+                == match (installer, output_limit) {
+                    (true, false) => "installer_timeout",
+                    (false, false) => "oracle_timeout",
+                    (true, true) => "installer_output_limit",
+                    (false, true) => "oracle_output_limit",
+                }));
+            assert!(!record
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("private-test-value"));
+            assert!(record.aggregate.is_none());
+            assert!(record.checks.is_empty());
+            assert!(!record.clean);
+            let persisted = serde_json::to_value(&record).unwrap();
+            assert!(persisted["error"].as_str().unwrap().contains(reason));
         }
     }
 
@@ -906,6 +1201,11 @@ mod tests {
 
     #[test]
     fn execution_has_private_env_and_installer_prefix_and_records_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "test \"$HOME\" != /root && test -d \"$HOME\" && test -d \"$XDG_CONFIG_HOME\" && test -d \"$XDG_RUNTIME_DIR\" && test -z \"${CARGO_HOME+x}\" && test -z \"${RUSTUP_HOME+x}\" && \"$AIDA_REGEN_PREFIX/bin/regen-fixture-tool\" && printf 'ok   - private environment\\nFAIL - assertion\\n'"]);
         cfg.install_command = Some(vec!["/bin/sh".into(), "-c".into(), "printf '#!/bin/sh\\nexit 0\\n' > \"$PREFIX/bin/regen-fixture-tool\"; chmod +x \"$PREFIX/bin/regen-fixture-tool\"".into()]);
@@ -932,6 +1232,11 @@ mod tests {
 
     #[test]
     fn guard_fallback_is_reported_and_can_never_be_clean_even_with_passing_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let cfg = config(&[
             "/bin/sh",
@@ -963,6 +1268,11 @@ mod tests {
 
     #[test]
     fn oracle_ignores_prefix_shadow_and_uses_fresh_python_home() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1005,6 +1315,11 @@ PYTHON
 
     #[test]
     fn confined_installer_survivor_is_recorded_without_suppressing_raw_score() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1098,6 +1413,11 @@ os.close(f)
 
     #[test]
     fn bare_required_system_tool_uses_guard_and_forbids_clean() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1120,6 +1440,11 @@ os.close(f)
 
     #[test]
     fn python_default_subprocess_records_guard_hit_without_inherited_fd() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1147,6 +1472,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn exit_policy_distinguishes_installer_failure_oracle_checks_and_scoring_errors() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let mut cfg = config(&["/bin/sh", "-c", "printf 'ok   - check\\n'; exit 7"]);
         let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
@@ -1159,7 +1489,7 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
         assert_eq!(record.status, "install_failed");
         assert_eq!(record.install_exit, Some(3));
         assert!(record.oracle_exit.is_none() && record.aggregate.is_none());
-        cfg.install_command = None;
+        cfg.install_command = Some(vec!["/bin/true".into()]);
         cfg.oracle_command = vec![
             "/bin/sh".into(),
             "-c".into(),
@@ -1173,20 +1503,18 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn default_installer_runs_when_present_and_manifest_tampering_refuses() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("install.sh");
         std::fs::write(&path, "#!/bin/sh\nexit 12\n").unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let record = run_trial(
-            &config(&["/bin/sh", "-c", "echo 'ok   - never'"]),
-            dir.path(),
-            manifest(),
-            "m",
-            "v",
-            "h",
-            true,
-        )
-        .unwrap();
+        let mut cfg = config(&["/bin/sh", "-c", "echo 'ok   - never'"]);
+        cfg.install_command = None;
+        let record = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
         assert_eq!(record.status, "install_failed");
         assert_eq!(record.install_exit, Some(12));
         let corpus = dir.path().join("corpus");
@@ -1207,6 +1535,120 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
             .contains("hash mismatch"));
     }
 
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn own_installer_keeps_bin_and_lib_layouts_equivalent_and_missing_install_is_distinct() {
+        let mut cfg = config(&["/bin/sh", "-c", "test \"$(\"$AIDA_REGEN_PREFIX/bin/tool\")\" = real && printf 'ok   - installed tool\\n'"]);
+        cfg.install_command = None;
+        for layout in ["bin", "lib"] {
+            let source = TempDir::new().unwrap();
+            std::fs::create_dir(source.path().join(layout)).unwrap();
+            std::fs::write(
+                source.path().join(layout).join("tool"),
+                "#!/bin/sh\nprintf real\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(
+                source.path().join(layout).join("tool"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            let installer = format!(
+                r#"#!/bin/sh
+set -eu
+test -z "${{AIDA_REGEN_CHECK_RESULTS+x}}"
+mkdir -p "$PREFIX/{layout}" "$PREFIX/bin"
+cp {layout}/tool "$PREFIX/{layout}/tool"
+"#
+            );
+            let installer = if layout == "lib" {
+                format!("{installer}printf '#!/bin/sh\\nexec \"%s/lib/tool\"\\n' \"$PREFIX\" > \"$PREFIX/bin/tool\"\nchmod +x \"$PREFIX/bin/tool\"\n")
+            } else {
+                installer
+            };
+            std::fs::write(source.path().join("install.sh"), installer).unwrap();
+            std::fs::set_permissions(
+                source.path().join("install.sh"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+            let result = run_trial(&cfg, source.path(), manifest(), "m", "v", "h", true).unwrap();
+            assert_eq!(result.status, "scored", "{:?}", result.error);
+            assert_eq!(result.install_exit, Some(0));
+            assert_eq!(result.aggregate.unwrap().pass_rate, 1.0);
+            assert_eq!(
+                std::fs::read_dir(source.path()).unwrap().count(),
+                2,
+                "input remains untouched"
+            );
+        }
+        let empty = TempDir::new().unwrap();
+        let result = run_trial(&cfg, empty.path(), manifest(), "m", "v", "h", true).unwrap();
+        assert_eq!(result.status, "install_failed");
+        assert!(
+            result.install_exit.is_none()
+                && result.oracle_exit.is_none()
+                && result.aggregate.is_none()
+        );
+        assert!(result.error.unwrap().contains("no declared installer"));
+        cfg.install_command = Some(vec!["./missing-installer".into()]);
+        let result = run_trial(&cfg, empty.path(), manifest(), "m", "v", "h", true).unwrap();
+        assert_eq!(result.status, "install_failed");
+        assert!(result.error.unwrap().contains("installer launch failed"));
+    }
+
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn oracle_sidecar_capture_flags_and_roundtrips_without_marker_guessing() {
+        let dir = TempDir::new().unwrap();
+        for (diagnostic, crash, unknown) in [
+            (
+                r#"printf '%s\n' '{"v":1,"check":"Traceback usage 127","kind":"crash","exit":127}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                1,
+                0,
+            ),
+            (
+                r#"printf '%s\n' '{"v":1,"check":"Traceback usage 127","kind":"assertion","exit":127}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                0,
+                0,
+            ),
+            (
+                r#"printf '%s\n' '{"v":2,"check":"Traceback usage 127","kind":"crash"}' > "$AIDA_REGEN_CHECK_RESULTS""#,
+                0,
+                1,
+            ),
+            (":", 0, 1),
+        ] {
+            let script = format!("{diagnostic}\nprintf 'FAIL - Traceback usage 127\\n'");
+            let mut cfg = config(&["/bin/sh", "-c", &script]);
+            cfg.install_command = Some(vec![
+                "/bin/sh".into(),
+                "-c".into(),
+                "test -z \"${AIDA_REGEN_CHECK_RESULTS+x}\"".into(),
+            ]);
+            let mut row = run_trial(&cfg, dir.path(), manifest(), "m", "v", "h", true).unwrap();
+            assert_eq!(row.status, "scored", "{:?}", row.error);
+            let counts = diagnostics::summary(&row);
+            assert_eq!((counts.crashes, counts.unknown), (crash, unknown));
+            diagnostics::flag_trial(&mut row);
+            assert_eq!(
+                row.flags.iter().any(|f| f.starts_with("crash-dominated:")),
+                crash > 0
+            );
+            assert_eq!(
+                row.flags.iter().any(|f| f.starts_with("unclassified:")),
+                unknown > 0
+            );
+            let copy: TrialRecord =
+                serde_json::from_slice(&serde_json::to_vec(&row).unwrap()).unwrap();
+            assert_eq!(diagnostics::summary(&copy).unknown, unknown);
+            assert_eq!(diagnostics::summary(&copy).crashes, crash);
+        }
+        for threshold in ["-1", "101", "256", "0.5"] {
+            assert!(RegenConfig::parse(&format!("[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\ncrash_failure_share_percent={threshold}")).is_err());
+        }
+    }
+
     #[test]
     fn unavailable_bwrap_refuses_without_explicit_override() {
         if !matches!(
@@ -1219,6 +1661,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn confined_run_uses_existing_helper_when_available() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -1308,6 +1755,11 @@ print(('ok   - ' if r.returncode == 0 and r.stdout == 'sentinel\n' else 'FAIL - 
 
     #[test]
     fn trial_persistence_keeps_unrelated_staged_edits_and_roundtrips_checks() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let store = TempDir::new().unwrap();
         super::super::git(store.path(), &["init", "-b", "main"]).unwrap();
         super::super::git(store.path(), &["config", "user.email", "test@example.com"]).unwrap();

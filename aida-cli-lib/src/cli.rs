@@ -201,6 +201,41 @@ pub enum InternalCommand {
     SoloActive,
 }
 
+/// `aida mandate` — the fire-fighting mandate.
+// trace:STORY-1698 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum MandateAction {
+    /// Start a time-boxed mandate that lets the advisor seat ship held PRs
+    /// with an attested, independent approval and green CI. Start and stop
+    /// require a human at an interactive terminal; a same-uid process that
+    /// forges files in the AIDA home is outside the threat model (the same
+    /// as session grants).
+    Start {
+        /// Cover shipping held PRs (the only scope today; required).
+        #[clap(long)]
+        ship_held: bool,
+        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
+        /// A mandate cannot be extended; stop it and start another.
+        #[clap(long)]
+        ttl: Option<String>,
+        /// Why the mandate exists, recorded with it.
+        #[clap(long)]
+        reason: Option<String>,
+        /// Also cover sensitive specs (security, containment, authority,
+        /// guided, keystone). Operator-only specs are never covered.
+        #[clap(long)]
+        include_supervised: bool,
+    },
+    /// End the active mandate now. Human at an interactive terminal only.
+    Stop,
+    /// Show the current mandate, if any.
+    Status {
+        /// Print JSON.
+        #[clap(long)]
+        json: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum MergeHoldAction {
     /// Release eligible Rework-only holds using a fresh recorded approval.
@@ -2451,6 +2486,11 @@ pub enum RoleCommand {
         // trace:STORY-1473, TASK-1592 | ai:antigravity
         #[clap(long = "delegate-seat")]
         delegate_seats: Vec<String>,
+
+        /// Grant time-to-live duration (e.g. 72h), capped by [seat] max_grant_hours (default 24, hard ceiling 168h).
+        // trace:TASK-1787 | ai:antigravity
+        #[clap(long)]
+        ttl: Option<String>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -8512,6 +8552,10 @@ pub enum UsageCommand {
         // trace:TASK-1434 | ai:codex
         #[clap(long)]
         cost: bool,
+        /// Per-write author/session/harness context with session usage at write time.
+        // trace:STORY-1674 | ai:codex
+        #[clap(long, conflicts_with = "cost")]
+        provenance: bool,
         #[clap(long)]
         json: bool,
         #[clap(long, conflicts_with = "json")]
@@ -10380,6 +10424,16 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
         description_stdin: bool,
 
+        /// Replace the data-only constraint verification block with JSON.
+        /// Probes run only with `aida verify constraints`.
+        // trace:STORY-1673 | ai:codex
+        #[clap(long, value_name = "JSON", conflicts_with = "clear_verify")]
+        verify: Option<String>,
+
+        /// Remove a constraint's verification block.
+        #[clap(long)]
+        clear_verify: bool,
+
         /// New status (draft, approved, planned, in-progress, done,
         /// completed, rejected, superseded). Needs Attention is set via
         /// `aida punt`. `superseded` = adopted, then replaced by a later
@@ -11192,6 +11246,17 @@ pub enum Command {
     MergeHold {
         #[clap(subcommand)]
         action: MergeHoldAction,
+    },
+
+    /// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
+    /// advisor seat ship held PRs with an attested, independent approval.
+    ///
+    /// `start` and `stop` need a human at an interactive terminal; `status`
+    /// is open to anyone. Operator-only specs always stay human-only.
+    // trace:STORY-1698 | ai:claude
+    Mandate {
+        #[clap(subcommand)]
+        action: MandateAction,
     },
 
     /// Stream a running session's log — found by id, not by file path.
@@ -13950,6 +14015,12 @@ pub enum Command {
         json: bool,
     },
 
+    /// Explicit, report-only host verification using built-in probes.
+    /// Never executes a command from the requirements store.
+    // trace:STORY-1673 | ai:codex
+    #[clap(subcommand)]
+    Verify(VerifyCommand),
+
     /// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
     /// --diagram` prints a Mermaid state diagram generated from the single
     /// declared transition model in `aida-core`, so the picture can't drift
@@ -14233,6 +14304,26 @@ pub enum Command {
         json: bool,
         #[clap(subcommand)]
         command: Option<AliasCommand>,
+    },
+}
+
+/// The closed, explicit host-verification command group.
+// trace:STORY-1673 | ai:codex
+#[derive(Subcommand, Debug)]
+pub enum VerifyCommand {
+    /// Compare constraint verify blocks with this Linux host. Read-only.
+    Constraints {
+        /// Emit one match/drift/unknown/invalid result per configured row.
+        #[clap(long)]
+        json: bool,
+        /// Return a nonzero exit only when a row reports drift.
+        #[clap(long)]
+        fail_on_drift: bool,
+        /// Also list rejected, superseded and archived constraints, which are
+        /// never probed. JSON output always includes them.
+        // trace:STORY-1673 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 }
 
@@ -16819,22 +16910,49 @@ pub enum RegenCommand {
     // trace:TASK-1730 | ai:codex
     Score {
         /// Regenerated system directory; copied into a fresh scoring root
-        #[clap(required_unless_present = "control", conflicts_with = "control")]
+        #[clap(required_unless_present_any = ["control", "consensus"], conflicts_with_all = ["control", "consensus"])]
         dir: Option<PathBuf>,
         /// Run generated controls instead of a caller-supplied system
-        #[clap(long, value_enum)]
+        #[clap(long, value_enum, conflicts_with = "consensus")]
         control: Option<RegenControl>,
         /// Corpus directory containing corpus.json and manifest.json
-        #[clap(long)]
-        corpus: PathBuf,
-        #[clap(long)]
-        model: String,
-        #[clap(long)]
-        vendor: String,
-        #[clap(long)]
-        harness: String,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        corpus: Option<PathBuf>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        model: Option<String>,
+        /// Explicit family identity for cross-family oracle audits (no inferred mapping)
+        // trace:STORY-1676 | ai:codex
+        #[clap(long, conflicts_with = "consensus")]
+        model_family: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        vendor: Option<String>,
+        #[clap(
+            long,
+            required_unless_present = "consensus",
+            conflicts_with = "consensus"
+        )]
+        harness: Option<String>,
+        /// Compare at least three committed scored ordinary trials; never executes tools
+        // trace:STORY-1679 | ai:codex
+        #[clap(long, num_args = 3..)]
+        consensus: Vec<uuid::Uuid>,
+        /// File draft amendment tasks for consensus gaps (report-only by default)
+        #[clap(long, requires = "consensus")]
+        file: bool,
         /// Explicitly bypass bubblewrap; the recorded trial is never clean
-        #[clap(long)]
+        #[clap(long, conflicts_with = "consensus")]
         unconfined: bool,
     },
 

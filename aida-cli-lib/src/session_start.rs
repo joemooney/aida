@@ -414,6 +414,18 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
             .args(["fetch", "origin", &refspec])
             .output()?;
         if !fetch.status.success() {
+            // TASK-1784: a branch that was never pushed has nothing on origin
+            // to align with — the local branch IS the work (pure-git reports
+            // it as the change). Only a confirmed absence (`ls-remote` exit 2)
+            // proceeds; a network or auth failure still refuses.
+            // trace:TASK-1784 | ai:claude
+            if remote_branch_absent(project_root, branch) {
+                eprintln!(
+                    "  {} branch `{branch}` was never pushed — reusing the local branch as is",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt)
+                );
+                return Ok(());
+            }
             anyhow::bail!(
                 "could not refresh PR branch `{branch}` from origin before launch: {}",
                 String::from_utf8_lossy(&fetch.stderr).trim()
@@ -421,6 +433,22 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
         }
     }
     align_reused_pr_branch_with_status(project_root, branch, has_open_pr)
+}
+
+/// TASK-1784: origin answered and has no `refs/heads/<branch>`.
+/// `git ls-remote --exit-code` exits 2 exactly when no ref matched; any other
+/// failure (unreachable remote, auth) is not proof of absence.
+// trace:TASK-1784 | ai:claude
+fn remote_branch_absent(project_root: &std::path::Path, branch: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-remote", "--exit-code", "--heads", "origin"])
+        .arg(format!("refs/heads/{branch}"))
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.code() == Some(2))
 }
 
 pub(crate) fn align_reused_pr_branch_with_status(
@@ -1004,8 +1032,14 @@ pub(crate) fn clear_worktree_session_leases(
             .worktree_path
             .canonicalize()
             .unwrap_or_else(|_| lease.worktree_path.clone());
-        if lease_wt == target && std::fs::remove_file(lease_path(project_root, &lease.id)).is_ok() {
-            removed += 1;
+        if lease_wt == target {
+            let path = lease_path(project_root, &lease.id);
+            // Revoke while the grant handle is still readable in the lease.
+            // trace:TASK-1789 | ai:codex
+            crate::session::revoke_lease_child_grant(&path);
+            if std::fs::remove_file(path).is_ok() {
+                removed += 1;
+            }
         }
     }
     removed
@@ -1132,6 +1166,9 @@ pub(crate) fn session_start(
     // BUG-2010: true when caller is working the lease itself (self-claim).
     // false when launching/spawning another agent (agent new, session start --launch).
     self_claim: bool,
+    // BUG-2169: the seat this session is for runs contained, so under
+    // `[contained] seat_tree = "clone"` it gets a private clone, not a worktree.
+    contained_seat: bool,
 ) -> Result<()> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -1164,6 +1201,10 @@ pub(crate) fn session_start(
             launch_set_title,
         );
     }
+    // BUG-2169: decide the tree kind before any claim or lease is written, so
+    // a malformed knob refuses with nothing to undo.
+    // trace:BUG-2169 | ai:claude
+    let tree_kind = crate::seat_clone::tree_kind_for_launch(&project_root, contained_seat)?;
     let invoking_root = find_project_root().unwrap_or_else(|_| project_root.clone());
     let invoked_from_linked_worktree = invoking_root
         .canonicalize()
@@ -1474,7 +1515,59 @@ pub(crate) fn session_start(
     let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
-    if reuse_existing_worktree_path {
+    // BUG-2169: owns a just-made seat clone until the lease is written; any
+    // error in between removes the clone and releases its pin.
+    // trace:BUG-2169 | ai:claude
+    let mut clone_cleanup: Option<crate::seat_clone::CloneCleanupGuard> = None;
+    if tree_kind == crate::seat_clone::TreeKind::Clone {
+        // BUG-2169: a contained seat gets a private clone. There is no
+        // worktree fallback: any failure refuses the launch.
+        // trace:BUG-2169 | ai:claude
+        if reuse_existing_worktree_path || review_target.is_some() {
+            anyhow::bail!(
+                "a contained seat with `[contained] seat_tree = \"clone\"` cannot {} yet; \
+                 launch it from an uncontained shell, or set seat_tree = \"worktree\"",
+                if review_target.is_some() {
+                    "start a review session"
+                } else {
+                    "re-enter an existing --path"
+                }
+            );
+        }
+        let base_ref = if reuse_existing {
+            if session_git_ref_exists(&project_root, &format!("refs/heads/{branch_name}")) {
+                branch_name.clone()
+            } else {
+                format!("origin/{branch_name}")
+            }
+        } else {
+            match base {
+                Some(b) => b.to_string(),
+                None => detect_default_branch_ref(&project_root).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "cannot create a private clone for this contained seat: the project's \
+                         default branch could not be resolved (pass --base)"
+                    )
+                })?,
+            }
+        };
+        if explicit_path.is_none() {
+            worktree_path = crate::seat_clone::clone_path(&project_root, &slug)?;
+        }
+        let created =
+            crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref)?;
+        eprintln!(
+            "{} private clone for this contained seat: {} [{}] at {}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            created.path.display(),
+            branch_name,
+            &created.base_sha[..created.base_sha.len().min(10)],
+        );
+        clone_cleanup = Some(crate::seat_clone::CloneCleanupGuard::new(
+            &project_root,
+            &created,
+        ));
+    } else if reuse_existing_worktree_path {
         let current = current_branch_at(&worktree_path);
         if current.as_deref() != Some(branch_name.as_str()) {
             anyhow::bail!(
@@ -2098,6 +2191,8 @@ pub(crate) fn session_start(
         branch: branch_name.clone(),
         started_at: chrono::Utc::now(),
         hostname: hostname(),
+        // trace:BUG-2169 | ai:claude
+        tree_kind,
         role: inherited_role.clone(),
         creator_pid,
         creator_pid_start_time,
@@ -2142,11 +2237,17 @@ pub(crate) fn session_start(
         interrupted_at: None,
         interrupted_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
+        child_grant_id: None,
     };
     let lease_file = lease_path(&project_root, &id);
     // STORY-1429: atomic, so a reader never sees a half-written lease.
     // trace:STORY-1429 | ai:claude
+    // trace:BUG-2169 | ai:claude
+    crate::seat_clone::failpoint::check_before_lease()?;
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    if let Some(guard) = clone_cleanup.as_mut() {
+        guard.disarm();
+    }
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     review_authority::record_authoring_lease(&project_root, &lease);

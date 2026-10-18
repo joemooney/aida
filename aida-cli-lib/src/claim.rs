@@ -150,6 +150,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     let refreshed = existing.is_some();
 
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: scope.clone(),
         slug: slugify(&scope),
@@ -183,6 +184,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
         interrupted_at: None,
         interrupted_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
+        child_grant_id: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;

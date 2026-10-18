@@ -510,6 +510,17 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "no",
         edit: EditSafety::Bool { default: false },
     },
+    // --- [seat] — seat authority grant policies (read-only: security-relevant). ---
+    // trace:TASK-1787 | ai:antigravity
+    KnobSpec {
+        section: "seat",
+        key: "max_grant_hours",
+        doc: "Maximum role grant lifetime in hours (default 24, hard ceiling 168h).",
+        default: "24",
+        edit: EditSafety::ReadOnly {
+            reason: "grant lifetime ceiling — edit ~/.aida/config.toml or .aida/config.toml deliberately",
+        },
+    },
     // --- [burndown]. ---
     KnobSpec {
         section: "burndown",
@@ -2973,6 +2984,44 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         }
     });
 
+    // --- [seat] — seat authority grant policies (TASK-1787). ---
+    // trace:TASK-1787 | ai:antigravity
+    sections.push({
+        let global_hours = aida_home_dir()
+            .map(|h| h.join(".aida/config.toml"))
+            .and_then(|p| crate::seat_authority::read_max_grant_hours_file(&p));
+        let project_path = project_root.join(".aida").join("config.toml");
+        let project_hours = crate::seat_authority::read_max_grant_hours_file(&project_path);
+        let (effective, source) = match (global_hours, project_hours) {
+            (Some(g), Some(p)) => {
+                if g <= p {
+                    (g, PolicySource::GlobalConfig)
+                } else {
+                    (p, PolicySource::ProjectConfig)
+                }
+            }
+            (Some(g), None) => (g, PolicySource::GlobalConfig),
+            (None, Some(p)) => (
+                std::cmp::min(crate::seat_authority::DEFAULT_MAX_GRANT_HOURS, p),
+                PolicySource::ProjectConfig,
+            ),
+            (None, None) => (
+                crate::seat_authority::DEFAULT_MAX_GRANT_HOURS,
+                PolicySource::Default,
+            ),
+        };
+        let effective = std::cmp::min(effective, crate::seat_authority::HARD_CEILING_GRANT_HOURS);
+        PolicySection {
+            section: "seat",
+            header: "[seat] — seat authority grant policy".to_string(),
+            rows: vec![PolicyRow {
+                key: "max_grant_hours",
+                value: format!("{effective}h"),
+                source,
+            }],
+        }
+    });
+
     sections
 }
 
@@ -4722,6 +4771,7 @@ mod bug_1667_bypass_gate_tests {
                     project_root: root.to_path_buf(),
                     stdin_is_terminal: stdin,
                     stdout_is_terminal: stdout,
+                    stderr_is_terminal: false,
                 },
             )))
         }

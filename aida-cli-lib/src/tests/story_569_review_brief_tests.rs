@@ -79,6 +79,7 @@ fn file_zen_review_brief_short_circuits() {
     let root = tmp.path();
 
     let lease = |scope: &str| SessionLease {
+        tree_kind: Default::default(),
         id: "zen001".into(),
         scope: scope.into(),
         slug: scope.to_lowercase(),
@@ -107,6 +108,7 @@ fn file_zen_review_brief_short_circuits() {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     };
 
     // Handoff disabled → None, no side effects.

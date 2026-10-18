@@ -2,6 +2,7 @@ use super::*;
 
 fn lease_for(scope: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "019ebug574xyz".to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -30,6 +31,7 @@ fn lease_for(scope: &str) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

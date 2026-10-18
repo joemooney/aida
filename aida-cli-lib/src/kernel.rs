@@ -6,14 +6,9 @@ use crate::*;
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
 /// Format recommendation: "ai:claude:username" for AI-assisted work
 pub(crate) fn get_default_author() -> String {
-    if let Ok(author) = std::env::var("AIDA_AUTHOR") {
-        author
-    } else {
-        // Fall back to system username
-        std::env::var("USER")
-            .or_else(|_| std::env::var("USERNAME")) // Windows fallback
-            .unwrap_or_else(|_| "Unknown".to_string())
-    }
+    // One resolution shared with the store's write events.
+    // trace:STORY-1674 | ai:claude
+    aida_core::provenance::default_author()
 }
 
 /// Short build SHA for telemetry tagging. Reads the same banner that
@@ -222,6 +217,17 @@ pub(crate) fn authority_stdout_is_terminal() -> bool {
     std::io::stdout().is_terminal()
 }
 
+/// TASK-1787: whether stderr is an interactive terminal, through the same test seam as
+/// [`authority_stdin_is_terminal`].
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn authority_stderr_is_terminal() -> bool {
+    #[cfg(test)]
+    if let Some(tty) = test_ambient::stderr_is_terminal() {
+        return tty;
+    }
+    std::io::stderr().is_terminal()
+}
+
 /// BUG-1618: test-only, per-thread override of the ambient inputs the
 /// authority checks read (project root discovered from cwd, stdin TTY-ness).
 /// Thread-local, so a test pinning it never leaks into a sibling test running
@@ -239,6 +245,8 @@ pub(crate) mod test_ambient {
         pub(crate) stdin_is_terminal: bool,
         // trace:BUG-1667 | ai:claude
         pub(crate) stdout_is_terminal: bool,
+        // trace:TASK-1787 | ai:antigravity
+        pub(crate) stderr_is_terminal: bool,
     }
 
     thread_local! {
@@ -261,6 +269,11 @@ pub(crate) mod test_ambient {
     // trace:BUG-1667 | ai:claude
     pub(crate) fn stdout_is_terminal() -> Option<bool> {
         AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stdout_is_terminal))
+    }
+
+    // trace:TASK-1787 | ai:antigravity
+    pub(crate) fn stderr_is_terminal() -> Option<bool> {
+        AMBIENT.with(|a| a.borrow().as_ref().map(|x| x.stderr_is_terminal))
     }
 }
 

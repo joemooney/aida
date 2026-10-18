@@ -196,7 +196,7 @@ pub(super) struct AdapterRecord {
     adapter_input_sha256: String,
     mappings: Vec<Mapping>,
     r1: R1Scores,
-    r2: Box<TrialRecord>,
+    pub(super) r2: Box<TrialRecord>,
     raw_delta: Option<f64>,
     discriminating_delta: Option<f64>,
 }
@@ -348,7 +348,18 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
         // Withhold the entire diagnostic: truncation or encoding could otherwise
         // leave a fragment of an echoed captured value. Status/exits survive.
         record.error = Some(
-            if record.status == "install_failed" {
+            // Fixed scorer-owned flags preserve the failure class without
+            // retaining command paths or child-controlled diagnostic text.
+            // trace:TASK-1791 | ai:codex
+            if record.flags.iter().any(|flag| flag == "installer_timeout") {
+                "installer timed out; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "oracle_timeout") {
+                "oracle timed out; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "installer_output_limit") {
+                "installer output limit exceeded; child diagnostics withheld for mapped input privacy"
+            } else if record.flags.iter().any(|flag| flag == "oracle_output_limit") {
+                "oracle output limit exceeded; child diagnostics withheld for mapped input privacy"
+            } else if record.status == "install_failed" {
                 "installer failed; child diagnostics withheld for mapped input privacy"
             } else {
                 "scoring failed; child diagnostics withheld for mapped input privacy"
@@ -359,6 +370,7 @@ pub(super) fn sanitize_output(record: &mut TrialRecord, env: &BTreeMap<String, S
     for value in env.values().filter(|v| !v.is_empty()) {
         if record.checks.iter().any(|c| c.name.contains(value)) {
             record.checks.clear();
+            record.failure_diagnostics = None;
             record.aggregate = None;
             record.status = "error".into();
             record.error =
@@ -587,6 +599,11 @@ mod tests {
 
     #[test]
     fn optional_input_requires_regular_file_and_invalid_metadata_does_not_capture() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let root = tempfile::tempdir().unwrap();
         assert!(CapturedAdapter::load(root.path()).unwrap().is_none());
         std::fs::write(root.path().join("other"), "format_version=1").unwrap();
@@ -631,6 +648,9 @@ mod tests {
             oracle_command: vec!["oracle.sh".into()],
             oracle_paths: vec!["oracle.sh".into()],
             reference_repeats: 1,
+            crash_failure_share_percent: 50,
+            min_bytes: 64,
+            components: BTreeMap::new(),
             required_tools: vec!["regen-fixture-tool".into()],
             install_command: Some(vec!["/bin/sh".into(), "-c".into(), installer.into()]),
         };
@@ -696,6 +716,11 @@ mod tests {
 
     #[test]
     fn renamed_env_flips_r1_to_r2_with_fresh_installs_and_full_evidence() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let record = pair(RENAMED, INSTALL, false);
         assert_eq!(record.status, "scored", "{:?}", record.error);
         assert_eq!(record.aggregate.as_ref().unwrap().pass_rate, 0.0);
@@ -718,6 +743,11 @@ mod tests {
 
     #[test]
     fn confined_pair_uses_trusted_path_and_fresh_environment() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -735,6 +765,11 @@ mod tests {
 
     #[test]
     fn r2_mismatch_errors_and_contamination_cannot_hide_behind_passing_r1() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         for oracle in [
             "if test -n \"${REGENERATED_NAME-}\"; then printf 'ok   - other\\n'; else printf 'ok   - original\\n'; fi",
             "if test -n \"${REGENERATED_NAME-}\"; then echo 'ok - loose'; exit 4; else printf 'ok   - original\\n'; fi",
@@ -755,6 +790,11 @@ mod tests {
 
     #[test]
     fn installer_failure_retains_both_runs_and_legacy_record_has_no_adapter() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let record = pair(RENAMED, "exit 13", false);
         assert_eq!(record.status, "install_failed");
         let r2 = &record.adapter.as_ref().unwrap().r2;
@@ -771,6 +811,11 @@ mod tests {
 
     #[test]
     fn r2_setup_failure_is_durable_without_borrowing_r1_execution_evidence() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let record = pair_with_setup("printf 'ok   - fixed\\n'", INSTALL, false, true);
         assert_eq!(record.status, "adapter_refused");
         assert_eq!(record.aggregate.as_ref().unwrap().pass_rate, 1.0);
@@ -788,6 +833,11 @@ mod tests {
 
     #[test]
     fn child_output_cannot_persist_mapped_values() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let oracle = "if test -n \"${REGENERATED_NAME-}\"; then printf 'FAIL - %s\\n' \"$REGENERATED_NAME\"; else printf 'ok   - fixed\\n'; fi";
         let record = pair(oracle, INSTALL, false);
         assert_eq!(record.status, "adapter_refused");

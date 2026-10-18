@@ -867,6 +867,12 @@ impl GitBackend {
         if incoming.external_refs.is_empty() && !disk.external_refs.is_empty() {
             incoming.external_refs = disk.external_refs.clone();
         }
+        // Preserve data omitted by full-store projection callers. Targeted
+        // edits can still explicitly clear a verify block.
+        // trace:STORY-1673 | ai:codex
+        if incoming.verify.is_none() {
+            incoming.verify = disk.verify.clone();
+        }
         if incoming.risk_notes.is_none() {
             incoming.risk_notes = disk.risk_notes.clone();
         }
@@ -883,19 +889,141 @@ impl GitBackend {
             incoming.failure_reason = disk.failure_reason.clone();
         }
 
-        for comment in &mut incoming.comments {
-            if comment.session_id.is_some() {
-                continue;
-            }
-            if let Some(old) = disk.comments.iter().find(|old| old.id == comment.id) {
-                comment.session_id = old.session_id.clone();
-            }
-        }
-        // CR-8: filing provenance is write-once — the on-disk stamp wins.
-        // trace:CR-8 | ai:claude
+        // Context preservation/stamping is shared with targeted and transaction writes.
+        // trace:STORY-1674 | ai:codex
         crate::provenance::preserve_from_disk(&mut incoming, disk);
+        if disk.hypothesis_lock.is_some() {
+            incoming.hypothesis_lock = disk.hypothesis_lock.clone();
+        }
 
         incoming
+    }
+
+    /// Preflight hypothesis locks against the canonical graph under StoreLock.
+    /// Append lock-only writes for rows affected indirectly by a result change.
+    /// Call once for the ENTIRE transaction, before metadata, oplog or YAML writes.
+    // trace:STORY-1675 | ai:codex
+    fn prepare_hypothesis_updates(
+        &self,
+        updates: &mut Vec<Requirement>,
+        deleted: &[String],
+    ) -> Result<()> {
+        use std::collections::{HashMap, HashSet};
+        if updates.is_empty() && deleted.is_empty() {
+            return Ok(());
+        }
+        let mut ids = HashSet::new();
+        let mut specs = HashSet::new();
+        for row in updates.iter() {
+            if row.spec_id.is_none() {
+                anyhow::bail!("cannot update requirement without spec_id; nothing was written");
+            }
+            if !ids.insert(row.id)
+                || row
+                    .spec_id
+                    .as_deref()
+                    .is_some_and(|sid| !specs.insert(object_store::canonical_spec_id(sid)))
+            {
+                anyhow::bail!("duplicate requirement in mutation batch; nothing was written");
+            }
+        }
+        // Refuse to overwrite an existing object whose lock evidence cannot
+        // be read. Unrelated unreadable objects keep the loader's usual policy.
+        let mut existing = Vec::with_capacity(updates.len());
+        for next in updates.iter() {
+            let old = match next.spec_id.as_deref() {
+                Some(sid) if object_store::object_exists(&self.objects_root, sid)? => Some(
+                    object_store::read_object(&self.objects_root, sid).with_context(|| {
+                        format!(
+                            "cannot validate hypothesis evidence for {sid}; nothing was written"
+                        )
+                    })?,
+                ),
+                _ => None,
+            };
+            existing.push(old);
+        }
+        // Ordinary single-row refinements cannot create or remove a result
+        // boundary. Keep the BUG-1612 no-store-scan contract for those edits.
+        // An edge change, a status change into or out of Completed, or any
+        // hypothesis tag/stamp requires the graph. trace:STORY-1675 | ai:claude
+        let completed = |r: &Requirement| r.effective_status().eq_ignore_ascii_case("completed");
+        if deleted.is_empty()
+            && updates.iter().zip(&existing).all(|(next, old)| {
+                old.as_ref().is_some_and(|old| {
+                    old.id == next.id
+                        && old.hypothesis_lock.is_none()
+                        && next.hypothesis_lock.is_none()
+                        && !crate::hypothesis::has_tag(old)
+                        && !crate::hypothesis::has_tag(next)
+                        && !completed(old)
+                        && !completed(next)
+                        && old.relationships == next.relationships
+                })
+            })
+        {
+            return Ok(());
+        }
+        let before = object_store::load_all_objects(&self.objects_root)?;
+        let mut after = before.clone();
+        after.retain(|r| !r.spec_id.as_ref().is_some_and(|s| deleted.contains(s)));
+        let by_spec: HashMap<_, _> = before
+            .iter()
+            .filter_map(|r| {
+                r.spec_id
+                    .as_deref()
+                    .map(|s| (object_store::canonical_spec_id(s), r))
+            })
+            .collect();
+        // An update carrying an existing spec_id under a NEW uuid replaces that
+        // ordinary row (re-run imports, identity repair): the old row leaves
+        // the planned graph. Hypothesis identities can never be replaced.
+        // trace:STORY-1675 | ai:claude
+        let mut replaced = HashSet::new();
+        for update in updates.iter() {
+            let Some(old) = update
+                .spec_id
+                .as_deref()
+                .and_then(|s| by_spec.get(&object_store::canonical_spec_id(s)))
+            else {
+                continue;
+            };
+            if old.id == update.id {
+                continue;
+            }
+            if old.hypothesis_lock.is_some() || crate::hypothesis::has_tag(old) {
+                anyhow::bail!(
+                    "{} cannot replace a hypothesis identity; nothing was written",
+                    old.display_id()
+                );
+            }
+            replaced.insert(old.id);
+        }
+        after.retain(|r| !replaced.contains(&r.id));
+        let mut indices: HashMap<_, _> = after.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
+        for update in updates.iter() {
+            if let Some(&i) = indices.get(&update.id) {
+                after[i] = update.clone();
+            } else {
+                indices.insert(update.id, after.len());
+                after.push(update.clone());
+            }
+        }
+        crate::hypothesis::enforce(&before, &mut after)?;
+        let update_indices: HashMap<_, _> =
+            updates.iter().enumerate().map(|(i, r)| (r.id, i)).collect();
+        let old_locks: HashMap<_, _> = before.iter().map(|r| (r.id, &r.hypothesis_lock)).collect();
+        for row in after {
+            if let Some(&i) = update_indices.get(&row.id) {
+                updates[i] = row;
+            } else if old_locks
+                .get(&row.id)
+                .is_some_and(|old| **old != row.hypothesis_lock)
+            {
+                updates.push(row);
+            }
+        }
+        Ok(())
     }
 
     /// Record the granular field ops for one requirement update and write its
@@ -916,15 +1044,17 @@ impl GitBackend {
         // differs from the on-disk one (dropped by a caller that built the
         // struct fresh, or rewritten), write the on-disk stamp back instead.
         // trace:CR-8 | ai:claude
-        let existing = object_store::read_object(&self.objects_root, spec_id).ok();
-        let provenance_fixed: Option<Requirement> = match &existing {
-            Some(old) if old.filed_at != requirement.filed_at => {
-                let mut fixed = requirement.clone();
-                crate::provenance::preserve_from_disk(&mut fixed, old);
-                Some(fixed)
-            }
-            _ => None,
+        let existing = if object_store::object_exists(&self.objects_root, spec_id)? {
+            Some(object_store::read_object(&self.objects_root, spec_id)?)
+        } else {
+            None
         };
+        let mut stamped = requirement.clone();
+        crate::provenance::stamp_write(
+            &mut stamped,
+            existing.as_ref(),
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
         // Record ops for changed fields (compare with existing if possible).
         if let Some(old) = existing {
@@ -991,8 +1121,7 @@ impl GitBackend {
             }
         }
 
-        let to_write = provenance_fixed.as_ref().unwrap_or(requirement);
-        let wrote = object_store::write_object_if_changed(&self.objects_root, to_write)?;
+        let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -1009,8 +1138,10 @@ impl GitBackend {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
+        let mut planned = requirements.to_vec();
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
         let mut changed: Vec<String> = Vec::new();
-        for requirement in requirements {
+        for requirement in &planned {
             if let Some(spec_id) = self.stage_requirement_update(requirement)? {
                 changed.push(spec_id.to_string());
             }
@@ -1071,6 +1202,8 @@ impl GitBackend {
         // write, so no lock-respecting writer can slip between them.
         let _lock = self.lock_store()?;
         let mut report = BulkAtomicReport::default();
+        let mut planned = Vec::new();
+        let mut baselines = Vec::new();
         let mut changed: Vec<String> = Vec::new();
         for target in targets {
             let Some(spec_id) = target.spec_id.as_deref() else {
@@ -1121,15 +1254,29 @@ impl GitBackend {
                     "update of {spec_id} tried to change its id or spec_id; nothing was written"
                 );
             }
-            if serde_yaml::to_string(&next)? == serde_yaml::to_string(&fresh)? {
-                report.written.push(next);
-                continue;
-            }
-            self.ensure_object_unchanged(&spec_id, &path, &before)?;
+            baselines.push((spec_id, path, before));
+            planned.push(next);
+        }
+        let accepted: std::collections::HashSet<_> = planned.iter().map(|r| r.id).collect();
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
+        for (sid, path, bytes) in baselines {
+            self.ensure_object_unchanged(&sid, &path, &bytes)?;
+        }
+        for next in planned {
             if let Some(written) = self.stage_requirement_update(&next)? {
                 changed.push(written.to_string());
             }
-            report.written.push(next);
+            // Report the stamped object as persisted, not the caller's copy.
+            // trace:STORY-1674 | ai:claude
+            if accepted.contains(&next.id) {
+                let sid = next
+                    .spec_id
+                    .as_deref()
+                    .expect("planned updates are keyed by spec_id");
+                report
+                    .written
+                    .push(object_store::read_object(&self.objects_root, sid)?);
+            }
         }
         if !changed.is_empty() {
             let paths: Vec<String> = changed
@@ -1214,6 +1361,14 @@ impl GitBackend {
     /// newer than the incoming copy is a conflict (TASK-1161).
     // trace:BUG-1612 | ai:claude
     pub(crate) fn save_reporting(&self, store: &RequirementsStore) -> Result<SaveReport> {
+        self.save_reporting_with_origin(store, false)
+    }
+
+    fn save_reporting_with_origin(
+        &self,
+        store: &RequirementsStore,
+        imported: bool,
+    ) -> Result<SaveReport> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -1234,6 +1389,19 @@ impl GitBackend {
                                                                   // filing provenance. Captured lazily, once per save.
                                                                   // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+
+        // A new path may be an existing UUID renamed by ID migration. Resolve
+        // that identity once per full save, so old unknown events remain old.
+        // trace:STORY-1674 | ai:codex
+        // Only an on-disk spec missing from the incoming store can be a
+        // rename's old path, so the map reads just those (none: no reads).
+        // trace:STORY-1674 | ai:claude
+        let incoming_specs: std::collections::HashSet<&str> = store
+            .requirements
+            .iter()
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
         for req in &store.requirements {
             let Some(ref spec_id) = req.spec_id else {
@@ -1279,16 +1447,64 @@ impl GitBackend {
                         conflicts.push(spec_id.clone());
                         continue;
                     }
-                    Self::preserve_full_save_only_fields(req.clone(), &disk)
+                    let mut next = Self::preserve_full_save_only_fields(req.clone(), &disk);
+                    if imported {
+                        crate::provenance::stamp_import_write(&mut next, Some(&disk))?;
+                    } else {
+                        crate::provenance::stamp_write(
+                            &mut next,
+                            Some(&disk),
+                            &crate::provenance::WriteContext::capture(),
+                        )?;
+                    }
+                    next
                 }
                 // Absent (or unparseable, as before): this save creates it.
                 _ => {
-                    let mut created = req.clone();
-                    if created.filed_at.is_none() {
-                        let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
-                        crate::provenance::stamp_with(&mut created, p);
+                    if previous_by_uuid.is_none() {
+                        let mut by_uuid = std::collections::HashMap::new();
+                        for (old_id, _) in existing
+                            .iter()
+                            .filter(|(id, _)| !incoming_specs.contains(id.as_str()))
+                        {
+                            if let Ok(old) = object_store::read_object(&self.objects_root, old_id) {
+                                if by_uuid.insert(old.id, old).is_some() {
+                                    anyhow::bail!("cannot resolve renamed requirement: duplicate UUID in store");
+                                }
+                            }
+                        }
+                        previous_by_uuid = Some(by_uuid);
                     }
-                    created
+                    if let Some(old) = previous_by_uuid.as_ref().and_then(|m| m.get(&req.id)) {
+                        let mut renamed = Self::preserve_full_save_only_fields(req.clone(), old);
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut renamed, Some(old))?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut renamed,
+                                Some(old),
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        renamed
+                    } else {
+                        let mut created = req.clone();
+                        if !imported && created.filed_at.is_none() {
+                            let p =
+                                filing_provenance.get_or_insert_with(crate::provenance::capture);
+                            crate::provenance::stamp_with(&mut created, p);
+                        }
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut created, None)?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut created,
+                                None,
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        created
+                    }
                 }
             };
             let caller_fp = match snapshot {
@@ -1353,6 +1569,37 @@ impl GitBackend {
             .into());
         }
         let meta_plan = meta_plan.unwrap_or(MetadataMerge { write: None });
+
+        // Lock policy is part of the all-or-nothing preflight, including
+        // full-store MCP saves and lock-only companion rows. trace:STORY-1675
+        let mut planned: Vec<_> = to_write.iter().map(|(r, _)| r.clone()).collect();
+        self.prepare_hypothesis_updates(&mut planned, &to_delete)?;
+        let caller_fps: std::collections::HashMap<_, _> =
+            to_write.iter().map(|(r, fp)| (r.id, *fp)).collect();
+        let callers: std::collections::HashMap<_, _> =
+            store.requirements.iter().map(|r| (r.id, r)).collect();
+        to_write = planned
+            .into_iter()
+            .map(|r| {
+                let fp = match caller_fps.get(&r.id) {
+                    Some(fp) => *fp,
+                    None if snapshot.is_some() => callers
+                        .get(&r.id)
+                        .map(|mine| {
+                            serde_yaml::to_string(mine)
+                                .map(|s| object_store::content_fingerprint(&s))
+                        })
+                        .transpose()?,
+                    None => None,
+                };
+                Ok((r, fp))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let written_ids: std::collections::HashSet<_> = to_write
+            .iter()
+            .filter_map(|(r, _)| r.spec_id.as_ref())
+            .collect();
+        already_current.retain(|(sid, _)| !written_ids.contains(sid));
 
         // ---- write phase ----
         if let Some(meta) = &meta_plan.write {
@@ -1427,8 +1674,10 @@ impl GitBackend {
     ///
     /// Under the store write lock: read ONLY `target`'s object file (located by
     /// its `spec_id`, identity checked against its `id`), apply `update_fn`,
-    /// and write back only that object with a targeted commit. No other object
-    /// is read, written, or deleted. Just before the write the file is re-read
+    /// and write back that object with a targeted commit. Ordinary untagged
+    /// refinements read only that object. Graph-affecting edits also preflight
+    /// hypothesis locks and may write lock-only companion rows (STORY-1675).
+    /// Just before the write the file is re-read
     /// and compared with the bytes the update started from, so a writer that
     /// bypasses the lock (an older binary, a hand edit) is detected and the
     /// update is refused instead of silently clobbering it.
@@ -1490,20 +1739,34 @@ impl GitBackend {
                 "update of {spec_id} tried to change its id or spec_id; nothing was written"
             );
         }
-        if serde_yaml::to_string(&next)? == serde_yaml::to_string(&current)? {
-            return Ok(Some(next));
-        }
-
+        let mut planned = vec![next];
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
         self.ensure_object_unchanged(&spec_id, &path, &before)?;
-        if let Some(written) = self.stage_requirement_update(&next)? {
-            let rel = object_store::relative_object_path(written)?;
-            let message = match commit_subject {
-                Some(subject) => format!("{subject}: update 1 requirement"),
-                None => format!("update {}", written),
-            };
-            self.auto_commit_paths(&message, &[&rel]);
+        let next = planned.iter().find(|r| r.id == current.id).unwrap().clone();
+        let mut paths = Vec::new();
+        for row in &planned {
+            if let Some(written) = self.stage_requirement_update(row)? {
+                paths.push(object_store::relative_object_path(written)?);
+            }
         }
-        Ok(Some(next))
+        if !paths.is_empty() {
+            let message = match commit_subject {
+                Some(subject) => format!(
+                    "{subject}: update {} requirement{}",
+                    paths.len(),
+                    if paths.len() == 1 { "" } else { "s" }
+                ),
+                None => format!("update {}", spec_id),
+            };
+            self.auto_commit_paths(
+                &message,
+                &paths.iter().map(String::as_str).collect::<Vec<_>>(),
+            );
+        }
+        Ok(Some(object_store::read_object(
+            &self.objects_root,
+            &spec_id,
+        )?))
     }
 
     /// Compare-and-swap check: the object at `path` must still hold `before`.
@@ -1558,7 +1821,9 @@ impl GitBackend {
             }
         }
 
+        let hypotheses_before = store.requirements.clone();
         update_fn(&mut store);
+        crate::hypothesis::enforce(&hypotheses_before, &mut store.requirements)?;
 
         let meta_after = Self::extract_metadata(&store);
         let meta_changed = metadata_value(&meta_after)? != meta_before;
@@ -1653,16 +1918,34 @@ impl GitBackend {
         for req in &changed {
             if let Some(sid) = self.stage_requirement_update(req)? {
                 paths.push(object_store::relative_object_path(sid)?);
-                summary.written.push((*req).clone());
+                summary
+                    .written
+                    .push(object_store::read_object(&self.objects_root, sid)?);
             }
         }
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+        // A spec_id change is a delete + create of the same UUID. Stamp it
+        // against its old copy, as the full-save path does, so legacy events
+        // keep their unknown context instead of acquiring this session's.
+        // trace:STORY-1674 | ai:claude
+        let mut renamed_from: HashMap<uuid::Uuid, Requirement> = HashMap::new();
+        for (sid, id) in &removed {
+            if let Some((_, yaml)) = before.get(sid.as_str()) {
+                renamed_from.insert(*id, serde_yaml::from_str(yaml)?);
+            }
+        }
         for req in &created {
             let mut new_req = (*req).clone();
-            if new_req.filed_at.is_none() {
+            let previous = renamed_from.get(&new_req.id);
+            if previous.is_none() && new_req.filed_at.is_none() {
                 let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
                 crate::provenance::stamp_with(&mut new_req, p);
             }
+            crate::provenance::stamp_write(
+                &mut new_req,
+                previous,
+                &crate::provenance::WriteContext::capture(),
+            )?;
             self.record_op(
                 new_req.id,
                 crate::oplog::OpKind::Create {
@@ -1688,7 +1971,7 @@ impl GitBackend {
         // that was written to disk.
         for written in &summary.written {
             if let Some(slot) = store.requirements.iter_mut().find(|r| r.id == written.id) {
-                slot.filed_at = written.filed_at.clone();
+                *slot = written.clone();
             }
         }
 
@@ -1767,6 +2050,13 @@ impl DatabaseBackend for GitBackend {
         self.save_reporting(store).map(|_| ())
     }
 
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        // Keep the destination-loaded import's optimistic/deletion baseline.
+        // Foreign exporters clear their source baseline at the transfer call site.
+        self.save_reporting_with_origin(store, true).map(|_| ())
+    }
+
     /// Per-spec compare-and-swap.
     // trace:BUG-1612 | ai:claude
     fn update_spec_atomically<F>(
@@ -1838,16 +2128,21 @@ impl DatabaseBackend for GitBackend {
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
-        // trace:BUG-1612 | ai:claude — serialize with every other store writer.
         let _lock = self.lock_store()?;
-        // Record granular field ops + write the YAML via the shared helper,
-        // then targeted-commit only the one YAML this op touched (when it
-        // actually changed). The op-recording logic lives in
-        // `stage_requirement_update` so `bulk_update` stays faithful to it.
-        // trace:BUG-1-040 trace:BUG-425 | ai:claude
-        if let Some(spec_id) = self.stage_requirement_update(requirement)? {
-            let rel = object_store::relative_object_path(spec_id)?;
-            self.auto_commit_paths(&format!("update {}", spec_id), &[&rel]);
+        // trace:STORY-1675 | ai:codex
+        let mut planned = vec![requirement.clone()];
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
+        let mut paths = Vec::new();
+        for row in &planned {
+            if let Some(sid) = self.stage_requirement_update(row)? {
+                paths.push(object_store::relative_object_path(sid)?);
+            }
+        }
+        if !paths.is_empty() {
+            self.auto_commit_paths(
+                &format!("update {}", requirement.display_id()),
+                &paths.iter().map(String::as_str).collect::<Vec<_>>(),
+            );
         }
         Ok(())
     }
@@ -1858,11 +2153,25 @@ impl DatabaseBackend for GitBackend {
         let _lock = self.lock_store()?;
         if let Some(req) = object_store::find_by_uuid(&self.objects_root, id)? {
             if let Some(ref spec_id) = req.spec_id {
+                // Capture pre-existing completed-result evidence before removal.
+                // trace:STORY-1675 | ai:codex
+                let mut companions = Vec::new();
+                self.prepare_hypothesis_updates(&mut companions, &[spec_id.clone()])?;
+                let mut paths = Vec::new();
+                for row in &companions {
+                    if let Some(sid) = self.stage_requirement_update(row)? {
+                        paths.push(object_store::relative_object_path(sid)?);
+                    }
+                }
                 self.record_op(*id, crate::oplog::OpKind::Archive);
                 object_store::delete_object(&self.objects_root, spec_id)?;
                 let rel = object_store::relative_object_path(spec_id)?;
                 // trace:BUG-1-040 | ai:claude
-                self.auto_commit_paths(&format!("delete {}", spec_id), &[&rel]);
+                paths.push(rel);
+                self.auto_commit_paths(
+                    &format!("delete {}", spec_id),
+                    &paths.iter().map(String::as_str).collect::<Vec<_>>(),
+                );
                 return Ok(());
             }
         }
@@ -1877,7 +2186,13 @@ impl DatabaseBackend for GitBackend {
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
         crate::provenance::stamp_if_absent(&mut req);
+        crate::provenance::stamp_write(
+            &mut req,
+            None,
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
+        let mut new_metadata = None;
         if req.spec_id.is_none() {
             // Load metadata to get counters, assign ID, save metadata back
             let meta = self.load_metadata()?;
@@ -1899,7 +2214,21 @@ impl DatabaseBackend for GitBackend {
             }
             // Persist the updated counters back to metadata
             let updated_meta = Self::extract_metadata(&temp_store);
-            self.save_metadata(&updated_meta)?;
+            new_metadata = Some(updated_meta);
+        }
+
+        // trace:STORY-1675 | ai:codex
+        let mut planned = vec![req.clone()];
+        self.prepare_hypothesis_updates(&mut planned, &[])?;
+        req = planned.iter().find(|r| r.id == req.id).unwrap().clone();
+        if let Some(meta) = new_metadata {
+            self.save_metadata(&meta)?;
+        }
+        let mut paths = vec!["metadata.yaml".to_string()];
+        for row in planned.iter().filter(|r| r.id != req.id) {
+            if let Some(sid) = self.stage_requirement_update(row)? {
+                paths.push(object_store::relative_object_path(sid)?);
+            }
         }
 
         // Record create operation
@@ -1919,10 +2248,10 @@ impl DatabaseBackend for GitBackend {
         // Targeted stage: only the new YAML + metadata.yaml (counters bumped).
         // trace:BUG-1-040 | ai:claude
         if let Ok(rel) = object_store::relative_object_path(spec_id) {
-            self.auto_commit_paths(
-                &format!("add {} — {}", spec_id, req.title),
-                &[&rel, "metadata.yaml"],
-            );
+            self.auto_commit_paths(&format!("add {} — {}", spec_id, req.title), &{
+                paths.push(rel);
+                paths.iter().map(String::as_str).collect::<Vec<_>>()
+            });
         }
         Ok(req)
     }
@@ -2428,6 +2757,12 @@ impl<'a> BulkWriter<'a> {
             }
         };
 
+        // trace:STORY-1675 | ai:codex — imports share the same preflight.
+        let count = self.staged.len();
+        let imported: std::collections::HashSet<_> = self.staged.iter().map(|r| r.id).collect();
+        self.backend
+            .prepare_hypothesis_updates(&mut self.staged, &[])?;
+
         // Persist all object YAMLs first (skipping unchanged just in case the
         // caller is re-running an idempotent import).
         let mut written: Vec<String> = Vec::new();
@@ -2435,13 +2770,27 @@ impl<'a> BulkWriter<'a> {
         // for the whole batch; write-once). trace:CR-8 | ai:claude
         let provenance = crate::provenance::capture();
         for staged in &self.staged {
+            if !imported.contains(&staged.id) {
+                if let Some(sid) = self.backend.stage_requirement_update(staged)? {
+                    written.push(sid.to_string());
+                }
+                continue;
+            }
             let mut stamped = staged.clone();
-            let is_new = stamped.spec_id.as_deref().is_none_or(|sid| {
-                object_store::read_object(&self.backend.objects_root, sid).is_err()
-            });
-            if is_new {
+            let previous = match stamped.spec_id.as_deref() {
+                Some(sid) if object_store::object_exists(&self.backend.objects_root, sid)? => {
+                    Some(object_store::read_object(&self.backend.objects_root, sid)?)
+                }
+                _ => None,
+            };
+            if previous.is_none() {
                 crate::provenance::stamp_with(&mut stamped, &provenance);
             }
+            crate::provenance::stamp_write(
+                &mut stamped,
+                previous.as_ref(),
+                &crate::provenance::WriteContext::capture(),
+            )?;
             let req = &stamped;
             if object_store::write_object_if_changed(&self.backend.objects_root, req)? {
                 if let Some(spec) = &req.spec_id {
@@ -2474,7 +2823,6 @@ impl<'a> BulkWriter<'a> {
         }
         let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
-        let count = self.staged.len();
         let message = format!(
             "{}: import {} requirement{}",
             commit_subject,
@@ -3869,6 +4217,195 @@ mod tests {
             new.filed_at.is_some(),
             "a spec created by a full-store save is stamped"
         );
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_canonical_write_routes_persist_context_and_return_stamped_rows() {
+        use crate::models::{Comment, HistoryEntry};
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "session1674"),
+            ("AIDA_HARNESS_VERSION", "harness1674"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut req = Requirement::new("new".into(), "body".into());
+        req.comments
+            .push(Comment::new("writer".into(), "new comment".into()));
+        let added = backend.add_requirement(req).unwrap();
+        assert_eq!(
+            added.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("harness1674")
+        );
+        assert_eq!(added.comments[0].session_id.as_deref(), Some("session1674"));
+        let sid = added.spec_id.as_deref().unwrap();
+        let read = || object_store::read_object(&backend.objects_root, sid).unwrap();
+        let check = |req: &Requirement| {
+            let event = req.history.last().expect("write must have an event");
+            assert_eq!(event.session_id.as_deref(), Some("session1674"));
+            assert_eq!(event.harness_version.as_deref(), Some("harness1674"));
+        };
+        let mut edit = added.clone();
+        edit.title = "direct edit".into();
+        edit.history
+            .push(HistoryEntry::new("writer".into(), Vec::new()));
+        backend.update_requirement(&edit).unwrap();
+        check(&read());
+        // A retry with a pre-stamp copy must produce identical persisted bytes.
+        let prior = serde_yaml::to_string(&read()).unwrap();
+        backend.update_requirement(&edit).unwrap();
+        assert_eq!(serde_yaml::to_string(&read()).unwrap(), prior);
+        // Full save, per-spec atomic, bulk CAS, whole-store transaction.
+        let mut store = backend.load().unwrap();
+        store.requirements[0].description = "full save".into();
+        backend.save(&store).unwrap();
+        check(&read());
+        let current = read();
+        let next = backend
+            .update_spec_atomically(&current, |r| r.title = "per-spec".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&next).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        check(&next);
+        let report = backend
+            .bulk_update_atomically(&[next], "test", |r| {
+                r.title = "bulk CAS".into();
+                true
+            })
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&report.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let (store, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].title = "transaction".into())
+            .unwrap();
+        check(&store.requirements[0]);
+        assert_eq!(
+            serde_yaml::to_string(&store.requirements[0]).unwrap(),
+            serde_yaml::to_string(&summary.written[0]).unwrap()
+        );
+        assert_eq!(
+            serde_yaml::to_string(&summary.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let mut writer = backend.bulk_writer().unwrap();
+        let mut new = Requirement::new("bulk created".into(), "body".into());
+        let mut c = Comment::new("writer".into(), "parent".into());
+        c.replies
+            .push(Comment::new_reply("writer".into(), "reply".into(), c.id));
+        new.comments.push(c);
+        let created_id = writer.add(new).unwrap().spec_id.clone().unwrap();
+        writer.finish("test provenance").unwrap();
+        let new = object_store::read_object(&backend.objects_root, &created_id).unwrap();
+        assert_eq!(
+            new.comments[0].replies[0].harness_version.as_deref(),
+            Some("harness1674")
+        );
+        // The shared Storage facade used by MCP must persist the same metadata.
+        let storage = crate::storage::Storage::new(root);
+        let store = storage
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == added.id)
+                    .unwrap()
+                    .title = "facade edit".into()
+            })
+            .unwrap();
+        check(
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == added.id)
+                .unwrap(),
+        );
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_full_save_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy
+            .history
+            .push(crate::models::HistoryEntry::new("old".into(), Vec::new()));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let mut store = backend.load().unwrap();
+        store.requirements[0].spec_id = Some("TASK-2".into());
+        backend.save(&store).unwrap();
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none());
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert_eq!(
+            renamed.history.last().unwrap().session_id.as_deref(),
+            Some("renamer")
+        );
+        assert_eq!(
+            renamed.history.last().unwrap().harness_version.as_deref(),
+            Some("rename-harness")
+        );
+    }
+
+    // A spec_id change inside a whole-store transaction is delete + create of
+    // the same UUID: legacy events keep unknown context, filing provenance is
+    // not invented, and only the new write event carries this session.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_transaction_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy.history.push(crate::models::HistoryEntry::new(
+            "old".into(),
+            vec![crate::models::FieldChange {
+                field_name: "title".into(),
+                old_value: "a".into(),
+                new_value: "legacy".into(),
+            }],
+        ));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let (_, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].spec_id = Some("TASK-2".into()))
+            .unwrap();
+        assert_eq!(summary.created, vec!["TASK-2".to_string()]);
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none(), "no invented filing provenance");
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.history[0].harness_version.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert!(renamed.comments[0].harness_version.is_none());
+        let event = renamed.history.last().unwrap();
+        assert!(event.is_write_event());
+        assert_eq!(event.session_id.as_deref(), Some("renamer"));
     }
 
     // ---- BUG-1612: per-spec compare-and-swap, no whole-store rewrite -------

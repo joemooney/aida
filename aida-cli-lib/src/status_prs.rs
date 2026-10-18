@@ -3076,6 +3076,7 @@ mod story_1043_unshipped_work_tests {
 
     fn write_live_lease(root: &std::path::Path, spec: &str, branch: &str) {
         let lease = SessionLease {
+            tree_kind: Default::default(),
             id: "live1043".to_string(),
             scope: spec.to_string(),
             slug: slugify(spec),
@@ -3104,6 +3105,7 @@ mod story_1043_unshipped_work_tests {
             interrupted_at: None,
             interrupted_reason: None,
             driver: None,
+            child_grant_id: None,
         };
         std::fs::create_dir_all(leases_dir(root)).unwrap();
         std::fs::write(

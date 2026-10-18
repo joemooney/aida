@@ -16,7 +16,12 @@ use uuid::Uuid;
 
 use crate::cli::RegenCommand;
 // trace:TASK-1730 | ai:codex
-mod score;
+mod consensus;
+mod score; // trace:STORY-1679 | ai:codex
+
+// trace:TASK-1734 | ai:codex
+pub(crate) use score::report::read_summary_for_project;
+pub use score::report::RegenerationSummary;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct CorpusManifest {
@@ -130,10 +135,14 @@ fn git(store: &Path, args: &[&str]) -> Result<Vec<u8>> {
         .env("GIT_OPTIONAL_LOCKS", "0")
         .output()
         .with_context(|| format!("run git {}", args.join(" ")))?;
+    // Report the exit status as well as stderr: a git killed by a signal
+    // writes nothing, and an empty "failed:" hides why (BUG-2160).
+    // trace:BUG-2160 | ai:claude
     anyhow::ensure!(
         out.status.success(),
-        "git {} failed: {}",
+        "git {} failed ({}): {}",
         args.join(" "),
+        out.status,
         String::from_utf8_lossy(&out.stderr).trim()
     );
     Ok(out.stdout)
@@ -183,6 +192,28 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
     if objects.is_empty() {
         return Ok(Vec::new());
     }
+    let mut reqs = Vec::new();
+    let mut ids = HashSet::new();
+    for ((_, path), bytes) in objects.iter().zip(read_blobs(store, &objects)?) {
+        let req: Requirement = serde_yaml::from_slice(&bytes)
+            .with_context(|| format!("parse committed object {path}"))?;
+        anyhow::ensure!(
+            ids.insert(req.id),
+            "duplicate corpus UUID {} in {path}",
+            req.id
+        );
+        reqs.push(req);
+    }
+    reqs.sort_by_key(|r| r.id);
+    Ok(reqs)
+}
+
+// Shared immutable blob protocol; one child and concurrent stdin draining.
+// trace:TASK-1734 | ai:codex
+fn read_blobs(store: &Path, objects: &[(String, String)]) -> Result<Vec<Vec<u8>>> {
+    if objects.is_empty() {
+        return Ok(Vec::new());
+    }
     let input: String = objects.iter().map(|(oid, _)| format!("{oid}\n")).collect();
     let mut child = aida_core::git_ops::host_git_command(store)
         .args(["cat-file", "--batch"])
@@ -203,8 +234,7 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
         String::from_utf8_lossy(&output.stderr)
     );
     let mut remaining = output.stdout.as_slice();
-    let mut reqs = Vec::new();
-    let mut ids = HashSet::new();
+    let mut blobs = Vec::new();
     for (oid, path) in objects {
         let (header, data) = split_byte(remaining, b'\n').context("missing git blob header")?;
         let fields: Vec<_> = std::str::from_utf8(header)?.split_whitespace().collect();
@@ -217,19 +247,11 @@ fn read_objects(store: &Path, sha: &str) -> Result<Vec<Requirement>> {
             size < data.len() && data[size] == b'\n',
             "truncated git blob for {path}"
         );
-        let req: Requirement = serde_yaml::from_slice(&data[..size])
-            .with_context(|| format!("parse committed object {path}"))?;
-        anyhow::ensure!(
-            ids.insert(req.id),
-            "duplicate corpus UUID {} in {path}",
-            req.id
-        );
-        reqs.push(req);
+        blobs.push(data[..size].to_vec());
         remaining = &data[size + 1..];
     }
     anyhow::ensure!(remaining.is_empty(), "unexpected trailing git batch output");
-    reqs.sort_by_key(|r| r.id);
-    Ok(reqs)
+    Ok(blobs)
 }
 
 fn split_byte(data: &[u8], byte: u8) -> Option<(&[u8], &[u8])> {
@@ -305,18 +327,37 @@ pub(crate) fn handle_command(store: &Path, cmd: &RegenCommand) -> Result<()> {
             control,
             corpus,
             model,
+            model_family,
             vendor,
             harness,
+            consensus,
+            file,
             unconfined,
         } => {
+            if !consensus.is_empty() {
+                anyhow::ensure!(
+                    dir.is_none()
+                        && control.is_none()
+                        && corpus.is_none()
+                        && model.is_none()
+                        && model_family.is_none()
+                        && vendor.is_none()
+                        && harness.is_none()
+                        && !unconfined,
+                    "consensus is exclusive of trial/control execution"
+                );
+                return self::consensus::handle(store, consensus, *file);
+            }
+            anyhow::ensure!(!file, "--file requires --consensus");
             score::handle_score(
                 store,
                 dir.as_deref(),
                 *control,
-                corpus,
-                model,
-                vendor,
-                harness,
+                corpus.as_deref().context("scoring requires --corpus")?,
+                model.as_deref().context("scoring requires --model")?,
+                model_family.as_deref(),
+                vendor.as_deref().context("scoring requires --vendor")?,
+                harness.as_deref().context("scoring requires --harness")?,
                 *unconfined,
             )?;
         }
@@ -621,5 +662,36 @@ mod tests {
                 ..
             })
         ));
+    }
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn score_cli_preserves_optional_explicit_model_family() {
+        use clap::Parser;
+        for family in [None, Some("explicit-family")] {
+            let mut args = vec![
+                "aida",
+                "regen",
+                "score",
+                "system",
+                "--corpus",
+                "corpus",
+                "--model",
+                "model",
+                "--vendor",
+                "vendor",
+                "--harness",
+                "harness",
+            ];
+            if let Some(family) = family {
+                args.extend(["--model-family", family]);
+            }
+            let parsed = crate::cli::Cli::try_parse_from(args).unwrap();
+            match parsed.command {
+                crate::cli::Command::Regen(RegenCommand::Score { model_family, .. }) => {
+                    assert_eq!(model_family.as_deref(), family)
+                }
+                _ => panic!("expected regen score"),
+            }
+        }
     }
 }

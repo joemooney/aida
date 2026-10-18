@@ -74,6 +74,8 @@ pub mod alias;
 pub mod analytics;
 pub mod block_allocation;
 pub mod conflict;
+// Explicit, data-only host constraint checks. trace:STORY-1673 | ai:codex
+pub mod constraints;
 #[cfg(all(unix, feature = "native"))]
 pub mod daemon;
 pub mod db;
@@ -97,6 +99,7 @@ pub mod fs_atomic;
 #[cfg(feature = "native")]
 pub mod git_ops;
 pub mod graph_walk;
+mod hypothesis;
 mod store_hooks;
 // trace:TASK-1513 | ai:claude
 pub mod home;
@@ -145,6 +148,8 @@ pub mod review_config;
 pub mod rollup;
 #[cfg(feature = "native")]
 pub mod scaffolding;
+// trace:BUG-2169 | ai:claude — file-only detection of a contained seat's private clone.
+pub mod seat_clone_detect;
 #[cfg(feature = "native")]
 pub mod storage;
 // trace:TASK-1141 | ai:claude

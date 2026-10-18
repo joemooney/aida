@@ -4,6 +4,7 @@ fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
     let dir = project_root.join(".aida").join("sessions");
     std::fs::create_dir_all(&dir).unwrap();
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -32,6 +33,7 @@ fn write_lease(project_root: &std::path::Path, id: &str, scope: &str) {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     };
     std::fs::write(
         dir.join(format!("{}.toml", id)),

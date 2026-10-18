@@ -45,7 +45,7 @@ fn grant_path(id: &str) -> Result<PathBuf> {
     Ok(grant_dir()?.join(format!("{id}.json")))
 }
 
-fn read_grant(id: &str) -> Result<SeatGrant> {
+pub(crate) fn read_grant(id: &str) -> Result<SeatGrant> {
     let path = grant_path(id)?;
     let bytes = std::fs::read(&path).context("session grant is missing or unreadable")?;
     let grant: SeatGrant = serde_json::from_slice(&bytes).context("session grant is malformed")?;
@@ -397,7 +397,7 @@ pub(crate) fn classify_role_display(label: Option<&str>, grant_seat: Option<&str
             // The implementer baseline and the lower-privilege stakeholder
             // personas confer nothing a grant would gate, so the label is
             // already the truth for them.
-            if matches!(role.as_str(), "implementer" | "guest" | "requester") {
+            if is_baseline_seat(&role) {
                 RoleDisplay::Held(role)
             } else {
                 RoleDisplay::Ungranted(role)
@@ -710,17 +710,13 @@ pub(crate) fn unresolved_launch_refusal(reason: &str, label: Option<&str>) -> St
 }
 
 pub(crate) fn require_direct_tty() -> Result<()> {
-    use std::io::IsTerminal;
-    if !(std::io::stdin().is_terminal() && std::io::stderr().is_terminal()) {
+    if !(crate::authority_stdin_is_terminal() && crate::authority_stderr_is_terminal()) {
         bail!("role grants require a human at an interactive TTY; run `aida role enter` from your terminal");
     }
     Ok(())
 }
 
-// Shared by direct seat issuance and operator-only ship explanations.
-// trace:TASK-1602 | ai:codex
-pub(crate) fn require_direct_human() -> Result<()> {
-    require_direct_tty()?;
+pub(crate) fn require_non_agent_session() -> Result<()> {
     if ["AIDA_AGENT_NAME", "AIDA_AGENT_TYPE"].iter().any(|key| {
         std::env::var(key)
             .ok()
@@ -731,11 +727,133 @@ pub(crate) fn require_direct_human() -> Result<()> {
     Ok(())
 }
 
+// Shared by direct seat issuance and operator-only ship explanations.
+// trace:TASK-1602 | ai:codex
+pub(crate) fn require_direct_human() -> Result<()> {
+    require_non_agent_session()?;
+    require_direct_tty()?;
+    Ok(())
+}
+
+// trace:TASK-1787 | ai:antigravity
+pub(crate) const DEFAULT_MAX_GRANT_HOURS: u32 = 24;
+pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
+
+/// Parse `[seat] max_grant_hours` from a config file's contents.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
+    let value: toml::Value = match toml::from_str(body) {
+        Ok(v) => v,
+        Err(_) => {
+            static WARNED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("Warning: failed to parse config TOML");
+            }
+            return None;
+        }
+    };
+    let seat_table = value.get("seat")?;
+    let hours_val = seat_table.get("max_grant_hours")?;
+    if let Some(i) = hours_val.as_integer() {
+        match u32::try_from(i) {
+            Ok(val) => Some(std::cmp::min(val, HARD_CEILING_GRANT_HOURS)),
+            Err(_) => {
+                eprintln!("Warning: [seat] max_grant_hours must be a positive integer, got `{i}`");
+                None
+            }
+        }
+    } else {
+        eprintln!("Warning: [seat] max_grant_hours must be an integer, got `{hours_val}`");
+        None
+    }
+}
+
+/// Read `[seat] max_grant_hours` from a TOML file path.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
+    let body = std::fs::read_to_string(path).ok()?;
+    parse_max_grant_hours_from_str(&body)
+}
+
+/// Resolve the configured maximum grant lifetime in hours:
+/// Global `~/.aida/config.toml` and project `.aida/config.toml`.
+/// Effective cap = min(global, project) when both are set.
+/// The project value alone may only lower the 24h default's ceiling.
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
+    let global_val = crate::aida_home_dir()
+        .map(|h| h.join(".aida").join("config.toml"))
+        .as_deref()
+        .and_then(read_max_grant_hours_file);
+    let project_path = project_root.join(".aida").join("config.toml");
+    let project_val = read_max_grant_hours_file(&project_path);
+    let cap = match (global_val, project_val) {
+        (Some(g), Some(p)) => std::cmp::min(g, p),
+        (Some(g), None) => g,
+        (None, Some(p)) => std::cmp::min(DEFAULT_MAX_GRANT_HOURS, p),
+        (None, None) => DEFAULT_MAX_GRANT_HOURS,
+    };
+    std::cmp::min(cap, HARD_CEILING_GRANT_HOURS)
+}
+
+/// Parse and validate `--ttl <dur>` against the configured cap and hard ceiling.
+/// Returns `Ok(None)` when `--ttl` is omitted (signalling the 24h default).
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn parse_ttl(project_root: &Path, dur_str: Option<&str>) -> Result<Option<Duration>> {
+    let Some(dur_str) = dur_str else {
+        return Ok(None);
+    };
+    let dur_str = dur_str.trim();
+    if dur_str.is_empty() {
+        return Ok(None);
+    }
+    if !dur_str.chars().any(|c| c.is_ascii_alphabetic()) {
+        bail!("--ttl needs a unit, e.g. 72h or 90m");
+    }
+    let std_dur = crate::drain_caps::parse_duration(dur_str).ok_or_else(|| {
+        anyhow::anyhow!("invalid grant TTL `{dur_str}`: expected a duration like 72h, 24h, or 90m")
+    })?;
+    let dur = Duration::from_std(std_dur)
+        .map_err(|e| anyhow::anyhow!("invalid grant TTL `{dur_str}`: {e}"))?;
+    if dur <= Duration::zero() {
+        bail!("grant TTL must be positive");
+    }
+    if dur > Duration::hours(HARD_CEILING_GRANT_HOURS as i64) {
+        bail!("requested TTL `{dur_str}` exceeds the 168h maximum (not configurable)");
+    }
+    let configured_cap = resolve_max_grant_hours(project_root);
+    if dur > Duration::hours(configured_cap as i64) {
+        bail!(
+            "requested TTL `{dur_str}` exceeds the configured cap of {configured_cap}h ([seat] max_grant_hours)"
+        );
+    }
+    Ok(Some(dur))
+}
+
+/// Format a grant's TTL for display (e.g. `72h`, `24h`, `30m`, `1h30m`).
+// trace:TASK-1787 | ai:antigravity
+pub(crate) fn format_ttl(ttl: Duration) -> String {
+    let total_mins = ttl.num_minutes();
+    if total_mins <= 0 {
+        return "0m".to_string();
+    }
+    if total_mins % 60 == 0 {
+        format!("{}h", total_mins / 60)
+    } else if total_mins < 60 {
+        format!("{total_mins}m")
+    } else {
+        format!("{}h{:02}m", total_mins / 60, total_mins % 60)
+    }
+}
+
 // trace:STORY-1473, TASK-1592 | ai:antigravity
+// trace:TASK-1787 | ai:antigravity
 pub(crate) fn issue_direct(
     project_root: &Path,
     seat: &str,
     delegable_seats: Vec<String>,
+    ttl: Option<Duration>,
 ) -> Result<SeatGrant> {
     require_direct_human()?;
     // trace:TASK-1594 | ai:claude
@@ -764,6 +882,7 @@ pub(crate) fn issue_direct(
     if delegable_seats.iter().any(|seat| !allowed.contains(seat)) {
         bail!("delegated seats must all be present in the team roster");
     }
+    let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -775,7 +894,7 @@ pub(crate) fn issue_direct(
         delegable_seats,
         parent_grant_id: None,
         issued_at: now,
-        expires_at: now + MAX_GRANT_AGE,
+        expires_at: now + lifetime,
         revoked_at: None,
     };
     write_grant(&grant)?;
@@ -832,11 +951,118 @@ pub(crate) fn issue_child(
     Ok(grant)
 }
 
+/// BUG-2139: the seats that confer nothing a grant gates — the implementer
+/// baseline and the lower-privilege stakeholder personas. ONE list, read by
+/// both the statusline classification ([`classify_role_display`]) and the
+/// headless-child baseline fallback ([`preflight_headless_child`]), so the two
+/// can never disagree about which seats are safe to run ungranted.
+// trace:BUG-2139 | ai:claude
+pub(crate) const BASELINE_SEATS: &[&str] = &["implementer", "guest", "requester"];
+
+/// Whether `seat` (any spelling) is one of [`BASELINE_SEATS`].
+// trace:BUG-2139 | ai:claude
+pub(crate) fn is_baseline_seat(seat: &str) -> bool {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    BASELINE_SEATS.contains(&seat.as_str())
+}
+
+/// BUG-2139: the authority a fresh headless queue-work child will run with.
+/// It never inherits the launcher's grant.
+// trace:BUG-2139 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HeadlessChildAuthority {
+    /// The launcher's grant delegates the seat; a child grant is minted.
+    Delegated,
+    /// The launcher cannot delegate a BASELINE seat; the child runs with
+    /// `AIDA_SESSION_GRANT=""` (baseline authority only). `cause` says why.
+    Baseline { cause: String },
+}
+
+/// BUG-2139: read-only preflight for a fresh headless child in `seat`. A seat
+/// the launcher's grant delegates is [`HeadlessChildAuthority::Delegated`]. A
+/// baseline seat it cannot delegate (no grant, or a grant that does not
+/// delegate it) falls back to [`HeadlessChildAuthority::Baseline`]. Every other
+/// seat (reviewer, advisor, integrator, ...) fails closed.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn preflight_headless_child(
+    project_root: &Path,
+    seat: &str,
+) -> Result<HeadlessChildAuthority> {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    match validate_child_delegation(project_root, &seat) {
+        Ok(_) => Ok(HeadlessChildAuthority::Delegated),
+        Err(cause) if is_baseline_seat(&seat) => Ok(HeadlessChildAuthority::Baseline {
+            cause: format!("{cause:#}"),
+        }),
+        Err(cause) => Err(cause),
+    }
+}
+
+/// BUG-2139: the grant a fresh headless child was launched with.
+// trace:BUG-2139 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) enum HeadlessChildGrant {
+    /// A child grant minted for this launch (seat = routed role,
+    /// `delegable_seats` empty, parent = the launcher's grant).
+    Issued(SeatGrant),
+    /// No grant: the child runs at baseline authority. `cause` says why the
+    /// launcher could not delegate the seat.
+    Baseline { cause: String },
+}
+
+impl HeadlessChildGrant {
+    /// The value the child's `AIDA_SESSION_GRANT` is set to — ALWAYS set,
+    /// never inherited: the minted id, or `""` for a baseline child.
+    pub(crate) fn env_value(&self) -> &str {
+        match self {
+            Self::Issued(grant) => &grant.id,
+            Self::Baseline { .. } => "",
+        }
+    }
+
+    /// The minted grant id, if any.
+    pub(crate) fn id(&self) -> Option<&str> {
+        match self {
+            Self::Issued(grant) => Some(&grant.id),
+            Self::Baseline { .. } => None,
+        }
+    }
+}
+
+/// BUG-2139: mint the authority for a fresh headless child in `seat`.
+/// [`preflight_headless_child`] decides; a delegated seat goes through
+/// [`issue_child`], which re-validates, so a roster edit or a parent revoked
+/// between preflight and launch still fails closed.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn issue_headless_child(
+    project_root: &Path,
+    seat: &str,
+    child_subject: &str,
+) -> Result<HeadlessChildGrant> {
+    let seat = aida_core::team::canonical_role(seat.trim());
+    match preflight_headless_child(project_root, &seat)? {
+        HeadlessChildAuthority::Delegated => Ok(HeadlessChildGrant::Issued(issue_child(
+            project_root,
+            &seat,
+            child_subject,
+        )?)),
+        HeadlessChildAuthority::Baseline { cause } => Ok(HeadlessChildGrant::Baseline { cause }),
+    }
+}
+
 pub(crate) fn revoke_current() -> Result<bool> {
     let Some(id) = std::env::var(GRANT_ENV).ok() else {
         return Ok(false);
     };
-    let Ok(mut grant) = read_grant(&id) else {
+    revoke_by_id(&id)
+}
+
+/// Revoke grant `id` now. `Ok(false)` when it does not exist or is already
+/// revoked. BUG-2139: a headless child's grant is revoked this way when the
+/// child exits and when its lease ends or is reaped.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
+    let Ok(mut grant) = read_grant(id) else {
         return Ok(false);
     };
     if grant.revoked_at.is_some() {
@@ -916,6 +1142,17 @@ pub(crate) mod test_support {
         seat: &str,
         delegable: &[&str],
     ) -> String {
+        mint_grant_for_with_ttl(project_root, subject, seat, delegable, None)
+    }
+
+    // trace:TASK-1787 | ai:antigravity
+    pub(crate) fn mint_grant_for_with_ttl(
+        project_root: &Path,
+        subject: &str,
+        seat: &str,
+        delegable: &[&str],
+        ttl: Option<Duration>,
+    ) -> String {
         // The mint resolves env-derived paths (the grant-store home via
         // `$AIDA_HOME`/`$HOME`); hold the process env lock for the duration
         // unless the caller already does, so a sibling test's guard cannot
@@ -971,6 +1208,7 @@ pub(crate) mod test_support {
         )
         .unwrap();
 
+        let lifetime = ttl.unwrap_or(MAX_GRANT_AGE);
         let now = Utc::now();
         let grant = SeatGrant {
             id: Uuid::new_v4().to_string(),
@@ -985,7 +1223,7 @@ pub(crate) mod test_support {
                 .collect(),
             parent_grant_id: None,
             issued_at: now,
-            expires_at: now + MAX_GRANT_AGE,
+            expires_at: now + lifetime,
             revoked_at: None,
         };
         write_grant(&grant).unwrap();
@@ -1165,6 +1403,104 @@ mod tests {
         }
     }
 
+    /// BUG-2139: a fresh headless child never inherits the launcher's grant.
+    /// A delegated seat mints a distinct child grant (routed seat, no
+    /// delegable seats, parent = launcher); a baseline seat the launcher
+    /// cannot delegate falls back to an ungranted child; every other seat
+    /// fails closed. The child grant is revocable by id.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn headless_child_gets_its_own_grant_or_baseline_or_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut env = pinned_env();
+        // Use a short parent lifetime so a child defaulting to MAX_GRANT_AGE
+        // cannot accidentally satisfy the expiry assertion.
+        // trace:TASK-1789 | ai:codex
+        let advisor = test_support::mint_grant_for_with_ttl(
+            root,
+            SUBJECT,
+            "advisor",
+            &["implementer", "reviewer"],
+            Some(Duration::minutes(7)),
+        );
+        let parent_expiry = read_grant(&advisor).unwrap().expires_at;
+        {
+            let _env = Scoped::apply(&mut env, &[(GRANT_ENV, Some(advisor.as_str()))]);
+            for seat in ["implementer", "reviewer"] {
+                assert_eq!(
+                    preflight_headless_child(root, seat).unwrap(),
+                    HeadlessChildAuthority::Delegated
+                );
+                let HeadlessChildGrant::Issued(child) =
+                    issue_headless_child(root, seat, SUBJECT).unwrap()
+                else {
+                    panic!("a delegated {seat} seat must mint a child grant");
+                };
+                assert_ne!(
+                    child.id, advisor,
+                    "the child never reuses the launcher grant"
+                );
+                assert_eq!(child.seat, seat);
+                assert!(
+                    child.delegable_seats.is_empty(),
+                    "the child delegates nothing"
+                );
+                assert_eq!(child.parent_grant_id.as_deref(), Some(advisor.as_str()));
+                // trace:TASK-1789 | ai:codex
+                assert_eq!(child.expires_at, parent_expiry, "{seat} child expiry");
+                assert_eq!(read_grant(&child.id).unwrap().expires_at, parent_expiry);
+                // Revocation by id ends exactly the child, never the launcher.
+                assert!(revoke_by_id(&child.id).unwrap());
+                assert!(!revoke_by_id(&child.id).unwrap(), "idempotent");
+                assert!(read_grant(&child.id).unwrap().revoked_at.is_some());
+                assert!(read_grant(&advisor).unwrap().revoked_at.is_none());
+            }
+        }
+        // A launcher whose grant does not delegate the seat.
+        let narrow = test_support::mint_grant_for(root, SUBJECT, "advisor", &["product"]);
+        for grant in [Some(narrow.as_str()), None] {
+            let _env = Scoped::apply(&mut env, &[(GRANT_ENV, grant)]);
+            // Baseline seats fall back to an ungranted child...
+            for seat in BASELINE_SEATS {
+                let got = issue_headless_child(root, seat, SUBJECT).unwrap();
+                assert!(
+                    matches!(got, HeadlessChildGrant::Baseline { .. }),
+                    "{seat} with grant {grant:?}: {got:?}"
+                );
+                assert_eq!(got.env_value(), "", "a baseline child's grant env is empty");
+                assert_eq!(got.id(), None);
+            }
+            // ...every other seat is refused.
+            for seat in ["reviewer", "advisor", "integrator", "product"] {
+                if grant.is_some() && seat == "product" {
+                    continue; // `product` IS delegated by the narrow grant.
+                }
+                issue_headless_child(root, seat, SUBJECT)
+                    .expect_err("a non-baseline seat must fail closed");
+                preflight_headless_child(root, seat)
+                    .expect_err("the preflight agrees with issuance");
+            }
+        }
+    }
+
+    /// BUG-2139: the baseline seat list is the one `classify_role_display`
+    /// reads, so the statusline and the headless fallback cannot drift.
+    // trace:BUG-2139 | ai:claude
+    #[test]
+    fn baseline_seats_match_role_display() {
+        for seat in BASELINE_SEATS {
+            assert!(is_baseline_seat(seat));
+            assert_eq!(
+                classify_role_display(Some(seat), None),
+                RoleDisplay::Held((*seat).to_string())
+            );
+        }
+        for seat in ["reviewer", "advisor", "integrator", "product"] {
+            assert!(!is_baseline_seat(seat));
+        }
+    }
+
     /// A role label with no valid grant reads as ungranted; a validated grant
     /// reads as held; the implementer baseline needs no grant.
     // trace:BUG-1924 | ai:claude
@@ -1301,6 +1637,20 @@ mod tests {
             .contains("expired at"));
     }
 
+    /// A session needs at least the requested window, including exact equality.
+    // trace:TASK-1372 | ai:codex
+    #[test]
+    fn expiry_launch_refusal_allows_exact_window_boundary() {
+        let within = Duration::hours(1);
+        let (expiry, now) = expiry_in("advisor", within);
+        assert_eq!(launch_refusal(&expiry, now, within), None);
+        assert_eq!(
+            launch_refusal(&expiry, now - Duration::nanoseconds(1), within),
+            None,
+        );
+        assert!(launch_refusal(&expiry, now + Duration::nanoseconds(1), within).is_some());
+    }
+
     /// A set handle naming no usable record is `Unresolved`, never silently
     /// `NoGrant`; the launch refusal names the renew command.
     // trace:TASK-1736 | ai:claude
@@ -1431,3 +1781,8 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/bug_2011_grant_expiry_verdict_tests.rs"]
 mod bug_2011_grant_expiry_verdict_tests;
+
+// trace:TASK-1787 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1787_grant_ttl_tests.rs"]
+mod task_1787_grant_ttl_tests;

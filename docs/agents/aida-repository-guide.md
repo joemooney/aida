@@ -829,7 +829,18 @@ Supervision, Recusal, Decision, Unknown, legacy or absorbed non-Rework holds
 still need a human. Covered specs with sensitive title/tag metadata, guided or
 operator mode, keystone class, or missing/unreadable metadata also keep the
 human floor. Sensitive metadata includes sandbox, contained, confinement,
-security, authority, grant, identity, credential and secret. Clearance names
+security, authority, grant, identity, credential and secret.
+
+Mandate exception (STORY-1697): while a fire-fighting mandate minted with
+`--include-supervised` is active, its minting human's advisor seat may release
+a typed Rework-only hold on a sensitive spec the same way. The two-person rule
+still holds: the newest approval must come from an independent reviewer, never
+from the advisor session doing the release, and that session must carry an
+identity AIDA can check. Operator-only and decide-mode specs never release,
+and the mandate is re-read at each release-time recheck, so stopping it
+mid-release keeps the hold. The clearance records `released_under_mandate`.
+
+Clearance names
 `auto-released:verdict`, the reviewer, verdict file and approved head, and the
 PR receives an audit comment before the active label is dropped. Failed audit
 or mirror operations retain the local marker for retry.

@@ -18,7 +18,7 @@ Four of these commands look superficially similar — they all "report on the pr
 | **Why is *this one* spec still open?** | `aida why` | the spec's store signals |
 | **Are agents actually lifting load?** (proof, metrics) | `aida metrics` / `aida usage` | the telemetry logs (`~/.aida/*.jsonl`) |
 
-The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics`/`usage` don't read the graph at all — they read the telemetry substrate. `why` is the only one scoped to a single spec.
+The dividing lines: `status` is *now*, everything else is *over a window*. `history` is the raw machine-readable record; `digest` is the same events run through editorial logic into prose for a human reader. `metrics` and ordinary `usage` read the telemetry substrate; `usage show --provenance` also reads the selected spec's write events. `why` is the only one scoped to a single spec.
 
 ## Time bounds
 
@@ -357,6 +357,63 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 
 ---
 
+#### Write provenance
+
+<!-- trace:STORY-1674 | ai:codex -->
+
+```bash
+aida usage show <spec-id> --provenance
+aida usage show <spec-id> --provenance --json
+aida usage show <spec-id> --provenance --toon
+```
+
+This view reads the requirement's filing, edit, comment and nested reply events.
+For each event it reports its author, timestamp, exact session ID and explicitly
+reported harness version. Write paths preserve existing event context, including
+unknown context on legacy entries. A programmatic edit without a field-history
+entry records a write event with an empty change list; no-op retries add none.
+Comment creation context stays attached to its original identity; later edits
+receive a new write event.
+
+A write event (a history entry with an empty change list) records session
+context only, never a content change: churn and contribution metrics skip it,
+and `aida edit` does not treat it as a concurrent change when leaving
+NeedsAttention. A write event already on disk is re-appended on save, so a
+caller cannot remove one.
+<!-- trace:STORY-1674 | ai:claude -->
+
+Only `AIDA_HARNESS_VERSION`, explicitly supplied to the writing process by its
+launcher, supplies a captured harness version. Missing or blank values mean
+unknown. This change does not configure launchers to provide that variable.
+
+The query opens `.aida/derived/token-ledger-v1.sqlite` read-only. It includes
+measured rows whose vendor session ID **or** attributed AIDA session ID matches
+exactly and whose parsed timestamp is at or before the write. It excludes
+missing/invalid timestamps and future rows, handles timezone offsets, and lists
+all observed models rather than choosing one. Ledger v1 has no explicit effort
+column, so effort remains unknown. No transcript parsing or vendor-based guesses
+occur in this view, and it neither rebuilds nor creates a ledger. A missing
+ledger still permits showing persisted write metadata.
+
+Token classes report a known measured subtotal (null/unknown when no value was
+measured) plus a count of matching rows with an unknown value. Zero is a known
+measurement. **These are cumulative session-at-write totals, overlapping between
+events. Do not add them up as per-write or per-spec costs.** `--cost` remains the
+ordinary usage/cost view and cannot be combined with `--provenance`.
+
+Legacy YAML preserves optional fields through its write paths. Legacy SQLite
+schema v9 adds nullable `filed_at` JSON; existing rows remain un-attributed and
+history/comments retain their optional JSON context. Migration, export and tree
+import preserve historical event context, including unknowns; the current import
+receives its own write event. Binaries older than this change do not know
+`session_id` / `harness_version` and drop them when they rewrite an entry, so
+mixed-version fleets can lose that context. The legacy YAML save now refuses
+to overwrite a non-empty file it cannot parse (an empty file is still
+initialized). This is compatibility for
+archived stores, not a new storage mode. The opt-in archived PostgreSQL backend
+is outside this implementation and validation scope; it still lacks filing-context
+persistence.
+
 ### `aida metrics`
 
 **One line** — agent-lift metrics: the *framed proof* that autonomous drains lift load.
@@ -612,3 +669,69 @@ Print the versioned JSON field subset promised to read-only external monitor
 consumers. See [the monitor contract](../monitor-contract.md) for compatibility
 rules, fixtures, and the event-follow example. Use `aida contract --json` in
 automation; monitor consumers must not parse human-formatted command output.
+
+
+### `aida verify`
+
+Run explicit host-fact checks stored on constraint rows:
+
+```bash
+aida verify constraints
+aida verify constraints --json
+aida verify constraints --fail-on-drift
+```
+
+Use this after a host change to find assumptions that drifted. It runs only
+when invoked: sync, drain and hooks never trigger these checks. Each configured
+constraint reports `match`, `drift`, `unknown` (host data unavailable), or
+`invalid` (bad block, arguments, type, operator or version). Rows without a
+block are skipped. Rejected, superseded and archived constraints report
+`skipped` and are never probed, so a retired host fact cannot trip
+`--fail-on-drift`; the human view prints only their count unless `--verbose`
+is given, and JSON always lists them. Reports do not edit requirements or status. Results exit
+successfully unless drift exists and `--fail-on-drift` was supplied; store load
+and command errors still fail normally.
+
+Author a block on an existing constraint in a canonical store:
+
+```bash
+aida edit <constraint-id> --verify '{"version":1,"probe":"cpu-count","args":{},"expect":{"op":"ge","value":6}}'
+aida edit <constraint-id> --clear-verify
+```
+
+This is JSON data, never a shell command. Authoring does not run the probe;
+unknown or malformed blocks remain stored and are reported as `invalid` by
+verification. Invalid JSON syntax is refused at edit time. A block is optional;
+old rows load normally. Canonical and YAML row serialization preserve it;
+archived SQLite/PostgreSQL writers refuse blocks they cannot preserve.
+
+The fixed version-1 schema is `version`, `probe`, `args`, and `expect` containing
+`op` and `value`. All keys are required and unknown keys are invalid.
+
+| Probe | Arguments | Result |
+| --- | --- | --- |
+| `cpu-count` | `{}` | Integer logical CPU count from Linux procfs |
+| `mem-total-bytes` | `{}` | Integer MemTotal in bytes, without unit strings |
+| `psi-available` | `{}` | Boolean availability of cpu, memory and io pressure files |
+| `disk-rotational` | `{"path":"/dev/sda"}` | Boolean Linux sysfs rotational flag; partitions use their parent disk |
+| `path-exists` | `{"path":"/absolute/path"}` | Boolean path existence |
+| `command-on-path` | `{"name":"aida"}` | Boolean executable availability to the invoking caller on PATH |
+
+Integer results accept `eq`, `ge`, or `le`, with an integer expected value.
+Boolean results accept `eq` or `exists`, with a boolean expected value;
+`exists` compares the observed presence boolean to that value. Floats, numeric
+strings, boolean strings and unit strings are invalid. Paths must be absolute
+without parent traversal, control characters or shell metacharacters. Command
+names must match `[A-Za-z0-9._-]+`; the probe looks up executable regular files
+and never runs them. Missing paths or commands produce a known false value;
+lookup/read errors produce `unknown`. No stored command or custom probe runs.
+
+The procfs and sysfs probes (`cpu-count`, `mem-total-bytes`, `psi-available`,
+`disk-rotational`) report `unknown` off Linux; `path-exists` and
+`command-on-path` run on any Unix host. Path probes call `stat`, so a hung NFS
+mount or a slow automount point can block the command until the filesystem
+answers. Relative `PATH` entries (including an empty entry) resolve against the
+current working directory, as they would for a shell lookup.
+
+<!-- trace:STORY-1673 | ai:codex -->
+<!-- trace:STORY-1673 | ai:claude -->

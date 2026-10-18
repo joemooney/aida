@@ -3,30 +3,37 @@
 //! delegation decision from queue selection.
 // trace:BUG-1808 | ai:claude
 
-use super::{queue_work_delegation_refusal, queue_work_issues_child_grant};
+use super::{
+    queue_work_delegation_refusal, queue_work_is_fresh_headless, queue_work_issues_child_grant,
+};
 
 #[test]
 fn every_child_granting_launch_arm_is_preflighted() {
-    // (no_launch, no_human, resume, standalone_reviewer) -> issues a child grant
+    // BUG-2139: every launch mints a child grant — including a fresh headless
+    // pickup, which used to exec the vendor under the launcher's own grant.
+    // Only `--no-launch` (no child at all) skips the preflight.
+    // trace:BUG-2139 | ai:claude
+    assert!(!queue_work_issues_child_grant(true));
+    assert!(queue_work_issues_child_grant(false));
+}
+
+#[test]
+fn only_a_fresh_headless_pickup_gets_the_baseline_fallback() {
+    // (no_human, resume, standalone_reviewer) -> fresh headless
+    // trace:BUG-2139 | ai:claude
     let cases = [
-        // --no-launch never launches a child, whatever else is set.
-        ((true, false, false, false), false),
-        ((true, true, true, true), false),
-        // Interactive launches always mint a child grant.
-        ((false, false, false, false), true),
-        ((false, false, true, false), true),
-        ((false, false, false, true), true),
-        // Headless: resume and standalone reviewer mint one; a fresh
-        // headless pickup execs the vendor without one.
-        ((false, true, true, false), true),
-        ((false, true, false, true), true),
-        ((false, true, false, false), false),
+        ((true, false, false), true),
+        ((true, true, false), false),
+        ((true, false, true), false),
+        ((false, false, false), false),
+        ((false, true, false), false),
+        ((false, false, true), false),
     ];
-    for ((no_launch, no_human, resume, reviewer), want) in cases {
+    for ((no_human, resume, reviewer), want) in cases {
         assert_eq!(
-            queue_work_issues_child_grant(no_launch, no_human, resume, reviewer),
+            queue_work_is_fresh_headless(no_human, resume, reviewer),
             want,
-            "no_launch={no_launch} no_human={no_human} resume={resume} reviewer={reviewer}"
+            "no_human={no_human} resume={resume} reviewer={reviewer}"
         );
     }
 }

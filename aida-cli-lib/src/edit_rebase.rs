@@ -52,6 +52,7 @@ const ATOMIC_FIELDS: &[&str] = &[
     "interface_changes",
     "ai_evaluation",
     "filed_at",
+    "hypothesis_lock", // trace:STORY-1675 | ai:codex
     "origin",
 ];
 
@@ -89,9 +90,13 @@ pub(crate) fn rebase_edit(
     let (r, p, c) = (as_map(read)?, as_map(planned)?, as_map(current)?);
     let null = Value::Null;
     // Leaving NeedsAttention acts on the parked spec as it was read; any
-    // concurrent change (a new tag, a comment, …) refuses.
+    // concurrent change (a new tag, a comment, …) refuses. An empty-change
+    // write event only records session/harness context, not a content
+    // change, so it never counts as one.
     // trace:TASK-1506 | ai:claude
+    // trace:STORY-1674 | ai:claude
     if opts.leaving_needs_attention {
+        let (r, c) = (without_write_events(&r), without_write_events(&c));
         let mut changed: Vec<String> = Vec::new();
         for k in c.keys().chain(r.keys()) {
             let Some(name) = k.as_str() else { continue };
@@ -126,6 +131,24 @@ pub(crate) fn rebase_edit(
     Ok(Ok(serde_yaml::from_value(Value::Mapping(merged))?))
 }
 
+/// `m` with the empty-change write events dropped from its history: those
+/// record the writing session's context only (STORY-1674) and are never a
+/// content change.
+// trace:STORY-1674 | ai:claude
+fn without_write_events(m: &Mapping) -> Mapping {
+    let mut out = m.clone();
+    if let Some(Value::Sequence(history)) = out.get_mut("history") {
+        history.retain(
+            |entry| matches!(entry.get("changes"), Some(Value::Sequence(c)) if !c.is_empty()),
+        );
+        // An empty history is not serialized, so match the absent key.
+        if history.is_empty() {
+            out.remove("history");
+        }
+    }
+    out
+}
+
 fn merge_maps(
     read: &Mapping,
     planned: &Mapping,
@@ -147,6 +170,24 @@ fn merge_maps(
             Some(s) => format!("{prefix}.{s}"),
             None => format!("{prefix}.?"),
         };
+        // `verify: null` is invalid-but-retained data, distinct from no block.
+        // Treat the complete block atomically, including field presence.
+        // trace:STORY-1673 | ai:codex
+        if name == "verify" {
+            let (r, p, c) = (read.get(k), planned.get(k), current.get(k));
+            let chosen = if p == r || c == p {
+                c
+            } else if c == r {
+                p
+            } else {
+                conflicts.push(name.clone());
+                c
+            };
+            if let Some(value) = chosen {
+                out.insert(k.clone(), value.clone());
+            }
+            continue;
+        }
         let r = read.get(k).unwrap_or(&null);
         let p = planned.get(k).unwrap_or(&null);
         let c = current.get(k).unwrap_or(&null);
@@ -623,6 +664,49 @@ mod tests {
         assert!(String::from_utf8_lossy(&log.stdout).contains("test subject"));
     }
 
+    // An empty-change write event (session context only) is not a content
+    // change, so the exit still applies; a real field change by another
+    // writer while the spec stays parked still refuses it.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn needs_attention_exit_ignores_write_events_but_refuses_real_changes() {
+        let f = fixture();
+        let mut parked = spec();
+        parked.status = RequirementStatus::NeedsAttention;
+        let read = f.backend.add_requirement(parked).unwrap();
+        let mut planned = read.clone();
+        planned.status = RequirementStatus::Approved;
+
+        let other = aida_core::GitBackend::new(&f.store_root).unwrap();
+        let mut theirs = other.get_requirement(&read.id).unwrap().unwrap();
+        theirs.priority = Priority::High;
+        other.update_requirement(&theirs).unwrap();
+        let after = on_disk(&f, "TASK-1");
+        assert!(
+            after.history.iter().any(|e| e.changes.is_empty()),
+            "the untracked write recorded a write event"
+        );
+
+        let err = write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            Some(&RequirementStatus::Approved),
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("priority"), "{err}");
+        assert!(!err.contains("history"), "{err}");
+        assert_eq!(
+            on_disk(&f, "TASK-1").status,
+            RequirementStatus::NeedsAttention
+        );
+    }
+
     // Review probe (a): the read copy has tags {keep}; the user runs
     // `--tags keep,x` while another writer removes keep and adds c. The
     // replace refuses and nothing is written. trace:TASK-1506 | ai:claude
@@ -813,5 +897,54 @@ mod tests {
         let disk = on_disk(&f, "TASK-1");
         assert_eq!(disk.title, "title");
         assert!(disk.tags.contains("protected"));
+    }
+    // trace:STORY-1675 | ai:codex
+    #[test]
+    fn hypothesis_cli_edit_shared_seam_refuses_description_but_allows_title() {
+        let f = fixture();
+        let mut h = spec();
+        h.req_type = aida_core::RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        let mut result = aida_core::Requirement::new("result".into(), "data".into());
+        result.spec_id = Some("TASK-998".into());
+        result.status = aida_core::RequirementStatus::Completed;
+        h.relationships.push(aida_core::models::Relationship {
+            rel_type: aida_core::RelationshipType::References,
+            target_id: result.id,
+            created_at: None,
+            created_by: None,
+        });
+        f.backend.add_requirement(result).unwrap();
+        let read = f.backend.add_requirement(h).unwrap();
+        assert!(read.hypothesis_lock.is_some());
+        let mut planned = read.clone();
+        planned.description = "post hoc".into();
+        let error = write_edit_atomically(
+            &f.backend,
+            "hypothesis",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("aida comment add"), "{error}");
+        planned.description = read.description.clone();
+        planned.title = "retitled".into();
+        let updated = write_edit_atomically(
+            &f.backend,
+            "hypothesis",
+            &read,
+            &planned,
+            None,
+            EditMerge::default(),
+            &no_gate,
+            None,
+        )
+        .unwrap();
+        assert_eq!(updated.title, "retitled");
+        assert_eq!(updated.hypothesis_lock, read.hypothesis_lock);
     }
 }

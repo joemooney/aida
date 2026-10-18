@@ -423,7 +423,9 @@ pub(crate) fn handle_burndown_run(
     // The skill re-resolves the ready set authoritatively (same gate), so the
     // preflight list is what WILL drain. Build the headless invocation.
     let prompt = burndown_skill_prompt(status, tag, batch, max, concurrency);
-    let mode = permission_mode.unwrap_or("bypassPermissions");
+    let contained = session::aida_contained_env()?;
+    let mode_str = crate::session::resolve_headless_claude_posture(permission_mode, contained)?;
+    let mode = &mode_str;
     let (project_verbose, global_verbose) = find_project_root()
         .ok()
         .map(|root| read_burndown_verbose_config(&root))
@@ -510,7 +512,9 @@ pub(crate) fn handle_burndown_run(
     // headless drain that pushes/merges/fans-out can't stall on prompts, so
     // default to bypassed permissions — but say so loudly and let `--permission-mode`
     // override. trace:STORY-545
-    if permission_mode.is_none() {
+    if contained {
+        println!("  {} launching headless `claude -p` contained", "→".green());
+    } else if permission_mode.is_none() {
         println!(
             "  {} launching headless `claude -p` with {} permissions (override: --permission-mode <mode>)",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -562,17 +566,41 @@ pub(crate) fn handle_burndown_run(
         let status_code = if stream_verbose {
             // TASK-804: stream-json + tee path. Redirect the drain's JSONL to a
             // discoverable log and render a live human progress line per event.
-            run_burndown_verbose(&current_prompt, mode)?
+            run_burndown_verbose(&current_prompt, mode, contained)?
         } else {
-            build_burndown_quiet_command(&current_prompt, mode, ceiling_key, &ceiling_value)
-                .status()
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
+            // trace:BUG-2165 | ai:antigravity
+            let child_grant = seat_authority::issue_headless_child(
+                &project_root,
+                "implementer",
+                &current_user_id(None),
+            )?;
+            if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+                eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    queue_cmd::headless_baseline_notice("implementer", cause)
+                );
+            }
+            let res = build_burndown_quiet_command(
+                &current_prompt,
+                mode,
+                child_grant.env_value(),
+                ceiling_key,
+                &ceiling_value,
+                contained,
+            )
+            .status()
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to launch `claude -p` ({e}) — the headless drain needs the Claude \
                      Code CLI on PATH. Install it, or use `aida queue work --auto-complete` \
                      (the orchestrator drain) instead."
-                    )
-                })?
+                )
+            });
+            if let Some(id) = child_grant.id() {
+                session::revoke_headless_child_grant(id);
+            }
+            res?
         };
 
         let code = status_code.code().unwrap_or(1);
@@ -1376,7 +1404,16 @@ pub(crate) fn file_integration_wait_finding(
 /// drain's permission posture or control flow. The prompt stays the trailing
 /// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
 pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
-    vec![
+    burndown_verbose_claude_args_with_containment(prompt, mode, false)
+}
+
+// trace:TASK-804 trace:BUG-2171 | ai:antigravity
+pub(crate) fn burndown_verbose_claude_args_with_containment(
+    prompt: &str,
+    mode: &str,
+    contained: bool,
+) -> Vec<String> {
+    let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
         mode.to_string(),
@@ -1384,8 +1421,12 @@ pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<Stri
         "stream-json".to_string(),
         "--verbose".to_string(),
         "--include-partial-messages".to_string(),
-        prompt.to_string(),
-    ]
+    ];
+    if contained {
+        args.extend(crate::session::claude_contained_flags());
+    }
+    args.push(prompt.to_string());
+    args
 }
 
 /// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
@@ -1953,8 +1994,13 @@ pub(crate) fn render_burndown_status_json(
 /// and a background tee renders a human-readable progress line per event to
 /// stderr — so a long drain shows live progress instead of a silent terminal.
 /// Reuses the proven `headless_tee` machinery (TASK-307) rather than rolling a
-/// new renderer. trace:TASK-804 | ai:claude
-pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::process::ExitStatus> {
+/// new renderer.
+// trace:TASK-804 trace:BUG-2171 trace:BUG-2170 | ai:claude ai:antigravity
+pub(crate) fn run_burndown_verbose(
+    prompt: &str,
+    mode: &str,
+    contained: bool,
+) -> Result<std::process::ExitStatus> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
     // TASK-1169 / ADR-22: same bounded ceiling the quiet launch sets.
@@ -1996,39 +2042,64 @@ pub(crate) fn run_burndown_verbose(prompt: &str, mode: &str) -> Result<std::proc
     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false).with_label("burndown");
     let tee_handle = headless_tee::start_tee(&log_path, &tee_opts);
 
+    // trace:BUG-2165 | ai:antigravity
     let child_grant =
-        seat_authority::issue_child(&project_root, "implementer", &current_user_id(None))?;
-    let status_code =
-        build_burndown_verbose_command(prompt, mode, &child_grant.id, ceiling_key, &ceiling_value)
-            .stdout(std::process::Stdio::from(log))
-            .status()
-            .map_err(|e| {
-                anyhow::anyhow!(
+        seat_authority::issue_headless_child(&project_root, "implementer", &current_user_id(None))?;
+    if let seat_authority::HeadlessChildGrant::Baseline { cause } = &child_grant {
+        eprintln!(
+            "  {} {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            queue_cmd::headless_baseline_notice("implementer", cause)
+        );
+    }
+    let status_code = build_burndown_verbose_command(
+        prompt,
+        mode,
+        child_grant.env_value(),
+        ceiling_key,
+        &ceiling_value,
+        contained,
+    )
+    .stdout(std::process::Stdio::from(log))
+    .status()
+    .map_err(|e| {
+        anyhow::anyhow!(
             "failed to launch `claude -p` ({e}) — the headless drain needs the Claude Code \
              CLI on PATH. Install it, or use `aida queue work --auto-complete` (the \
              orchestrator drain) instead."
         )
-            });
+    });
     // Always stop the tee, even on spawn failure, so the background thread exits.
     tee_handle.stop();
+    if let Some(id) = child_grant.id() {
+        session::revoke_headless_child_grant(id);
+    }
     status_code
 }
 
 // trace:BUG-2124 | ai:antigravity
+// trace:BUG-2165 | ai:antigravity
+// trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_burndown_quiet_command(
     current_prompt: &str,
     mode: &str,
+    grant_env: &str,
     ceiling_key: &str,
     ceiling_value: &str,
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("claude");
     cmd.arg("-p")
         .arg(current_prompt)
         .arg("--permission-mode")
-        .arg(mode)
-        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+        .arg(mode);
+    if contained {
+        cmd.args(crate::session::claude_contained_flags());
+    }
+    cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .env(ceiling_key, ceiling_value);
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", grant_env);
+    if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
@@ -2037,20 +2108,24 @@ pub(crate) fn build_burndown_quiet_command(
 }
 
 // trace:BUG-2124 | ai:antigravity
+// trace:BUG-2165 | ai:antigravity
+// trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_burndown_verbose_command(
     prompt: &str,
     mode: &str,
     child_grant_id: &str,
     ceiling_key: &str,
     ceiling_value: &str,
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("claude");
-    cmd.args(burndown_verbose_claude_args(prompt, mode))
-        .env("AIDA_BURNDOWN_LOCK_HELD", "1")
-        .env("AIDA_SESSION_ROLE", "implementer")
-        .env(seat_authority::GRANT_ENV, child_grant_id)
-        .env(ceiling_key, ceiling_value);
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    cmd.args(burndown_verbose_claude_args_with_containment(
+        prompt, mode, contained,
+    ))
+    .env("AIDA_BURNDOWN_LOCK_HELD", "1")
+    .env(ceiling_key, ceiling_value);
+    crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", child_grant_id);
+    if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

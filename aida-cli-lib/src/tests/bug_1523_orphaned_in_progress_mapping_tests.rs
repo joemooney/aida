@@ -10,6 +10,7 @@ use super::*;
 /// covers rendering only; this covers detection → emission.
 fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -38,6 +39,7 @@ fn lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

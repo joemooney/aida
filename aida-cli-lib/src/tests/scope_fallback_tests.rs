@@ -3,6 +3,7 @@ use aida_core::models::Relationship;
 
 fn lease_for(scope: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "selflease0001".into(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
@@ -31,6 +32,7 @@ fn lease_for(scope: &str) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

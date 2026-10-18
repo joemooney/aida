@@ -179,6 +179,7 @@ mod questions;
 mod queue_cmd;
 mod queue_misc;
 mod rel_cards;
+mod relay_stall;
 mod requirements_cli;
 mod review_gates;
 mod role;
@@ -211,6 +212,7 @@ mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
 mod worktree_gc;
+mod write_provenance;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;
@@ -404,6 +406,9 @@ mod mcp;
 mod mcp_translate;
 mod memories_cmd;
 mod merge_hold;
+// trace:STORY-1698 | ai:claude — the fire-fighting mandate.
+mod mandate;
+mod mandate_traces;
 mod merge_lock;
 mod metrics;
 mod metrics_cmd;
@@ -497,6 +502,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
+mod seat_clone;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
@@ -559,6 +566,8 @@ mod ultraplan_cmd;
 mod upgrade_cmd;
 mod usage;
 mod usage_cmd;
+// trace:STORY-1673 | ai:codex
+mod verify_cmd;
 // trace:TASK-877 | ai:claude — user/project-defined `aida` command aliases.
 mod user_alias;
 mod worker;

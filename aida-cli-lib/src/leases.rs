@@ -187,6 +187,21 @@ pub(crate) struct SessionLease {
     // trace:STORY-1653 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) driver: Option<String>,
+    /// BUG-2169: whether `worktree_path` is a linked worktree of the main
+    /// checkout or a contained seat's private clone. Absent on older leases,
+    /// which read as `worktree`; a worktree lease never writes the key.
+    // trace:BUG-2169 | ai:claude
+    #[serde(
+        default,
+        skip_serializing_if = "crate::seat_clone::TreeKind::is_worktree"
+    )]
+    pub(crate) tree_kind: crate::seat_clone::TreeKind,
+    /// BUG-2139 / BUG-2165: child grant id stamped on the lease for a
+    /// headless child session. Preserved across lease updates so
+    /// `update_lease_branch` and `mark_lease_escalated_to_human` do not drop it.
+    // trace:BUG-2165 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) child_grant_id: Option<String>,
 }
 
 pub(crate) fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -269,6 +284,7 @@ pub(crate) fn session_harness_worktree_register(
         .unwrap_or_else(|| "unknown".to_string());
     let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: spec.scope.clone(),
         slug: slugify(&spec.scope),
@@ -315,6 +331,7 @@ pub(crate) fn session_harness_worktree_register(
         interrupted_at: None,
         interrupted_reason: None,
         driver: aida_core::driver_registry::driver_from_env(), // trace:STORY-1653 | ai:claude
+        child_grant_id: None,
     };
 
     std::fs::create_dir_all(leases_dir(&project_root))?;
@@ -2886,6 +2903,8 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // (after the same activity aggregation) and stop.
     if lease.worktree_path.as_os_str().is_empty() {
         aggregate_session_activity_into_roles(project_root, &lease.id);
+        // trace:BUG-2139 | ai:claude
+        crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
         let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
         let activity = session_activity_path(project_root, &lease.id);
         if activity.exists() {
@@ -2953,6 +2972,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     let lease_target: &std::path::Path = canonical_lease
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
+    // BUG-2139: a headless child's grant ends with its lease.
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(lease_target);
     match std::fs::remove_file(lease_target) {
         Ok(_) | Err(_) => {}
     }
@@ -4118,6 +4140,8 @@ pub(crate) fn remove_session_lease_record_only(
     lease_id: &str,
 ) -> bool {
     let lease_file = lease_path(project_root, lease_id);
+    // trace:BUG-2139 | ai:claude
+    crate::session::revoke_lease_child_grant(&lease_file);
     let removed = match std::fs::remove_file(&lease_file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,

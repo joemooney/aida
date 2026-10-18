@@ -2,6 +2,7 @@ use super::*;
 
 fn spec_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -30,6 +31,7 @@ fn spec_lease(id: &str, scope: &str, worktree: std::path::PathBuf) -> SessionLea
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

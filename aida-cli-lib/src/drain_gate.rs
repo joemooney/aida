@@ -1359,6 +1359,37 @@ pub(crate) fn run_plan_prelude(spec: &str, headless_implementer: bool, json: boo
 /// failed) still exit the process directly — they would recur identically on
 /// every batch iteration. trace:STORY-246, TASK-285 | ai:claude
 #[allow(clippy::too_many_arguments)]
+/// BUG-2139: the seats a `--no-human` drain launches headless: the
+/// implementer under `both`, and the reviewer under every mode.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn headless_phase_seats(mode: auto_complete::NoHumanMode) -> Vec<&'static str> {
+    let mut seats = Vec::new();
+    if mode.wants_headless_implementer() {
+        seats.push("implementer");
+    }
+    seats.push("reviewer");
+    seats
+}
+
+/// BUG-2139: refuse a `--no-human` drain up front when the launcher cannot
+/// give one of its headless phases a child grant (a baseline seat may still
+/// run ungranted; see `seat_authority::preflight_headless_child`).
+// trace:BUG-2139 | ai:claude
+pub(crate) fn preflight_headless_phase_seats(
+    project_root: &std::path::Path,
+    mode: auto_complete::NoHumanMode,
+) -> anyhow::Result<()> {
+    for seat in headless_phase_seats(mode) {
+        crate::seat_authority::preflight_headless_child(project_root, seat).map_err(|cause| {
+            anyhow::anyhow!(
+                "headless drain refused before any phase started: the headless `{seat}` phase \
+                 needs a `{seat}` child grant, but {cause:#}"
+            )
+        })?;
+    }
+    Ok(())
+}
+
 pub(crate) fn run_auto_complete(
     storage: &Storage,
     user_id: &str,
@@ -1439,6 +1470,27 @@ pub(crate) fn run_auto_complete(
             if let Some(status) = terminal {
                 return auto_complete::finish_noop(spec, status, json, &std::time::Instant::now());
             }
+        }
+    }
+    // BUG-2139: every headless phase runs under its own child grant, so a
+    // launcher that cannot delegate a headless phase's seat would otherwise be
+    // refused only when that phase starts — the reviewer after phase 1 has
+    // already pushed. Preflight every headless phase seat up front, before the
+    // queue add below or any phase-1 mutation. Read-only.
+    // trace:BUG-2139 | ai:claude
+    if let Some(mode) = no_human {
+        // Root resolution is part of the gate: failure cannot skip authority
+        // validation and reach queue mutation or the plan prelude.
+        // trace:TASK-1789 | ai:codex
+        let preflight = find_main_worktree_root()
+            .context("headless drain refused before any phase started: could not resolve the project root")
+            .and_then(|root| preflight_headless_phase_seats(&root, mode));
+        if let Err(reason) = preflight {
+            eprintln!(
+                "{} {reason:#}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold()
+            );
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
         }
     }
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
@@ -1795,4 +1847,104 @@ pub(crate) fn run_auto_complete(
     let _ = agent_registry::gc_dead_agents(&project_root, false, None);
 
     result
+}
+
+// trace:BUG-2139 | ai:claude
+#[cfg(test)]
+mod bug_2139_headless_phase_seat_tests {
+    use super::*;
+
+    // trace:TASK-1789 | ai:codex
+    #[test]
+    fn unresolved_root_refuses_before_queue_or_phase_mutation() {
+        // Cwd changes are process-global; keep this in one exact-test child.
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        std::env::set_current_dir(tmp.path()).unwrap();
+        assert!(find_main_worktree_root().is_err());
+        let storage = Storage::new(tmp.path().join("requirements.yaml"));
+        let mut store = aida_core::RequirementsStore::new();
+        let mut req = aida_core::Requirement::new("eligible spec".into(), "fixture".into());
+        req.spec_id = Some("TASK-1789".into());
+        req.status = RequirementStatus::Approved;
+        req.execution_mode = Some(aida_core::ExecutionMode::Drain);
+        store.requirements.push(req);
+        storage.save(&store).unwrap();
+        // The spec gates must allow this fixture, so only the new root gate
+        // can return before queue preflight (which would spawn/exit).
+        assert!(guarded_execution_mode_for_drain(&storage, "TASK-1789").is_none());
+        assert!(keyboard_only_dispatch_refusal(&storage, "TASK-1789").is_none());
+        for mode in [
+            auto_complete::NoHumanMode::Both,
+            auto_complete::NoHumanMode::ReviewerOnly,
+        ] {
+            let result = run_auto_complete(
+                &storage,
+                "test-user",
+                "TASK-1789",
+                auto_complete::AutoCompleteVariant::Full,
+                false,
+                None,
+                Some(mode),
+                auto_complete::EscalateMode::Blocks,
+                true,
+                false,
+                false,
+                false,
+                false,
+                None,
+            );
+            assert_ne!(result.exit_code, 0);
+            assert_eq!(result.failed_phase, Some(auto_complete::Phase::Implementer));
+            assert!(!tmp.path().join(".aida").exists());
+        }
+    }
+
+    #[test]
+    fn every_headless_phase_seat_is_preflighted() {
+        assert_eq!(
+            headless_phase_seats(auto_complete::NoHumanMode::Both),
+            vec!["implementer", "reviewer"]
+        );
+        assert_eq!(
+            headless_phase_seats(auto_complete::NoHumanMode::ReviewerOnly),
+            vec!["reviewer"]
+        );
+    }
+
+    /// A launcher that cannot delegate `reviewer` is refused before any phase
+    /// runs; the implementer phase alone would have fallen back to baseline.
+    #[test]
+    fn a_drain_without_reviewer_delegation_is_refused_up_front() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let mut env = crate::test_env::EnvVarsGuard::snapshot(&[
+            "AIDA_USER",
+            crate::seat_authority::GRANT_ENV,
+        ]);
+        env.set_key("AIDA_USER", "bug-2139-drain-user");
+        let narrow = crate::seat_authority::test_support::mint_grant_for(
+            root,
+            "bug-2139-drain-user",
+            "advisor",
+            &["implementer"],
+        );
+        env.set_key(crate::seat_authority::GRANT_ENV, &narrow);
+        let err = preflight_headless_phase_seats(root, auto_complete::NoHumanMode::Both)
+            .expect_err("the reviewer phase cannot be granted");
+        assert!(
+            format!("{err:#}").contains("headless `reviewer` phase"),
+            "{err:#}"
+        );
+        let full = crate::seat_authority::test_support::mint_grant_for(
+            root,
+            "bug-2139-drain-user",
+            "advisor",
+            &["implementer", "reviewer"],
+        );
+        env.set_key(crate::seat_authority::GRANT_ENV, &full);
+        preflight_headless_phase_seats(root, auto_complete::NoHumanMode::Both).unwrap();
+    }
 }

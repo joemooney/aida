@@ -359,6 +359,7 @@ fn spawned_agy_process_receives_the_ordered_argv() {
         project_root: project.clone(),
         stdin_is_terminal: false,
         stdout_is_terminal: false,
+        stderr_is_terminal: false,
     }));
 
     let prompt = "/aida-pickup BUG-1680";
@@ -421,6 +422,7 @@ fn compose_headless_command_for_agy_orders_flags_before_the_prompt() {
         ("HOME", Some(home.to_str().unwrap())),
         ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
         ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
     ]);
 
     let prompt = "/aida-pickup BUG-1680";

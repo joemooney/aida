@@ -722,6 +722,7 @@ fn add_proxy_approval(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: Some(session.clone()),
+        harness_version: None,
         relayed_from: None,
     };
     req.comments.push(comment);
@@ -1071,6 +1072,7 @@ mod show_latency_regression_tests {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         }];
         let hint = toon_show_comment_lines(&comments, false).join("\n");
@@ -1708,9 +1710,22 @@ pub(crate) fn handle_git_backend_command(
                         spec,
                         group_by,
                         cost,
+                        provenance,
                         json,
                         toon,
                     } => {
+                        if *provenance {
+                            let req = backend
+                                .get_requirement_by_spec_id(spec)?
+                                .ok_or_else(|| anyhow::anyhow!("requirement not found: {spec}"))?;
+                            return crate::write_provenance::show(
+                                store_path.parent().unwrap_or(store_path),
+                                &req,
+                                *json || output_format_is_json(),
+                                *toon,
+                            );
+                        }
+
                         let root = store_path.parent().unwrap_or(store_path);
                         return token_ledger::show(
                             root,
@@ -1957,6 +1972,7 @@ pub(crate) fn handle_git_backend_command(
         Command::Plan(_) => unreachable!("plan is dispatched before storage init"),
         Command::Deps(_) => unreachable!("deps is dispatched before storage init"),
         Command::Lint { .. } => unreachable!("lint is dispatched before storage init"),
+        Command::Verify(_) => unreachable!("verify is dispatched before storage init"),
         Command::Gate(_) => unreachable!("gate is dispatched before storage init"),
         Command::Lifecycle { .. } => {
             unreachable!("lifecycle is dispatched before storage init")
@@ -5364,6 +5380,10 @@ pub(crate) fn handle_git_backend_command(
                         if let Some(o) = &req.origin {
                             lines.push(crate::toon::scalar("origin", &o.to_string()));
                         }
+                        // trace:STORY-1673 | ai:claude
+                        if let Some(v) = &req.verify {
+                            lines.push(crate::toon::scalar("verify", &v.to_string()));
+                        }
                         // CR-8: filing provenance, one compact scalar, only
                         // when stamped. trace:CR-8 | ai:claude
                         if let Some(p) = req.filed_at.as_ref().filter(|p| !p.is_empty()) {
@@ -5580,6 +5600,12 @@ pub(crate) fn handle_git_backend_command(
                     // absent = single-repo, prints nothing.
                     if let Some(o) = &req.origin {
                         println!("{}: {}", "Origin".bold(), o.to_string().cyan());
+                    }
+                    // The data-only constraint check, verbatim; probes run
+                    // only under `aida verify constraints`.
+                    // trace:STORY-1673 | ai:claude
+                    if let Some(v) = &req.verify {
+                        println!("{}: {}", "Verify".bold(), v.to_string().dimmed());
                     }
                     // CR-8: where (code state) and with what (tooling) the
                     // spec was filed — one compact line, only when stamped.
@@ -6116,6 +6142,8 @@ pub(crate) fn handle_git_backend_command(
             description,
             description_from_file,
             description_stdin,
+            verify,
+            clear_verify,
             status,
             priority,
             r#type,
@@ -6324,6 +6352,8 @@ pub(crate) fn handle_git_backend_command(
             // trace:TASK-1117 | ai:claude
             let no_field_flags = title.is_none()
                 && description.is_none()
+                && verify.is_none()
+                && !*clear_verify
                 && status.is_none()
                 && priority.is_none()
                 && r#type.is_none()
@@ -6822,6 +6852,16 @@ pub(crate) fn handle_git_backend_command(
                     }
                 }
                 req.req_type = rt;
+                changed = true;
+            }
+            // After --type so `--type constraint --verify ...` works in one
+            // call. No probe runs while authoring the data-only block.
+            // trace:STORY-1673 | ai:claude
+            if let Some(change) =
+                verify_cmd::apply_verify_edit(&mut req, verify.as_deref(), *clear_verify)?
+            {
+                let author = get_default_author();
+                req.record_change(author, vec![change]);
                 changed = true;
             }
             if let Some(o) = owner {
@@ -7751,6 +7791,7 @@ pub(crate) fn handle_git_backend_command(
                 reactions: Vec::new(),
                 // trace:TASK-330 | ai:claude — stamp the producing session
                 session_id: resolve_current_session_id(),
+                harness_version: None,
                 relayed_from: None,
             }
             // trace:BUG-1534 | ai:claude — record whose claim this relays.
@@ -8502,7 +8543,10 @@ pub(crate) fn handle_git_backend_command(
                 aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
             }
 
-            target.save(&store)?;
+            // trace:STORY-1674 | ai:codex — source snapshots do not fence destination writes.
+            let mut transferred = store.clone();
+            transferred.loaded_objects = None;
+            target.save_imported(&transferred)?;
             println!(
                 "Exported {} requirements to {}",
                 store.requirements.len(),

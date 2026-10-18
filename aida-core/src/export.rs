@@ -303,6 +303,10 @@ pub struct ExportedRequirement {
     /// Requirement description
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Permanent pre-registration evidence travels with a copied tree.
+    // trace:STORY-1675 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis_lock: Option<crate::models::HypothesisLock>,
     /// Requirement type
     pub req_type: RequirementType,
     /// Meta subtype (for Meta requirements)
@@ -327,6 +331,14 @@ pub struct ExportedRequirement {
     /// Custom fields
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub custom_fields: HashMap<String, String>,
+    /// Data-only host verification; invalid blocks remain reportable.
+    // trace:STORY-1673 | ai:codex
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::constraints::deserialize_verify"
+    )]
+    pub verify: Option<serde_json::Value>,
     /// Custom status (for types with custom statuses)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_status: Option<String>,
@@ -493,6 +505,7 @@ fn export_requirement_tree(
         } else {
             Some(req.description.clone())
         },
+        hypothesis_lock: req.hypothesis_lock.clone(),
         req_type: req.req_type.clone(),
         meta_subtype: req.meta_subtype.clone(),
         status: req.status.clone(),
@@ -502,6 +515,7 @@ fn export_requirement_tree(
         tags: req.tags.clone(),
         comments: req.comments.clone(),
         custom_fields: req.custom_fields.clone(),
+        verify: req.verify.clone(),
         custom_status: req.custom_status.clone(),
         custom_priority: req.custom_priority.clone(),
         archived: req.archived,
@@ -600,6 +614,7 @@ fn import_requirement_recursive(
 
     let description = exported.description.clone().unwrap_or_default();
     let mut new_req = Requirement::new(title.clone(), description);
+    new_req.hypothesis_lock = exported.hypothesis_lock.clone();
     new_req.req_type = exported.req_type.clone();
     new_req.meta_subtype = exported.meta_subtype.clone();
     new_req.status = exported.status.clone();
@@ -609,6 +624,7 @@ fn import_requirement_recursive(
     new_req.tags = exported.tags.clone();
     new_req.comments = exported.comments.clone();
     new_req.custom_fields = exported.custom_fields.clone();
+    new_req.verify = exported.verify.clone();
     new_req.custom_status = exported.custom_status.clone();
     new_req.custom_priority = exported.custom_priority.clone();
     new_req.archived = exported.archived;

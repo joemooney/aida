@@ -10736,18 +10736,36 @@ pub(crate) fn is_standalone_reviewer(role: &str, has_review_target: bool) -> boo
 /// via `seat_authority::issue_child`, and so must preflight delegation before
 /// any mutation. Mirrors the launch arms of `handle_queue_work`:
 /// - `--no-launch` launches nothing, so no child grant;
-/// - every interactive launch mints one for the pickup role;
-/// - `--no-human` mints one on a resume (`spawn_claude_headless_resume`) and
-///   on a standalone reviewer (`run_standalone_reviewer`); a fresh headless
-///   pickup execs the vendor without a child grant.
+/// - every other launch — interactive, headless resume, standalone reviewer
+///   and (BUG-2139) a fresh headless pickup — mints one for the pickup role.
+///   A fresh headless pickup never runs under the launcher's grant.
 // trace:BUG-1808 | ai:claude
-pub(crate) fn queue_work_issues_child_grant(
-    no_launch: bool,
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_issues_child_grant(no_launch: bool) -> bool {
+    !no_launch
+}
+
+/// BUG-2139: whether this launch is a fresh headless pickup — the arm that
+/// execs the vendor through `session::exec_vendor_headless`. It is the one
+/// arm where a launcher that cannot delegate a BASELINE seat still launches,
+/// with the child at baseline authority (`AIDA_SESSION_GRANT=""`); every other
+/// arm requires delegation.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn queue_work_is_fresh_headless(
     no_human: bool,
     resume: bool,
     standalone_reviewer: bool,
 ) -> bool {
-    !no_launch && (!no_human || resume || standalone_reviewer)
+    no_human && !resume && !standalone_reviewer
+}
+
+/// BUG-2139: the one line a baseline headless launch prints.
+// trace:BUG-2139 | ai:claude
+pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
+    format!(
+        "headless `{seat}` child runs ungranted at baseline authority (AIDA_SESSION_GRANT=\"\"): \
+         the launcher cannot delegate `{seat}` ({cause})"
+    )
 }
 
 /// The refusal printed when the launcher's grant cannot delegate the child
@@ -10874,6 +10892,12 @@ pub(crate) fn honour_auto_complete_sandbox(
     sandbox: bool,
     permission_mode: Option<&str>,
 ) -> Result<()> {
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    let contained_env = session::aida_contained_env()?;
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     if !sandbox {
         return Ok(());
     }
@@ -10900,6 +10924,76 @@ pub(crate) fn apply_queue_work_contained_env(contained: bool) {
 // trace:BUG-2010 | ai:antigravity
 pub(crate) fn queue_work_self_claim(no_launch: bool) -> bool {
     no_launch
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct QueueWorkPosture {
+    pub(crate) contained: bool,
+    pub(crate) permission_mode: Option<String>,
+    pub(crate) permission_mode_origin: &'static str,
+}
+
+// BUG-2166: monotonic containment — a contained parent's env always wins
+// (BUG-2151 ruling). `--plan-only` must not disable containment, and
+// `--permission-mode` must be refused under a contained parent.
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn resolve_queue_work_posture(
+    permission_mode: Option<&str>,
+    sandbox: bool,
+    contained_env: bool,
+    contained_knob: bool,
+    bypass_knob: bool,
+    plan_only: bool,
+    env_mode: Option<&str>,
+    config_mode: Option<&str>,
+) -> Result<QueueWorkPosture> {
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
+    let contained = sandbox || contained_env || contained_knob;
+    if contained && bypass_knob {
+        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
+    }
+    let (permission_mode, permission_mode_origin) = if contained {
+        (Some("dontAsk".to_string()), "contained sandbox")
+    } else {
+        resolve_queue_work_permission_mode(
+            permission_mode,
+            env_mode,
+            config_mode,
+            bypass_knob,
+            plan_only,
+        )
+    };
+    Ok(QueueWorkPosture {
+        contained,
+        permission_mode,
+        permission_mode_origin,
+    })
+}
+
+// trace:BUG-2166 | ai:antigravity
+pub(crate) fn build_queue_work_claude_command(
+    posture: &QueueWorkPosture,
+    name: Option<&str>,
+    prompt: &str,
+    session_id: &str,
+    model: Option<&str>,
+    grant_id: Option<&str>,
+) -> std::process::Command {
+    session::build_claude_exec_command(
+        posture.permission_mode.as_deref(),
+        name,
+        Some(prompt),
+        Some(session_id),
+        posture.contained,
+        model,
+        grant_id,
+    )
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -11161,17 +11255,26 @@ pub(crate) fn handle_queue_work(
         .unwrap_or(false);
     // trace:BUG-2146 | ai:claude
     let contained_env = session::aida_contained_env()?;
+    // BUG-2166: a contained parent's env always wins (monotonic containment,
+    // BUG-2151 ruling). `--plan-only` must not disable containment, and
+    // `--permission-mode` must be refused under a contained parent.
+    // trace:BUG-2166 | ai:antigravity
+    if sandbox && permission_mode.is_some() {
+        anyhow::bail!(
+            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
+        );
+    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
+    let contained = sandbox || contained_env || contained_knob;
     // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
     // on a vendor that cannot apply it is refused HERE — before the queue_add
     // row, the calibration/effort tags, any lease or worktree — rather than
     // silently running uncontained. `contained` below uses the same inputs.
     // trace:BUG-2144 | ai:claude
+    // trace:BUG-2166 | ai:antigravity
     if !no_launch && !list_sessions {
-        session::require_vendor_containment(
-            launch_vendor,
-            !plan_only && (sandbox || contained_env || contained_knob),
-            "queue-work session",
-        )?;
+        session::require_vendor_containment(launch_vendor, contained, "queue-work session")?;
     }
     let model_root = project_root_for_config
         .clone()
@@ -11220,16 +11323,23 @@ pub(crate) fn handle_queue_work(
             // launches, which used to skip this check and refuse in
             // `issue_child` only after the status bump, queue row, worktree,
             // lease and manifest had landed.
-            if queue_work_issues_child_grant(
-                no_launch,
-                no_human,
-                matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                is_standalone_reviewer(&role, plan.review_target.is_some()),
-            ) {
+            if queue_work_issues_child_grant(no_launch) {
                 let child_seat = crate::canonical_role_name(&role);
-                if let Err(cause) =
+                // BUG-2139: a fresh headless pickup now mints a child grant
+                // too. Its baseline seats may fall back to an ungranted child;
+                // every other arm and seat must be delegated.
+                let preflight = if queue_work_is_fresh_headless(
+                    no_human,
+                    matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                    is_standalone_reviewer(&role, plan.review_target.is_some()),
+                ) {
+                    crate::seat_authority::preflight_headless_child(&project_root, &child_seat)
+                        .map(|_| ())
+                } else {
                     crate::seat_authority::validate_child_delegation(&project_root, &child_seat)
-                {
+                        .map(|_| ())
+                };
+                if let Err(cause) = preflight {
                     let launcher = crate::seat_authority::current_grant(&project_root);
                     anyhow::bail!(queue_work_delegation_refusal(
                         &child_seat,
@@ -11343,15 +11453,17 @@ pub(crate) fn handle_queue_work(
         .as_deref()
         .map(|r| load_agents_bypass(r).unwrap_or(false))
         .unwrap_or(false);
-    if sandbox && permission_mode.is_some() {
-        anyhow::bail!(
-            "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
-        );
-    }
-    let contained = !plan_only && (sandbox || contained_env || contained_knob);
-    if contained && bypass_knob {
-        anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
-    }
+    let posture = resolve_queue_work_posture(
+        permission_mode,
+        sandbox,
+        contained_env,
+        contained_knob,
+        bypass_knob,
+        plan_only,
+        env_mode.as_deref(),
+        config_mode.as_deref(),
+    )?;
+    let contained = posture.contained;
     // trace:BUG-2131 | ai:claude
     if contained {
         aida_core::git_ops::ensure_git_supports_contained()?;
@@ -11359,20 +11471,14 @@ pub(crate) fn handle_queue_work(
     apply_queue_work_contained_env(contained);
     let explicit_permission_mode = permission_mode.is_some();
     let mut bypass_prompt_declined = false;
-    let (mut permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
-    } else {
-        resolve_queue_work_permission_mode(
-            permission_mode,
-            env_mode.as_deref(),
-            config_mode.as_deref(),
-            bypass_knob,
-            plan_only,
-        )
-    };
+    let (mut permission_mode, permission_mode_origin) =
+        (posture.permission_mode, posture.permission_mode_origin);
     // TASK-1500: interactive queue work owns a human consent prompt. Corroborated
     // orchestrated children already passed dispatch authority and must not hang.
-    if !no_human && !plan_only && permission_mode.as_deref() == Some("bypassPermissions") {
+    // BUG-2166: `--plan-only` must not skip the bypass consent prompt if an
+    // uncontained interactive session resolves to bypassPermissions.
+    // trace:BUG-2166 | ai:antigravity
+    if !no_human && permission_mode.as_deref() == Some("bypassPermissions") {
         let orchestrated = project_root_for_config
             .as_deref()
             .is_some_and(|root| crate::orchestrator::detect(root).is_orchestrated());
@@ -12377,6 +12483,9 @@ pub(crate) fn handle_queue_work(
             None,
             /* self_claim */
             queue_work_self_claim(no_launch),
+            // trace:BUG-2169 | ai:claude
+            /* contained_seat */
+            contained,
         )
     };
     if no_launch {
@@ -12700,6 +12809,9 @@ pub(crate) fn handle_queue_work(
         }
         // trace:TASK-1594 | ai:claude
         let mut child_grant_id = None;
+        // BUG-2139: the fresh headless child's own authority — minted here,
+        // never inherited from the launcher. `None` on every other arm.
+        let mut headless_child_grant = None;
         if !no_human {
             let child_grant = crate::seat_authority::issue_child(
                 &project_root,
@@ -12707,6 +12819,34 @@ pub(crate) fn handle_queue_work(
                 &crate::current_user_id(None),
             )?;
             child_grant_id = Some(child_grant.id);
+        } else if matches!(launch, QueueWorkLaunch::Fresh(_)) {
+            // trace:BUG-2139 | ai:claude
+            let seat = crate::canonical_role_name(&role);
+            let grant = crate::seat_authority::issue_headless_child(
+                &project_root,
+                &seat,
+                &crate::current_user_id(None),
+            )?;
+            match &grant {
+                crate::seat_authority::HeadlessChildGrant::Issued(issued) => {
+                    // Stamped beside `active_pid`, so a lease end or reap
+                    // revokes it even if this launcher dies before the child.
+                    if let Err(e) =
+                        session::stamp_lease_child_grant_at(&project_root, &lease.id, &issued.id)
+                    {
+                        session::revoke_headless_child_grant(&issued.id);
+                        return Err(
+                            e.context("could not record the headless child grant on its lease")
+                        );
+                    }
+                }
+                crate::seat_authority::HeadlessChildGrant::Baseline { cause } => eprintln!(
+                    "  {} {}",
+                    crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+                    headless_baseline_notice(&seat, cause)
+                ),
+            }
+            headless_child_grant = Some(grant);
         }
         // TASK-895: a Codex tab hosts a fresh interactive Codex session. Codex has
         // no caller-minted session id / AIDA-addressable resume, and the interactive
@@ -12889,6 +13029,10 @@ pub(crate) fn handle_queue_work(
                     // trace:TASK-307 | ai:claude
                     let tee_opts = headless_tee::TeeOptions::from_env_and_flag(false)
                         .with_label(&lease.branch);
+                    // trace:BUG-2139 | ai:claude
+                    let child_grant = headless_child_grant
+                        .as_ref()
+                        .expect("BUG-2139: a fresh headless launch minted its child authority");
                     return session::exec_vendor_headless(
                         headless_vendor,
                         &prompt,
@@ -12897,6 +13041,8 @@ pub(crate) fn handle_queue_work(
                         &tee_opts,
                         contained,
                         Some(&lease.id),
+                        &crate::canonical_role_name(&role),
+                        child_grant,
                     );
                 }
                 eprintln!(

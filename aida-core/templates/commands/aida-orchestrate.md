@@ -34,16 +34,26 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    once, give each a wall-clock and token budget in its brief, and state the
    child's model explicitly; a child that runs out is stopped and re-dispatched
    once, never retried silently. <!-- trace:BUG-1816 | ai:claude -->
-5. Give every branch a fresh reviewer, and a strict one for drain, merge,
-   store, lock, authority or unattended-launch code. On REQUEST_CHANGES,
-   return the findings to the same implementer, then re-review with a new
-   reviewer.
+5. Give every branch a fresh reviewer as a separate process launched from
+   Bash: `aida queue work PR-<n> --role reviewer --no-human --vendor claude`
+   (under `AIDA_CONTAINED` the codex vendor refuses). Only when it exits 0
+   with a `verdict:` line, read `.aida/review-verdicts/PR-<n>.json`; any
+   non-zero exit (30 = no verified verdict) means launch a new reviewer. If
+   it refuses with "branch pr-<n> is held by worktree ...", run
+   `aida session end --spec PR-<n> --remove --skip-ci --yes` and
+   `git branch -D pr-<n>`, then relaunch; if it refuses with "base is N
+   commits behind ... overlaps", have the author merge main up first. Never review through the Agent tool,
+   never write the reviewer's prompt, and never record a verdict yourself.
+   Your seat must be entered with `--delegate-seat reviewer`. On
+   RequestChanges, return the findings to the same implementer, then launch a
+   new reviewer at the new head. <!-- trace:STORY-1654 | ai:claude -->
 6. Batch approved branches on top of origin/main, and run the project's full
    local check set (the same checks CI runs). Fix only mechanical integration
    breaks, and have each fix reviewed. Design conflicts go to the advisor or
    the operator.
 7. Push and open the PR. Wait on the required checks in a background job.
-   Merge with `--match-head-commit`; never use `--admin`. Verify the PR shows
+   Have a reviewer process approve the batch PR's head, then ship with
+   `aida pr ship N`; never use `--admin` or `--override-stale-approval`. Verify the PR shows
    MERGED, run `aida pull`, then clean up. Never merge authority-changing diffs
    as proxy: leave them for the operator.
 8. Refresh the handoff note after every batch
@@ -51,7 +61,8 @@ Follow the workflow in `.claude/skills/aida-orchestrate/SKILL.md`:
    operator-blocked items plainly.
 
 Guardrails:
-- Implementation and review always run in separate sessions.
+- Implementation and review always run in separate sessions, and review runs
+  in a separate process with its own reviewer seat.
 - Never force-push the default branch.
 - Never bypass a human-at-TTY floor.
 - Never approve or merge changes to authority.

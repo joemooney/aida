@@ -56,6 +56,16 @@ pub(crate) fn recent_files_for_branch(
 /// (we treat an unparseable status as clean and let `git worktree
 /// remove --force` produce the authoritative error). trace:BUG-67 | ai:claude
 pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
+    // BUG-2169: never run host git in a contained seat's private clone. Report
+    // it as dirty (one explanatory entry) so every caller keeps the tree
+    // instead of reading the refusal as "clean".
+    // trace:BUG-2169 | ai:claude
+    if let Some(clone_root) = aida_core::seat_clone_detect::seat_clone_root(worktree) {
+        return vec![format!(
+            "?? ({})",
+            aida_core::seat_clone_detect::host_git_refusal(&clone_root)
+        )];
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(worktree)
@@ -1477,6 +1487,22 @@ mod bug_2144_2146_containment_refusal_tests;
 #[cfg(test)]
 #[path = "tests/bug_2151_contained_parent_agent_new_tests.rs"]
 mod bug_2151_contained_parent_agent_new_tests;
+// trace:BUG-2157 BUG-2158 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2157_2158_contained_session_tests.rs"]
+mod bug_2157_2158_contained_session_tests;
+// trace:BUG-2165 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2165_headless_child_grant_isolation_tests.rs"]
+mod bug_2165_headless_child_grant_isolation_tests;
+// trace:BUG-2166 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2166_contained_parent_escape_tests.rs"]
+mod bug_2166_contained_parent_escape_tests;
+// trace:BUG-2171 trace:BUG-2170 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/bug_2171_2170_contained_builders_tests.rs"]
+mod bug_2171_2170_contained_builders_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_1609_gitlab_reviewer_preflight_tests.rs"]

@@ -692,6 +692,10 @@ pub struct FilingProvenance {
     /// Filing session id, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
+    /// Harness version explicitly supplied by AIDA_HARNESS_VERSION; absent is unknown.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
     // Reserved: STORY-1468 (deferred) adds the originating prompt here as
     // another optional, serde-default field.
 }
@@ -2497,6 +2501,15 @@ pub struct IdConfigValidation {
     pub affected_count: usize,
 }
 
+/// Permanent pre-registration evidence, stamped by canonical store mutations.
+// trace:STORY-1675 | ai:codex
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
+pub struct HypothesisLock {
+    pub locked_at: DateTime<Utc>,
+    /// SHA-256 of the UTF-8 description before the first completed result.
+    pub description_sha256: String,
+}
+
 /// Represents a relationship between two requirements
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct Relationship {
@@ -2537,6 +2550,13 @@ pub struct HistoryEntry {
     /// When the change was made
     pub timestamp: DateTime<Utc>,
 
+    /// Exact writing session, when explicitly available. Legacy rows remain unknown.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
+
     /// List of field changes in this update
     pub changes: Vec<FieldChange>,
 }
@@ -2548,8 +2568,18 @@ impl HistoryEntry {
             id: Uuid::now_v7(),
             author,
             timestamp: Utc::now(),
+            session_id: None,
+            harness_version: None,
             changes,
         }
+    }
+
+    /// An empty-change entry is a write event: it records the writing
+    /// session/harness context only, never a content change. History
+    /// consumers that count changes (churn, contributions) skip it.
+    // trace:STORY-1674 | ai:claude
+    pub fn is_write_event(&self) -> bool {
+        self.changes.is_empty()
     }
 }
 
@@ -3842,6 +3872,11 @@ pub struct Comment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
 
+    /// Explicitly reported harness version at comment creation.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
+
     /// The seat whose claim this comment RELAYS (`aida comment add
     /// --relayed-from <seat>`), when the author is recording another seat's
     /// measurement, finding or argument rather than something it verified
@@ -3867,6 +3902,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         }
     }
@@ -3884,6 +3920,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         }
     }
@@ -4421,6 +4458,21 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filed_at: Option<FilingProvenance>,
 
+    /// Data-only constraint verification block. Validate only at the explicit
+    /// verify command so malformed/unknown blocks remain loadable and reportable.
+    // trace:STORY-1673 | ai:codex
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "crate::constraints::deserialize_verify"
+    )]
+    pub verify: Option<serde_json::Value>,
+
+    /// Sticky pre-registration lock; tag, relationship and status edits never clear it.
+    // trace:STORY-1675 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hypothesis_lock: Option<HypothesisLock>,
+
     /// Custom status string (for types with custom statuses)
     /// If set, this takes precedence over the `status` enum field
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -4690,6 +4742,8 @@ impl Requirement {
             origin: None,
             // trace:CR-8 | ai:claude
             filed_at: None,
+            verify: None,
+            hypothesis_lock: None,
             custom_status: None,
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),

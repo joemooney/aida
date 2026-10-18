@@ -22,6 +22,7 @@ const OPERATOR: &str = "aida review record (operator)";
 
 fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -49,6 +50,7 @@ fn lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
         manual_enter_at: None,
         interrupted_at: None,
         driver: None,
+        child_grant_id: None,
         interrupted_reason: None,
     }
 }

@@ -31,6 +31,7 @@ fn lease_at(
     active_pid: Option<u32>,
 ) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "019f8357abcd".to_string(),
         scope: "TASK-5".to_string(),
         slug: "task-5".to_string(),
@@ -59,6 +60,7 @@ fn lease_at(
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

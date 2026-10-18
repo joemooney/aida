@@ -25,6 +25,8 @@ use aida_core::{
 };
 
 use crate::global_queue;
+// trace:TASK-1734 | ai:codex
+pub use crate::regen::RegenerationSummary;
 
 /// `--audience` enum. `self` is a Rust keyword, so the variant is `Slf` and
 /// clap accepts it as `self` via `#[value(name = "self")]`.
@@ -1099,6 +1101,7 @@ impl DigestMarker {
 
 #[derive(Debug, Clone)]
 pub struct DigestReport {
+    pub regeneration: Option<RegenerationSummary>,
     pub since: DateTime<Utc>,
     pub until: DateTime<Utc>,
     pub releases: Vec<ReleaseTag>,
@@ -1123,6 +1126,7 @@ fn render_capabilities_markdown(report: &DigestReport, _opts: &DigestOptions) ->
         report.until.format("%Y-%m-%d")
     ));
 
+    append_regeneration(&mut s, report);
     if !report.releases.is_empty() {
         s.push_str("## Released\n\n");
         for r in &report.releases {
@@ -1173,6 +1177,7 @@ pub fn render_markdown(report: &DigestReport, opts: &DigestOptions) -> String {
         report.until.format("%Y-%m-%d")
     ));
 
+    append_regeneration(&mut s, report);
     if !report.releases.is_empty() {
         s.push_str("## Released\n\n");
         for r in &report.releases {
@@ -1323,6 +1328,13 @@ pub fn render_markdown(report: &DigestReport, opts: &DigestOptions) -> String {
     s
 }
 
+// trace:TASK-1734 | ai:codex
+fn append_regeneration(out: &mut String, report: &DigestReport) {
+    if let Some(score) = &report.regeneration {
+        out.push_str(&format!("{}\n\n", score.text()));
+    }
+}
+
 /// Strip every `<PREFIX>-<digits>` SPEC-ID token (and any trailing parens that
 /// hold *only* SPEC-IDs / `PR-N` tokens) from a string. Used in customer
 /// audience to keep titles ID-free.
@@ -1446,6 +1458,9 @@ fn render_brief(report: &DigestReport, opts: &DigestOptions) -> String {
         report.until.format("%Y-%m-%d")
     );
     let mut parts: Vec<String> = Vec::new();
+    if let Some(score) = &report.regeneration {
+        parts.push(score.text());
+    }
     if !releases.is_empty() {
         parts.push(format!("Released {}", releases.join(", ")));
     }
@@ -1467,6 +1482,9 @@ fn render_brief(report: &DigestReport, opts: &DigestOptions) -> String {
 fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
     #[derive(Serialize)]
     struct DigestJson<'a> {
+        // trace:TASK-1734 | ai:codex
+        #[serde(skip_serializing_if = "Option::is_none")]
+        regeneration: Option<&'a RegenerationSummary>,
         since: String,
         until: String,
         audience: DigestAudience,
@@ -1537,6 +1555,7 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
     };
 
     let doc = DigestJson {
+        regeneration: report.regeneration.as_ref(),
         since: report.since.to_rfc3339(),
         until: report.until.to_rfc3339(),
         audience: opts.audience,
@@ -1686,6 +1705,7 @@ pub fn render_string(
     };
 
     let report = DigestReport {
+        regeneration: crate::regen::read_summary_for_project(project_root, opts.until),
         since: opts.since,
         until: opts.until,
         releases,
@@ -2003,6 +2023,7 @@ mod tests {
         );
         opts.audience = DigestAudience::Customer;
         let report = DigestReport {
+            regeneration: None,
             since: opts.since,
             until: opts.until,
             releases: vec![],
@@ -2029,6 +2050,7 @@ mod tests {
         let now = Utc::now();
         let opts = opts_at(now - chrono::Duration::days(7), now);
         let report = DigestReport {
+            regeneration: None,
             since: opts.since,
             until: opts.until,
             releases: vec![ReleaseTag {
@@ -2176,6 +2198,7 @@ mod tests {
             value: "feat(plan): add aida plan verify command".into(),
         });
         let report = DigestReport {
+            regeneration: None,
             since: opts.since,
             until: opts.until,
             releases: vec![],

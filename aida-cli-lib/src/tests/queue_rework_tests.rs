@@ -1203,6 +1203,7 @@ fn parked(spec_id: &str) -> aida_core::Requirement {
 
 fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
     crate::SessionLease {
+        tree_kind: Default::default(),
         id: format!("lease-{}-0000", scope.to_ascii_lowercase()),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -1234,6 +1235,7 @@ fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

@@ -719,6 +719,7 @@ pub(crate) fn push_why_open(req: &mut Requirement, label: &str, consequence: &st
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
 }
@@ -1312,6 +1313,7 @@ pub(crate) fn handle_research_command(
         replies: Vec::new(),
         reactions: Vec::new(),
         session_id: resolve_current_session_id(), // trace:TASK-330
+        harness_version: None,
         relayed_from: None,
     });
 
@@ -1588,6 +1590,8 @@ pub(crate) fn questions_clarify(
         targets.join(", ").cyan()
     );
 
+    let contained = session::aida_contained_env()?;
+
     // Build the interactive invocation. Unlike the headless drain, clarify
     // needs a human at the keyboard, so it launches plain interactive
     // `claude "<prompt>"` — NOT `claude -p`.
@@ -1595,7 +1599,14 @@ pub(crate) fn questions_clarify(
 
     if dry_run {
         println!("\n{} dry run — not launching. Would run:", "·".dimmed());
-        println!("  claude {prompt:?}");
+        if contained {
+            println!(
+                "  claude {} {prompt:?}",
+                crate::session::claude_contained_flags().join(" ")
+            );
+        } else {
+            println!("  claude {prompt:?}");
+        }
         return Ok(());
     }
 
@@ -1603,11 +1614,23 @@ pub(crate) fn questions_clarify(
         "  {} launching interactive `claude` — answer its questions to author acceptance",
         "→".green()
     );
-    println!(
-        "  {} {}",
-        "→".green(),
-        format!("claude {prompt:?}").dimmed()
-    );
+    if contained {
+        println!(
+            "  {} {}",
+            "→".green(),
+            format!(
+                "claude {} {prompt:?}",
+                crate::session::claude_contained_flags().join(" ")
+            )
+            .dimmed()
+        );
+    } else {
+        println!(
+            "  {} {}",
+            "→".green(),
+            format!("claude {prompt:?}").dimmed()
+        );
+    }
     println!();
 
     // Interactive: inherit the terminal so the human can converse. `claude` is
@@ -1620,7 +1643,7 @@ pub(crate) fn questions_clarify(
     let project_root = find_project_root()?;
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = build_questions_clarify_command(&prompt, &child_grant.id)
+    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -1630,7 +1653,10 @@ pub(crate) fn questions_clarify(
                  - answer questions directly: aida questions list / aida questions answer\n\
                  - or edit acceptance by hand: aida edit <spec-id> --description ..."
             )
-        })?;
+        });
+    // trace:BUG-2170 | ai:antigravity
+    crate::session::revoke_headless_child_grant(&child_grant.id);
+    let status_code = status_code?;
 
     if status_code.success() {
         Ok(())
@@ -1640,16 +1666,21 @@ pub(crate) fn questions_clarify(
     }
 }
 
-// trace:BUG-2124 | ai:antigravity
+// trace:BUG-2124 trace:BUG-2171 trace:BUG-2170 | ai:antigravity
 pub(crate) fn build_questions_clarify_command(
     prompt: &str,
     child_grant_id: &str,
+    contained: bool,
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("claude");
+    if contained {
+        cmd.args(crate::session::claude_contained_flags());
+    }
     cmd.arg(prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
         .env(seat_authority::GRANT_ENV, child_grant_id);
-    if crate::session::containment_applied(crate::session::HeadlessVendor::Claude, false) {
+    crate::session::scrub_launcher_session_env(&mut cmd);
+    if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");

@@ -3,6 +3,7 @@ use super::*;
 // A minimal fan-out lease at `scope` for shaping the JSON rows.
 fn lease(scope: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "abc123def456".into(),
         scope: scope.into(),
         slug: scope.to_ascii_lowercase(),
@@ -31,6 +32,7 @@ fn lease(scope: &str) -> SessionLease {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

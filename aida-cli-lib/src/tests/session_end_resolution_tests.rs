@@ -3,6 +3,7 @@ use std::process::Command;
 
 fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
@@ -31,6 +32,7 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        child_grant_id: None,
     }
 }
 

@@ -352,8 +352,9 @@ impl MergeHoldRecord {
                 .as_ref()
                 .map(|r| r.key.clone())
                 .unwrap_or_else(|| format!("PR-{pr}"));
+            // trace:STORY-1697 | ai:claude
             format!(
-                "a fresh APPROVED verdict for {key} recorded at the PR's current head; then a human ships it"
+                "a fresh APPROVED verdict for {key} recorded at the PR's current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)"
             )
         } else {
             match self.reason_kind {
@@ -434,9 +435,26 @@ pub(crate) fn write_typed_hold(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
+    write_typed_hold_context(project_root, record, false)
+}
+
+/// The same composition and marker write, with explicit re-arm audit context.
+// trace:TASK-1790 | ai:codex
+pub(crate) fn rearm_typed_hold(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+) -> std::io::Result<()> {
+    write_typed_hold_context(project_root, record, true)
+}
+
+fn write_typed_hold_context(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    rearmed: bool,
+) -> std::io::Result<()> {
     match compose_with_existing(project_root, record) {
-        Composed::Placed(r) => write_marker(project_root, &r, true),
-        Composed::Preserved(r) => write_marker(project_root, &r, false),
+        Composed::Placed(r) => write_marker(project_root, &r, true, rearmed),
+        Composed::Preserved(r) => write_marker(project_root, &r, false, rearmed),
     }
 }
 
@@ -446,7 +464,7 @@ fn write_typed_hold_replacing(
     project_root: &Path,
     record: &MergeHoldRecord,
 ) -> std::io::Result<()> {
-    write_marker(project_root, record, true)
+    write_marker(project_root, record, true, false)
 }
 
 // trace:BUG-1691 | ai:codex
@@ -454,6 +472,7 @@ fn write_marker(
     project_root: &Path,
     record: &MergeHoldRecord,
     reconcile_route: bool,
+    rearmed: bool,
 ) -> std::io::Result<()> {
     let dir = holds_dir(project_root);
     std::fs::create_dir_all(&dir)?;
@@ -491,7 +510,14 @@ fn write_marker(
         crate::events::EventKind::MergeHoldChanged {
             pr: record.pr as u32,
             placed: true,
-            reason: Some(record.detail.clone()),
+            // Only the event reason changes; the persisted hold keeps its
+            // original composition, reason and clearance identity.
+            // trace:TASK-1790 | ai:codex
+            reason: Some(if rearmed {
+                format!("Re-armed after mandate ship failure: {}", record.detail)
+            } else {
+                record.detail.clone()
+            }),
         },
     );
     event.seat = crate::events::active_seat();
@@ -944,6 +970,11 @@ pub(crate) struct HoldClearance {
     // trace:BUG-1532 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub released_by_verdict: Option<VerdictRef>,
+    /// STORY-1698: the mandate under which the advisor released this hold,
+    /// when one did. `None` = no mandate was involved.
+    // trace:STORY-1698 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub released_under_mandate: Option<String>,
 }
 
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
@@ -1003,6 +1034,36 @@ pub(crate) fn record_clearance_by(
     principal: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
+    record_clearance_full(project_root, record, principal, released_by_verdict, None)
+}
+
+/// STORY-1698: the ledger entry for a hold the advisor released under a
+/// fire-fighting mandate — `cleared_by` names the advisor seat's principal,
+/// `released_under_mandate` the mandate.
+// trace:STORY-1698 | ai:claude
+pub(crate) fn record_mandate_clearance(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    advisor_principal: &str,
+    mandate_id: &str,
+    released_by_verdict: Option<VerdictRef>,
+) -> std::io::Result<()> {
+    record_clearance_full(
+        project_root,
+        record,
+        &format!("advisor:{}", advisor_principal.trim()),
+        released_by_verdict,
+        Some(mandate_id.to_string()),
+    )
+}
+
+fn record_clearance_full(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    principal: &str,
+    released_by_verdict: Option<VerdictRef>,
+    released_under_mandate: Option<String>,
+) -> std::io::Result<()> {
     let path = clearance_path(project_root, record.pr);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -1015,6 +1076,7 @@ pub(crate) fn record_clearance_by(
         target_head_sha: record.target_head_sha.clone(),
         cleared_at: chrono::Utc::now().to_rfc3339(),
         released_by_verdict,
+        released_under_mandate,
     };
     let body = serde_json::to_vec_pretty(&clearance)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -2753,8 +2815,9 @@ fn arm_corpus_mirrors(project_root: &Path, pr: u64, arm: &CorpusArm) {
     if !arm.key.starts_with("PR-") {
         hold.spec = Some(arm.key.clone());
     }
+    // trace:STORY-1697 | ai:claude
     hold.release_condition = Some(format!(
-        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head; then a human ships it",
+        "a fresh APPROVED verdict for {} recorded at PR #{pr}'s current head by an independent reviewer releases it (a sensitive spec also needs a human clear or an --include-supervised mandate)",
         arm.key
     ));
     if let Err(err) = write_typed_hold(project_root, &hold) {
@@ -4715,7 +4778,7 @@ mod tests {
         let mut recusal = recused_record();
         recusal.routed_to = vec![PrincipalIdentity::parse("agent:cold-reader")];
         recusal.routing_state = HoldRoutingState::Routed;
-        write_marker(dir.path(), &recusal, false).unwrap();
+        write_marker(dir.path(), &recusal, false, false).unwrap();
         let expected_route = recusal.routed_to.clone();
         write_typed_hold(
             dir.path(),
@@ -4732,7 +4795,7 @@ mod tests {
     #[test]
     fn preserving_path_still_rejects_invalid_recusal_refresh() {
         let dir = tempfile::tempdir().unwrap();
-        write_marker(dir.path(), &recused_record(), false).unwrap();
+        write_marker(dir.path(), &recused_record(), false, false).unwrap();
         let mut invalid = recused_record();
         invalid.recused_principals.clear();
         assert!(write_typed_hold(dir.path(), &invalid).is_err());

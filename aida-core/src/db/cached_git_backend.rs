@@ -1657,6 +1657,14 @@ impl DatabaseBackend for CachedGitBackend {
         Ok(())
     }
 
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.refuse_store_write_on_read_only_cache()?;
+        let _lock = self.inner.lock_store()?;
+        self.inner.save_imported(store)?;
+        self.with_cache_schema_retry("rebuild cache after import", || self.full_rebuild(false))
+    }
+
     /// Whole-store transaction written per spec, then the cache rows it
     /// touched. Holds the store write lock across both.
     // trace:BUG-1612 | ai:claude
@@ -2057,6 +2065,47 @@ mod tests {
         }
         assert!(read(&Uuid::now_v7()).unwrap().is_none());
         assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+    }
+
+    // The whole-store transaction the doc/burndown/findings commands use:
+    // the returned store, the object on disk and the cache row all carry the
+    // write event's session context. trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_update_atomically_returns_and_caches_stamped_rows() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "session1674"),
+            ("AIDA_HARNESS_VERSION", "harness1674"),
+        ]);
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let added = backend
+            .add_requirement(sample_req("TASK-1", "Before"))
+            .unwrap();
+        let store = backend
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == added.id)
+                    .unwrap()
+                    .title = "After".into();
+            })
+            .unwrap();
+        let returned = store.get_requirement_by_id(&added.id).unwrap().clone();
+        let event = returned
+            .history
+            .last()
+            .expect("the write recorded an event");
+        assert!(event.is_write_event());
+        assert_eq!(event.session_id.as_deref(), Some("session1674"));
+        assert_eq!(event.harness_version.as_deref(), Some("harness1674"));
+        let on_disk =
+            crate::object_store::read_object(&store_root.join("objects"), "TASK-1").unwrap();
+        let cached = backend.get_requirement(&added.id).unwrap().unwrap();
+        let yaml = |r: &Requirement| serde_yaml::to_string(r).unwrap();
+        assert_eq!(yaml(&returned), yaml(&on_disk));
+        assert_eq!(yaml(&cached), yaml(&on_disk));
     }
 
     #[test]
@@ -3112,7 +3161,10 @@ mod tests {
     }
 
     /// BUG-1612: the cached per-spec update is a targeted write-through: the
-    /// row is refreshed without listing the store.
+    /// row is refreshed without listing the store for ordinary refinements.
+    /// STORY-1675: completing a result now consults incoming hypothesis edges;
+    /// that graph-affecting operation intentionally needs one canonical scan.
+    // trace:STORY-1675 | ai:codex
     // trace:BUG-1612 | ai:claude
     #[test]
     fn bug1612_cached_update_spec_atomically_refreshes_row_without_scan() {
@@ -3136,12 +3188,27 @@ mod tests {
         FULL_SCAN_COUNT.with(|c| c.set(0));
         backend
             .update_spec_atomically(&target, |r| {
-                r.status = crate::models::RequirementStatus::Completed;
+                r.title = "ordinary refinement".into();
             })
             .unwrap()
             .unwrap();
         assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 0);
         assert_eq!(FULL_SCAN_COUNT.with(|c| c.get()), 0);
+        assert_eq!(
+            cached_status(&backend, target.id),
+            target.status.to_string()
+        );
+        backend
+            .update_spec_atomically(&target, |r| {
+                r.status = crate::models::RequirementStatus::Completed;
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            OBJECT_LIST_COUNT.with(|c| c.get()),
+            1,
+            "result completion must consult the canonical incoming hypothesis graph"
+        );
         assert_eq!(cached_status(&backend, target.id), "Completed");
     }
 

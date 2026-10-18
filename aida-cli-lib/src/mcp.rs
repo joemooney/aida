@@ -10401,6 +10401,51 @@ mod tests {
         assert!(err.contains("not found"), "{err}");
     }
 
+    // trace:STORY-1675 | ai:codex
+    #[test]
+    fn hypothesis_mcp_update_refuses_description_and_allows_amendment() {
+        use aida_core::db::DatabaseBackend;
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = aida_core::GitBackend::new(&root)
+            .unwrap()
+            .with_auto_commit(false);
+        let mut h = Requirement::new("hypothesis".into(), "pre-result".into());
+        h.spec_id = Some("SPIKE-991".into());
+        h.req_type = RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        let mut result = Requirement::new("result".into(), "data".into());
+        result.spec_id = Some("TASK-992".into());
+        result.status = RequirementStatus::Completed;
+        h.relationships.push(aida_core::models::Relationship {
+            rel_type: RelationshipType::VerifiedBy,
+            target_id: result.id,
+            created_at: None,
+            created_by: None,
+        });
+        let mut store = aida_core::RequirementsStore::new();
+        store.requirements = vec![h, result];
+        backend.save(&store).unwrap();
+        let storage = Storage::new(root);
+        let server = McpServer::new(&storage, dir.path().to_path_buf());
+        let error = server
+            .tool_update_requirement(&json!({"id": "SPIKE-991", "description": "post hoc"}))
+            .unwrap_err();
+        assert!(error.contains("aida comment add SPIKE-991"), "{error}");
+        server
+            .tool_update_requirement(&json!({"id": "SPIKE-991", "title": "retitled"}))
+            .unwrap();
+        server
+            .tool_add_comment(&json!({"id": "SPIKE-991", "text": "amendment"}))
+            .unwrap();
+        let loaded = storage.load().unwrap();
+        let h = loaded.get_requirement_by_spec_id("SPIKE-991").unwrap();
+        assert_eq!(h.description, "pre-result");
+        assert_eq!(h.title, "retitled");
+        assert!(h.hypothesis_lock.is_some());
+        assert!(h.comments.iter().any(|c| c.content == "amendment"));
+    }
+
     // trace:STORY-82 | ai:claude
     #[test]
     fn mcp_update_requirement_sets_title_type_priority_tags_parent() {
@@ -11154,6 +11199,51 @@ mod tests {
         let store = server.storage.load().unwrap();
         let req = store.get_requirement_by_spec_id(&id).unwrap();
         assert_eq!(req.status, RequirementStatus::Draft);
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_mcp_comment_and_edit_persist_write_context() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            // The temporary store test must not append to an inherited live role log.
+            ("AIDA_SESSION_ROLE", None),
+            ("AIDA_SESSION_ID", Some("mcp-exact-session")),
+            ("AIDA_HARNESS_VERSION", Some("mcp-harness")),
+        ]);
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        let added = server
+            .tool_add_requirement(
+                &json!({"title":"Provenance target","description":"body","type":"task"}),
+            )
+            .unwrap();
+        let id = added_spec_id(&added).to_string();
+        server
+            .tool_add_comment(&json!({"id":id,"text":"a note"}))
+            .unwrap();
+        server
+            .tool_update_requirement(&json!({"id":id,"title":"Edited through MCP"}))
+            .unwrap();
+        let store: aida_core::RequirementsStore = serde_yaml::from_str(
+            &std::fs::read_to_string(dir.path().join(".aida/mcp-test-cache.yaml")).unwrap(),
+        )
+        .unwrap();
+        let req = store.get_requirement_by_spec_id(&id).unwrap();
+        assert_eq!(
+            req.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("mcp-harness")
+        );
+        assert_eq!(
+            req.comments.last().unwrap().harness_version.as_deref(),
+            Some("mcp-harness")
+        );
+        assert_eq!(
+            req.comments.last().unwrap().session_id.as_deref(),
+            Some("mcp-exact-session")
+        );
+        let edit = req.history.last().unwrap();
+        assert_eq!(edit.session_id.as_deref(), Some("mcp-exact-session"));
+        assert_eq!(edit.harness_version.as_deref(), Some("mcp-harness"));
     }
 
     /// `add_comment` carries no status/lifecycle mutation — confirm it leaves

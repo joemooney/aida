@@ -1,3 +1,79 @@
+Regen generated-command execution defaults to a 30-second timeout per call;
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
+kills the process group and failed records retain timeout reasons. Each output
+stream is capped at 1 MiB; overflow fails without retaining child diagnostics.
+See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
+<!-- trace:TASK-1791 | ai:codex -->
+
+Pooled-worktree lease cleanup revokes its stamped headless child grant before
+removing the lease. Headless drains refuse unresolved project roots before
+queueing or phase startup; delegated child expiry matches its parent.
+<!-- trace:TASK-1789 | ai:codex -->
+
+`aida usage show <SPEC> --provenance` reports persisted write context and
+read-only session-ledger evidence at or before each write. Harness versions
+come only from `AIDA_HARNESS_VERSION`; missing model/effort/token evidence stays
+unknown. Session totals overlap between events and must not be summed.
+See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
+
+Mandate exclusion-ledger reads validate the opened non-symlink regular file,
+mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
+mandate ships restore holds with explicit re-arm context in the placement event.
+Mandate exclusions also include committed base/head traces in changed source
+hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
+with full-file fallback when attribution
+fails. Trace IDs grant no completion or author/reviewer authority; unreadable
+evidence or a moving/dirty store refuses mandate coverage. See OVERVIEW.md.
+<!-- trace:TASK-1790 | ai:codex -->
+
+Explicit `aida verify constraints` reads data-only version-1 blocks using six
+closed built-in Linux probes. It never runs stored shell commands or probes
+from sync/drain/hooks, and reports match/drift/unknown/invalid without status
+mutation. Canonical `edit --verify <JSON>` / `--clear-verify` author blocks;
+archived writers refuse unsupported blocks. See
+[constraint verification](docs/cli/08-reporting.md#aida-verify).
+<!-- trace:STORY-1673 | ai:codex -->
+
+Regeneration completeness checks installed required tools before the oracle and
+rechecks file content after quarantining helper writes. Incomplete trials keep
+overall and trusted-component split diagnostics but never supply a headline
+score. Harness continuation is separate launcher work. See OVERVIEW.md.
+<!-- trace:STORY-1677 | ai:codex -->
+
+`aida statusline` and every `aida digest` format show the latest scored ordinary
+discriminating R1 percentage and age, with `!` for non-clean or flagged trials.
+Digest JSON includes an optional `regeneration` object. Missing scores or invalid
+committed records omit this optional display; reads use local committed evidence.
+A derived summary cache under `$XDG_CACHE_HOME/aida/regen-display` (default
+`~/.cache`) is keyed by store HEAD and CLI build. An unchanged HEAD uses no Git
+subprocesses; a miss reads trial blobs in one batch. Failed reads are not cached.
+Digest selection excludes trials after `--until`; text ages use compact days,
+hours, minutes or seconds. The cache grants no scoring or control authority;
+unusual Git discovery environments omit this optional segment.
+<!-- trace:TASK-1734 | ai:codex -->
+
+Canonical mutations lock descriptions on `hypothesis`-tagged spikes/decisions
+once a references/verified-by neighbor is Completed (either direction). Persisted
+`hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
+amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
+<!-- trace:STORY-1675 | ai:codex -->
+
+Regeneration scoring requires a declared/default installer for actual systems.
+The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
+or absent diagnostics remain unknown. Reports flag crash-dominated and mostly
+unclassified failures and audit matching R1 trials by explicit `--model-family`.
+See OVERVIEW.md for the sidecar and comparison rules.
+<!-- trace:STORY-1676 | ai:codex -->
+
+`regen score --consensus <uuid...>` compares at least three committed ordinary
+scored R1 trials with matching corpus/oracle/bundle and discriminating check sets.
+All-fail checks are reported as store gaps, partial failures separately. It is
+report-only unless `--file` requests draft amendments. Non-archived items other
+than Completed/Rejected deduplicate under the store write lock using exact-check
+hash tags. See OVERVIEW.md.
+<!-- trace:STORY-1679 | ai:codex -->
+
 `aida regen report` reads committed ordinary trials without a cache rebuild.
 Its headline is the latest attempt's discriminating R1 oracle pass rate and
 age; unsuccessful attempts show unavailable, with status and flags visible.
@@ -269,6 +345,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
+
+## Child launch containment
+
+Headless and interactive reviewer/resume launches strictly inherit
+`AIDA_CONTAINED`, even when a caller passes `contained=false`. Compete pins
+`dontAsk` and validates all vendors before any arm or artifact. Arms use their
+child worktree; judges use the project root with the same write boundary.
+Burndown and intake share the headless Claude posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
 
 ## Cache read behavior
 

@@ -4045,6 +4045,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn uncontained_launchers_strip_inherited_aida_contained() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().to_path_buf();
 
@@ -4076,6 +4077,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "10",
         session::HeadlessVendor::Claude,
         false,
+        "",
     );
     assert!(
         ci_fix_cmd
@@ -4085,13 +4087,20 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 3. burndown quiet
-    let burndown_quiet_cmd =
-        crate::burndown_run::build_burndown_quiet_command("prompt", "mode", "CEILING", "10");
+    let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
+        "prompt", "mode", "", "CEILING", "10", false,
+    );
     assert!(
         burndown_quiet_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown quiet command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        burndown_quiet_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "burndown quiet command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 4. burndown verbose
@@ -4101,12 +4110,19 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "child-grant-id",
         "CEILING",
         "10",
+        false,
     );
     assert!(
         burndown_verbose_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "burndown verbose command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        burndown_verbose_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "burndown verbose command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 5. autopilot intake
@@ -4122,6 +4138,7 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "none",
         crate::backlog::RiskLevel::Low,
         None,
+        false,
     );
     assert!(
         intake_cmd
@@ -4129,14 +4146,27 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "autopilot intake command must strip AIDA_CONTAINED"
     );
+    assert!(
+        intake_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "autopilot intake command must strip AIDA_SESSION_PURPOSE"
+    );
 
     // 6. questions clarify
-    let clarify_cmd = crate::questions::build_questions_clarify_command("prompt", "child-grant-id");
+    let clarify_cmd =
+        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false);
     assert!(
         clarify_cmd
             .get_envs()
             .any(|(k, v)| k == "AIDA_CONTAINED" && v.is_none()),
         "questions clarify command must strip AIDA_CONTAINED"
+    );
+    assert!(
+        clarify_cmd
+            .get_envs()
+            .any(|(k, v)| k == "AIDA_SESSION_PURPOSE" && v.is_none()),
+        "questions clarify command must strip AIDA_SESSION_PURPOSE"
     );
 
     // 7. compete judge
@@ -4145,7 +4175,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "claude",
         &[],
         crate::compete::JudgeVendor::Claude,
-    );
+    )
+    .unwrap();
     assert!(
         judge_cmd
             .get_envs()
@@ -4154,7 +4185,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     );
 
     // 8. compete arm
-    let arm_cmd = crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude");
+    let arm_cmd =
+        crate::compete_cmd::build_compete_arm_command(&project, "claude", &[], "claude").unwrap();
     assert!(
         arm_cmd
             .get_envs()

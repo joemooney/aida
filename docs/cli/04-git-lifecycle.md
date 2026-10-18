@@ -355,3 +355,67 @@ release after a verified APPROVED write. Sensitive or composed holds retain
 the human clear. See [clearance policy](08-reporting.md#merge-hold-gate-and-clearance-limits)
 for grant, arming-round, metadata and audit requirements.
 <!-- trace:STORY-1687 | ai:codex -->
+
+### `aida mandate`
+
+**One line** — a time-boxed fire-fighting mandate that lets the advisor seat
+ship held PRs while the operator is away.
+
+**Mental model.** Normally only a human at a terminal can release a merge-hold.
+`aida mandate start --ship-held` (human at an interactive terminal only) mints a
+mandate bound to the advisor seat of the person who started it. While it is
+active, `aida pr ship <pr>` from that advisor seat may release the hold and
+merge, but only when an approval with a verified reviewer identity covers the
+PR's current head, that approval came from neither the implementer nor the
+shipping session, the advisor did not author the work, and CI is green.
+The stale-approval override of `aida pr ship` is never honoured under a
+mandate.
+
+**Options.** `--ttl` sets the duration (`8h` by default, `90m` style also
+accepted, at most `24h`). A mandate cannot be extended: stop it and start
+another. `--reason` records why. `--include-supervised` also covers sensitive
+specs (security, containment, review or merge authority, guided, keystone).
+Specs tagged `operator-only` or with execution mode `operator` or `decide`
+always stay human-only. Exclusion is sticky: a spec that was ever in an
+excluded class, in any stored version or in the local exclusion ledger
+(`~/.aida/mandates/exclusions.jsonl`, append-only), stays excluded after the
+tag is removed. A mandate releases only a typed hold marker; a missing marker,
+a label-only hold or a recusal hold always needs a human.
+
+Mandate exclusions also consider committed trace IDs in changed source hunks and
+their enclosing Rust functions/impls, plus the file’s leading header traces
+(including doc comments), on both base and head. Deletions and renames
+retain the old traces. When a hunk cannot be attributed safely, the check uses
+the full file; other text formats (including docs, configuration and hooks) use
+that conservative fallback. Every changed text path is scanned, including nested
+build directories. A stale local `origin/<base>` can include older changes and
+therefore exclude more specs; fetch the current base before retrying.
+These IDs only add exclusions, with the same sticky history/ledger rules. They
+grant no completion credit or author/reviewer authority. Unreadable evidence or
+a changed/dirty store refuses mandate coverage; fetch missing source commits or
+finish the store write before retrying. See OVERVIEW.md for source scope and
+fallback limits.
+<!-- trace:TASK-1790 | ai:codex -->
+
+**Stopping.** `aida mandate stop` (human at a terminal) ends it at once. Expiry
+is checked by every ship at the moment it decides, again under the merge lease,
+and once more immediately before the merge call. `aida mandate status [--json]`
+shows the current mandate; the statusline shows `MANDATE <time left>` while one
+is active.
+
+**Audit.** Each release is recorded in the merge-hold clearance ledger and in a
+PR comment as "released under mandate <id> by advisor"; start and stop are
+recorded in `.aida/events.jsonl`. The authority record lives only in the
+user's AIDA home (`~/.aida/mandates/`, mode 0600), never in the shared store.
+Each record is re-validated on every read (24h cap, no future issue time,
+advisor seat, current user, a 0600 regular file you own, never a symlink); an
+invalid record is ignored with a warning. Stopping writes a `<id>.stopped`
+tombstone that is never removed, so editing a record cannot revive it.
+
+**Trust boundary.** Start and stop require a human at an interactive
+terminal. A same-uid process that forges files in the AIDA home is outside the
+threat model, the same as for session grants: the mandate keeps work moving
+while the operator is away, and is not a defense against a malicious agent
+running as the same user. Accepted risk: a process that wraps itself in a
+pseudo-terminal passes the terminal check, as it does for `aida role enter`.
+<!-- trace:STORY-1698 | ai:claude -->

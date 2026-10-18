@@ -85,10 +85,16 @@ fn require_execution(
 }
 
 pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
-    // Only committed evidence counts; pin once to avoid mixing concurrent writes.
     let sha = super::super::head(store)?;
-    let rows = super::super::git(store, &["ls-tree", "-rz", &sha, "--", "regen/trials/"])?;
-    let mut records = Vec::new();
+    read_records_at(store, &sha)
+}
+
+// One pinned tree plus one blob batch, regardless of the trial/control count.
+// The score/control gate keeps its strict uncached reader.
+// trace:TASK-1734 | ai:codex
+pub(super) fn read_records_at(store: &Path, sha: &str) -> Result<Vec<TrialRecord>> {
+    let rows = super::super::git(store, &["ls-tree", "-rz", sha, "--", "regen/trials/"])?;
+    let mut objects = Vec::new();
     for row in rows.split(|b| *b == 0).filter(|b| !b.is_empty()) {
         let row = std::str::from_utf8(row)?;
         let (meta, path) = row.split_once('\t').context("invalid trial tree entry")?;
@@ -97,13 +103,24 @@ pub(super) fn read_records(store: &Path) -> Result<Vec<TrialRecord>> {
             fields.len() == 3 && fields[0] == "100644" && fields[1] == "blob",
             "unsafe control record: {path}"
         );
-        let bytes = super::super::git(store, &["cat-file", "blob", fields[2]])?;
-        let record: TrialRecord = serde_json::from_slice(&bytes)
+        objects.push((fields[2].to_owned(), path.to_owned()));
+    }
+    let mut records = Vec::new();
+    for ((_, path), bytes) in objects
+        .iter()
+        .zip(super::super::read_blobs(store, &objects)?)
+    {
+        let mut record: TrialRecord = serde_json::from_slice(&bytes)
             .with_context(|| format!("invalid control/trial record: {path}"))?;
         anyhow::ensure!(
-            path == format!("regen/trials/{}.json", record.trial_id),
+            path == &format!("regen/trials/{}.json", record.trial_id),
             "control record identity/path mismatch: {path}"
         );
+        // Derive legacy/invalid-sidecar quality warnings for every read surface,
+        // including optional statusline/digest readers sharing this function.
+        // Controls remain byte-for-byte execution evidence, never quality-flagged.
+        // trace:STORY-1676 | ai:codex
+        diagnostics::flag_trial(&mut record);
         records.push(record);
     }
     Ok(records)
@@ -248,6 +265,7 @@ mod tests {
         let passed = values.iter().filter(|(_, pass)| *pass).count();
         TrialRecord {
             gaps: None,
+            completeness: None,
             format_version: 1,
             adapter: None,
             trial_id: Uuid::new_v4(),
@@ -265,6 +283,8 @@ mod tests {
             oracle_sha: "oracle".into(),
             oracle_bundle_sha256: "bundle".into(),
             model: "m".into(),
+            model_family: None,
+            failure_diagnostics: None,
             vendor: "v".into(),
             harness: "h".into(),
             started_at: Utc::now(),
@@ -743,6 +763,7 @@ mod tests {
                 None,
                 corpus.path(),
                 "m",
+                None,
                 "v",
                 "h",
                 false,
@@ -764,6 +785,174 @@ mod tests {
             std::fs::remove_dir_all(&store).unwrap();
         }
     }
+    // trace:STORY-1676 | ai:codex
+    #[test]
+    fn handle_score_persists_installer_failures_and_flagged_family_score_after_real_controls() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        if !matches!(
+            crate::session::bwrap_availability(),
+            crate::session::BwrapAvailability::Ok
+        ) {
+            return;
+        }
+        let cache = tempfile::tempdir_in("/var/tmp").unwrap();
+        let _env =
+            crate::test_env::EnvVarGuard::set("XDG_CACHE_HOME", cache.path().to_str().unwrap());
+        let project = tempfile::tempdir().unwrap();
+        let git = |root: &Path, args: &[&str]| super::super::super::git(root, args).unwrap();
+        git(project.path(), &["init", "-b", "main"]);
+        git(project.path(), &["config", "user.name", "Test"]);
+        git(
+            project.path(),
+            &["config", "user.email", "test@example.com"],
+        );
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(project.path().join(".aida/config.toml"), "[regen]\noracle_command=['oracle.sh']\noracle_paths=['oracle.sh']\nrequired_tools=['tool']\nreference_repeats=1\n").unwrap();
+        // The installed tool must pass completeness (size + --help) or the reference control flags.
+        // trace:STORY-1677 | ai:claude
+        let install = r#"#!/bin/sh
+set -eu
+test -z "${AIDA_REGEN_CHECK_RESULTS+x}"
+cat > "$PREFIX/bin/tool" <<EOS
+#!/bin/sh
+# Complete fixture component with enough substantive bytes and a help interface.
+if test "\${1-}" = --help; then echo Usage: tool; exit 0; fi
+printf '%s\n' $(cat behavior)
+EOS
+chmod +x "$PREFIX/bin/tool"
+"#;
+        let oracle = r#"#!/bin/sh
+if test "$("$AIDA_REGEN_PREFIX/bin/tool")" = real; then
+ printf 'ok   - behavior\n'
+else
+ printf 'FAIL - behavior\n'
+ if test -f "$AIDA_REGEN_TRIAL_ROOT/crash"; then kind=crash; else kind=assertion; fi
+ printf '{"v":1,"check":"behavior","kind":"%s","exit":127}\n' "$kind" > "$AIDA_REGEN_CHECK_RESULTS"
+fi
+"#;
+        for (name, body) in [
+            ("install.sh", install),
+            ("oracle.sh", oracle),
+            ("behavior", "real"),
+        ] {
+            std::fs::write(project.path().join(name), body).unwrap();
+            std::fs::set_permissions(
+                project.path().join(name),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+        git(project.path(), &["add", "."]);
+        git(project.path(), &["commit", "-m", "trusted fixture"]);
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir(&store).unwrap();
+        git(&store, &["init", "-b", "aida-store"]);
+        git(&store, &["config", "user.name", "Test"]);
+        git(&store, &["config", "user.email", "test@example.com"]);
+        git(&store, &["commit", "--allow-empty", "-m", "fixture"]);
+        let corpus = tempfile::tempdir().unwrap();
+        let bytes = br#"{"format_version":1,"rows":[]}"#;
+        std::fs::write(corpus.path().join("corpus.json"), bytes).unwrap();
+        std::fs::write(corpus.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({
+            "format_version":1,"store_sha":"a".repeat(40),"content_sha256":format!("{:x}", Sha256::digest(bytes)),
+            "corpus_file":"corpus.json","row_count":0
+        })).unwrap()).unwrap();
+        for control in [
+            crate::cli::RegenControl::Reference,
+            crate::cli::RegenControl::Stub,
+        ] {
+            handle_score(
+                &store,
+                None,
+                Some(control),
+                corpus.path(),
+                "m",
+                None,
+                "v",
+                "h",
+                false,
+            )
+            .unwrap();
+        }
+        let trial = tempfile::tempdir().unwrap();
+        assert!(handle_score(
+            &store,
+            Some(trial.path()),
+            None,
+            corpus.path(),
+            "m",
+            Some("family"),
+            "v",
+            "h",
+            false
+        )
+        .is_err());
+        std::fs::write(trial.path().join("install.sh"), "#!/bin/sh\nexit 8\n").unwrap();
+        std::fs::set_permissions(
+            trial.path().join("install.sh"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        assert!(handle_score(
+            &store,
+            Some(trial.path()),
+            None,
+            corpus.path(),
+            "m",
+            Some("family"),
+            "v",
+            "h",
+            false
+        )
+        .is_err());
+        std::fs::write(trial.path().join("install.sh"), install).unwrap();
+        std::fs::write(trial.path().join("behavior"), "bad").unwrap();
+        std::fs::write(trial.path().join("crash"), "").unwrap();
+        handle_score(
+            &store,
+            Some(trial.path()),
+            None,
+            corpus.path(),
+            "m",
+            Some("family"),
+            "v",
+            "h",
+            false,
+        )
+        .unwrap();
+        let rows = read_records(&store).unwrap();
+        assert_eq!(
+            rows.iter()
+                .filter(|r| r.kind == "trial" && r.status == "install_failed")
+                .count(),
+            2
+        );
+        let trial = rows
+            .iter()
+            .find(|r| r.kind == "trial" && r.status == "scored")
+            .unwrap();
+        assert_eq!(trial.model_family.as_deref(), Some("family"));
+        assert_eq!(trial.discriminating.as_ref().unwrap().pass_rate, 0.0);
+        assert!(trial
+            .flags
+            .iter()
+            .any(|f| f == "crash-dominated: review before reporting"));
+        assert!(!trial.clean);
+        assert_eq!(diagnostics::summary(trial).crashes, 1);
+        assert!(rows
+            .iter()
+            .filter(|r| r.kind.starts_with("control-"))
+            .all(|r| r.clean));
+        let out = report::read_report(&store).unwrap();
+        assert!(out
+            .lines()
+            .next()
+            .unwrap()
+            .contains("crash-dominated: review before reporting"));
+    }
+
     #[test]
     fn trial_sandbox_contamination_refuses_even_with_valid_controls() {
         let gate = gate(records()).unwrap();
@@ -788,6 +977,11 @@ mod execution_tests {
     use super::*;
     #[test]
     fn confined_reference_repeats_stub_and_trials_use_independent_roots_and_tools() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        // trace:STORY-1677 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         if !matches!(
             crate::session::bwrap_availability(),
             crate::session::BwrapAvailability::Ok
@@ -821,6 +1015,9 @@ mod execution_tests {
             install_command: None,
             required_tools: vec!["regen-fixture-tool".into()],
             reference_repeats: 3,
+            crash_failure_share_percent: 50,
+            min_bytes: 64,
+            components: BTreeMap::new(),
         };
         let cache = tempfile::tempdir_in("/var/tmp").unwrap();
         let bundle_trial = fresh::FreshRoot::empty().unwrap();
@@ -956,7 +1153,7 @@ mod execution_tests {
         let r = run_trial_in_env(
             &cfg,
             root.path(),
-            manifest,
+            manifest.clone(),
             "m",
             "v",
             "h",
@@ -971,9 +1168,40 @@ mod execution_tests {
             }),
         )
         .unwrap();
-        assert_eq!(r.status, "error");
-        assert!(r.install_exit.is_none());
+        assert_eq!(r.status, "install_failed");
+        assert!(r
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("no declared installer"));
+        assert!(r.install_exit.is_none() && r.oracle_exit.is_none() && r.aggregate.is_none());
         assert!(r.guard_hits.is_empty());
         assert!(r.stub_tools.is_none());
+        // Preserve the original no-generated-tools oracle regression too:
+        // a declared no-op installer succeeds, but no tool is silently provided.
+        let mut noop = cfg.clone();
+        noop.install_command = Some(vec!["/bin/true".into()]);
+        let r = run_trial_in_env(
+            &noop,
+            root.path(),
+            manifest,
+            "m",
+            "v",
+            "h",
+            false,
+            ScoreEnv::new(&noop, false).unwrap(),
+            &bundle,
+            Some(RunSetup {
+                kind: "trial",
+                run_id: None,
+                repeat: None,
+                repeats: None,
+            }),
+        )
+        .unwrap();
+        assert_eq!(r.status, "error");
+        assert_eq!(r.install_exit, Some(0));
+        assert_eq!(r.oracle_exit, Some(127));
+        assert!(r.aggregate.is_none() && r.guard_hits.is_empty() && r.stub_tools.is_none());
     }
 }
