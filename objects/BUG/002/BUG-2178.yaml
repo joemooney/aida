@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:58:37.912954885Z
-modified_at: 2026-10-18T19:45:08.389861234Z
+modified_at: 2026-10-18T20:10:24.154721769Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -23,6 +23,13 @@ relationships:
   target_id: 01a1508a-acee-7412-9ed6-fca73044fb0c
   created_at: 2026-10-18T19:44:43.010352974Z
   created_by: joe
+comments:
+- id: 01a150a3-081a-7b12-99e2-f99d2d5b6dd3
+  author: joe
+  content: 'Advisor 2026-10-18: PR #2742 PASS. Non-blocking follow-up: if with_store_write_lock fails before its closure runs (lock timeout, or ensure_store_write_safe refusing a mid-rebase or detached store), the timing record is not written at all. Write it outside the lock as a fallback (left for the next store commit to sweep, as before), so a lock failure degrades to the old behaviour instead of losing the record.'
+  created_at: 2026-10-18T20:10:24.154721769Z
+  modified_at: 2026-10-18T20:10:24.154721769Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a15061-af02-75c0-85d7-aac7c0712d30
   author: joe
