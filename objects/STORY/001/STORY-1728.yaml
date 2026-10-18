@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T03:34:08.129467173Z
+modified_at: 2026-10-18T06:33:03.884876765Z
 req_type: Story
 comments:
 - id: 01a14d0e-0308-7f71-a227-dd7c8c4ece8a
@@ -75,6 +75,27 @@ comments:
     - Acceptance 5 (Windows CI) stays, but it no longer guards a linker mechanism.
   created_at: 2026-10-18T03:34:08.129467173Z
   modified_at: 2026-10-18T03:34:08.129467173Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+- id: 01a14db6-bc8c-7763-bf0e-5159aa3e561e
+  author: joe
+  content: |
+    SKETCH AMENDMENTS A1-A5 (operator-agreed, Joe, 2026-10-17 23:32; advisor ack requested before slice 1). Verified against main 188adef04b.
+
+    ORDERING CONFLICT (needs an advisor ruling): the signoff says to sort the REGISTRY list "by module", but the operator amendment says "alphabetical by command name". Recommendation: sort by command name. It matches `aida --help` order, and two new commands only collide when their names sort next to each other. The order test enforces whichever rule is chosen.
+
+    A1 ADOPT. Slice-1 acceptance: a CI ratchet records the number of top-level Command variants, counted through Cli::command().get_subcommands(), not by parsing source text. The count may only go down, and each slice lowers it in the same PR. A PR that raises it fails with a pointer to command_registry.rs. Scope note: nested enums of commands not yet migrated (PrCommand, SessionCommand, ...) are not ratcheted; they move with their slice.
+
+    A2 ADOPT. In slice 1, move every non-subcommand field of Cli (cli.rs:116-155: file, project, server, asciinema, cast_out, cast_title, path, format with global=true) into a #[derive(Args)] GlobalArgs flattened into Cli. Both dispatch paths read GlobalArgs from the ArgMatches. Blast radius: 9 cli.<field> sites in lib_part1.rs, plus tests/story_423_asciinema_tests.rs. Covered by the golden help snapshot and a --format json test on one registry command and one legacy command.
+
+    A3 ADOPT, WIDENED. Slice 1 adds command_registry::built_command() and replaces every production Cli::command() call with it: user_alias.rs:165-178 (feeds external_cmd shadowed_names and alias validation), help_catalog.rs (4 sites), agent_launch.rs:914 and lib_part1.rs:336. The two main parse sites, Cli::parse_from at lib_part1.rs:1639 and 1683, also move to built_command().get_matches_from(). Guard test: production code (outside command_registry.rs and test modules) may not contain Cli::command(), <Cli as CommandFactory>::command(), Cli::parse* or Cli::try_parse*. Regression tests: (a) `away` is in real_subcommand_names() once migrated; (b) with a stub aida-away on PATH, `aida away` still runs the built-in, because maybe_dispatch (lib_part1.rs:1636) runs before the parse.
+
+    A4 SPLIT OUT as ADR-78 (remove or keep legacy --centralized mode). Slice 4 is blocked by ADR-78.
+
+    A5 DROPPED. Extra helper moves make pure-move slices bigger to review and rebase, and each slice already needs a C2 quiet window. Record the misplaced helpers as follow-ups on TASK-1540/1541 instead.
+
+    SCHEDULE: slice 1 is developed in an isolated worktree from about 2026-10-18 03:30 -07:00. Landing still waits for a C2 quiet window that the advisor announces.
+  created_at: 2026-10-18T06:33:03.884876765Z
+  modified_at: 2026-10-18T06:33:03.884876765Z
   session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
