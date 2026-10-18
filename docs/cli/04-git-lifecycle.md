@@ -158,6 +158,18 @@ preserves the title without adding a trailer. Existing constituent commit
 trailers in squash bodies remain landing evidence for the auto-bump scanner.
 <!-- trace:TASK-1600 | ai:codex -->
 
+**Rebase merge mode (`--rebase` / `--merge-method rebase`).** `aida pr ship [N]
+--rebase` runs the identical preflight, CI, independent review/approval,
+stale-head, and merge-hold gates as squash, pins the merge with
+`--match-head-commit <HEAD_SHA>`, and invokes `gh pr merge --rebase`. When
+`scripts/split-lib/verify_stack.py` is present and the PR range contains
+`refactor(cli-lib): extract|extend <m>.rs` slice commits, ship runs
+`scripts/split-lib/verify_stack.py <base> <head>` before merging. Because rebase
+merges land slice stacks incrementally without a squash subject, `--rebase`
+leaves the owning spec's status unchanged by default unless `--final-slice`
+(`--complete-spec`) is passed to complete the spec on the final slice.
+<!-- trace:STORY-1663 | ai:antigravity -->
+
 **Chains with** — `aida queue done` (finish on a branch) → `aida pr` (open/ship the PR) → `aida review` (if reviewed) → merge → `aida pull` (auto-bump to Completed).
 
 ---

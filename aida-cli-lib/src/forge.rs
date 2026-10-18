@@ -3932,49 +3932,100 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn default_branch_of(project_root: &Path) -> String {
-    // BUG-417: ask the forge for origin's live default branch first. `gh repo
-    // view --json defaultBranchRef` is authoritative even on a fresh clone where
-    // `refs/remotes/origin/HEAD` was never set (the quizdom `master`-default
-    // case that produced a GraphQL base-ref error when AIDA assumed `main`).
-    // Fall back to the local origin/HEAD probe, then `main`. trace:BUG-417 | ai:claude
-    if let Ok(out) = Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "repo",
-            "view",
-            "--json",
-            "defaultBranchRef",
-            "-q",
-            ".defaultBranchRef.name",
-        ])
-        .output()
-    {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
-                return name;
-            }
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+fn probe_github_default_branch(project_root: &Path) -> Option<String> {
+    if resolve_open_change_forge_kind(project_root) != ForgeKind::GitHub {
+        return None;
+    }
+    let mut cmd = Command::new(crate::kernel::resolve_gh_binary_for_probe()?);
+    cmd.current_dir(project_root).args([
+        "repo",
+        "view",
+        "--json",
+        "defaultBranchRef",
+        "-q",
+        ".defaultBranchRef.name",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let name = std::str::from_utf8(&out.stdout).ok()?.trim();
+    // Validate the entire response: a first-line parser could silently accept
+    // malformed or multi-line evidence and let the guard miss the real default.
+    crate::git_arg_guard::is_shell_safe_branch_name(name).then(|| name.to_owned())
+}
+
+// trace:TASK-1803 | ai:antigravity
+pub(crate) fn parse_ls_remote_symref_head(stdout: &str) -> Option<String> {
+    let mut found: Option<String> = None;
+    for line in stdout.lines() {
+        let Some(rest) = line.strip_prefix("ref: ") else {
+            continue;
+        };
+        let (target, symref) = rest.split_once('\t')?;
+        if symref.trim() != "HEAD" {
+            continue;
+        }
+        let branch = target.strip_prefix("refs/heads/")?.trim();
+        if !crate::git_arg_guard::is_shell_safe_branch_name(branch) {
+            return None;
+        }
+        if found.replace(branch.to_owned()).is_some() {
+            return None;
         }
     }
+    found
+}
 
-    // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
-    if let Ok(out) = Command::new("git")
+/// Bounded, forge-neutral `git ls-remote --symref origin HEAD` probe.
+// trace:TASK-1803 | ai:antigravity
+fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
+    let remote_url = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .args(["remote", "get-url", "origin"])
         .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    if String::from_utf8_lossy(&remote_url.stdout)
+        .trim()
+        .is_empty()
     {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if let Some(b) = s.strip_prefix("origin/") {
-                if !b.is_empty() {
-                    return b.to_string();
-                }
-            }
-        }
+        return None;
     }
-    "main".to_string()
+
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        // An ssh origin must never prompt for a passphrase or host key.
+        // trace:TASK-1803 | ai:claude
+        .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        .args(["ls-remote", "--symref", "origin", "HEAD"]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = std::str::from_utf8(&out.stdout).ok()?;
+    parse_ls_remote_symref_head(stdout)
+}
+
+/// Bounded, read-only forge evidence. Unknown is distinct from a guessed PR base.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn probe_default_branch(project_root: &Path) -> Option<String> {
+    probe_github_default_branch(project_root).or_else(|| probe_origin_head_symref(project_root))
+}
+
+pub(crate) fn default_branch_of(project_root: &Path) -> String {
+    // PR base callers retain the conventional-ref/main fallback; authority
+    // guards must use probe_default_branch, where unknown never becomes main.
+    // trace:BUG-417 trace:TASK-1795 | ai:codex
+    probe_default_branch(project_root).unwrap_or_else(|| {
+        crate::detect_default_branch_ref(project_root)
+            .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+            .unwrap_or_else(|| "main".to_owned())
+    })
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from

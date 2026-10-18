@@ -208,10 +208,15 @@ mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
 mod trace;
+// trace:TASK-1783 | ai:claude — whole-tree `aida trace coverage`.
+// trace:TASK-1783 | ai:claude — region rule shared by lint constants and tree coverage.
+mod trace_regions;
+mod trace_tree_coverage;
 mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
 mod worktree_gc;
+mod write_provenance;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;
@@ -334,6 +339,8 @@ mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
 mod lint_cmd;
+// trace:TASK-1785 | ai:claude — `aida lint constants`.
+mod lint_constants;
 mod load_cmd;
 mod lock_cmd;
 // trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
@@ -485,8 +492,10 @@ mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
 mod role_cmd;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
+mod solo_review;
 // trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
@@ -501,6 +510,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
+mod seat_clone;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;

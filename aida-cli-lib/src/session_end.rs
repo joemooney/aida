@@ -967,6 +967,16 @@ mod bug_2005_wrapper_staleness_tests;
 /// pre-fix behavior.
 // trace:BUG-1952 | ai:claude
 pub(crate) fn resolve_session_end_root(invocation_root: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a seat clone also has a real `.git` directory, but its leases
+    // live in the main checkout its marker, alternates and lease agree on.
+    // trace:BUG-2169 | ai:claude
+    match crate::seat_clone::main_for(invocation_root) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(_) => {
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     if invocation_root.join(".git").is_dir() {
         return invocation_root.to_path_buf();
     }
@@ -1005,7 +1015,15 @@ pub(crate) fn session_end(
     // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
     // peer guard, pool checks and store detection below never resolve against
     // the dying tree. trace:BUG-1952 | ai:claude
-    let project_root = resolve_session_end_root(&find_project_root()?);
+    let invocation_root = find_project_root()?;
+    // BUG-2169: a seat clone that does not verify is refused outright.
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) =
+        crate::seat_clone::main_for(&invocation_root)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
+    let project_root = resolve_session_end_root(&invocation_root);
     let leases = list_leases(&project_root);
     if leases.is_empty() {
         // BUG-779: a BARE `session end` with nothing to end is a benign no-op
@@ -1025,6 +1043,22 @@ pub(crate) fn session_end(
     }
 
     let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
+    // BUG-2169: ending a seat clone (probe, salvage, remove, unpin) is slice
+    // S3. Everything below runs git in the session's tree, which for a clone
+    // would execute seat-controlled config on the host, so refuse first.
+    // trace:BUG-2169 | ai:claude
+    if target.tree_kind == crate::seat_clone::TreeKind::Clone {
+        anyhow::bail!(
+            "session {} works in a contained seat's private clone ({}). `session end` cannot \
+             end a seat clone yet; the clone and its base pin are left in place. Push its branch \
+             from inside the seat, then remove the directory and run `git update-ref -d {}` in \
+             the main checkout.",
+            &target.id[..target.id.len().min(8)],
+            target.worktree_path.display(),
+            crate::seat_clone::pin_ref(&target.worktree_path)
+                .unwrap_or_else(|| format!("{}<seat>", crate::seat_clone::PIN_PREFIX)),
+        );
+    }
 
     // BUG-361: visibility-first guard for the ceiling variant where an agent
     // commits locally and exits without any lifecycle command (`queue done`,

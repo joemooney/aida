@@ -158,6 +158,9 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                     *force_claim,
                     use_pool,
                     !*launch,
+                    /* review_coexistence */ None,
+                    // trace:BUG-2169 | ai:claude
+                    mode.contained,
                 )
             };
             // BUG-1918: `--launch` claims FOR the agent it starts; without
@@ -2046,16 +2049,8 @@ pub(crate) fn resolve_claude_new_posture(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if parent_contained {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, parent_contained)?;
     let contained_posture = || -> Result<ClaudeNewPosture> {
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
@@ -2553,8 +2548,16 @@ pub(crate) fn agent_new_with_config(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2792,8 +2795,16 @@ pub(crate) fn agent_new_bg_dispatch(
             &project_root,
         )?;
     }
-    let plan =
-        prepare_agent_launch_with_cwd(&project_root, role, spec, config.agent_type, name, cwd)?;
+    let plan = prepare_agent_launch_with_cwd(
+        &project_root,
+        role,
+        spec,
+        config.agent_type,
+        name,
+        cwd,
+        // trace:BUG-2169 | ai:claude
+        is_contained_launch(&config),
+    )?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -3067,13 +3078,8 @@ pub(crate) fn resolve_interactive_launch_mode_under_parent(
     if !parent_contained {
         return resolve_interactive_launch_mode_for_root(flag, sandbox, root);
     }
-    if let Some(m) = flag.filter(|s| !s.is_empty()) {
-        anyhow::bail!(
-            "[contained] this session is contained (AIDA_CONTAINED), so the claude it launches \
-             is contained too — refusing `--permission-mode {m}`, which would run it with a \
-             different posture. Drop --permission-mode, or launch from an uncontained shell."
-        );
-    }
+    // trace:BUG-2172 | ai:codex
+    session::refuse_contained_permission_override(flag.filter(|s| !s.is_empty()), true)?;
     // trace:BUG-2131 | ai:claude
     aida_core::git_ops::ensure_git_supports_contained()?;
     Ok(ResolvedClaudeLaunch {
@@ -3377,7 +3383,15 @@ pub(crate) fn prepare_agent_launch(
     agent_type: &str,
     custom_name: Option<String>,
 ) -> Result<AgentLaunchPlan> {
-    prepare_agent_launch_with_cwd(project_root, role, spec, agent_type, custom_name, None)
+    prepare_agent_launch_with_cwd(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        None,
+        false,
+    )
 }
 
 // trace:BUG-2002 | ai:codex
@@ -3388,6 +3402,8 @@ fn prepare_agent_launch_with_cwd(
     agent_type: &str,
     custom_name: Option<String>,
     explicit_cwd: Option<&std::path::Path>,
+    // BUG-2169: the seat runs contained, so its tree may be a private clone.
+    contained_seat: bool,
 ) -> Result<AgentLaunchPlan> {
     // Persona launches never turn an optional `--spec` into ownership. They
     // stay in the project checkout and carry no lease/worktree.
@@ -3503,6 +3519,9 @@ fn prepare_agent_launch_with_cwd(
                     None,
                     /* self_claim */
                     false,
+                    /* review_coexistence */ None,
+                    // trace:BUG-2169 | ai:claude
+                    contained_seat,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);
@@ -4346,6 +4365,36 @@ pub(crate) fn resolved_agent_program_and_args(
 ) -> Result<(std::ffi::OsString, Vec<String>)> {
     let mut all_args: Vec<String> = config.default_args.clone();
     all_args.extend(prompt_args.iter().cloned());
+    wrapped_agent_program_and_args(binary, config, plan, all_args, wrap_claude)
+}
+
+/// The `--version` probe for [`apply_harness_version`], resolved through the
+/// SAME os_wrap decision as the child it stamps: when the child runs inside
+/// bwrap, so does the probe (and a wrap that cannot be set up fails closed
+/// rather than probing unconfined).
+// trace:TASK-1793 | ai:claude
+pub(crate) fn harness_version_probe_program_and_args(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    wrap_claude: bool,
+) -> Result<(std::ffi::OsString, Vec<String>)> {
+    wrapped_agent_program_and_args(
+        binary,
+        config,
+        plan,
+        vec!["--version".to_string()],
+        wrap_claude,
+    )
+}
+
+fn wrapped_agent_program_and_args(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    all_args: Vec<String>,
+    wrap_claude: bool,
+) -> Result<(std::ffi::OsString, Vec<String>)> {
     if wrap_claude && config.agent_type == "claude" {
         let (prog, args) = crate::session::os_wrapped_program_and_args(
             &plan.launch_cwd,
@@ -4678,6 +4727,133 @@ pub(crate) fn render_agent_show_prompt(
     out
 }
 
+/// Ask the selected executable, never the launching session, for its version.
+/// A failed probe clears inherited context so a different vendor cannot receive
+/// its parent's version. Previews do not call this helper. `probe` is the
+/// program + argv from [`harness_version_probe_program_and_args`], so the probe
+/// runs under the same os_wrap boundary as the child.
+// trace:TASK-1793 | ai:codex
+fn apply_harness_version(
+    command: &mut std::process::Command,
+    (program, args): (std::ffi::OsString, Vec<String>),
+) {
+    command.env_remove("AIDA_HARNESS_VERSION");
+    if let Some(version) = reported_harness_version(&program, &args, command.get_current_dir()) {
+        command.env("AIDA_HARNESS_VERSION", version);
+    }
+}
+
+// trace:TASK-1793 | ai:codex
+#[cfg(unix)]
+fn reported_harness_version(
+    program: &std::ffi::OsStr,
+    args: &[String],
+    cwd: Option<&std::path::Path>,
+) -> Option<String> {
+    use crate::notify::ChildPoll;
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let start = std::time::Instant::now();
+    let mut probe = Command::new(program);
+    if let Some(cwd) = cwd {
+        probe.current_dir(cwd);
+    }
+    // The probe carries no seat authority: both launch paths strip the
+    // launching seat's grant from the child, so the probe must not hold it
+    // either (nor the seat's role or purpose).
+    // trace:TASK-1793 | ai:claude
+    probe
+        .env_remove(seat_authority::GRANT_ENV)
+        .env_remove("AIDA_SESSION_ROLE")
+        .env_remove("AIDA_SESSION_PURPOSE");
+    let mut child = probe
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn_retrying_etxtbsy()
+        .ok()?;
+    let mut reaped = None;
+    let output = (|| {
+        let mut stdout = child.stdout.take()?;
+        let fd = stdout.as_raw_fd();
+        // SAFETY: fd belongs to this live stdout pipe; these fcntl operations
+        // change only its file-status flags and do not take pointer arguments.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+        if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        let mut eof = false;
+        loop {
+            // Never retain more than 257 bytes, including a trailing newline.
+            // A descendant holding the pipe open shares this same deadline.
+            let mut chunk = [0u8; 258];
+            match stdout.read(&mut chunk) {
+                Ok(0) => eof = true,
+                Ok(n) => {
+                    if bytes.len() + n > 257 {
+                        return None;
+                    }
+                    bytes.extend_from_slice(&chunk[..n]);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => return None,
+            }
+            // Linux observes the exit WITHOUT reaping, so the leader's pid
+            // stays reserved as the group id until the cleanup below.
+            match crate::notify::poll_exit(&mut child).ok()? {
+                ChildPoll::Running => {}
+                ChildPoll::ExitedUnreaped if eof => return Some(bytes),
+                ChildPoll::ExitedUnreaped => {}
+                ChildPoll::Reaped(status) => {
+                    reaped = Some(status);
+                    if eof {
+                        return Some(bytes);
+                    }
+                }
+            }
+            if start.elapsed() >= std::time::Duration::from_secs(2) {
+                return None;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    })();
+    // Signal the probe group only while its leader is unreaped: its pid is
+    // then still the group id and cannot have been recycled. This also ends
+    // descendants of an exited leader that still hold the pipe. A leader
+    // already reaped by the non-Linux poll is never group-signalled.
+    let status = match reaped {
+        Some(status) => status,
+        None => {
+            crate::kill_process_group(child.id());
+            let _ = child.kill();
+            child.wait().ok()?
+        }
+    };
+    if !status.success() {
+        return None;
+    }
+    let output = String::from_utf8(output?).ok()?;
+    let value = output.trim();
+    (!value.is_empty() && value.len() <= 256 && !value.chars().any(char::is_control))
+        .then(|| value.to_string())
+}
+
+#[cfg(not(unix))]
+fn reported_harness_version(
+    _program: &std::ffi::OsStr,
+    _args: &[String],
+    _cwd: Option<&std::path::Path>,
+) -> Option<String> {
+    None
+}
+
 // trace:BUG-2006 | ai:antigravity
 pub(crate) fn build_agent_new_bg_command(
     binary: &std::path::Path,
@@ -4705,6 +4881,11 @@ pub(crate) fn build_agent_new_bg_command(
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
+    // The `--bg` child is the bare binary (never os-wrapped), so is its probe.
+    apply_harness_version(
+        &mut command,
+        harness_version_probe_program_and_args(binary, config, plan, false)?,
+    );
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
@@ -4907,6 +5088,10 @@ pub(crate) fn run_tracked_agent(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    apply_harness_version(
+        &mut command,
+        harness_version_probe_program_and_args(binary, config, plan, true)?,
+    );
     if let Some(role) = &plan.role {
         let grant = seat_authority::issue_child(
             &plan.project_root,
@@ -5072,3 +5257,8 @@ pub(crate) fn run_tracked_agent(
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+// trace:TASK-1793 | ai:codex
+#[cfg(test)]
+#[path = "tests/task_1793_harness_version_tests.rs"]
+mod harness_version_tests;

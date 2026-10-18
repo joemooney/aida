@@ -70,8 +70,22 @@ pub(crate) fn handle_trace_command(cmd: &TraceCommand, storage: &Storage) -> Res
         TraceCommand::Gate { range, json } => {
             crate::handle_trace_gate(range.as_deref(), *json)?;
         }
-        TraceCommand::Coverage { range, json, block } => {
-            crate::handle_trace_coverage(range.as_deref(), *json, *block)?;
+        TraceCommand::Coverage {
+            range,
+            json,
+            block,
+            all,
+            path,
+            fail_on,
+        } => {
+            crate::trace_tree_coverage::dispatch_coverage(
+                range.as_deref(),
+                *json,
+                *block,
+                *all,
+                path.as_deref(),
+                *fail_on,
+            )?;
         }
         TraceCommand::Check { path, json, block } => {
             crate::handle_trace_check(path.as_deref(), *json, *block)?;

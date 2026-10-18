@@ -187,6 +187,15 @@ pub(crate) struct SessionLease {
     // trace:STORY-1653 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) driver: Option<String>,
+    /// BUG-2169: whether `worktree_path` is a linked worktree of the main
+    /// checkout or a contained seat's private clone. Absent on older leases,
+    /// which read as `worktree`; a worktree lease never writes the key.
+    // trace:BUG-2169 | ai:claude
+    #[serde(
+        default,
+        skip_serializing_if = "crate::seat_clone::TreeKind::is_worktree"
+    )]
+    pub(crate) tree_kind: crate::seat_clone::TreeKind,
     /// BUG-2139 / BUG-2165: child grant id stamped on the lease for a
     /// headless child session. Preserved across lease updates so
     /// `update_lease_branch` and `mark_lease_escalated_to_human` do not drop it.
@@ -275,6 +284,7 @@ pub(crate) fn session_harness_worktree_register(
         .unwrap_or_else(|| "unknown".to_string());
     let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: spec.scope.clone(),
         slug: slugify(&spec.scope),
@@ -1668,7 +1678,7 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
 
 /// BUG-2150: the decision for a review whose PR source branch is held by
 /// another lease. A review lease is a different kind from an implementer
-/// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
+/// claim, so an explicit reviewer pickup with a backing spec coexists
 /// with a LIVE non-reviewer holder. Every other case — a non-reviewer pickup,
 /// a holder that is itself a reviewer, or a dead holder (ended as before) —
 /// keeps the BUG-1205 prompt / auto-end / refuse handling.
@@ -1677,12 +1687,18 @@ pub(crate) fn review_source_branch_conflict_decision(
     headless: bool,
     lease_live: bool,
     holder_role: Option<&str>,
-    pickup_role: Option<&str>,
+    explicit_pickup_role: Option<&str>,
+    backing_spec: Option<&str>,
 ) -> LeaseConflictDecision {
     let is_reviewer = |r: Option<&str>| {
         r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
     };
-    if lease_live && is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+    // trace:TASK-1786 | ai:codex
+    if lease_live
+        && is_reviewer(explicit_pickup_role)
+        && backing_spec.is_some_and(|id| !id.trim().is_empty())
+        && !is_reviewer(holder_role)
+    {
         LeaseConflictDecision::Coexist
     } else {
         lease_conflict_decision(headless, lease_live)

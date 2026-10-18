@@ -2833,7 +2833,22 @@ pub(crate) fn run() -> Result<()> {
     // `aida lint` self-loads the store via `load_store_for_lookup` and scores
     // requirement text with the EARS heuristics — read-only, no shared storage
     // handle, no LLM. trace:TASK-0417 | ai:claude
-    if let Command::Lint { spec, scope, json } = &cli.command {
+    if let Command::Lint {
+        cmd,
+        spec,
+        scope,
+        json,
+    } = &cli.command
+    {
+        // trace:TASK-1785 | ai:claude
+        if let Some(crate::cli::LintCommand::Constants {
+            path,
+            json,
+            fail_on,
+        }) = cmd
+        {
+            return lint_constants::handle_lint_constants(path.as_deref(), *json, *fail_on);
+        }
         return lint_cmd::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
     }
 
@@ -2886,8 +2901,24 @@ pub(crate) fn run() -> Result<()> {
     // — it reads git for the diff + range and self-loads the store to resolve
     // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
     // needs the shared storage handle. trace:STORY-499 | ai:claude
-    if let Command::Trace(TraceCommand::Coverage { range, json, block }) = &cli.command {
-        return handle_trace_coverage(range.as_deref(), *json, *block);
+    if let Command::Trace(TraceCommand::Coverage {
+        range,
+        json,
+        block,
+        all,
+        path,
+        fail_on,
+    }) = &cli.command
+    {
+        // trace:TASK-1783 | ai:claude
+        return trace_tree_coverage::dispatch_coverage(
+            range.as_deref(),
+            *json,
+            *block,
+            *all,
+            path.as_deref(),
+            *fail_on,
+        );
     }
 
     // `aida changelog` is self-contained: git + read-only store, no shared
@@ -4027,9 +4058,23 @@ pub(crate) fn run() -> Result<()> {
                         spec,
                         group_by,
                         cost,
+                        provenance,
                         json,
                         toon,
                     } => {
+                        if *provenance {
+                            let store = storage.load()?;
+                            let req = store
+                                .get_requirement_by_spec_id(spec)
+                                .ok_or_else(|| anyhow::anyhow!("requirement not found: {spec}"))?;
+                            return crate::write_provenance::show(
+                                &find_project_root()?,
+                                req,
+                                *json || output_format_is_json(),
+                                *toon,
+                            );
+                        }
+
                         token_ledger::show(
                             &find_project_root()?,
                             spec,

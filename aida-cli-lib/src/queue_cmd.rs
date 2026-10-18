@@ -5606,6 +5606,7 @@ pub(crate) fn handle_queue_command(
             sandbox,
             no_launch,
             plan_only,
+            plan_phase,
             guided,
             with_plan,
             role,
@@ -6679,7 +6680,7 @@ pub(crate) fn handle_queue_command(
                 permission_mode.as_deref(),
                 *sandbox,
                 *no_launch,
-                role.as_deref(),
+                QueueWorkRoleInput::direct(role.as_deref()),
                 *no_pull,
                 type_filter.as_deref(),
                 branch.as_deref(),
@@ -6728,8 +6729,10 @@ pub(crate) fn handle_queue_command(
                 *effort,
                 *strict,
                 // STORY-265: plan-only mode — launch /aida-plan in `plan`
-                // permission mode instead of /aida-pickup implement.
-                *plan_only,
+                // permission mode instead of /aida-pickup implement. The
+                // hidden `--plan-phase` is the drain prelude's headless twin.
+                // trace:TASK-1794 | ai:claude
+                *plan_only || *plan_phase,
                 // STORY-735: guided keystone mode — launch
                 // /aida-guided-implement (structured decision dialog) instead
                 // of /aida-pickup. trace:STORY-735 | ai:claude
@@ -8620,7 +8623,7 @@ pub(crate) fn handle_queue_rework(
             permission_mode,
             /* sandbox */ false,
             /* no_launch */ false,
-            for_role_resolved.as_deref(),
+            QueueWorkRoleInput::rework(for_role, for_role_resolved.as_deref()),
             no_pull,
             /* type_filter */ None,
             /* branch_override */ None,
@@ -8673,6 +8676,40 @@ pub(crate) fn handle_queue_rework(
     }
 
     Ok(())
+}
+
+/// Keep route inheritance separate from the caller's explicit reviewer intent.
+/// Rework may preserve a stored route for pickup without authorizing coexistence.
+// trace:TASK-1786 | ai:codex
+#[derive(Clone, Copy)]
+pub(crate) struct QueueWorkRoleInput<'a> {
+    pickup: Option<&'a str>,
+    explicit: Option<&'a str>,
+}
+
+impl<'a> QueueWorkRoleInput<'a> {
+    pub(crate) fn direct(role: Option<&'a str>) -> Self {
+        Self {
+            pickup: role,
+            explicit: role,
+        }
+    }
+
+    pub(crate) fn rework(raw_for: Option<&'a str>, resolved_route: Option<&'a str>) -> Self {
+        Self {
+            pickup: resolved_route,
+            explicit: raw_for,
+        }
+    }
+
+    pub(crate) fn review_coexistence<'p>(
+        &self,
+        plan: &'p QueueWorkPlan,
+    ) -> Option<(&'a str, &'p str)> {
+        plan.review_target?;
+        self.explicit
+            .map(|explicit| (explicit, plan.anchor_display.as_str()))
+    }
 }
 
 /// STORY-42: resolved pickup plan — which queue entries we're working,
@@ -10896,16 +10933,8 @@ pub(crate) fn honour_auto_complete_sandbox(
     // BUG-2151 ruling). `--permission-mode` must be refused under a contained parent.
     // trace:BUG-2166 | ai:antigravity
     let contained_env = session::aida_contained_env()?;
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     if !sandbox {
         return Ok(());
     }
@@ -10960,22 +10989,23 @@ pub(crate) fn resolve_queue_work_posture(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     let contained = sandbox || contained_env || contained_knob;
     if contained && bypass_knob {
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
     let (permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
+        // Plan mode and containment are independent: retain the sandbox flags
+        // while requesting the planning permission posture.
+        // trace:TASK-1794 | ai:codex
+        let mode = if plan_only { "plan" } else { "dontAsk" };
+        let origin = if plan_only {
+            "contained sandbox + --plan-only"
+        } else {
+            "contained sandbox"
+        };
+        (Some(mode.to_string()), origin)
     } else {
         resolve_queue_work_permission_mode(
             permission_mode,
@@ -11025,7 +11055,7 @@ pub(crate) fn handle_queue_work(
     permission_mode: Option<&str>,
     sandbox: bool,
     no_launch: bool,
-    role_override: Option<&str>,
+    role_input: QueueWorkRoleInput<'_>,
     no_pull: bool,
     type_filter: Option<&str>,
     branch_override: Option<&str>,
@@ -11102,6 +11132,7 @@ pub(crate) fn handle_queue_work(
     // STORY-1003: opaque vendor model override for this pickup/drain.
     model_override: Option<&str>,
 ) -> Result<()> {
+    let role_override = role_input.pickup;
     // STORY-132: validate a caller-minted --session-id up front — before
     // any side effect — so a malformed id fails clean with a clear
     // message rather than surfacing deep in session setup.
@@ -11280,16 +11311,8 @@ pub(crate) fn handle_queue_work(
             "--sandbox and --permission-mode are mutually exclusive Claude launch postures"
         );
     }
-    if contained_env {
-        if let Some(m) = permission_mode {
-            anyhow::bail!(
-                "[contained] this session is contained (AIDA_CONTAINED), so every agent it \
-                 launches is contained too — refusing `--permission-mode {m}`, which would run \
-                 the child with a different posture. Drop --permission-mode, or launch from an \
-                 uncontained shell."
-            );
-        }
-    }
+    // trace:BUG-2172 | ai:codex
+    crate::session::refuse_contained_permission_override(permission_mode, contained_env)?;
     let contained = sandbox || contained_env || contained_knob;
     // BUG-2144: containment is monotonic (BUG-2133 ruling). A contained launch
     // on a vendor that cannot apply it is refused HERE — before the queue_add
@@ -11483,7 +11506,11 @@ pub(crate) fn handle_queue_work(
         contained_env,
         contained_knob,
         bypass_knob,
-        plan_only,
+        // The headless launcher never runs Claude plan mode (it owns its own
+        // posture), so only an interactive plan lane resolves to `plan`; the
+        // headless plan phase must not report a mode it will not run.
+        // trace:TASK-1794 | ai:claude
+        plan_only && !no_human,
         env_mode.as_deref(),
         config_mode.as_deref(),
     )?;
@@ -12507,6 +12534,11 @@ pub(crate) fn handle_queue_work(
             None,
             /* self_claim */
             queue_work_self_claim(no_launch),
+            // trace:TASK-1786 | ai:codex
+            role_input.review_coexistence(&plan),
+            // trace:BUG-2169 | ai:claude
+            /* contained_seat */
+            contained,
         )
     };
     if no_launch {
@@ -13396,6 +13428,25 @@ pub(crate) fn run_standalone_reviewer(
         Err(why) => eprintln!(
             "  {} no verdict collected for PR-{pr}: {why}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+        ),
+    }
+
+    // BUG-2176: a contained reviewer cannot write the primary checkout's
+    // merge-holds either, so its rework marker stays in the review worktree,
+    // invisible to `aida pr ship` and gone once the worktree is removed.
+    // Adopt it whatever the verdict collection decided — a hold only tightens.
+    // trace:BUG-2176 | ai:claude
+    match crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at) {
+        Ok(true) if !quiet => eprintln!(
+            "  {} adopted the reviewer's merge-hold marker for PR-{pr} from {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            worktree.display()
+        ),
+        Ok(_) => {}
+        Err(err) => eprintln!(
+            "  {} could not adopt the reviewer's merge-hold marker for PR-{pr} from {} ({err}) — copy it to the primary checkout's .aida/merge-holds/ before removing the worktree",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            worktree.display()
         ),
     }
 

@@ -4,10 +4,46 @@ comments of unchanged sibling fn/impl items retain their scope; attribution
 fallback is unchanged. See OVERVIEW.md.
 <!-- trace:TASK-1800 | ai:codex -->
 
+Contained plan-only queue pickups select Claude plan mode while retaining
+contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
+Plan-only rejects headless flags before setup; headless drains use --with-plan.
+<!-- trace:TASK-1794 | ai:codex -->
+
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
+Standalone reviewer coexistence requires an explicit queue-work role flag plus
+an unambiguous backing spec. Verdict collection reads a size-bounded regular
+file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
+process watchdog.
+<!-- trace:TASK-1786 | ai:codex -->
+
+No-number `pr ship` protects main/master, then uses only origin/HEAD as local
+default-branch evidence before a bounded, read-only forge probe. Unknown evidence
+requires a PR number. PR-base callers retain conventional-ref/main fallbacks.
+Refusal suggestions show numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
+Regen generated-command execution defaults to a 30-second timeout per call;
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
+kills the process group and failed records retain timeout reasons. Each output
+stream is capped at 1 MiB; overflow fails without retaining child diagnostics.
+See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
+<!-- trace:TASK-1791 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.
 <!-- trace:TASK-1789 | ai:codex -->
+
+`aida usage show <SPEC> --provenance` reports persisted write context and
+read-only session-ledger evidence at or before each write. Harness versions
+come only from `AIDA_HARNESS_VERSION`; missing model/effort/token evidence stays
+unknown. Session totals overlap between events and must not be summed.
+See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
 
 Mandate exclusion-ledger reads validate the opened non-symlink regular file,
 mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
@@ -50,6 +86,11 @@ once a references/verified-by neighbor is Completed (either direction). Persiste
 `hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
 amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+Store rebase/union-merge/fast-forward (`git_ops::pull_rebase*`, `merge_union_auto`,
+`fast_forward_store`) take the store lock, refuse incompatible evidence before
+Git, and commit combined-graph locks before success; check refusals with
+`git_ops::is_evidence_refusal` and never publish after one.
+<!-- trace:BUG-2162 | ai:claude -->
 
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
@@ -337,6 +378,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
+
+## Child launch containment
+
+Headless and interactive reviewer/resume launches strictly inherit
+`AIDA_CONTAINED`, even when a caller passes `contained=false`. Compete pins
+`dontAsk` and validates all vendors before any arm or artifact. Arms use their
+child worktree; judges use the project root with the same write boundary.
+Burndown and intake share the headless Claude posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
 
 ## Cache read behavior
 

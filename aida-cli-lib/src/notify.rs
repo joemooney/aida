@@ -829,7 +829,7 @@ fn is_echild(e: &std::io::Error) -> bool {
 
 /// One poll of the bounded command.
 // trace:BUG-1623 | ai:claude
-enum ChildPoll {
+pub(crate) enum ChildPoll {
     Running,
     /// Exited but not reaped: its pid is still reserved as the group id.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -844,7 +844,7 @@ enum ChildPoll {
 /// and background leftovers of a finished command are ended too.
 // trace:TASK-1492 trace:BUG-1623 | ai:claude
 #[cfg(target_os = "linux")]
-fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
+pub(crate) fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
     // SAFETY: waitid only writes the zeroed siginfo we own.
     let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
     let rc = unsafe {
@@ -872,7 +872,7 @@ fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
 /// leftovers of a command that exited on its own are not ended.
 // trace:BUG-1623 | ai:claude
 #[cfg(not(target_os = "linux"))]
-fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
+pub(crate) fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
     Ok(match child.try_wait()? {
         Some(status) => ChildPoll::Reaped(status),
         None => ChildPoll::Running,

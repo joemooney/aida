@@ -309,6 +309,12 @@ sites = 2
 channels = ["write"]
 sites = 1
 
+[readers."aida-cli-lib/src/solo_review.rs"]
+# STORY-1655: the mode is read from ~/.aida/config.toml only; the branch-local
+# copy is PRESENCE-probed for an "ignored" warning, never for the value.
+channels = ["home", "worktree", "prose"]
+sites = 3
+
 [readers."aida-cli-lib/src/supervise_cmd.rs"]
 channels = ["worktree", "prose"]
 sites = 2
@@ -490,6 +496,9 @@ mass_change_expires_at = "policy"
 # for a display note only; their values are policy'd from ~/.aida/config.toml.
 run_acceptance_commands = "policy"
 acceptance_command_allow = "policy"
+# STORY-1655: presence-probed for an "ignored" warning; the value comes only
+# from ~/.aida/config.toml.
+solo_human_self_approval = "policy"
 
 [keys.worktree.block_allocation]
 auto_claim = "policy"
@@ -774,6 +783,7 @@ confirm_bypass = "policy" # can only tighten; malformed means "on"
 [keys.trusted.review]
 run_acceptance_commands = "policy" # presence probed for a display note
 acceptance_command_allow = "policy"
+solo_human_self_approval = "policy" # STORY-1655: presence probed for an "ignored" warning
 
 # Regeneration commands come only from the trusted default-branch config.
 # trace:TASK-1730 | ai:codex
