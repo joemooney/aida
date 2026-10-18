@@ -695,6 +695,14 @@ pub(crate) fn propose_only(
         &out_path,
         contained,
     )?;
+    // BUG-2140: commit any pending store changes left by a contained harvest
+    // child on the host through the hardened `add_all`/`commit` path.
+    // trace:BUG-2140 | ai:antigravity
+    if contained {
+        if let Some(store_path) = crate::detect_distributed_store_from(project_root) {
+            aida_core::git_ops::commit_pending_store_changes_on_host(&store_path)?;
+        }
+    }
     let candidates = parse_candidates(&raw)?;
     let total = candidates.len();
     let context = filter_context(&diff, store);
