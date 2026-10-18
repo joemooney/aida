@@ -168,3 +168,88 @@ fn outside_a_repository_the_hold_stays_under_the_given_root() {
     assert!(local_hold_path(dir.path(), 3).is_file());
     assert_eq!(hold_store_root(dir.path()), dir.path());
 }
+
+#[test]
+fn many_hold_path_calls_resolve_the_primary_checkout_at_most_once() {
+    let (_tmp, primary, linked) = primary_with_linked();
+    STORE_RESOLUTIONS.with(|n| n.set(0));
+    for pr in 0..50 {
+        assert_eq!(hold_path(&linked, pr), local_hold_path(&primary, pr));
+        assert_eq!(
+            clearance_path(&linked, pr),
+            local_clearance_path(&primary, pr)
+        );
+    }
+    let misses: Vec<_> = (0..20).map(|pr| read_hold(&linked, pr)).collect();
+    assert!(misses.iter().all(Option::is_none));
+    assert!(
+        STORE_RESOLUTIONS.with(|n| n.get()) <= 1,
+        "the store root must be memoised, not re-resolved per call"
+    );
+}
+
+#[test]
+fn the_store_resolver_never_spawns_git() {
+    let src = include_str!("../merge_hold.rs");
+    let start = src.find("pub(crate) fn hold_store_root(").unwrap();
+    let end = start + src[start..].find("\nfn holds_dir(").unwrap();
+    let body = &src[start..end];
+    assert!(
+        !body.contains("Command::new"),
+        "no subprocess on the hold path"
+    );
+    assert!(
+        !body.contains("main_worktree_root_from"),
+        "that resolver spawns git"
+    );
+}
+
+#[test]
+fn list_json_reports_stray_markers_with_their_label_only_state() {
+    let strays = vec![
+        (
+            2726,
+            PathBuf::from("/w/aida-pr-2726/.aida/merge-holds/PR-2726"),
+        ),
+        (
+            2727,
+            PathBuf::from("/w/aida-pr-2727/.aida/merge-holds/PR-2727"),
+        ),
+    ];
+    let json = stray_markers_json(&strays, &[2726]);
+    assert_eq!(
+        json,
+        serde_json::json!([
+            {"pr": 2726, "path": "/w/aida-pr-2726/.aida/merge-holds/PR-2726", "label_only": true},
+            {"pr": 2727, "path": "/w/aida-pr-2727/.aida/merge-holds/PR-2727", "label_only": false},
+        ])
+    );
+    // The list command emits exactly these rows, in text and JSON alike.
+    let cmd = include_str!("../merge_hold_cmd.rs");
+    assert!(cmd.contains("let strays = merge_hold::stray_worktree_markers(&root);"));
+    assert!(cmd.contains(
+        "\"stray_worktree_markers\": merge_hold::stray_markers_json(&strays, &label_only)"
+    ));
+    assert!(
+        cmd.contains("merge_hold::stray_marker_warning(*pr, path, &root, label_only.contains(pr))")
+    );
+}
+
+#[test]
+fn the_standalone_reviewer_adopts_its_marker_after_collecting_the_verdict() {
+    let src = include_str!("../queue_cmd.rs");
+    let collect = src
+        .find("crate::review_verdict::collect_standalone_verdict(")
+        .expect("verdict collection");
+    let adopt = src
+        .find("crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)")
+        .expect("the launcher must adopt the reviewer's hold marker");
+    let exit = src[adopt..]
+        .find("std::process::exit(code)")
+        .map(|i| adopt + i)
+        .expect("exit propagation");
+    assert!(
+        collect < adopt && adopt < exit,
+        "adoption must run after collection and before the exit-code early return"
+    );
+}

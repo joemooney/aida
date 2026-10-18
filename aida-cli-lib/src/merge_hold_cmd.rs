@@ -588,14 +588,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                         "label_scan_disagrees": scan_disagrees,
                         "unrecorded_marker_removals": unrecorded_removals,
                         // trace:BUG-2176 | ai:claude
-                        "stray_worktree_markers": strays
-                            .iter()
-                            .map(|(pr, path)| serde_json::json!({
-                                "pr": pr,
-                                "path": path.display().to_string(),
-                                "label_only": label_only.contains(pr),
-                            }))
-                            .collect::<Vec<_>>(),
+                        "stray_worktree_markers": merge_hold::stray_markers_json(&strays, &label_only),
                     })
                 );
                 return Ok(());

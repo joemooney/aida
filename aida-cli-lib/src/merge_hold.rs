@@ -402,19 +402,84 @@ impl MergeHoldRecord {
 
 /// BUG-2176: the checkout whose `.aida/merge-holds/` and
 /// `.aida/merge-hold-clearances/` every reader and writer shares — the
-/// primary checkout, resolved the same way the merge chokepoint resolves the
-/// launcher's review verdicts ([`crate::main_worktree_root_from`]). A caller
-/// in a linked worktree (a headless reviewer in `aida-pr-N`) used to write its
-/// marker into that worktree, where `aida pr ship` and auto-release never saw
-/// it and removing the worktree destroyed it. A seat clone that does not
-/// verify keeps its own root, as before, rather than pointing at the
-/// unverified-clone sentinel where every hold read would answer "no hold".
+/// primary checkout, the same main checkout the merge chokepoint reads the
+/// launcher's review verdicts from. A caller in a linked worktree (a headless
+/// reviewer in `aida-pr-N`) used to write its marker into that worktree,
+/// where `aida pr ship` and auto-release never saw it and removing the
+/// worktree destroyed it. A seat clone that does not verify keeps its own
+/// root, as before, rather than pointing at the unverified-clone sentinel
+/// where every hold read would answer "no hold".
+///
+/// Every `hold_path` / `clearance_path` call lands here, and a hold-read miss
+/// walks every placed PR, so this never spawns git: the main checkout is read
+/// from `.git` / `commondir` on disk ([`primary_checkout_from_files`]) and
+/// memoised per process. An unverified seat clone is never memoised, so it
+/// resolves afresh once its lease verifies.
 // trace:BUG-2176 | ai:claude
 pub(crate) fn hold_store_root(project_root: &Path) -> PathBuf {
-    if let crate::seat_clone::MainFor::Unverified(_) = crate::seat_clone::main_for(project_root) {
-        return project_root.to_path_buf();
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static MEMO: OnceLock<Mutex<HashMap<PathBuf, PathBuf>>> = OnceLock::new();
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some(hit) = memo.lock().ok().and_then(|m| m.get(project_root).cloned()) {
+        return hit;
     }
-    crate::main_worktree_root_from(project_root)
+    let resolved = match crate::seat_clone::main_for(project_root) {
+        crate::seat_clone::MainFor::Unverified(_) => return project_root.to_path_buf(),
+        crate::seat_clone::MainFor::Verified(main) => main,
+        crate::seat_clone::MainFor::NotAClone => {
+            // A root with no `.git` costs one stat and stays unmemoised, so a
+            // directory that later becomes a checkout is not pinned stale.
+            if std::fs::symlink_metadata(project_root.join(".git")).is_err() {
+                return project_root.to_path_buf();
+            }
+            primary_checkout_from_files(project_root)
+        }
+    };
+    if let Ok(mut m) = memo.lock() {
+        m.insert(project_root.to_path_buf(), resolved.clone());
+    }
+    resolved
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Uncached primary-checkout resolutions on this thread.
+    pub(crate) static STORE_RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The main checkout of `root`, read from git's own files without running git:
+/// a `.git` directory makes `root` the main checkout; a linked worktree's
+/// `.git` file names its gitdir, whose `commondir` is the main checkout's
+/// `.git`. Anything else (a submodule, a bare main, an unreadable file) keeps
+/// `root`, which is where the marker lived before BUG-2176.
+// trace:BUG-2176 | ai:claude
+fn primary_checkout_from_files(root: &Path) -> PathBuf {
+    #[cfg(test)]
+    STORE_RESOLUTIONS.with(|n| n.set(n.get() + 1));
+    let dot_git = root.join(".git");
+    let Ok(meta) = std::fs::symlink_metadata(&dot_git) else {
+        return root.to_path_buf();
+    };
+    if !meta.is_file() {
+        return root.to_path_buf();
+    }
+    let Some(gitdir) = std::fs::read_to_string(&dot_git).ok().and_then(|body| {
+        body.lines()
+            .find_map(|l| l.strip_prefix("gitdir:"))
+            .map(|d| root.join(d.trim()))
+    }) else {
+        return root.to_path_buf();
+    };
+    let Ok(common) = std::fs::read_to_string(gitdir.join("commondir")) else {
+        return root.to_path_buf();
+    };
+    let common = gitdir.join(common.trim());
+    let common = std::fs::canonicalize(&common).unwrap_or(common);
+    match (common.file_name(), common.parent()) {
+        (Some(name), Some(main)) if name == ".git" => main.to_path_buf(),
+        _ => root.to_path_buf(),
+    }
 }
 
 fn holds_dir(project_root: &Path) -> PathBuf {
@@ -532,7 +597,10 @@ fn write_marker(
     // trace:BUG-2176 | ai:claude
     let store = hold_store_root(project_root);
     if let Err(error) = write_marker_files(&store, record.pr, &body) {
-        if store == project_root {
+        // Compare canonical spellings: a primary reached through a symlink
+        // must not "fall back" to the very directory that just refused.
+        let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        if canon(&store) == canon(project_root) {
             return Err(error);
         }
         write_marker_files(project_root, record.pr, &body)?;
@@ -652,6 +720,24 @@ pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
     }
     found.sort();
     found
+}
+
+/// The `stray_worktree_markers` rows of `aida merge-hold list --json`.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_markers_json(
+    strays: &[(u64, PathBuf)],
+    label_only: &[u64],
+) -> serde_json::Value {
+    strays
+        .iter()
+        .map(|(pr, path)| {
+            serde_json::json!({
+                "pr": pr,
+                "path": path.display().to_string(),
+                "label_only": label_only.contains(pr),
+            })
+        })
+        .collect()
 }
 
 /// The `aida merge-hold list` line for one stray marker. A label-only hold
