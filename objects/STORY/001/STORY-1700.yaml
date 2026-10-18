@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-16T08:18:10.265271181Z
+modified_at: 2026-10-18T03:15:40.437504085Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -87,6 +87,12 @@ comments:
   created_at: 2026-10-16T08:18:10.265271181Z
   modified_at: 2026-10-16T08:18:10.265271181Z
   session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
+- id: 01a14d02-0515-7540-b398-90406ec00223
+  author: joe
+  content: 'AC NOTE (AC3 reading), per the advisor STRICT review of 2026-10-16, change 5: with no live advisor, ships, sketch signoffs and dispatches WAIT for the advisor seat. The STORY-1698 ship gate needs an anchored advisor grant, and the drive tick holds no grant. The tick notifies the operator once per absence episode and keeps doing substrate actions: lease expiry on dead pids, mail nudges, lane classification, due-item emission and the ledger. AC3''s ''performs the next action itself'' is satisfied by those substrate actions plus routed due items. Relay restart is out of scope for this story (moved to STORY-1706).'
+  created_at: 2026-10-18T03:15:40.437504085Z
+  modified_at: 2026-10-18T03:15:40.437504085Z
+  session_id: 49568076-7fe3-49cb-a8e6-1262df7e870a
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
   author: joe
