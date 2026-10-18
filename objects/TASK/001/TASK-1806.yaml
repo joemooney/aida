@@ -1,0 +1,24 @@
+id: 01a14db9-0e21-70f3-97cb-65ce60a9780d
+spec_id: TASK-1806
+agreed_id: TASK-1806
+title: Show the active drive mandate to Antigravity seats (no SessionStart or per-turn hook)
+description: |-
+  Follow-up from STORY-1700 (non-blocking review point). Claude Code and Codex fire aida-session-context.sh (SessionStart) and aida-mail-notice.sh (SessionStart + UserPromptSubmit, via codex-hooks.json), so they print the MANDATE line at start and every turn. Antigravity installs neither hook, so an agy seat or relay lane never sees the active mandate or its expiry. Fix: write the 'aida mandate status --line' output into the launch context file agent_launch builds for every vendor (next to the STORY-619 Mailbox block), and refresh it wherever agy lanes get their per-session context.
+  ## Acceptance
+  - An Antigravity session launched by aida agent new or the relay sees the MANDATE line in its launch context while a mandate is active, and nothing when none is.
+  - A test covers the launch-context block with and without an active mandate.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T06:35:35.841948665Z
+modified_at: 2026-10-18T06:35:35.841948665Z
+req_type: Task
+filed_at:
+  code_sha: 913fe5334ebf3d0bd49461bbd0c6b88561bc598b
+  branch: claude/story-1700
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: efcb10bb1c
+  vendor: claude
+  session: 71d347d5-57a7-4c97-b5cd-5ac563246710
