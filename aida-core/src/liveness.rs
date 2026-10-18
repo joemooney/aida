@@ -696,12 +696,23 @@ pub fn pid_is_alive(pid: u32) -> bool {
     pid_is_alive_impl(pid)
 }
 
-/// Return the kernel-reported start time for `pid` as a canonical timestamp.
-/// Together with the PID this is a stable process identity: if the OS recycles
-/// a PID, the new process necessarily has a different start time.
+/// Return the legacy bare-rfc3339 start timestamp for `pid` derived via
+/// `sysinfo::Process::start_time` (`btime + starttime / HZ`). Retained so
+/// [`compare_recorded_identity`] can still read pre-upgrade records written in
+/// bare-rfc3339 format.
 // trace:TASK-1284 | ai:codex
-pub fn process_start_identity(pid: u32) -> Option<String> {
+// trace:BUG-2130 | ai:agy
+pub fn process_start_identity_legacy(pid: u32) -> Option<String> {
     process_start_time(pid).map(|time| time.to_rfc3339())
+}
+
+/// Return the canonical kernel start identity for `pid` (`linux-starttime:<ticks>`
+/// on Linux, `sysinfo-start:<rfc3339>` elsewhere). Together with the PID this is a
+/// stable process identity that is immune to `btime` / wall-clock steps.
+// trace:TASK-1284 | ai:codex
+// trace:BUG-2130 | ai:agy
+pub fn process_start_identity(pid: u32) -> Option<String> {
+    process_start_identity_exact(pid)
 }
 
 /// Scheme prefix of the exact Linux start identity: clock ticks since boot,
@@ -709,7 +720,7 @@ pub fn process_start_identity(pid: u32) -> Option<String> {
 const EXACT_LINUX_SCHEME: &str = "linux-starttime:";
 
 /// Scheme prefix of the non-Linux fallback of [`process_start_identity_exact`]:
-/// the same rfc3339 value [`process_start_identity`] returns, prefixed.
+/// the same rfc3339 value [`process_start_identity_legacy`] returns, prefixed.
 const EXACT_SYSINFO_SCHEME: &str = "sysinfo-start:";
 
 /// Scheme-prefixed kernel start identity of `pid`, or `None` when it cannot be
@@ -717,12 +728,9 @@ const EXACT_SYSINFO_SCHEME: &str = "sysinfo-start:";
 /// process stat file, which is exact and never changes for a process's life:
 /// `linux-starttime:<ticks>`. Elsewhere it is sysinfo's start time (seconds
 /// resolution): `sysinfo-start:<rfc3339>`.
-///
-/// Moved here from `db::cache_lock` (which re-exports it under its old name,
-/// `live_start_identity`) so the canonical liveness path can read records in
-/// this format. No writer outside the cache lock records it yet.
 // trace:TASK-1484 | ai:claude
 // trace:TASK-1750 | ai:claude
+// trace:BUG-2130 | ai:agy
 #[cfg(target_os = "linux")]
 pub fn process_start_identity_exact(pid: u32) -> Option<String> {
     if pid == 0 {
@@ -735,12 +743,13 @@ pub fn process_start_identity_exact(pid: u32) -> Option<String> {
 /// Best effort elsewhere: sysinfo's start time (seconds resolution).
 // trace:TASK-1484 | ai:claude
 // trace:TASK-1750 | ai:claude
+// trace:BUG-2130 | ai:agy
 #[cfg(not(target_os = "linux"))]
 pub fn process_start_identity_exact(pid: u32) -> Option<String> {
     if pid == 0 {
         return None;
     }
-    process_start_identity(pid).map(|t| format!("{EXACT_SYSINFO_SCHEME}{t}"))
+    process_start_identity_legacy(pid).map(|t| format!("{EXACT_SYSINFO_SCHEME}{t}"))
 }
 
 /// Field 22 (`starttime`) of a Linux process stat line. The command name
@@ -759,22 +768,22 @@ fn parse_proc_stat_starttime(stat: &str) -> Option<u64> {
 /// merely because their record predates process identities or the platform
 /// cannot report a live start time.
 ///
-/// The recorded value is compared in its OWN format (TASK-1750): a bare
-/// rfc3339 value (what [`process_start_identity`] writes) against
-/// [`process_start_identity`], exactly as before; a scheme-prefixed value
-/// (`linux-starttime:` / `sysinfo-start:`, what
-/// [`process_start_identity_exact`] writes) against the exact identity. A
-/// value in neither recognised format, or one whose live identity is in a
-/// different scheme, cannot be compared and reads alive: fail closed toward
-/// holding a lock, never toward reclaiming it.
+/// The recorded value is compared in its OWN format (TASK-1750 / BUG-2130): a
+/// bare rfc3339 value against [`process_start_identity_legacy`], and a
+/// scheme-prefixed value (`linux-starttime:` / `sysinfo-start:`, what
+/// [`process_start_identity`] and [`process_start_identity_exact`] write)
+/// against the exact identity. A value in neither recognised format, or one
+/// whose live identity is in a different scheme, cannot be compared and reads
+/// alive: fail closed toward holding a lock, never toward reclaiming it.
 // trace:TASK-1284 | ai:codex
 // trace:TASK-1750 | ai:claude
+// trace:BUG-2130 | ai:agy
 pub fn process_identity_is_alive(pid: u32, recorded_start_time: Option<&str>) -> bool {
     process_identity_is_alive_with(
         pid,
         recorded_start_time,
         pid_is_alive,
-        process_start_identity,
+        process_start_identity_legacy,
         process_start_identity_exact,
     )
 }
@@ -877,18 +886,20 @@ fn compare_recorded_identity(
 /// not be the one recorded. Here every such case is "no match". Lock-reclaim
 /// callers keep the lenient [`process_identity_is_alive`].
 // trace:TASK-1768 | ai:claude
+// trace:BUG-2130 | ai:agy
 pub fn process_identity_matches_strict(pid: u32, recorded_start_time: &str) -> bool {
     process_identity_matches_strict_with(
         pid,
         recorded_start_time,
         pid_is_alive,
-        process_start_identity,
+        process_start_identity_legacy,
         process_start_identity_exact,
     )
 }
 
 // trace:TASK-1768 | ai:claude
-fn process_identity_matches_strict_with(
+// trace:BUG-2130 | ai:agy
+pub fn process_identity_matches_strict_with(
     pid: u32,
     recorded_start_time: &str,
     is_pid_alive: impl FnOnce(u32) -> bool,
@@ -1963,23 +1974,65 @@ mod tests {
     }
 
     // Signoff condition (b) round trip: what the current binary writes for
-    // itself (`process_start_identity`, every writer today) still reads alive
-    // through the canonical path, and so does the exact identity.
+    // itself (`process_start_identity`, now emitting exact `linux-starttime:<ticks>`)
+    // and pre-upgrade legacy records (`process_start_identity_legacy`) both
+    // read alive through the canonical path.
+    // trace:BUG-2130 | ai:agy
     #[test]
     fn current_writer_records_round_trip_alive_for_self() {
         let me = std::process::id();
-        let legacy = process_start_identity(me).expect("own legacy identity");
+        let current = process_start_identity(me).expect("own canonical identity");
+        assert_eq!(
+            recorded_identity_format(&current),
+            RecordedIdentityFormat::Exact
+        );
+        assert!(process_identity_is_alive(me, Some(&current)));
+        let legacy = process_start_identity_legacy(me).expect("own legacy identity");
         assert_eq!(
             recorded_identity_format(&legacy),
             RecordedIdentityFormat::Legacy
         );
         assert!(process_identity_is_alive(me, Some(&legacy)));
         let exact = process_start_identity_exact(me).expect("own exact identity");
+        assert_eq!(current, exact);
         assert_eq!(
             recorded_identity_format(&exact),
             RecordedIdentityFormat::Exact
         );
         assert!(process_identity_is_alive(me, Some(&exact)));
+    }
+
+    // BUG-2130: when NTP / VM resume shifts btime so the legacy rfc3339 start
+    // time drifts by 1-2s, a record written by `process_start_identity`
+    // (`linux-starttime:<ticks>`) remains alive and strictly matching without
+    // consulting the btime-dependent legacy probe.
+    // trace:BUG-2130 | ai:agy
+    #[test]
+    fn bug_2130_exact_start_identity_survives_btime_shift() {
+        let me = std::process::id();
+        let recorded = process_start_identity(me).expect("own identity");
+        assert!(recorded.starts_with("linux-starttime:"), "{recorded}");
+        let shifted_legacy = |_: u32| Some("2026-09-18T12:00:02+00:00".to_string());
+        // A legacy RFC3339 record written before the 2s btime drift fails against
+        // the shifted legacy probe...
+        assert!(!identity_alive(
+            "2026-09-18T12:00:00+00:00",
+            shifted_legacy,
+            |_| Some(recorded.clone())
+        ));
+        // ...whereas the exact record written by `process_start_identity` ignores
+        // the shifted legacy probe (and does not even invoke it) and stays alive /
+        // strictly matching.
+        assert!(identity_alive(&recorded, shifted_legacy, |_| Some(
+            recorded.clone()
+        )));
+        assert!(strict(&recorded, shifted_legacy, |_| Some(
+            recorded.clone()
+        )));
+        assert!(identity_alive(&recorded, never_probed, |_| Some(
+            recorded.clone()
+        )));
+        assert!(strict(&recorded, never_probed, |_| Some(recorded.clone())));
     }
 
     // Round trip through an on-disk record: serialize the current writer's

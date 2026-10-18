@@ -2219,10 +2219,7 @@ pub(crate) fn without_own_claim(
 pub(crate) fn collect_leaked_claude_targets(
     leaked_sessions: Vec<process_probe::LiveSession>,
 ) -> Vec<(process_probe::LiveSession, Option<String>)> {
-    collect_leaked_claude_targets_with(leaked_sessions, |pid| {
-        aida_core::liveness::process_start_identity_exact(pid)
-            .or_else(|| aida_core::liveness::process_start_identity(pid))
-    })
+    collect_leaked_claude_targets_with(leaked_sessions, aida_core::liveness::process_start_identity)
 }
 
 /// Inner worker for test injection of start-time identity lookup (BUG-2148).

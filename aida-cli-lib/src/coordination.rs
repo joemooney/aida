@@ -367,47 +367,50 @@ pub(crate) fn claim_staleness(
 /// what BUG-1764 clause 2 asks for: an unverifiable claim must not be trusted
 /// as live.
 ///
-/// | recorded start | live start | verdict |
+/// | recorded start | live start (matching format) | verdict |
 /// |---|---|---|
 /// | (pid not alive) | — | dead |
 /// | absent | — | **unverifiable → not live** |
-/// | present | unreadable | **unverifiable → not live** |
+/// | present | unreadable / unparseable | **unverifiable → not live** |
 /// | present | differs | dead (the PID-collision case) |
 /// | present | equal | alive |
 ///
 /// Use for display and for the opt-in `--prune-stale` clear only. Do NOT reuse
 /// as a reclaim predicate for the drain/solo locks.
 // trace:BUG-1764 | ai:claude
+// trace:BUG-2130 | ai:agy
 pub(crate) fn strictly_alive(pid: u32, recorded_start: Option<&str>) -> bool {
     strictly_alive_with(
         pid,
         recorded_start,
-        aida_core::liveness::pid_is_alive,
-        aida_core::liveness::process_start_identity,
+        crate::process_probe::pid_is_alive,
+        aida_core::liveness::process_start_identity_legacy,
+        aida_core::liveness::process_start_identity_exact,
     )
 }
 
 /// Injectable core of [`strictly_alive`], so the collision case is reproducible
 /// in a unit test without root and without a real pid 2.
 // trace:BUG-1764 | ai:claude
-fn strictly_alive_with(
+// trace:BUG-2130 | ai:agy
+pub(crate) fn strictly_alive_with(
     pid: u32,
     recorded_start: Option<&str>,
     is_pid_alive: impl FnOnce(u32) -> bool,
     live_start: impl FnOnce(u32) -> Option<String>,
+    live_exact_start: impl FnOnce(u32) -> Option<String>,
 ) -> bool {
-    if !is_pid_alive(pid) {
-        return false;
-    }
     // No recorded identity → nothing to compare → unverifiable, not live.
     let Some(recorded) = recorded_start else {
         return false;
     };
-    // Kernel start time unreadable → unverifiable, not live.
-    match live_start(pid) {
-        Some(actual) => recorded == actual,
-        None => false,
-    }
+    aida_core::liveness::process_identity_matches_strict_with(
+        pid,
+        recorded,
+        is_pid_alive,
+        live_start,
+        live_exact_start,
+    )
 }
 
 /// BUG-1765: the real verified-live probe for a session-lease claim, injected
@@ -2015,19 +2018,25 @@ ttl_secs = 1800
     #[test]
     fn bug_1764_strict_probe_rejects_a_recycled_pid() {
         let boot = |_| Some("2026-09-04T00:00:00+00:00".to_string());
+        let exact = |_| Some("linux-starttime:42".to_string());
         // Recorded Sep 28, kernel says Sep 4 → mismatch → dead.
         assert!(
-            !strictly_alive_with(2, Some("2026-09-28T12:26:18+00:00"), |_| true, boot),
+            !strictly_alive_with(2, Some("2026-09-28T12:26:18+00:00"), |_| true, boot, exact),
             "a recorded start time that differs from the kernel's must read dead"
         );
         // Recorded == actual → alive.
         assert!(
-            strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| true, boot),
+            strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| true, boot, exact),
             "a matching start time must read alive"
+        );
+        // Exact tick record matches exact probe without relying on legacy btime.
+        assert!(
+            strictly_alive_with(2, Some("linux-starttime:42"), |_| true, |_| None, exact),
+            "an exact tick identity must read alive against the exact probe"
         );
         // Pid not alive at all → dead, regardless of the recorded identity.
         assert!(
-            !strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| false, boot),
+            !strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| false, boot, exact),
             "a dead pid must read dead"
         );
     }
@@ -2047,13 +2056,20 @@ ttl_secs = 1800
                 202,
                 None,
                 |_| true,
-                |_| Some("2026-09-04T00:00:00+00:00".to_string())
+                |_| Some("2026-09-04T00:00:00+00:00".to_string()),
+                |_| Some("linux-starttime:42".to_string()),
             ),
             "no recorded pid_start_time must read NOT live, even for a live pid"
         );
         // And a kernel that cannot report a start time is equally unverifiable.
         assert!(
-            !strictly_alive_with(202, Some("2026-09-28T00:00:00+00:00"), |_| true, |_| None),
+            !strictly_alive_with(
+                202,
+                Some("2026-09-28T00:00:00+00:00"),
+                |_| true,
+                |_| None,
+                |_| None,
+            ),
             "an unreadable kernel start time must read NOT live"
         );
         // Guard the contrast with the reclaim predicate we deliberately did

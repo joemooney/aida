@@ -445,11 +445,13 @@ pub(crate) fn adopt_spec_lease_for_subagent(
         if !subagent_adopts_lease(&scope, &worktree, cwd) {
             continue;
         }
+        let recorded_active_start = table.get("active_pid_start_time").and_then(|v| v.as_str());
         let already_live = table
             .get("active_pid")
             .and_then(|v| v.as_integer())
             .and_then(|v| u32::try_from(v).ok())
-            .is_some_and(process_probe::pid_is_alive);
+            // trace:BUG-2130 | ai:agy
+            .is_some_and(|p| process_probe::process_identity_is_alive(p, recorded_active_start));
         if already_live {
             continue;
         }
@@ -4010,7 +4012,17 @@ pub(crate) fn lease_minted_by_returned_phase_child(
             lease.creator_pid_start_time.as_deref(),
             orchestrator_start_time,
         ) {
-            (Some(recorded), Some(current)) => recorded == current,
+            // trace:BUG-2130 | ai:agy
+            (Some(recorded), Some(current)) => {
+                recorded == current
+                    || (aida_core::liveness::process_identity_matches_strict(
+                        orchestrator_pid,
+                        recorded,
+                    ) && aida_core::liveness::process_identity_matches_strict(
+                        orchestrator_pid,
+                        current,
+                    ))
+            }
             _ => true,
         }
 }
