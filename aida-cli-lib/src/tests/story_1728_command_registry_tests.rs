@@ -101,7 +101,7 @@ fn help_surface_matches_golden_snapshot() {
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.
-const LEGACY_TOP_LEVEL_COMMANDS: usize = 96;
+const LEGACY_TOP_LEVEL_COMMANDS: usize = 91;
 
 // trace:STORY-1728 | ai:claude
 #[test]

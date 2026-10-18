@@ -4820,10 +4820,9 @@ fn test_derisk_command_parses_spec() {
     use clap::Parser;
 
     let cli = crate::command_registry::try_parse_from(["aida", "derisk", "TASK-1235"]).unwrap();
-    match cli.command {
-        Command::Derisk { spec } => assert_eq!(spec, "TASK-1235"),
-        other => panic!("expected Derisk command, got {other:?}"),
-    }
+    let crate::derisk_cmd::DeriskArgs { spec } =
+        cli.command.registered::<crate::derisk_cmd::DeriskArgs>();
+    assert_eq!(spec, "TASK-1235");
 }
 
 #[test]

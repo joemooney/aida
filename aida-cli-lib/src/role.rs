@@ -403,7 +403,7 @@ pub(crate) fn role_restore_prompt_should_skip(command: &Command) -> bool {
     if let Command::Registered(invocation) = command {
         return invocation.policy().skip_role_restore_prompt;
     }
-    matches!(command, Command::Init { .. } | Command::McpServe)
+    matches!(command, Command::McpServe)
 }
 
 pub(crate) fn maybe_prompt_role_restore(command: &Command) -> Result<()> {

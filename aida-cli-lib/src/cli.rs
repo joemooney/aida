@@ -9582,16 +9582,6 @@ pub enum Command {
         force: bool,
     },
 
-    /// Launch an advisor session to de-risk a supervised requirement. This is
-    /// a thin vendor-aware front door: the advisor surfaces forks, records
-    /// decisions, and only changes routing with explicit operator confirmation.
-    // trace:TASK-1235 | ai:codex
-    Derisk {
-        /// Requirement identifier to de-risk.
-        #[clap(value_name = "ID")]
-        spec: String,
-    },
-
     /// Add a new requirement
     Add {
         /// Title, positional — the newcomer-friendly form: `aida add "Add a task
@@ -11379,14 +11369,6 @@ pub enum Command {
         reset: bool,
     },
 
-    /// Set up a git `origin` for a project that has none — guided origin
-    /// bootstrap. `create` offers GitHub (via gh), personal-GitLab
-    /// push-to-create over SSH (no glab/token needed), or attach-existing;
-    /// `attach <url>` wires an existing repo. Non-interactive prints the
-    /// manual recipe and exits cleanly.
-    #[clap(subcommand)]
-    Remote(RemoteCommand),
-
     /// Push code branch AND orphan aida-store branch to origin. Use
     /// --code-only or --store-only to scope. Equivalent to running
     /// `git push` on the current branch followed by `aida db sync
@@ -12037,253 +12019,6 @@ pub enum Command {
         command: Option<ReportCommand>,
     },
 
-    /// Initialize AIDA in the current project
-    #[clap(group(
-        ArgGroup::new("init_remote")
-            .args(["github", "remote", "forge"])
-            .multiple(false)
-    ))]
-    #[clap(group(
-        ArgGroup::new("init_visibility_target")
-            .args(["github", "forge", "gitlab"])
-            .multiple(true)
-    ))]
-    Init {
-        /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
-        // trace:TASK-457 | ai:claude
-        #[clap(long)]
-        no_skills: bool,
-
-        /// Opt into scaffolding AIDA MCP registrations for Claude/Codex.
-        ///
-        /// The token-efficient CLI/TOON surface is the default for
-        /// CLI-capable agents; MCP remains available as the typed surface for
-        /// MCP-native clients and explicit opt-ins.
-        // trace:STORY-1129 | ai:codex
-        #[clap(long)]
-        with_mcp: bool,
-
-        /// Agent profiles to scaffold — a STRICT allow-list: only the named
-        /// agents' surfaces are written. Accepts `claude`, `codex`,
-        /// `antigravity`, a comma-list (`claude,codex`), `both`
-        /// (= claude,codex exactly — no antigravity), or `all` (every
-        /// profile). Omit to use PATH detection.
-        // trace:BUG-794 | ai:claude
-        #[clap(long)]
-        agent: Option<String>,
-
-        /// Skip generating commit validation hooks
-        #[clap(long)]
-        no_hooks: bool,
-
-        /// Skip machine-global post-init hooks from ~/.aida/init.d/*.sh.
-        // trace:STORY-828 | ai:codex
-        #[clap(long)]
-        no_post_hooks: bool,
-
-        /// Skip bootstrapping the default global role set (implementer, product,
-        /// advisor, reviewer, integrator) into ~/.aida/roles/. By default
-        /// `aida init` scaffolds them so a fresh machine is ready out of the box.
-        // trace:TASK-638 TASK-1200 | ai:claude,codex
-        #[clap(long)]
-        no_roles: bool,
-
-        /// Skip the first-machine-setup prompt for the agent permission
-        /// posture (~/.aida/agents.toml). By default, the first `aida init` on
-        /// a machine asks how `aida agent new` should handle permissions and
-        /// records the choice globally. Non-interactive init never prompts.
-        // trace:TASK-698 | ai:claude
-        #[clap(long)]
-        no_agent_config: bool,
-
-        /// Skip the TTY offer to install the scheduler-tick crontab entry
-        /// (`aida schedule tick`, every 15m). Without this flag, a TTY init
-        /// still only offers — the default answer is no — and a
-        /// non-interactive init never prompts or installs anything either
-        /// way. Use this to suppress the offer itself, e.g. in a scripted
-        /// session run at a TTY.
-        // trace:STORY-1463 | ai:claude
-        #[clap(long)]
-        no_schedule: bool,
-
-        /// Overwrite existing files if already initialized
-        #[clap(long)]
-        force: bool,
-
-        /// Project footprint for git-canonical init. `minimal` writes only the
-        /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block;
-        /// `memory-lane` adds only reflex guidance plus aida-capture/aida-learn.
-        // trace:STORY-830 | ai:codex
-        // trace:STORY-1093 | ai:codex
-        #[clap(long, value_enum, value_name = "full|minimal|memory-lane")]
-        footprint: Option<InitFootprint>,
-
-        /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
-        /// `aida why` demo — no orphan branch, cache, MCP, skills, or roles. The
-        /// 60-second magic with zero machine; add full `aida init` later.
-        // trace:STORY-757 | ai:claude
-        #[clap(long)]
-        minimal: bool,
-
-        /// Bootstrap a BRAND-NEW project: create DIR, optionally scaffold it
-        /// (--lang), git init + first commit, run the standard init inside it,
-        /// then (with --github or --remote) create the remote and push the
-        /// code branch and aida-store in the order that never leaves divergent
-        /// history. Omit DIR to initialize in place, exactly as before.
-        // trace:STORY-780 | ai:claude
-        #[clap(value_name = "DIR")]
-        dir: Option<String>,
-
-        /// Language scaffold for a new DIR, delegated to the native tool:
-        /// rust (cargo init), python (uv init), or node (npm init -y).
-        // trace:STORY-780 | ai:claude
-        #[clap(long, value_name = "LANG", requires = "dir")]
-        lang: Option<String>,
-
-        /// Create the GitHub repo for a new DIR (PRIVATE by default) and push
-        /// both legs. Needs an authenticated `gh`.
-        // trace:STORY-780 | ai:claude
-        #[clap(long, requires = "dir")]
-        github: bool,
-
-        /// Make the --github repo public instead of private.
-        // trace:STORY-780 | ai:claude
-        // trace:STORY-823 | ai:codex
-        #[clap(long, requires_all = ["dir", "init_visibility_target"])]
-        public: bool,
-
-        /// Bring-your-own remote URL for a new DIR: set origin and push both
-        /// legs. Covers GitLab and any host with push-to-create.
-        // trace:STORY-780 | ai:claude
-        #[clap(long, value_name = "URL", requires = "dir")]
-        remote: Option<String>,
-
-        /// Use a named machine-global forge profile from ~/.aida/forges.toml.
-        // trace:STORY-823 | ai:codex
-        #[clap(long, value_name = "NAME", requires = "dir")]
-        forge: Option<String>,
-
-        /// Also create the project on this GitLab host and group
-        /// (HOST or HOST/GROUP; PRIVATE unless --public) and publish both
-        /// legs there. With --github it becomes a mirror hub; alone it is
-        /// origin. When the group refuses push-to-create, the project is
-        /// created through the GitLab API (needs a `glab` login for the
-        /// host, else GITLAB_TOKEN).
-        // trace:STORY-1656 | ai:claude
-        #[clap(
-            long,
-            value_name = "HOST[/GROUP]",
-            requires = "dir",
-            conflicts_with = "remote"
-        )]
-        gitlab: Option<String>,
-
-        /// (deprecated, accepted for backwards compat) Initialize in
-        /// distributed mode. Distributed is now the default, so this
-        /// flag is a no-op. Use `--centralized` to opt out.
-        // trace:EPIC-1-001 | ai:claude
-        // trace:TASK-487 | ai:claude
-        #[clap(long, hide = true)]
-        distributed: bool,
-
-        /// Initialize in legacy centralized mode (SQLite-canonical, single
-        /// requirements.db). Deprecated — git-canonical is now the default.
-        #[clap(long)]
-        centralized: bool,
-
-        /// Use a sibling repo instead of an orphan branch for the store.
-        /// Recommended for multi-repo workspaces where multiple code repos
-        /// share one store. Implies distributed mode.
-        #[clap(long)]
-        sibling: bool,
-
-        /// Attach this repo to an EXISTING sibling store (multi-repo) instead of
-        /// creating a new one. Writes the local config + rebuilds the cache and
-        /// never touches the store's contents — the shared dispenser serializes
-        /// id allocation across repos, so no separate node id is needed.
-        // trace:STORY-674 | ai:claude
-        #[clap(long, visible_alias = "join")]
-        attach: bool,
-
-        /// Explicit store location for distributed mode — a separate store repo
-        /// at PATH (relative to this repo, or absolute). Several code repos that
-        /// point at the SAME path share one store. `--sibling` is sugar for
-        /// `--store-path ../aida-store`. Combine with `--attach` to join an
-        /// existing store at PATH.
-        // trace:STORY-676 | ai:claude
-        #[clap(long, value_name = "PATH")]
-        store_path: Option<String>,
-
-        /// Git remote URL for the shared aida registry (used with --sibling).
-        /// Example: git@github.com:org/aida-registry.git
-        #[clap(long)]
-        registry_remote: Option<String>,
-
-        /// Verbose output — list every file scaffolded. Default is a brief
-        /// summary suitable for first-run UX.
-        // trace:BUG-19 | ai:claude
-        #[clap(long, short = 'v')]
-        verbose: bool,
-
-        /// Project name. Stored in the store's metadata and used as the
-        /// title in scaffolded CLAUDE.md / `aida status` output. Defaults
-        /// to the current working directory's basename when omitted, so a
-        /// fresh init in `~/projects/tzconv/` lands `name = "tzconv"`.
-        // trace:BUG-25 | ai:claude
-        #[clap(long)]
-        name: Option<String>,
-
-        /// Also write the starter memory pack — generic AIDA-using
-        /// discipline as Claude Code project memories. Opt-in; off by
-        /// default so first-time projects start with an empty memory dir.
-        // trace:STORY-255 | ai:claude
-        #[clap(long)]
-        with_memories: bool,
-
-        /// Refresh every installed pack — starter memories, agent skills and
-        /// commands, and the Codex custom prompts: overlay updated versions
-        /// of the files you have not edited, leaving your own edits intact.
-        /// Implies --with-memories. No --force needed, and nothing you wrote
-        /// is overwritten.
-        // trace:STORY-255 trace:TASK-1170 | ai:claude
-        #[clap(long)]
-        refresh: bool,
-
-        /// Scope the starter memory pack to a subsystem. Memory files
-        /// carrying a `subsystem:` frontmatter tag load only when their
-        /// value matches; untagged memories are universal and always load.
-        /// Omit to load the full pack.
-        // trace:STORY-362 | ai:claude
-        #[clap(long, value_name = "SUBSYSTEM")]
-        focus: Option<String>,
-
-        /// Run `git init` automatically when the current directory is not yet
-        /// a git repository, instead of bailing. At a TTY this is offered
-        /// interactively; in scripts pass this flag to opt into creating the
-        /// repo (otherwise non-interactive init keeps the safe bail).
-        // trace:STORY-552 | ai:claude
-        #[clap(long)]
-        git_init: bool,
-
-        /// When bootstrapping a clone of an already-initialized AIDA project,
-        /// commit the locally-written scaffold files to the code branch. The
-        /// safe default leaves them uncommitted so a clone never pushes a
-        /// scaffold dump to the shared default branch; pass this to opt into a
-        /// deliberate scaffold commit. No effect on a genuinely-new first init,
-        /// which always commits its own scaffolding.
-        // trace:BUG-570 | ai:claude
-        #[clap(long)]
-        commit_scaffold: bool,
-
-        /// Friendly name for this node, recorded alongside the node id in the
-        /// shared roster (`aida team`). Defaults to `<host>-<user>-<seq>` (e.g.
-        /// `imac-joe-1`). At a TTY with no flag you are prompted with the
-        /// default pre-filled; non-interactive init uses the default silently.
-        // trace:STORY-652 | ai:claude
-        #[clap(long, value_name = "NAME")]
-        node_name: Option<String>,
-    },
-
     /// Starter-memory-pack drift discovery (`aida memories check`)
     // trace:STORY-410 | ai:claude
     #[clap(subcommand)]
@@ -12921,27 +12656,6 @@ pub enum Command {
         short: bool,
         #[clap(subcommand)]
         command: Option<HumanCommand>,
-    },
-
-    /// Stock and local skill tooling.
-    #[clap(subcommand)]
-    Skill(SkillCommand),
-
-    /// Discoverable registry of AIDA's built-in shortcuts.
-    ///
-    /// One place that enumerates every accreted shortcut — the `aida list`
-    /// status lenses (open/closed) + status-token shortcuts, the `aida list
-    /// <lens>` argv rewrites (queue/why/human/inflight/me/user:<name>), and the
-    /// command aliases (intake, advisor assess, bare `aida agent`) — grouped by
-    /// surface, each with its canonical expansion + a one-line meaning. Bare
-    /// `aida alias` behaves like `aida alias list`. Built-in shortcuts only.
-    // trace:STORY-667 | ai:claude
-    Alias {
-        /// Emit the registry as JSON for machine consumers.
-        #[clap(long)]
-        json: bool,
-        #[clap(subcommand)]
-        command: Option<AliasCommand>,
     },
 
     // A command owned by a module in `command_registry::REGISTRY`, parsed by
@@ -13873,8 +13587,8 @@ mod tests {
             crate::command_registry::try_parse_from(["aida", "remote", "mirror-push", "origin"])
                 .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Remote(RemoteCommand::MirrorPush { pushed_remote, dry_run })
+            cli.command.registered::<crate::remote_cmd::RemoteArgs>(),
+            crate::remote_cmd::RemoteArgs { inner: RemoteCommand::MirrorPush { pushed_remote, dry_run } }
                 if pushed_remote == "origin"
                     && !dry_run
         ));

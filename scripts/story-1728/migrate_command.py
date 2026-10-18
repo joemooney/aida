@@ -66,13 +66,21 @@ def brace_end(lines, i):
 
 
 def leading_comments(lines, i, include_attrs=True):
-    """First index of the doc/comment/attribute run directly above line i."""
+    """First index of the doc/comment/attribute run directly above line i,
+    including attributes that span several lines (`#[clap(group(` … `))]`)."""
     j = i
     while j > 0:
         s = lines[j - 1].strip()
         if s.startswith("//") or (include_attrs and s.startswith("#[")):
             j -= 1
             continue
+        if include_attrs and s.endswith("]"):
+            k = j - 1
+            while k > 0 and not lines[k].strip().startswith("#["):
+                k -= 1
+            if lines[k].strip().startswith("#["):
+                j = k
+                continue
         break
     return j
 
@@ -146,8 +154,21 @@ def parser_struct(block, head_off, kind, variant, cli):
     """Render the variant as a `#[derive(clap::Parser)]` struct."""
     pre = [l[4:] if l.startswith("    ") else l for l in block[:head_off]]
     head = block[head_off].strip()
-    attrs = [l for l in pre if l.startswith("#[")]
-    docs = [l for l in pre if not l.startswith("#[")]
+    # Group each attribute with its continuation lines.
+    attrs, docs, cur = [], [], None
+    for l in pre:
+        if cur is not None:
+            cur += "\n" + l
+            if cur.count("[") <= cur.count("]"):
+                attrs.append(cur)
+                cur = None
+        elif l.startswith("#["):
+            if l.count("[") > l.count("]"):
+                cur = l
+            else:
+                attrs.append(l)
+        else:
+            docs.append(l)
     name = None
     variant_mode = None
     keep_attrs = []
@@ -314,7 +335,8 @@ def strip_unreachable_arms(text, variant):
     alt = WHOLE.format(v=variant)
     one = re.compile(r"(?:\n[ \t]*//[^\n]*)*\n[ \t]*" + alt + r"\s*=>\s*unreachable!\([^\n]*\),[ \t]*(?=\n)")
     three = re.compile(
-        r"(?:\n[ \t]*//[^\n]*)*\n[ \t]*" + alt + r"\s*=>\s*\{\n[ \t]*unreachable!\([^\n]*\)\n[ \t]*\}(?=\n)"
+        r"(?:\n[ \t]*//[^\n]*)*\n[ \t]*" + alt
+        + r"\s*=>\s*\{(?:\n[ \t]*//[^\n]*)*\n[ \t]*unreachable!\([^\n]*\);?\n[ \t]*\}(?=\n)"
     )
     text, a = one.subn("", text)
     text, b = three.subn("", text)

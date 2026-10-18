@@ -100,17 +100,15 @@ fn schedule_tick_has_no_json_capability() {
 #[test]
 fn init_no_schedule_flag_parses() {
     let cli = crate::command_registry::try_parse_from(["aida", "init", "--no-schedule"]).unwrap();
-    let Command::Init { no_schedule, .. } = cli.command else {
-        panic!("expected Command::Init");
-    };
+    let crate::init_cmd::InitArgs { no_schedule, .. } =
+        cli.command.registered::<crate::init_cmd::InitArgs>();
     assert!(no_schedule);
 
     // Default (no flag) is false — a bare `aida init` still only OFFERS at a
     // TTY; the flag exists to skip the offer entirely.
     let cli = crate::command_registry::try_parse_from(["aida", "init"]).unwrap();
-    let Command::Init { no_schedule, .. } = cli.command else {
-        panic!("expected Command::Init");
-    };
+    let crate::init_cmd::InitArgs { no_schedule, .. } =
+        cli.command.registered::<crate::init_cmd::InitArgs>();
     assert!(!no_schedule);
 }
 

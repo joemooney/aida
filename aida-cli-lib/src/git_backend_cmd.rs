@@ -1927,10 +1927,7 @@ pub(crate) fn handle_git_backend_command(
             );
         }
         Command::Memories(_) => unreachable!("memories is dispatched before storage init"),
-        Command::Skill(_) => unreachable!("skill is dispatched before storage init"),
         Command::Spec(_) => unreachable!("spec subcommands are dispatched before storage init"),
-        Command::Remote(_) => unreachable!("remote is dispatched before storage init"),
-        Command::Alias { .. } => unreachable!("alias is dispatched before storage init"),
         Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
         Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
