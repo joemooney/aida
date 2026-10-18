@@ -540,6 +540,7 @@ mod tests {
         let r = row(EventKind::StatusChange {
             from: "Draft".into(),
             to: "Approved".into(),
+            authority: None,
         });
         for f in ["title", "priority", "comment"] {
             assert!(value(&r, f).is_null());

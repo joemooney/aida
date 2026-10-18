@@ -90,6 +90,40 @@ pub(crate) struct CommitMeta {
     /// `last_modified_by` field at event-rendering time, but the git
     /// author is the fallback when the YAML doesn't have one.
     pub(crate) git_author: String,
+    /// Authorizing seat/grant or orchestrator parsed from git trailers
+    /// (`Aida-Authority`, `Aida-Seat`, `Aida-Grant`).
+    // trace:TASK-1737 | ai:antigravity
+    pub(crate) authority: Option<EventAuthority>,
+}
+
+/// Authority recorded on an advisor-gated status advance (`TASK-1737`).
+// trace:TASK-1737 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventAuthority {
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grant: Option<String>,
+}
+
+impl EventAuthority {
+    /// Human-readable authority clause for `aida history events`.
+    // trace:TASK-1737 | ai:antigravity
+    pub fn display_clause(&self) -> String {
+        match (
+            self.kind.as_str(),
+            self.seat.as_deref(),
+            self.grant.as_deref(),
+        ) {
+            ("grant", Some(seat), Some(grant)) => {
+                format!("authority: grant ({seat}, {grant})")
+            }
+            ("grant", Some(seat), None) => format!("authority: grant ({seat})"),
+            ("grant", None, Some(grant)) => format!("authority: grant ({grant})"),
+            (kind, _, _) => format!("authority: {kind}"),
+        }
+    }
 }
 
 /// TASK-507: is this event a ship — a status transition into Completed
@@ -107,7 +141,7 @@ pub(crate) struct CommitMeta {
 pub(crate) fn is_ship_event(kind: &EventKind) -> bool {
     matches!(
         kind,
-        EventKind::StatusChange { from, to }
+        EventKind::StatusChange { from, to, .. }
             if to.eq_ignore_ascii_case("Completed") && !from.eq_ignore_ascii_case("Completed")
     )
 }
@@ -133,7 +167,7 @@ fn event_kind_allowed(kind: &EventKind, opts: &HistoryOpts) -> bool {
         return true;
     }
     match kind {
-        EventKind::StatusChange { from, to } => {
+        EventKind::StatusChange { from, to, .. } => {
             (opts.status_changes_only || transition) && transition_matches(from, to, opts)
         }
         EventKind::CommentsAdded { .. } => opts.comments_only,
@@ -249,6 +283,9 @@ pub(crate) enum EventKind {
     StatusChange {
         from: String,
         to: String,
+        // trace:TASK-1737 | ai:antigravity
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        authority: Option<EventAuthority>,
     },
     PriorityChange {
         from: String,
@@ -396,6 +433,11 @@ pub struct HistoryEventRecord {
     /// New value for a field transition; `null` for any other kind.
     // trace:BUG-1635 | ai:claude
     pub to: Option<String>,
+    /// Authority recorded on an advisor-gated status advance (`TASK-1737`),
+    /// omitted when absent.
+    // trace:TASK-1737 | ai:antigravity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub authority: Option<EventAuthority>,
 }
 
 /// Whether a single-spec `aida history` call (`--id` or the positional
@@ -1218,7 +1260,7 @@ fn collect_filtered_events(
 /// relationship edge targets resolved to spec IDs (BUG-1631).
 // trace:TASK-1508 | ai:claude
 // trace:BUG-1631 | ai:claude
-fn collect_filtered_events_sourced(
+pub(crate) fn collect_filtered_events_sourced(
     store_path: &Path,
     opts: &HistoryOpts,
 ) -> Result<(Vec<Event>, usize, bool, HistorySource)> {
@@ -1458,7 +1500,7 @@ pub(crate) fn collect_filtered_events_git(
     // trace:BUG-1617 | ai:claude
     let mut log_args: Vec<String> = vec![
         "log".into(),
-        "--pretty=format:%H%x09%aI%x09%ae".into(),
+        "--pretty=format:%H%x09%aI%x09%ae%x09%(trailers:key=Aida-Authority,key=Aida-Seat,key=Aida-Grant,only,unfold,separator=%x1f)".into(),
         format!("-n{}", opts.max_commits.saturating_add(1)),
     ];
     if let Some(s) = &opts.since {
@@ -2245,16 +2287,55 @@ fn colorize_status(status: &str) -> String {
 }
 
 // trace:STORY-1478 | ai:claude — the timeline collector reuses this walk.
+// trace:TASK-1737 | ai:antigravity
 pub(crate) fn parse_log_line(line: &str) -> Option<CommitMeta> {
     let mut parts = line.split('\t');
     let sha = parts.next()?.to_string();
     let iso_timestamp = parts.next()?.to_string();
     let git_author = parts.next()?.to_string();
+    let authority = parts.next().and_then(parse_authority_trailers);
     Some(CommitMeta {
         sha,
         iso_timestamp,
         git_author,
+        authority,
     })
+}
+
+/// Parse `Aida-Authority`, `Aida-Seat`, and `Aida-Grant` trailers from a raw
+/// trailer block (separated by `\x1f` from `%(trailers:only,separator=%x1f)`
+/// or by newlines). Tolerates empty input, missing trailers, malformed lines,
+/// and unknown trailer keys (`TASK-1737` condition 2).
+// trace:TASK-1737 | ai:antigravity
+pub(crate) fn parse_authority_trailers(raw: &str) -> Option<EventAuthority> {
+    let mut authority_kind: Option<String> = None;
+    let mut seat: Option<String> = None;
+    let mut grant: Option<String> = None;
+
+    for entry in raw.split(|c| c == '\x1f' || c == '\n') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = entry.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        if key.eq_ignore_ascii_case("Aida-Authority") {
+            authority_kind = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("Aida-Seat") {
+            seat = Some(value.to_string());
+        } else if key.eq_ignore_ascii_case("Aida-Grant") {
+            grant = Some(value.chars().take(8).collect());
+        }
+    }
+
+    let kind = authority_kind?;
+    Some(EventAuthority { kind, seat, grant })
 }
 
 // trace:STORY-1478 | ai:claude
@@ -2334,7 +2415,7 @@ pub(crate) fn decode_into_events(
         _ => {
             // Modified — diff before vs after.
             if let (Some(a), Some(b)) = (&before_yaml, &after_yaml) {
-                diff_modified(a, b, &mk, out);
+                diff_modified_with_authority(a, b, commit.authority.as_ref(), &mk, out);
             }
         }
     }
@@ -2349,6 +2430,16 @@ fn diff_modified(
     mk: &dyn Fn(EventKind) -> Event,
     out: &mut Vec<Event>,
 ) {
+    diff_modified_with_authority(before, after, None, mk, out);
+}
+
+fn diff_modified_with_authority(
+    before: &Value,
+    after: &Value,
+    authority: Option<&EventAuthority>,
+    mk: &dyn Fn(EventKind) -> Event,
+    out: &mut Vec<Event>,
+) {
     // Status — read effective (custom_status overrides) so we report the
     // user-visible value, not the underlying enum that might lag behind.
     let s_before = effective(before, "status", "custom_status");
@@ -2357,6 +2448,7 @@ fn diff_modified(
         out.push(mk(EventKind::StatusChange {
             from: s_before.clone().unwrap_or_else(|| "—".into()),
             to: s_after.clone().unwrap_or_else(|| "—".into()),
+            authority: authority.cloned(),
         }));
     }
 
@@ -2730,6 +2822,10 @@ fn format_oneline(e: &Event) -> String {
 pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
     let (kind, summary, detail) = event_kind_record(&e.kind, &e.spec_id);
     let (from, to) = kind_from_to(&e.kind);
+    let authority = match &e.kind {
+        EventKind::StatusChange { authority, .. } => authority.clone(),
+        _ => None,
+    };
     HistoryEventRecord {
         sha: e.sha.clone(),
         timestamp: e.timestamp.clone(),
@@ -2743,6 +2839,7 @@ pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
         ts: e.timestamp.clone(),
         from,
         to,
+        authority,
     }
 }
 
@@ -2751,7 +2848,7 @@ pub(crate) fn event_record(e: &Event) -> HistoryEventRecord {
 // trace:BUG-1635 | ai:claude
 fn kind_from_to(kind: &EventKind) -> (Option<String>, Option<String>) {
     match kind {
-        EventKind::StatusChange { from, to }
+        EventKind::StatusChange { from, to, .. }
         | EventKind::PriorityChange { from, to }
         | EventKind::TitleChange { from, to }
         | EventKind::OwnerChange { from, to }
@@ -2782,11 +2879,21 @@ fn event_kind_record(kind: &EventKind, spec_id: &str) -> (String, String, JsonVa
             format!("deleted {}", shorten(title, 80)),
             json!({ "title": title }),
         ),
-        EventKind::StatusChange { from, to } => (
-            "status_change".to_string(),
-            format!("status: {from} -> {to}"),
-            json!({ "from": from, "to": to }),
-        ),
+        EventKind::StatusChange {
+            from,
+            to,
+            authority,
+        } => {
+            let summary = match authority {
+                Some(auth) => format!("status: {from} -> {to} ({})", auth.display_clause()),
+                None => format!("status: {from} -> {to}"),
+            };
+            let detail = match authority {
+                Some(auth) => json!({ "from": from, "to": to, "authority": auth }),
+                None => json!({ "from": from, "to": to }),
+            };
+            ("status_change".to_string(), summary, detail)
+        }
         EventKind::PriorityChange { from, to } => (
             "priority_change".to_string(),
             format!("priority: {from} -> {to}"),
@@ -2906,9 +3013,20 @@ fn format_event_body(e: &Event) -> String {
         EventKind::Deleted { title } => {
             format!("{} {}", "deleted".red(), shorten(title, 80).dimmed())
         }
-        EventKind::StatusChange { from, to } => {
-            format!("{}: {} → {}", "status".bold(), from.yellow(), to.green())
-        }
+        EventKind::StatusChange {
+            from,
+            to,
+            authority,
+        } => match authority {
+            Some(auth) => format!(
+                "{}: {} → {} {}",
+                "status".bold(),
+                from.yellow(),
+                to.green(),
+                format!("({})", auth.display_clause()).dimmed()
+            ),
+            None => format!("{}: {} → {}", "status".bold(), from.yellow(), to.green()),
+        },
         EventKind::PriorityChange { from, to } => {
             format!("{}: {} → {}", "priority".bold(), from, to)
         }
@@ -4266,6 +4384,7 @@ mod tests {
             sha: "abc".into(),
             iso_timestamp: "2026-05-04T12:00:00Z".into(),
             git_author: "joe@example.com".into(),
+            authority: None,
         };
         let mut out = Vec::new();
         let mk = |kind: EventKind| Event {
@@ -4289,29 +4408,35 @@ mod tests {
         assert!(is_ship_event(&EventKind::StatusChange {
             from: "InProgress".into(),
             to: "Completed".into(),
+            authority: None,
         }));
         assert!(!is_ship_event(&EventKind::StatusChange {
             from: "Completed".into(),
             to: "Completed".into(),
+            authority: None,
         }));
         let ship = EventKind::StatusChange {
             from: "Done".into(),
             to: "Completed".into(),
+            authority: None,
         };
         assert!(is_ship_event(&ship));
         // case-insensitive
         assert!(is_ship_event(&EventKind::StatusChange {
             from: "done".into(),
             to: "completed".into(),
+            authority: None,
         }));
         // other transitions are not ships
         assert!(!is_ship_event(&EventKind::StatusChange {
             from: "Approved".into(),
             to: "Done".into(),
+            authority: None,
         }));
         assert!(!is_ship_event(&EventKind::StatusChange {
             from: "InProgress".into(),
             to: "Done".into(),
+            authority: None,
         }));
         assert!(!is_ship_event(&EventKind::PriorityChange {
             from: "Low".into(),
@@ -4330,6 +4455,7 @@ mod tests {
             kind: EventKind::StatusChange {
                 from: "Approved".into(),
                 to: "Completed".into(),
+                authority: None,
             },
         };
 
@@ -4350,6 +4476,7 @@ mod tests {
             sha: "abc".into(),
             iso_timestamp: "2026-05-04T12:00:00Z".into(),
             git_author: "joe@example.com".into(),
+            authority: None,
         };
         let mk = |kind: EventKind| Event {
             sha: commit.sha.clone(),
@@ -4380,6 +4507,7 @@ mod tests {
             sha: "abc".into(),
             iso_timestamp: "2026-05-04T12:00:00Z".into(),
             git_author: "joe@example.com".into(),
+            authority: None,
         };
         let mk = |kind: EventKind| Event {
             sha: commit.sha.clone(),
@@ -4409,6 +4537,7 @@ mod tests {
         let status = EventKind::StatusChange {
             from: "Draft".into(),
             to: "Approved".into(),
+            authority: None,
         };
         let comment = EventKind::CommentsAdded {
             count: 1,
@@ -4557,7 +4686,7 @@ mod tests {
         let transitions: Vec<(String, String)> = filtered
             .iter()
             .map(|e| match &e.kind {
-                EventKind::StatusChange { from, to } => (from.clone(), to.clone()),
+                EventKind::StatusChange { from, to, .. } => (from.clone(), to.clone()),
                 _ => unreachable!(),
             })
             .collect();
