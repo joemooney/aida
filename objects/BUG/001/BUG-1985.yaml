@@ -2,20 +2,25 @@ id: 01a12e66-32ef-7803-b84a-1b5506729cf6
 spec_id: BUG-1985
 agreed_id: BUG-1985
 title: Host git runs over contained session worktrees can still recurse into a planted embedded repo (filter drivers in its config)
-description: |-
+description: |
   Found while fixing advisor E1 on PR #2541 (BUG-1929). That PR hardens host git over the store: every host git run gets -c core.fsmonitor=false, store trees also get diff.ignoreSubmodules=all and submodule.recurse=false, and store writes refuse gitlinks and nested .git.
 
   A contained session can also write its own code worktree, and the host runs git status there (git_ops::worktree_is_dirty, used by the worktree pool, adopt and destroy). The fsmonitor vector is closed there too because core.fsmonitor=false now applies to every git_ops::git run. But a planted embedded repo that is staged as a gitlink still makes host status recurse into it. Its own config can name a filter.<x>.clean driver, selected by a .gitattributes in the embedded worktree, and that driver may run when the embedded index is stale. The code-tree side was not given --ignore-submodules=all, because a user project with real submodules must still see them as dirty.
 
   Several raw Command::new("git") calls outside git_ops (worktree_pool.rs status --short, main_checkout_drift.rs, agent_launch.rs, init_cmd.rs status) also miss the hardening.
 
-  Acceptance: decide the policy for code worktrees (for example, ignore submodules only for pool and contained worktrees, or refuse a gitlink that is not in .gitmodules), route the raw status calls through one hardened helper, and add a test that plants an embedded repo with a filter driver in a worktree and asserts the host never runs it. Related: BUG-1982 (writable <main>/.git).
+  Related: BUG-1982 (writable <main>/.git).
+
+  ## Acceptance
+  - The policy for code worktrees is decided and implemented (for example, ignore submodules only for pool and contained worktrees, or refuse a gitlink that is not in .gitmodules).
+  - The raw host git status calls are routed through one hardened helper.
+  - A test plants an embedded repo with a filter driver in a worktree and asserts the host never runs it.
 status: NeedsAttention
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T19:25:15.505084268Z
+modified_at: 2026-10-18T20:14:40.608276283Z
 req_type: Bug
 tags:
 - contained
@@ -96,6 +101,11 @@ history:
   author: joe
   timestamp: 2026-10-18T19:25:15.983820987Z
   session_id: 01a150721911
+  changes: []
+- id: 01a150a6-f5ac-7711-bab3-66ace9b9a173
+  author: joe
+  timestamp: 2026-10-18T20:14:41.580147096Z
+  session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
   changes: []
 execution_mode: guided
 filed_at:
