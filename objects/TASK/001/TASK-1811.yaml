@@ -1,0 +1,26 @@
+id: 01a14f07-417e-70f0-b5e0-8d97f195fe7b
+spec_id: TASK-1811
+agreed_id: TASK-1811
+title: 'lint constants: trace the 15/40/7 fixture tests to criterion ac0ead8d'
+description: |
+  The fixture tests for TASK-1785 (aida-cli-lib/src/lint_constants.rs:527 and aida-cli/tests/task_1785_lint_constants.rs:147) carry 'trace:TASK-1785.Fixture'. That label resolves to no criterion, so 'aida criteria TASK-1785' still reports TASK-1785.ac0ead8d as 'untraced no traced tests'. Change both markers to 'trace:TASK-1785.ac0ead8d'.
+
+  Raised in review of PR-2723: https://github.com/joemooney/aida/pull/2723
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T12:40:38.014537148Z
+modified_at: 2026-10-18T12:40:38.014537148Z
+req_type: Task
+tags:
+- from-review:PR-2723
+- severity:minor
+filed_at:
+  code_sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
+  branch: pr-2723
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: d7a640e944
+  vendor: claude
+  session: 01a14ee85271
