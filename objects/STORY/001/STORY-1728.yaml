@@ -1,0 +1,30 @@
+id: 01a14d0d-845f-7ef3-a152-37e7f24ac98f
+spec_id: STORY-1728
+agreed_id: STORY-1728
+title: Per-module clap subcommand registration so command changes stop touching cli.rs / lib.rs
+description: |
+  Today, adding or changing any CLI command touches shared hot files: the top-level `Command` enum in aida-cli-lib/src/cli.rs (~211 variants, L9547–14308 of a 16,967-line file) plus the dispatch and policy matches in lib_part1.rs (`run()`: pre-storage early handlers, legacy-storage dispatch, `needs_store`, `command_triggers_per_write_auto_push`), git_backend_cmd.rs (main git-backend dispatch), stakeholder_role.rs (`stakeholder_cli_action`, capability enforcement) and role.rs (`role_restore_prompt_should_skip`). Since 2026-10-10, cli.rs was touched in 38 commits and lib.rs/lib_part*.rs in 221 file-commits, which makes these files the main source of merge conflicts between parallel agent branches.
+
+  Goal: each command module owns its clap registration (Args/Subcommand type), its dispatch phase, its policy declarations and its handler. Adding a command, or changing one, then touches only that module. The one exception is a new module's `mod` line.
+
+  Acceptance:
+  1. A command registry exists. Each entry declares: name, clap augment fn, dispatch phase (pre-store | legacy-storage | git-backend), stakeholder action, auto-push trigger, role-restore skip, and handler. Every policy field is required: there is no default, so an unclassified command does not compile (fail-closed, replacing today's exhaustive matches).
+  2. Strangler parse path: the built `clap::Command` = `Cli::command()` plus the registry subcommands. Registry hits dispatch through the registry; everything else falls through to the legacy `Command` enum unchanged. Commands migrate one at a time.
+  3. A golden snapshot of `aida --help`, `aida help-all` and every subcommand's `--help` is byte-identical before and after each migration slice. The help-leak guard (cli.rs collect_leaks) walks the combined command tree.
+  4. After full migration, a PR that adds a new flag to a migrated command changes zero lines in cli.rs, lib.rs, lib_part*.rs, git_backend_cmd.rs, stakeholder_role.rs and role.rs (checked by a demo PR).
+  5. `make check-ci-fast` and the Windows CI job pass with the registry mechanism.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T03:28:13.919339215Z
+modified_at: 2026-10-18T03:28:13.919339215Z
+req_type: Story
+filed_at:
+  code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 9f0ab97da0
+  vendor: claude
+  session: 43e47b00-c449-4778-8838-bd89a371ccc2
