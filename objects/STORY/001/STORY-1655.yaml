@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:51:12.553707881Z
-modified_at: 2026-10-18T03:09:00.790130850Z
+modified_at: 2026-10-18T07:54:39.782512064Z
 req_type: Story
 tags:
 - batch:2026-10-11
@@ -56,6 +56,17 @@ comments:
   created_at: 2026-10-11T15:20:56.313245650Z
   modified_at: 2026-10-11T15:20:56.313245650Z
   session_id: ac2268c9-a663-49e5-a9ef-27117f872438
+- id: 01a14e01-7126-7071-8ecb-5b8b5ef2070b
+  author: joe
+  content: |-
+    FIXER (claude): PR #2724 opened (ready), head 7498ba00ee1f9b16cce54ca8cbdf46de7193ec7c, branch story-1655-work.
+    Implements the OPERATOR DECISION 2026-10-11 with every amendment: S1 global-only key review.solo_human_self_approval (a project value is ignored with a warning); S2 --pr required plus a typed SPEC+PR challenge read from /dev/tty, never stdin, piped/scripted refused; S3 never in the AIDA repo (is_aida_repo); separate durable key, not the 'aida solo' presence. The ship gate re-reads the mode at merge time and exempts a solo approval from the author check ONLY when its ~/.aida receipt also records solo_human.
+    Files: new aida-cli-lib/src/solo_review.rs + tests/story_1655_solo_review_tests.rs (15 named tests, one or more per amendment); lib_part5.rs (review_author_gate, record path); pr_ship.rs (policy fields, solo_self_approval, notice); pr_cmd.rs (policy + ship notice); review_authority.rs (receipt solo flag, verified_solo_keys); review_verdict.rs (attestation solo_human, omitted when false); config_cmd.rs (knob + config show row); doctor_cmd.rs / status_awaiting.rs (mode line); scripts/config-trust.toml; docs/review-process.md; docs/security/config-trust-boundary.md.
+    Checks: make test-touched (only failure was the config-trust inventory guard, now fixed and passing); make check-ci-compile ok after merging main; area tests: --test bug_1953_pr_ship_step5_head_branch ok, lib story_1655/bug_1918/story_1697/story_1698/pr_merge_gate 131 passed; make check-ci-fast 30 gates passed.
+    Deviations for the reviewer: kept review_author_refusal unchanged (BUG-1918 byte-identical) and added review_author_gate on top; 'aida review awaiting' does not exist, so the line is in 'aida awaiting'. Sequencing note: the operator comment says 'after BUG-1934 in tier 1'; BUG-1934 is still approved/not merged. This PR does not depend on it, but the advisor should confirm the merge order.
+  created_at: 2026-10-18T07:54:39.782512064Z
+  modified_at: 2026-10-18T07:54:39.782512064Z
+  session_id: bf8191c5-6e60-4082-a4a8-4ab6b64fccfa
 history:
 - id: 01a12b8d-7de7-7f01-8bdf-9f893f4ac4f3
   author: joe
