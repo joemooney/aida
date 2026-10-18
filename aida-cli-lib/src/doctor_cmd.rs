@@ -14175,3 +14175,7 @@ mod bug_1505_review_verdict_doctor_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_1985_destructive_gate_tests.rs"]
+mod bug_1985_destructive_gate_tests;

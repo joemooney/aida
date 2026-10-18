@@ -498,6 +498,49 @@ pub fn refuse_untrusted_gitlinks(tree: &Path) -> Result<()> {
     )
 }
 
+/// [`refuse_untrusted_gitlinks`] plus a refusal for an untracked nested
+/// repository that `git add -A` would stage as a new gitlink, in a code tree
+/// a contained session may have written. Run before host staging there.
+/// No-op in a store tree and in other code trees.
+// trace:BUG-1985 | ai:claude
+pub fn refuse_untrusted_staging(tree: &Path) -> Result<()> {
+    refuse_untrusted_gitlinks(tree)?;
+    if is_store_tree(tree) || !is_contained_writable_tree(tree) {
+        return Ok(());
+    }
+    let untracked = git(
+        tree,
+        &[
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--directory",
+            "-z",
+        ],
+    )?;
+    anyhow::ensure!(
+        untracked.success,
+        "git ls-files failed in {}: {}",
+        tree.display(),
+        untracked.stderr
+    );
+    let mut nested: Vec<&str> = untracked
+        .stdout
+        .split('\0')
+        .filter(|p| p.ends_with('/') && tree.join(p).join(".git").exists())
+        .collect();
+    if nested.is_empty() {
+        return Ok(());
+    }
+    nested.sort_unstable();
+    anyhow::bail!(
+        "refusing to stage {}: it holds an untracked embedded git repository, which a \
+         sandboxed session may have planted to run commands on this machine: {}",
+        tree.display(),
+        nested.join(", ")
+    )
+}
+
 /// True when the checked-out submodule at `dir` has no `.git` (git never
 /// enters it) or a `.git` pointer file naming a git directory inside `common`.
 // trace:BUG-1985 | ai:claude

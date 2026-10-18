@@ -66,9 +66,17 @@ pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> 
             aida_core::seat_clone_detect::host_git_refusal(&clone_root)
         )];
     }
+    // BUG-1985: reap, doctor heal and gc remove a tree with force when this
+    // reads clean, so it must see uncommitted edits inside a submodule. Like
+    // `git_ops::worktree_status_porcelain`: a gitlink that is not a host-owned
+    // submodule reads as dirty (the tree is kept), and only then does status
+    // recurse into submodules, overriding the contained-tree hardening.
     // trace:BUG-1985 | ai:claude
+    if let Err(err) = aida_core::git_ops::refuse_untrusted_gitlinks(worktree) {
+        return vec![format!("?? ({err:#})")];
+    }
     let out = aida_core::git_ops::host_git_command(worktree)
-        .args(["status", "--porcelain"])
+        .args(["status", "--porcelain", "--ignore-submodules=none"])
         .output();
     let Ok(out) = out else { return Vec::new() };
     if !out.status.success() {

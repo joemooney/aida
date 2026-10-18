@@ -395,7 +395,8 @@ against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
 `fetch.recurseSubmodules=false`, so incidental status and diff never enter a
 submodule, where a planted repository's own config (a filter driver, for
 example) would run on the host. Before any safety check in such a tree (pool,
-adopt, destroy, salvage), every gitlink must be a host-owned submodule:
+adopt, destroy, salvage, session reap, doctor heal, worktree gc) and before
+host staging (`aida compete`), every gitlink must be a host-owned submodule:
 registered in `.gitmodules`, with a `.git` pointer that resolves inside the
 sandbox-denied common git directory. A tree that fails this is kept and
 treated as dirty. Once every gitlink passes, the checks recurse into the
