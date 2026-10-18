@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 // trace:BUG-2010 | ai:antigravity
 fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -152,6 +153,7 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         Some(false),
         /* self_claim */ true,
         /* review_coexistence */ None,
+        /* contained_seat */ false,
     )
     .unwrap();
 
@@ -409,6 +411,7 @@ fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_inv
         Some(false),
         /* self_claim */ true,
         /* review_coexistence */ None,
+        /* contained_seat */ false,
     )
     .unwrap();
 
@@ -641,6 +644,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         /* use_pool */ None,
         /* self_claim */ crate::queue_cmd::queue_work_self_claim(false),
         /* review_coexistence */ None,
+        /* contained_seat */ false,
     );
     assert!(
         res1.is_ok(),

@@ -118,6 +118,12 @@ pub trait DatabaseBackend: Send + Sync {
     /// Saves the entire requirements store to the database
     fn save(&self, store: &RequirementsStore) -> Result<()>;
 
+    /// Save transferred records without attributing old unknown events to the importer.
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.save(store)
+    }
+
     /// Performs an atomic update operation
     /// Default implementation loads, applies changes, and saves
     fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
@@ -153,13 +159,13 @@ pub trait DatabaseBackend: Send + Sync {
         Self: Sized,
     {
         let mut updated = None;
-        self.update_atomically(|store| {
+        let persisted = self.update_atomically(|store| {
             if let Some(r) = store.requirements.iter_mut().find(|r| r.id == target.id) {
                 update_fn(r);
                 updated = Some(r.clone());
             }
         })?;
-        Ok(updated)
+        Ok(updated.and_then(|r| persisted.get_requirement_by_id(&r.id).cloned()))
     }
 
     // =========================================================================
@@ -250,7 +256,9 @@ pub trait DatabaseBackend: Send + Sync {
 
         store.requirements.push(req.clone());
         self.save(&store)?;
-        Ok(req)
+        // trace:STORY-1674 | ai:codex — compatibility writers may add context.
+        self.get_requirement(&req.id)?
+            .ok_or_else(|| anyhow::anyhow!("written requirement missing from store"))
     }
 
     /// Updates an existing requirement

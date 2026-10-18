@@ -2219,11 +2219,12 @@ pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) ->
         base.to_string()
     } else {
         let mut msg = format!("{base}\n\nOpen approved PRs:");
+        // trace:TASK-1795 | ai:codex
         for pr in approved {
             if pr.title.is_empty() {
-                msg.push_str(&format!("\n  PR-{}", pr.number));
+                msg.push_str(&format!("\n  aida pr ship {}", pr.number));
             } else {
-                msg.push_str(&format!("\n  PR-{} — {}", pr.number, pr.title));
+                msg.push_str(&format!("\n  aida pr ship {} — {}", pr.number, pr.title));
             }
         }
         msg
