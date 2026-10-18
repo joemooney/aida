@@ -862,6 +862,11 @@ pub(crate) struct HumanReviewReceipt {
     /// checks THIS copy against the author sessions, not the verdict's.
     #[serde(default)]
     pub(crate) identity: Vec<String>,
+    /// STORY-1655: the approval was a solo-human self-approval. The ship gate
+    /// honours a solo attestation only when its receipt says so too.
+    // trace:STORY-1655 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) solo_human: bool,
 }
 
 fn receipt_dir() -> Option<PathBuf> {
@@ -874,14 +879,16 @@ fn receipt_path(dir: &Path, id: &str) -> Option<PathBuf> {
 }
 
 /// Write a receipt for a human-at-TTY approval of `sha` on `subject` by a
-/// recorder with `identity`; returns its id.
+/// recorder with `identity`; returns its id. `solo_human` marks a solo-human
+/// self-approval (STORY-1655).
 pub(crate) fn write_human_receipt(
     sha: &str,
     subject: &str,
     identity: &[String],
+    solo_human: bool,
 ) -> anyhow::Result<String> {
     let dir = receipt_dir().ok_or_else(|| anyhow::anyhow!("cannot locate the AIDA home"))?;
-    write_human_receipt_in(&dir, sha, subject, identity)
+    write_human_receipt_as(&dir, sha, subject, identity, solo_human)
 }
 
 pub(crate) fn write_human_receipt_in(
@@ -890,6 +897,19 @@ pub(crate) fn write_human_receipt_in(
     subject: &str,
     identity: &[String],
 ) -> anyhow::Result<String> {
+    write_human_receipt_as(dir, sha, subject, identity, false)
+}
+
+/// [`write_human_receipt_in`], recording whether the approval was a
+/// solo-human self-approval.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn write_human_receipt_as(
+    dir: &Path,
+    sha: &str,
+    subject: &str,
+    identity: &[String],
+    solo_human: bool,
+) -> anyhow::Result<String> {
     let id = uuid::Uuid::new_v4().to_string();
     let receipt = HumanReviewReceipt {
         id: id.clone(),
@@ -897,6 +917,7 @@ pub(crate) fn write_human_receipt_in(
         subject: subject.trim().to_string(),
         recorded_at: chrono::Utc::now().to_rfc3339(),
         identity: identity.to_vec(),
+        solo_human,
     };
     std::fs::create_dir_all(dir)?;
     let path = receipt_path(dir, &id).ok_or_else(|| anyhow::anyhow!("invalid receipt id"))?;
@@ -972,6 +993,30 @@ pub(crate) fn verified_authority_keys(
         }
     }
     out
+}
+
+/// STORY-1655: the authority keys of every solo-human approval among
+/// `candidates` whose human-review receipt exists for the attested commit AND
+/// itself records a solo approval. A seat-grant attestation is never solo,
+/// and flipping `solo_human` in the verdict JSON alone verifies nothing.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn verified_solo_keys(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+) -> std::collections::BTreeSet<String> {
+    candidates
+        .iter()
+        .filter_map(|v| {
+            let att = v.attestation.as_ref()?;
+            if !(att.solo_human && att.human_at_tty) || att.grant_id.is_some() {
+                return None;
+            }
+            let receipt = human_receipt_for(att.receipt_id.as_deref()?, &att.sha)?;
+            receipt
+                .solo_human
+                .then(|| att.authority_key(v.recorded_at.as_deref()))
+                .flatten()
+        })
+        .collect()
 }
 
 #[cfg(test)]

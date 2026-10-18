@@ -234,6 +234,45 @@ Keep the inbox populated by running **`aida questions sweep`** as part of the
 advisor's periodic garden pass — otherwise each decision falls back to a live
 `clarify` session.
 
+## Solo projects — audited self-approval
+
+An approval must come from a session other than the one that claimed or
+implemented the work, so a one-person project has no one to approve from. A
+human who works alone can opt in to **solo-human self-approval** in their own
+user config:
+
+```toml
+# ~/.aida/config.toml
+[review]
+solo_human_self_approval = true   # default false
+```
+
+What the opt-in does, and its limits:
+
+- **User config only.** The key is read from `~/.aida/config.toml` and nowhere
+  else. A value in a project's `.aida/config.toml` is ignored with a warning,
+  so a pull request can never switch the mode on. `aida config show` names
+  where the value came from and flags an ignored project value.
+- **Humans only.** It applies only to `aida review record ... --verdict
+  approved` run by a person at an interactive terminal with no agent identity
+  set (the same check operator approvals already pass). An agent session is
+  refused exactly as before, mode on or off.
+- **Typed confirmation.** A self-approval must name `--pr <N>`, and the human
+  re-types the spec id and PR number. The answer is read from the controlling
+  terminal (`/dev/tty`), never from stdin; a piped or scripted run is refused.
+- **Not in the AIDA repository.** AIDA's own repository uses independent
+  reviewer sessions; the mode never applies there.
+- **Audited.** The human-review receipt in `~/.aida/review-receipts/` and the
+  verdict's recorder attestation both carry `solo_human: true`. `aida pr ship`
+  re-reads the user config at merge time, honours a solo approval only when
+  its receipt also records it, and prints a line naming the mode when it
+  merges on one. `aida doctor` and `aida awaiting` print
+  `review: solo-human mode ON (self-approval permitted for TTY humans)` while
+  the mode is on.
+
+This is a separate, durable setting. It is unrelated to `aida solo`, which
+sets a short-lived presence for the advisor code gate.
+
 ## Related
 
 - [`docs/lifecycle.md`](lifecycle.md) — the spec states and the Done→Completed merge transition this review gates.

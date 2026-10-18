@@ -1306,6 +1306,11 @@ pub(crate) fn handle_awaiting_command(
     let store = backend.load()?;
     let ctx = collect_user_context(&project_root, &store, backend, no_ci);
     let report = collect_awaiting_report(&project_root, backend, &ctx, no_ci);
+    // STORY-1655: approvals awaiting this human may be self-approved; say so.
+    // trace:STORY-1655 | ai:claude
+    if !json && crate::solo_review::effective(&project_root) {
+        println!("{}", crate::solo_review::MODE_ON_LINE);
+    }
     if json {
         println!("{}", crate::cache_output::json_pretty(&report.to_json())?);
     } else if agent_output_mode() {

@@ -867,6 +867,11 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
                 // STORY-707: full human doctor includes orientation diagnostics.
                 if opts.category.is_none() {
                     print_doctor_status_diagnostics(&project_root, &store);
+                    // STORY-1655: surface that the project runs solo review.
+                    // trace:STORY-1655 | ai:claude
+                    if crate::solo_review::effective(&project_root) {
+                        println!("{}", crate::solo_review::MODE_ON_LINE);
+                    }
                 }
             },
         );

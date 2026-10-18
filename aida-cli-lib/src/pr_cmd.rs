@@ -1611,6 +1611,11 @@ pub(crate) fn pr_ship_approval_gate(
         );
         return Err(pr_ship::ShipRefusal::Review.error(message));
     }
+    // STORY-1655: name the mode when a solo-human approval is relied on.
+    // trace:STORY-1655 | ai:claude
+    if let Some(notice) = pr_ship::solo_approval_notice(candidates, policy) {
+        println!("  {notice}");
+    }
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));
     };
@@ -1775,6 +1780,11 @@ pub(crate) fn merge_path_approval_gate(
         );
         return Err(message);
     }
+    // STORY-1655: name the mode when a solo-human approval is relied on.
+    // trace:STORY-1655 | ai:claude
+    if let Some(notice) = pr_ship::solo_approval_notice(&candidates, &policy) {
+        eprintln!("  {notice}");
+    }
     if let Some(refusal) = pr_ship::approval_head_refusal(&candidates, head_sha) {
         let message = pr_ship::approval_head_refusal_message(pr, &refusal);
         crate::events::record_gate_held(
@@ -1832,6 +1842,10 @@ pub(crate) fn ship_approval_policy(
             &crate::review_authority::visible_leases(main_worktree),
         )
         .tokens,
+        // STORY-1655: the solo mode is re-read at ship time, never trusted
+        // from the verdict. trace:STORY-1655 | ai:claude
+        solo_human: crate::solo_review::effective(main_worktree),
+        verified_solo: crate::review_authority::verified_solo_keys(candidates),
     }
 }
 
