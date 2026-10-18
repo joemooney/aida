@@ -1227,6 +1227,9 @@ fn db_sync_local_window(
     // trace:BUG-1-051 | ai:claude
     // trace:TASK-1717 | ai:claude — a failing `git status` is an error,
     // never "clean".
+    // trace:BUG-2140 | ai:antigravity — refuse embedded git repos even when
+    // `git status` would not report an empty nested `.git` as a dirty tree.
+    aida_core::git_ops::refuse_embedded_repos(store_path)?;
     let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
     if has_changes {
         let msg = message.unwrap_or("chore: sync pending changes");
@@ -4334,7 +4337,9 @@ pub(crate) fn handle_git_backend_command(
                                         // Persist the updated next pointer
                                         if let Err(e) = registry.save(&blocks_path) {
                                             eprintln!("Warning: could not save blocks.yaml: {}", e);
-                                        } else {
+                                        } else if !aida_core::git_ops::store_commit_deferred_to_host(
+                                            store_path,
+                                        ) {
                                             // Commit the pointer advance to the store
                                             let _ = aida_core::git_ops::add(
                                                 store_path,
