@@ -3,12 +3,12 @@ spec_id: BUG-2001
 agreed_id: BUG-2001
 title: OS wrapper binds headless_worktree_root() read-write, which falls back to cwd/$HOME outside git
 description: 'Found during BUG-1971. claude_program_and_args / os_wrapped_program_and_args (STORY-612) bind headless_worktree_root() rw. That helper falls back to cwd (then ''.'') when no git root resolves, so a contained headless launch outside a git repo gets an OS-level rw bind of cwd, possibly $HOME. BUG-1971 made the settings-level write boundary fail closed in this case; the OS wrapper should match (refuse or bind nothing rw). Expected: no git root => contained launch refuses or binds no rw worktree.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T00:51:24.065349766Z
-modified_at: 2026-10-18T20:59:01.536200383Z
+modified_at: 2026-10-18T20:59:13.927591675Z
 req_type: Bug
 tags:
 - contained
@@ -40,6 +40,14 @@ history:
   timestamp: 2026-10-18T20:59:03.246963493Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a150cf-bc87-7861-9fbd-6742e8c37a49
+  author: aida-pr-open
+  timestamp: 2026-10-18T20:59:13.927587502Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: guided
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
