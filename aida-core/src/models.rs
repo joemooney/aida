@@ -692,6 +692,10 @@ pub struct FilingProvenance {
     /// Filing session id, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<String>,
+    /// Harness version explicitly supplied by AIDA_HARNESS_VERSION; absent is unknown.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
     // Reserved: STORY-1468 (deferred) adds the originating prompt here as
     // another optional, serde-default field.
 }
@@ -2546,6 +2550,13 @@ pub struct HistoryEntry {
     /// When the change was made
     pub timestamp: DateTime<Utc>,
 
+    /// Exact writing session, when explicitly available. Legacy rows remain unknown.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
+
     /// List of field changes in this update
     pub changes: Vec<FieldChange>,
 }
@@ -2557,8 +2568,18 @@ impl HistoryEntry {
             id: Uuid::now_v7(),
             author,
             timestamp: Utc::now(),
+            session_id: None,
+            harness_version: None,
             changes,
         }
+    }
+
+    /// An empty-change entry is a write event: it records the writing
+    /// session/harness context only, never a content change. History
+    /// consumers that count changes (churn, contributions) skip it.
+    // trace:STORY-1674 | ai:claude
+    pub fn is_write_event(&self) -> bool {
+        self.changes.is_empty()
     }
 }
 
@@ -3851,6 +3872,11 @@ pub struct Comment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
 
+    /// Explicitly reported harness version at comment creation.
+    // trace:STORY-1674 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_version: Option<String>,
+
     /// The seat whose claim this comment RELAYS (`aida comment add
     /// --relayed-from <seat>`), when the author is recording another seat's
     /// measurement, finding or argument rather than something it verified
@@ -3876,6 +3902,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         }
     }
@@ -3893,6 +3920,7 @@ impl Comment {
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: None,
+            harness_version: None,
             relayed_from: None,
         }
     }

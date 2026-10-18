@@ -2241,6 +2241,8 @@ fn doc_coverage_selects_completed_since_tag_without_doc() {
     let before = cutoff - Duration::days(1);
 
     let status_completed = |ts| HistoryEntry {
+        session_id: None,
+        harness_version: None,
         id: uuid::Uuid::new_v4(),
         author: "tester".into(),
         timestamp: ts,

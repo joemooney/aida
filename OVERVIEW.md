@@ -5,6 +5,15 @@ removing its lease, while leaving sibling worktrees and the parent grant intact.
 Delegated children retain exactly their parent's expiration timestamp.
 <!-- trace:TASK-1789 | ai:codex -->
 
+Spec creation, history and comments carry small optional write context.
+`aida usage show <SPEC> --provenance` joins exact session IDs to the existing
+read-only token ledger through each write timestamp; it never reads transcripts
+or infers model/effort. `AIDA_HARNESS_VERSION` is the sole harness-version source.
+Missing evidence remains unknown, including legacy rows. Per-event session
+usage is cumulative and overlapping. See
+[write provenance](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
+
 Mandate exclusion ledgers require a regular file owned by the current uid with
 exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
 An absent ledger stays empty; invalid metadata or content refuses mandate
