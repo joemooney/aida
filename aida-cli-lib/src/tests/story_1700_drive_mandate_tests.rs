@@ -2074,6 +2074,32 @@ fn a_redispatch_or_setup_lane_carries_the_runs_spec_and_fails_closed_without_one
     }
 }
 
+// `aida fleet drive --json` (preview) emits JSON even with no lane to drive,
+// and carries the same withheld status the human preview shows.
+// trace:STORY-1700 | ai:claude
+#[test]
+fn the_json_preview_is_json_with_no_lanes_and_mirrors_withheld_routes() {
+    let empty = preview_json(&[], true);
+    assert_eq!(empty["store_readable"], true);
+    assert_eq!(empty["lanes"], serde_json::json!([]));
+
+    let fx = Fixture::new();
+    let decisions = vec![plan_relay_lane(
+        &lane("c", LaneClass::Crashed, &fx.run_dir("c"), &[]),
+        &no_signoff,
+    )];
+    let readable = preview_json(&decisions, true);
+    assert_eq!(readable["lanes"][0]["held"], serde_json::Value::Null);
+    let blind = preview_json(&decisions, false);
+    assert_eq!(blind["store_readable"], false);
+    let lane = &blind["lanes"][0];
+    assert!(lane["subject"].as_str().unwrap().contains("relay run c"));
+    assert_eq!(
+        lane["held"], "withheld: the requirement store is unreadable",
+        "{blind}"
+    );
+}
+
 // R3-3: the preview mirrors an unreadable store.
 // trace:STORY-1700.ac2ed84c | ai:claude
 #[test]

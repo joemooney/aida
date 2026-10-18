@@ -31,6 +31,8 @@ VERIFIED = {
     "aida history events": "history events",
     # trace:STORY-1673 | ai:claude
     "aida verify constraints": "verify constraints",
+    # trace:STORY-1700 | ai:claude
+    "aida fleet drive": "fleet drive (preview; changes nothing without --tick)",
 }
 
 

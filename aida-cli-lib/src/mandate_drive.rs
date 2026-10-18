@@ -112,6 +112,15 @@ pub(crate) enum Route {
     Operator,
 }
 
+impl Route {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Advisor => "advisor",
+            Self::Operator => "operator",
+        }
+    }
+}
+
 /// One lane's planned next action.
 // trace:STORY-1700 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1937,18 +1946,10 @@ pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) ->
                 out.push(format!("  {subject}: skipped ({why})"));
             }
             LaneDecision::Act(p) => {
-                let route = match p.route {
-                    Route::Advisor => "advisor",
-                    Route::Operator => "operator",
-                };
-                let status = if !store_readable && p.action.gate_op().is_some() {
-                    " (withheld: the requirement store is unreadable)".to_string()
-                } else {
-                    p.forced_gate
-                        .as_deref()
-                        .map(|g| format!(" (gated: {g})"))
-                        .unwrap_or_default()
-                };
+                let route = p.route.as_str();
+                let status = preview_hold(p, store_readable)
+                    .map(|h| format!(" ({h})"))
+                    .unwrap_or_default();
                 out.push(format!(
                     "  {}: {} → {route}{status}\n    {}",
                     p.subject,
@@ -1965,6 +1966,45 @@ pub(crate) fn preview_lines(decisions: &[LaneDecision], store_readable: bool) ->
         );
     }
     out
+}
+
+/// Why the preview would not route a planned action as-is: withheld (an
+/// unreadable store) or gated. `None` routes it.
+// trace:STORY-1700 | ai:claude
+fn preview_hold(p: &Planned, store_readable: bool) -> Option<String> {
+    if !store_readable && p.action.gate_op().is_some() {
+        Some("withheld: the requirement store is unreadable".to_string())
+    } else {
+        p.forced_gate.as_deref().map(|g| format!("gated: {g}"))
+    }
+}
+
+/// The `--json` projection of the preview: the same lanes `preview_lines`
+/// renders, as data. `lanes` is empty when no lane would act.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn preview_json(decisions: &[LaneDecision], store_readable: bool) -> serde_json::Value {
+    let lanes: Vec<serde_json::Value> = decisions
+        .iter()
+        .filter_map(|d| match d {
+            LaneDecision::None => None,
+            LaneDecision::Skip {
+                lane, subject, why, ..
+            } => Some(serde_json::json!({
+                "lane": lane,
+                "subject": subject,
+                "skipped": why,
+            })),
+            LaneDecision::Act(p) => Some(serde_json::json!({
+                "lane": p.lane,
+                "subject": p.subject,
+                "action": p.action.as_str(),
+                "route": p.route.as_str(),
+                "held": preview_hold(p, store_readable),
+                "command": p.command,
+            })),
+        })
+        .collect();
+    serde_json::json!({ "store_readable": store_readable, "lanes": lanes })
 }
 
 /// `aida fleet drive [--tick] [--json]`.
@@ -1996,6 +2036,11 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
                     .iter()
                     .map(plan_unowned_spec),
             );
+            if *json {
+                let preview = preview_json(&decisions, store_readable);
+                println!("{}", serde_json::to_string_pretty(&preview)?);
+                return Ok(());
+            }
             let lines = preview_lines(&decisions, store_readable);
             for line in &lines {
                 println!("{line}");
