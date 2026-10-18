@@ -25,12 +25,12 @@ description: |
   1. Fixture tests for each check, including a dead lane, a stale log, an unpicked READY PR and a stale gate wait.
   2. The 2026-10-13 incidents, replayed, each produce a finding within one tick.
   3. No model-side polling anywhere.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-18T20:54:55.868491313Z
+modified_at: 2026-10-18T20:55:06.641802168Z
 req_type: Story
 relationships:
 - rel_type:
@@ -44,6 +44,14 @@ history:
   timestamp: 2026-10-18T20:54:58.642588698Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a150cb-f691-7a42-b764-d51094adf8c9
+  author: aida-pr-open
+  timestamp: 2026-10-18T20:55:06.641801342Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
   branch: main
