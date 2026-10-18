@@ -498,6 +498,14 @@ edits direct amendments to comments. CLI and MCP share this preflight, including
 indirect lock writes when an experiment completes. See
 [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+AIDA-owned store syncs keep that evidence across clones: rebase, union merge
+and reconcile fast-forward pin both tips and their merge bases, refuse a
+changed, deleted or divergent locked description before Git runs, and commit
+any lock the combined graph first establishes before reporting success. A
+failure after Git is reported with exact commits and is never reset. Raw Git,
+older binaries and lock-free readers are outside this guarantee. See
+[store sync](docs/cli/10-storage.md#store-sync-and-pre-registration).
+<!-- trace:BUG-2162 | ai:claude -->
 
 ## Feature surface (high level)
 
