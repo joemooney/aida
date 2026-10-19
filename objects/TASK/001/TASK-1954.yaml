@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-19T19:52:04.198742251Z
+modified_at: 2026-10-19T19:52:12.219044080Z
 req_type: Task
 tags:
 - cli
@@ -138,6 +138,12 @@ comments:
     - A bare `aida --version` / `aida` still returns `<root>`.
   created_at: 2026-10-19T16:09:36.293318927Z
   modified_at: 2026-10-19T16:09:36.293318927Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a155b8-babb-7e21-955b-e71947edef9f
+  author: joe
+  content: 'Advisor 2026-10-19: also covers TASK-1413 (superseded here; read its description for the full finding).'
+  created_at: 2026-10-19T19:52:12.219044080Z
+  modified_at: 2026-10-19T19:52:12.219044080Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
