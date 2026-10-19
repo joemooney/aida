@@ -1,0 +1,27 @@
+id: 01a1554e-ca7b-7233-a771-5e3c67643d5e
+spec_id: TASK-1962
+agreed_id: TASK-1962
+title: Cargo-timeout hook warns on make targets that do not run cargo
+description: |
+  The hook pattern matches any `timeout N make <target>` (e.g. `timeout 1h make lint`) and suggests AIDA_CARGO_TIMEOUT, even when the target does not run cargo. This is acceptable while the hook is warn-only; revisit if it starts blocking.
+
+  Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T17:56:29.435799036Z
+modified_at: 2026-10-19T17:56:29.435799036Z
+req_type: Task
+tags:
+- from-review:PR-2759
+- hooks
+- severity:cosmetic
+filed_at:
+  code_sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
+  branch: pr-2759
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 01a15535f12e
