@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:09:32.180659596Z
-modified_at: 2026-10-18T21:48:34.504390458Z
+modified_at: 2026-10-19T01:19:34.059523107Z
 req_type: Task
 tags:
 - from-implementer:STORY-1679
@@ -90,6 +90,18 @@ comments:
        - Fixtures with a real main/default branch holding the map commit covering: Valid mapping + parented draft + remapped display alias; Missing map file at valid oracle_sha and map missing the check; Invalid map blob (malformed TOML, duplicate check, non-regular mode); Unavailable (unresolvable default branch, oracle_sha not ancestor of default branch); Stale (description_sha256 change, archived/missing owner UUID, overlapping/ambiguous clause, corpus content_sha256 mismatch, and live-graph drift between trial and --file); and idempotent repeat --file plus existing-draft add-only parenting and different-parent conflict.
   created_at: 2026-10-18T21:48:34.504390458Z
   modified_at: 2026-10-18T21:48:34.504390458Z
+- id: 01a151be-14ab-7af3-b880-9411a80718d7
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (architecture, 2026-10-18 18:20) on sketch v2 (01a150fc): APPROVED. It resolves PR-2745 F1 through F7: the default-branch-only trust anchor never falls back to aida-store; code_repo comes from crate::project_root_from_store_hint; there is no synthetic-oracle special case; link errors surface; a deduplicated draft gains a Parent without being overwritten. Conditions:
+    (1) Report Missing and Unavailable as distinct statuses with distinct reasons. A trust failure must never read as 'no mapping'.
+    (2) Prove the 1 MiB and entry-count bounds with fixtures, and refuse a non-regular blob mode before parsing.
+    (3) A --file run that cannot link the Parent must leave the draft's description free of any 'Mapped contract target' claim.
+    (4) Fix the legacy unit fixtures to use real commits instead of keeping any test-shaped production branch.
+    Any deviation from the sketch needs a new ruling, and the merge reviewer checks conformance.
+  created_at: 2026-10-19T01:19:34.059523107Z
+  modified_at: 2026-10-19T01:19:34.059523107Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14039-91e8-7f70-9646-6686cc0e631b
   author: joe
