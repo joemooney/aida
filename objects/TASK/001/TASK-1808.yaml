@@ -3,12 +3,12 @@ spec_id: TASK-1808
 agreed_id: TASK-1808
 title: 'STORY-1655 follow-ups: end-to-end solo record-path test, doctor/awaiting mode-line tests, trace placement'
 description: 'Non-blocking findings from the PR #2724 review (PASS). (1) handle_review_record_at solo path (lib_part5.rs:3077-3123): add an injectable challenge seam and an end-to-end test proving the verdict JSON and the ~/.aida receipt both carry solo_human:true and that a CLI-recorded solo approval clears approval_authority_refusal. (2) Test that aida doctor and aida awaiting print MODE_ON_LINE when the mode is on and omit it when it is off or in the AIDA repo. (3) Move the STORY-1655 trace comment at lib.rs:489 onto mod solo_review and fix its alphabetical order; make the solo notice use the same stream (eprintln!) in pr_ship_approval_gate and merge_path_approval_gate. Parent: STORY-1655.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T09:38:08.083567482Z
-modified_at: 2026-10-19T16:04:45.163976332Z
+modified_at: 2026-10-19T16:04:47.484874500Z
 req_type: Task
 comments:
 - id: 01a154e8-7deb-7410-b942-c7c1338ecb0c
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-19T16:04:45.163976332Z
   modified_at: 2026-10-19T16:04:45.163976332Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e8-86fc-7b11-b15d-fc037249a7ff
+  author: joe
+  timestamp: 2026-10-19T16:04:47.484867232Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
   branch: main
