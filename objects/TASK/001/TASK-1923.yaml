@@ -11,11 +11,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:41:07.006343545Z
-modified_at: 2026-10-18T22:41:07.006343545Z
+modified_at: 2026-10-19T15:47:57.004574456Z
 req_type: Task
 tags:
 - from-review:PR-2749
 - severity:minor
+comments:
+- id: 01a154d9-1bcc-7050-96a1-2f5e2dd1646c
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1625. aida show TASK-1923 and TASK-1625 both specify implementer-phase store commit masking WatchdogTripped diagnosis; the target description explicitly includes this obligation. Preserve the narrower finding evidence under th'
+  created_at: 2026-10-19T15:47:57.004574456Z
+  modified_at: 2026-10-19T15:47:57.004574456Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
   branch: pr-2749
