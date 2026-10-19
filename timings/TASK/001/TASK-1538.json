@@ -17,6 +17,10 @@
     {
       "at": "2026-10-06T02:42:12.682016916Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-19T16:08:07.204877320Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -205,6 +209,468 @@
         "event": "SpecCompleted",
         "commit": "2dc90ca81f5fcf0d38262dae16dadaa7b480eb09",
         "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:42:51.597320726Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:28.962730821Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:14.675988442Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:24.845453520Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:19:55.689988464Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:30:50.022836870Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:34:30.989519628Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:35:18.067652241Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:59:27.063160394Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:04:59.313619334Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:23:13.785426396Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:24:33.550463636Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:31:07.918140225Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-09T15:44:13.961938669Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2474,
+        "verdict": "APPROVED",
+        "reviewed_sha": "430dc01de461"
+      }
+    },
+    {
+      "ts": "2026-10-09T15:51:39.542434744Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-09T16:56:52.372516270Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1538",
+        "branch": "task-1538-include",
+        "first_seen": "2026-10-09T16:56:52.372465854+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-10T01:55:08.726781971Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T02:09:57.986728247Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T02:23:45.238373833Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T02:36:34.486873032Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T02:55:54.969200016Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": false
+      }
+    },
+    {
+      "ts": "2026-10-10T03:16:03.280247905Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-10T03:16:15.997452023Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2474
+      }
+    },
+    {
+      "ts": "2026-10-10T03:16:23.786563155Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (a6d9bc8) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-10T05:08:41.688329126Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-10T05:08:54.101611767Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2475
+      }
+    },
+    {
+      "ts": "2026-10-10T05:30:58.858060636Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (9bd6d8a) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-10T05:36:18.064328146Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-10T05:36:27.295801664Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2477
+      }
+    },
+    {
+      "ts": "2026-10-10T14:28:09.106616496Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T03:50:33.952102810Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-11T10:47:41.602833370Z",
+      "spec": "TASK-1538",
+      "seat": "integrator",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dcc01e) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-11T17:46:35.100755654Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "f445f94b821bffd33d3ba391a163e570bb23565c"
+      }
+    },
+    {
+      "ts": "2026-10-11T17:46:35.266472345Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "59207aebaee0e26791d78dff393f38d0aa7b3f67"
+      }
+    },
+    {
+      "ts": "2026-10-11T19:49:06.668834711Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T19:49:10.476736480Z",
+      "spec": "TASK-1538",
+      "seat": "implementer",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-11T22:17:01.256308692Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2511,
+        "verdict": "APPROVED",
+        "reviewed_sha": "27e972044e9a27a2d43df8674961f1558b4a7c01"
+      }
+    },
+    {
+      "ts": "2026-10-12T00:46:47.683570055Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2526,
+        "verdict": "APPROVED",
+        "reviewed_sha": "fbcd695e2e1f7efb0b08eb1dc50ea7b43efe0cd1"
+      }
+    },
+    {
+      "ts": "2026-10-12T01:16:48.043580066Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2538,
+        "verdict": "APPROVED",
+        "reviewed_sha": "436c966e3dc815b2532bd05f4f6b9d5e1abbfacc"
+      }
+    },
+    {
+      "ts": "2026-10-12T02:54:09.194669729Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2545,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d6cd452383627cedf39ddc3726c0af4c6726d4ee"
+      }
+    },
+    {
+      "ts": "2026-10-12T05:31:35.559527046Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2546,
+        "verdict": "APPROVED",
+        "reviewed_sha": "3b0cb81d4df01dd3d19b70b93b4f76d1771731f9"
+      }
+    },
+    {
+      "ts": "2026-10-12T08:22:54.184248205Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2547,
+        "verdict": "APPROVED",
+        "reviewed_sha": "779ce22fdec1ecb545cfadbdc3d8718fd51ac7d5"
+      }
+    },
+    {
+      "ts": "2026-10-12T09:49:56.766879196Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2550,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a487090b93bcfb0be269afdd1973ed2330ee3bb9"
+      }
+    },
+    {
+      "ts": "2026-10-12T15:12:20.110352774Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "verdict": "APPROVED",
+        "reviewed_sha": "d4d0de51b69beccbb41c1e1e7569c8fbc3445a3e"
+      }
+    },
+    {
+      "ts": "2026-10-12T15:13:01.004690743Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (28dbd53) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-12T15:13:10.553399995Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-19T16:08:06.972170634Z",
+      "spec": "TASK-1538",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T16:08:06.972735752Z",
+      "spec": "TASK-1538",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
