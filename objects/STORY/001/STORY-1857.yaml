@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2751` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:04:58.945730670Z
-modified_at: 2026-10-19T07:05:13.306718567Z
+modified_at: 2026-10-19T16:06:47.000941576Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,12 +30,27 @@ relationships:
   target_id: 01a14d0d-845f-7ef3-a152-37e7f24ac98f
   created_at: 2026-10-19T07:05:13.306714720Z
   created_by: joe
+comments:
+- id: 01a154ea-6191-7931-9150-1cf4ba6506f4
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2751 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-19T16:06:48.977695068Z
+  modified_at: 2026-10-19T16:06:48.977695068Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152fa-8ea4-7b51-bd39-3e2d51e84cc5
   author: joe
   timestamp: 2026-10-19T07:05:14.660700217Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a154ea-6191-7931-9150-1d02fff92c1e
+  author: aida-auto-bump
+  timestamp: 2026-10-19T16:06:48.977701934Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
@@ -44,3 +59,6 @@ filed_at:
   aida_build_sha: 97987f04b5
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T16:06:48.977693674Z
