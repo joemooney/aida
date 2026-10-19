@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:10.780385786Z
-modified_at: 2026-10-18T14:31:10.780385786Z
+modified_at: 2026-10-19T15:46:32.806197786Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
 - finding-hash:2ce82e2a
 - from-review:TASK-1785
 - kind:carried-forward
+comments:
+- id: 01a154d7-d2e6-7180-aea5-9069f7051c96
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1393 and TASK-1812 both specify skip in-file cfg(test) modules under the explicit advisor ruling; the target description explicitly includes this obligation. Preserve the narrower finding evidence under th'
+  created_at: 2026-10-19T15:46:32.806197786Z
+  modified_at: 2026-10-19T15:46:32.806197786Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f90-061c-7572-b9e2-44571bb66419
   author: joe
