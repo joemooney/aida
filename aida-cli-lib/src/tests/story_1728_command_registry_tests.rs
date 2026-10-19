@@ -46,6 +46,14 @@ fn render_help_snapshot() -> String {
         let _ = writeln!(out, "===== aida {}", path.join(" "));
         out.push_str(&text);
     }
+    // `aida help all`'s inventory, minus its PATH-dependent extension section.
+    let _ = writeln!(out, "===== help all (command groups)");
+    for (group, cmds) in crate::help::command_groups() {
+        let _ = writeln!(out, "{group}");
+        for (name, desc) in *cmds {
+            let _ = writeln!(out, "  {name:<14} {desc}");
+        }
+    }
     let _ = writeln!(out, "===== catalog (hidden included)");
     let rows = crate::help_catalog::catalog_rows(true);
     out.push_str(&serde_json::to_string_pretty(&rows).expect("catalog serializes"));
@@ -287,13 +295,14 @@ fn production_code_uses_only_the_built_command_tree() {
         "Cli::from_arg_matches",
         "Cli as clap::CommandFactory",
         "Cli as CommandFactory",
+        "<Cli as clap::Parser>",
+        "Cli as Parser",
     ];
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut hits = Vec::new();
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if !name.ends_with(".rs") || name == "command_registry.rs" {
+    for path in production_sources(&src) {
+        let name = path.strip_prefix(&src).unwrap().display().to_string();
+        if name == "command_registry.rs" {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
@@ -308,6 +317,28 @@ fn production_code_uses_only_the_built_command_tree() {
         "use crate::command_registry::{{built_command, parse_from, try_parse_from}}:\n{}",
         hits.join("\n")
     );
+}
+
+/// Every `.rs` file below `dir`, recursively, except test modules (a
+/// `tests/` directory, `tests.rs`, or `*_tests.rs`).
+fn production_sources(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if path.is_dir() {
+            if name != "tests" {
+                out.extend(production_sources(&path));
+            }
+        } else if name.ends_with(".rs") && name != "tests.rs" && !name.ends_with("_tests.rs") {
+            out.push(path);
+        }
+    }
+    out
 }
 
 /// Non-comment lines outside inline `#[cfg(test)] mod … { … }` blocks.
@@ -337,4 +368,75 @@ fn production_lines(text: &str) -> Vec<(usize, &str)> {
         i += 1;
     }
     out
+}
+
+fn ordering_reg(name: &'static str, help_after: &'static str) -> &'static CommandReg {
+    Box::leak(Box::new(CommandReg {
+        name,
+        help_after,
+        command: || clap::Command::new("ordering"),
+        phase: Phase::PreStore,
+        policy: |_| CmdPolicy {
+            stakeholder: StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+        },
+        run: |_, _| Ok(()),
+    }))
+}
+
+// A help_after cycle among registered commands is rejected by name, never
+// appended silently at the end of help.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn help_after_cycle_is_rejected() {
+    let a = ordering_reg("cyc-a", "cyc-b");
+    let b = ordering_reg("cyc-b", "cyc-a");
+    let err = help_order(&["status"], &[a, b]).expect_err("a cycle never resolves");
+    assert!(
+        err.contains("`cyc-a` (help_after `cyc-b`)")
+            && err.contains("`cyc-b` (help_after `cyc-a`)"),
+        "{err}"
+    );
+    let unknown = ordering_reg("orphan", "no-such-command");
+    let err = help_order(&["status"], &[unknown]).expect_err("an unknown anchor is an error");
+    assert!(
+        err.contains("`orphan` (help_after `no-such-command`)"),
+        "{err}"
+    );
+}
+
+// Entries sharing one anchor land right after it in name order, whatever the
+// input order, and chained anchors resolve across rounds.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn shared_help_after_anchor_places_entries_in_name_order() {
+    let alpha = ordering_reg("alpha", "list");
+    let beta = ordering_reg("beta", "list");
+    let gamma = ordering_reg("gamma", "list");
+    let child = ordering_reg("child", "beta");
+    let want = vec!["add", "list", "alpha", "beta", "child", "gamma", "show"];
+    for regs in [
+        [alpha, beta, gamma, child],
+        [gamma, child, alpha, beta],
+        [child, beta, gamma, alpha],
+    ] {
+        assert_eq!(
+            help_order(&["add", "list", "show"], &regs).unwrap(),
+            want,
+            "input order {:?}",
+            regs.iter().map(|reg| reg.name).collect::<Vec<_>>()
+        );
+    }
+    assert!(
+        help_order(&built_legacy_names(), REGISTRY).is_ok(),
+        "every real registration resolves"
+    );
+}
+
+fn built_legacy_names() -> Vec<&'static str> {
+    Cli::command()
+        .get_subcommands()
+        .map(|sub| &*Box::leak(sub.get_name().to_string().into_boxed_str()))
+        .collect()
 }
