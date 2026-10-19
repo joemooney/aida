@@ -1,0 +1,37 @@
+id: 01a15369-a3ec-7733-a343-2d08af9e9393
+spec_id: TASK-1940
+agreed_id: TASK-1940
+title: 'STORY-1728 slice 3: finish AC4 (move review/advisor sub-dispatchers, drop exhaustive cli.rs test destructures, hot-file guard test)'
+description: |-
+  STORY-1728 slice 3: close out AC4 (ac245f28) after #2751. These are the round-2 review findings on #2751 at a2e163b106; the advisor deferred them under the 2-round cap.
+
+  Required (AC4):
+  1. Move handle_review_command (lib_part5.rs:1578-1642) into review_cmd.rs and handle_advisor_command (lib_part1.rs:1966-2012) into advisor_cmd_root.rs. Pure move.
+  2. Remove exhaustive destructures of migrated clap types from the cli.rs test module: add `..`, or move each test into the owning module's tests. Sites: :522 RemoteCommand::MirrorPush, :604 TailArgs, :621/:679 DrainCommand, :730/:752 DoArgs, :769 WorktreeCommand::Gc, :2296 FindingsCommand::Classes, :2310/:2349/:2369/:2437 ReviewCommand, :2410 ReviewModeCommand::MassChange.
+  3. Add a guard test, traced to STORY-1728.ac245f28, that fails when a hot file (cli.rs, lib.rs, lib_part*.rs, git_backend_cmd.rs, stakeholder_role.rs, role.rs) exhaustively matches a migrated command's Args/XCommand or hosts a per-verb sub-dispatcher.
+
+  Non-blocking (same PR if cheap):
+  4. run_dispatches_early_handlers_before_any_store_is_opened: use the recursive production_sources walker, not read_dir.
+  5. Add a team_identity_write column to golden/story_1728_main_policy.tsv; fix the MAIN_TEAM_IDENTITY_WRITES citation to the base SHA.
+  6. Delete scripts/story-1728/*.py (one-shot migration tools).
+  7. Remove the ~154 `#[allow(unreachable_patterns)] _ =>` dead arms and irrefutable let-else on the single-variant Command.
+  8. Make the spec-ID leak scan recursive over clap types outside *_args.rs; fix the stale doc at aida-tui/src/cmd_palette.rs:77.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:06:34.604763727Z
+modified_at: 2026-10-19T09:06:34.604763727Z
+req_type: Task
+tags:
+- cli
+- refactor
+- story-1728
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
