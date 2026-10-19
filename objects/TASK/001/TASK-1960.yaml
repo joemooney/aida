@@ -1,0 +1,36 @@
+id: 01a154f2-246f-7731-bcb5-079b74a6e8ca
+spec_id: TASK-1960
+agreed_id: TASK-1960
+title: 'STORY-1690 S1: patch-id attestation carry-over — a merge-from-main that leaves the PR''s own diff unchanged keeps its attested approval (fixes BUG-2177)'
+description: |-
+  Advisor-approved slice 1 of STORY-1690 option (b) (sketch: STORY-1690 comment 2).
+  When a PR's head advances only by merging origin/main, and the PR's own patch is identical to the approved one (the patch-id of merge-base..head after the merge equals the patch-id of merge-base..reviewed_sha, compared the same way git range-diff would), aida pr ship and aida review treat the attested approval as carried over to the new head. Record a machine carry-over record: approved_sha, new_head, both patch-ids, and the base range. This replaces serial-ship.sh's asserted base-only re-approval.
+  Any difference in the PR's own diff, including a conflict resolution, voids the carry-over and needs a scoped re-review.
+  SECURITY-RELEVANT, reviewed STRICT. Adversarial tests:
+  (1) a clean main merge carries over;
+  (2) a merge with a conflict resolution that changes a PR hunk does not;
+  (3) an extra commit hidden inside a merge commit does not;
+  (4) an evil merge (a merge commit carrying non-main changes) does not;
+  (5) a rebase with an identical patch carries over, if supported, or is refused with a reason.
+  Closes BUG-2177. Trailer (TASK-ID BUG-2177).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T16:15:17.615382008Z
+modified_at: 2026-10-19T16:15:17.615382008Z
+req_type: Task
+tags:
+- review
+- security
+- ship
+- story-1690
+- throughput
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
