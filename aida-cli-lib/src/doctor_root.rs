@@ -624,6 +624,26 @@ pub(crate) fn collect_doctor_findings(
             safe_heal: false,
         });
     }
+    // BUG-2140: if a host permission mistake makes the store's git metadata
+    // unwritable, store writes defer their commits indefinitely. Report the
+    // exact unwritable directory so the operator can fix permissions.
+    // trace:BUG-2140 | ai:antigravity
+    if let Some(unwritable) = aida_core::git_ops::store_unwritable_git_path(&store_worktree) {
+        push(DoctorFinding {
+            category: "store-worktree".to_string(),
+            id: "store-worktree-gitdir-unwritable".to_string(),
+            summary: format!(
+                "cannot write {}: store git metadata is not writable, so store changes stay uncommitted",
+                unwritable.display()
+            ),
+            action: format!(
+                "restore write permissions on {} (e.g. `chmod -R u+w {}`) and run `aida db sync`",
+                unwritable.display(),
+                unwritable.display()
+            ),
+            safe_heal: false,
+        });
+    }
 
     // BUG-915: repos with container tooling and linked worktrees need the
     // worktree `.git` file's target mounted inside the container. Otherwise
@@ -1683,6 +1703,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
             "checkout-drift",
         ],
         "main-checkout-drift",
+    ),
+    // BUG-1229 / BUG-2140: store worktree gitdir/rebase/permission integrity.
+    // trace:BUG-2140 | ai:antigravity
+    (
+        &["store-worktree", "store-gitdir", "store-permissions"],
+        "store-worktree",
     ),
 ];
 
