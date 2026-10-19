@@ -6,6 +6,11 @@
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "backlog_args.rs"]
+pub(crate) mod backlog_args;
+pub(crate) use backlog_args::*;
+
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use colored::Colorize;
@@ -2104,5 +2109,97 @@ mod bug_595_risk_signal_tests {
         );
         let (level, _) = classify_risk_with_reason(&r, false);
         assert_eq!(level, RiskLevel::High, "an epic decomposes, never grooms");
+    }
+}
+
+/// Curate Approved-but-not-queued work into the queue with risk and
+/// file-overlap heuristics. See `aida backlog --help`.
+// trace:STORY-444 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "backlog")]
+pub(crate) struct BacklogArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::BacklogCommand,
+}
+
+fn run_backlog(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <BacklogArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+                // `load` alias for quantitative effort summaries.
+                BacklogArgs { inner: backlog_cmd } => {
+                    let storage = Storage::new(store_path);
+                    match backlog_cmd {
+                        BacklogCommand::Load => {
+                            load_cmd::handle_load_command(&LoadCommand::Backlog, &storage)?
+                        }
+                        _ => self::handle_backlog_command(backlog_cmd, &storage)?,
+                    }
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-444 + STORY-451: `aida backlog` owns grooming plus the
+                // `load` alias for quantitative effort summaries.
+                BacklogArgs { inner: backlog_cmd } => match backlog_cmd {
+                    BacklogCommand::Load => {
+                        load_cmd::handle_load_command(&LoadCommand::Backlog, &storage)?
+                    }
+                    _ => self::handle_backlog_command(backlog_cmd, &storage)?,
+                },
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida backlog` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static BACKLOG: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "backlog",
+        help_after: "queue",
+        command: <BacklogArgs as clap::CommandFactory>::command,
+        policy: backlog_cli_policy,
+        run: crate::command_registry::Handler::Store(run_backlog),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn backlog_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::BacklogCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <BacklogArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Write,
+        per_write_auto_push: matches!(inner, Some(BacklogCommand::Groom { .. })),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

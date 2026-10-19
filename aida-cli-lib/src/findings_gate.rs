@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "findings_gate_args.rs"]
+pub(crate) mod findings_gate_args;
+pub(crate) use findings_gate_args::*;
+
 /// BUG-1637: record a caller-authored (human-class) status transition
 /// `from -> req.status` under the caller's identity ([`get_default_author`])
 /// through the one shared helper, `aida_core::conflict::record_status_transition`.
@@ -2129,4 +2134,144 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
         filed += 1;
     }
     Ok(filed)
+}
+
+/// Triage findings filed by headless drain phases (reviewer + implementer).
+/// Bare `aida findings` defaults to `aida findings list` — the command every
+/// failure message points the user at, so it must run without a subcommand.
+// trace:STORY-278 trace:STORY-285 trace:STORY-732 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "findings")]
+pub(crate) struct FindingsArgs {
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::FindingsCommand>,
+}
+
+fn run_findings(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FindingsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                FindingsArgs { cmd: findings_cmd } => {
+                    // STORY-732 (FIX 8): bare `aida findings` defaults to `findings list`
+                    // — the command every failure message tells the user to run, so it
+                    // must not be a hard clap error. Mirrors the `aida questions` pattern.
+                    // trace:STORY-732 | ai:claude
+                    let default_list = FindingsCommand::List {
+                        pr: None,
+                        source: None,
+                        kind: None,
+                        count: false,
+                        json: false,
+                    };
+                    let cmd = findings_cmd.as_ref().unwrap_or(&default_list);
+                    handle_findings_command(cmd, backend, store_path)?;
+                    // STORY-1429: bare `aida findings` at a terminal offers the
+                    // one-keystroke requeue loop when specs are parked, the way bare
+                    // `aida questions` offers its answer loop. `findings list` never
+                    // prompts. trace:STORY-1429 | ai:claude
+                    use std::io::IsTerminal;
+                    if findings_cmd.is_none()
+                        && !output_format_is_json()
+                        && std::io::stdin().is_terminal()
+                        && std::io::stdout().is_terminal()
+                    {
+                        let parked = backend
+                            .list_summaries(&aida_core::ListFilter {
+                                status: Some("needs-attention".to_string()),
+                                ..Default::default()
+                            })
+                            .map(|v| v.len())
+                            .unwrap_or(0);
+                        if parked > 0 {
+                            print!("\nTriage {parked} parked now? [Y/n] ");
+                            use std::io::Write;
+                            std::io::stdout().flush()?;
+                            let mut input = String::new();
+                            std::io::stdin().read_line(&mut input)?;
+                            let answer = input.trim();
+                            if answer.is_empty() || answer.eq_ignore_ascii_case("y") {
+                                let storage = Storage::new(store_path);
+                                crate::queue_cmd::handle_rework_entry(
+                                    &storage,
+                                    None,
+                                    &crate::queue_cmd::ReworkFlags::default(),
+                                )?;
+                            }
+                        }
+                    }
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                FindingsArgs { .. } => {
+                    // `aida findings` queries the cache for `from-review:` /
+                    // `from-implementer:` tags; the deprecated SQLite backend has no
+                    // equivalent. trace:STORY-278 trace:STORY-285 | ai:claude
+                    anyhow::bail!(
+                        "aida findings requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida findings` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FINDINGS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "findings",
+        help_after: "del",
+        command: <FindingsArgs as clap::CommandFactory>::command,
+        policy: findings_cli_policy,
+        run: crate::command_registry::Handler::Store(run_findings),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn findings_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::FindingsCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <FindingsArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let cmd = args.as_ref().map(|args| args.cmd.as_ref());
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(
+            cmd,
+            Some(None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }))
+        ) {
+            SA::Read
+        } else {
+            SA::Finding
+        },
+        per_write_auto_push: matches!(cmd, Some(Some(c)) if !matches!(c, FindingsCommand::List { .. } | FindingsCommand::Classes { .. })),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
 }

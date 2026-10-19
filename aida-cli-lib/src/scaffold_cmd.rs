@@ -14,6 +14,11 @@ use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "scaffold_cmd_args.rs"]
+pub(crate) mod scaffold_cmd_args;
+pub(crate) use scaffold_cmd_args::*;
+
 // trace:FR-0260 | ai:claude:high
 pub(crate) fn handle_scaffold_command(
     cmd: &ScaffoldCommand,
@@ -2067,3 +2072,102 @@ mod bug2009_tests {
         assert_eq!(mode(&commit_msg), 0o755, "created hook is executable");
     }
 }
+
+/// Scaffolding management commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "scaffold")]
+#[clap(hide = true)]
+pub(crate) struct ScaffoldArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::ScaffoldCommand,
+}
+
+fn run_scaffold(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ScaffoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // BUG-1977: the hook-only refresh repairs what blocks store writes, so
+            // it must not need a resolvable store (the refusal names --project-root).
+            // trace:BUG-1977 | ai:claude
+            if let ScaffoldArgs {
+                inner:
+                    ScaffoldCommand::Upgrade {
+                        project_root,
+                        dry_run,
+                        only: Some(cli::ScaffoldUpgradeOnly::GitHooks),
+                        ..
+                    },
+            } = &args
+            {
+                let root = project_root
+                    .clone()
+                    .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+                if !root.exists() {
+                    anyhow::bail!("Project root does not exist: {}", root.display());
+                }
+                return crate::command_registry::returned(
+                    scaffold_cmd::run_scaffold_upgrade_git_hooks(&root, *dry_run),
+                );
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ScaffoldArgs {
+                    inner: scaffold_cmd,
+                } => {
+                    // Scaffold apply / status / preview / extract — same pattern.
+                    // Storage façade now handles directory paths via GitBackend.load().
+                    let storage = Storage::new(store_path);
+                    self::handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ScaffoldArgs {
+                    inner: scaffold_cmd,
+                } => {
+                    self::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida scaffold` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SCAFFOLD: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "scaffold",
+        help_after: "memories",
+        command: <ScaffoldArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_scaffold),
+    };

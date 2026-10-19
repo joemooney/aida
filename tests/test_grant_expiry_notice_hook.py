@@ -176,13 +176,13 @@ class NoticeHook(unittest.TestCase):
         self.assertIn('.agents/hooks/aida-grant-expiry-notice.sh', agy_hooks[0]['command'])
         self.assertIn('"$h" --client agy', agy_hooks[0]['command'])
         self.assertEqual(agy_hooks[0]['timeout'], 2)
-        source = (ROOT / 'aida-cli-lib/src/lib_part1.rs').read_text()
-        dispatch = source.index('return role_cmd::handle_role_command(role_cmd);')
-        # Pin the actual early return and unreachable late dispatch contract.
-        storage = source.index('let storage =', dispatch)
-        self.assertLess(dispatch, storage)
-        self.assertLess(dispatch, source.index('role is dispatched before storage init'))
+        # `aida role` is registered as an early (store-free) command: its handler
+        # runs before storage init and finishes there. trace:STORY-1728 | ai:claude
         role = (ROOT / 'aida-cli-lib/src/role_cmd.rs').read_text()
+        self.assertIn('run: crate::command_registry::Handler::Early(run_role)', role)
+        run_role = role[role.index('fn run_role('):]
+        run_role = run_role[: run_role.index('\n}\n')]
+        self.assertIn('handle_role_command(', run_role)
         self.assertLess(role.index('return crate::grant_expiry_notice::handle(client);'), role.index('let project_root = statusline_project_root();'))
         notice = (ROOT / 'aida-cli-lib/src/grant_expiry_notice.rs').read_text()
         self.assertNotIn('Storage::', notice)

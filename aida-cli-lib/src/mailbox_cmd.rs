@@ -18,6 +18,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::Read;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mailbox_cmd_args.rs"]
+pub(crate) mod mailbox_cmd_args;
+pub(crate) use mailbox_cmd_args::*;
+
 use crate::cli::MailboxCommand;
 use crate::*;
 
@@ -1178,9 +1183,12 @@ mod tests {
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_read_cli_accepts_a_message_prefix() {
-        let cli = Cli::try_parse_from(["aida", "mailbox", "read", "0fa629d6"]).unwrap();
-        match cli.command {
-            Command::Mailbox(MailboxCommand::Read { message_id }) => {
+        let cli = crate::command_registry::try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
+            .unwrap();
+        match cli.command.registered::<crate::mailbox_cmd::MailboxArgs>() {
+            crate::mailbox_cmd::MailboxArgs {
+                inner: MailboxCommand::Read { message_id },
+            } => {
                 assert_eq!(message_id, "0fa629d6")
             }
             other => panic!("expected mailbox read, got {other:?}"),
@@ -1468,7 +1476,7 @@ mod tests {
     // trace:TASK-1250 | ai:codex
     #[test]
     fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
-        let from_file = Cli::try_parse_from([
+        let from_file = crate::command_registry::try_parse_from([
             "aida",
             "mailbox",
             "send",
@@ -1480,13 +1488,19 @@ mod tests {
             "Review requested",
         ])
         .unwrap();
-        match from_file.command {
-            Command::Mailbox(MailboxCommand::Send {
-                body,
-                body_file,
-                subject,
-                ..
-            }) => {
+        match from_file
+            .command
+            .registered::<crate::mailbox_cmd::MailboxArgs>()
+        {
+            crate::mailbox_cmd::MailboxArgs {
+                inner:
+                    MailboxCommand::Send {
+                        body,
+                        body_file,
+                        subject,
+                        ..
+                    },
+            } => {
                 assert!(body.is_none());
                 assert_eq!(body_file.unwrap(), std::path::PathBuf::from("mail.txt"));
                 assert_eq!(subject.as_deref(), Some("Review requested"));
@@ -1494,10 +1508,21 @@ mod tests {
             other => panic!("expected mailbox send, got {other:?}"),
         }
 
-        let from_stdin =
-            Cli::try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"]).unwrap();
-        match from_stdin.command {
-            Command::Mailbox(MailboxCommand::Send { body, stdin, .. }) => {
+        let from_stdin = crate::command_registry::try_parse_from([
+            "aida",
+            "mailbox",
+            "send",
+            "--broadcast",
+            "--stdin",
+        ])
+        .unwrap();
+        match from_stdin
+            .command
+            .registered::<crate::mailbox_cmd::MailboxArgs>()
+        {
+            crate::mailbox_cmd::MailboxArgs {
+                inner: MailboxCommand::Send { body, stdin, .. },
+            } => {
                 assert!(body.is_none());
                 assert!(stdin);
             }
@@ -2101,5 +2126,98 @@ mod tests {
                 aida_core::mailbox::Recipient::Agent("advisor".into()),
             ]
         );
+    }
+}
+
+/// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
+// trace:STORY-493 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mailbox")]
+pub(crate) struct MailboxArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::MailboxCommand,
+}
+
+fn run_mailbox(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                MailboxArgs { inner: mailbox_cmd } => {
+                    // trace:STORY-493 | ai:claude — local layer only; git-canonical
+                    // digest is a later slice. Needs only the project root.
+                    return crate::command_registry::returned(self::handle_mailbox_command(
+                        mailbox_cmd,
+                        store_path,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                MailboxArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida mailbox commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida mailbox` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MAILBOX: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "mailbox",
+        help_after: "sandbox",
+        command: <MailboxArgs as clap::CommandFactory>::command,
+        policy: mailbox_cli_policy,
+        run: crate::command_registry::Handler::Store(run_mailbox),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::MailboxCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(
+            inner,
+            Some(MailboxCommand::Inbox { .. } | MailboxCommand::Thread { .. })
+        ) {
+            SA::Read
+        } else {
+            SA::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }
