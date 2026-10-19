@@ -1,0 +1,28 @@
+id: 01a15552-ec72-74d2-b752-2223b6038ee8
+spec_id: TASK-1-367
+title: 'minor (non-blocking): aida-cargo-timeout-guard.sh misses `timeout N bash -c "ca…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1854, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): aida-cargo-timeout-guard.sh misses `timeout N bash -c "cargo ..."` / sh -c forms because quoted bodies are stripped before matching.
+  Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T18:01:00.274729740Z
+modified_at: 2026-10-19T18:01:00.274729740Z
+req_type: Task
+tags:
+- carried-from:STORY-1854
+- finding-hash:927bc124
+- from-review:STORY-1854
+- kind:carried-forward
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
