@@ -49,7 +49,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:13:09.312319606Z
-modified_at: 2026-10-18T16:10:34.572701355Z
+modified_at: 2026-10-19T15:44:39.232927746Z
 req_type: Story
 tags:
 - from:aida-host
@@ -187,6 +187,12 @@ comments:
   created_at: 2026-10-18T16:10:34.572701355Z
   modified_at: 2026-10-18T16:10:34.572701355Z
   session_id: 29d7480a-170e-464b-ad8d-3720bdeaa6cf
+- id: 01a154d6-1740-7793-b785-0d5d7566a1b6
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. Child tasks are complete: TASK-1783 in aab6e12bcc, TASK-1785 in f14ef5f1e8. The residual findings are tracked as TASK-1393..1396.'
+  created_at: 2026-10-19T15:44:39.232927746Z
+  modified_at: 2026-10-19T15:44:39.232927746Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14036-9d75-7782-880c-dfebe1f22dd5
   author: joe
