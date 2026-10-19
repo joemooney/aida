@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T06:51:46.404012941Z
+modified_at: 2026-10-19T07:26:06.254201008Z
 req_type: Story
 tags:
 - architecture
@@ -83,6 +83,66 @@ comments:
   created_at: 2026-10-19T06:49:59.803638195Z
   modified_at: 2026-10-19T06:49:59.803638195Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1530d-a7ae-7be1-9672-5ebffc29e5f7
+  author: joe
+  content: |
+    SKETCH: S2 (cargo-nextest) and S3 (one integration-test harness). Implementer, 2026-10-19 00:40 MST. Requesting advisor signoff. Nothing in this sketch is implemented.
+
+    ## Measured baseline (S1 tooling, scripts/test-timings.py on two main runs)
+
+    | | run 39186737460 (97987f0) | run 39208649075 (a27fe3f) |
+    |---|---|---|
+    | Run tests step | 904 s | 1127 s |
+    | compile (step start to first `Running`) | 151 s | 163 s |
+    | execution (first `Running` to last result) | 753 s | 964 s |
+    | summed binary time, 85 binaries | 747 s | 958 s |
+    | aida_cli_lib unit (9,183 tests, libtest 4 threads) | 275 s | 371 s |
+    | other unit binaries (6) | 41 s | 54 s |
+    | integration binaries (74; run one at a time) | 431 s | 533 s |
+    | top 10 integration binaries | 224 s | 267 s |
+    | tests passed+ignored (acceptance 5 baseline) | 11,671 | 11,683 |
+
+    Two corrections to the spec's table. (1) `context_budget` takes 0.02 s for 1 test. The "40 s, 1,549 tests" row is aida_core's unit binary: CI's merged streams print the next binary's `Running` header before the previous binary's result, so reading the log by eye attributes the result to the wrong binary. S1's parser matches each result to its binary by test count. (2) Shared runners vary by about 30% between runs, so every target below is a median of 3.
+
+    ## S2: cargo-nextest
+
+    **Approach**
+    - `.config/nextest.toml`:
+      - `ci` profile: `junit.path`, `fail-fast = false`, `slow-timeout = { period = "10s" }` (it reports, it does not kill), `test-threads = "num-cpus"`.
+      - A `serial` test-group (`max-threads = 1`) with explicit filters for the tests that need it.
+      - A `default` profile for local runs.
+    - CI "Run tests" becomes `cargo nextest run --workspace --no-fail-fast --profile ci`, plus a separate `cargo test --doc --workspace` step (nextest does not run doctests; they take 0.1 s today).
+    - Install nextest with `taiki-e/install-action` pinned to a version, or a pinned prebuilt tarball with a checksum. No `cargo install` on a cold cache.
+    - S1 moves from per-binary to per-test rows: test-timings.py gains a JUnit reader, the budget keys become per test, and acceptance 4 ("no unbudgeted test over 10 s") is then enforced literally. The per-binary log reader stays for local `cargo test` runs.
+    - check-ci-compile keeps deriving from the step (`cargo nextest run --no-run` has the same compile set), and the Rust shape guard (task_1555_ci_gate_tiers_tests) is updated with it in the same commit.
+    - The Makefile targets and `make check-ci` use nextest when it is installed and fall back to `cargo test` with a note. `make test-touched` keeps libtest filters: it targets modules, not test pools.
+
+    **Expected win, from the S1 timings above.** The integration binaries total 431 s, almost all of it one binary at a time with few tests each, so they are mostly waiting (sleeps, child processes). In one 4-wide pool their floor is the longest single test (agent_error_channel: 44 s across 2 tests), not 431 s. The aida_cli_lib binary already uses 4 libtest threads. If it is CPU-bound, the pool floor is (4 x 275 + 431) / 4 ≈ 380 s of execution. If it is mostly waiting, the floor is about 280 s. Execution therefore drops from 753 s to roughly 280–380 s, and the step from 904 s to about 430–530 s. **S2 alone does not reach 360 s.** S3 (compile/link), S4 (the top slow tests) and possibly an opt-level-1 test profile close the rest. Process-per-test also adds roughly 9,183 x ~10 ms / 4 ≈ 25 s for the lib binary. That cost is measured, not assumed, in the shadow run below.
+
+    **Risks**
+    1. Tests that serialize on in-process locks (8 static `*_LOCK` mutexes) or mutate process-global state (105 `env::set_var`/`remove_var` in 23 files, 21 `set_current_dir`). Under nextest each test is its own process, so the in-process locks stop serializing. Env and cwd become per-process, which is safer. External shared resources (fixed paths under HOME or /tmp, ports, the shared `.aida-store`) can now collide across processes. Each lock is audited. Anything guarding an external resource goes into the `serial` test-group, explicitly, with a comment.
+    2. The host cargo-slot wrapper (aida-host `bin/cargo`) gates `build/test/check/clippy/run/bench/doc/install`. `cargo nextest` is a different subcommand and would bypass the slot limiter. aida-host needs `nextest` added to its gated set before any agent runs nextest locally. Filed as a dependency, not done here.
+    3. A flaky test that passes under libtest's shared process can fail under nextest. Mitigation: no `retries` in the ci profile (retries hide flakes), and a shadow period.
+
+    **Rollout (CI change):** PR 1 adds nextest as a **non-gating shadow step** after "Run tests" (`continue-on-error: true`, same runner), for 3 main runs. It records the step time, the pass/fail parity against libtest, and the passed+ignored count (it must be ≥ 11,683). PR 2 swaps the gating step only after parity holds. That costs about 8 extra CI minutes per run for the shadow period, then nothing.
+
+    ## S3: one integration-test harness
+
+    **Approach.** Move `aida-cli/tests/*.rs` (68 files; 74 integration binaries workspace-wide) into `aida-cli/tests/it/main.rs` with one `mod` per former file, keeping `tests/support/` and `tests/fixtures/` as they are. Set `autotests = false` plus one `[[test]] name = "it"` in aida-cli's Cargo.toml. Each module keeps its file name, so `it::task_1717_store_writer_lock::...` stays greppable. `test-touched` maps `aida-cli/tests/it/<mod>.rs` to `--test it -- <mod>::`. Budget keys follow.
+
+    **Expected win.** The 74 test crates each link a debug build of aida-cli-lib plus dependencies, and each runs `main` once. Compile is 151 s today, and per-binary link time is not visible in the log. PR 1 of S3 adds `cargo build --tests --timings` as an artifact for one run to measure it before the move. Estimate: 74 links of about 1–2 s each with lld, about 110 s of CPU over 4 jobs, so about 30–40 s of wall time saved, plus faster incremental local builds of the integration tests. With S2 it brings the step to about 400–490 s. S4 has to remove the rest, starting from the list in scripts/test-time-budget.toml: task_1717 (66 s), agent_error_channel (44 s), bug_1502 (29 s), bug_1947 (29 s).
+
+    **Risks**
+    1. Under libtest, one binary runs every module's tests on shared threads in one process. Env/cwd mutations and `OnceLock` caches would then race across former binaries. **S3 lands only after S2,** where nextest's process-per-test removes that coupling.
+    2. Name collisions between files (`mod common`, duplicate helper fns): module namespaces fix them, plus a compile check.
+    3. Churn: a 68-file move collides with every open PR touching `aida-cli/tests`. Land it in a quiet window after a mail to the fleet, as a pure `git mv` commit plus a mechanical `mod` list, with no edits to test bodies in the same commit.
+
+    ## Order and asks
+    - S2-shadow, then S2-swap, then S3-measure (`--timings`), then S3-move, then S4. S0b's open question (debug vs opt-level 1 for test execution) gets measured in the S2 shadow job with `--cargo-profile agent` on one run, including its cold-cache compile cost.
+    - Advisor: sign off on (a) the nextest shadow-then-swap rollout, (b) S3 after S2, and (c) filing the aida-host slot-wrapper `nextest` gating as a dependency of S2-swap.
+  created_at: 2026-10-19T07:26:06.254201008Z
+  modified_at: 2026-10-19T07:26:06.254201008Z
+  session_id: d55be7a9-bc9c-4d9c-8cdf-4c50f4e6afe7
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
