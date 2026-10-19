@@ -8,6 +8,11 @@ use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 use serde::{Deserialize, Serialize};
 
+// trace:STORY-1728 | ai:claude
+#[path = "pr_cmd_args.rs"]
+pub(crate) mod pr_cmd_args;
+pub(crate) use pr_cmd_args::*;
+
 /// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
 pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
     match cmd {
@@ -452,6 +457,21 @@ pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &s
     }
 }
 
+/// Does `git status --porcelain=v2 --branch` output say a rebase is still in
+/// progress (detached head or an unmerged entry)? A status that could not run,
+/// failed or was refused (a seat clone, an inexpressible `.gitmodules`) counts
+/// as still rebasing, so the caller never proceeds to force-push on it.
+// trace:BUG-1985 | ai:claude
+pub(crate) fn status_output_says_rebasing(out: std::io::Result<std::process::Output>) -> bool {
+    match out {
+        Ok(o) if o.status.success() => {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.contains("# branch.head (no branch)") || s.lines().any(|l| l.starts_with("u "))
+        }
+        _ => true,
+    }
+}
+
 /// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
 /// rebase / smoke / force-push-with-lease / cleanup recipe.
 ///
@@ -729,18 +749,12 @@ pub(crate) fn pr_rebase_handler(
             // gitdir; the rebase-merge marker actually lives at the
             // gitdir. Use `git status --porcelain=v2 --branch` to ask
             // git itself.
-            let status_says_rebasing = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&wt_path)
-                .args(["status", "--porcelain=v2", "--branch"])
-                .output()
-                .ok()
-                .map(|o| {
-                    let s = String::from_utf8_lossy(&o.stdout).to_string();
-                    s.contains("# branch.head (no branch)")
-                        || s.lines().any(|l| l.starts_with("u "))
-                })
-                .unwrap_or(false);
+            // trace:BUG-1985 | ai:claude
+            let status_says_rebasing = status_output_says_rebasing(
+                aida_core::git_ops::host_git_command(&wt_path)
+                    .args(["status", "--porcelain=v2", "--branch"])
+                    .output(),
+            );
             if still_rebasing || status_says_rebasing {
                 eprintln!(
                     "{} rebase still in progress — leaving worktree at {}",
@@ -5369,8 +5383,8 @@ pub(crate) fn prepare_main_worktree_for_pr_ship_pull(
         );
     }
 
-    let status = std::process::Command::new("git")
-        .current_dir(main_worktree)
+    // trace:BUG-1985 | ai:claude
+    let status = aida_core::git_ops::host_git_command(main_worktree)
         .args(["status", "--porcelain"])
         .output()
         .context("could not invoke `git status --porcelain` in main worktree")?;
@@ -7015,6 +7029,145 @@ mod task_1458_pr_ship_wiring_guard {
     }
 }
 
+/// Pull-request side-effects intended to fire from the /aida-pr
+/// skill. Today: `auto-queue-review` files the reviewer story right
+/// after `gh pr create` so the trigger lives where context is
+/// freshest. `aida session end` keeps the same logic as an
+/// idempotent backup for PRs opened outside the skill.
+// trace:STORY-90 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "pr")]
+pub(crate) struct PrArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PrCommand,
+}
+
+// STORY-90: PR side-effects dispatch before storage init — the
+// command's side-effects all live in git / gh / self-invoked `aida
+// add` calls; it doesn't need the global Storage handle.
+// trace:STORY-90 | ai:claude
+fn run_pr(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let pr_cmd = &args.inner;
+    return handle_pr_command(pr_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PR: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "pr",
+    help_after: "ship",
+    command: <PrArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_pr),
+};
+
+/// The one-shot HUMAN-implementer finish. From inside a worktree where
+/// you implemented a spec, run the whole finish ceremony in ONE command:
+/// commit any uncommitted work with the (SPEC-ID) trailer, rebase onto
+/// current origin/main, push, open the PR, wait for CI green, squash-merge,
+/// run `aida pull` (Done → Completed auto-bump), and remove the worktree.
+///
+/// It is the orchestrator's finish phases with phase-1 (implement) done by
+/// you instead of a spawned agent — the human-implementer counterpart to
+/// `aida queue work <id> --auto-complete`. The spec is resolved from the
+/// current branch (or the active session lease); pass `<spec>` to override.
+///
+/// Stop earlier with `--no-merge` (open the PR, don't merge) or `--no-pr`
+/// (just rebase + push). `--keep-worktree` leaves the worktree in place
+/// after a successful merge.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "ship")]
+pub(crate) struct ShipArgs {
+    /// Spec to finish. When omitted, resolved from the current branch
+    /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
+    /// lease covering this worktree.
+    #[clap(value_name = "SPEC")]
+    pub spec: Option<String>,
+
+    /// Commit subject to use when committing uncommitted work. The
+    /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
+    /// conventional default is used. Ignored when the worktree is clean.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
+    pub message: Option<String>,
+
+    /// Stop after opening the PR — do not watch CI or merge. The PR is
+    /// left open for a human to review + merge.
+    #[clap(long)]
+    pub no_merge: bool,
+
+    /// Stop after rebase + push — do not open a PR. Useful when you want
+    /// to open the PR yourself, or when CI is configured to gate on push.
+    #[clap(long, conflicts_with = "no_merge")]
+    pub no_pr: bool,
+
+    /// Keep the worktree after a successful merge (skip the
+    /// `aida session end` cleanup step).
+    #[clap(long)]
+    pub keep_worktree: bool,
+
+    /// Print the resolved finish sequence without executing any of it.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Bypass the client-side trailer spec-ID check before shipping.
+    // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub no_trailer_check: bool,
+}
+
+// STORY-720: `aida ship` dispatches before storage init for the same
+// reason as `aida pr` — every side-effect is a git / gh / self-invoked
+// `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
+// resolved from the branch / lease, not the requirement store.
+// trace:STORY-720 | ai:claude
+fn run_ship(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <ShipArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ShipArgs {
+        spec,
+        message,
+        no_merge,
+        no_pr,
+        keep_worktree,
+        dry_run,
+        no_trailer_check,
+    } = &args;
+    return run_human_finish_ceremony(HumanFinishOptions {
+        spec: spec.clone(),
+        message: message.clone(),
+        no_merge: *no_merge,
+        no_pr: *no_pr,
+        keep_worktree: *keep_worktree,
+        dry_run: *dry_run,
+        no_trailer_check: *no_trailer_check,
+    });
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SHIP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "ship",
+    help_after: "triage",
+    command: <ShipArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_ship),
+};
+
 #[cfg(test)]
 mod story_1663_rebase_ship_tests {
     use super::*;
@@ -7023,16 +7176,19 @@ mod story_1663_rebase_ship_tests {
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
         // trace:STORY-1663.ac5970a5 | ai:antigravity
-        let cli = crate::cli::Cli::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+        let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
             .expect("parses --rebase");
-        match cli.command {
-            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
-                n,
-                rebase,
-                merge_method,
-                final_slice,
-                ..
-            }) => {
+        match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        n,
+                        rebase,
+                        merge_method,
+                        final_slice,
+                        ..
+                    },
+            } => {
                 assert_eq!(n, Some(42));
                 assert!(rebase);
                 assert!(merge_method.is_none());
@@ -7045,7 +7201,7 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli2 = crate::cli::Cli::try_parse_from([
+        let cli2 = crate::command_registry::try_parse_from([
             "aida",
             "pr",
             "ship",
@@ -7055,13 +7211,16 @@ mod story_1663_rebase_ship_tests {
             "--final-slice",
         ])
         .expect("parses --merge-method rebase --final-slice");
-        match cli2.command {
-            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
-                rebase,
-                merge_method,
-                final_slice,
-                ..
-            }) => {
+        match cli2.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        rebase,
+                        merge_method,
+                        final_slice,
+                        ..
+                    },
+            } => {
                 assert!(!rebase);
                 assert_eq!(merge_method, Some(pr_ship::ShipMergeMethod::Rebase));
                 assert!(final_slice);
@@ -7073,7 +7232,7 @@ mod story_1663_rebase_ship_tests {
             other => panic!("unexpected command: {other:?}"),
         }
 
-        let cli3 = crate::cli::Cli::try_parse_from([
+        let cli3 = crate::command_registry::try_parse_from([
             "aida",
             "pr",
             "ship",
@@ -7082,12 +7241,15 @@ mod story_1663_rebase_ship_tests {
             "--complete-spec",
         ])
         .expect("parses --complete-spec alias");
-        match cli3.command {
-            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
-                rebase,
-                final_slice,
-                ..
-            }) => {
+        match cli3.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        rebase,
+                        final_slice,
+                        ..
+                    },
+            } => {
                 assert!(rebase);
                 assert!(final_slice);
             }
@@ -7095,7 +7257,7 @@ mod story_1663_rebase_ship_tests {
         }
 
         // Conflicting --rebase and --merge-method is rejected by clap.
-        assert!(crate::cli::Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "pr",
             "ship",

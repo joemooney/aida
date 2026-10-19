@@ -105,9 +105,8 @@ fn parse_porcelain_v2(out: &str) -> CodeState {
 /// Read the code repo's state at `dir` with ONE local git subprocess. Any
 /// failure (no git, not a repo) yields an all-`None` state.
 fn code_state(dir: &Path) -> CodeState {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    // trace:BUG-1985 | ai:claude
+    let output = crate::git_ops::host_git_command(dir)
         .args([
             "status",
             "--porcelain=v2",

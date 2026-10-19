@@ -30,6 +30,11 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "user_alias_args.rs"]
+pub(crate) mod user_alias_args;
+pub(crate) use user_alias_args::*;
+
 use anyhow::{Context, Result};
 use toml_edit::{DocumentMut, Item, Table, Value};
 
@@ -162,12 +167,11 @@ pub(crate) fn load_table(path: &Path) -> Result<Vec<(String, String)>> {
 }
 
 /// The set of real top-level subcommand names + aliases, derived from the live
-/// clap command tree (`Cli::command()`) — the single source of truth for "what
+/// clap command tree (`command_registry::built_command()`) — the single source of truth for "what
 /// is a real subcommand". A user alias may not shadow any of these.
 /// trace:TASK-877 | ai:claude
 pub(crate) fn real_subcommand_names() -> std::collections::HashSet<String> {
-    use clap::CommandFactory;
-    let cmd = crate::cli::Cli::command();
+    let cmd = crate::command_registry::built_command();
     let mut names = std::collections::HashSet::new();
     for sub in cmd.get_subcommands() {
         names.insert(sub.get_name().to_string());
@@ -651,3 +655,75 @@ mod tests {
         assert_eq!(out, s(&["aida", "approved"]));
     }
 }
+
+/// Discoverable registry of AIDA's built-in shortcuts.
+///
+/// One place that enumerates every accreted shortcut — the `aida list`
+/// status lenses (open/closed) + status-token shortcuts, the `aida list
+/// <lens>` argv rewrites (queue/why/human/inflight/me/user:<name>), and the
+/// command aliases (intake, advisor assess, bare `aida agent`) — grouped by
+/// surface, each with its canonical expansion + a one-line meaning. Bare
+/// `aida alias` behaves like `aida alias list`. Built-in shortcuts only.
+// trace:STORY-667 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "alias")]
+pub(crate) struct AliasArgs {
+    /// Emit the registry as JSON for machine consumers.
+    #[clap(long)]
+    pub json: bool,
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::AliasCommand>,
+}
+
+// `aida alias` / `aida alias list` is a built-in-shortcut registry (now also
+// surfacing user-defined aliases) — it reads no requirement store and needs
+// no storage handle, so dispatch it early like help-all. Bare `aida alias`
+// defaults to `list`. `add` / `remove` manage user aliases under the chosen
+// scope. trace:STORY-667 | ai:claude
+// trace:TASK-877 | ai:claude — user-alias CRUD dispatch.
+fn run_alias(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <AliasArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let AliasArgs { json, command } = &args;
+    match command {
+        Some(crate::cli::AliasCommand::Add {
+            name,
+            command: cmd_tokens,
+            global,
+            project,
+        }) => {
+            let scope = self::resolve_scope(*project, *global)?;
+            return self::add(scope, name, cmd_tokens);
+        }
+        Some(crate::cli::AliasCommand::Remove {
+            name,
+            global,
+            project,
+        }) => {
+            let scope = self::resolve_scope(*project, *global)?;
+            return self::remove(scope, name);
+        }
+        Some(crate::cli::AliasCommand::List { json: sub_json }) => {
+            return alias::run(*json || *sub_json);
+        }
+        None => return alias::run(*json),
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ALIAS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "alias",
+        help_after: "skill",
+        command: <AliasArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_alias),
+    };

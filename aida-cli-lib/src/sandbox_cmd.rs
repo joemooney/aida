@@ -13,6 +13,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "sandbox_cmd_args.rs"]
+pub(crate) mod sandbox_cmd_args;
+pub(crate) use sandbox_cmd_args::*;
+
 use crate::*;
 
 /// Default sandbox store location: a stable per-user dir under the system temp
@@ -618,3 +623,42 @@ mod tests {
         );
     }
 }
+
+/// Throwaway sandbox store for drain-testing / scenario play. Creates a
+/// discardable git-canonical store under a temp dir; point `aida` at it
+/// with the printed `AIDA_STORE=...` export so drains and test specs never
+/// touch the project's real store. `reset` re-seeds, `destroy` removes it.
+// trace:SPIKE-48 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "sandbox")]
+pub(crate) struct SandboxArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::SandboxCommand,
+}
+
+// Sandbox commands MANAGE a throwaway store directory; they don't read the
+// project's store, so dispatch before store detection (and so they work
+// even from a non-AIDA cwd). trace:SPIKE-48 | ai:claude
+fn run_sandbox(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <SandboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let sandbox_cmd = &args.inner;
+    return self::handle_sandbox_command(sandbox_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SANDBOX: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "sandbox",
+        help_after: "protocol",
+        command: <SandboxArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_sandbox),
+    };

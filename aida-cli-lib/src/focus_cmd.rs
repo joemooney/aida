@@ -9,6 +9,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "focus_cmd_args.rs"]
+pub(crate) mod focus_cmd_args;
+pub(crate) use focus_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 
 use crate::find_project_root;
@@ -224,3 +229,132 @@ mod bug_678_focus_rollup_tally_tests {
         assert_eq!(t.total, 4);
     }
 }
+
+/// Set, show, or clear the current FOCUS — a persistent, per-worktree
+/// context (an epic or spec) that scopes the read commands to that spec's
+/// transitive subtree. The kubectl-namespace / gcloud-config pattern for
+/// AIDA's requirement graph.
+///
+///   aida focus <EPIC-ID>   set the focus to that epic (+ its subtree)
+///   aida focus             show the current focus + a progress rollup
+///   aida focus clear       drop the focus
+///
+/// With a focus set, `aida list`, `aida status`, and `aida queue list`
+/// scope to the focused subtree and print a loud header naming it; pass
+/// `--all` / `--no-focus` on those commands to widen back to everything.
+/// The focus is stored in `.aida/focus` (per-worktree, gitignored) and
+/// surfaced on the statusline so it is never silently active. Precedence:
+/// `AIDA_FOCUS` env > `.aida/focus` > none.
+// — plain `//` keeps the marker out of `--help`.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "focus")]
+pub(crate) struct FocusArgs {
+    /// The epic or spec to focus on (SPEC-ID / agreed id). Omit to show
+    /// the current focus.
+    #[clap(value_name = "SPEC", conflicts_with = "clear")]
+    pub target: Option<String>,
+    /// Clear the current focus (remove `.aida/focus`).
+    #[clap(long, hide = true)]
+    pub clear: bool,
+    /// Show the current focus (the default when no SPEC is given).
+    #[clap(long, hide = true)]
+    pub show: bool,
+
+    /// Focus action.
+    // trace:STORY-1028 | ai:codex
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::FocusCommand>,
+}
+
+fn run_focus(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FocusArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // — `aida focus` set/show/clear.
+                FocusArgs {
+                    target,
+                    clear,
+                    show,
+                    cmd,
+                } => {
+                    let (clear, show) = match cmd {
+                        Some(FocusCommand::Clear) => (true, false),
+                        Some(FocusCommand::Show) => (false, true),
+                        None => {
+                            if *clear {
+                                note_hidden_alias(
+                                    concat!("aida focus ", "--clear"),
+                                    "aida focus clear",
+                                );
+                            }
+                            if *show {
+                                note_hidden_alias(
+                                    concat!("aida focus ", "--show"),
+                                    "aida focus show",
+                                );
+                            }
+                            (*clear, *show)
+                        }
+                    };
+                    return crate::command_registry::returned(self::handle_focus_command(
+                        target.as_deref(),
+                        clear,
+                        show,
+                        backend,
+                    ));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-706: `aida focus` scopes reads by walking the requirement
+                // hierarchy graph — a distributed-mode (cache-backed) concept.
+                FocusArgs { .. } => {
+                    anyhow::bail!(
+                        "`aida focus` is available in the default (distributed) mode. Legacy \
+                     --centralized mode has no per-worktree focus context."
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida focus` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FOCUS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "focus",
+        help_after: "wiki",
+        command: <FocusArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_focus),
+    };
