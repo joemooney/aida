@@ -6,12 +6,12 @@ description: |
   The hook pattern matches any `timeout N make <target>` (e.g. `timeout 1h make lint`) and suggests AIDA_CARGO_TIMEOUT, even when the target does not run cargo. This is acceptable while the hook is warn-only; revisit if it starts blocking.
 
   Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T17:56:29.435799036Z
-modified_at: 2026-10-19T19:48:24.464581189Z
+modified_at: 2026-10-19T19:48:26.931302260Z
 req_type: Task
 tags:
 - from-review:PR-2759
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T19:48:24.464581189Z
   modified_at: 2026-10-19T19:48:24.464581189Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b5-4ab3-71c1-b293-e54104e7df73
+  author: joe
+  timestamp: 2026-10-19T19:48:26.931295875Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
   branch: pr-2759
