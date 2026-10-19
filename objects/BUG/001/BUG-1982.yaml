@@ -15,12 +15,12 @@ description: |
   - A contained session cannot write <main>/.git/worktrees/** metadata that changes which git directory or config the host's git uses (commondir, gitdir, config.worktree). The contained boundary emits denyWrite entries for these, or an equivalent bind.
   - A real-sandbox test shows that writes to commondir and gitdir fail while ordinary commits in the session worktree still succeed. Its fixture lives outside every sandbox-writable temp directory.
   - The remaining <main>/.git write surface that Claude Code grants is documented, with the reason each remaining path is safe.
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T02:23:57.732653120Z
-modified_at: 2026-10-19T06:47:53.840615573Z
+modified_at: 2026-10-19T20:42:15.691064638Z
 req_type: Bug
 tags:
 - contained
@@ -95,6 +95,21 @@ history:
   timestamp: 2026-10-19T06:47:54.062466123Z
   session_id: 01a152e90e24
   changes: []
+- id: 01a155e6-8c7e-7560-990d-ae36df5175a8
+  author: aida-auto-bump
+  timestamp: 2026-10-19T20:42:15.038050518Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a155e6-8f0b-7191-a003-7f06a399aa56
+  timestamp: 2026-10-19T20:42:15.691040316Z
+  agent: aida
+  commit_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
+  summary: 'BUG-1982: <main>/.git denied (sandbox denyWrite + tool rules) under every spelling regardless of store grant; unexpressible deny refuses launch; Result threaded through every launcher with no contained fail-open; OVERVIEW documents residual surface; 4 bug_1982 unit tests green locally; CI Build pass, CLEAN'
+  review_verdict: approved
 execution_mode: guided
 filed_at:
   code_sha: 1e3d9aaddd3bcef79b876a92acdec5f267e7a250
@@ -104,11 +119,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 7cc6ad83-d782-4236-bf8a-091eebcd8144
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core deny is correct and tested, but the F5 'grant no writes' fallback for an unexpressible <main>/.git path leaves Claude Code's own linked-worktree <main>/.git sandbox grant undenied, so the BUG-1982 redirect stays open via Bash; the docs and residual note misstate it
-  recovery_hint: address the review findings, move BUG-1982 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-19T06:47:53.840615573Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T20:42:15.038041584Z
+  completion_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
