@@ -3713,14 +3713,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args_contained_in(
+        let fix_args = match session::headless_vendor_args_contained_in(
             vendor,
             &prompt,
             &fix_uuid,
             contained_in,
             None,
             None,
-        );
+        ) {
+            Ok(args) => args,
+            // trace:BUG-1982 | ai:claude
+            Err(e) => {
+                tee.stop();
+                eprintln!(
+                    "  {} {e:#} — leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
         let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
             vendor,
             self.contained,

@@ -379,7 +379,13 @@ and `tests/test_bug_1929_hook_templates.py`.
 
 A contained session has no write access to the main git directory. Launch
 settings deny all of `<main>/.git` in both the sandbox (`denyWrite`) and the
-direct tool rules, whether or not the store write paths are granted. That
+direct tool rules, whether or not the store write paths are granted, under
+every spelling of the path (as given and canonical, so a symlinked checkout is
+covered). When some spelling cannot be written as an exact rule (it holds a
+character such as `( [ ! {`), the contained launch is refused with an error
+naming the path: no settings are built and no session starts, because Claude
+Code's own sandbox would otherwise leave `<main>/.git` writable to a
+linked-worktree session. That
 covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`, which would
 otherwise let a session point host git at a git directory it controls. It also
 covers the shared config, hooks, refs and objects. Claude Code itself denies

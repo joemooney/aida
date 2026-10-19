@@ -2147,7 +2147,7 @@ impl RealPhaseDriver {
         // advisor reads untrusted PR content and runs commands. Scoped to the
         // advisor's cwd (the project root, where it writes its punt response).
         let contained_in = self.contained.then_some(self.project_root.as_path());
-        let (program, advisor_args) = session::advisor_tier_program_and_args_with_posture(
+        let advisor_tier = session::advisor_tier_program_and_args_with_posture(
             vendor,
             is_fork,
             &seeded,
@@ -2156,6 +2156,18 @@ impl RealPhaseDriver {
             advisor_tuning.effort.as_deref(),
             contained_in,
         );
+        // BUG-1982: a refused contained launch is a spawn failure.
+        // trace:BUG-1982 | ai:claude
+        let (program, advisor_args) = match advisor_tier {
+            Ok(pair) => pair,
+            Err(e) => {
+                tee_handle.stop();
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: {e:#}"),
+                ));
+            }
+        };
         let (program, advisor_args) = match contained_child_program_and_args(
             vendor,
             self.contained,

@@ -740,7 +740,7 @@ pub(crate) fn apply_agent_default_flags(
                 aida_core::git_ops::ensure_git_supports_contained()?;
                 config
                     .default_args
-                    .extend(tool_contained_flags(config.agent_type));
+                    .extend(tool_contained_flags(config.agent_type)?);
                 config.contained = config.agent_type == "claude";
             } else if bypass {
                 config

@@ -1073,7 +1073,7 @@ fn tool_bypass_flags_per_agent() {
 
 #[test]
 fn tool_contained_flags_for_claude_keep_interactive_prompts() {
-    let flags = tool_contained_flags("claude");
+    let flags = tool_contained_flags("claude").unwrap();
     assert!(!claude_args_request_dontask(&flags), "{flags:?}");
     assert!(flags.contains(&"--setting-sources".to_string()));
     assert!(flags.contains(&"project".to_string()));
@@ -1100,7 +1100,10 @@ fn interactive_claude_dontask_guard_refuses_unpromptable_mode() {
     let args = vec!["--permission-mode".to_string(), "dontAsk".to_string()];
     let err = guard_interactive_claude_dontask("claude", &args).unwrap_err();
     assert!(format!("{err:?}").contains("interactive Claude"));
-    assert!(guard_interactive_claude_dontask("claude", &tool_contained_flags("claude")).is_ok());
+    assert!(
+        guard_interactive_claude_dontask("claude", &tool_contained_flags("claude").unwrap())
+            .is_ok()
+    );
 }
 
 // trace:BUG-1178 | ai:codex
@@ -1208,7 +1211,7 @@ fn bug_2131_contained_launch_refuses_on_old_git() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn tool_contained_flags_for_codex_are_sandboxed_and_prompt_free() {
-    let flags = tool_contained_flags("codex");
+    let flags = tool_contained_flags("codex").unwrap();
     assert_eq!(
         flags,
         vec![
@@ -1510,7 +1513,7 @@ fn apply_agent_default_flags_contained_injects_when_native() {
 // trace:STORY-1124 | ai:codex
 #[test]
 fn codex_bypass_flag_only_comes_from_bypass_posture() {
-    let contained = tool_contained_flags("codex");
+    let contained = tool_contained_flags("codex").unwrap();
     assert!(!contained
         .iter()
         .any(|flag| flag == "--dangerously-bypass-approvals-and-sandbox"));
@@ -4089,7 +4092,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
     // 3. burndown quiet
     let burndown_quiet_cmd = crate::burndown_run::build_burndown_quiet_command(
         "prompt", "mode", "", "CEILING", "10", false,
-    );
+    )
+    .unwrap();
     assert!(
         burndown_quiet_cmd
             .get_envs()
@@ -4111,7 +4115,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         "CEILING",
         "10",
         false,
-    );
+    )
+    .unwrap();
     assert!(
         burndown_verbose_cmd
             .get_envs()
@@ -4139,7 +4144,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
         crate::backlog::RiskLevel::Low,
         None,
         false,
-    );
+    )
+    .unwrap();
     assert!(
         intake_cmd
             .get_envs()
@@ -4155,7 +4161,8 @@ fn uncontained_launchers_strip_inherited_aida_contained() {
 
     // 6. questions clarify
     let clarify_cmd =
-        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false);
+        crate::questions::build_questions_clarify_command("prompt", "child-grant-id", false)
+            .unwrap();
     assert!(
         clarify_cmd
             .get_envs()

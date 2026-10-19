@@ -219,12 +219,12 @@ pub(crate) fn handle_compete_command(
             // both operational helpers can write artifacts in an existing tree.
             let actual_args =
                 compete_arm_argv(&argv, vendor, session::aida_contained_env()?, || {
-                    vec![
+                    Ok(vec![
                         "--setting-sources".into(),
                         "project".into(),
                         "--settings".into(),
                         "<contained settings resolved at launch>".into(),
-                    ]
+                    ])
                 })?;
             println!(
                 "  {}: would create worktree on `{}` and run vendor argv (settings/OS wrapper resolved at launch): {} {}",
@@ -1073,7 +1073,7 @@ fn compete_arm_argv(
     argv: &[String],
     vendor: &str,
     contained: bool,
-    contained_flags: impl FnOnce() -> Vec<String>,
+    contained_flags: impl FnOnce() -> Result<Vec<String>>,
 ) -> Result<Vec<String>> {
     if !contained {
         return Ok(argv.to_vec());
@@ -1085,7 +1085,7 @@ fn compete_arm_argv(
     let split = argv.len().saturating_sub(1);
     let (mut args, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
     args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
-    args.extend(contained_flags());
+    args.extend(contained_flags()?);
     args.extend_from_slice(&argv[split..]);
     Ok(args)
 }
@@ -1235,12 +1235,12 @@ mod containment_tests {
         let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
         assert_eq!(bin, "claude");
         let preview = compete_arm_argv(&argv, "claude", true, || {
-            vec![
+            Ok(vec![
                 "--setting-sources".into(),
                 "project".into(),
                 "--settings".into(),
                 "<contained settings resolved at launch>".into(),
-            ]
+            ])
         })
         .unwrap();
         assert!(preview

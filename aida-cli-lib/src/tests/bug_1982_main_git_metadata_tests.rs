@@ -64,7 +64,8 @@ fn run_contained(tree: &Path, home: &Path, script: &str) -> String {
     std::fs::write(&script_path, script).unwrap();
     let settings = crate::session::claude_contained_settings_json(
         &crate::contained_boundary::contained_write_roots(tree),
-    );
+    )
+    .unwrap();
     let prompt = format!(
         "Run exactly this one Bash command and nothing else: sh {}",
         script_path.display()
@@ -176,7 +177,7 @@ fn bug_1982_main_git_denied_whatever_the_store_grant() {
     let roots = crate::contained_boundary::contained_write_roots(&worktree);
     for version in ["git version 2.43.0", "git version 2.39.5", "not a version"] {
         aida_core::git_ops::with_host_git_version(version, || {
-            let json = crate::session::claude_contained_settings_json(&roots);
+            let json = crate::session::claude_contained_settings_json(&roots).unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             let (deny_write, deny) = denies(&settings);
             assert!(
@@ -207,12 +208,12 @@ fn bug_1982_main_git_denied_whatever_the_store_grant() {
 }
 
 // A main checkout whose path holds a rule metacharacter cannot be denied
-// exactly, so the launch settings grant no writes at all: no write-root allow
-// rule and no sandbox store grant beside a missing `<main>/.git` deny.
+// exactly, so the contained launch is refused with an error naming the path,
+// and no settings are built.
 // trace:BUG-1982 | ai:claude
 #[cfg(unix)]
 #[test]
-fn bug_1982_unexpressible_main_git_deny_grants_no_writes() {
+fn bug_1982_unexpressible_main_git_deny_refuses_the_launch() {
     let tmp = tempfile::tempdir().unwrap();
     let parent = std::fs::canonicalize(tmp.path()).unwrap();
     let main = parent.join("ma[in]");
@@ -249,27 +250,44 @@ fn bug_1982_unexpressible_main_git_deny_grants_no_writes() {
     let roots = crate::contained_boundary::contained_write_roots(&worktree);
     assert!(
         !crate::contained_boundary::write_allow_rules(&roots).is_empty(),
-        "the worktree itself is expressible, so only the missing deny withholds its grant"
+        "the worktree itself is expressible, so only the missing deny refuses the launch"
     );
+    // Review round 1 F1: Claude Code's own sandbox leaves `<main>/.git`
+    // writable to a linked-worktree session, so withholding grants is not
+    // enough. The launch is refused and no settings (no flags) are produced.
     aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
-        let json = crate::session::claude_contained_settings_json(&roots);
-        let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
-        let allow = settings["permissions"]["allow"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let err = crate::session::claude_contained_settings_json(&roots)
+            .expect_err("an unexpressible main git deny must refuse the launch")
+            .to_string();
         assert!(
-            allow.is_empty(),
-            "no write grant may be emitted: {settings}"
+            err.contains("refusing to launch a contained session"),
+            "{err}"
         );
-        let granted = settings["sandbox"]["filesystem"]["allowWrite"]
-            .as_array()
-            .is_some_and(|a| !a.is_empty());
         assert!(
-            !granted,
-            "no sandbox store grant may be emitted: {settings}"
+            err.contains(&main.join(".git").display().to_string()),
+            "{err}"
+        );
+        assert!(
+            crate::session::claude_contained_flags_for(&worktree).is_err(),
+            "no contained launch flags are built"
         );
     });
+
+    // Second line of defence in the pure builder: no write grants.
+    let json = crate::session::contained_settings_json_with_boundary(
+        &[],
+        false,
+        &roots,
+        &[],
+        &[main.join(".git")],
+    );
+    let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert!(
+        settings["permissions"]["allow"]
+            .as_array()
+            .is_none_or(|a| a.is_empty()),
+        "{settings}"
+    );
 
     // Mutation control: the same launch with an expressible main path grants.
     let json = crate::session::contained_settings_json_with_boundary(
@@ -286,6 +304,55 @@ fn bug_1982_unexpressible_main_git_deny_grants_no_writes() {
             .is_some_and(|a| !a.is_empty()),
         "{settings}"
     );
+}
+
+// Review round 1 F3: a checkout reached through a symlink has two spellings
+// of its git directory, and a tool or sandbox path may resolve to either, so
+// the launch denies both (the path as given and the canonical one).
+// trace:BUG-1982 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_1982_symlinked_checkout_denies_every_main_git_spelling() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let real = parent.join("real-main");
+    std::fs::create_dir_all(&real).unwrap();
+    run(&real, "git", &["init", "-q", "-b", "main"]);
+    run(
+        &real,
+        "git",
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@example.com",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+    );
+    let link = parent.join("linked-main");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+
+    let paths = crate::session::main_git_deny_paths(&link);
+    assert!(paths.contains(&link.join(".git")), "{paths:?}");
+    assert!(paths.contains(&real.join(".git")), "{paths:?}");
+
+    // End to end: a session whose code root is the symlinked checkout.
+    let roots = crate::contained_boundary::contained_write_roots(&link);
+    aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
+        let json = crate::session::claude_contained_settings_json(&roots).unwrap();
+        let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let (deny_write, deny) = denies(&settings);
+        for spelling in [link.join(".git"), real.join(".git")] {
+            let entry = format!("/{}", spelling.display());
+            assert!(deny_write.contains(&entry), "{entry}: {settings}");
+            let rule = format!("Edit(/{}/**)", spelling.display());
+            assert!(deny.contains(&rule), "{rule}: {settings}");
+        }
+    });
 }
 
 // The remaining `<main>/.git` write surface, its condition and the
@@ -308,6 +375,8 @@ fn bug_1982_overview_documents_the_main_git_write_surface() {
         "While these denies are in place",
         "cannot commit",
         "BUG-2169",
+        "launch is refused",
+        "symlinked checkout",
     ] {
         assert!(section.contains(needle), "missing {needle:?}: {section}");
     }
