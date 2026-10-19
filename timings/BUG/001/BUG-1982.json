@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1982",
+  "publishes": [
+    {
+      "at": "2026-10-19T20:42:20.707273110Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-12T02:46:57.728887252Z",
+      "spec": "BUG-1982",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:07.985328222Z",
+      "spec": "BUG-1982",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-18T12:08:14.137518945Z",
+      "spec": "BUG-1982",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-18T22:32:33.211137039Z",
+      "spec": "BUG-1982",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1982",
+        "branch": "pr-2731",
+        "first_seen": "2026-10-18T22:32:33.211095820+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T20:41:29.666902829Z",
+      "spec": "BUG-1982",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T20:41:41.919371369Z",
+      "spec": "BUG-1982",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2752
+      }
+    },
+    {
+      "ts": "2026-10-19T20:42:20.457720913Z",
+      "spec": "BUG-1982",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
