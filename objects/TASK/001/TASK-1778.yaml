@@ -8,13 +8,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T11:44:29.118951084Z
-modified_at: 2026-10-15T15:02:40.097447265Z
+modified_at: 2026-10-19T15:51:13.373431383Z
 req_type: Task
+tags:
+- operator-held
 relationships:
 - rel_type: Child
   target_id: 01a12d8f-3823-7db3-aefb-fb4d05c88216
   created_at: 2026-10-15T15:02:40.097443113Z
   created_by: ai:codex:joe
+history:
+- id: 01a154dc-1bec-7220-89c2-ad194058b726
+  author: joe
+  timestamp: 2026-10-19T15:51:13.644650162Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:51:13.373431383Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: 6ddf336dddb944e409cfd1d7f96f42bd293a0bc5
   branch: main
