@@ -1,0 +1,27 @@
+id: 01a15313-a215-7910-8c1b-3968aefc1cc7
+spec_id: TASK-1934
+agreed_id: TASK-1934
+title: 'STORY-1728 follow-ups: dead migration scripts; help-leak guard misses DriverCommand'
+description: |
+  Non-blocking findings from the #2751 (STORY-1728 slices 2+2b) attested review at 7cd057a183, 2026-10-19:
+  - F7: the scripts/story-1728/*.py migration scripts no longer run against the migrated tree. Delete them, or mark them historical with a README note.
+  - F8: the PR body claims the help-leak guard covers the whole clap surface, but it misses DriverCommand in driver_cmd.rs (also true on main). Extend the guard to it.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T07:32:38.037719686Z
+modified_at: 2026-10-19T07:32:38.037719686Z
+req_type: Task
+tags:
+- cli
+- follow-up
+- story-1728
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
