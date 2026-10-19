@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:10:09.552795156Z
-modified_at: 2026-10-19T19:26:08.745426708Z
+modified_at: 2026-10-19T20:02:25.261167174Z
 req_type: Task
 tags:
 - ci
@@ -53,6 +53,12 @@ comments:
   content: 'Advisor 2026-10-19 12:27: BUG-2182 recurred on PR-2750 CI, run 39307417711: ''sleeping descendant survived the group timeout'' at regen/score.rs:1063. The PR doesn''t touch regen; the job was rerun. This sweep is costing a ~35-min CI cycle per hit, so raise its priority.'
   created_at: 2026-10-19T19:26:08.745426708Z
   modified_at: 2026-10-19T19:26:08.745426708Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a155c2-156d-7ec2-bca2-d75c70234c4a
+  author: joe
+  content: 'Advisor 13:05: two more flake hits on PR-2760 CI (run 39309026167): BUG-2182 help-timeout, and aida-core cache_binding rebind_note_routes_to_cache_read_note (cache_binding.rs:572). Each costs a full CI cycle. This sweep is now P1; assign it next.'
+  created_at: 2026-10-19T20:02:25.261167174Z
+  modified_at: 2026-10-19T20:02:25.261167174Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154ed-9c7f-7af0-a31a-f0ba19c4ea70
