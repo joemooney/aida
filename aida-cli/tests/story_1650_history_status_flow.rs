@@ -442,7 +442,7 @@ fn warm(fx: &Fixture) {
 }
 
 fn history_db(fx: &Fixture) -> PathBuf {
-    fx.repo.join(".aida").join("history-v6-5.db")
+    fx.repo.join(".aida").join("history-v6-6.db")
 }
 
 fn flow_lines(stdout: &str) -> Vec<String> {

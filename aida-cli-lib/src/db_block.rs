@@ -866,7 +866,8 @@ pub(crate) fn auto_allocate_block_inner(
     // BUG-40: same local-only short-circuit as register_node_full —
     // claim the block on the local orphan branch and let the next
     // `aida push` upload it.
-    let local_only = !aida_core::git_ops::has_remote(store_path, "origin");
+    let deferred = aida_core::git_ops::store_commit_deferred_to_host(store_path);
+    let local_only = !aida_core::git_ops::has_remote(store_path, "origin") || deferred;
 
     let max_retries = 3;
     for attempt in 0..max_retries {
@@ -913,8 +914,12 @@ pub(crate) fn auto_allocate_block_inner(
                 type_prefix, block.range_start, block.range_end, node_id
             ),
         };
-        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
-        aida_core::git_ops::commit(store_path, &commit_subject)?;
+        if deferred {
+            aida_core::git_ops::notice_store_commit_deferred(store_path);
+        } else {
+            aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+            aida_core::git_ops::commit(store_path, &commit_subject)?;
+        }
 
         if local_only {
             return Ok(Some(format!(

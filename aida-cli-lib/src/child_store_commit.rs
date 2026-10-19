@@ -57,7 +57,7 @@ pub(crate) fn commit_store_writes_since(
     // A launcher that is itself contained cannot write the history either;
     // its own host commits both.
     if aida_core::git_ops::store_commit_deferred_to_host(store) {
-        aida_core::git_ops::notice_store_commit_deferred();
+        aida_core::git_ops::notice_store_commit_deferred(store);
         return Ok(Vec::new());
     }
     aida_core::db::with_store_write_lock(store, || {

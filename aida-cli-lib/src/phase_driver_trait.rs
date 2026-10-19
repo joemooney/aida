@@ -512,6 +512,12 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             launched_at,
             "implementer",
         );
+        // BUG-2140: commit any pending store changes left by a contained
+        // implementer child on the host before continuing phase evaluation.
+        // After the BUG-2180 commit above this sweeps only what it left (older
+        // dirt, deletions) and fails loudly on an embedded-repo plant.
+        // trace:BUG-2140 | ai:antigravity
+        self.commit_contained_child_store_changes("implementer phase")?;
         // BUG-420: the watchdog killed a degenerate headless session — surface
         // it as a shelvable phase-1 failure so a batch drain parks the spec and
         // advances. trace:BUG-420 | ai:claude
@@ -2151,6 +2157,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             "reviewer",
         );
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+            let _ = self.commit_contained_child_store_changes("reviewer phase");
             // BUG-1299: attach the hint resolved alongside `reason` in the
             // same `watchdog_trip_report` match arm rather than let
             // `recovery_hint` re-derive one from `FailureKind` alone.
@@ -2164,6 +2171,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             return Err(failure);
         }
+        // BUG-2140: commit any pending store changes left by a contained
+        // reviewer child on the host before continuing phase evaluation.
+        // trace:BUG-2140 | ai:antigravity
+        self.commit_contained_child_store_changes("reviewer phase")?;
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
                 return Err(auto_complete::PhaseFailure::new(format!(
@@ -3795,6 +3806,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         tee.stop();
         if let Some(id) = child_grant.id() {
             session::revoke_headless_child_grant(id);
+        }
+        // BUG-2140: commit any pending store changes left by a contained
+        // CI-fix child on the host before continuing.
+        // trace:BUG-2140 | ai:antigravity
+        if let Err(e) = self.commit_contained_child_store_changes("CI-fix session") {
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                e.reason
+            );
+            return false;
         }
         match status {
             Ok(s) if s.success() => {}

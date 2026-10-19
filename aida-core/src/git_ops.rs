@@ -1226,19 +1226,12 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     }
 }
 
-/// Whether this process cannot commit to the store at `repo` and must leave
-/// its store change for a host-side aida run to commit (BUG-1929 r4): the
-/// store's git directory or object database is not writable here. The
-/// contained sandbox write set covers the store's files but denies
-/// `<main>/.git`, so a contained session can never write the history. The
-/// check is on the filesystem, not `AIDA_CONTAINED`: that variable is set
-/// in host-side launcher processes and can leak into host children
-/// (BUG-2124), and a host process must never skip its own commit. The host commits the
-/// pending YAML at its next store sync (`aida db sync`), which stages
-/// through the hardened builder and keeps the embedded-repository refusal.
-// trace:BUG-1929 | ai:claude
+/// Return the first store git metadata directory (`<git-dir>` or
+/// `<git-common-dir>/objects`) that this process cannot write, or `None` when
+/// both are writable (or cannot be resolved).
+// trace:BUG-2140 | ai:antigravity
 #[cfg(feature = "native")]
-pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
+pub fn store_unwritable_git_path(repo: &Path) -> Option<PathBuf> {
     #[cfg(unix)]
     {
         let writable = |p: &Path| -> bool {
@@ -1258,29 +1251,92 @@ pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
         let git_dir = dir(&["rev-parse", "--absolute-git-dir"]);
         let common = dir(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
         match (git_dir, common) {
-            (Some(g), Some(c)) => !(writable(&g) && writable(&c.join("objects"))),
+            (Some(g), Some(c)) => {
+                if !writable(&g) {
+                    Some(g)
+                } else {
+                    let objects = c.join("objects");
+                    (!writable(&objects)).then_some(objects)
+                }
+            }
             // Can't resolve the git directories: let the commit run and
             // report its own failure.
-            _ => false,
+            _ => None,
         }
     }
     #[cfg(not(unix))]
-    false
+    None
+}
+
+/// Whether this process cannot commit to the store at `repo` and must leave
+/// its store change for a host-side aida run to commit (BUG-1929 r4): the
+/// store's git directory or object database is not writable here. The
+/// contained sandbox write set covers the store's files but denies
+/// `<main>/.git`, so a contained session can never write the history. The
+/// check is on the filesystem, not `AIDA_CONTAINED`: that variable is set
+/// in host-side launcher processes and can leak into host children
+/// (BUG-2124), and a host process must never skip its own commit. The host commits the
+/// pending YAML at its next store sync (`aida db sync`), which stages
+/// through the hardened builder and keeps the embedded-repository refusal.
+// trace:BUG-1929 trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
+    store_unwritable_git_path(repo).is_some()
+}
+
+/// Format the deferral notice for `repo` naming the unwritable git metadata
+/// path without assuming a sandboxed session (BUG-2140).
+// trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn format_store_commit_deferred_notice(repo: &Path) -> String {
+    let target = store_unwritable_git_path(repo).unwrap_or_else(|| repo.join(".git"));
+    format!(
+        "note: cannot write {}: store change queued for host commit",
+        target.display()
+    )
 }
 
 /// Tell the user, once per process, that a store change was written but its
-/// commit is left to the host (BUG-1929 r4). A notice, not an error: the
-/// write itself succeeded and is visible to every reader.
-// trace:BUG-1929 | ai:claude
+/// commit is left to the host (BUG-1929 r4, BUG-2140). A notice, not an error:
+/// the write itself succeeded and is visible to every reader.
+// trace:BUG-1929 trace:BUG-2140 | ai:antigravity
 #[cfg(feature = "native")]
-pub fn notice_store_commit_deferred() {
+pub fn notice_store_commit_deferred(repo: &Path) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        eprintln!(
-            "note: store change queued for host commit (this sandboxed session cannot write \
-             the store's git history; the next host-side `aida db sync` commits it)"
-        );
+        eprintln!("{}", format_store_commit_deferred_notice(repo));
     });
+}
+
+/// Commit any pending changes in the git-canonical store worktree on the host
+/// through the hardened `add_all` / `commit` (`host_git_command`) path, under
+/// the store write lock.
+///
+/// No-ops (returns `Ok(false)`) when `store_path` is not a git repo, when
+/// this process itself cannot write the store's git directory (inside a
+/// contained sandbox), or when nothing is pending in the store worktree.
+/// Checks `refuse_embedded_repos` and `has_changes_checked` before acquiring
+/// `with_store_write_lock` so an unrelated store worktree issue (e.g. a rebase
+/// in progress or detached HEAD) does not fail `session end` or contained phases
+/// when nothing is pending, while embedded-repository plants still fail loudly.
+// trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
+    if !is_git_repo(store_path) || store_commit_deferred_to_host(store_path) {
+        return Ok(false);
+    }
+    refuse_embedded_repos(store_path)?;
+    if !has_changes_checked(store_path)? {
+        return Ok(false);
+    }
+    crate::db::with_store_write_lock(store_path, || {
+        refuse_embedded_repos(store_path)?;
+        if !has_changes_checked(store_path)? {
+            return Ok(false);
+        }
+        add_all(store_path, ".")?;
+        commit(store_path, "chore: sync pending changes")
+    })
 }
 
 /// True when HEAD has advanced and no rebase is in progress (sanity check
