@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T09:39:01.716612043Z
-modified_at: 2026-10-18T09:39:01.716612043Z
+modified_at: 2026-10-19T15:46:19.283935802Z
 req_type: Task
 tags:
 - carried-from:STORY-1655
 - finding-hash:7d54bcb4
 - from-review:STORY-1655
 - kind:carried-forward
+comments:
+- id: 01a154d7-9e13-71e3-90ab-bfd14d03a5d2
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1808. aida show TASK-1390 and TASK-1808 both specify doctor/awaiting MODE_ON_LINE on/off and AIDA-repo coverage; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the targ'
+  created_at: 2026-10-19T15:46:19.283935802Z
+  modified_at: 2026-10-19T15:46:19.283935802Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f37-3f33-7b73-a308-0dc95ddbcedc
   author: joe
