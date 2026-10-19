@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T16:06:57.261451020Z
-modified_at: 2026-10-19T16:06:57.261451020Z
+modified_at: 2026-10-19T19:50:04.933482623Z
 req_type: Task
 tags:
 - carried-from:STORY-1728
 - finding-hash:6b200129
 - from-review:STORY-1728
 - kind:carried-forward
+comments:
+- id: 01a155b6-c985-70f2-8378-ca6b6f8bbcb9
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1940. PR-2751 review follow-up; folded into STORY-1728 slice 3 (TASK-1940), which already owns the housekeeping items.'
+  created_at: 2026-10-19T19:50:04.933482623Z
+  modified_at: 2026-10-19T19:50:04.933482623Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1554a-3755-7951-a6d6-f6225491b1ee
   author: joe
