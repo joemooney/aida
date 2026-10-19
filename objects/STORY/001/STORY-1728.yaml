@@ -14,12 +14,12 @@ description: |+
   4. After full migration, a PR that adds a new flag to a migrated command changes zero lines in cli.rs, lib.rs, lib_part*.rs, git_backend_cmd.rs, stakeholder_role.rs and role.rs (checked by a demo PR).
   5. ~~`make check-ci-fast` and the Windows CI job pass with the registry mechanism.~~ RETIRED (advisor ruling 2026-10-18 17:30): AIDA is Linux-only with no Windows CI job, per ADR-72. `make check-ci-fast` passing remains required under the general merge gate.
 
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-19T14:32:24.031780501Z
+modified_at: 2026-10-19T16:06:47.052758170Z
 req_type: Story
 tags:
 - docs:impacted
@@ -252,6 +252,21 @@ history:
   timestamp: 2026-10-19T09:04:12.239717845Z
   session_id: 01a1535eadaf
   changes: []
+- id: 01a154ea-59d9-7a63-88f2-60dddc9bf5de
+  author: aida-auto-bump
+  timestamp: 2026-10-19T16:06:47.001500023Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a154ea-5a0c-72c3-a1cd-5e6f32387ffc
+  timestamp: 2026-10-19T16:06:47.052751565Z
+  agent: integrator
+  commit_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  summary: 'Round-1 AC4 blockers resolved at 4c332a2: review/advisor dispatchers moved (pure moves) out of lib_part1/5, 28 cli.rs patterns + git_backend_cmd gain ''..'', AC4 guard test traced to ac245f28; main (BUG-1985) merge verified loss-free; help snapshot byte-identical to main; CI Build green at head. AC1-3 verified, AC4 verified by guard+demo, AC5 retired (ADR-72).'
+  review_verdict: approved
 filed_at:
   code_sha: 9f0ab97da0df85995c297d5a604bdff02c9980df
   branch: main
@@ -260,11 +275,7 @@ filed_at:
   aida_build_sha: 9f0ab97da0
   vendor: claude
   session: 43e47b00-c449-4778-8838-bd89a371ccc2
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Registry, strangler parse, golden snapshot and policy parity verified (CI green, parity audits clean); AC4 (ac245f28) not met: review/advisor sub-dispatchers stay in lib_part5/lib_part1 and cli.rs tests destructure migrated args exhaustively, so adding a flag to those commands still edits hot files.'
-  recovery_hint: address the review findings, move STORY-1728 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-19T09:04:11.947102084Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T16:06:47.001495730Z
+  completion_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
