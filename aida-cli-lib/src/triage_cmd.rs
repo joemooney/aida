@@ -11,6 +11,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "triage_cmd_args.rs"]
+pub(crate) mod triage_cmd_args;
+pub(crate) use triage_cmd_args::*;
+
 use crate::cli::TriageCommand;
 use crate::*;
 
@@ -165,3 +170,44 @@ pub(crate) fn handle_triage_command(cmd: &TriageCommand) -> Result<()> {
         }
     }
 }
+
+/// Acquire / release / inspect a per-scope disposition (triage) lease —
+/// the intake gate's "one disposing advisor per scope" guard. The
+/// authority gate decides WHO may dispose; this lease decides HOW MANY
+/// (exactly one live advisor per scope). A second advisor disposing the
+/// same scope is refused, naming the holder. Per-scope, so non-
+/// overlapping subsystem advisors dispose concurrently.
+// trace:TASK-661 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "triage")]
+pub(crate) struct TriageArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::TriageCommand,
+}
+
+// TASK-661 (ADR-3): disposition/triage lease. Dispatched before storage
+// init — it reads + writes only `.aida/triage-leases/` files and probes
+// PIDs; no requirement-store handle needed. trace:TASK-661 | ai:claude
+fn run_triage(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <TriageArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let triage_cmd = &args.inner;
+    return self::handle_triage_command(triage_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static TRIAGE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "triage",
+        help_after: "lock",
+        command: <TriageArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_triage),
+    };

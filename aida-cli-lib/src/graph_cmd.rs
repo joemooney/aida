@@ -6,6 +6,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "graph_cmd_args.rs"]
+pub(crate) mod graph_cmd_args;
+pub(crate) use graph_cmd_args::*;
+
 use aida_core::RelationshipType;
 
 use crate::{agent_output_mode, parse_requirement_id, toon_status_token};
@@ -356,3 +361,229 @@ mod tests {
         assert!(filled.contains("TASK-5") && filled.contains("in-progress"));
     }
 }
+
+/// Query the cross-spec relationship graph from a root spec. The default
+/// mode is the epic-rollup tree; other modes answer the
+/// transitive blocked-by / blocks and reverse-impact questions a flat
+/// per-feature spec tool structurally can't. Read-only. Pick at most one
+/// mode.
+// trace:STORY-489 | ai:claude
+// trace:TASK-778
+#[derive(clap::Parser, Debug)]
+#[clap(name = "graph")]
+pub(crate) struct GraphArgs {
+    /// The root spec (SPEC-ID or UUID) to query from.
+    pub id: Option<String>,
+
+    /// Transitive BlockedBy chain: every spec the root is directly or
+    /// indirectly blocked by.
+    #[clap(long, hide = true)]
+    pub blocked_by: bool,
+
+    /// Transitive Blocks chain: every spec the root directly or
+    /// indirectly blocks.
+    #[clap(long, hide = true)]
+    pub blocks: bool,
+
+    /// Parent/Child descendants of the root with a status rollup — the
+    /// epic-rollup view. The default when no mode flag is given.
+    #[clap(long, hide = true)]
+    pub tree: bool,
+
+    /// Reverse impact: every spec that is (transitively) blocked by the
+    /// root — what is at risk if the root slips.
+    #[clap(long, hide = true)]
+    pub impact: bool,
+
+    /// Follow a custom (or built-in) relationship type by name, outgoing —
+    /// e.g. `--follow begets`. Repeatable to walk several types at once.
+    /// The traversal a flat per-feature spec tool can't do over arbitrary edges.
+    // trace:FR-282 | ai:claude
+    #[clap(long, value_name = "TYPE")]
+    pub follow: Vec<String>,
+
+    /// Limit traversal to N hops from the root (default: unbounded).
+    #[clap(long, value_name = "N")]
+    pub depth: Option<usize>,
+
+    /// Emit the result as JSON for agents / scripts.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Graph query mode. Bare `aida graph <id>` still renders the tree.
+    // trace:STORY-1028 | ai:codex
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::GraphCommand>,
+}
+
+fn run_graph(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <GraphArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                GraphArgs {
+                    id: graph_id,
+                    blocked_by,
+                    blocks,
+                    tree,
+                    impact,
+                    follow,
+                    depth,
+                    json,
+                    cmd,
+                } => {
+                    let store = backend.load()?;
+                    let (id, blocked_by, blocks, tree, impact) = match cmd {
+                        Some(GraphCommand::BlockedBy { id }) => {
+                            (id.as_str(), true, false, false, false)
+                        }
+                        Some(GraphCommand::Blocks { id }) => {
+                            (id.as_str(), false, true, false, false)
+                        }
+                        Some(GraphCommand::Tree { id }) => (id.as_str(), false, false, true, false),
+                        Some(GraphCommand::Impact { id }) => {
+                            (id.as_str(), false, false, false, true)
+                        }
+                        None => {
+                            let id = graph_id.as_deref().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
+                                )
+                            })?;
+                            if *blocked_by {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--blocked-by"),
+                                    "aida graph blocked-by <id>",
+                                );
+                            }
+                            if *blocks {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--blocks"),
+                                    "aida graph blocks <id>",
+                                );
+                            }
+                            if *tree {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--tree"),
+                                    "aida graph tree <id>",
+                                );
+                            }
+                            if *impact {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--impact"),
+                                    "aida graph impact <id>",
+                                );
+                            }
+                            (id, *blocked_by, *blocks, *tree, *impact)
+                        }
+                    };
+                    self::handle_graph_command(
+                        &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
+                    )?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                GraphArgs {
+                    id: graph_id,
+                    blocked_by,
+                    blocks,
+                    tree,
+                    impact,
+                    follow,
+                    depth,
+                    json,
+                    cmd,
+                } => {
+                    let store = storage.load_for_read()?;
+                    let (id, blocked_by, blocks, tree, impact) = match cmd {
+                        Some(GraphCommand::BlockedBy { id }) => {
+                            (id.as_str(), true, false, false, false)
+                        }
+                        Some(GraphCommand::Blocks { id }) => {
+                            (id.as_str(), false, true, false, false)
+                        }
+                        Some(GraphCommand::Tree { id }) => (id.as_str(), false, false, true, false),
+                        Some(GraphCommand::Impact { id }) => {
+                            (id.as_str(), false, false, false, true)
+                        }
+                        None => {
+                            let id = graph_id.as_deref().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "aida graph needs a spec id, e.g. `aida graph tree STORY-1`"
+                                )
+                            })?;
+                            if *blocked_by {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--blocked-by"),
+                                    "aida graph blocked-by <id>",
+                                );
+                            }
+                            if *blocks {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--blocks"),
+                                    "aida graph blocks <id>",
+                                );
+                            }
+                            if *tree {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--tree"),
+                                    "aida graph tree <id>",
+                                );
+                            }
+                            if *impact {
+                                note_hidden_alias(
+                                    concat!("aida graph <id> ", "--impact"),
+                                    "aida graph impact <id>",
+                                );
+                            }
+                            (id, *blocked_by, *blocks, *tree, *impact)
+                        }
+                    };
+                    self::handle_graph_command(
+                        &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
+                    )?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida graph` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GRAPH: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "graph",
+        help_after: "approvals",
+        command: <GraphArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_graph),
+    };

@@ -13,6 +13,11 @@ use crate::*;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "dev_cmd_args.rs"]
+pub(crate) mod dev_cmd_args;
+pub(crate) use dev_cmd_args::*;
+
 pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     match cmd {
         DevCommand::Activate {
@@ -2361,3 +2366,40 @@ fn handle_dev_serve(
     eprintln!("[dev serve] stopped.");
     Ok(())
 }
+
+/// AIDA-developer-only commands: activate the in-repo dev binary,
+/// run dev servers, install shell helpers. End users don't need these.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "dev")]
+#[clap(hide = true)]
+pub(crate) struct DevArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DevCommand,
+}
+
+// Handle dev commands before storage resolution — most need no DB.
+// (Dev::Serve does interact with storage but spawns aida-server which
+// handles that itself; the wrapper just supervises the children.)
+// trace:EPIC-1-001 | ai:claude
+fn run_dev(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <DevArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let dev_cmd = &args.inner;
+    return handle_dev_command(dev_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DEV: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "dev",
+    help_after: "intent",
+    command: <DevArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_dev),
+};
