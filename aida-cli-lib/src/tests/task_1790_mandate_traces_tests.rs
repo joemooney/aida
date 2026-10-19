@@ -430,3 +430,39 @@ fn header_traces_include_outer_docs_attributes_and_same_line_prefixes() {
         assert_eq!(got, ids(&["SUP-1"]), "{header}");
     }
 }
+
+// trace:TASK-1800 | ai:codex
+#[test]
+fn hunk_scope_adds_unowned_module_comments_without_sibling_function_traces() {
+    for module_comments in [
+        "// trace:SUP-1\nuse std::io;",
+        "// trace:SUP-1\nconst X: u8 = 1;",
+        "/// trace:SUP-1\nstruct Other;",
+        "/* trace:SUP-1 */ static X: u8 = 1;",
+        "macro_rules! noop { () => {} }\n// trace:SUP-1",
+        "mod untouched { //! trace:SUP-1\n fn other() {} }",
+    ] {
+        let source = format!("use std::fmt;\n{module_comments}\nfn changed() {{\n let x = 1;\n}}\n// trace:OTHER-9\nfn sibling() {{}}\n// trace:TAIL-2\n");
+        let line = source.lines().position(|s| s.contains("let x")).unwrap();
+        let (got, fallback) = source_ids("a.rs", &source, &[line..line + 1], Scope::ChangedItems);
+        assert!(!fallback, "{module_comments}");
+        assert_eq!(got, ids(&["SUP-1", "TAIL-2"]), "{module_comments}");
+    }
+}
+
+// trace:TASK-1800 | ai:codex
+#[test]
+fn inline_module_headers_apply_even_when_attached_to_unchanged_first_function() {
+    for header in [
+        "//! trace:SUP-1\n",
+        "/* trace:SUP-1 */ ",
+        "/// trace:SUP-1\n",
+        "#![allow(unused)]\n// trace:SUP-1\n#[inline]\n",
+    ] {
+        let source = format!("use std::fmt;\nmod outer {{\n mod inner {{\n {header}fn first() {{}}\n // trace:LOCAL-2\n fn changed() {{\n let x = 1;\n }}\n // trace:OTHER-9\n fn sibling() {{}}\n }}\n}}\n");
+        let line = source.lines().position(|s| s.contains("let x")).unwrap();
+        let (got, fallback) = source_ids("a.rs", &source, &[line..line + 1], Scope::ChangedItems);
+        assert!(!fallback, "{header}");
+        assert_eq!(got, ids(&["SUP-1", "LOCAL-2"]), "{header}");
+    }
+}

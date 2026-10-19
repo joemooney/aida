@@ -2,8 +2,8 @@
 
 <!-- trace:TASK-1800 | ai:codex -->
 
-The current collector, including the additive Rust header fix, refuses an
-additional **27/50 PRs (54%)** beyond the 22 named-subject refusals in the frozen
+The current collector, including additive Rust file/inline-module headers and
+unowned module comments, refuses an additional **27/50 PRs (54%)** beyond the 22 named-subject refusals in the frozen
 TASK-1790 sample. Full-file and hunk/item modes both refuse 49/50 in total (98%).
 Hunk mode falls back on at least one path in **50/50 cases**, with 290 case/path
 pairs. All 50 required source reads succeeded; none refused for a symlink,
@@ -45,3 +45,27 @@ This is a non-completing slice. Semantic classification of true touches versus
 incidental co-location and fallback-reduction design remain open. Symlink and
 binary handling remain fail closed; changing their interpretation requires the
 separate sketch on the owning task.
+
+## Additive module-comment follow-up
+
+The next priority slice includes comment lines outside function/impl items and
+attached leading prefixes, plus inline-module headers even when attached to an
+unchanged first function. This closes module traces between items and at EOF;
+other unchanged function/impl prefixes retain item scope. It leaves hunk
+attribution, every fallback, and non-Rust handling unchanged.
+
+Rerunning the actual collector on the same 50 pinned base/head pairs adds scoped
+IDs in **33/50** cases. Every previous ID remains present, every full-file
+set is identical, and all fallback paths are identical (50 cases / 290 pairs).
+The JSON records the previous/current collector hashes and updated set digests.
+The refusal count remains 22 named plus 27 additional, 49/50 total. This count
+uses the frozen classifications above: prior refusal witnesses remain in the
+new sets, and each new scoped set is a subset of its unchanged full-file set.
+The sole previously allowed full-file case therefore remains allowed. No new
+live classification or grant is inferred. This still measures conservative
+refusal, not semantic true touches or false positives.
+
+Two new regressions fail on the parent collector and pass on this collector.
+The real ship-cover callback fixture separately requires an item trace, module
+trace, and file-header trace alongside the named subject. Its workspace runtime
+result is recorded in the PR validation, separately from extracted-module tests.
