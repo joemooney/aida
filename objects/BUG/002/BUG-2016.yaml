@@ -13,12 +13,12 @@ description: |-
   - The contained launch and resume derive the main checkout from host-owned lease/session data, or verify the pointer against it and refuse on mismatch.
   - A test rewrites the worktree's .git pointer to another repo and asserts that no store or cache path of the other repo is granted (and that the launch refuses or falls back to the leased main).
   - Related: BUG-2012, BUG-1929, BUG-1971.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T16:19:22.729950376Z
-modified_at: 2026-10-19T16:09:01.434054480Z
+modified_at: 2026-10-19T16:09:04.525103702Z
 req_type: Bug
 tags:
 - contained
@@ -32,6 +32,15 @@ comments:
   created_at: 2026-10-19T16:09:01.434054480Z
   modified_at: 2026-10-19T16:09:01.434054480Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154ec-730d-7380-b01e-e6a00e70f4a4
+  author: joe
+  timestamp: 2026-10-19T16:09:04.525096081Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
