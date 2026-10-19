@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T14:04:03.102740464Z
-modified_at: 2026-10-19T17:25:17.064760415Z
+modified_at: 2026-10-19T17:35:55.815091580Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -16,6 +16,13 @@ relationships:
   target_id: 01a15531-bb2d-7ca2-88cc-92f3e1202481
   created_at: 2026-10-19T17:25:17.064757106Z
   created_by: joe
+comments:
+- id: 01a1553b-f7a7-7801-8ce5-e7623366b9da
+  author: joe
+  content: 'Advisor 2026-10-19: symptom 1 (approval invalidated by a clean main merge) is fixed by TASK-1960 (#2758). Symptom 2 (the reviewer refuses a branch behind main) remains; TASK-1960 deliberately does not close this bug.'
+  created_at: 2026-10-19T17:35:55.815091580Z
+  modified_at: 2026-10-19T17:35:55.815091580Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15532-3dea-75e3-88cc-978dbaeea783
   author: joe
