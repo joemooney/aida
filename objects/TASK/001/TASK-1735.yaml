@@ -8,16 +8,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T02:44:47.629375520Z
-modified_at: 2026-10-13T02:44:47.629375520Z
+modified_at: 2026-10-19T15:51:05.868320763Z
 req_type: Task
 tags:
 - canonical-hub
 - ci
 - gitlab
+- operator-held
 relationships:
 - rel_type: Child
   target_id: 019ec824-8b71-7b73-a74a-27b973fb441f
   created_at: 2026-10-13T02:44:53.053128402Z
+history:
+- id: 01a154db-fe91-7d42-8054-ffdb50844940
+  author: joe
+  timestamp: 2026-10-19T15:51:06.129235054Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:51:05.868320763Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
   branch: main
