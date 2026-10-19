@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/mandate_drive.rs:277 run_spec returns the first PREFIX-N token in relay.status ticket=/spec= without checking it is a store spec (unlike R3-1's resolving_action). A ticket such as PR-12 becomes spec "PR-12"; spec_always_human finds no ledger entry and no requirement, so the Redispatch/FixSetup lane routes to the advisor ungated instead of taking the RUN_SPEC_UNKNOWN forced gate. Fix: filter to store-known ids (or resolve PR-N to its specs) and fail closed otherwise; add a test.
 
   Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T06:10:49.413706296Z
-modified_at: 2026-10-19T15:45:17.529079761Z
+modified_at: 2026-10-19T15:45:19.698245607Z
 req_type: Task
 tags:
 - from-review:PR-2725
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T15:45:17.529079761Z
   modified_at: 2026-10-19T15:45:17.529079761Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d6-b552-7c10-94ac-eb2ee15d9a88
+  author: joe
+  timestamp: 2026-10-19T15:45:19.698239386Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 2ced85b30183879504d98782c68854ca10a02c00
   branch: pr-2725
