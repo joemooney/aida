@@ -10,6 +10,11 @@ use crate::{
 };
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "internal_cmd_args.rs"]
+pub(crate) mod internal_cmd_args;
+pub(crate) use internal_cmd_args::*;
+
 // trace:STORY-684 | ai:claude
 /// Dispatch for the hidden `aida internal <…>` family — substrate machinery
 /// invoked by hooks/scaffolding, not by humans. Today it carries the
@@ -200,3 +205,47 @@ fn infer_head_spec(root: &std::path::Path) -> Option<String> {
         None
     }
 }
+
+/// Substrate machinery invoked by hooks / scaffolding, not by humans.
+/// Hidden from `--help`. Currently carries the vendor-agnostic
+/// advisor-no-code-write gate the git pre-commit hook calls.
+// trace:STORY-684
+#[derive(clap::Parser, Debug)]
+#[clap(name = "internal")]
+#[clap(hide = true)]
+pub(crate) struct InternalArgs {
+    #[clap(subcommand)]
+    pub command: crate::cli::InternalCommand,
+}
+
+// `aida internal advisor-code-gate` is the vendor-agnostic substrate
+// enforcement of the advisor-no-code-write invariant (STORY-684). The
+// scaffolded git pre-commit hook shells out to it so ANY vendor's
+// `git commit` (Codex, raw terminal, headless) hits the same gate the
+// Claude PreToolUse hook only ever gave Claude. Self-contained (git diff +
+// env + the solo marker), so it dispatches before storage init.
+// trace:STORY-684
+fn run_internal(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <InternalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let InternalArgs { command } = &args;
+    return self::handle_internal_command(command);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static INTERNAL: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "internal",
+        help_after: "fetch",
+        command: <InternalArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_internal),
+    };

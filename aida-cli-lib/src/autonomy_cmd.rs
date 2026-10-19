@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "autonomy_cmd_args.rs"]
+pub(crate) mod autonomy_cmd_args;
+pub(crate) use autonomy_cmd_args::*;
+
 use crate::cli::{AutonomyCommand, CalibrationSubcommand};
 use crate::{
     calibration, complexity_calibration, find_project_root, main_worktree_root_from, punt,
@@ -243,3 +248,40 @@ fn print_autonomy_overview() {
     println!("  aida autonomy report");
     println!("  aida autonomy calibration mismatches");
 }
+
+/// Show AIDA's autonomy ladder and the commands/config knobs for each rung.
+// trace:STORY-439 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "autonomy")]
+pub(crate) struct AutonomyArgs {
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::AutonomyCommand>,
+}
+
+// STORY-439: autonomy / calibration surface. Dispatched before storage
+// init — it reads only `.aida/complexity-calibration/`, no requirement
+// store. trace:STORY-439 | ai:claude
+fn run_autonomy(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <AutonomyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let AutonomyArgs { command } = &args;
+    return self::handle_autonomy_command(command.as_ref());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AUTONOMY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "autonomy",
+        help_after: "punts",
+        command: <AutonomyArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_autonomy),
+    };

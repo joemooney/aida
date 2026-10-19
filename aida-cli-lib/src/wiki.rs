@@ -13,6 +13,11 @@ use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "wiki_args.rs"]
+pub(crate) mod wiki_args;
+pub(crate) use wiki_args::*;
+
 /// Default `aida wiki serve` port, registered as `aida-wiki` in the operator's
 /// global port registry (`~/.ports`).
 // trace:TASK-1470 | ai:claude
@@ -679,3 +684,37 @@ fn escape_html(input: &str) -> String {
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
 }
+
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+/// Living project wiki: build browsable hyperlinked HTML projection and serve locally
+#[derive(clap::Parser, Debug)]
+#[clap(name = "wiki")]
+pub(crate) struct WikiArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::WikiCommand,
+}
+
+// trace:EPIC-72 trace:TASK-1439 | ai:antigravity
+fn run_wiki(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <WikiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let command = &args.inner;
+    return self::handle_wiki_command(command);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WIKI: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "wiki",
+    help_after: "explain",
+    command: <WikiArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_wiki),
+};
