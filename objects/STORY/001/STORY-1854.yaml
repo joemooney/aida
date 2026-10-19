@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T04:24:25.684853123Z
-modified_at: 2026-10-19T06:52:05.896704842Z
+modified_at: 2026-10-19T07:44:21.722664566Z
 req_type: Story
 tags:
 - cargo
@@ -36,6 +36,12 @@ comments:
   created_at: 2026-10-19T06:50:01.357939979Z
   modified_at: 2026-10-19T06:50:01.357939979Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1531e-5eda-73d0-8079-5bec2b0d7c95
+  author: joe
+  content: Commit fce4037ea8 references this requirement
+  created_at: 2026-10-19T07:44:21.722664566Z
+  modified_at: 2026-10-19T07:44:21.722664566Z
+  session_id: 3c7364f7-5818-49bb-8f81-46d554e6e746
 history:
 - id: 01a152ec-5fd3-79c0-aa1a-0ac8e9181c47
   author: joe
