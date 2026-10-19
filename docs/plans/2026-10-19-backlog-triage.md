@@ -6,17 +6,17 @@ Proposal only. No spec status, archive/defer flag, queue entry, or relationship 
 
 Snapshot: `aida list --all --format json`, captured 2026-10-19, with code evidence pinned to `origin/main` at `6d590ed914dea5135a126f7dae6abb403adec66d`. The input contained 5,348 rows; 475 had open stored statuses: Approved 208, NeedsAttention 20, Draft 235, InProgress 12. InProgress is included by the operator's follow-up instruction; there were no Planned rows. Done, Completed, Rejected, and Superseded are excluded. Input SHA-256: `e908a1e7a016cb87a920bbe9f23a22c0688cefdd52abe5f5a843be7d2fa5ac8d`.
 
-Coverage: **300/475** open specs. Each covered spec was read through `aida show <ID> --format json --no-git --comments`; TSV statuses preserve the list snapshot rather than the show's deferred display label. Open is not the same as actionable: the full input intentionally includes archived and deferred work. Among the 475 open rows, 139 are archived and 115 deferred; these counts can overlap. KEEP preserves those shelves and does not authorize pickup. 92 rows have no description; a title-only KEEP explicitly remains uncertain.
+Coverage: **350/475** open specs. Each covered spec was read through `aida show <ID> --format json --no-git --comments`; TSV statuses preserve the list snapshot rather than the show's deferred display label. Open is not the same as actionable: the full input intentionally includes archived and deferred work. Among the 475 open rows, 139 are archived and 115 deferred; these counts can overlap. KEEP preserves those shelves and does not authorize pickup. 92 rows have no description; a title-only KEEP explicitly remains uncertain.
 
 | Disposition | Count |
 |---|---:|
 | DONE-ALREADY | 2 |
-| DUPLICATE-OF | 11 |
-| SUPERSEDED-BY | 2 |
+| DUPLICATE-OF | 27 |
+| SUPERSEDED-BY | 3 |
 | STALE-REJECT | 1 |
-| KEEP | 284 |
+| KEEP | 317 |
 
-KEEP priorities: P1 67, P2 35, P3 182. `target` is the priority for KEEP, the covering ID for DUPLICATE-OF, and the cited replacement or mainline commit for other dispositions.
+KEEP priorities: P1 69, P2 43, P3 205. `target` is the priority for KEEP, the covering ID for DUPLICATE-OF, and the cited replacement or mainline commit for other dispositions.
 
 TSV evidence separates proof of removal from conservative retention. A merged commit or a trace alone does not close a reopened or umbrella spec; an unverified observation stays KEEP. DUPLICATE-OF means the target contract contains the source obligation, including when the target is broader; preserve the source evidence when consolidating. P1 is a dev-cycle/unblocking recommendation, not a change to stored priority or authority. P2 is substantive follow-on work. P3 includes cosmetics and conditional or shelved work. The TSV places the recommended P1 queue first, then evidence-backed removal candidates, then the remaining KEEPs by priority.
 
