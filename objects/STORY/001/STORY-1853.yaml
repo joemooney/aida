@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T02:44:35.681395576Z
+modified_at: 2026-10-19T02:49:58.216123696Z
 req_type: Story
 tags:
 - architecture
@@ -61,6 +61,15 @@ comments:
   content: 'Correction to S0: the templates already say the full suite runs only in CI (implementer-discipline.md:257, aida-pickup.md:478). The violations come from briefs. The advisor''s own briefs told the integrator to run ''make check-ci'' (relay 20261017-182837, 18:55 and 19:18 mails), and fix-2725 ran ''make check'' with AIDA_CARGO_NO_SLOT=1. So S0 is: (a) advisor and fixer briefs say check-ci-fast + test-touched + check-ci-compile and never the full suite; (b) a guard. cargo-slot should refuse AIDA_CARGO_NO_SLOT for agent-role sessions, or warn loudly, so a brief can''t bypass the limiter. No template rewrite needed.'
   created_at: 2026-10-19T02:44:35.681395576Z
   modified_at: 2026-10-19T02:44:35.681395576Z
+  session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
+- id: 01a15210-d8c8-7570-ac9a-59425fd9d771
+  author: joe
+  content: |-
+    Operator finding (2026-10-18 19:49): fix-2725 and aida-agy-batch were in test EXECUTION. Both ran the debug profile, while automatic cache seeding defaults to the agent profile. The light gates already use --profile agent (Makefile:260 test-touched, :515 check-ci-compile), so they hit the seeded cache. A full 'cargo test --workspace' / 'make check' rebuilds debug cold in each worktree and then runs unoptimized tests. Adds to the slices:
+    - S0b: any local full run uses '--profile agent' (cargo test --workspace --profile agent; Makefile full-test targets default to it). Debug stays CI-only. Alternatively, seed the debug/test profile too, but agent is the cheaper default.
+    - S1 measures debug vs agent test-execution time for the lib binary and the top-10 integration binaries, to decide whether CI should also move to an opt-level-1 test profile. Opt-level 1 speeds up execution; check its compile cost on a cold CI cache.
+  created_at: 2026-10-19T02:49:58.216123696Z
+  modified_at: 2026-10-19T02:49:58.216123696Z
   session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
