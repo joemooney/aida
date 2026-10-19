@@ -1,0 +1,24 @@
+id: 01a154cf-d6ed-7a80-8b05-9afecb29cd9a
+spec_id: TASK-1948
+agreed_id: TASK-1948
+title: 'STORY-1853 slices S0/S0b/S1: gate discipline, agent-profile local runs, per-binary test timing budget'
+description: 'Slice task for PR #2754. It exists so that merging the PR completes this slice and NOT the umbrella STORY-1853, whose AC1/AC2/AC5 and S2–S6 stay open. Scope: S0 (process: no full local suite, AIDA_CARGO_NO_SLOT forbidden in templates), S0b (agent-profile local runs) and S1 (CI per-binary timing artifact plus committed budget file and gate). Advisor ruling 2026-10-19: per-TEST budget enforcement (STORY-1853 AC4) is deferred to S2 (nextest JUnit); S1 enforces per binary.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:37:49.549035318Z
+modified_at: 2026-10-19T15:37:49.549035318Z
+req_type: Task
+tags:
+- ci
+- story-1853
+- throughput
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
