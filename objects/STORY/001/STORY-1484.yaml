@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-11T07:02:26.193739828Z
+modified_at: 2026-10-19T15:48:12.366422775Z
 req_type: Story
 tags:
 - cache
@@ -303,4 +303,10 @@ comments:
   created_at: 2026-10-11T07:02:02.445153266Z
   modified_at: 2026-10-11T07:02:02.445153266Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+- id: 01a154d9-57ce-7f71-9688-8aa046a547ab
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. Every slice is merged: A (BUG-1664/1670, TASK-1515), B TASK-1526 (#2283), C TASK-1527 (#2349), plus BUG-1674 (#2370). The comment-12 cache recurrence goes in its own bug if it recurs.'
+  created_at: 2026-10-19T15:48:12.366422775Z
+  modified_at: 2026-10-19T15:48:12.366422775Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 execution_mode: guided
