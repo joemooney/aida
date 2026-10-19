@@ -729,9 +729,8 @@ pub(crate) fn pr_rebase_handler(
             // gitdir; the rebase-merge marker actually lives at the
             // gitdir. Use `git status --porcelain=v2 --branch` to ask
             // git itself.
-            let status_says_rebasing = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&wt_path)
+            // trace:BUG-1985 | ai:claude
+            let status_says_rebasing = aida_core::git_ops::host_git_command(&wt_path)
                 .args(["status", "--porcelain=v2", "--branch"])
                 .output()
                 .ok()
@@ -5369,8 +5368,8 @@ pub(crate) fn prepare_main_worktree_for_pr_ship_pull(
         );
     }
 
-    let status = std::process::Command::new("git")
-        .current_dir(main_worktree)
+    // trace:BUG-1985 | ai:claude
+    let status = aida_core::git_ops::host_git_command(main_worktree)
         .args(["status", "--porcelain"])
         .output()
         .context("could not invoke `git status --porcelain` in main worktree")?;

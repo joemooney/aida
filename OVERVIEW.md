@@ -377,6 +377,31 @@ Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
+Host git over a code tree a contained session may have written (a linked
+worktree, or any tree of a repository a contained session was launched
+against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, plus `submodule.<name>.ignore=dirty` for
+every name in the `.gitmodules` git would read (the file, else the index or
+`HEAD` copy), because a `.gitmodules` `ignore = none` outranks
+`diff.ignoreSubmodules`. A `.gitmodules` that cannot be read, or that names a
+submodule the override cannot express, makes host git refuse. So incidental
+status and diff never enter a submodule, where a planted repository's own
+config (a filter driver, for example) would run on the host. Before any safety
+check in such a tree (pool, adopt, destroy, salvage, session reap, doctor
+heal, worktree gc) and before host staging (`aida compete`), every gitlink
+must be a host-owned submodule: registered in `.gitmodules`, with a `.git`
+pointer that resolves to a submodule git directory (`<common>/modules/...` or
+`<common>/worktrees/<wt>/modules/...`) inside the sandbox-denied common git
+directory. Staging also refuses an untracked nested repository at any depth.
+A tree that fails this is kept and treated as dirty, and so is a tree whose
+`git status` fails: no dirty check reads a git error as clean. Once every gitlink passes, the checks recurse into the
+submodules (`--ignore-submodules=none`), so uncommitted edits there still keep
+the tree. Salvage refuses edits inside a submodule, because a patch cannot
+hold them. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`, directly or via a
+wrapper; a guard test enforces it.
+<!-- trace:BUG-1985 | ai:claude -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.

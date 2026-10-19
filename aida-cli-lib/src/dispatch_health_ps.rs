@@ -451,9 +451,8 @@ pub(crate) fn dirty_movement_is_fresh(newest_age_secs: Option<u64>, fresh_secs: 
 /// column, which silently cut the first character off the path.
 // trace:BUG-1656 | ai:claude
 pub(crate) fn dirty_paths(worktree: &Path) -> Vec<std::path::PathBuf> {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let Ok(out) = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "-z", "--untracked-files=all"])
         .output()
     else {
@@ -659,9 +658,8 @@ pub(crate) fn parse_commit_time_and_subject(
 /// `worktree`; empty when git fails.
 // trace:BUG-1941 | ai:claude
 fn porcelain_records(worktree: &Path) -> Vec<(String, PathBuf)> {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let Ok(out) = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "-z", "--untracked-files=all"])
         .output()
     else {
