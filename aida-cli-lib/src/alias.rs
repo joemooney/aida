@@ -426,8 +426,11 @@ mod tests {
         // clap `intake` alias reaches the Groom command (STORY-708: groom is
         // canonical; assess/intake are deprecated aliases)
         assert!(matches!(
-            Cli::try_parse_from(["aida", "intake"]).unwrap().command,
-            Command::Groom { .. }
+            crate::command_registry::try_parse_from(["aida", "intake"])
+                .unwrap()
+                .command
+                .registered::<crate::autopilot_intake::GroomArgs>(),
+            crate::autopilot_intake::GroomArgs { .. }
         ));
         // TASK-862: the personal-view shortcuts must rewrite exactly as the
         // registry advertises (`mylist` -> `list me`, `myqueue` -> `queue list`).

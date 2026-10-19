@@ -3426,3 +3426,202 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/bug_2010_factory_lane_ps_tests.rs"]
 mod bug_2010_factory_lane_ps_tests;
+
+/// The global running-work table — one row per active session/agent
+/// across the project (the `ps`/`docker ps` of AIDA work). Companion to
+/// `aida status <spec>` (per-spec): where that answers "is THIS spec
+/// liveness-backed?", `aida ps` answers "what is genuinely running on
+/// my machine right now, and what only CLAIMS to be?".
+///
+/// Each session row shows: session id, spec (scope), role, worktree, pid,
+/// started, ELAPSED, and a liveness verdict reusing the same machinery
+/// `aida status <spec>` and `aida session leases` use
+/// (live / dormant / STALE).
+///
+/// It ALSO surfaces ORPHANED In-Progress specs — specs at status
+/// In-Progress with NO spec-scoped lease backing them (the flag-only
+/// case) — so a crashed or never-started session can't hide behind a
+/// status flag. AIDA-launched work (`aida queue work` / `aida agent new`)
+/// gets spec-scoped leases (the rich, spec-linked rows); advisor
+/// Agent-tool fan-outs take generic `harness-worktree` leases (shown by
+/// session/worktree, spec unknown).
+// trace:STORY-696 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "ps")]
+pub(crate) struct PsArgs {
+    /// Machine-readable JSON output: `{ sessions: [...], orphaned: [...] }`.
+    // trace:STORY-696
+    #[clap(long)]
+    pub json: bool,
+    /// Include STALE (dead-pid / leaked) session rows that the default
+    /// view folds behind a footer count.
+    // trace:STORY-696
+    #[clap(long)]
+    pub all: bool,
+}
+
+// STORY-696: `aida ps` is the GLOBAL running-work table — the project-wide
+// companion to `aida status <spec>`. Like that command it reads the local
+// session leases + probes pid liveness and self-loads the store read-only
+// (to find orphaned In-Progress specs), so it needs no shared storage
+// handle — dispatch early. trace:STORY-696 | ai:claude
+fn run_ps(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let PsArgs { json, all } = &args;
+    // trace:BUG-1289 | ai:claude
+    return handle_ps(*json || output_format_is_json(), *all);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "ps",
+    help_after: "awaiting",
+    command: <PsArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_ps),
+};
+
+/// The integrator seat: bare shows the merge queue; --run drains it.
+///
+/// One screen, scoped to the active focus, answering "what would I work
+/// next, and is main actually moving?": the focus-scoped queue (specs + the
+/// role each is routed to), live throughput (time since the last merge to
+/// the default branch, recent-merge counts, and a main-idle indicator), and
+/// the active fan-out (which sessions/agents hold which specs right now).
+/// A cheap cache-backed read when bare; `--run` is the single serialized
+/// merge loop over Done-with-PR specs.
+// trace:TASK-1034 trace:STORY-1024 | ai:claude codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "integrate")]
+pub(crate) struct IntegrateArgs {
+    /// Emit the view as JSON instead of the human summary.
+    // trace:TASK-1034
+    #[clap(long)]
+    pub json: bool,
+    /// Drain the merge queue: rebase each Done-with-PR branch onto current
+    /// main, wait/reuse the standing verdict, merge, pull, then continue
+    /// serially. Bare `aida integrate` remains the read-only view.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub run: bool,
+    /// Inspect the merge queue and print what WOULD be driven, without
+    /// merging anything. Alias for `--run --dry-run`.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub dry_run: bool,
+    /// Keep watching for newly-ready Done-with-PR specs and drain them
+    /// serially as they appear.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub watch: bool,
+    /// Idle backstop (seconds) for --watch. Default 60.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long, value_name = "SECS", default_value_t = 60)]
+    pub interval: u64,
+    /// Cap the number of specs integrated this run. 0 = no cap.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long, value_name = "N", default_value_t = 0)]
+    pub max: usize,
+    /// Wait for in-flight CI on ready PRs before deciding whether to merge.
+    /// Default for --run; accepted for explicit scripts.
+    // trace:BUG-1052 | ai:codex
+    #[clap(long, conflicts_with = "no_wait_ci")]
+    pub wait_ci: bool,
+    /// Do not wait for in-flight CI; skip it until a later pass.
+    // trace:BUG-1052 | ai:codex
+    #[clap(long)]
+    pub no_wait_ci: bool,
+    /// Do not rebase PR branches before merge. The default for top-level
+    /// `integrate --run` is to rebase first so stale-base churn cannot race.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub no_rebase: bool,
+    /// Accumulation strategy for the batch. Falls back to `[integrate]
+    /// strategy` in .aida/config.toml, then `per-item`.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long, value_enum)]
+    pub strategy: Option<crate::integrate::IntegrateStrategy>,
+    /// Scope the scan to a focus epic/spec and its transitive descendants.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long, value_name = "ID")]
+    pub focus: Option<String>,
+    /// Idle backstop for `--watch`, in minutes.
+    // trace:STORY-1024 | ai:codex
+    #[clap(long, value_name = "N")]
+    pub idle_minutes: Option<u64>,
+    /// Bypass the team RBAC guardrail (`[team.permissions] integrate`).
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub force: bool,
+    /// User ID (defaults to AIDA_USER or system user).
+    // trace:STORY-1024 | ai:codex
+    #[clap(long)]
+    pub user: Option<String>,
+}
+
+// `aida integrate` is the integrator front door. Bare remains the read-only
+// throughput/merge-queue view (TASK-1034); `--run` / `--watch` / `--dry-run`
+// enter the same serialized engine as `aida queue integrate`, with rebase
+// enabled by default so Done-with-PR specs land through one current-main
+// queue instead of racing each other stale. trace:STORY-1024 | ai:codex
+fn run_integrate(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <IntegrateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let IntegrateArgs {
+        json,
+        run,
+        dry_run,
+        watch,
+        interval,
+        max,
+        wait_ci: _,
+        no_wait_ci,
+        no_rebase,
+        strategy,
+        focus,
+        idle_minutes,
+        force,
+        user,
+    } = &args;
+    return handle_integrate(IntegrateCommandOpts {
+        // trace:BUG-1289 | ai:claude
+        json: *json || output_format_is_json(),
+        run: *run,
+        dry_run: *dry_run,
+        watch: *watch,
+        interval: *interval,
+        max: *max,
+        wait_ci: !*no_wait_ci,
+        rebase: !*no_rebase,
+        strategy: *strategy,
+        focus: focus.clone(),
+        idle_minutes: *idle_minutes,
+        force: *force,
+        user: user.clone(),
+    });
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static INTEGRATE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "integrate",
+        help_after: "tail",
+        command: <IntegrateArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_integrate),
+    };

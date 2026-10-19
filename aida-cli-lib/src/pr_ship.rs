@@ -2716,15 +2716,20 @@ mod tests {
         ] {
             let mut args = vec!["aida", "pr", "ship", "1602"];
             args.extend(flags);
-            let cli = crate::cli::Cli::try_parse_from(args).unwrap();
-            match cli.command {
-                crate::cli::Command::Pr(crate::cli::PrCommand::Ship { wait, .. }) => {
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+                crate::pr_cmd::PrArgs {
+                    inner: crate::cli::PrCommand::Ship { wait, .. },
+                } => {
                     assert_eq!(wait, expected)
                 }
                 _ => panic!("expected pr ship"),
             }
         }
-        assert!(crate::cli::Cli::try_parse_from(["aida", "pr", "ship", "--wait", "bad"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "pr", "ship", "--wait", "bad"])
+                .is_err()
+        );
     }
 
     // BUG-1499: a label-only hold is refused even for a HUMAN at a terminal
@@ -4103,9 +4108,11 @@ mod tests {
         for (flags, expected) in [(vec![], false), (vec!["--no-complete"], true)] {
             let mut args = vec!["aida", "pr", "ship", "1957"];
             args.extend(flags);
-            let cli = crate::cli::Cli::try_parse_from(args).unwrap();
-            match cli.command {
-                crate::cli::Command::Pr(crate::cli::PrCommand::Ship { no_complete, .. }) => {
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+                crate::pr_cmd::PrArgs {
+                    inner: crate::cli::PrCommand::Ship { no_complete, .. },
+                } => {
                     assert_eq!(no_complete, expected)
                 }
                 _ => panic!("expected pr ship"),

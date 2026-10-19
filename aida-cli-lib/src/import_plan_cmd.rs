@@ -203,3 +203,104 @@ mod tests {
         assert_eq!(detect_spec_id_from_filename("no-numbers-here.md"), None);
     }
 }
+
+/// Import a saved plan file into AIDA conventions: archive it under
+/// `docs/plans/YYYY-MM-DD-<slug>.md` and pin it to its SPEC with a
+/// comment. `--request-review` additionally lands a master-review
+/// handshake — it tags the spec `plan-review:pending` and posts a
+/// "plan landed for master review" comment, so the plan is NOT yet
+/// treated as canonical: `aida queue work <SPEC>` warns before
+/// picking up a spec whose plan is still awaiting review.
+// trace:TASK-516 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "import-plan")]
+pub(crate) struct ImportPlanArgs {
+    /// The saved plan markdown file to import.
+    pub file: String,
+
+    /// SPEC-ID this plan targets. If omitted, AIDA tries to detect it
+    /// from the filename (a `TYPE-N` pattern like `task-42`).
+    #[clap(long, value_name = "SPEC-ID")]
+    pub spec: Option<String>,
+
+    /// Land the plan as awaiting-master-review rather than canonical:
+    /// tag the spec `plan-review:pending` + post a review-requested
+    /// comment. `aida queue work <SPEC>` then warns before pickup.
+    // trace:TASK-516 | ai:claude
+    #[clap(long)]
+    pub request_review: bool,
+}
+
+fn run_import_plan(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ImportPlanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ImportPlanArgs {
+                    file,
+                    spec,
+                    request_review,
+                } => {
+                    self::handle_import_plan_command(
+                        backend,
+                        store_path,
+                        file,
+                        spec.as_deref(),
+                        *request_review,
+                    )?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ImportPlanArgs { .. } => {
+                    // The plan-review handshake tags + comments on the spec via the
+                    // git-canonical write path. trace:TASK-516 | ai:claude
+                    anyhow::bail!(
+                        "aida import-plan requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida import-plan` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static IMPORT_PLAN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "import-plan",
+        help_after: "ultraplan",
+        command: <ImportPlanArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_import_plan),
+    };

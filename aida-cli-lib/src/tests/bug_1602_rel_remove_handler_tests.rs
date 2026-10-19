@@ -1,5 +1,5 @@
-// Handler-level fixture tests for `aida rel remove`, invoked through the
-// real `Command::Rel(RelationshipCommand::Remove { .. })` dispatch path
+// Handler-level fixture tests for `aida rel remove`.registered::<crate::relationship_cmd::RelArgs>(), invoked through the
+// real `crate::relationship_cmd::RelArgs { inner: RelationshipCommand::Remove { .. } }` dispatch path
 // (`handle_git_backend_command`) rather than only the pure
 // `rel_remove_matches` helper `task_1426_related_edge_migration_tests.rs`
 // already covers. Every fixture is a throwaway git store under a tempdir;
@@ -73,14 +73,11 @@ fn rels_of(backend: &CachedGitBackend, spec_id: &str) -> Vec<Relationship> {
 /// Runs `aida rel remove <from> <to> --type <type> [-b]` through the real
 /// command handler against `store_path`.
 fn rel_remove(store_path: &std::path::Path, from: &str, to: &str, r#type: &str, bidi: bool) {
-    let cmd = Command::Rel(RelationshipCommand::Remove {
-        from_pos: Some(from.to_string()),
-        to_pos: Some(to.to_string()),
-        from_flag: None,
-        to_flag: None,
-        r#type: r#type.to_string(),
-        bidirectional: bidi,
-    });
+    let mut argv = vec!["aida", "rel", "remove", from, to, "--type", r#type];
+    if bidi {
+        argv.push("--bidirectional");
+    }
+    let cmd = crate::command_registry::parse_command(argv);
     crate::git_backend_cmd::handle_git_backend_command(store_path, &cmd).unwrap();
 }
 
