@@ -6,12 +6,12 @@ description: |
   aida-core/templates/hooks/aida-cargo-timeout-guard.sh strips quoted bodies before matching, so `timeout 3000 bash -c "cargo test"` (and sh -c) produce no hint, even though the outer timeout still wraps cargo.
 
   Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T17:56:23.589403200Z
-modified_at: 2026-10-19T19:48:09.815461322Z
+modified_at: 2026-10-19T19:48:17.405797447Z
 req_type: Task
 tags:
 - from-review:PR-2759
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T19:48:09.815461322Z
   modified_at: 2026-10-19T19:48:09.815461322Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b5-257d-75b2-933e-4924896de9fb
+  author: joe
+  timestamp: 2026-10-19T19:48:17.405788233Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
   branch: pr-2759
