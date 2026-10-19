@@ -11,12 +11,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:38.037719686Z
-modified_at: 2026-10-19T07:32:38.037719686Z
+modified_at: 2026-10-19T15:45:26.284057899Z
 req_type: Task
 tags:
 - cli
 - follow-up
 - story-1728
+comments:
+- id: 01a154d6-cf0c-7822-a4b7-a027d17935b3
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1937. F7 is tracked by TASK-1937 and F8 by TASK-1938.'
+  created_at: 2026-10-19T15:45:26.284057899Z
+  modified_at: 2026-10-19T15:45:26.284057899Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
