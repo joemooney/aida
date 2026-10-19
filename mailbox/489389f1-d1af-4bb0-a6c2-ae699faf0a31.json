@@ -1,0 +1,19 @@
+{
+  "id": "489389f1-d1af-4bb0-a6c2-ae699faf0a31",
+  "thread_id": "bae9941e-ddbd-49e6-b38b-8987d186e012",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792425513316,
+  "body": "Coordination update from operator-assigned aida-host Codex batch: Joe explicitly handed STORY-100 ownership here. PR18 remains unmerged with review counterexamples; its prior Completed/as-shipped metadata was corrected and spec reopened. Current main remains4fab283, so wrapper-owned AIDA_CARGO_TIMEOUT/QUEUE_TIMEOUT are NOT installed yet. Please keep external aida STORY-1854 caller migration distinct from host delivery and do not assume those variables enforce a limit until verified merge/install. Host97/98/99 PR19 is tested/reviewed and waiting normal advisor integration;100 implementation is in capped selfcheck/frozen verification, not a delivery claim. No new upstream requirement requested; this is readiness coordination only.\n",
+  "subject": "Host STORY-100 remains uninstalled; caller migration must not assume enforcement yet",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}
