@@ -3,12 +3,12 @@ spec_id: TASK-1959
 agreed_id: TASK-1959
 title: 'STORY-1853 slice S4: fix the slowest tests (sleeps and wall-clock waits replaced by injected clocks or readiness signals)'
 description: 'From the S1 timings (STORY-1853 comment 4): task_1717_store_writer_lock 50 s/43 tests, agent_error_channel 44 s/2 tests, bug_1502_format_json_audit 23 s, bug_1947_session_end_live_process 23 s, task_1335 15 s, journey 14 s, bug_1940 14 s, task_1290 14 s. Replace fixed sleeps and polling with readiness signals (pipes, files, condvars) or injected clocks. Keep every assertion: no test deleted or #[ignore]d, and the passed+ignored count is unchanged. Report before/after per binary in the PR body (local median of 3 under the slot wrapper). Target: each of these is 5 s or less, or comes with a stated reason. No ci.yml change, so this runs in parallel with S6/S2.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:54.167668605Z
-modified_at: 2026-10-19T19:14:14.103156045Z
+modified_at: 2026-10-19T20:02:23.178680984Z
 req_type: Task
 tags:
 - ci
@@ -25,6 +25,13 @@ relationships:
   target_id: 01a15595-6e71-72f2-a889-5191ff0bb4c1
   created_at: 2026-10-19T19:14:07.358787504Z
   created_by: joe
+comments:
+- id: 01a155c2-0d4a-7db1-91c5-5ce043b810b6
+  author: joe
+  content: 'Advisor 2026-10-19 13:05: the #2760 round-1 CHANGES REQUESTED rested only on ''CI red, failing test unknown''. The logs show known flakes in UNTOUCHED lib unit tests: regen::score generated_tool_help_timeout (BUG-2182) and aida-core db::cache_binding rebind_note_routes_to_cache_read_note (the TASK-1956 cache-writer stale read). Attempt 1''s trace-gate failure was a CI store-attach transient. No code change needed; CI rerun, then re-review. The bug_1502 shared-fixture concurrency note is non-blocking.'
+  created_at: 2026-10-19T20:02:23.178680984Z
+  modified_at: 2026-10-19T20:02:23.178680984Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154f1-378a-7cd1-86db-af168db25873
   author: joe
@@ -52,6 +59,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a155c0-6720-7171-8b24-780dd6467429
+  author: aida-orchestrator
+  timestamp: 2026-10-19T20:00:35.104551846Z
+  session_id: 01a15597296d
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -60,3 +75,11 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Code meets all 5 TASK-1959 acceptance criteria on inspection, but PR CI is red on 707b797f61 and the failing test could not be identified from the review sandbox
+  recovery_hint: address the review findings, move TASK-1959 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-19T20:00:35.104528639Z
