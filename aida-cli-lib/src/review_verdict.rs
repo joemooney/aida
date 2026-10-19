@@ -1611,6 +1611,51 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     write_verdict_atomic(&archive, &format!("{body}\n"))
 }
 
+/// BUG-2186: every recording [`archive_round_by_sha`] kept for the verdict
+/// file at `path` — each `<stem>/<sha>.json` round plus the `rounds` it
+/// retained, in file-name order. The reviewer launchers clear the current
+/// file before each run, so its inline `rounds` restart every round; this
+/// archive is where the writer keeps a change's refusal history. A missing
+/// archive is empty; an unreadable or malformed one is an error, never a
+/// silently shorter history.
+// trace:BUG-2186 | ai:claude
+pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>, String> {
+    let Some(dir) = verdict_archive_dir(path) else {
+        return Ok(Vec::new());
+    };
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let file = entry
+            .map_err(|e| format!("could not read {}: {e}", dir.display()))?
+            .path();
+        if file.extension().is_some_and(|ext| ext == "json") {
+            files.push(file);
+        }
+    }
+    files.sort();
+    let mut recordings = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(&file)
+            .map_err(|e| format!("could not read {}: {e}", file.display()))?;
+        let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&text) else {
+            return Err(format!("{} is not a JSON object", file.display()));
+        };
+        let rounds = match obj.remove("rounds") {
+            None => Vec::new(),
+            Some(serde_json::Value::Array(rounds)) => rounds,
+            Some(_) => return Err(format!("`rounds` in {} is not an array", file.display())),
+        };
+        recordings.push(serde_json::Value::Object(obj));
+        recordings.extend(rounds);
+    }
+    Ok(recordings)
+}
+
 /// BUG-1539: the verdict recorded under `key` (a `PR-<N>` or spec id) for the
 /// commit `sha`, whichever round it was. The current file answers first when
 /// it was taken at `sha`; otherwise the per-sha archive does. Prefix-tolerant
