@@ -3,12 +3,12 @@ spec_id: TASK-1959
 agreed_id: TASK-1959
 title: 'STORY-1853 slice S4: fix the slowest tests (sleeps and wall-clock waits replaced by injected clocks or readiness signals)'
 description: 'From the S1 timings (STORY-1853 comment 4): task_1717_store_writer_lock 50 s/43 tests, agent_error_channel 44 s/2 tests, bug_1502_format_json_audit 23 s, bug_1947_session_end_live_process 23 s, task_1335 15 s, journey 14 s, bug_1940 14 s, task_1290 14 s. Replace fixed sleeps and polling with readiness signals (pipes, files, condvars) or injected clocks. Keep every assertion: no test deleted or #[ignore]d, and the passed+ignored count is unchanged. Report before/after per binary in the PR body (local median of 3 under the slot wrapper). Target: each of these is 5 s or less, or comes with a stated reason. No ci.yml change, so this runs in parallel with S6/S2.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:54.167668605Z
-modified_at: 2026-10-19T19:14:07.358790567Z
+modified_at: 2026-10-19T19:14:14.103156045Z
 req_type: Task
 tags:
 - ci
@@ -44,6 +44,14 @@ history:
   timestamp: 2026-10-19T19:14:08.581573294Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15595-f7d7-7a13-b191-8a09709ba8e6
+  author: aida-pr-open
+  timestamp: 2026-10-19T19:14:14.103152705Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
