@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T07:26:06.254201008Z
+modified_at: 2026-10-19T15:22:11.779541518Z
 req_type: Story
 tags:
 - architecture
@@ -143,6 +143,23 @@ comments:
   created_at: 2026-10-19T07:26:06.254201008Z
   modified_at: 2026-10-19T07:26:06.254201008Z
   session_id: d55be7a9-bc9c-4d9c-8cdf-4c50f4e6afe7
+- id: 01a154c1-87c3-79b3-8a98-b7d9eb1beab0
+  author: joe
+  content: |-
+    Advisor ruling 2026-10-19 08:30 (operator: cycle speed is the top priority; CPU-bound box): ADD SLICE S6, CI job fan-out. It is APPROVED and needs no harness sketch, because it changes only the job layout, not the test harness.
+    Why: the repo is PUBLIC, so GitHub-hosted runners are free and run up to 20 jobs concurrently, and they use none of the local CPU. Run 39228940147 took 35 min wall: the build took 1.5 min (rust-cache works), Run tests 18 min on ONE runner, and about 12 min of serial post-test gates followed.
+    S6: split the Build job into parallel matrix jobs, each restoring the same rust-cache key:
+    (a) aida_cli_lib unit tests;
+    (b) aida-cli integration binaries, first half;
+    (c) aida-cli integration binaries, second half;
+    (d) the remaining crates + doc tests;
+    (e) all non-test gates (MCP/history contract tests, hook tests, guards, clippy).
+    The binary list is split deterministically: sorted, alternating by measured time. Add one aggregate 'Build (ubuntu-latest)' job with needs: [all], so branch protection and merge-hold-gate keep the same required check name.
+    Target: green PR CI in 12 min or less, with no loss of coverage (the AC5 count rule applies). S2 (nextest) later replaces the half-split with --partition.
+    Owner: the codex speed batch, item 1. Merge it after #2754 if they conflict on ci.yml.
+  created_at: 2026-10-19T15:22:11.779541518Z
+  modified_at: 2026-10-19T15:22:11.779541518Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
