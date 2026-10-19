@@ -6,12 +6,12 @@ description: |-
 
   minor (non-blocking): aida-cargo-timeout-guard.sh misses `timeout N bash -c "cargo ..."` / sh -c forms because quoted bodies are stripped before matching.
   Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T18:01:00.274729740Z
-modified_at: 2026-10-19T19:49:18.546546182Z
+modified_at: 2026-10-19T19:49:22.035315728Z
 req_type: Task
 tags:
 - carried-from:STORY-1854
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-19T19:49:18.546546182Z
   modified_at: 2026-10-19T19:49:18.546546182Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b6-21f3-7c70-9f5c-dc636e8c1e2f
+  author: joe
+  timestamp: 2026-10-19T19:49:22.035308101Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
   branch: main
