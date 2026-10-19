@@ -22,18 +22,27 @@ description: |-
 
   ### BUG-2182: Flaky: generated_tool_help_timeout_kills_group_and_retains_reason gives zombie reaping only 1s
   aida-cli-lib/src/regen/score.rs:1058-1066 waits 1s for the killed descendant pid to stop being alive, but an orphaned zombie stays 'alive' to pid_is_alive until init reaps it, which can take longer than 1s under CI load. It failed on the PR-2749 head 1df8b54d1d (CI 2026-10-18 22:04Z) while the PR touches no regen code. Fix: treat zombie state (/proc/<pid>/stat state Z) as dead for this assertion, or use a process-identity check, rather than lengthening the deadline.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:10:09.552795156Z
-modified_at: 2026-10-19T16:10:09.552795156Z
+modified_at: 2026-10-19T16:10:20.671849994Z
 req_type: Task
 tags:
 - ci
 - flaky
 - sweep
 - throughput
+history:
+- id: 01a154ed-9c7f-7af0-a31a-f0ba19c4ea70
+  author: joe
+  timestamp: 2026-10-19T16:10:20.671842703Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
