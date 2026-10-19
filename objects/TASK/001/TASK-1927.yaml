@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:48:55.906671869Z
-modified_at: 2026-10-18T23:48:55.906671869Z
+modified_at: 2026-10-19T16:03:25.201622800Z
 req_type: Task
 tags:
 - cache
 - from-review:PR-2746
 - severity:cosmetic
+comments:
+- id: 01a154e7-4591-7bf1-ba5d-fd9c0a92f60e
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1954 (Sweep: doctor / history / cache / lint / verify follow-ups); full text copied there.'
+  created_at: 2026-10-19T16:03:25.201622800Z
+  modified_at: 2026-10-19T16:03:25.201622800Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
   branch: pr-2746
