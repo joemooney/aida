@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T19:51:34.247644269Z
+modified_at: 2026-10-19T19:51:39.077118511Z
 req_type: Story
 tags:
 - ci
@@ -110,6 +110,12 @@ comments:
     Slices in order: S1 = TASK-1960 (patch-id carry-over; it also closes BUG-2177 and is needed today, because each main merge stales every approval), then S2 builder + dry-run + regression demo, S3 hold-gate train mode, S4 land + bookkeeping, S5 bisect + docs + retire serial-ship.sh. File S2-S5 as tasks when S1 lands.
   created_at: 2026-10-19T16:15:35.738997323Z
   modified_at: 2026-10-19T16:15:35.738997323Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a155b8-3945-72f0-be75-220e9bc93888
+  author: joe
+  content: 'Advisor: folded in TASK-1378. The train builder (S2) must refuse or skip DRAFT member PRs with a stated reason, never wait on a Build that a draft never runs.'
+  created_at: 2026-10-19T19:51:39.077118511Z
+  modified_at: 2026-10-19T19:51:39.077118511Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
