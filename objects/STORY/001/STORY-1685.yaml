@@ -19,11 +19,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T06:17:24.784149600Z
-modified_at: 2026-10-13T06:17:24.784149600Z
+modified_at: 2026-10-19T15:50:58.434413506Z
 req_type: Story
 tags:
 - handoff
+- operator-held
 - relay
+history:
+- id: 01a154db-e195-7801-b97e-273ae9dc2383
+  author: joe
+  timestamp: 2026-10-19T15:50:58.709177532Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:58.434413506Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: 3618fe739ba92b7df8c2a79a42f7ccc0da18d2ab
   branch: main
