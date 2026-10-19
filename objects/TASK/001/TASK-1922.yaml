@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:01:16.525838950Z
-modified_at: 2026-10-18T21:01:16.525838950Z
+modified_at: 2026-10-19T15:44:30.198007892Z
 req_type: Task
 tags:
 - from-review:PR-2739
 - history
 - severity:minor
+comments:
+- id: 01a154d5-f3f6-7bf1-b089-768372c8945a
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. aaff1236ad: history_cache.rs:733 puts the trailer field after %s.'
+  created_at: 2026-10-19T15:44:30.198007892Z
+  modified_at: 2026-10-19T15:44:30.198007892Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
