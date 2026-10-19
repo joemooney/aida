@@ -1,0 +1,35 @@
+id: 01a154c5-609a-7d51-9126-d7d4345597dd
+spec_id: TASK-1945
+agreed_id: TASK-1945
+title: 'Review-on-push pipeline: start the attested review when a PR head changes; ship only when the verdict on that SHA is approved and CI on that SHA is green'
+description: |-
+  Operator ruling 2026-10-19 08:26: reviews must not wait for CI. Make that structural, so it no longer depends on advisor memory.
+
+  Today the advisor hand-writes per-session shell loops: poll the PR head, wait for CI, run `aida queue work PR-N --role reviewer --no-human --vendor claude`, read .aida/review-verdicts/PR-N.json, then run `aida pr ship N --wait 3600`. They are lost at every relay handoff.
+
+  Build one first-class, idempotent runner, e.g. an `aida review watch` subcommand registered in its own module (command_registry.rs) or an `aida watch --emit-wakes` consumer:
+  1. On a new head SHA for an open, non-draft PR, start the attested reviewer immediately, without waiting for CI. Skip when the PR is behind origin/main with overlapping files; in that case mail the PR author 'merge main' once per head. Never run two reviewers on one PR, and supersede a running review when a new head lands.
+  2. Ship gate: a PR becomes ship-ready only when the verdict is approved, reviewed_sha == head SHA, CI conclusion == success on that same SHA, the branch is 0 behind main, and no merge hold is set. Emit a wake or mail to the advisor; auto-ship only under an active fire-mode mandate, which the existing ship path already checks.
+  3. On a request-changes verdict, mail the PR author the findings file path once.
+  4. Respect the cargo-slot limiter and a max-concurrent-reviewers setting (default 2). Reviewers run no cargo.
+  5. Tests: (a) a review starts on a pending-CI head; (b) a stale head is skipped and mailed once; (c) the ship gate refuses on an SHA mismatch, red CI or a hold; (d) a new head supersedes a running review; (e) a restart is idempotent and launches no duplicate reviewers.
+  The 2-round cap and risk-scaled review rules are unchanged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:26:23.898572812Z
+modified_at: 2026-10-19T15:26:23.898572812Z
+req_type: Task
+tags:
+- review
+- ship
+- throughput
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
