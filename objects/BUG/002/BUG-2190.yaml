@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:14:07.605406343Z
-modified_at: 2026-10-19T15:14:52.838002424Z
+modified_at: 2026-10-19T15:21:14.919487310Z
 req_type: Bug
 tags:
 - burndown
 - cli
 - list
+comments:
+- id: 01a154c0-a9a7-70c0-a96b-e6f712f5ee8f
+  author: ai:codex:joe
+  content: 'Root cause reproduced: the primary checkout has persisted focus BUG-2149, whose subtree contains no open matches. Bare list and explicit statuses return 0 there; --no-focus restores 240 open rows. A fresh sibling worktree has no focus and returns rows normally. Cache statuses and SQL normalization are correct. The existing focus banner is emitted only after the machine-output early returns, so TOON, JSON and --short silently hide the scope. Fix will disclose focus on every renderer (JSON/short stderr) and add real-CLI open-status plus focused-empty regressions; preserve intentional focus semantics.'
+  created_at: 2026-10-19T15:21:14.919487310Z
+  modified_at: 2026-10-19T15:21:14.919487310Z
 history:
 - id: 01a154ba-d525-7cf0-b362-1254df941302
   author: joe
