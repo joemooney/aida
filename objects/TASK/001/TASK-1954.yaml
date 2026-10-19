@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-19T16:03:31.600255710Z
+modified_at: 2026-10-19T16:09:36.293318927Z
 req_type: Task
 tags:
 - cli
@@ -112,6 +112,25 @@ relationships:
   target_id: 01a1516b-19e2-7d81-b1d2-dd257de51f34
   created_at: 2026-10-19T16:03:31.600251590Z
   created_by: joe
+comments:
+- id: 01a154ec-ef25-7c33-9dfd-7a4d5d700bbd
+  author: joe
+  content: |
+    Advisor triage 2026-10-19: further items rolled into this sweep (full text below; each original is superseded by this sweep).
+
+    ### BUG-2129: usage telemetry logs any command invoked with a leading global flag (aida --format toon show X) as <root>, hiding it from per-command latency budgets
+    Found while writing BUG-1993's phase-timing test. `usage::derive_cmd_shape` (aida-cli-lib/src/usage.rs) stops at the first token starting with `-`. So any invocation that puts a global flag BEFORE the subcommand, such as `aida --format toon show BUG-1`, is logged with cmd `<root>` instead of `show`.
+
+    Impact: those calls disappear from the per-command latency and error stats, including `aida doctor check performance` show budget, which reads `usage.jsonl` by cmd. Observed: `{"cmd":"<root>","args_count":4,...}` for `aida --format toon show BUG-1`.
+
+    Fix sketch: skip known global flags, and their value when the flag takes one (`--format <v>`, and any other `global = true` options in cli.rs), before capturing the subcommand path. Keep it cheap, because the statusline logs on a hot path. Add a unit test for `--format toon show X` resolving to `show`.
+
+    ## Acceptance
+    - `derive_cmd_shape(["aida","--format","toon","show","BUG-1"])` returns `show`, and the same holds for every other value-taking global flag.
+    - A bare `aida --version` / `aida` still returns `<root>`.
+  created_at: 2026-10-19T16:09:36.293318927Z
+  modified_at: 2026-10-19T16:09:36.293318927Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
   author: joe
