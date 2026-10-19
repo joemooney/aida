@@ -167,10 +167,9 @@ pub(crate) fn statusline_marker(drift: Option<&CheckoutDrift>) -> Option<&'stati
 /// Returns `None` when git fails (not a repository, git missing).
 // trace:STORY-1648 | ai:claude
 pub(crate) fn probe(root: &Path) -> Option<CheckoutDrift> {
-    let out = std::process::Command::new("git")
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(root)
         .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(root)
         .args(["status", "--porcelain=v2", "--branch"])
         .output()
         .ok()?;

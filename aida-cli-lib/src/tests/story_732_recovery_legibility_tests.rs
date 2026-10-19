@@ -90,16 +90,23 @@ fn non_terminal_stale_lease_keeps_orphaned_warning() {
 /// resolves to the same view as `aida findings list`.
 #[test]
 fn bare_findings_parses_to_optional_subcommand() {
-    let bare = Cli::try_parse_from(["aida", "findings"]).expect("bare findings must parse");
+    let bare = crate::command_registry::try_parse_from(["aida", "findings"])
+        .expect("bare findings must parse");
     assert!(
-        matches!(bare.command, Command::Findings { cmd: None }),
+        matches!(
+            bare.command
+                .registered::<crate::findings_gate::FindingsArgs>(),
+            crate::findings_gate::FindingsArgs { cmd: None }
+        ),
         "bare `aida findings` defaults to no subcommand (→ list)"
     );
-    let listed =
-        Cli::try_parse_from(["aida", "findings", "list"]).expect("findings list must parse");
+    let listed = crate::command_registry::try_parse_from(["aida", "findings", "list"])
+        .expect("findings list must parse");
     assert!(matches!(
-        listed.command,
-        Command::Findings {
+        listed
+            .command
+            .registered::<crate::findings_gate::FindingsArgs>(),
+        crate::findings_gate::FindingsArgs {
             cmd: Some(FindingsCommand::List { .. })
         }
     ));

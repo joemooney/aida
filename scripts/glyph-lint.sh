@@ -54,6 +54,10 @@ ALLOW_LIST=(
   # strings rendered in `--help`), which cannot route through the runtime glyph
   # registry. Kept on the allow-list by design. (TASK-840)
   "$SRC_DIR/cli.rs"
+  # Each command's clap types moved out of cli.rs into `<module>_args.rs`
+  # with the same `///` help text, so the same reasoning covers them.
+  # trace:STORY-1728 | ai:claude
+  "$SRC_DIR"/*_args.rs
 )
 
 block_mode=0

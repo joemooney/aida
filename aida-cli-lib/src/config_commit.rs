@@ -71,9 +71,8 @@ pub(crate) fn config_is_clean(root: &Path) -> Option<bool> {
         .args(["ls-files", "--error-unmatch", "--", CONFIG_REL_PATH])
         .output()
         .ok()?;
-    let status = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    // trace:BUG-1985 | ai:claude
+    let status = aida_core::git_ops::host_git_command(root)
         .args(["status", "--porcelain", "--", CONFIG_REL_PATH])
         .output()
         .ok()?;

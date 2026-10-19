@@ -15,6 +15,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "store_cmd_args.rs"]
+pub(crate) mod store_cmd_args;
+pub(crate) use store_cmd_args::*;
+
 use crate::*;
 
 pub(crate) fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
@@ -476,3 +481,41 @@ pub(crate) fn parse_paired_store_sha(trailer_text: &str) -> Option<String> {
         .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()))
         .filter(|s| crate::git_arg_guard::is_hex_sha(s))
 }
+
+/// Inspect and align the orphan-store SHA against code commits.
+/// Pairs with the prepare-commit-msg hook (`aida-store-pair.sh`)
+/// that pins the store SHA into every code commit's trailer via an
+/// `Aida-Store: <sha>` line.
+// trace:EPIC-21 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "store")]
+pub(crate) struct StoreArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::StoreCommand,
+}
+
+// Store commands inspect git state, no AIDA storage needed.
+// trace:EPIC-21 | ai:claude
+fn run_store(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <StoreArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let store_cmd = &args.inner;
+    return self::handle_store_command(store_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STORE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "store",
+        help_after: "doctor",
+        command: <StoreArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_store),
+    };
