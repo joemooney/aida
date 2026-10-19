@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:21.134258476Z
-modified_at: 2026-10-18T20:53:21.134258476Z
+modified_at: 2026-10-19T15:47:37.150593413Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
 - finding-hash:9796e974
 - from-review:TASK-1803
 - kind:carried-forward
+comments:
+- id: 01a154d8-ce3e-7803-b17d-048bc0a39d94
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1920. aida show TASK-1409 requires a bounded combined store_history_alias_ids scan for unresolved trace IDs; TASK-1920 item 1 owns that same unbounded git log --all -G performance repair. BUG-2179 is related but concerns the b'
+  created_at: 2026-10-19T15:47:37.150593413Z
+  modified_at: 2026-10-19T15:47:37.150593413Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-7714-73c3-8336-f1fbc602a77a
   author: joe
