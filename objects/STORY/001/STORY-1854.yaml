@@ -22,13 +22,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T04:24:25.684853123Z
-modified_at: 2026-10-19T06:49:45.171732895Z
+modified_at: 2026-10-19T06:50:01.357939979Z
 req_type: Story
 tags:
 - cargo
 - discipline
 - hooks
 - timeout
+comments:
+- id: 01a152ec-9f0d-7d11-9bf2-e273717cbf58
+  author: joe
+  content: Approved by the operator 2026-10-18 23:49 MST (burndown-speed priorities, alongside STORY-1690/1853/1854 and aida-host STORY-100). Advisor dispatches after the STORY-1728 window; any slice the spec marks as needing a sketch requires advisor signoff before implementation.
+  created_at: 2026-10-19T06:50:01.357939979Z
+  modified_at: 2026-10-19T06:50:01.357939979Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-5fd3-79c0-aa1a-0ac8e9181c47
   author: joe
