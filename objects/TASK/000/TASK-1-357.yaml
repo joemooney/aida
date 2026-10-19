@@ -1,0 +1,30 @@
+id: 01a1518f-9a30-7291-91d4-bae6eb9c0510
+spec_id: TASK-1-357
+title: 'NON-BLOCKING (cosmetic): git_backend_cmd.rs:4340 silently skips the blocks.yaml…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2140, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  NON-BLOCKING (cosmetic): git_backend_cmd.rs:4340 silently skips the blocks.yaml pointer commit when deferred, with no notice_store_commit_deferred call. Also, auto_commit_paths now calls refuse_embedded_repos up front and again inside every add/add_all, so each targeted write walks the full store tree (~5.4k objects) several times.
+
+  PR: #2749
+  Reviewed sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T00:28:48.048522447Z
+modified_at: 2026-10-19T00:28:48.048522447Z
+req_type: Task
+tags:
+- carried-from:BUG-2140
+- finding-hash:f7fdc4a2
+- from-review:PR-2749
+- kind:carried-forward
+filed_at:
+  code_sha: 4ac9efab327e10def5d7d2d127bcaeb22c219d54
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
