@@ -1,0 +1,19 @@
+{
+  "id": "04710ea3-2c2d-4c19-9576-c52cff78b803",
+  "thread_id": "04710ea3-2c2d-4c19-9576-c52cff78b803",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792394905203,
+  "body": "PR #2754 (non-draft), 3 commits, one per slice:\n- S0 0fedb5b: test-touched caps aida-cli-lib widening (it narrows to the named modules, or exits 5 and asks for --filter; --allow-full lifts the cap). The git-guardrails hook blocks commands that set AIDA_CARGO_NO_SLOT. Templates: rework-brief-craft step 6, implementer discipline, aida-review, advisor standing order 7. sync-templates and check-templates OK.\n- S0b f0b72b2: the Makefile test targets default to --profile agent. make check-ci runs CI's cargo test step on --profile agent locally.\n- S1 c354971: CI tees Run tests into a log. A new \"Test time budget\" step (per-binary timings: job summary plus artifact) fails on any binary over 10 s without an entry in scripts/test-time-budget.toml. The budget is seeded from runs 39186737460 and 39208649075 (the slower run x1.5). Baseline count: 11,671 passed+ignored, 85 binaries.\nGate: check-ci-fast green (31 gates). Targeted runs green: aida-core 231, aida-cli-lib 478 (the test-touched-named modules), task_1555 guard 4. Python suites green. No full suite run.\n\nFindings:\n1. The spec's \"context_budget 40 s / 1549 tests\" row is really aida_core's unit binary. CI's merged streams put the next header before the previous result. context_budget itself takes 0.02 s.\n2. Runner variance between the two runs is ~30% (747 s vs 958 s summed).\n\nSKETCH for S2/S3 is posted as a comment on STORY-1853. It asks for signoff on: (a) nextest as a non-gating shadow step for 3 main runs, then the swap; (b) S3 (one tests/it harness) only after S2; (c) aida-host's slot wrapper gating `cargo nextest`, as a dependency of the S2 swap. Estimate: S2 alone takes the step from 904 s to ~430-530 s, so S3 and S4 are needed to reach 360 s.\n\nNote: this session started in the advisor seat (inherited env). `aida role enter` needs a TTY, so I proceeded per the operator-approved implementer brief after the one-time guard warning.\n",
+  "subject": "#2754 STORY-1853 ready (S0/S0b/S1) + S2/S3 sketch for signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

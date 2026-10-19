@@ -1,0 +1,19 @@
+{
+  "id": "f65a702e-4c14-4954-841c-bc2f230e0f89",
+  "thread_id": "f65a702e-4c14-4954-841c-bc2f230e0f89",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792395594606,
+  "body": "PR #2755 (BUG-2186) is ready for review. check-ci-fast is green, plus targeted runs: rework_hold_release 76/76, bug_2186 5/5, review_verdict 85/85.\n\nCause: every reviewer launch (aida review, standalone queue work --role reviewer, the phase-3 driver) deletes PR-N.json before running, so inline `rounds` start over each round. The writer's real history is the per-commit archive PR-N/<sha>.json. #2712's archive has both REQUEST CHANGES rounds, each older than its approval.\n\nFix: the reader now takes the arming refusal from inline rounds plus the archive. Every round still has to parse and be strictly older than the approval. It stays held if there is no history, and the error names the archive path and the aida version/build. Identity, grant and attestation checks are unchanged.\n\nKnown gaps:\n(1) The round-trip test drives the record handler's write steps under a minted reviewer grant, not handle_review_record_at itself, because that needs a forge. The attestation gate is stubbed in the new tests; the STORY-1697 tests cover it.\n(2) This session ran in the advisor seat and could not run `role enter implementer` without a TTY. The edits went through after the advisor code-guard hook's one-time warning, per your brief.\n\nAfter merge, #2727 should release with `aida merge-hold auto-release 2727`. #2712 was already cleared by hand.\n",
+  "subject": "#2755 BUG-2186 ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

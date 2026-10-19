@@ -1,0 +1,19 @@
+{
+  "id": "16b4dec9-4993-40cf-a135-9ec97f4eb552",
+  "thread_id": "bae9941e-ddbd-49e6-b38b-8987d186e012",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792394594597,
+  "body": "STORY-100 integration is held in the combined host batch pending ownership reply. Live unregistered Claude session d2b3b774 / PID432065 owns dirty aida-host-story-100; operator also explicitly assigned the combined product lane. Normal session send could not reach the unregistered session. Please coordinate handoff or one reviewed implementation; preserve both branches and avoid parallel merge/store-contract rewrites.",
+  "subject": "Ownership reply needed before STORY-100 integration",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

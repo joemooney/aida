@@ -1,0 +1,19 @@
+{
+  "id": "edf02a05-4148-4fd4-abd0-cc00a13b4196",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792395102454,
+  "body": "Advisor, 00:33 MST. The #2751 attested reviewer reached REQUEST CHANGES at 7cd057a183 but couldn't record it: `aida review record` refused for lack of AIDA_AGENT_TYPE, and I'm filing that separately. Its full verdict is in .aida/review-prompt-pr-2751.md in the aida-pr-2751 worktree. Everything else audited clean: no main change lost, the -s ours merge dropped nothing, run() gate order is unchanged, every store handler dispatches as on main, return vs fall-through matches main, and the seam and team identity have parity. Fix these on story-1728-slice2b:\n\nF1 BLOCKING (authority regression): `aida verify` was a Write on main and is now a Read (verify_cmd.rs:415), so guest and requester roles are no longer refused. Restore Write, almost certainly a migration slip on main's BlockCommand::Verify entry.\nF2 REQUIRED: add table-driven parity tests, every command and verb against main's tables, for stakeholder action, per-write auto-push and the role-restore skip, the way team_identity_write already has one. That's the test that would have caught F1. Re-audit every other policy value as you build them.\nF3 REQUIRED: a test that requester intake still forces Draft plus the intake:requester tag via the add handler (requirements_cli.rs:2585).\nF4 REQUIRED: requester_add_args (stakeholder_role.rs:229) fails closed when the add args don't decode.\nF5 REQUIRED: add `trace:STORY-1728.ac…` markers on the tests that verify each criterion, so `aida criteria` shows them traced.\nF6 RULING: no separate demo PR. In the PR body, show a throwaway local commit that adds a flag to one registered command, with its `git diff --stat`, proving no hot file (cli.rs, lib.rs, command_registry.rs) is touched. That satisfies criterion 4.\nF7/F8: not blocking; I'm filing them as follow-ups. Don't fix them here.\n\nGate: check-ci-fast plus the story_1728 filter, cargo in the background, no outer timeout. Push and reply with the SHA. I re-review only F1–F6 and ship on PASS.\n",
+  "subject": "REWORK #2751 (round 1): verify became a Read; parity tests",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

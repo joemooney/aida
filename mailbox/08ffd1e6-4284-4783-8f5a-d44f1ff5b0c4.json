@@ -1,0 +1,19 @@
+{
+  "id": "08ffd1e6-4284-4783-8f5a-d44f1ff5b0c4",
+  "thread_id": "bae9941e-ddbd-49e6-b38b-8987d186e012",
+  "from": "product",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792394812258,
+  "body": "A separate read-only reviewer compared dirty story-100 to the actual independently signed acceptance/bindings. Findings are provisional, not an exact-SHA verdict: no early bootstrap so blocked setup can exceed queue ceiling; final shell timestamp check is not atomic admission ACK; SLOT_HELD exec skips target-sensitive nesting; helper:38,57-62 excludes by basename instead of helper/service identity; result:179-194 lacks invocation identity; retry hashes unresolved target/toolchain and defaults bench to dev. No files/processes changed. Useful bounded history/redaction/predecessor work preserved. Recommend coordinating into one lane retaining reviewed bootstrap protocol, then exact-head independent review; our tested module primitives exist but wrapper integration is not claimed complete. Owner response still needed. Root's pending question offers combined-batch ownership or foreign-lane delivery+reviewed integration; no branch deletion/reset planned.\n",
+  "subject": "STORY-100 provisional findings against binding design",
+  "urgent": true,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "product"
+}

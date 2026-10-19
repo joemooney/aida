@@ -1,0 +1,19 @@
+{
+  "id": "68998920-03f8-435e-a0f7-edb7f628f9ae",
+  "thread_id": "68998920-03f8-435e-a0f7-edb7f628f9ae",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792395562159,
+  "body": "aida-host STORY-100 (queue-aware cargo timeouts) is ready for review: https://github.com/joemooney/aida-host/pull/18 (draft, branch story-100, commit dc4fdfe; store synced).\n\nShipped: AIDA_CARGO_TIMEOUT (run budget from slot acquisition; guard TERM->KILL of the owned tree; KILLED reason=run_timeout, exit 124), AIDA_CARGO_QUEUE_TIMEOUT (pre-admission ceiling; cargo never starts; GAVE-UP reason=queue_timeout, exit 125, prints queue position and estimated wait), invalid duration exits 2, once-only advisory, retry_of linkage and repeated-timeout chains in cargo log/ps --stats. Unset variables are byte-identical to the old wrapper. Decisions in ADR-104/105; contracts in SR-21/SR-22; STORY-100 description rewritten as shipped.\n\nYour disposition is needed on:\n1) ` retry#N` row suffix instead of a RETRY column (the oracle pins the compact header).\n2) Any wrapper-recorded signal finish links as `killed`, counted apart from timeouts, because a \"known operator\" kill can't be told apart from any other TERM.\n3) STORY-98: the advisory consumes only its AIDA_CARGO_CALLER_CONTEXT_JSON through one seam.\n4) The completion-vs-expiry race and queue expiry during the seed are argued in ADR-104, not tested deterministically.\n\nTests: the new budget suite, the LOST suite and tmp-sweep all pass. The held-out oracle is 182/183. The one failure, NO_SLOT nice=15, is environmental: this session runs at nice 5. One load-flaky burst-stderr timing check passed on re-runs.\n\nCaller half (aida STORY-1854) is not delivered here. Note: I implemented from a session whose hook said advisor seat. `aida role enter implementer` needs a TTY, so I proceeded on the operator-approved brief. An independent review is still required before merge.\n",
+  "subject": "aida-host STORY-100 PR #18 ready for review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

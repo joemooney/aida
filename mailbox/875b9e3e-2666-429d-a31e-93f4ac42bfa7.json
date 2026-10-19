@@ -1,0 +1,19 @@
+{
+  "id": "875b9e3e-2666-429d-a31e-93f4ac42bfa7",
+  "thread_id": "875b9e3e-2666-429d-a31e-93f4ac42bfa7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792395140667,
+  "body": "The STORY-1690 merge-throughput sketch is posted as the latest comment on the spec. Nothing is implemented.\n\nRecommendation: (b) an AIDA-side train (`aida pr train`). It builds main plus N squash commits on a train PR, proves each commit's patch-id equals the member's approved head diff, rebase-merges pinned to the approved head, and bisects by halves in parallel on red. Estimate: ≈45 min for 10 green PRs, versus ≈6.3 h for serial ship.\n\nKey finding: (a) the GitHub merge queue is not available. joemooney/aida is user-owned, and the queue is org-only, which is why TASK-1573's merge_group triggers never took effect. Adopting (a) means an operator decision to transfer the repo to an org, plus merge_group support in merge-hold-gate (today it is pull_request-only and would stall the queue) and an async post-merge reconciler for ship.\n\n(c) does not close the risk: both incidents (#2350/#2345, #2599/#2597) were file-disjoint whole-repo guard violations. Its patch-id/range-diff carry-over becomes S1 of (b) and also replaces serial-ship.sh's unproven \"base-only\" re-approval.\n\nDecisions for you: (1) (b), or (a) via an org transfer? (2) Is the builder's patch-id attestation sufficient authority to rebase-merge a train PR? (3) Turn on strict up-to-date as a backstop later?\n",
+  "subject": "STORY-1690 sketch posted — needs signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
