@@ -6,12 +6,12 @@ description: |
   No test drives run_standalone_reviewer (aida-cli-lib/src/queue_cmd.rs:13400) or the RealPhaseDriver implementer/reviewer call sites (phase_driver_trait.rs ~506, ~2145). bug_2180_reviewer_request_changes_leaves_store_worktree_clean calls commit_child_store_writes directly, so deleting a call site would not fail any test.
 
   Raised in review of PR-2750: https://github.com/joemooney/aida/pull/2750#issuecomment-6256980556
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T00:19:21.972764557Z
-modified_at: 2026-10-19T16:05:15.034739259Z
+modified_at: 2026-10-19T16:05:16.822909392Z
 req_type: Task
 tags:
 - from-review:PR-2750
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-19T16:05:15.034739259Z
   modified_at: 2026-10-19T16:05:15.034739259Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e8-f996-7293-a41e-b01a96e4b7d0
+  author: joe
+  timestamp: 2026-10-19T16:05:16.822901650Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f820d565f53e9b781db5f81cc063f4807ce89272
   branch: pr-2750
