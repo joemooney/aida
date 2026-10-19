@@ -327,19 +327,39 @@ pub(crate) fn lookup(name: &str) -> Option<&'static CommandReg> {
 // trace:STORY-1728 | ai:claude
 pub(crate) fn built_command() -> clap::Command {
     let mut root = Cli::command();
-    let mut order: Vec<&str> = Vec::new();
     let legacy: Vec<String> = root
         .get_subcommands()
         .map(|sub| sub.get_name().to_string())
         .collect();
-    order.extend(legacy.iter().map(String::as_str));
     for reg in REGISTRY {
         root = root.subcommand((reg.command)());
     }
-    // Anchors may themselves be registered, so place entries in rounds until
-    // none moves; `help_after: ""` is the first command. Reverse registry
-    // order keeps same-anchor siblings sorted.
-    let mut pending: Vec<&CommandReg> = REGISTRY.iter().rev().copied().collect();
+    let legacy: Vec<&str> = legacy.iter().map(String::as_str).collect();
+    let order = help_order(&legacy, REGISTRY).unwrap_or_else(|err| panic!("{err}"));
+    // `mut_subcommand` re-appends, so this also fixes iteration order.
+    for (at, name) in order.iter().enumerate() {
+        root = root.mut_subcommand(name, |sub| sub.display_order(at));
+    }
+    root
+}
+
+/// Top-level display order: the legacy commands in their own order, each
+/// registered command placed right after its `help_after` anchor. Anchors may
+/// themselves be registered, so entries are placed in rounds until none moves;
+/// `help_after: ""` places an entry first, and entries sharing an anchor land
+/// in name order whatever the input order. An
+/// anchor that never resolves (unknown, or a cycle among registered entries)
+/// is an error naming every stuck entry, never a silent append.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn help_order<'a>(
+    legacy: &[&'a str],
+    regs: &[&'a CommandReg],
+) -> Result<Vec<&'a str>, String> {
+    let mut order: Vec<&'a str> = legacy.to_vec();
+    // Inserting each sibling straight after the anchor reverses insertion
+    // order, so place them in reverse name order.
+    let mut pending: Vec<&CommandReg> = regs.to_vec();
+    pending.sort_by(|a, b| b.name.cmp(a.name));
     while !pending.is_empty() {
         let before = pending.len();
         pending.retain(|reg| {
@@ -360,16 +380,18 @@ pub(crate) fn built_command() -> clap::Command {
             }
         });
         if pending.len() == before {
-            // An unknown anchor lands last; a test rejects it.
-            order.extend(pending.iter().map(|reg| reg.name));
-            break;
+            let mut stuck: Vec<String> = pending
+                .iter()
+                .map(|reg| format!("`{}` (help_after `{}`)", reg.name, reg.help_after))
+                .collect();
+            stuck.sort();
+            return Err(format!(
+                "registered commands with an unknown or cyclic help_after anchor: {}",
+                stuck.join(", ")
+            ));
         }
     }
-    // `mut_subcommand` re-appends, so this also fixes iteration order.
-    for (at, name) in order.iter().enumerate() {
-        root = root.mut_subcommand(name, |sub| sub.display_order(at));
-    }
-    root
+    Ok(order)
 }
 
 /// Parse argv against [`built_command`]; clap's own error on failure.

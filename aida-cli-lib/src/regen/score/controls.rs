@@ -597,7 +597,6 @@ mod tests {
     }
     #[test]
     fn cli_requires_exactly_a_trial_directory_or_generated_control() {
-        use clap::Parser;
         let suffix = [
             "--corpus",
             "/corpus",
