@@ -1,0 +1,27 @@
+id: 01a155b0-3617-7301-9ee2-0bb6cec2af5e
+spec_id: TASK-1966
+agreed_id: TASK-1966
+title: mandate_ship_cover runs the carry-over proof even where it is ignored
+description: |
+  pr_cmd.rs mandate_ship_cover always calls mandate_carry_over, which runs git ls-remote origin HEAD plus a fetch of the base and of any missing shas. rework_release_decision ignores ShipCheck.carry_over, so the proof is wasted there. A mandate ship also computes the cover twice (mandate_cover_now at the start and again at the re-check). Consider computing the carry-over only for ship_decision.
+
+  Raised in review of PR-2758 (round 2, head 57b4081532): https://github.com/joemooney/aida/pull/2758
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T19:42:53.975271411Z
+modified_at: 2026-10-19T19:42:53.975271411Z
+req_type: Task
+tags:
+- efficiency
+- from-review:PR-2758
+- severity:cosmetic
+filed_at:
+  code_sha: 57b4081532447f793a26d87dabb368f28b00b752
+  branch: pr-2758
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dd4b6ed730
+  vendor: claude
+  session: 01a1558f0c0f
