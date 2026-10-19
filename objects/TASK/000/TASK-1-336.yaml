@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T17:28:55.962175042Z
-modified_at: 2026-10-18T17:28:55.962175042Z
+modified_at: 2026-10-19T15:47:21.393304167Z
 req_type: Task
 tags:
 - carried-from:TASK-1783
 - finding-hash:46a629bb
 - from-review:TASK-1783
 - kind:carried-forward
+comments:
+- id: 01a154d8-90b1-7300-b4b2-305af917988d
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1916. aida show TASK-1404 and TASK-1916 both specify non-.rs tree-coverage diagnostics and cfg(test) function noise; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the '
+  created_at: 2026-10-19T15:47:21.393304167Z
+  modified_at: 2026-10-19T15:47:21.393304167Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15019-ed7f-7f52-be3a-e7116a13ed17
   author: joe
