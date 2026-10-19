@@ -1,0 +1,26 @@
+id: 01a15368-91c6-72e1-984d-46c32de7bd74
+spec_id: TASK-1938
+agreed_id: TASK-1938
+title: Spec-ID leak scan misses clap types outside *_args.rs; stale Cli::command() doc in cmd_palette
+description: |
+  The /// spec-ID scan (aida-cli-lib/src/cli.rs:928-963) is not recursive and only covers cli.rs, *_args.rs and CommandReg files. It misses DriverCommand (driver_cmd.rs:19) and the ValueEnums at integrate.rs:413, complexity_calibration.rs:85, digest.rs:33/:60, pr_ship.rs:191 and findings.rs:114. None of them leak today. The doc at aida-tui/src/cmd_palette.rs:77 still tells callers to pass aida_cli::Cli::command().
+
+  Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:05:24.422961425Z
+modified_at: 2026-10-19T09:05:24.422961425Z
+req_type: Task
+tags:
+- from-review:PR-2751
+- severity:cosmetic
+filed_at:
+  code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
+  branch: pr-2751
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1535eadaf

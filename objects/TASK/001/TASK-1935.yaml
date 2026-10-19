@@ -1,0 +1,26 @@
+id: 01a15368-6b27-7482-9ad8-618d1ac2c541
+spec_id: TASK-1935
+agreed_id: TASK-1935
+title: 'Strengthen STORY-1728 early-dispatch test: recursive scan, any receiver, prelude helpers'
+description: |
+  run_dispatches_early_handlers_before_any_store_is_opened (aida-cli-lib/src/tests/story_1728_command_registry_tests.rs:523) scans only run()'s own text. It does not inspect prelude helpers (enforce_stakeholder_role_capabilities, maybe_prompt_role_restore, maybe_run_asciinema_wrapper, warn_if_cwd_removed). It looks for dispatch sites with non-recursive read_dir (:556) instead of production_sources, and it only matches the 'invocation.' receiver. early_handlers_run_without_a_store_and_continue_reaches_the_store_phase (:461) uses a synthetic handler only. Consider also pinning that Distributed arms return Continue except regen/mcp-serve/jira/github/gitlab (advisor ruling 2b).
+
+  Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:05:14.535451266Z
+modified_at: 2026-10-19T09:05:14.535451266Z
+req_type: Task
+tags:
+- from-review:PR-2751
+- severity:minor
+filed_at:
+  code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
+  branch: pr-2751
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1535eadaf

@@ -1,0 +1,26 @@
+id: 01a15368-9f33-71d3-bc9d-6e177941df4f
+spec_id: TASK-1939
+agreed_id: TASK-1939
+title: Guest stakeholder gets Read for mutating session leases --prune-stale --yes and status --cleanup
+description: |
+  This is pre-existing on main (a27fe3fc76) and carried over unchanged by STORY-1728. golden/story_1728_main_policy.tsv records 'session leases --prune-stale --yes' as Read, but it releases stale leases, a cross-clone mutation. 'status --cleanup' (doctor heal) is also Read. A guest seat may run both. Decide whether these should be Write.
+
+  Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:05:27.859220245Z
+modified_at: 2026-10-19T09:05:27.859220245Z
+req_type: Task
+tags:
+- from-review:PR-2751
+- severity:minor
+filed_at:
+  code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
+  branch: pr-2751
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1535eadaf

@@ -1,0 +1,26 @@
+id: 01a15368-77ba-7770-a807-40a900dc436d
+spec_id: TASK-1936
+agreed_id: TASK-1936
+title: Capture team_identity_write in the STORY-1728 main-policy golden; fix parity-test base citation
+description: |
+  team_identity_write_matches_mains_is_write_command_for_every_verb (story_1728_command_registry_tests.rs:591-615) compares against a hand-copied MAIN_TEAM_IDENTITY_WRITES whose doc comment cites origin/main aaff1236ad rather than the base a27fe3fc76. The list itself matches main's 11 entries. team_identity_write is not a column in golden/story_1728_main_policy.tsv, and team_identity_guard_exemptions_match_main never calls maybe_team_identity_guard (status --format json is uncovered).
+
+  Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:05:17.754242291Z
+modified_at: 2026-10-19T09:05:17.754242291Z
+req_type: Task
+tags:
+- from-review:PR-2751
+- severity:minor
+filed_at:
+  code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
+  branch: pr-2751
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1535eadaf

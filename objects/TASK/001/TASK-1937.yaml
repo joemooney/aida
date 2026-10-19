@@ -1,0 +1,26 @@
+id: 01a15368-846d-7552-8529-6dac39689ed8
+spec_id: TASK-1937
+agreed_id: TASK-1937
+title: Remove STORY-1728 one-shot migration scripts and dead unreachable_patterns arms
+description: |
+  scripts/story-1728/*.py (fix_scope, migrate_command, migrate_store, move_cli_types, rewrite_tests; about 1.4k lines) are referenced by no Makefile, CI job or script, and they target the now-empty legacy enum. The migration also left about 154 '#[allow(unreachable_patterns)] _ =>' dead arms with trailing unreachable Ok(Flow::Continue) (e.g. doc_cmd.rs:584,599; assign_cmd.rs:200-216), plus an irrefutable let-else / 'other =>' on the single-variant Command (command_registry.rs:472; tests :198,:241).
+
+  Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:05:21.005775995Z
+modified_at: 2026-10-19T09:05:21.005775995Z
+req_type: Task
+tags:
+- from-review:PR-2751
+- severity:cosmetic
+filed_at:
+  code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
+  branch: pr-2751
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1535eadaf
