@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1484",
+  "publishes": [
+    {
+      "at": "2026-10-19T15:48:17.921811202Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-09-26T09:52:12.629784017Z",
+      "spec": "STORY-1484",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-09-28T15:51:08.812080963Z",
+      "spec": "STORY-1484",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:48:17.713030546Z",
+      "spec": "STORY-1484",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:48:17.713596042Z",
+      "spec": "STORY-1484",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
