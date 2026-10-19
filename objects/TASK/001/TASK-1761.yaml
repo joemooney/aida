@@ -3,12 +3,12 @@ spec_id: TASK-1761
 agreed_id: TASK-1761
 title: 'BUG-2124 follow-ups: dead env branch in the 8 uncontained builders; production-path tests for --sandbox and per-tool --settings'
 description: 'From the #2640 review: (a) the 8 new builders call containment_applied(..,false), which is always false, so the env(AIDA_CONTAINED,1) branch is dead; use plain env_remove. (b) Add tests: agent_new_claude --sandbox sets contained=true; a per-tool --settings in agents.toml reads as uncontained. (d) burndown_run.rs ~570/~1985 error-string indentation.'
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:16:10.562325329Z
-modified_at: 2026-10-19T15:58:08.050164865Z
+modified_at: 2026-10-19T15:58:10.254143931Z
 req_type: Task
 comments:
 - id: 01a154e2-6eb2-7090-9caa-1da940586a7b
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-19T15:58:08.050164865Z
   modified_at: 2026-10-19T15:58:08.050164865Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e2-774e-7d11-a4b9-3ad137678e55
+  author: joe
+  timestamp: 2026-10-19T15:58:10.254139407Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 11154cd1566734d2bc9c07b087dc9d38fb41820f
   branch: main
