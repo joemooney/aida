@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T21:02:29.234013200Z
-modified_at: 2026-10-18T21:02:29.234013200Z
+modified_at: 2026-10-19T15:47:45.794733221Z
 req_type: Task
 tags:
 - carried-from:TASK-1351
 - finding-hash:124b5fa9
 - from-review:TASK-1351
 - kind:carried-forward
+comments:
+- id: 01a154d8-f002-70b0-bbad-f9efda53d4b5
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1919. aida show TASK-1616 and TASK-1919 identify the same docs/autonomous-drain.md:1260 environment-blocked over-long line; TASK-1919 includes its PR-2738 provenance. No separate behavior change is requested.'
+  created_at: 2026-10-19T15:47:45.794733221Z
+  modified_at: 2026-10-19T15:47:45.794733221Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150ef-9960-7e42-a269-0c1132456bd0
   author: joe
