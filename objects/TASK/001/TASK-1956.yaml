@@ -1,0 +1,44 @@
+id: 01a154ed-7110-7483-a632-cad1329d0524
+spec_id: TASK-1956
+agreed_id: TASK-1956
+title: 'Sweep: known flaky tests (regen parallel git, cache-writer stale read, help-timeout zombie reaping)'
+description: |-
+  Advisor triage 2026-10-19: one sweep for the known intermittent test failures, each of which has failed CI on unrelated PRs (a direct cycle-time cost). Deliver one PR that fixes each flake or proves its root cause; trace each fix to this sweep's ID and the original ID. Gate: check-ci-fast + targeted filters run 20x in a loop (`for i in $(seq 20); do cargo test ... || break; done` under the slot wrapper) + check-ci-compile.
+
+  ### BUG-2155: Investigate intermittent empty-diagnostic Git failures in parallel regen tests
+  Observed while validating STORY-1679 at ebfef68065ce3842a935bb6f14e515d1971ed1f6. One parallel 76-test regeneration run had 74 passes and two empty-diagnostic Git setup failures: consensus_accepts_committed_json_fraction_43_of_44 failed its second git add regen/trials (the valid 43/44 report had already succeeded); unchanged r2_setup_failure_is_durable_without_borrowing_r1_execution_evidence failed git worktree list --porcelain -z. Both exact tests passed immediately from the same compiled binary. The entire suite then passed serially (76/76) and a parallel confirmation passed (76/76), without source changes.
+
+  Evidence: /tmp/regen-relay4-1679-tests-fixed.log (failure), -fraction-exact.log, -adapter-exact.log, -serial.log, -parallel-confirm.log. Source binary: /home/joe/ai/aida/target/worktrees/aida-story-1679/agent/deps/aida_cli_lib-f0d5957c818468f5. Direct runs set RUST_MIN_STACK=8388608 and compiled nothing. Similar transient Git fixture behavior was noted earlier in this relay; marker-FD inheritance is only a hypothesis, not an established cause.
+
+  ## Acceptance
+
+  - Capture Git exit status/signal and process association for an intermittent failing parallel run.
+  - Identify the root cause or record why it remains unresolved; do not infer it solely from a later passing rerun.
+  - If a repair is warranted, scope and review it separately from consensus behavior; preserve all frozen execution and survivor-detection limits.
+
+
+  ### BUG-2156: Investigate intermittent stale result after cache writer lock release in full core tests
+  Observed during STORY-1674 validation on 2026-10-15. Full aida-core agent-profile runtime:1473 passed,4 failed,3 ignored. Three failures were a separate newly introduced empty-YAML first-save regression (being fixed). The fourth was db::cached_git_backend::tests::writer_busy_next_reader_retries_incremental_after_lock_release at cached_git_backend.rs:4337: metadata stale was true instead of false after ROLLBACK released the SQLite writer. The exact same compiled binary rerun of this one test passed in2.84s without any cache-product source change. Evidence: /tmp/regen-relay5-1674-core-runtime-corrected.log and /tmp/regen-relay5-1674-cache-busy-exact.log; binary /home/joe/ai/aida/target/worktrees/aida-story-1674/agent/deps/aida_core-47a8ae8d887838bb. Root cause is UNPROVEN; do not call this pre-existing or environment-only without baseline evidence. BUG-1965 fixed a related but different assertion in reader_incremental_lock_error_does_not_full_rebuild. Investigation should identify the actual stale/refreshing branch (deadline, refresh flock, Git, or another cause), retain the bounded reader contract, and make the recovery assertion deterministic without loosening product budgets or weakening assertions. No cache product/test workaround belongs in STORY-1674 merely to turn this green.
+
+  ### BUG-2182: Flaky: generated_tool_help_timeout_kills_group_and_retains_reason gives zombie reaping only 1s
+  aida-cli-lib/src/regen/score.rs:1058-1066 waits 1s for the killed descendant pid to stop being alive, but an orphaned zombie stays 'alive' to pid_is_alive until init reaps it, which can take longer than 1s under CI load. It failed on the PR-2749 head 1df8b54d1d (CI 2026-10-18 22:04Z) while the PR touches no regen code. Fix: treat zombie state (/proc/<pid>/stat state Z) as dead for this assertion, or use a process-identity check, rather than lengthening the deadline.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T16:10:09.552795156Z
+modified_at: 2026-10-19T16:10:09.552795156Z
+req_type: Task
+tags:
+- ci
+- flaky
+- sweep
+- throughput
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
