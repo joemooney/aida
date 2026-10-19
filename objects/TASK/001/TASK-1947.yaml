@@ -11,11 +11,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:31:37.499132171Z
-modified_at: 2026-10-19T15:31:37.499132171Z
+modified_at: 2026-10-19T16:07:44.482416865Z
 req_type: Task
 tags:
 - from-review:PR-2754
 - severity:cosmetic
+comments:
+- id: 01a154eb-3a62-7ee1-aec1-91906ca3e268
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1948. The #2754 round-2 rework brief (item 4) fixes the TEST_TOUCHED_ALLOW_FULL parse under TASK-1948.'
+  created_at: 2026-10-19T16:07:44.482416865Z
+  modified_at: 2026-10-19T16:07:44.482416865Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: c354971f88d5bacf2aa5d3f62f7c64252c063768
   branch: pr-2754
