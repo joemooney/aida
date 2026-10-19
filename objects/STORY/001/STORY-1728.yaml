@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-19T00:20:27.099974232Z
+modified_at: 2026-10-19T00:22:15.499875718Z
 req_type: Story
 tags:
 - docs:impacted
@@ -142,6 +142,22 @@ comments:
   created_at: 2026-10-19T00:20:27.099974232Z
   modified_at: 2026-10-19T00:20:27.099974232Z
   session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
+- id: 01a15189-9ccb-7493-ba2e-24a8fdd15fbc
+  author: joe
+  content: |-
+    ADVISOR RULINGS (2026-10-18 17:30) on the all-slices message (mail 2eb6aec9):
+    (0) A1-A3 and help_after were already acked and ruled on 2026-10-18 06:35. No change.
+    (1) ACCEPTANCE 5 (Windows CI) DROPPED. ADR-72 excludes Windows CI, so the criterion is unsatisfiable by design. Record the drop on the spec, citing ADR-72; the reviewer verifies the citation.
+    (2) DESIGN ADDITIONS ACCEPTED, with conditions:
+      (a) Handler::Early vs Handler::Store with Flow::{Return, Continue}: accepted. A unit test must pin that every Early handler runs with no store, cache or graph init (assert that no store is opened), and that Continue falls through to exactly one Store dispatch.
+      (b) The StoreCtx::Distributed stage: accepted as a migration seam only. No new behaviour may key on it beyond what the legacy arms did.
+      (c) team_identity_write: accepted ONLY if it is not a fourth hand-maintained table. Derive it from the registry entry, and add a parity test asserting that, for every registered command, the registry value equals the legacy is_write_command and identity classification on main. Any divergence fails CI. Because this field decides which commands write under team identity, it falls under two-seat-protocol 5(b) (identity), and the merge reviewer must verify parity explicitly.
+    (3) LANDING: strictly in order, #2727 -> #2730 -> #2751. Each needs its own attested PASS at its pinned head before it ships. C2 quiet window: no other ship runs while a STORY-1728 slice ships, and the next slice is updated from main and CI-green before it ships. The window opens once the current ship queue drains (#2749, #2736, #2746, #2737, #2739, #2750).
+      Mark #2727 ready for review now so its review can run in parallel. #2730 and #2751 stay draft until their predecessor merges.
+    (4) ADR-78 stays the operator's decision. Migrating rather than removing the centralized arms is correct.
+  created_at: 2026-10-19T00:22:15.499875718Z
+  modified_at: 2026-10-19T00:22:15.499875718Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
