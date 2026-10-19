@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking): no test asserts the store is unchanged after a tree-coverage run (acb82e61 verified by inspection only); add a store-snapshot assertion like task_1785's black-box.
   Reviewed sha: 1d221159db64e75100e643a6235833efe872b5de
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T17:28:41.822090642Z
-modified_at: 2026-10-19T15:47:16.954617596Z
+modified_at: 2026-10-19T15:47:19.307080966Z
 req_type: Task
 tags:
 - carried-from:TASK-1783
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-18T17:40:38.869985899Z
   changes: []
+- id: 01a154d8-888b-7720-bcd6-cb045e869b84
+  author: joe
+  timestamp: 2026-10-19T15:47:19.307076895Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: aab6e12bcc3d304c8fec9e0210e0f16c7665df0b
   branch: main
