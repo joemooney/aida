@@ -22,13 +22,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T04:24:25.684853123Z
-modified_at: 2026-10-19T07:44:21.722664566Z
+modified_at: 2026-10-19T17:28:16.101844801Z
 req_type: Story
 tags:
 - cargo
 - discipline
 - hooks
 - timeout
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a15534-a6cf-7482-9c8a-cfb55d69fdb0
+  created_at: 2026-10-19T17:28:16.101841420Z
+  created_by: joe
 comments:
 - id: 01a152ec-9f0d-7d11-9bf2-e273717cbf58
   author: joe
@@ -59,6 +65,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15534-f902-73f1-ba66-14a11ad077ad
+  author: joe
+  timestamp: 2026-10-19T17:28:17.410313669Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
