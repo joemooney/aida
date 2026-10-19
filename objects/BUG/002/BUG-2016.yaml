@@ -18,13 +18,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T16:19:22.729950376Z
-modified_at: 2026-10-19T16:09:04.525103702Z
+modified_at: 2026-10-19T16:09:06.986813638Z
 req_type: Bug
 tags:
 - contained
 - review-follow-up
 - sandbox
 - security
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e2-1411-71b0-9344-2a78faddcce9
+  created_at: 2026-10-19T16:09:06.986809840Z
+  created_by: joe
 comments:
 - id: 01a154ec-66fa-7d80-95ff-fec1e083d85a
   author: joe
@@ -41,6 +46,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a154ec-80b9-7172-a441-f4a44cfe2436
+  author: joe
+  timestamp: 2026-10-19T16:09:08.025248163Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
