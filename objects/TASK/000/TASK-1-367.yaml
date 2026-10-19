@@ -11,13 +11,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T18:01:00.274729740Z
-modified_at: 2026-10-19T18:01:00.274729740Z
+modified_at: 2026-10-19T19:49:18.546546182Z
 req_type: Task
 tags:
 - carried-from:STORY-1854
 - finding-hash:927bc124
 - from-review:STORY-1854
 - kind:carried-forward
+comments:
+- id: 01a155b6-1452-7d72-8e11-4f15d23fb604
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1961. Same PR-2759 finding filed twice (legacy-format id); tracked in TASK-1967.'
+  created_at: 2026-10-19T19:49:18.546546182Z
+  modified_at: 2026-10-19T19:49:18.546546182Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
   branch: main
