@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - `derive_cmd_shape(["aida","--format","toon","show","BUG-1"])` returns `show`, and the same holds for every other value-taking global flag.
   - A bare `aida --version` / `aida` still returns `<root>`.
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T19:22:03.589371187Z
-modified_at: 2026-10-19T16:09:38.492656766Z
+modified_at: 2026-10-19T16:09:42.260674774Z
 req_type: Bug
 comments:
 - id: 01a154ec-f7bc-78a3-a7bd-7456e3ac2abf
@@ -26,6 +26,15 @@ comments:
   created_at: 2026-10-19T16:09:38.492656766Z
   modified_at: 2026-10-19T16:09:38.492656766Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154ed-0674-7233-b5d4-b26c166a353f
+  author: joe
+  timestamp: 2026-10-19T16:09:42.260668397Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 84a49427860777b88d91ea6fc95c52122da6134b
   branch: main
