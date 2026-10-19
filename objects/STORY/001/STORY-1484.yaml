@@ -22,12 +22,12 @@ description: |
   - Killing the worker mid-refresh leaves the previous committed cache readable and the request file present; the next reader or schedule tick re-spawns a worker that completes it.
   - No reader path calls with_cache_write; busy_timeout stays 0; DEFAULT_CACHE_RETRY_DELAYS_MS is unchanged.
   - `aida cache status` shows cache head, store head, built_at, pending request, and lock holder.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T09:46:08.431977062Z
-modified_at: 2026-10-19T15:48:12.366422775Z
+modified_at: 2026-10-19T15:48:15.039038690Z
 req_type: Story
 tags:
 - cache
@@ -309,4 +309,16 @@ comments:
   created_at: 2026-10-19T15:48:12.366422775Z
   modified_at: 2026-10-19T15:48:12.366422775Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d9-623f-7dd3-92a5-829049eaae83
+  author: joe
+  timestamp: 2026-10-19T15:48:15.039031378Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 execution_mode: guided
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T15:48:15.039017010Z
