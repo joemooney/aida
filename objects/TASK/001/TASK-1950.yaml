@@ -1,0 +1,71 @@
+id: 01a154de-bffb-7cd3-ad06-579005851f1d
+spec_id: TASK-1950
+agreed_id: TASK-1950
+title: 'Sweep: regen scorer and relay_stall hardening follow-ups'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1379: cosmetic (non-blocking): relay_stall.rs:66 owner_alive compares second-resoluti…
+  cosmetic (non-blocking): relay_stall.rs:66 owner_alive compares second-resolution process start time with second-resolution updated using <=, so a PID recycled within the same second as the relay's last status write reads alive. Negligible in practice; worth a comment.
+
+  PR: #2701
+  Reviewed sha: 9d4002c627d8b7e98a3e42626323d6283544046a
+
+  ### TASK-1380: minor (non-blocking): relay_stall.rs:135-149 dead-owner findings have no age ca…
+  minor (non-blocking): relay_stall.rs:135-149 dead-owner findings have no age cap, and for default run-dir relays (status handoff=<run>/handoff.md) acknowledgement_marker returns None, so the only way to silence one is deleting the run dir (losing sessions/ logs). After a host reboot every running relay becomes a permanent, unackable page — the forever-page TASK-1792 item 3 removed for trap-written exits. relay.sh --status reports the same condition as plain 'exited'.
+
+  PR: #2701
+  Reviewed sha: 9d4002c627d8b7e98a3e42626323d6283544046a
+
+  ### TASK-1381: minor (non-blocking): relay_stall.rs:139-142 an 'exited' status whose updated= …
+  minor (non-blocking): relay_stall.rs:139-142 an 'exited' status whose updated= is missing or unparseable is now silently dropped (unwrap_or(false)); before this PR it was reported. Likewise owner_alive returns None (never flagged) when updated is absent. Prefer reporting on unknown age for exited, or document the legacy-status drop.
+
+  PR: #2701
+  Reviewed sha: 9d4002c627d8b7e98a3e42626323d6283544046a
+
+  ### TASK-1382: minor/test-coverage: no test drives handle_score end-to-end for an incomplete t…
+  minor/test-coverage: no test drives handle_score end-to-end for an incomplete trial; completeness fixtures call finish() manually (completeness.rs:420), so deleting completeness::finish at score.rs:908 or reverting the scored|incomplete ensure at score.rs:911 would fail no test. Add a handle_score-level test asserting the persisted record is status incomplete and the command succeeds.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+
+  ### TASK-1383: minor/design: the marker heuristic also applies to the reference control (score…
+  minor/design: the marker heuristic also applies to the reference control (score.rs:546 only skips control-stub). A legitimate original tool that contains 'placeholder' or 'NotImplementedError' (e.g. bundled Python/compiled binaries, or a --placeholder option) makes every reference control incomplete, and the controls gate then refuses all trials. min_bytes is the only knob; consider surfacing this refusal cause explicitly or allowing a trusted per-component marker exemption.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+
+  ### TASK-1384: cosmetic: adapter::attach computes R1/R2 raw_delta and discriminating_delta whi…
+  cosmetic: adapter::attach computes R1/R2 raw_delta and discriminating_delta while both are still 'scored' (adapter.rs:287), before completeness::finish can flip either to incomplete, so the stored delta looks comparable even when one side is incomplete. It is diagnostic-only and not rendered as a headline, but it could mislead JSON consumers.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+
+  ### TASK-1385: minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping th…
+  minor/diagnostics: a missing tool, an unreadable tool and a symlink escaping the private prefix all collapse to one reason, 'missing, unreadable or unsafe tool' (completeness.rs:153, 236). The AC asks for a listing of missing/stub components; carry the underlying error kind so 'missing' can be told apart from 'unsafe link'.
+  Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
+
+  ### TASK-1776: Regen scorer hardening follow-ups from #2660: guard pipe path is trial-redirectable; survivor detection evadable; no timeouts; bwrap tests silently skip
+  From the #2660 round-2 adversarial review (non-blocking): (1) guards write to $AIDA_REGEN_GUARD_PIPE, so trial code the oracle invokes can redirect it to /dev/null and drop events: pin the FIFO path into the frozen guard scripts at freeze time and verify it is a FIFO (S_ISFIFO). Document that guards detect accidental fallback, not a hostile trial (same class as absolute-path calls). (2) A daemon that chdirs to / and closes fds evades survivor detection; the quarantine still isolates the filesystem, but pid/net namespaces are shared (depends on TASK-1774 --unshare-pid). (3) Add install and oracle timeouts; bound snapshot copy depth and size. (4) bwrap-dependent tests return early when bwrap is absent: make CI provide bwrap or mark them explicitly skipped-with-reason.
+
+  ### TASK-1779: TASK-1732 hardening batch (from #2666 STRICT review)
+  Non-blocking findings from the #2666 review, batched:
+  - Value matching is substring-only (adapter.rs:296-304): short values over-refuse; transformed echoes are not caught.
+  - Self-map recording is untested at record level (the persisted adapter.mappings row).
+  - source_present is hardcoded true (adapter.rs:255).
+  - Installer stderr is over-redacted on mapped runs.
+  - The GAPS.toml read has no size cap (adapter.rs:178).
+  - The AGENTS.md paragraph is misplaced (prepended above the first line).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:54:06.715648703Z
+modified_at: 2026-10-19T15:54:06.715648703Z
+req_type: Task
+tags:
+- regen
+- relay
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
