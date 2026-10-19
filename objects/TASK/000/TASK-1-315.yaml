@@ -7,12 +7,12 @@ description: |-
 
   minor/design: the marker heuristic also applies to the reference control (score.rs:546 only skips control-stub). A legitimate original tool that contains 'placeholder' or 'NotImplementedError' (e.g. bundled Python/compiled binaries, or a --placeholder option) makes every reference control incomplete, and the controls gate then refuses all trials. min_bytes is the only knob; consider surfacing this refusal cause explicitly or allowing a trusted per-component marker exemption.
   Reviewed sha: 92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-16T18:47:15.212029759Z
-modified_at: 2026-10-19T15:55:03.803241713Z
+modified_at: 2026-10-19T15:55:06.360199255Z
 req_type: Task
 tags:
 - carried-from:STORY-1677
@@ -26,6 +26,15 @@ comments:
   created_at: 2026-10-19T15:55:03.803241713Z
   modified_at: 2026-10-19T15:55:03.803241713Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154df-a8f8-7de3-b076-ca97e36de9b9
+  author: joe
+  timestamp: 2026-10-19T15:55:06.360192068Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2
   branch: main
