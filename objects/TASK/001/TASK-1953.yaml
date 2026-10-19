@@ -1,0 +1,71 @@
+id: 01a154e3-64e4-7382-95bb-b3c95fdf7c34
+spec_id: TASK-1953
+agreed_id: TASK-1953
+title: 'Sweep: docs, help-text and trace-tag nits'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1386: cosmetic/doc-drift: docs/agents/aida-repository-guide.md:296 still says /aida-o…
+  cosmetic/doc-drift: docs/agents/aida-repository-guide.md:296 still says /aida-orchestrate merges batches 'on the exact commit' and that the portable version runs reviewers as 'aida agent new' sessions. Both now conflict with the templates (aida pr ship, and aida queue work PR-<n> --role reviewer --no-human).
+
+  PR: #2661
+  Reviewed sha: 104757447a2c3586d3e3be2e1c35479a71b8c308
+
+  ### TASK-1389: cosmetic: the reviewer launch snippet omits --vendor claude in aida-review.md '…
+  cosmetic: the reviewer launch snippet omits --vendor claude in aida-review.md 'Reviewer independence' (line ~654), fire-mode.md 'Independent review', commands/aida-burndown.md step 4 and commands/aida-fire.md step 3. Every other template, and the advisor's 2026-10-16 gotcha 3, require --vendor claude because codex refuses under AIDA_CONTAINED. Make the snippets consistent.
+
+  PR: #2661
+  Reviewed sha: 104757447a2c3586d3e3be2e1c35479a71b8c308
+
+  ### TASK-1402: cosmetic: aida-cli-lib/src/cli.rs:6576-6577 — user-facing --plan-only help stil…
+  cosmetic: aida-cli-lib/src/cli.rs:6576-6577 — user-facing --plan-only help still says it 'conflicts with --auto-complete for now'; it now also conflicts with --drain and --no-human/--headless/--unattended.
+  Reviewed sha: 054907db48b9ad95b5602508229e1041c6b4c66b
+
+  ### TASK-1627: cosmetic (carried from round 1): the human (colored) rendering of the authority…
+  cosmetic (carried from round 1): the human (colored) rendering of the authority clause in history.rs format_event_body has no test; only TOON/JSON projections are asserted.
+  Reviewed sha: 170de75978b59a9c9dcfad90d557ac3c3f63c865
+
+  ### TASK-1628: cosmetic: aida-cli-lib/src/history.rs:2675-2679 — new fn yaml_status was insert…
+  cosmetic: aida-cli-lib/src/history.rs:2675-2679 — new fn yaml_status was inserted under effective()'s doc comment, so effective() lost its doc and yaml_status carries a merged two-topic doc block; move the 'Read key first...' lines back above fn effective.
+  Reviewed sha: 170de75978b59a9c9dcfad90d557ac3c3f63c865
+
+  ### TASK-1630: cosmetic: trace tags say ai:codex on Antigravity-authored code and are duplicat…
+  cosmetic: trace tags say ai:codex on Antigravity-authored code and are duplicated (trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude); commit e008831b7d lacks the [AI:tool] prefix (squash title carries it)
+  Reviewed sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
+
+  ### TASK-1799: fire-mode.md two-round cap still lets the advisor merge without a reviewer-process approval
+  aida-core/templates/.aida/discipline/fire-mode.md, 'The two-round cap': after round two the advisor may 'merge and file the remaining findings as follow-ups'. After STORY-1654, aida-fire.md says a merge needs an approval at head recorded by a reviewer process, and that a round-2 RequestChanges means park the PR or hand it to the operator. Add the same caveat to fire-mode.md so the two documents agree.
+
+  Raised in review of PR-2661: https://github.com/joemooney/aida/pull/2661#issuecomment-6225456554
+
+  ### TASK-1802: Rewrap TASK-1800 mandate prose in OVERVIEW.md and AGENTS.md
+  PR #2711's mandate-exclusion edits leave one ~140-column unwrapped line in OVERVIEW.md, in the mandate paragraph ("...The first code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable"). They also leave a short orphan line in AGENTS.md ("with full-file fallback when attribution"). Rewrap both to the surrounding ~80-column prose. This is cosmetic only and changes no behavior.
+
+  Raised in review of PR-2711: https://github.com/joemooney/aida/pull/2711
+
+  ### TASK-1810: TASK-1794 doc nits: plan_session_args doc placement and stale --plan-only prelude prose
+  Cosmetic findings from the PR #2713 round-2 review (PASS). (1) drain_gate.rs:1288-1305: the plan_session_args /// block sits under run_plan_prelude's STORY-265 doc block, so rustdoc attaches the wrong doc; move the STORY-265 block back above run_plan_prelude. (2) auto_complete.rs:3719 and drain_gate.rs:1290 still say the headless prelude runs --plan-only; it now uses the hidden --plan-phase lane.
+
+  ### TASK-1919: docs/autonomous-drain.md:1260 over-long unwrapped line
+  docs/autonomous-drain.md:1258-1260 (environment-blocked section, edited in PR-2738) has an unwrapped over-long line unlike the surrounding prose. Rewrap. Raised in review of PR-2738: https://github.com/joemooney/aida/pull/2738
+
+  ### BUG-2175: aida queue list --epic help text still names the removed 'aida graph <ID> --tree' spelling
+  cli.rs:6145-6146 (queue list --epic help): '...the same hierarchy closure `aida graph <ID> --tree` walks'. The flag form was replaced by subcommands (STORY-1028). scripts/check-removed-flags.sh misses it because the doc comment wraps between 'aida graph' and '<ID> --tree'. Found when STORY-1728's golden help snapshot rendered the text onto one line. Fix: name the current graph subcommand spelling, regenerate the snapshot.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:59:11.076757281Z
+modified_at: 2026-10-19T15:59:11.076757281Z
+req_type: Task
+tags:
+- docs
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
