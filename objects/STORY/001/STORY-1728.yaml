@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-19T07:05:19.795162980Z
+modified_at: 2026-10-19T08:10:09.100751024Z
 req_type: Story
 tags:
 - docs:impacted
@@ -183,6 +183,12 @@ comments:
   created_at: 2026-10-19T04:49:46.554249328Z
   modified_at: 2026-10-19T04:49:46.554249328Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15335-fb4c-7fd2-a339-f3d6812395c2
+  author: joe
+  content: Commit a27fe3fc76 references this requirement
+  created_at: 2026-10-19T08:10:09.100751024Z
+  modified_at: 2026-10-19T08:10:09.100751024Z
+  session_id: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
