@@ -8,9 +8,10 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T15:42:37.880863719Z
-modified_at: 2026-10-11T01:44:21.882792399Z
+modified_at: 2026-10-19T15:50:29.162447683Z
 req_type: Story
 tags:
+- operator-held
 - sketch-signed-off
 relationships:
 - rel_type: Parent
@@ -170,3 +171,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a154db-6f29-7392-bca5-0f60bafa3f70
+  author: joe
+  timestamp: 2026-10-19T15:50:29.417600235Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:29.162447683Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
