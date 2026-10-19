@@ -1238,6 +1238,7 @@ fn history_decoder_version_matches_event_kind_shape() {
         EventKind::StatusChange {
             from: "a".into(),
             to: "b".into(),
+            authority: None,
         },
         EventKind::PriorityChange {
             from: "a".into(),
@@ -1281,10 +1282,11 @@ fn history_decoder_version_matches_event_kind_shape() {
     ];
     let snapshot = serde_json::to_string(&kinds).unwrap();
     // trace:BUG-1631 | ai:claude
-    const V5: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p","status":"s"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
+    // trace:TASK-1737 | ai:antigravity
+    const V6: &str = r#"[{"Added":{"title":"t","req_type":"r","priority":"p","status":"s"}},{"Deleted":{"title":"t"}},{"StatusChange":{"from":"a","to":"b"}},{"PriorityChange":{"from":"a","to":"b"}},{"TitleChange":{"from":"a","to":"b"}},"DescriptionEdited",{"OwnerChange":{"from":"a","to":"b"}},{"FeatureChange":{"from":"a","to":"b"}},{"TypeChange":{"from":"a","to":"b"}},{"TagsChange":{"added":["x"],"removed":["y"]}},{"CommentsAdded":{"count":2,"author":"a"}},{"RelationshipsChange":{"added":1,"removed":0,"edges":[{"added":true,"rel_type":"Parent","target_id":"u"}]}}]"#;
     assert_eq!(
         (history_cache::HISTORY_DECODER_VERSION, snapshot.as_str()),
-        (5, V5),
+        (6, V6),
         "EventKind's serialized shape changed: bump HISTORY_DECODER_VERSION \
          and record the new shape here"
     );
@@ -1643,7 +1645,8 @@ fn bug_1620_id_on_an_ours_merged_side_branch_agrees_with_unfiltered_events() {
         walk.iter().any(|e| e.kind
             == EventKind::StatusChange {
                 from: "Approved".into(),
-                to: "Done".into()
+                to: "Done".into(),
+                authority: None,
             }),
         "the side-branch status change shows under --id"
     );
@@ -2484,7 +2487,9 @@ fn status_pairs(events: &[Event]) -> Vec<(String, String, String)> {
     events
         .iter()
         .map(|e| match &e.kind {
-            EventKind::StatusChange { from, to } => (e.spec_id.clone(), from.clone(), to.clone()),
+            EventKind::StatusChange { from, to, .. } => {
+                (e.spec_id.clone(), from.clone(), to.clone())
+            }
             other => panic!("--shipped returned a non-status event: {other:?}"),
         })
         .collect()
@@ -2524,7 +2529,8 @@ fn bug_1636_shipped_matches_every_transition_into_completed() {
             && e.kind
                 == EventKind::StatusChange {
                     from: "InProgress".into(),
-                    to: "Done".into()
+                    to: "Done".into(),
+                    authority: None,
                 }),
         "InProgress → Done is not a ship"
     );
@@ -2533,7 +2539,8 @@ fn bug_1636_shipped_matches_every_transition_into_completed() {
             && e.kind
                 == EventKind::StatusChange {
                     from: "Completed".into(),
-                    to: "InProgress".into()
+                    to: "InProgress".into(),
+                    authority: None,
                 }),
         "a reopen away from Completed is not a ship"
     );
@@ -2546,6 +2553,7 @@ fn bug_1636_is_ship_event_predicate() {
     let sc = |from: &str, to: &str| EventKind::StatusChange {
         from: from.into(),
         to: to.into(),
+        authority: None,
     };
     for from in [
         "InProgress",

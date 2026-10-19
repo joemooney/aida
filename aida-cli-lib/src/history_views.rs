@@ -80,7 +80,7 @@ impl HistoryView {
         match (self, kind) {
             (HistoryView::Opened, EventKind::Added { .. }) => true,
             (HistoryView::Opened, _) => false,
-            (view, EventKind::StatusChange { from, to }) => {
+            (view, EventKind::StatusChange { from, to, .. }) => {
                 let to_key = history::status_key(to);
                 if history::status_key(from) == to_key {
                     return false;

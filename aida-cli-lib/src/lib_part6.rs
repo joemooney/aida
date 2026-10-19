@@ -323,3 +323,8 @@ mod bug_1807_handoff_tests {
         assert!(canonical_review_story(&store, ReviewForge::GitLab, 3, None, None).is_none());
     }
 }
+
+// trace:TASK-1737 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1737_authority_trailers_tests.rs"]
+mod task_1737_authority_trailers_tests;

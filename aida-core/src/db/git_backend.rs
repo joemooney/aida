@@ -45,6 +45,10 @@ pub struct GitBackend {
     auto_commit: bool,
     /// Whether to record operations in the append-only oplog
     oplog_enabled: bool,
+    /// Whether the staged write under the current store lock includes an
+    /// advisor-gated status advance (`TASK-1737`).
+    // trace:TASK-1737 | ai:antigravity
+    pending_authority_advance: std::sync::atomic::AtomicBool,
 }
 
 /// What a whole-store `save()` left alone.
@@ -523,6 +527,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: true,
             oplog_enabled: true,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -577,6 +582,17 @@ impl GitBackend {
         }
     }
 
+    // trace:TASK-1737 | ai:antigravity
+    fn with_authority_trailers(&self, message: &str, record_authority: bool) -> String {
+        if !record_authority {
+            return message.to_string();
+        }
+        match crate::lifecycle::resolve_commit_authority(&self.root) {
+            Some(auth) => format!("{message}{}", auth.format_trailers()),
+            None => message.to_string(),
+        }
+    }
+
     /// Stage every YAML the backend is responsible for and commit. Used by
     /// the bulk `save()` path that legitimately touches the entire object
     /// tree. For per-operation paths, prefer `auto_commit_paths` so we don't
@@ -594,6 +610,9 @@ impl GitBackend {
     }
 
     fn auto_commit(&self, message: &str) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
@@ -625,7 +644,8 @@ impl GitBackend {
                 return;
             }
         }
-        if let Err(e) = crate::git_ops::commit(&self.root, message) {
+        let commit_message = self.with_authority_trailers(message, record_authority);
+        if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
             // Never succeed silently: the write is on disk but uncommitted.
             // trace:BUG-1929 | ai:claude
             eprintln!("warning: store change written but not committed: {e:#}");
@@ -638,6 +658,9 @@ impl GitBackend {
     /// captured along with adds/modifications.
     // trace:BUG-1-040 trace:BUG-2140 | ai:antigravity
     fn auto_commit_paths(&self, message: &str, paths: &[&str]) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
@@ -684,7 +707,8 @@ impl GitBackend {
             .map(|s| !s.success()) // non-zero exit means there ARE staged changes
             .unwrap_or(false);
         if staged {
-            if let Err(e) = crate::git_ops::commit(&self.root, message) {
+            let commit_message = self.with_authority_trailers(message, record_authority);
+            if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
                 // trace:BUG-1929 | ai:claude
                 eprintln!("warning: store change written but not committed: {e:#}");
             }
@@ -959,6 +983,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: false,
             oplog_enabled: false,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         };
         backend.load_metadata_only()
     }
@@ -1258,6 +1283,12 @@ impl GitBackend {
         )?;
 
         // Record ops for changed fields (compare with existing if possible).
+        let authority_advance = existing.as_ref().is_some_and(|old| {
+            crate::lifecycle::status_advance_records_authority_trailers(
+                &old.status,
+                &requirement.status,
+            )
+        });
         if let Some(old) = existing {
             if old.title != requirement.title {
                 self.record_op(
@@ -1323,6 +1354,10 @@ impl GitBackend {
         }
 
         let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
+        if wrote && authority_advance {
+            self.pending_authority_advance
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -1506,6 +1541,8 @@ impl GitBackend {
         // waiting; a sync holding the lock can leave a failed rebase behind
         // in between, so the outermost holder checks again once it owns it.
         if guard.is_outermost() {
+            self.pending_authority_advance
+                .store(false, std::sync::atomic::Ordering::SeqCst);
             crate::git_ops::ensure_store_write_safe(&self.root)?;
         }
         Ok(guard)
@@ -1815,8 +1852,21 @@ impl GitBackend {
         let mut written_specs: Vec<String> = Vec::new();
         for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
+            let authority_advance = !imported
+                && object_store::read_object(&self.objects_root, spec_id)
+                    .ok()
+                    .is_some_and(|old| {
+                        crate::lifecycle::status_advance_records_authority_trailers(
+                            &old.status,
+                            &req.status,
+                        )
+                    });
             if object_store::write_object_if_changed(&self.objects_root, req)? {
                 written_specs.push(spec_id.to_string());
+                if authority_advance {
+                    self.pending_authority_advance
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                }
             }
             if let (Some(snapshot), Some(caller_fp)) = (snapshot, caller_fp) {
                 if let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? {
