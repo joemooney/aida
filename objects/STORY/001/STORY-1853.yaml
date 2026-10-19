@@ -1,0 +1,65 @@
+id: 01a1520b-60c2-7532-8779-bf18cf4e5669
+spec_id: STORY-1853
+agreed_id: STORY-1853
+title: 'Cut test-suite wall time: CI Run tests ≤6 min, local full run ≤10 min on 6 cores'
+description: |
+  Operator request (2026-10-18 19:41 MST): local test runs are now taking 44–80 min (fix-2725 `make check` 1h20m; aida-agy-batch `cargo test --workspace` 44m, NOSLOT). Rework the architecture so they don't.
+
+  ## Measured (CI run 39186737460, main, 4-core ubuntu runner, uncontended)
+  - The "Run tests" step takes 904 s:
+    - compile: 150 s
+    - 72 aida-cli integration-test binaries: about 414 s, run one after another, each mostly single-threaded and process-spawning
+    - aida_cli_lib unit tests: about 290 s for 9183 tests in ONE binary
+    - remainder: about 50 s
+  - Slowest integration binaries:
+
+    | Binary | Time | Tests |
+    |---|---|---|
+    | task_1717_store_writer_lock | 50 s | 43 |
+    | agent_error_channel | 44 s | 2 |
+    | context_budget | 40 s | 1549 |
+    | bug_1502_format_json_audit | 23 s | 9 |
+    | bug_1947_session_end_live_process | 23 s | 11 |
+    | task_1335 | 15 s | |
+    | journey | 14 s | |
+    | bug_1940 | 14 s | |
+    | task_1290 | 14 s | |
+
+  - Locally, the machine has 6 cores. At 19:41 the load average was 19–29, with two concurrent `cargo test --workspace` runs plus reviewer and agent builds. One agent ran with AIDA_CARGO_NO_SLOT=1, which bypasses the cargo-slot limiter entirely. The 5–9x local slowdown comes from contention on top of the serial-binary structure.
+
+  ## Slices (each independently landable; measure before and after each)
+  - **S0, process (no code; land first):** the agent pre-push gate is `make check-ci-fast` + `make test-touched`. A full `cargo test --workspace` or `make check-ci` is CI's job, or runs at most one at a time under the cargo-slot limiter. Remove or forbid AIDA_CARGO_NO_SLOT in agent briefs and skills. The implementer and integrator skill templates currently tell agents to run the full suite.
+  - **S1, measurement:** emit per-test timings (nextest JUnit, or `--report-time`) in CI as an artifact. Add a committed slow-test budget file and a gate that fails when a test over 10 s has no budget entry.
+  - **S2, cargo-nextest** in CI and in the Makefile targets. It runs tests from all binaries in one parallel pool, which removes the serial-binary tail. Keep `cargo test --doc` separate. Port any test that relies on in-process global state or serial ordering to `#[serial]`/nextest test-groups explicitly.
+  - **S3, consolidate** the 72 `aida-cli/tests/*.rs` integration binaries into one harness (`tests/it/main.rs` with mods). That cuts 71 link steps of the large lib and the per-binary startup.
+  - **S4, fix the top slow tests:** replace sleeps and wall-clock waits with injected clocks or readiness signals, starting with task_1717, agent_error_channel (44 s for 2 tests), context_budget, bug_1502 and bug_1947.
+  - **S5, compile time:** continue the aida-cli-lib split (lib.rs is over 1 MiB; see scripts/split-lib, STORY-1728) so touched-crate test builds stop recompiling the monolith. Track it here; implement it under its own specs.
+
+  ## Acceptance
+  1. CI "Run tests" step at or under 360 s on ubuntu-latest (from 904 s). Median of 3 main runs, recorded on this spec.
+  2. A full local workspace test run on an idle 6-core box finishes in 10 min or less.
+  3. The agent-facing gate docs and skills say the full suite is not a pre-push step. No template sets AIDA_CARGO_NO_SLOT.
+  4. CI enforces the per-test budget file (S1). No unbudgeted test runs over 10 s.
+  5. No loss of coverage: the passed+ignored test count is ≥ the pre-change count, and the count is recorded.
+
+  ## Architecture note
+  S2 and S3 change the test harness architecture. Per repo rules they need a sketch on this spec and advisor signoff before implementation. S0 and S1 do not.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T02:43:59.810701479Z
+modified_at: 2026-10-19T02:43:59.810701479Z
+req_type: Story
+tags:
+- architecture
+- ci
+- test-speed
+filed_at:
+  code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: 02ae01a2-5cde-49db-b318-efb49691c3e3
