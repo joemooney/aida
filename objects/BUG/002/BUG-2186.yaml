@@ -1,0 +1,42 @@
+id: 01a152bd-aa78-7ae2-960c-80c1596b7126
+spec_id: BUG-2186
+agreed_id: BUG-2186
+title: 'Rework merge-holds never auto-release: release reader requires verdict ''rounds'' the writer no longer records'
+description: |
+  ## Observed (2026-10-18, advisor)
+  `aida merge-hold auto-release <PR>` refuses with "missing arming refusal rounds" for every rework hold, even with a fresh independent attested APPROVE at the current head:
+  - #2712: approved at 1b2e938d72 at 21:33; refused. The operator had to clear it by hand at 21:59.
+  - #2727: round-2 approved at 6923d5e4e2 at 22:27; refused.
+  The in-place release on approval (STORY-1697) also did not remove either marker.
+
+  ## Cause (located)
+  rework_hold_release.rs:194 requires `body["rounds"]` as an array. No verdict file written recently has a `rounds` key: PR-2727, PR-2750, PR-2712, TASK-1801, STORY-1728, BUG-2180, BUG-1985 and BUG-1982 all lack it. Their keys: findings, recorded_at, recorded_by, recorder_attestation, release_grant, reviewed_branch, reviewed_sha, summary, verdict. So the verdict writer and the release reader disagree on the schema. Candidates: 1909c0d2e2 (TASK-1766, "count shaless verdict rounds") and the STORY-1697 in-place release path (6d9ea04f5f).
+
+  ## Impact
+  Every rework-held PR needs an operator TTY clear, which defeats STORY-1687/1697 and the zero-intervention mandate.
+
+  ## Acceptance
+  1. A rework hold armed by a CHANGES REQUESTED verdict releases, both in place on a fresh independent attested APPROVE at head and via `auto-release`, with the verdict files the current writer produces.
+  2. The reader derives the arming refusal from the retained history wherever the writer actually stores it, or the writer restores `rounds`. Choose one and pin it with a writer-to-reader round-trip test that uses the real record path (no hand-built JSON).
+  3. It stays fail-closed: no rounds or history found means no release, but the error names the expected location and the writer version.
+  4. Regression test: record REQUEST CHANGES, then APPROVE at a new head through `aida review record`, and assert the marker is gone.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T05:58:44.088059619Z
+modified_at: 2026-10-19T05:58:44.088059619Z
+req_type: Bug
+tags:
+- auto-release
+- merge-hold
+- regression
+- review
+filed_at:
+  code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
