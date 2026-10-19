@@ -18,13 +18,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T16:19:22.729950376Z
-modified_at: 2026-10-13T16:19:22.729950376Z
+modified_at: 2026-10-19T16:09:01.434054480Z
 req_type: Bug
 tags:
 - contained
 - review-follow-up
 - sandbox
 - security
+comments:
+- id: 01a154ec-66fa-7d80-95ff-fec1e083d85a
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1952; full text copied there.'
+  created_at: 2026-10-19T16:09:01.434054480Z
+  modified_at: 2026-10-19T16:09:01.434054480Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: cdaea009518b0a4a01c7aaa48364c386cbb5299c
   branch: main
