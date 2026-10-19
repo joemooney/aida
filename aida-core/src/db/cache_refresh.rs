@@ -465,10 +465,30 @@ pub fn set_tui_owns_terminal(owns: bool) -> bool {
 
 /// Serializes tests that toggle the process-wide [`TUI_OWNS_TERMINAL`] flag or
 /// read the process-wide recorded note, so parallel tests cannot observe each
-/// other's state.
-// trace:TASK-1739 | ai:claude
+/// other's state. Those tests take it for writing; every other
+/// [`emit_cache_note`] in the test binary takes it for reading, so an unrelated
+/// test's rebind or quarantine note can never overwrite the note a TUI test is
+/// asserting on while that test has the flag set (TASK-1956).
+// trace:TASK-1739 | ai:claude trace:TASK-1956 | ai:claude
 #[cfg(test)]
-pub(crate) static TUI_TERMINAL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static TUI_TERMINAL_TEST_LOCK: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+#[cfg(test)]
+thread_local! {
+    static TUI_TEST_EMITTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` as the emitting side of a test that holds [`TUI_TERMINAL_TEST_LOCK`]
+/// for writing: its notes skip the read gate that would otherwise wait for
+/// that very lock.
+// trace:TASK-1956 | ai:claude
+#[cfg(test)]
+pub(crate) fn as_tui_test_emitter<T>(f: impl FnOnce() -> T) -> T {
+    TUI_TEST_EMITTER.with(|e| e.set(true));
+    let out = f();
+    TUI_TEST_EMITTER.with(|e| e.set(false));
+    out
+}
 
 // trace:TASK-1739 | ai:codex
 pub fn tui_owns_terminal() -> bool {
@@ -498,6 +518,13 @@ pub fn record_cache_note(note: impl Into<String>) {
 // trace:TASK-1739 | ai:codex
 pub fn emit_cache_note(note: impl Into<String>) {
     let note = note.into();
+    // trace:TASK-1956 | ai:claude
+    #[cfg(test)]
+    let _gate = (!TUI_TEST_EMITTER.with(std::cell::Cell::get)).then(|| {
+        TUI_TERMINAL_TEST_LOCK
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
     if tui_owns_terminal() {
         record_cache_note(note);
     } else {
@@ -1172,12 +1199,12 @@ except OSError:
     #[test]
     fn recorded_note_crosses_threads_and_joins_the_stale_note() {
         let _serial = TUI_TERMINAL_TEST_LOCK
-            .lock()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _scope = CacheReadScope::new();
         reset_cache_read_observations();
         let prev = set_tui_owns_terminal(true);
-        std::thread::spawn(|| emit_cache_note("note: background rebind"))
+        std::thread::spawn(|| as_tui_test_emitter(|| emit_cache_note("note: background rebind")))
             .join()
             .unwrap();
         set_tui_owns_terminal(prev);

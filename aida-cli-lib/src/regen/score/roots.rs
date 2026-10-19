@@ -222,6 +222,21 @@ fn is_own_pre_exec_fork(proc_dir: &Path) -> bool {
     }
 }
 
+/// Whether descriptor `fd` of the process at `proc_dir` is close-on-exec, from
+/// the `flags:` line of its fdinfo (octal, with O_CLOEXEC reported there).
+/// Unreadable means "no": the descriptor still counts as held.
+// trace:TASK-1956 | ai:claude
+fn close_on_exec(proc_dir: &Path, fd: &OsStr) -> bool {
+    std::fs::read_to_string(proc_dir.join("fdinfo").join(fd))
+        .ok()
+        .and_then(|info| {
+            info.lines()
+                .find_map(|line| line.strip_prefix("flags:"))
+                .and_then(|flags| i64::from_str_radix(flags.trim(), 8).ok())
+        })
+        .is_some_and(|flags| flags & i64::from(libc::O_CLOEXEC) != 0)
+}
+
 /// Advisory only: namespace/process races prevent this from being a universal
 /// no-survivors guarantee. Open pidfds keep best-effort signals bound to the
 /// observed process identity instead of a subsequently reused numeric PID.
@@ -265,13 +280,23 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
                 .ok()
                 .is_some_and(|path| roots.iter().any(|root| path.starts_with(root)))
         });
+        // A child of this process that has already switched its image (so the
+        // check above no longer matches it) still holds close-on-exec copies
+        // of our descriptors until execve reaches do_close_on_exec. Counting
+        // that copy SIGKILLed concurrent `git` spawns mid-exec, which then
+        // failed with empty stderr in parallel regen tests (BUG-2155). A
+        // scored command holds the guard with close-on-exec cleared (see
+        // `run_with_bundle`), so it still matches.
+        // trace:TASK-1956 | ai:claude trace:BUG-2155 | ai:claude
+        let own_child = parent_pid(&entry.path()) == Some(std::process::id() as i32);
         let holds_guard = guard.as_ref().is_some_and(|guard| {
             std::fs::read_dir(entry.path().join("fd"))
                 .ok()
                 .is_some_and(|entries| {
-                    entries
-                        .filter_map(Result::ok)
-                        .any(|entry| std::fs::read_link(entry.path()).ok().as_ref() == Some(guard))
+                    entries.filter_map(Result::ok).any(|fd| {
+                        std::fs::read_link(fd.path()).ok().as_ref() == Some(guard)
+                            && !(own_child && close_on_exec(&entry.path(), &fd.file_name()))
+                    })
                 })
         });
         if under_root || holds_guard {
@@ -363,6 +388,72 @@ mod tests {
         reap(pid, 30);
         assert!(fork_alive, "the scan killed a pre-exec fork of the scorer");
         assert_eq!(count, 1, "only the reparented descendant is a survivor");
+    }
+
+    // A concurrent spawn caught inside execve: our child, no longer running
+    // this binary, still holding a close-on-exec copy of the guard. It is not
+    // a survivor and must not be killed (BUG-2155). The same child holding the
+    // guard with close-on-exec cleared, as a scored command does, still is.
+    // trace:TASK-1956 | ai:claude
+    #[test]
+    fn close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor() {
+        use std::io::BufRead;
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        let mut fds = [0; 2];
+        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+        let (read_end, write_end) =
+            unsafe { (File::from_raw_fd(fds[0]), File::from_raw_fd(fds[1])) };
+        let guard = write_end.as_raw_fd();
+        let unrelated_root = TempDir::new().unwrap();
+        for inheritable in [false, true] {
+            // python3 receives the guard, then sets close-on-exec on it as
+            // requested and reports ready: the mid-exec descriptor state.
+            let script = format!(
+                "import os,sys,time\nos.set_inheritable({guard},{})\nprint('ready',flush=True)\ntime.sleep(60)\n",
+                if inheritable { "True" } else { "False" }
+            );
+            let mut cmd = Command::new("/usr/bin/python3");
+            cmd.args(["-c", &script])
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped());
+            unsafe {
+                cmd.pre_exec(move || {
+                    if libc::fcntl(guard, libc::F_SETFD, 0) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+            let Ok(mut child) = cmd.spawn() else {
+                return; // No python3.
+            };
+            let pid = child.id() as i32;
+            let mut ready = String::new();
+            std::io::BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut ready)
+                .unwrap();
+            assert_eq!(ready.trim(), "ready");
+            let count = survivors(
+                std::slice::from_ref(&unrelated_root.path().to_path_buf()),
+                Some(guard),
+                true,
+            )
+            .unwrap();
+            let ended = reap(pid, if inheritable { 30 } else { 0 });
+            if ended.is_none() {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+                reap(pid, 30);
+            }
+            if inheritable {
+                assert_eq!(count, 1, "a scored-command guard holder was not counted");
+                assert_eq!(ended, Some(Some(libc::SIGKILL)), "it was not killed");
+            } else {
+                assert_eq!(count, 0, "a mid-exec close-on-exec copy was counted");
+                assert_eq!(ended, None, "a mid-exec spawn was killed");
+            }
+        }
+        drop((read_end, write_end));
     }
 
     // A scored command (our child) clones a sibling with CLONE_PARENT, so the
