@@ -8,7 +8,9 @@ use std::io::Write;
 pub const NAME: &str = "aida-monitor";
 // 1.6.0: additive `PlanRecorded` event kind + interactive lifecycle emits
 // (STORY-1480). trace:STORY-1480 | ai:claude
-pub const VERSION: &str = "1.6.0";
+// 1.7.0: additive `MandateDriveAction` / `MandateDriveDue` event kinds
+// (STORY-1700). trace:STORY-1700 | ai:claude
+pub const VERSION: &str = "1.7.0";
 
 /// Return the deliberately small set of fields promised to monitor consumers.
 /// Fields not named here remain implementation details even when they happen to
