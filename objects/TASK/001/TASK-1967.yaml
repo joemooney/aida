@@ -1,0 +1,33 @@
+id: 01a155b4-1b75-7711-9f6d-adaea35d4607
+spec_id: TASK-1967
+agreed_id: TASK-1967
+title: 'Sweep: STORY-1854 cargo-budget hook and preflight follow-ups (PR-2759 review)'
+description: |-
+  Roll-up of non-blocking PR-2759 review follow-ups; members are superseded here with full text below. One PR.
+  --- TASK-1961: Cargo-timeout hook misses timeout N bash -c "cargo ..." forms :: aida-core/templates/hooks/aida-cargo-timeout-guard.sh strips quoted bodies before matching, so `timeout 3000 bash -c "cargo test"` (and sh -c) produce no hint, even though the outer timeout still wraps cargo.
+
+  Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
+  --- TASK-1962: Cargo-timeout hook warns on make targets that do not run cargo :: The hook pattern matches any `timeout N make <target>` (e.g. `timeout 1h make lint`) and suggests AIDA_CARGO_TIMEOUT, even when the target does not run cargo. This is acceptable while the hook is warn-only; revisit if it starts blocking.
+
+  Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
+  --- TASK-1963: Preflight timeout backstop doubles configured [preflight] budgets until STORY-100 :: aida-cli-lib/src/implementer_preflight.rs QUEUE_ALLOWANCE_FACTOR=2: the outer deadline is now 2x guard_timeout_secs / build_timeout_secs. Until aida-host STORY-100 honours AIDA_CARGO_TIMEOUT, nothing enforces the nominal budget. This is documented only in a code comment, not in user-facing [preflight] docs.
+
+  Raised in review of PR-2759: https://github.com/joemooney/aida/pull/2759#issuecomment-6273705741
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T19:47:09.301864104Z
+modified_at: 2026-10-19T19:47:09.301864104Z
+req_type: Task
+tags:
+- story-1854
+- sweep
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dd4b6ed730
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
