@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:30.859979237Z
-modified_at: 2026-10-18T20:53:30.859979237Z
+modified_at: 2026-10-19T15:47:41.509944708Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
 - finding-hash:651656b4
 - from-review:TASK-1803
 - kind:carried-forward
+comments:
+- id: 01a154d8-df45-7941-b2d3-247a4d3db30f
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1920. aida show TASK-1412 and TASK-1920 both specify prefer local origin/HEAD evidence before remote default-branch lookup; the target description explicitly includes this obligation. Preserve the narrower finding evidence und'
+  created_at: 2026-10-19T15:47:41.509944708Z
+  modified_at: 2026-10-19T15:47:41.509944708Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-7732-78a3-9696-c3172b17639f
   author: joe
