@@ -530,9 +530,8 @@ pub(crate) fn worktree_status_unreadable(worktree: &std::path::Path) -> bool {
     if worktree.as_os_str().is_empty() || !worktree.exists() {
         return false;
     }
-    !std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    !aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

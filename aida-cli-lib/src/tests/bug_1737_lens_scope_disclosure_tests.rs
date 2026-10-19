@@ -165,7 +165,8 @@ fn disclosure_helper_never_queries_the_backend() {
 // trace:BUG-1737 | ai:claude
 #[test]
 fn both_render_paths_are_wired_to_the_open_work_lens() {
-    let src = include_str!("../git_backend_cmd.rs");
+    // trace:STORY-1728 | ai:claude — `aida list` is registered from requirements_cli.
+    let src = include_str!("../requirements_cli.rs");
     let calls: Vec<&str> = src
         .match_indices("list_lens_scope_disclosure(")
         .map(|(i, _)| {
