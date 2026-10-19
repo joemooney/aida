@@ -7,12 +7,12 @@ description: |-
 
   minor (traceability): criterion TASK-1785.ac0ead8d (15/40/marked-7 fixture) is tested but untraced. The fixture tests carry 'trace:TASK-1785.Fixture' (lint_constants.rs:527, task_1785_lint_constants.rs:147), which resolves to no criterion, so 'aida criteria TASK-1785' still reports ac0ead8d as 'untraced no traced tests'. Change both markers to 'trace:TASK-1785.ac0ead8d'.
   Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:02.159503559Z
-modified_at: 2026-10-19T15:46:47.053568870Z
+modified_at: 2026-10-19T15:46:49.432112934Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-10-18T15:10:01.348967915Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a154d8-13d8-7632-aee8-09dc6aef4c60
+  author: joe
+  timestamp: 2026-10-19T15:46:49.432106181Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
   branch: main
