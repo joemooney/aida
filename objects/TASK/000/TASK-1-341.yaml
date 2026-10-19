@@ -7,12 +7,12 @@ description: |-
 
   [non-blocking, minor] forge.rs probe_default_branch now falls back to a network ls-remote (up to 3s), and default_branch_of calls it before local origin/HEAD. All 15 callers (trusted_config, drain_batch, orchestrator_leases, implementer_preflight, ...) now pay a network round-trip on non-GitHub forges or when gh fails, and the remote's answer now overrides local evidence there. This goes beyond the ship guard.
   Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:30.859979237Z
-modified_at: 2026-10-19T15:47:41.509944708Z
+modified_at: 2026-10-19T15:47:43.593067716Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-18T21:01:07.250405402Z
   changes: []
+- id: 01a154d8-e769-78d0-bde9-37a5c4694fef
+  author: joe
+  timestamp: 2026-10-19T15:47:43.593060913Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
   branch: main
