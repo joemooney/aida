@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:06.437909260Z
-modified_at: 2026-10-18T14:31:06.437909260Z
+modified_at: 2026-10-19T15:46:38.115033690Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
 - finding-hash:a7df3a1f
 - from-review:TASK-1785
 - kind:carried-forward
+comments:
+- id: 01a154d7-e7a3-7d90-af8b-decc96858a3e
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1394 and TASK-1812 both specify tuple-index literals falsely reported as constants; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:38.115033690Z
+  modified_at: 2026-10-19T15:46:38.115033690Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f90-0633-7b20-a3c1-34e53ce187b1
   author: joe
