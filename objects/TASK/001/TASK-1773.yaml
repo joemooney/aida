@@ -3,12 +3,12 @@ spec_id: TASK-1773
 agreed_id: TASK-1773
 title: 'TASK-1768 test/UX nits: drop-guard the sleep child in the stop-now test; distinguish a kill failure from an unconfirmed identity'
 description: 'From the #2653 final review: (1) task_1768_stop_now_never_signals_an_unconfirmed_identity drops its Child without a kill on early assert failure, orphaning sleep 60; add a drop guard. (2) signal_drain_stop_now prints ''identity could not be confirmed'' even when the strict match passed but kill itself failed; report that case accurately.'
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T07:55:49.846110560Z
-modified_at: 2026-10-19T16:04:00.506079353Z
+modified_at: 2026-10-19T16:04:03.691892716Z
 req_type: Task
 comments:
 - id: 01a154e7-cf7a-7122-820a-e0b48da62b77
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-19T16:04:00.506079353Z
   modified_at: 2026-10-19T16:04:00.506079353Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e7-dbeb-7a33-8903-3c7408caa6d6
+  author: joe
+  timestamp: 2026-10-19T16:04:03.691887099Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 92763a125a7b2ac062064c6324063723a02a80ad
   branch: main
