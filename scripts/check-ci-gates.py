@@ -69,6 +69,15 @@ DERIVED_TIERS = ("compile",)
 # runner) is a shape this derivation does not understand, and it refuses rather
 # than compile something CI does not.
 COMPILE_LOCAL_ARGS = ["--no-run", "--profile", "agent"]
+
+# A local `make check-ci` runs CI's `cargo test` steps on the agent profile.
+# Automatic cache seeding builds that profile, while CI's default (debug) would
+# rebuild the workspace cold in each worktree and run unoptimized tests: the
+# 44-80 min local runs of 2026-10-18. Only `cargo test` is reshaped; the
+# `cargo build` steps stay debug because later gates run `target/debug/aida`.
+# trace:STORY-1853 | ai:claude
+LOCAL_TEST_PROFILE = "agent"
+CARGO_TEST_RE = re.compile(r"\bcargo test\b(?![^\n]*--profile)")
 RUN_ONLY_ARGS = {"--no-fail-fast"}
 RUN_ONLY_REDIRECT = ["<", "/dev/null"]
 
@@ -167,6 +176,11 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
         )
     kept = [token for token in argv if token not in RUN_ONLY_ARGS]
     return shlex.join(kept + COMPILE_LOCAL_ARGS)
+
+
+def local_test_command(command: str) -> str:
+    """CI's step body with every `cargo test` moved to the local test profile."""
+    return CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
 
 
 def load_derived(
@@ -399,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_plan(root, args.tier, plan, tiers, compile_env())
 
     wanted = TIERS if args.tier == "all" else (args.tier,)
-    plan = [(name, command) for name, command in steps if tiers.get(name) in wanted]
+    plan = [(name, local_test_command(command)) for name, command in steps if tiers.get(name) in wanted]
 
     # Every skip is printed with its reason, naming the gate. A skip nobody sees
     # is how the documented check set came to omit ~25 gates.
@@ -410,8 +424,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"SKIP  {name}\n        not in the {args.tier} tier (it is {tiers[name]})")
 
     if args.list:
-        for name, _ in plan:
-            print(f"PLAN  {name}  [{tiers[name]}]")
+        for name, command in plan:
+            reshaped = "  (local: cargo test --profile agent)" if command != dict(steps)[name] else ""
+            print(f"PLAN  {name}  [{tiers[name]}]{reshaped}")
         # Derived gates are not part of `all`, but a listing that hid them would
         # make `make check-ci-compile` undiscoverable, which is the defect the
         # tier table exists to remove.
