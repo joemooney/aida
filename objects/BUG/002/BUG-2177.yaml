@@ -8,8 +8,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T14:04:03.102740464Z
-modified_at: 2026-10-18T14:04:03.102740464Z
+modified_at: 2026-10-19T17:25:17.064760415Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a15531-bb2d-7ca2-88cc-92f3e1202481
+  created_at: 2026-10-19T17:25:17.064757106Z
+  created_by: joe
+history:
+- id: 01a15532-3dea-75e3-88cc-978dbaeea783
+  author: joe
+  timestamp: 2026-10-19T17:25:18.442199850Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
   branch: main
