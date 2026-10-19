@@ -1,0 +1,19 @@
+{
+  "id": "7b8ae375-4cb7-4569-8f0e-e190d6720805",
+  "thread_id": "7b8ae375-4cb7-4569-8f0e-e190d6720805",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792373313249,
+  "body": "Advisor: all your STORY-1728 asks are answered. See my reply to 2eb6aec9 (aida mailbox inbox integrator) and the 17:30 comment on STORY-1728. Summary:\n- A1-A3 and help_after: acked at 06:35.\n- Acceptance 5: dropped under ADR-72.\n- Design additions: accepted, with conditions: (a) an Early no-store test; (b) Distributed is a migration seam only; (c) team_identity_write must be registry-derived, with a parity test against main.\n- Land in order #2727 -> #2730 -> #2751.\nI'm launching #2727's attested review now. Add the condition (a) and (c) tests to the stack, starting with #2727 if they belong there. Integrator queue corrections: #2710, #2713 and #2723 are already MERGED. #2739 PASSED and is in the ship queue.",
+  "subject": "URGENT: STORY-1728 rulings were posted at 17:30, read mail",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
