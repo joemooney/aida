@@ -13,8 +13,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T13:29:49.157270897Z
-modified_at: 2026-10-15T13:29:49.157270897Z
+modified_at: 2026-10-19T16:09:23.245679997Z
 req_type: Bug
+comments:
+- id: 01a154ec-bc2d-70a3-a217-38181875f6c9
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1952; full text copied there.'
+  created_at: 2026-10-19T16:09:23.245679997Z
+  modified_at: 2026-10-19T16:09:23.245679997Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 596a91dbc047f434d8db31558d6465c1f4c0030e
   branch: main
