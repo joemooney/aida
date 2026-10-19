@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T22:21:01.358390721Z
-modified_at: 2026-09-26T22:21:30.869599405Z
+modified_at: 2026-10-19T15:49:07.038955120Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -18,3 +18,10 @@ relationships:
 - rel_type: Child
   target_id: 01a0dfb2-d7e1-7273-9e11-dabe3bf74b86
   created_at: 2026-09-26T22:21:42.948191768Z
+comments:
+- id: 01a154da-2d5e-7872-a162-798489c59ddc
+  author: joe
+  content: 'Advisor triage 2026-10-19: STALE, closed. A measurement-gated chain under STORY-1488, which is done; the lib split continues under STORY-1728 (TASK-1940). Reopen if still wanted.'
+  created_at: 2026-10-19T15:49:07.038955120Z
+  modified_at: 2026-10-19T15:49:07.038955120Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
