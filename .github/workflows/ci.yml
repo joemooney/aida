@@ -250,6 +250,11 @@ jobs:
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_git_guardrails_parse.sh
 
+      # STORY-1854: warn-only cargo time-budget PreToolUse hook patterns.
+      # Shell only, so it runs on every PR. trace:STORY-1854 | ai:claude
+      - name: Run cargo-timeout hook test
+        run: bash tests/test_cargo_timeout_guard.sh
+
       # trace:STORY-1648 | ai:claude
       # Primary-checkout drift line in the session-context hook: clean,
       # tracked-dirty, untracked-only, off-main, behind-origin, linked

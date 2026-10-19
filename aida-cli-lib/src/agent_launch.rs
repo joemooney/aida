@@ -1292,7 +1292,7 @@ pub(crate) fn agent_resume_launch_config(
         // The child runs in `worktree`, so its write boundary is that
         // worktree — not the launcher's cwd (`tool_contained_flags` would
         // resolve the parent's git root). trace:BUG-2151 | ai:claude
-        config.default_args = session::claude_contained_flags_for(worktree);
+        config.default_args = session::claude_contained_flags_for(worktree)?;
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(
@@ -1649,11 +1649,11 @@ pub(crate) fn refuse_unallowlisted_contained_passthrough(
 }
 
 // trace:BUG-1178 | ai:codex
-pub(crate) fn tool_contained_flags(agent_type: &str) -> Vec<String> {
-    match agent_type {
+pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
+    Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags());
+            flags.extend(session::claude_contained_flags()?);
             flags
         }
         // trace:STORY-1124 | ai:codex
@@ -1664,7 +1664,7 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Vec<String> {
             "never".to_string(),
         ],
         _ => Vec::new(),
-    }
+    })
 }
 
 // trace:BUG-1178 | ai:codex
@@ -2058,7 +2058,7 @@ pub(crate) fn resolve_claude_new_posture(
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags("claude"),
+            default_args: tool_contained_flags("claude")?,
             contained: true,
             explicit: true,
         })

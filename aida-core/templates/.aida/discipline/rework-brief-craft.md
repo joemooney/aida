@@ -15,6 +15,14 @@ A rework brief preserves a review finding across a cold session. It is not
 5. Keep judgment in the finding and mechanics in the requested change. If the
    remedy requires a product/design choice, route that choice to the advisor
    instead of pretending it is implementation detail.
+6. When the brief names a cargo command, write its budget as
+   `AIDA_CARGO_TIMEOUT=<dur> cargo ...` and tell the implementer to run anything
+   that can exceed about 10 minutes in the tool's background mode. Never stack
+   an outer `timeout <N>` inside the tool's own cap: slot-queue wait counts
+   against it. Tell them to check `cargo ps` after a timeout or KILLED run
+   instead of retrying blindly. Until aida-host STORY-100 ships, the wrapper
+   ignores the variable and background mode is the only protection. See "Cargo time budgets" in
+   `implementer-discipline.md`. <!-- trace:STORY-1854 | ai:claude -->
 
 A sufficient brief lets a fresh implementer answer: what failed, where, how to
 reproduce it, what outcome is required, and which evidence will prove it fixed.
