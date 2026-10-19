@@ -452,6 +452,21 @@ pub(crate) fn pr_fetch_failure_message(stderr: &str, n: u64, pr_local_branch: &s
     }
 }
 
+/// Does `git status --porcelain=v2 --branch` output say a rebase is still in
+/// progress (detached head or an unmerged entry)? A status that could not run,
+/// failed or was refused (a seat clone, an inexpressible `.gitmodules`) counts
+/// as still rebasing, so the caller never proceeds to force-push on it.
+// trace:BUG-1985 | ai:claude
+pub(crate) fn status_output_says_rebasing(out: std::io::Result<std::process::Output>) -> bool {
+    match out {
+        Ok(o) if o.status.success() => {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.contains("# branch.head (no branch)") || s.lines().any(|l| l.starts_with("u "))
+        }
+        _ => true,
+    }
+}
+
 /// `aida pr rebase <N>` — orchestrates the temp-worktree / fetch /
 /// rebase / smoke / force-push-with-lease / cleanup recipe.
 ///
@@ -730,16 +745,11 @@ pub(crate) fn pr_rebase_handler(
             // gitdir. Use `git status --porcelain=v2 --branch` to ask
             // git itself.
             // trace:BUG-1985 | ai:claude
-            let status_says_rebasing = aida_core::git_ops::host_git_command(&wt_path)
-                .args(["status", "--porcelain=v2", "--branch"])
-                .output()
-                .ok()
-                .map(|o| {
-                    let s = String::from_utf8_lossy(&o.stdout).to_string();
-                    s.contains("# branch.head (no branch)")
-                        || s.lines().any(|l| l.starts_with("u "))
-                })
-                .unwrap_or(false);
+            let status_says_rebasing = status_output_says_rebasing(
+                aida_core::git_ops::host_git_command(&wt_path)
+                    .args(["status", "--porcelain=v2", "--branch"])
+                    .output(),
+            );
             if still_rebasing || status_says_rebasing {
                 eprintln!(
                     "{} rebase still in progress — leaving worktree at {}",

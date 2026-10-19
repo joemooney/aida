@@ -69,36 +69,19 @@ pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> 
         )];
     }
     // BUG-1985: reap, doctor heal and gc remove a tree with force when this
-    // reads clean, so it must see uncommitted edits inside a submodule. Like
-    // `git_ops::worktree_status_porcelain`: a gitlink that is not a host-owned
-    // submodule reads as dirty (the tree is kept), and only then does status
-    // recurse into submodules, overriding the contained-tree hardening.
-    // trace:BUG-1985 | ai:claude
-    if let Err(err) = aida_core::git_ops::refuse_untrusted_gitlinks(worktree) {
-        return vec![format!("?? ({err:#})")];
-    }
-    let out = aida_core::git_ops::host_git_command(worktree)
-        .args(["status", "--porcelain", "--ignore-submodules=none"])
-        .output();
-    // F4: a status that fails or cannot run over an existing tree is one
+    // reads clean, so it must see uncommitted edits inside a submodule. The
+    // shared safety status keeps a tree holding a planted gitlink and never
+    // lets git recurse into a submodule; each validated one is inspected
+    // through its validated git directory (review round 2).
+    // F4: a refusal or a status that fails over an existing tree is one
     // explanatory dirty entry, never "clean". A tree already gone has
-    // nothing to lose. trace:BUG-1985 | ai:claude
-    let out = match out {
-        Ok(out) if out.status.success() => out,
-        _ if !worktree.exists() => return Vec::new(),
-        Ok(out) => {
-            return vec![format!(
-                "?? (git status failed: {})",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )];
-        }
-        Err(err) => return vec![format!("?? (git status could not run: {err})")],
-    };
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| l.to_string())
-        .collect()
+    // nothing to lose.
+    // trace:BUG-1985 | ai:claude
+    match aida_core::git_ops::worktree_status_porcelain_lines(worktree) {
+        Ok(lines) => lines,
+        Err(_) if !worktree.exists() => Vec::new(),
+        Err(err) => vec![format!("?? ({err:#})")],
+    }
 }
 
 /// STORY-457: is this untracked path auto-flaggable as safe-to-remove? Editor
@@ -1890,7 +1873,9 @@ pub(crate) fn lease_activity_timestamp(
 
 pub(crate) fn collect_branch_facts(project_root: &std::path::Path) -> Option<BranchFacts> {
     let name = current_branch_at(project_root)?;
-    let dirty = !working_tree_clean(project_root).unwrap_or(true);
+    // BUG-1985: a refused or failed status shows dirty, never clean.
+    // trace:BUG-1985 | ai:claude
+    let dirty = working_tree_clean(project_root) != Some(true);
     let (ahead_main, behind_main) = ahead_behind_vs_ref(project_root, &name, "origin/main")
         .or_else(|| ahead_behind_vs_ref(project_root, &name, "main"))
         .map(|(a, b)| (Some(a), Some(b)))

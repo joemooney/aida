@@ -585,7 +585,10 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     if !worktree_path.is_dir() {
         return WorktreeGitProbe::default();
     }
-    let dirty = aida_core::git_ops::worktree_is_dirty(worktree_path);
+    // BUG-1985: a non-destructive probe never inspects inside a submodule,
+    // so a live session cannot race a recursion it triggers on every probe.
+    // trace:BUG-1985 | ai:claude
+    let dirty = aida_core::git_ops::worktree_is_dirty_shallow(worktree_path);
     let ahead_of_main = git_stdout(worktree_path, &["rev-list", "--count", "origin/main..HEAD"])
         .or_else(|| git_stdout(worktree_path, &["rev-list", "--count", "main..HEAD"]))
         .and_then(|s| s.parse::<u32>().ok())

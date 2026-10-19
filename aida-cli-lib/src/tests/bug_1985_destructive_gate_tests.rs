@@ -182,3 +182,38 @@ fn ship_dirty_check_reads_a_refused_status_as_dirty() {
     // The reap/gc entries probe keeps the tree too.
     assert!(!crate::status_sections::worktree_dirty_entries(&clone).is_empty());
 }
+
+// Review round 2 F3: `aida pr rebase` treats a status that could not run,
+// failed or was refused as "still rebasing", never as "rebase finished".
+// trace:BUG-1985 | ai:claude
+#[cfg(unix)]
+#[test]
+fn rebase_check_reads_a_failed_status_as_still_rebasing() {
+    let says = crate::pr_cmd::status_output_says_rebasing;
+    let sh = |script: &str| {
+        std::process::Command::new("sh")
+            .args(["-c", script])
+            .output()
+    };
+    assert!(says(Err(std::io::Error::other("spawn failed"))));
+    assert!(
+        says(sh("echo '# branch.head main'; exit 1")),
+        "a failed status"
+    );
+    assert!(!says(sh("echo '# branch.head main'")), "a finished rebase");
+    assert!(says(sh("echo '# branch.head (no branch)'")));
+    assert!(says(sh("echo '# branch.head main'; echo 'u UU N... x'")));
+
+    // A seat clone refuses host git: that refusal must read as rebasing.
+    let tmp = tempfile::tempdir().unwrap();
+    let clone = std::fs::canonicalize(tmp.path())
+        .unwrap()
+        .join("aida-seat-rebase");
+    std::fs::create_dir_all(&clone).unwrap();
+    git(&clone, &["init", "-q", "-b", "main"]);
+    assert!(says(
+        aida_core::git_ops::host_git_command(&clone)
+            .args(["status", "--porcelain=v2", "--branch"])
+            .output()
+    ));
+}

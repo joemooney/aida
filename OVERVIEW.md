@@ -394,9 +394,15 @@ pointer that resolves to a submodule git directory (`<common>/modules/...` or
 `<common>/worktrees/<wt>/modules/...`) inside the sandbox-denied common git
 directory. Staging also refuses an untracked nested repository at any depth.
 A tree that fails this is kept and treated as dirty, and so is a tree whose
-`git status` fails: no dirty check reads a git error as clean. Once every gitlink passes, the checks recurse into the
-submodules (`--ignore-submodules=none`), so uncommitted edits there still keep
-the tree. Salvage refuses edits inside a submodule, because a patch cannot
+`git status` fails: no dirty check reads a git error as clean. Git itself never recurses into a
+submodule there, even once every gitlink passes, because it would read each
+submodule's session-writable work-tree `.gitmodules`. The checks inspect each
+checked-out submodule themselves instead: policy B again over that
+submodule's own index, then its status through the git directory validated a
+moment earlier (`--git-dir`, never re-reading the `.git` pointer), nested
+submodules likewise. So uncommitted edits there still keep the tree. A
+submodule with no `.git` is skipped. The non-destructive `aida ps` probe
+never looks inside a submodule. Salvage refuses edits inside a submodule, because a patch cannot
 hold them. Other checkouts keep git's submodule handling. Every host
 `git status` goes through `git_ops::host_git_command`, directly or via a
 wrapper; a guard test enforces it.
