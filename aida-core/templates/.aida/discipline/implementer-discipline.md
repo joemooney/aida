@@ -191,9 +191,10 @@ again behind itself.
 
 - Write `AIDA_CARGO_TIMEOUT=<dur> cargo ...` (or `AIDA_CARGO_TIMEOUT=<dur> make
   <target>` for a make target that runs cargo). Never write `timeout <N> cargo
-  ...` or `timeout <N> make <cargo target>`. The wrapper starts that budget when
-  the slot is acquired. Timeouts on commands that are not cargo, such as
-  `timeout 540 gh pr checks ...`, are fine.
+  ...` or `timeout <N> make <cargo target>`. Once aida-host STORY-100 ships,
+  the wrapper starts that budget when the slot is acquired. Timeouts on
+  commands that are not cargo, such as `timeout 540 gh pr checks ...`, are
+  fine.
 - Run any cargo invocation that can exceed about 10 minutes (tests,
   `make check-ci-compile`, full builds) in the tool's background mode, not as a
   foreground call. A foreground tool call has its own cap (one hour for the
@@ -201,8 +202,8 @@ again behind itself.
 - After a timeout or a KILLED run, check `cargo ps` before retrying. The run
   may still be queued or running, and a blind retry adds a second copy to the
   queue.
-- **Until the host wrapper ships `AIDA_CARGO_TIMEOUT` support, it ignores the
-  variable, and background mode is the only protection.** Write the variable
+- **Until aida-host STORY-100 ships `AIDA_CARGO_TIMEOUT` support, the wrapper
+  ignores the variable, and background mode is the only protection.** Write the variable
   anyway so the budget takes effect once the wrapper honours it.
 
 The `aida-cargo-timeout-guard.sh` PreToolUse hook warns (never blocks) when a

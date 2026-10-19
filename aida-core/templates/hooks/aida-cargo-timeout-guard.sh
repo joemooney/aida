@@ -6,8 +6,9 @@
 # spent waiting for a cargo build slot on a busy host counts against it, and
 # the run is killed mid-build and usually retried, re-queueing behind itself.
 # The suggested replacement hands the budget to the cargo wrapper, which
-# starts the clock when the slot is acquired, and runs long work in the
-# tool's background mode, where no foreground tool cap applies.
+# (once aida-host STORY-100 ships) starts the clock when the slot is acquired,
+# and runs long work in the tool's background mode, where no foreground tool
+# cap applies. Until then the variable is a no-op.
 #
 # Non-cargo timeouts (`timeout 540 gh pr checks ...`) are left alone. Prose
 # that only mentions the pattern (a quoted argument, heredoc body or comment)
@@ -166,7 +167,7 @@ case "$tool" in
     *) replacement="AIDA_CARGO_TIMEOUT=${duration} ${tool} <target>" ;;
 esac
 
-MESSAGE="Cargo time budget: \`timeout ${duration} ${tool}\` starts its clock before the cargo slot queue, so a long wait for a build slot can kill the run partway through. Write \`${replacement}\` instead so the cargo wrapper starts the budget when the slot is acquired, and run anything that can take more than about 10 minutes in the tool's background mode. Until the host cargo wrapper honours AIDA_CARGO_TIMEOUT it ignores the variable, and background mode is the only protection. After a timeout or KILLED, check \`cargo ps\` before retrying; never retry blindly."
+MESSAGE="Cargo time budget: \`timeout ${duration} ${tool}\` starts its clock before the cargo slot queue, so a long wait for a build slot can kill the run partway through. Write \`${replacement}\` instead, and run anything that can take more than about 10 minutes in the tool's background mode. Once the host cargo wrapper supports AIDA_CARGO_TIMEOUT (aida-host STORY-100), it starts that budget when the slot is acquired; until then it ignores the variable, and background mode is the only protection. After a timeout or KILLED, check \`cargo ps\` before retrying; never retry blindly."
 
 # JSON-escape the message (it holds backticks and quotes, no newlines).
 escaped=${MESSAGE//\\/\\\\}

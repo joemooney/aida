@@ -16,11 +16,11 @@ const DEFAULT_GUARD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 // trace:BUG-1714 | ai:claude
 const DEFAULT_BUILD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 /// STORY-1854: a guard or build budget is a RUN budget, handed to the cargo
-/// wrapper as `AIDA_CARGO_TIMEOUT`, which starts the clock when a build slot is
-/// acquired. The outer deadline here starts at spawn, so it counts slot-queue
-/// wait; it stays only as a backstop and allows a queue wait as long as the
-/// budget itself. Until the host wrapper honours the variable it is ignored,
-/// and this backstop is the only bound.
+/// wrapper as `AIDA_CARGO_TIMEOUT`, which, once aida-host STORY-100 ships,
+/// starts the clock when a build slot is acquired. The outer deadline here
+/// starts at spawn, so it counts slot-queue wait; it stays only as a backstop
+/// and allows a queue wait as long as the budget itself. Until then the
+/// variable is ignored, and this backstop is the only bound.
 // trace:STORY-1854 | ai:claude
 const QUEUE_ALLOWANCE_FACTOR: u32 = 2;
 const CI_BASH_SHELL: &str = "bash --noprofile --norc -e -o pipefail {0}";

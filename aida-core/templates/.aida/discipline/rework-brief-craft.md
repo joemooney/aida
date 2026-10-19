@@ -20,8 +20,8 @@ A rework brief preserves a review finding across a cold session. It is not
    that can exceed about 10 minutes in the tool's background mode. Never stack
    an outer `timeout <N>` inside the tool's own cap: slot-queue wait counts
    against it. Tell them to check `cargo ps` after a timeout or KILLED run
-   instead of retrying blindly. Until the host wrapper honours the variable,
-   background mode is the only protection. See "Cargo time budgets" in
+   instead of retrying blindly. Until aida-host STORY-100 ships, the wrapper
+   ignores the variable and background mode is the only protection. See "Cargo time budgets" in
    `implementer-discipline.md`. <!-- trace:STORY-1854 | ai:claude -->
 
 A sufficient brief lets a fresh implementer answer: what failed, where, how to

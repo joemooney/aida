@@ -83,9 +83,9 @@ A reviewer's local test runs queue for the same build slots as everyone else's.
 Hand the budget to the wrapper (`AIDA_CARGO_TIMEOUT=<dur> cargo ...`), never
 wrap cargo or a cargo-running make target in `timeout <N>`, and run anything
 that can exceed about 10 minutes in the tool's background mode. After a timeout
-or KILLED run, check `cargo ps` before retrying; never retry blindly. Until the
-host wrapper honours `AIDA_CARGO_TIMEOUT` it ignores the variable, so background
-mode is the only protection. A run killed by an outer timeout is not a test
+or KILLED run, check `cargo ps` before retrying; never retry blindly. Until
+aida-host STORY-100 ships, the wrapper ignores `AIDA_CARGO_TIMEOUT`, so
+background mode is the only protection. A run killed by an outer timeout is not a test
 failure. Do not report it as one. See "Cargo time budgets" in
 `implementer-discipline.md`.
 
