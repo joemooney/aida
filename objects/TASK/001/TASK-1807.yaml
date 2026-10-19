@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T09:37:19.643685195Z
-modified_at: 2026-10-18T09:37:19.643685195Z
+modified_at: 2026-10-19T15:44:57.665088074Z
 req_type: Task
 tags:
 - from-review:PR-2724
 - severity:minor
 - test-coverage
+comments:
+- id: 01a154d6-5f41-72a1-955a-a237e50e4a58
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1808. Same finding (same finding-hash or identical text).'
+  created_at: 2026-10-19T15:44:57.665088074Z
+  modified_at: 2026-10-19T15:44:57.665088074Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 8839b6bb32ad549b1933c3af154dc504d3d6c0c8
   branch: pr-2724
