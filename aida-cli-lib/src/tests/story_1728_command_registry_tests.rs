@@ -391,3 +391,265 @@ fn per_verb_stakeholder_policy_matches_the_legacy_table() {
     let cli = try_parse_from(["aida", "role", "list"]).unwrap();
     assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
 }
+
+thread_local! {
+    /// What each synthetic handler saw: `(handler, had_store)`.
+    static SEEN: std::cell::RefCell<Vec<(&'static str, bool)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn synthetic_reg(run: Handler) -> &'static CommandReg {
+    Box::leak(Box::new(CommandReg {
+        name: "synthetic",
+        help_after: "",
+        command: || clap::Command::new("synthetic"),
+        policy: |_| CmdPolicy {
+            stakeholder: StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run,
+    }))
+}
+
+fn synthetic_invocation(run: Handler) -> Invocation {
+    let reg = synthetic_reg(run);
+    Invocation {
+        reg,
+        matches: (reg.command)().get_matches_from(["synthetic"]),
+    }
+}
+
+// Advisor condition (a): an Early handler runs exactly once, at the early
+// point, with no store, and always finishes there; it can never reach a
+// storage dispatcher. A store-phase handler that defers at the early point
+// sees no store there and runs again only when a dispatcher hands it one.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
+    let globals = try_parse_from(["aida", "status"]).unwrap().globals;
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    let early = synthetic_invocation(Handler::Early(|_, ctx| {
+        SEEN.with(|seen| seen.borrow_mut().push(("early", ctx.store.is_some())));
+        Ok(())
+    }));
+    assert_eq!(early.run_early(&globals).unwrap(), Flow::Return);
+    let store_path = std::path::Path::new("fixture-store");
+    let reached_store = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let store = StoreCtx::Distributed {
+            store_path,
+            project_root_hint: None,
+        };
+        early.run_store(store, Some(&globals))
+    }));
+    assert!(
+        reached_store.is_err(),
+        "an Early handler must never run inside a storage dispatcher"
+    );
+    SEEN.with(|seen| assert_eq!(*seen.borrow(), vec![("early", false)]));
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    let store = synthetic_invocation(Handler::Store(|_, ctx| {
+        SEEN.with(|seen| seen.borrow_mut().push(("store", ctx.store.is_some())));
+        Ok(if ctx.store.is_some() {
+            Flow::Return
+        } else {
+            Flow::Continue
+        })
+    }));
+    assert_eq!(store.run_early(&globals).unwrap(), Flow::Continue);
+    let ctx = StoreCtx::Distributed {
+        store_path,
+        project_root_hint: None,
+    };
+    assert_eq!(store.run_store(ctx, None).unwrap(), Flow::Return);
+    SEEN.with(|seen| {
+        assert_eq!(*seen.borrow(), vec![("store", false), ("store", true)]);
+    });
+}
+
+/// The body of `fn run()` in `lib_part1.rs`, up to its closing brace.
+fn run_fn_body() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib_part1.rs");
+    let text = std::fs::read_to_string(path).unwrap();
+    let start = text
+        .find("\npub(crate) fn run() -> Result<()> {")
+        .expect("lib_part1.rs defines run()");
+    let end = start + text[start..].find("\n}\n").expect("run() closes");
+    text[start..end].to_string()
+}
+
+// Advisor condition (a), dispatcher side: `run()` reaches the early dispatch
+// point before it resolves or opens any store, so no Early handler runs with
+// storage, the cache or the graph initialised; and each storage stage has
+// exactly one dispatch site, so a `Flow::Continue` from the early point is
+// served by one store dispatch (legacy or git-backend, with the distributed
+// pre-backend stage only a pass-through seam in front of the latter).
+// trace:STORY-1728 | ai:claude
+#[test]
+fn run_dispatches_early_handlers_before_any_store_is_opened() {
+    const STORE_INIT: &[&str] = &[
+        "requirements_path",
+        "Storage::new(",
+        "run_on_distributed_store(",
+        "handle_git_backend_command(",
+        "CachedGitBackend",
+        "find_project_root(",
+        "open_store",
+        "ensure_cache",
+    ];
+    let body = run_fn_body();
+    let early = body
+        .find("invocation.run_early(")
+        .expect("run() has the early dispatch point");
+    let prelude: Vec<&str> = body[..early]
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .filter(|line| STORE_INIT.iter().any(|pat| line.contains(pat)))
+        .collect();
+    assert!(
+        prelude.is_empty(),
+        "run() touches storage before the early dispatch point:\n{}",
+        prelude.join("\n")
+    );
+    assert_eq!(
+        body.matches("invocation.run_early(").count(),
+        1,
+        "run() has exactly one early dispatch point"
+    );
+
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut sites = Vec::new();
+    for entry in std::fs::read_dir(&src).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.ends_with(".rs") || name == "command_registry.rs" {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (_, line) in production_lines(&text) {
+            if line.contains("invocation.run_early(") && name != "lib_part1.rs" {
+                sites.push(format!("{name}: early"));
+            }
+            if line.contains("invocation.run_store(") {
+                sites.push(name.clone());
+            }
+        }
+    }
+    sites.sort();
+    assert_eq!(
+        sites,
+        ["git_backend_cmd.rs", "lib_part1.rs", "store_sync.rs"],
+        "one store dispatch per stage: git-backend, legacy, distributed"
+    );
+    let store_sync =
+        std::fs::read_to_string(src.join("store_sync.rs")).expect("store_sync.rs reads");
+    let seam = store_sync
+        .find("invocation.run_store(")
+        .expect("distributed dispatch site");
+    let tail = &store_sync[seam..];
+    let next_fn = tail.find("\n}\n").expect("run_on_distributed_store closes");
+    assert!(
+        tail[..next_fn].contains("handle_git_backend_command(store_path, command)"),
+        "a Continue at the distributed seam falls through to the git-backend dispatcher"
+    );
+}
+
+/// `is_write_command` on main before the registry (origin/main aaff1236ad,
+/// status_awaiting.rs): the commands the team-identity guard refuses under a
+/// shared `default` identity when `AIDA_TEAM_REQUIRE_USER=1`. Every verb of
+/// these commands counted; every other command was a read.
+const MAIN_TEAM_IDENTITY_WRITES: &[&str] = &[
+    "add",
+    "archive",
+    "brief",
+    "comment",
+    "defer",
+    "do",
+    "edit",
+    "queue",
+    "session",
+    "unarchive",
+    "undefer",
+];
+
+// Advisor condition (c), two-seat 5(b) identity: `team_identity_write` comes
+// from each command's registration, and for every registered command and
+// every one of its verbs it equals main's `is_write_command`. Any divergence
+// changes which commands write under team identity, so it fails here.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
+    let mut checked = 0;
+    let mut diverged = Vec::new();
+    for reg in REGISTRY {
+        let want = MAIN_TEAM_IDENTITY_WRITES.contains(&reg.name);
+        let mut paths = vec![Vec::new()];
+        collect_paths(&(reg.command)(), &[], &mut paths);
+        for path in paths {
+            let mut argv = vec![reg.name.to_string()];
+            argv.extend(path.iter().cloned());
+            // Required arguments are absent; policies answer for an
+            // unparseable invocation too (fail-closed).
+            let matches = (reg.command)()
+                .ignore_errors(true)
+                .try_get_matches_from(&argv)
+                .unwrap_or_else(|err| panic!("`aida {}`: {err}", argv.join(" ")));
+            checked += 1;
+            if (reg.policy)(&matches).team_identity_write != want {
+                diverged.push(format!("aida {} (main: {want})", argv.join(" ")));
+            }
+        }
+    }
+    assert!(
+        diverged.is_empty(),
+        "team_identity_write diverges from main's is_write_command:\n{}",
+        diverged.join("\n")
+    );
+    assert!(checked > REGISTRY.len(), "verbs were enumerated");
+    for name in MAIN_TEAM_IDENTITY_WRITES {
+        assert!(
+            lookup(name).is_some(),
+            "`{name}` is registered, so the parity above covered it"
+        );
+    }
+
+    // The guard itself reads the registry answer for real argv.
+    for (argv, want) in [
+        (vec!["aida", "queue", "list"], true),
+        (vec!["aida", "comment", "add", "TASK-1", "note"], true),
+        (vec!["aida", "edit", "TASK-1", "--status", "approved"], true),
+        (vec!["aida", "session", "leases"], true),
+        (vec!["aida", "show", "TASK-1"], false),
+        (vec!["aida", "rework", "TASK-1"], false),
+        (vec!["aida", "status"], false),
+        (vec!["aida", "team"], false),
+    ] {
+        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        assert_eq!(
+            crate::status_awaiting::is_write_command(&cli.command),
+            want,
+            "{argv:?}"
+        );
+    }
+}
+
+// The team-identity guard's exemptions keep main's classification: `aida
+// team` and the machine-readable `aida status --json` stay silent.
+// trace:STORY-1728 | ai:claude
+#[test]
+fn team_identity_guard_exemptions_match_main() {
+    let team = parse_command(["aida", "team"]);
+    assert_eq!(team.name(), "team");
+    let status = parse_command(["aida", "status", "--json"]);
+    assert!(status
+        .args::<crate::status_cmd::StatusArgs>()
+        .is_some_and(|args| args.json));
+    let plain = parse_command(["aida", "status"]);
+    assert!(!plain
+        .args::<crate::status_cmd::StatusArgs>()
+        .is_some_and(|args| args.json));
+    assert!(team.args::<crate::status_cmd::StatusArgs>().is_none());
+}
