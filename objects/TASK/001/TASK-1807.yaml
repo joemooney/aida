@@ -6,12 +6,12 @@ description: |
   No test drives handle_review_record_at (aida-cli-lib/src/lib_part5.rs:3077-3123) through a successful solo self-approval. The only positive test (solo_human_allows_tty_human_to_approve_own_claim) builds the receipt and attestation by hand, because run_challenge never opens a tty under cfg(test). Add an injectable challenge seam on the record path, then assert three things: the verdict JSON attestation and the ~/.aida/review-receipts receipt both carry solo_human: true, and approval_authority_refusal returns None for that CLI-recorded approval when the mode is on.
 
   Raised in review of PR-2724: https://github.com/joemooney/aida/pull/2724
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T09:37:19.643685195Z
-modified_at: 2026-10-19T15:44:57.665088074Z
+modified_at: 2026-10-19T15:45:00.220190777Z
 req_type: Task
 tags:
 - from-review:PR-2724
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T15:44:57.665088074Z
   modified_at: 2026-10-19T15:44:57.665088074Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d6-693c-7ea1-96c8-e4721ecb3bce
+  author: joe
+  timestamp: 2026-10-19T15:45:00.220183864Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 8839b6bb32ad549b1933c3af154dc504d3d6c0c8
   branch: pr-2724
