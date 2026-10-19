@@ -254,6 +254,7 @@ mod task_190_comment_source_parser_tests {
         match cli.command.registered::<crate::comment_cmd::CommentArgs>() {
             crate::comment_cmd::CommentArgs {
                 inner: super::CommentCommand::Add { relayed_from, .. },
+                ..
             } => {
                 assert_eq!(relayed_from.as_deref(), Some("claude-reviewer-1"))
             }
@@ -456,6 +457,7 @@ mod tests {
                         SessionCommand::Handoff {
                             standing_orders, ..
                         },
+                    ..
                 } => standing_orders,
                 _ => panic!("expected session handoff"),
             }
@@ -519,7 +521,7 @@ mod tests {
                 .unwrap();
         assert!(matches!(
             cli.command.registered::<crate::remote_cmd::RemoteArgs>(),
-            crate::remote_cmd::RemoteArgs { inner: RemoteCommand::MirrorPush { pushed_remote, dry_run } }
+            crate::remote_cmd::RemoteArgs { inner: RemoteCommand::MirrorPush { pushed_remote, dry_run, .. }, .. }
                 if pushed_remote == "origin"
                     && !dry_run
         ));
@@ -554,7 +556,7 @@ mod tests {
         assert!(matches!(
             cli.command
                 .registered::<crate::autonomy_cmd::AutonomyArgs>(),
-            crate::autonomy_cmd::AutonomyArgs { command: None }
+            crate::autonomy_cmd::AutonomyArgs { command: None, .. }
         ));
 
         let cli = crate::command_registry::try_parse_from(["aida", "autonomy", "report"]).unwrap();
@@ -562,7 +564,8 @@ mod tests {
             cli.command
                 .registered::<crate::autonomy_cmd::AutonomyArgs>(),
             crate::autonomy_cmd::AutonomyArgs {
-                command: Some(AutonomyCommand::Report { .. })
+                command: Some(AutonomyCommand::Report { .. }),
+                ..
             }
         ));
     }
@@ -611,6 +614,7 @@ mod tests {
             with_tools,
             no_timestamp,
             annotate,
+            ..
         } = tail.command.registered::<crate::tail_cmd::TailArgs>()
         else {
             panic!("expected Tail command");
@@ -628,7 +632,9 @@ mod tests {
                     with_tools: drain_with_tools,
                     no_timestamp: drain_no_timestamp,
                     annotate: drain_annotate,
+                    ..
                 },
+            ..
         } = drain_tail
             .command
             .registered::<crate::drain_cmd::DrainArgs>()
@@ -692,7 +698,9 @@ mod tests {
                         json,
                         vendor,
                         model,
+                        ..
                     },
+                ..
             } => {
                 assert_eq!(selector.as_deref(), Some("next3"));
                 assert_eq!(project.as_deref(), Some("/tmp/aida"));
@@ -716,7 +724,8 @@ mod tests {
         assert!(matches!(
             cli.command.registered::<crate::drain_cmd::DrainArgs>(),
             crate::drain_cmd::DrainArgs {
-                inner: DrainCommand::Stop { now: true, .. }
+                inner: DrainCommand::Stop { now: true, .. },
+                ..
             }
         ));
     }
@@ -727,7 +736,9 @@ mod tests {
         let cli = crate::command_registry::try_parse_from(["aida", "do", "TASK-1155"])
             .expect("`aida do <spec>` should parse");
         match cli.command.registered::<crate::do_dispatch::DoArgs>() {
-            crate::do_dispatch::DoArgs { spec, mode, force } => {
+            crate::do_dispatch::DoArgs {
+                spec, mode, force, ..
+            } => {
                 assert_eq!(spec, "TASK-1155");
                 assert!(mode.is_none());
                 assert!(!force);
@@ -749,7 +760,9 @@ mod tests {
         ])
         .expect("`aida do <spec> --mode <m> --force` should parse");
         match cli.command.registered::<crate::do_dispatch::DoArgs>() {
-            crate::do_dispatch::DoArgs { spec, mode, force } => {
+            crate::do_dispatch::DoArgs {
+                spec, mode, force, ..
+            } => {
                 assert_eq!(spec, "TASK-1155");
                 assert_eq!(mode.as_deref(), Some("guided"));
                 assert!(force);
@@ -767,7 +780,11 @@ mod tests {
         .expect("`aida worktree gc` should parse");
         match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
             crate::worktree_gc::WorktreeArgs {
-                inner: WorktreeCommand::Gc { yes, force, json },
+                inner:
+                    WorktreeCommand::Gc {
+                        yes, force, json, ..
+                    },
+                ..
             } => {
                 assert!(yes);
                 assert!(force);
@@ -1444,6 +1461,7 @@ mod tests {
                 crate::human_cmd::HumanArgs {
                     short: false,
                     command: Some(cmd),
+                    ..
                 } => {
                     let got = match cmd {
                         HumanCommand::Away => "away",
@@ -1506,6 +1524,7 @@ mod tests {
                         batch,
                         ..
                     },
+                ..
             } => {
                 assert!(sequential, "--sequential should parse as true");
                 assert!(!single_branch);
@@ -1799,7 +1818,8 @@ mod tests {
         assert!(matches!(
             cli.command.registered::<crate::drain_cmd::DrainArgs>(),
             crate::drain_cmd::DrainArgs {
-                inner: DrainCommand::Clear
+                inner: DrainCommand::Clear,
+                ..
             }
         ));
         let cli = crate::command_registry::try_parse_from(["aida", "drain", "status", "--clear"])
@@ -1807,7 +1827,8 @@ mod tests {
         assert!(matches!(
             cli.command.registered::<crate::drain_cmd::DrainArgs>(),
             crate::drain_cmd::DrainArgs {
-                inner: DrainCommand::Status { clear: true, .. }
+                inner: DrainCommand::Status { clear: true, .. },
+                ..
             }
         ));
 
@@ -2294,7 +2315,8 @@ mod tests {
             .registered::<crate::findings_gate::FindingsArgs>()
         {
             crate::findings_gate::FindingsArgs {
-                cmd: Some(FindingsCommand::Classes { since, json }),
+                cmd: Some(FindingsCommand::Classes { since, json, .. }),
+                ..
             } => {
                 assert_eq!(since.as_deref(), Some("7d"));
                 assert!(!json);
@@ -2307,7 +2329,7 @@ mod tests {
         .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
-                cmd: Some(ReviewCommand::Classes { since, json }),
+                cmd: Some(ReviewCommand::Classes { since, json, .. }),
                 ..
             } => {
                 assert_eq!(since.as_deref(), Some("30d"));
@@ -2346,7 +2368,7 @@ mod tests {
         .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
-                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
                 ..
             } => {
                 assert!(json);
@@ -2366,7 +2388,7 @@ mod tests {
         .unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
-                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
                 ..
             } => {
                 assert!(json);
@@ -2408,7 +2430,11 @@ mod tests {
             crate::review_cmd::ReviewArgs {
                 cmd:
                     Some(ReviewCommand::Mode {
-                        mode: ReviewModeCommand::MassChange { action, days, json },
+                        mode:
+                            ReviewModeCommand::MassChange {
+                                action, days, json, ..
+                            },
+                        ..
                     }),
                 ..
             } => {
@@ -2434,7 +2460,7 @@ mod tests {
         let cli = crate::command_registry::try_parse_from(["aida", "review", "stranded"]).unwrap();
         match cli.command.registered::<crate::review_cmd::ReviewArgs>() {
             crate::review_cmd::ReviewArgs {
-                cmd: Some(ReviewCommand::Stranded { json, fix, age }),
+                cmd: Some(ReviewCommand::Stranded { json, fix, age, .. }),
                 ..
             } => {
                 assert!(!json);

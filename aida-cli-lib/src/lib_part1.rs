@@ -1956,63 +1956,6 @@ pub(crate) fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Opti
         .filter(|s| !s.trim().is_empty())
 }
 
-/// `aida advisor` — manage the live-advisor registration the
-/// `--no-human=both` orchestrator reads (STORY-360). Three actions:
-///   - `register` writes the current session's UUID + project slug to
-///     `~/.aida/advisor.toml`. Auto-detects from `CLAUDE_CODE_SESSION_ID`.
-///   - `unregister` clears the file.
-///   - `status` prints what's registered and an estimated $/fork.
-///     trace:STORY-360 | ai:claude
-pub(crate) fn handle_advisor_command(cmd: &AdvisorCommand) -> Result<()> {
-    match cmd {
-        AdvisorCommand::Register { uuid, project_slug } => {
-            handle_advisor_register(uuid.as_deref(), project_slug.as_deref())
-        }
-        AdvisorCommand::Unregister => {
-            advisor::clear_registration()?;
-            println!("Advisor registration cleared.");
-            Ok(())
-        }
-        // STORY-586: presence-gated fork-from-live watch loop. Store-less —
-        // self-loads advisor config + presence. trace:STORY-586 | ai:claude
-        AdvisorCommand::Watch {
-            dry_run,
-            once,
-            triage_only,
-            poll_interval,
-            fork_interval,
-        } => {
-            let project_root = main_worktree_root_from(&find_project_root()?);
-            advisor_watch::run_advisor_watch(
-                &project_root,
-                &advisor_watch::WatchOpts {
-                    poll_interval_secs: *poll_interval,
-                    fork_interval_secs: *fork_interval,
-                    dry_run: *dry_run,
-                    once: *once,
-                    triage_only: *triage_only,
-                },
-            )
-        }
-        // STORY-559: only the narrow `--registration` view reaches this
-        // store-less early handler; the default dashboard dispatches after
-        // storage init. trace:STORY-559 | ai:claude
-        AdvisorCommand::Status { json, .. } => handle_advisor_registration_status(*json),
-        // STORY-262: `schedule` needs the requirement store, so it's routed
-        // through the post-storage-init dispatch instead of this store-less
-        // early handler. trace:STORY-262 | ai:claude
-        AdvisorCommand::Schedule(_) => {
-            unreachable!("advisor schedule dispatches after storage init")
-        }
-        // STORY-363: `handoff` writes a checked-in brief into a sibling
-        // project. It reads no requirement store — parent identity is derived
-        // from the current project root and the rest is an operator-authored
-        // template — so it dispatches in this store-less early handler.
-        // trace:STORY-363 | ai:claude
-        AdvisorCommand::Handoff { to, focus, force } => handle_advisor_handoff(to, focus, *force),
-    }
-}
-
 /// STORY-439: `aida autonomy calibration mismatches` — the substrate-gap
 /// signal. Walks `.aida/complexity-calibration/*.yaml`, drops records
 /// missing a pickup-or-review half, and surfaces the rest ranked by

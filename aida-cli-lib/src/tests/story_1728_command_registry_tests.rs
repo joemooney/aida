@@ -762,3 +762,142 @@ fn built_legacy_names() -> Vec<&'static str> {
         .map(|sub| &*Box::leak(sub.get_name().to_string().into_boxed_str()))
         .collect()
 }
+
+/// The files criterion 4 keeps a new flag out of.
+fn is_hot_file(name: &str) -> bool {
+    matches!(
+        name,
+        "cli.rs"
+            | "lib.rs"
+            | "command_registry.rs"
+            | "git_backend_cmd.rs"
+            | "stakeholder_role.rs"
+            | "role.rs"
+    ) || (name.starts_with("lib_part") && name.ends_with(".rs"))
+}
+
+/// Every clap-derived type outside the hot files: `(name, is_enum)`.
+fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
+    let item = regex::Regex::new(r"^\s*pub(\([^)]*\))?\s+(enum|struct)\s+(\w+)").unwrap();
+    let mut out = Vec::new();
+    for path in production_sources(src) {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if path.parent() == Some(src) && is_hot_file(&name) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            if lines[i].trim_start().starts_with("#[derive(") {
+                let mut derive = lines[i].to_string();
+                while !derive.contains(")]") && i + 1 < lines.len() {
+                    i += 1;
+                    derive.push_str(lines[i]);
+                }
+                let clap = ["Parser", "Args", "Subcommand"].iter().any(|d| {
+                    derive.contains(&format!("::{d}"))
+                        || derive.contains(&format!("({d}"))
+                        || derive.contains(&format!(" {d}"))
+                });
+                if clap {
+                    if let Some(caps) = lines[i + 1..].iter().find_map(|line| item.captures(line)) {
+                        out.push((caps[3].to_string(), &caps[2] == "enum"));
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+// Criterion 4, enforced: no hot file holds a per-verb dispatcher for a
+// command's subcommand enum, or a `{ … }` pattern over a command's clap
+// type or variant without `..`. Either one means a new flag or verb on that
+// command must edit the hot file.
+// trace:STORY-1728.ac245f28 | ai:claude
+#[test]
+fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let types = command_clap_types(&src);
+    assert!(
+        types.len() > 100,
+        "clap types were collected: {}",
+        types.len()
+    );
+    let names: Vec<&str> = types.iter().map(|(name, _)| name.as_str()).collect();
+    let group = regex::Regex::new(&format!(r"\b({})(::\w+)?\s*\{{", names.join("|"))).unwrap();
+    let decl = regex::Regex::new(r"(enum|struct|impl|for|fn)\s+$").unwrap();
+    let comment = regex::Regex::new(r"//[^\n]*").unwrap();
+    let param = regex::Regex::new(r"fn\s+(\w+)\s*(<[^>]*>)?\s*\(([^)]*)\)").unwrap();
+    let param_type = regex::Regex::new(r":\s*&?(?:mut\s+)?(?:[\w:]*::)?(\w+)").unwrap();
+    let enums: Vec<&str> = types
+        .iter()
+        .filter(|(_, is_enum)| *is_enum)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    let mut violations = Vec::new();
+    let mut entries: Vec<_> = std::fs::read_dir(&src)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !is_hot_file(&name) {
+            continue;
+        }
+        let raw = std::fs::read_to_string(&path).unwrap();
+        // Blank comments in place so offsets still map to lines.
+        let text = comment.replace_all(&raw, |caps: &regex::Captures| " ".repeat(caps[0].len()));
+        let bytes = text.as_bytes();
+        let line_of = |at: usize| text[..at].matches('\n').count() + 1;
+        for found in group.find_iter(&text) {
+            if decl.is_match(&text[found.start().saturating_sub(12)..found.start()]) {
+                continue;
+            }
+            let (mut end, mut depth) = (found.end(), 1);
+            while depth > 0 && end < bytes.len() {
+                depth += match bytes[end] {
+                    b'{' => 1,
+                    b'}' => -1,
+                    _ => 0,
+                };
+                end += 1;
+            }
+            // Only this level's own fields: drop nested `{ … }` groups.
+            let mut flat = text[found.end()..end - 1].to_string();
+            let nested = regex::Regex::new(r"\{[^{}]*\}").unwrap();
+            while nested.is_match(&flat) {
+                flat = nested.replace_all(&flat, "").into_owned();
+            }
+            if !flat.trim().is_empty() && !flat.contains("..") {
+                violations.push(format!(
+                    "{name}:{} `{}` lists every field; add `..`",
+                    line_of(found.start()),
+                    found.as_str().trim_end_matches('{').trim()
+                ));
+            }
+        }
+        for found in param.captures_iter(&text) {
+            for ty in param_type.captures_iter(&found[3]) {
+                if enums.contains(&&ty[1]) {
+                    violations.push(format!(
+                        "{name}:{} fn {} dispatches `{}` verbs; move it into the command's module",
+                        line_of(found.get(0).unwrap().start()),
+                        &found[1],
+                        &ty[1]
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a new flag or verb on these commands would have to edit a hot file:\n{}",
+        violations.join("\n")
+    );
+}

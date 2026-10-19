@@ -1381,7 +1381,7 @@ pub(crate) fn handle_git_backend_command(
     // Open the bare snapshot; the rebuild replaces it. trace:BUG-1940 | ai:claude
     let cache_rebuild = command
         .args::<crate::cache_cmd::CacheArgs>()
-        .is_some_and(|args| matches!(args.inner, CacheCommand::Rebuild { history: false }));
+        .is_some_and(|args| matches!(args.inner, CacheCommand::Rebuild { history: false, .. }));
     let backend_result = if notice_fast_fail || cache_rebuild {
         // BUG-1569: even a non-contended normal open may refresh a stale cache
         // by scanning every canonical object before dispatch reaches the
