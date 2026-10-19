@@ -14362,3 +14362,7 @@ pub(crate) static DOCTOR: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_doctor),
     };
+
+#[cfg(test)]
+#[path = "tests/bug_1985_destructive_gate_tests.rs"]
+mod bug_1985_destructive_gate_tests;

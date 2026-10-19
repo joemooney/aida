@@ -610,9 +610,8 @@ pub(crate) fn render_dispatch_toon(rows: &[DispatchReportRow]) -> String {
 }
 
 pub(crate) fn dispatch_worktree_dirty_fingerprint(path: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(path)
         .args(["status", "--porcelain"])
         .output();
     match out {

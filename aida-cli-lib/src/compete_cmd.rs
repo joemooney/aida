@@ -950,16 +950,24 @@ fn run_compete_arm(
 
     // Ensure the work is committed on the per-vendor branch even if the vendor
     // left changes uncommitted.
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(&worktree_dir)
-        .output();
-    let has_staged = !std::process::Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .current_dir(&worktree_dir)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(true);
+    // BUG-1985: the vendor ran contained in this tree, so host staging first
+    // refuses a planted embedded repository; host git staging into it would
+    // run the repository's own filter drivers.
+    // trace:BUG-1985 | ai:claude
+    let staging_refused = aida_core::git_ops::refuse_untrusted_staging(&worktree_dir).err();
+    if let Some(err) = &staging_refused {
+        eprintln!("     not committing the vendor's leftover changes: {err:#}");
+    } else {
+        let _ = aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["add", "-A"])
+            .output();
+    }
+    let has_staged = staging_refused.is_none()
+        && !aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["diff", "--cached", "--quiet"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(true);
     if has_staged {
         let _ = std::process::Command::new("git")
             .args([
