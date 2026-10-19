@@ -1,0 +1,28 @@
+id: 01a154ea-81ed-7e70-8b31-6f7fa1a55f10
+spec_id: TASK-1-365
+title: '[non-blocking, cosmetic] same test slices text[found.start().saturating_sub(12)…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1728, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [non-blocking, cosmetic] same test slices text[found.start().saturating_sub(12)..found.start()] by byte offset; a multibyte char within 12 bytes before a match panics (fails loud, not open). Use a char-boundary-safe window.
+  Reviewed sha: 4c332a2bdd0438ff746749605e8ed00bff8e762f
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T16:06:57.261451020Z
+modified_at: 2026-10-19T16:06:57.261451020Z
+req_type: Task
+tags:
+- carried-from:STORY-1728
+- finding-hash:6b200129
+- from-review:STORY-1728
+- kind:carried-forward
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
