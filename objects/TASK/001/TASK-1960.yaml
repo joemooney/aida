@@ -13,12 +13,12 @@ description: |-
   (4) an evil merge (a merge commit carrying non-main changes) does not;
   (5) a rebase with an identical patch carries over, if supported, or is refused with a reason.
   Closes BUG-2177. Trailer (TASK-ID BUG-2177).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:15:17.615382008Z
-modified_at: 2026-10-19T17:25:09.071804472Z
+modified_at: 2026-10-19T17:27:33.207622338Z
 req_type: Task
 tags:
 - review
@@ -56,6 +56,14 @@ history:
   timestamp: 2026-10-19T17:25:10.363338924Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15534-4c57-73b3-965a-7a41b6eae051
+  author: aida-pr-open
+  timestamp: 2026-10-19T17:27:33.207620903Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
