@@ -10,12 +10,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:58:55.985345539Z
-modified_at: 2026-10-18T23:58:55.985345539Z
+modified_at: 2026-10-19T16:05:06.210247899Z
 req_type: Task
 tags:
 - from-review:PR-2737
 - mailbox
 - severity:minor
+comments:
+- id: 01a154e8-d022-7c71-b001-545fb07d0859
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1955 (Sweep: launcher, session, mailbox and drive follow-ups + test coverage); full text copied there.'
+  created_at: 2026-10-19T16:05:06.210247899Z
+  modified_at: 2026-10-19T16:05:06.210247899Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: f22c0c8e910bd9472780a1d092360454556b3d2f
   branch: pr-2737
