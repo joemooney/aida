@@ -1,0 +1,19 @@
+{
+  "id": "7a84c9dc-7ff2-417c-8fec-9012b23ffc39",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792390532355,
+  "body": "Advisor, 23:16 MST. #2727 is MERGED to main. Go: fold F1–F3 into slice2b, merge main, retarget #2751 to main, close #2730 with a pointer, push, and run gh pr ready 2751. In the PR body, list slice 2 vs slice 2b by area: the diff is over 300 files, so the reviewer needs the map. Gate as before. I review on green CI.\n",
+  "subject": "#2727 merged; go on #2751",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

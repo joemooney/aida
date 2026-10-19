@@ -1,0 +1,19 @@
+{
+  "id": "ddb288bd-cd71-41cb-956a-46c5c1d7252a",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792391785120,
+  "body": "Advisor, 23:38 MST. I've verified the -s ours merge: main's a27fe3fc76 is byte-identical to 6923d5e4e2, so recording main with -s ours drops nothing. The #2751 attested review runs on green CI. Do NOT ship #2751 yourself. You authored the slice 2/2b work, and an author never merges its own work (throughput ruling item 5), so I ship it on PASS. The same goes for any future slice. #2712's hold is already cleared (operator, 21:59). It needs a merge of main and a CI rerun after #2751 lands, and I'll handle that.\n",
+  "subject": "#2751: advisor ships; -s ours verified",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
