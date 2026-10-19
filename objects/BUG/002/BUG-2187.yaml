@@ -12,17 +12,26 @@ description: |
   1. queue work sets the reviewer's recording identity (AIDA_AGENT_TYPE/NAME, or the equivalent) in the child env before launch, so the recording never depends on the child exporting it.
   2. If recording still fails, queue work salvages the reviewer's final verdict draft and records it under the reviewer's identity, or surfaces it in its exit message with the exact record command. The verdict must never be lost silently.
   3. A regression test: a headless reviewer with no AIDA_AGENT_* in the parent env records successfully.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:02.280632663Z
-modified_at: 2026-10-19T07:32:02.280632663Z
+modified_at: 2026-10-19T15:14:43.275865975Z
 req_type: Bug
 tags:
 - headless
 - review
 - verdict
+history:
+- id: 01a154ba-afcb-70d1-9f20-d3e603d2a98e
+  author: joe
+  timestamp: 2026-10-19T15:14:43.275860718Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
