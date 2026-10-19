@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1944",
+  "publishes": [
+    {
+      "at": "2026-10-19T16:07:53.202688186Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:14:57.091897168Z",
+      "spec": "TASK-1944",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-19T16:07:52.998903645Z",
+      "spec": "TASK-1944",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T16:07:52.999477875Z",
+      "spec": "TASK-1944",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
