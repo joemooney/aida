@@ -1,0 +1,28 @@
+id: 01a15397-c61c-7542-a1cb-64bec24277c2
+spec_id: TASK-1941
+agreed_id: TASK-1941
+title: Contained main-git deny misses the real common dir when <main>/.git is a gitfile and no store worktree exists
+description: |
+  main_git_deny_paths (aida-cli-lib/src/session.rs:2846) denies <main>/.git and its canonical path. When <main>/.git is a gitfile (a separate-git-dir or submodule checkout), canonicalize returns the gitfile itself, not the git directory it points to. The real common dir, which holds worktrees/<wt>/commondir, is then denied only by contained_store_deny_write_paths through resolve_store_hooks_dir, and that requires an existing .aida-store worktree. With no store worktree, a linked-worktree contained session in that layout can still redirect host git (BUG-1982). Fix: also deny the main's resolved `git rev-parse --path-format=absolute --git-common-dir`, and add a unit test with a separate-git-dir main.
+
+  Raised in review of PR-2752: https://github.com/joemooney/aida/pull/2752#issuecomment-6264555894
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T09:56:58.012592387Z
+modified_at: 2026-10-19T09:56:58.012592387Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2752
+- security
+- severity:minor
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a1539501ed
