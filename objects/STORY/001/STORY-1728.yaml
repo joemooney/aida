@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-19T00:22:15.499875718Z
+modified_at: 2026-10-19T02:19:19.081731852Z
 req_type: Story
 tags:
 - docs:impacted
@@ -158,6 +158,12 @@ comments:
   created_at: 2026-10-19T00:22:15.499875718Z
   modified_at: 2026-10-19T00:22:15.499875718Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a151f4-c8a9-74f0-bd94-1c76f42f1dfa
+  author: joe
+  content: 'Operator ruling 2026-10-18 19:18 MST: the STORY-1728 registry stack (#2727, then #2730, then #2751) ships FIRST whenever a slice is ready, so it stops re-merging main after every landing. Advisor policy: review immediately on green CI, then ship ahead of the queue. While a slice is in CI or review, hold other ships that overlap its files (cli.rs and the command modules). The integrator may collapse the stack into one PR if that''s faster.'
+  created_at: 2026-10-19T02:19:19.081731852Z
+  modified_at: 2026-10-19T02:19:19.081731852Z
+  session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
