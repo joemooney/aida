@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-18T13:31:02.390755803Z
+modified_at: 2026-10-19T00:20:27.099974232Z
 req_type: Story
 tags:
 - docs:impacted
@@ -126,6 +126,22 @@ comments:
   created_at: 2026-10-18T13:31:02.390755803Z
   modified_at: 2026-10-18T13:31:02.390755803Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a15187-f55b-7d01-936d-f00a5a564720
+  author: joe
+  content: |
+    ALL SLICES IMPLEMENTED (worktree ~/ai/aida-story1728). Draft stack, to land in order in C2 quiet windows: #2727 (slice 1) -> #2730 (slice 2a) -> #2751 (slices 2b-5, with origin/main merged in).
+
+    - The legacy Command enum holds only Registered; the ratchet is 0. Every top-level command is registered from its own module; 107 clap types moved into <module>_args.rs; cli.rs is ~2.5k lines, mostly tests.
+    - Acceptance 3: the golden help snapshot was byte-identical at every slice. After the main merge it was regenerated, and all 663 command paths' --help match the live binary built from current main.
+    - Acceptance 4: demonstrated. A new flag on `queue list` and on `add` touched only queue_cmd_args.rs, queue_cmd.rs, requirements_cli.rs and the golden snapshot.
+    - Acceptance 5 (Windows CI): cannot be met under ADR-72; I propose dropping it.
+    - Full aida-cli-lib suite on the merged tree: 9166 passed, 0 failed. check-ci-fast: 30/30.
+    - Slice 4 is implemented as a MIGRATION: centralized arms live on as StoreCtx::Legacy branches, so ADR-78 (remove centralized mode) remains the operator's decision.
+    - Design additions beyond the sketch, for advisor review: Handler::Early vs Handler::Store with Flow (Return/Continue), the StoreCtx::Distributed stage, help_after anchors, and the team_identity_write policy field (a fourth legacy table, is_write_command).
+    - Still blocking merge: advisor ack of A1-A3 and these additions, and a C2 window.
+  created_at: 2026-10-19T00:20:27.099974232Z
+  modified_at: 2026-10-19T00:20:27.099974232Z
+  session_id: 43e47b00-c449-4778-8838-bd89a371ccc2
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
