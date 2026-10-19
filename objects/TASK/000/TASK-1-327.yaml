@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:14.761689069Z
-modified_at: 2026-10-18T14:31:14.761689069Z
+modified_at: 2026-10-19T15:46:42.392088224Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
 - finding-hash:625304b2
 - from-review:TASK-1785
 - kind:carried-forward
+comments:
+- id: 01a154d7-f858-7cc2-84d5-baa86157749c
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1395 and TASK-1812 both specify range endpoints and negative-number mention matching; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:42.392088224Z
+  modified_at: 2026-10-19T15:46:42.392088224Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f90-0666-7ff2-90ad-dd76a2b80271
   author: joe
