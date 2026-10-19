@@ -1,0 +1,31 @@
+id: 01a154ca-153d-7cf0-98de-53375ac14cdf
+spec_id: TASK-1946
+agreed_id: TASK-1946
+title: 'No-slot guard in aida-git-guardrails.sh: bash -c bypass and heredoc false positive'
+description: |
+  The aida-git-guardrails.sh check at line 547 (the no-slot assignment guard, STORY-1853 S0) scans the command with quoted bodies stripped. That leaves two problems.
+
+  1. Bypass: wrapping the assignment in bash -c with a double-quoted body passes (exit 0). Agents plausibly wrap long cargo runs this way, so this is an accident path, not only deliberate evasion. The += and indirect-export forms also pass.
+
+  2. False positive: a gh pr comment --body with a command-substitution heredoc whose text shows the assignment after a double quote is blocked, because that quote ends the stripper's double-quote state. A quote-heavy body also fails closed as unparseable. The reviewer of PR-2754 hit both while posting the review comment.
+
+  Raised in review of PR-2754: https://github.com/joemooney/aida/pull/2754#issuecomment-6270969312
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:31:32.285480876Z
+modified_at: 2026-10-19T15:31:32.285480876Z
+req_type: Task
+tags:
+- from-review:PR-2754
+- hooks
+- severity:minor
+filed_at:
+  code_sha: c354971f88d5bacf2aa5d3f62f7c64252c063768
+  branch: pr-2754
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a154c6472c

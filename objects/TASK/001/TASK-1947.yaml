@@ -1,0 +1,26 @@
+id: 01a154ca-299b-74c0-bc5e-b1b532632006
+spec_id: TASK-1947
+agreed_id: TASK-1947
+title: 'test-touched: TEST_TOUCHED_ALLOW_FULL=0 enables allow-full'
+description: |
+  scripts/test-touched.py sets the --allow-full default to bool(os.environ.get('TEST_TOUCHED_ALLOW_FULL')). Any non-empty value, including 0 or false, therefore lifts the heavy-package cap. Accept only 1/true/yes.
+
+  Raised in review of PR-2754: https://github.com/joemooney/aida/pull/2754#issuecomment-6270969312
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:31:37.499132171Z
+modified_at: 2026-10-19T15:31:37.499132171Z
+req_type: Task
+tags:
+- from-review:PR-2754
+- severity:cosmetic
+filed_at:
+  code_sha: c354971f88d5bacf2aa5d3f62f7c64252c063768
+  branch: pr-2754
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a154c6472c
