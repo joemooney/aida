@@ -21,12 +21,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:26.310961852Z
-modified_at: 2026-10-12T05:51:05.991933368Z
+modified_at: 2026-10-19T15:50:15.996650012Z
 req_type: Epic
 tags:
 - architecture
 - groom:approve
 - lanes
+- operator-held
 - orchestrator
 - triaged:night
 - worktree
@@ -1199,6 +1200,16 @@ comments:
   created_at: 2026-10-12T05:51:05.991933368Z
   modified_at: 2026-10-12T05:51:05.991933368Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a154db-3bc2-7791-9b8b-74b2a1179e78
+  author: joe
+  timestamp: 2026-10-19T15:50:16.258543106Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:15.996650012Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 decision_request:
   question: 'Choose the protected feature isolation model before the three guided children are implemented: a named lane record, or target/parent branch vocabulary plus a store-side epic isolation declaration?'
   choices:
