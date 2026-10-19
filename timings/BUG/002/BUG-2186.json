@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2186",
+  "publishes": [
+    {
+      "at": "2026-10-19T19:06:01.104710431Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T10:40:53.615732778Z",
+      "spec": "BUG-2186",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2186",
+        "branch": "bug-2186",
+        "first_seen": "2026-10-19T10:40:53.615683837+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T17:17:22.708609017Z",
+      "spec": "BUG-2186",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2755,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7df3b64f8f3d"
+      }
+    },
+    {
+      "ts": "2026-10-19T17:50:57.828743864Z",
+      "spec": "BUG-2186",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T17:51:21.092676198Z",
+      "spec": "BUG-2186",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2755
+      }
+    },
+    {
+      "ts": "2026-10-19T19:06:00.752668174Z",
+      "spec": "BUG-2186",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "477d0a51cfde26e27c5b12a852babd6dc39bfe60",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
