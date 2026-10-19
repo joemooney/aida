@@ -3,12 +3,12 @@ spec_id: BUG-2180
 agreed_id: BUG-2180
 title: Reviewer request-changes shelve leaves spec writes uncommitted in the store
 description: 'The ''aida queue work PR-N --role reviewer --no-human'' request-changes path shelves each covered spec (status to NeedsAttention, plus failure_reason phase=reviewer, kind=verdict:request-changes, written by aida-orchestrator) and leaves the YAML modified but uncommitted in .aida-store. Observed 2026-10-18 at 14:25 MST: the PR-2746 review (session 01a150de7ea8) left TASK-1526.yaml and TASK-1739.yaml dirty, and the reviewer process had exited. Impact: mandate_traces store_snapshot fails closed (''mandate exclusion store has uncommitted evidence''), so every mandate-covered aida pr ship refuses (PR-2732) until someone commits by hand. Same class as BUG-2178 (timing record), on a different write path. Fix: commit the shelve under the store write lock in the same operation, as BUG-2178 did. Test: run a reviewer request-changes, then assert .aida-store git status is clean. Related: BUG-2179.'
-status: Draft
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:30:11.862994119Z
-modified_at: 2026-10-18T23:36:10.995823876Z
+modified_at: 2026-10-19T20:05:46.391638068Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -29,12 +29,26 @@ comments:
   created_at: 2026-10-18T23:35:24.663596735Z
   modified_at: 2026-10-18T23:35:24.663596735Z
   session_id: d6011b46-5b32-4ffc-9be0-3089236d0097
+- id: 01a155c5-2717-7071-9f9b-b7c4aae15fd5
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (4143249) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-19T20:05:46.391637054Z
+  modified_at: 2026-10-19T20:05:46.391637054Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1515f-7138-78d3-8a64-6f3e08801417
   author: joe
   timestamp: 2026-10-18T23:36:11.832130502Z
   session_id: d6011b46-5b32-4ffc-9be0-3089236d0097
   changes: []
+- id: 01a155c5-2717-7071-9f9b-b7be87c9d02b
+  author: aida-auto-bump
+  timestamp: 2026-10-19T20:05:46.391636083Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
