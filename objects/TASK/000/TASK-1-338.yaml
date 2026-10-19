@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:41:30.280523362Z
-modified_at: 2026-10-18T20:41:30.280523362Z
+modified_at: 2026-10-19T19:51:55.449029183Z
 req_type: Task
 tags:
 - carried-from:BUG-2178
 - finding-hash:41b0b76a
 - from-review:BUG-2178
 - kind:carried-forward
+comments:
+- id: 01a155b8-7939-7d40-a7b8-3c66308a523b
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1954. timing_record publish_to_store fail-open belongs with the doctor/history/cache sweep. Full text stays on TASK-1413.'
+  created_at: 2026-10-19T19:51:55.449029183Z
+  modified_at: 2026-10-19T19:51:55.449029183Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-7744-7b33-b320-5f304580168f
   author: joe
