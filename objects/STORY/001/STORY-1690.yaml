@@ -22,12 +22,17 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T16:15:35.738997323Z
+modified_at: 2026-10-19T19:51:34.247644269Z
 req_type: Story
 tags:
 - ci
 - merge-policy
 - throughput
+relationships:
+- rel_type: Supersedes
+  target_id: 01a141e9-f964-7072-bfb0-07774d0d9238
+  created_at: 2026-10-19T19:51:34.247638962Z
+  created_by: joe
 comments:
 - id: 01a13b1b-609a-7331-bbc8-465daf557510
   author: joe
@@ -123,6 +128,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a155b8-2c22-7d81-8f8d-2ea31f82d393
+  author: joe
+  timestamp: 2026-10-19T19:51:35.714556644Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 71d04b3609f89ac607471a35013a0ad9962708f6
   branch: main
