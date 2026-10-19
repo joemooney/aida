@@ -8,11 +8,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T10:03:06.298261864Z
-modified_at: 2026-10-15T10:03:06.298261864Z
+modified_at: 2026-10-19T15:55:31.354849632Z
 req_type: Task
 tags:
 - regen
 - security
+comments:
+- id: 01a154e0-0a9a-7e80-b2a5-1db0b5a9ede2
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1950 (Sweep: regen scorer and relay_stall hardening follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:55:31.354849632Z
+  modified_at: 2026-10-19T15:55:31.354849632Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3
   branch: main
