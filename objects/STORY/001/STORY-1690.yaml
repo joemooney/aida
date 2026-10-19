@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T06:52:27.365580112Z
+modified_at: 2026-10-19T07:32:07.883886855Z
 req_type: Story
 tags:
 - ci
@@ -41,6 +41,60 @@ comments:
   created_at: 2026-10-19T06:49:58.299260426Z
   modified_at: 2026-10-19T06:49:58.299260426Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15313-2c4b-7582-b562-1f864bcc8c94
+  author: joe
+  content: |
+    SKETCH (STORY-1690, ai:claude, 2026-10-19). Merge-throughput options. Sketch only; nothing is implemented. Advisor signoff is needed before any slice.
+
+    ## Ground truth (checked 2026-10-19)
+    - Branch protection on main: required checks `Build (ubuntu-latest)` and `merge-hold-gate`; `strict: false` (up-to-date is NOT required); enforce_admins on; no required PR reviews; ruleset "main" is disabled; allow_auto_merge on.
+    - ci.yml and web.yml already trigger on `merge_group` (TASK-1573, #2411). The queue was never switched on, and it cannot be: **joemooney/aida is user-owned (`owner.type: User`), and GitHub offers merge queue only on organization-owned repos** (public org repos, or private ones on GHEC).
+    - merge-hold-gate.yml triggers on `pull_request` only, and it reads labels from `github.event.pull_request`.
+    - CI has no `concurrency:` group, and runs overlap on hosted runners: the 15 most recent main pushes include 5 in flight at once (01:20 to 02:14Z). Wall time is 24 to 36 min. Runner parallelism is not the bottleneck; serial dependency is.
+    - Today's flow is the fire skill's step 5 plus the advisor scratchpad `serial-ship.sh`. Per PR it runs: `gh pr update-branch`, an automatic base-only `aida review record --verdict approved` at the new head, a wait for Build, then `aida pr ship --override-stale-check`. The merge pins `--match-head-commit` (forge.rs), and attested-approval checks tie the approval to `reviewed_sha` == head (pr_ship.rs, ApprovalHeadRefusal/Unattested).
+    - Two known incidents had NO file overlap: #2350/#2345 (a config-trust site inventory) and #2599/#2597 (a PATH-isolation guard that scans all tests). Both are whole-repo guards (ratchets, inventories, scanners) that a later PR's new code trips.
+
+    ## Baseline: N=10 approved PRs, CI T=34 min
+    Serial ship costs about 10 × (34 + ~4 for update, poll and ship) ≈ **6.3 h**. Each landing makes the other 9 greens stale. Any refusal (overlap re-review, as with #2725) or failure stops the script, so in practice it runs longer. The script also re-approves on the base-only update without proving it was base-only. It just asserts it.
+
+    ## (a) GitHub merge queue
+    - **Throughput:** with build concurrency 5 and group size up to 5, 10 green PRs land in about 2 overlapping runs, **≈40–70 min**. Each red member is ejected and its successors rebuild (+34 min). That is ≈5–8× the baseline.
+    - **Risk closed:** full. Each merge_group ref is main plus the PRs ahead of it plus the member, tested by full CI before main moves. Both incidents would be caught.
+    - **Merge holds:** the required `merge-hold-gate` must also report on `merge_group`, or every group stalls waiting for it. The `merge_group` payload has no PR labels, so the gate has to resolve the member PR(s) from the `gh-readonly-queue/main/pr-N-<sha>` ref and re-read labels plus clearance through the API. A hold applied after a PR is enqueued must dequeue it (labeled hook → `gh pr merge --disable-auto` / dequeue).
+    - **Attested review:** the PR head does not move under a queue, so the approval at head stays valid and the base-only re-approval disappears (a win). But the merge happens server side and asynchronously, outside `aida pr ship`'s chokepoint. Ship turns into "verify attestation, holds and trailers, then enqueue pinned to the approved head". Every post-merge step ship does today (completion trailer, `Aida-Store:` body trailer, store sync, worktree cleanup) needs an async reconciler that fires on merge. The queue writes the commit message itself (squash = PR title plus the default body), so the trailer derivation from BUG-1919 has to be baked into the PR title and body *before* enqueue, or set through the queue's commit-message setting.
+    - **serial-ship.sh:** retired. Fire step 5 becomes "enqueue every approved, hold-clear PR".
+    - **Failure modes:** a required check that never reports on merge_group (a silent stall); flakes ejecting good PRs and rebuilding groups; the pinned `--match-head-commit` semantics under enqueue need verifying; GitHub-only (forge.rs's GitLab/pure-git forges get nothing, though GitLab merge trains are the analogue); lock-in to the queue's commit-message format.
+    - **Migration:** (1) **an operator decision to transfer the repo to a GitHub organization** (a free org works for a public repo). Side effects: URL redirects, every local `origin` remote, Actions and branch-protection settings carried over, auto-merge, web.yml/Pages, aida-host references. (2) Add a merge_group mode to merge-hold-gate, plus fixtures in tests/test_merge_hold_gate.sh. (3) Split `aida pr ship` into enqueue plus a post-merge reconciler. (4) Enable "require merge queue" (group size 5, build concurrency 5, squash). (5) Update the docs and fire step 5. (6) Run the regression demo.
+
+    ## (b) AIDA-side batch/train (`aida pr train`)
+    - **Shape:** take up to N approved, attested, hold-clear PRs in priority order. Build `train/<ts>` = main + for each member one squash commit, with the exact subject/body/trailers `aida pr ship` would write, including `(#N)`. Drop a member on textual conflict and never auto-resolve. Verify each member commit's **patch-id equals the member's approved head diff**, which is the attestation carry-over proof. Open a train PR so CI and merge-hold-gate run unchanged. On green, **rebase-merge** the train PR pinned with `--match-head-commit` (STORY-1663's rebase path already exists). Main then gets N commits, each with its own completion trailer. Finally AIDA closes each member PR with "landed as <sha> in train #T" and runs per-member post-merge bookkeeping. On red: rerun once to rule out a flake, then **bisect by halves in parallel** (two sub-train PRs at once; a green half lands immediately).
+    - **Throughput:** 10 green in one train ≈ 34 + ~8 for build, land and bookkeeping ≈ **45 min**. With one bad member: 45 + the flake rerun is optional, then ~2–3 parallel bisect levels ≈ **2–2.5 h** worst case, with 5–8 of the 10 landed after the first level. ≈5–8× the baseline in the common case.
+    - **Risk closed:** full. The train tip is exactly the commit sequence main receives. The rebase-merge pin plus GitHub's base check refuse a moved main, and the train is rebuilt.
+    - **Merge holds:** unchanged on member PRs: the builder applies the same hold/clearance check ship does and refuses held members. The required gate on the train PR needs a train mode. A train PR (branch `train/*`) passes only if every member listed in its body has no active hold and a recorded clearance where needed, read via the API. That keeps the gate un-bypassable server-side.
+    - **Attested review:** each member keeps its attested approval at its own head. Patch-id equality is the machine proof that the reviewed content is what lands; it replaces serial-ship's asserted "base-only" re-record. The train PR itself is mechanical: its "approval" is the builder's patch-id attestation record, not a review. Advisor ruling needed: is that sufficient authority for a rebase-merge to main?
+    - **serial-ship.sh:** replaced by `aida pr train <N...>`, or `--all-ready`. A one-member train equals serial ship.
+    - **Failure modes:** bespoke code (builder, bisect, closure bookkeeping) to maintain; members show as *closed*, not *merged*, on GitHub (AIDA linkage reads trailers, so `shipped_pr` keeps working, but external dashboards won't); a flaky suite triggers bisects (mitigated by the rerun-once rule); a bad patch-id proof would let unreviewed content land, so this check is security-relevant and needs its own tests; train construction races with a concurrent manual `aida pr ship` (take the existing merge lock).
+    - **Migration:** (1) the train builder plus patch-id attestation, dry-run only (prints the plan; shows the regression scenario red). (2) The merge-hold-gate train mode plus fixtures. (3) Land plus per-member bookkeeping (completion trailers, store sync, close-with-pointer). (4) Parallel bisect. (5) Docs: two-seat-protocol.md and git-sync-and-review.md (template masters), fire skill step 5; retire serial-ship.sh. (6) Optional: set `strict: true` later as a backstop for raw `gh pr merge`. The new command registers in command_registry.rs after the STORY-1728 window (#2751) closes.
+
+    ## (c) Cheaper currency proof (range-diff re-approval plus affected tests)
+    - **Shape:** after main moves, if `git range-diff` shows the PR's patches unchanged and the PR's files are disjoint from main's new commits, auto-re-approve and run only the affected tests locally instead of a full CI. Then ship on the stale green (`strict: false` allows it).
+    - **Throughput:** ≈10 × (~3 ship + ~8 targeted tests) ≈ **1.8 h**, about 3.5×. But every miss turns main red and triggers the main-red stop rule (≈1–2 h lost each).
+    - **Risk closed:** **no.** Both motivating incidents were file-disjoint whole-repo guard violations. File-based test selection is unsound for ratchets, inventories and scanners, so (c) narrows the window without closing it. Always running the guard tests would help, but it can't be made complete.
+    - **Merge holds / attested review / serial-ship.sh:** holds unchanged. Attestation gains a real proof (the range-diff/patch-id) in place of today's asserted base-only record. serial-ship.sh stays, minus the CI wait.
+    - **Failure modes:** the incidents this spec exists to stop; red-main stalls for all lanes.
+    - **Migration:** a range-diff/patch-id check in `aida review record`; an affected-test selector; doc edits.
+
+    ## Recommendation: (b), the AIDA-side train
+    Option (a) is the best mechanism, but it is blocked by repo ownership. Adopting it means an operator decision to move the repo into an org, and it moves the merge outside `aida pr ship`'s chokepoint (attestation, holds and completion trailers would all need an async rebuild). Option (b) closes the same risk at about the same common-case throughput (≈45 min for 10 versus ≈6.3 h). It keeps every merge inside AIDA's gate, needs no platform change, and stays forge-neutral (pure-git and GitLab forges work too). (c) does not close the risk. Its useful part, the **patch-id/range-diff attestation carry-over**, becomes slice 1 of (b). That slice is also worth having immediately, because it replaces serial-ship.sh's unproven "base-only" re-approval.
+
+    If the operator would rather move the repo to an org, switch to (a). Hold-gate merge_group support and the async ship reconciler then become slices 1–2, and most of (b)'s builder is never written.
+
+    **Proposed slices for (b):** S1 patch-id attestation carry-over (also used by serial-ship today) → S2 train build plus dry-run, plus the regression demo in a scratch repo (A adds a whole-repo guard, B adds an offender; each is green alone, the train is red, bisect lands A and ejects B before main moves) → S3 merge-hold-gate train mode → S4 land and bookkeeping → S5 parallel bisect plus docs and retirement of serial-ship.sh.
+
+    **Decisions for the advisor/operator:** (1) (b), or (a) via an org transfer? (2) Is the builder's patch-id attestation sufficient authority to rebase-merge a train PR? (3) Turn on `strict: true` as a backstop once the trains land?
+  created_at: 2026-10-19T07:32:07.883886855Z
+  modified_at: 2026-10-19T07:32:07.883886855Z
+  session_id: 74e2df92-b79f-471f-9d55-57899b64a997
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
   author: joe
