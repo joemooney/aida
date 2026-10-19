@@ -1,0 +1,33 @@
+id: 01a15313-1668-7263-9ae3-378b81e452e2
+spec_id: BUG-2187
+agreed_id: BUG-2187
+title: Headless reviewer cannot record its verdict when AIDA_AGENT_TYPE/NAME is unset, so a finished review is lost
+description: |
+  2026-10-19 00:30. A headless attested reviewer (`aida queue work PR-2751 --role reviewer --no-human --vendor claude`, launched from the advisor seat's shell) reached a verdict after ~25 min and $20.50, but could not record it.
+  - `aida review record` refused because no agent identity was set: "export AIDA_AGENT_TYPE or AIDA_AGENT_NAME".
+  - The reviewer's permission mode denied exporting it, `cd` into the primary checkout, and writing the primary checkout. So no verdict file was written, queue work exited 30 ("no verifiable verdict"), and the whole review was wasted.
+  - Reviews launched the same way from the same shell recorded fine 1–3 h earlier (#2750, #2725, #2727 round 2). The difference here is unknown: the long run, the >300-file diff, or the env at launch. Evidence: .aida/headless-logs/pr-2751-*.jsonl, plus the verdict draft in aida-pr-2751/.aida/review-prompt-pr-2751.md.
+
+  Acceptance:
+  1. queue work sets the reviewer's recording identity (AIDA_AGENT_TYPE/NAME, or the equivalent) in the child env before launch, so the recording never depends on the child exporting it.
+  2. If recording still fails, queue work salvages the reviewer's final verdict draft and records it under the reviewer's identity, or surfaces it in its exit message with the exact record command. The verdict must never be lost silently.
+  3. A regression test: a headless reviewer with no AIDA_AGENT_* in the parent env records successfully.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T07:32:02.280632663Z
+modified_at: 2026-10-19T07:32:02.280632663Z
+req_type: Bug
+tags:
+- headless
+- review
+- verdict
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
