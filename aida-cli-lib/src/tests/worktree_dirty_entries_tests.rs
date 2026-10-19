@@ -114,6 +114,9 @@ fn non_git_path_fails_closed() {
     let tmp = TempDir::new().unwrap();
     let entries = worktree_dirty_entries(tmp.path());
     assert_eq!(entries.len(), 1, "{entries:?}");
-    assert!(entries[0].starts_with("?? (git status failed"), "{entries:?}");
+    assert!(
+        entries[0].starts_with("?? (git status failed"),
+        "{entries:?}"
+    );
     assert!(worktree_dirty_entries(&tmp.path().join("gone")).is_empty());
 }
