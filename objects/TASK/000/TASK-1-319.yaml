@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T02:03:25.512918164Z
-modified_at: 2026-10-18T02:03:25.512918164Z
+modified_at: 2026-10-19T15:48:52.959472300Z
 req_type: Task
 tags:
 - carried-from:STORY-1654
 - finding-hash:cd4363cd
 - from-review:PR-2661
 - kind:carried-forward
+comments:
+- id: 01a154d9-f65f-7b42-b613-d9c90fe83ec4
+  author: joe
+  content: 'Advisor triage 2026-10-19: STALE, closed. An evidence gap with no remaining action under the earlier advisor ruling. Reopen if still wanted.'
+  created_at: 2026-10-19T15:48:52.959472300Z
+  modified_at: 2026-10-19T15:48:52.959472300Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
   branch: main
