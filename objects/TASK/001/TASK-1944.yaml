@@ -1,0 +1,38 @@
+id: 01a154ba-7744-7171-86d3-0a5b63399164
+spec_id: TASK-1944
+agreed_id: TASK-1944
+title: 'Backlog triage proposal: disposition every open Draft/Approved spec (done-already, duplicate, superseded, stale-reject, keep) with evidence'
+description: |-
+  Goal: cut the ~440 open Draft/Approved specs down to a workable queue. This task produces a PROPOSAL; it changes NO spec status. The advisor rules on the proposal in batch.
+
+  Input: `aida list --all --format json` (do not use plain `aida list`: BUG-2190 makes its open lens show 0), filtered to status Draft, Approved or NeedsAttention.
+
+  For each spec, decide one disposition and give one line of evidence:
+  - DONE-ALREADY: the behavior exists on origin/main. Cite the commit SHA, file:line or merged PR.
+  - DUPLICATE-OF <ID>: another open or completed spec covers it.
+  - SUPERSEDED-BY <ID|commit>: a later design replaced it, e.g. STORY-1728's command registry, Linux-only ADR-72, or retired PROMPT_HISTORY.
+  - STALE-REJECT: it targets removed code, a retired surface, or an abandoned approach (e.g. Windows CI, the legacy Command enum). Name what is gone.
+  - KEEP, with priority P1/P2/P3. P1 means it speeds the dev cycle or unblocks other work: review, ship, CI time, launch, merge holds.
+
+  Method: use rg/git log over origin/main and `aida show <ID>`. Do not run cargo; no build or test is needed. Work in batches of 50 and commit the file after each batch, so progress survives a context reset.
+
+  Output: docs/plans/2026-10-19-backlog-triage.tsv with columns id, status, disposition, target, evidence, title. Add a short summary at docs/plans/2026-10-19-backlog-triage.md: counts per disposition, plus the top 15 P1 KEEPs in recommended order. Open ONE PR (docs only) and mail the advisor. Do NOT run aida edit --status on any spec.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:14:28.804479257Z
+modified_at: 2026-10-19T15:14:28.804479257Z
+req_type: Task
+tags:
+- burndown
+- throughput
+- triage
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
