@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1669",
+  "publishes": [
+    {
+      "at": "2026-10-19T15:48:31.059838370Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:48:30.848757298Z",
+      "spec": "STORY-1669",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:48:30.849669516Z",
+      "spec": "STORY-1669",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
