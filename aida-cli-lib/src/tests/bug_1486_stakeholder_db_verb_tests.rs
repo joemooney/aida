@@ -6,9 +6,7 @@ use super::*;
 // a "database write" the way the genuinely mutating db verbs are.
 #[test]
 fn requester_may_run_db_block_status() {
-    let command = Command::Db(DbCommand::Block {
-        subcommand: BlockCommand::Status,
-    });
+    let command = crate::command_registry::parse_command(["aida", "db", "block", "status"]);
     let action = stakeholder_cli_action(&command);
     assert_eq!(action, StakeholderAction::Read);
     assert!(stakeholder_action_allowed("requester", action));
@@ -19,12 +17,9 @@ fn requester_may_run_db_block_status() {
 // the shared store) and must stay gated for the requester role.
 #[test]
 fn requester_may_not_run_db_block_claim() {
-    let command = Command::Db(DbCommand::Block {
-        subcommand: BlockCommand::Claim {
-            r#type: "FR".to_string(),
-            size: 100,
-        },
-    });
+    let command = crate::command_registry::parse_command([
+        "aida", "db", "block", "claim", "--type", "FR", "--size", "100",
+    ]);
     let action = stakeholder_cli_action(&command);
     assert_eq!(action, StakeholderAction::Database);
     assert!(!stakeholder_action_allowed("requester", action));

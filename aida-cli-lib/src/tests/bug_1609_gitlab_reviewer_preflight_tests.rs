@@ -144,7 +144,7 @@ fn reviewer_preflight_pr_n_fires_for_every_forge() {
 #[test]
 fn auto_queue_review_help_text_is_forge_neutral() {
     use clap::CommandFactory;
-    let cmd = crate::cli::Cli::command();
+    let cmd = crate::command_registry::built_command();
     let pr_cmd = cmd
         .get_subcommands()
         .find(|s| s.get_name() == "pr")

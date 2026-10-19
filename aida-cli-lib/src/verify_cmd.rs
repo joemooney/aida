@@ -4,6 +4,11 @@ use crate::cli::VerifyCommand;
 use aida_core::constraints::{verify_constraints, ConstraintResult, Status};
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "verify_cmd_args.rs"]
+pub(crate) mod verify_cmd_args;
+pub(crate) use verify_cmd_args::*;
+
 // trace:STORY-1673 | ai:codex
 pub(crate) fn apply_verify_edit(
     req: &mut aida_core::Requirement,
@@ -154,7 +159,7 @@ mod tests {
 
     #[test]
     fn story1673_cli_parses_only_explicit_constraints_command() {
-        let cli = crate::cli::Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "verify",
             "constraints",
@@ -163,12 +168,14 @@ mod tests {
         ])
         .unwrap();
         assert!(matches!(
-            cli.command,
-            crate::cli::Command::Verify(VerifyCommand::Constraints {
-                json: true,
-                fail_on_drift: true,
-                verbose: false
-            })
+            cli.command.registered::<crate::verify_cmd::VerifyArgs>(),
+            crate::verify_cmd::VerifyArgs {
+                inner: VerifyCommand::Constraints {
+                    json: true,
+                    fail_on_drift: true,
+                    verbose: false
+                }
+            }
         ));
         for args in [
             vec!["aida", "verify"],
@@ -181,7 +188,7 @@ mod tests {
                 "touch sentinel",
             ],
         ] {
-            assert!(crate::cli::Cli::try_parse_from(args).is_err());
+            assert!(crate::command_registry::try_parse_from(args).is_err());
         }
     }
 
@@ -241,9 +248,13 @@ mod tests {
             serde_json::from_str(&render(&rows, true, false).unwrap()).unwrap();
         assert_eq!(output[1]["status"], "skipped");
         assert!(!fails_on_drift(&rows, true));
-        assert!(
-            crate::cli::Cli::try_parse_from(["aida", "verify", "constraints", "--verbose"]).is_ok()
-        );
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "verify",
+            "constraints",
+            "--verbose"
+        ])
+        .is_ok());
     }
 }
 
@@ -368,3 +379,45 @@ mod read_tests {
         assert_eq!(std::fs::read_to_string(sqlite).unwrap(), "do not touch");
     }
 }
+
+/// Explicit, report-only host verification using built-in probes.
+/// Never executes a command from the requirements store.
+// trace:STORY-1673 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "verify")]
+pub(crate) struct VerifyArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::VerifyCommand,
+}
+
+// Explicit only: no sync/drain/hook path invokes host probes.
+// trace:STORY-1673 | ai:codex
+fn run_verify(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <VerifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return self::handle_verify_command(
+        cmd,
+        ctx.globals.and_then(|globals| globals.file.as_deref()),
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static VERIFY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "verify",
+        help_after: "lint",
+        command: <VerifyArgs as clap::CommandFactory>::command,
+        // Main's table had no read arm for top-level `verify` (only `db block
+        // verify`), so it fell through to Write; guests stay refused.
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_verify),
+    };

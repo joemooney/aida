@@ -240,7 +240,7 @@ fn session_leases_default_includes_dispatch_blocking_stale_lease() {
 #[test]
 fn agent_new_bg_help_documents_noninteractive_form() {
     use clap::CommandFactory;
-    let mut command = Cli::command();
+    let mut command = crate::command_registry::built_command();
     let help = command
         .find_subcommand_mut("agent")
         .unwrap()

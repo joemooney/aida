@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "gate_cmd_args.rs"]
+pub(crate) mod gate_cmd_args;
+pub(crate) use gate_cmd_args::*;
+
 use aida_core::gates::{self, GateDef, GateVerdict};
 
 use crate::cli::GateCommand;
@@ -210,7 +215,7 @@ mod tests {
     #[test]
     fn add_parses_gates_flag() {
         use clap::Parser;
-        let cli = crate::cli::Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "add",
             "--title",
@@ -219,11 +224,50 @@ mod tests {
             "well-formed,testable-acceptance",
         ])
         .unwrap();
-        match cli.command {
-            crate::cli::Command::Add { gates, .. } => {
+        match cli.command.registered::<crate::requirements_cli::AddArgs>() {
+            crate::requirements_cli::AddArgs { gates, .. } => {
                 assert_eq!(gates, vec!["well-formed", "testable-acceptance"])
             }
             other => panic!("unexpected {other:?}"),
         }
     }
 }
+
+/// Named discipline gates, invoked on demand instead of carried as prose.
+/// `aida gate list` shows the shipped library and which lifecycle moment
+/// each gate is a default for; `aida gate show <name>` prints one gate's
+/// checklist; `aida gate run <name> <SPEC>` runs its deterministic tier
+/// over a spec and prints the checklist an agent answers for the rest.
+// trace:STORY-1427 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "gate")]
+pub(crate) struct GateArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::GateCommand,
+}
+
+// `aida gate` reads the embedded gate library (and, for `run`, self-loads
+// the store) — no shared storage handle. trace:STORY-1427 | ai:claude
+fn run_gate(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <GateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let gate_cmd = &args.inner;
+    return self::handle_gate_command(gate_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GATE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "gate",
+    help_after: "deps",
+    command: <GateArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_gate),
+};

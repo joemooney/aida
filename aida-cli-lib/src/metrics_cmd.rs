@@ -10,6 +10,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "metrics_cmd_args.rs"]
+pub(crate) mod metrics_cmd_args;
+pub(crate) use metrics_cmd_args::*;
+
 use crate::{auto_complete_telemetry, metrics, parse_days_arg, usage};
 use aida_core::storage::Storage;
 
@@ -525,3 +530,111 @@ fn render_agent_lift_markdown(lift: &metrics::AgentLift, since_raw: &str) {
          therefore omitted rather than approximated."
     );
 }
+
+/// Dogfood agent-lift metrics over the recorded telemetry substrate.
+/// A reporting layer that surfaces the coordination signals already
+/// derivable from the autonomous-drain log and the human CLI usage log:
+/// drain success rate, autonomous runs over distinct specs/builds,
+/// stale-base recoveries, and the autonomous-vs-human split. Useful for
+/// case studies, release notes, and proving coordination value.
+///
+// trace:STORY-477 | ai:claude — plain `//` so the SPEC-ID stays out of
+// `--help` output (TASK-268).
+// trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "metrics")]
+#[clap(hide = true)]
+pub(crate) struct MetricsArgs {
+    #[clap(subcommand)]
+    pub cmd: crate::cli::MetricsCommand,
+}
+
+fn run_metrics(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <MetricsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                MetricsArgs { cmd } => {
+                    // STORY-1479: the cycle-time aggregate reads the orphan-branch
+                    // store + local drain feed, so it dispatches here with the store
+                    // path; the telemetry-log reports below need no store at all.
+                    // trace:STORY-1479 | ai:claude
+                    if let crate::cli::MetricsCommand::CycleTime {
+                        since,
+                        until,
+                        req_type,
+                        tags,
+                        slowest,
+                        json,
+                    } = cmd
+                    {
+                        let output = history::HistoryOutput::select(
+                            *json || crate::output_format_is_json(),
+                            false,
+                            crate::agent_output_mode(),
+                        );
+                        return crate::command_registry::returned(metrics_cycle_time::run(
+                            store_path,
+                            since,
+                            until.as_deref(),
+                            req_type.as_deref(),
+                            tags,
+                            *slowest,
+                            output,
+                        ));
+                    }
+                    // trace:STORY-477 | ai:claude — reporting layer over the local
+                    // telemetry logs; no store load required.
+                    return crate::command_registry::returned(self::handle_metrics_command(cmd));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                MetricsArgs { cmd } => {
+                    // trace:STORY-477 | ai:claude — reporting layer over the local
+                    // telemetry logs; backend-agnostic.
+                    self::handle_metrics_command(cmd)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida metrics` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static METRICS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "metrics",
+        help_after: "usage",
+        command: <MetricsArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_metrics),
+    };
