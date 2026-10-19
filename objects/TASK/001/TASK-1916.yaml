@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T17:00:42.040657138Z
-modified_at: 2026-10-18T17:00:42.040657138Z
+modified_at: 2026-10-19T16:03:15.535280198Z
 req_type: Task
+comments:
+- id: 01a154e7-1fcf-7b10-818a-8f11e3daf1cc
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1954 (Sweep: doctor / history / cache / lint / verify follow-ups); full text copied there.'
+  created_at: 2026-10-19T16:03:15.535280198Z
+  modified_at: 2026-10-19T16:03:15.535280198Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 8c4feb441c26eff2974a85753b3f3a595d499e26
   branch: main
