@@ -1,0 +1,24 @@
+id: 01a154f0-7aaf-7893-a672-cb0bed2a2bfb
+spec_id: TASK-1957
+agreed_id: TASK-1957
+title: 'STORY-1853 slice S2: cargo-nextest (shadow job, then gating swap; per-test budgets enforce AC4)'
+description: 'Approved sketch: STORY-1853 comment 4 (2026-10-19 00:40). PR 1 adds nextest as a NON-GATING shadow. Run it as its own parallel CI job after S6 fan-out (TASK-1949) lands, so it adds no wall time. It must record pass/fail parity and passed+ignored >= 11,683 for 3 main runs. PR 2 makes nextest gating, using nextest --partition across the S6 test shards in place of the binary half-split, and moves S1 budgets to per-test keys from JUnit (this closes STORY-1853 AC4). Use a serial test-group, with comments, for tests that guard external resources. No retries in the ci profile. Pin the nextest install. Precondition for local use: aida-host''s bin/cargo slot wrapper gates the ''nextest'' subcommand (aida-host STORY-100 lane). Until then agents must not run cargo nextest locally.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T16:13:28.623567193Z
+modified_at: 2026-10-19T16:13:28.623567193Z
+req_type: Task
+tags:
+- ci
+- story-1853
+- throughput
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
