@@ -68,10 +68,13 @@ struct Project {
     _temp: tempfile::TempDir,
     repo: PathBuf,
     home: PathBuf,
+    // trace:TASK-1959 | ai:claude
+    _checkout: support::CheckoutGuard,
 }
 
 impl Project {
     fn new() -> Self {
+        let checkout = support::CheckoutGuard::new();
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().canonicalize().expect("canonical tempdir");
         let repo = root.join("repo");
@@ -112,6 +115,7 @@ impl Project {
             _temp: temp,
             repo,
             home,
+            _checkout: checkout,
         }
     }
 

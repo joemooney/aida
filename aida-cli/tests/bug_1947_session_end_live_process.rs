@@ -85,6 +85,8 @@ struct Session {
     spec: String,
     id: String,
     worktree: PathBuf,
+    // trace:TASK-1959 | ai:claude
+    _checkout: support::CheckoutGuard,
 }
 
 impl Session {
@@ -102,6 +104,7 @@ impl Session {
     }
 
     fn start_with(pooled: bool) -> Self {
+        let checkout = support::CheckoutGuard::new();
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().canonicalize().expect("canonical tempdir");
         let repo = root.join("repo");
@@ -187,6 +190,7 @@ impl Session {
                 spec,
                 id,
                 worktree,
+                _checkout: checkout,
             };
         }
 
@@ -220,6 +224,7 @@ impl Session {
             spec,
             id,
             worktree,
+            _checkout: checkout,
         }
     }
 

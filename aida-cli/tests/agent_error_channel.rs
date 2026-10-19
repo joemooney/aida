@@ -23,6 +23,9 @@
 
 use std::process::Command;
 
+// trace:TASK-1959 | ai:claude
+mod support;
+
 /// An empty git-canonical store in a fresh directory. The binary's default
 /// cwd is the crate dir inside this repository, so without it every run loaded
 /// the repository's own live store (seconds per call) before failing.
@@ -48,6 +51,7 @@ fn aida(dir: &tempfile::TempDir) -> Command {
 
 #[test]
 fn agent_mode_routes_structured_error_to_stdout_exit_1() {
+    let _checkout = support::CheckoutGuard::new();
     let dir = empty_store();
     let out = aida(&dir)
         .env("AIDA_AGENT_OUTPUT", "1")
@@ -76,6 +80,7 @@ fn agent_mode_routes_structured_error_to_stdout_exit_1() {
 
 #[test]
 fn human_mode_keeps_stderr_error_and_empty_stdout_exit_1() {
+    let _checkout = support::CheckoutGuard::new();
     let dir = empty_store();
     let out = aida(&dir)
         .env("AIDA_AGENT_OUTPUT", "0")
