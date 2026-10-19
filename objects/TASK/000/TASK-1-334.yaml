@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T17:28:41.822090642Z
-modified_at: 2026-10-18T17:28:41.822090642Z
+modified_at: 2026-10-19T15:47:16.954617596Z
 req_type: Task
 tags:
 - carried-from:TASK-1783
 - finding-hash:65780278
 - from-review:TASK-1783
 - kind:carried-forward
+comments:
+- id: 01a154d8-7f5a-7a10-88af-8a220bf9c5b0
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1916. aida show TASK-1403 and TASK-1916 both specify black-box assertion that tree coverage leaves the store unchanged; the target description explicitly includes this obligation. Preserve the narrower finding evidence under t'
+  created_at: 2026-10-19T15:47:16.954617596Z
+  modified_at: 2026-10-19T15:47:16.954617596Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15019-ed55-7323-83af-dd22ab174285
   author: joe
