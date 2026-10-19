@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-16T18:11:15.725838495Z
-modified_at: 2026-10-16T18:11:15.725838495Z
+modified_at: 2026-10-19T15:54:37.166811520Z
 req_type: Task
 tags:
 - carried-from:TASK-1792
 - finding-hash:40a2fca2
 - from-review:PR-2701
 - kind:carried-forward
+comments:
+- id: 01a154df-36ee-7e61-8829-5e270c3fb189
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1950 (Sweep: regen scorer and relay_stall hardening follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:54:37.166811520Z
+  modified_at: 2026-10-19T15:54:37.166811520Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 08f6a4af7a143146d283518fd43dca481b0ef4d6
   branch: main
