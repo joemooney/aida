@@ -1,0 +1,33 @@
+id: 01a155b4-bcec-7a82-9deb-3a8c8f4d1294
+spec_id: TASK-1968
+agreed_id: TASK-1968
+title: 'Sweep: verdict-reader and approval carry-over polish (PR-2712 / PR-2758 reviews)'
+description: |-
+  Roll-up of non-blocking review follow-ups from PR-2712 (TASK-1801) and PR-2758 (TASK-1960); members are superseded here with full text below. One PR, after both merge.
+  --- TASK-1964: Document or close the nlink=2 window in the verdict publish link-then-unlink fallback :: review_verdict.rs link_then_unlink (fallback for publish_verdict_no_replace when renameat2 RENAME_NOREPLACE is unsupported) hard-links temp to dest and then unlinks temp. Between the two calls dest has nlink=2, so a concurrent anchored reader (read_verdict_body) refuses the canonical verdict. This only happens on filesystems without no-replace rename. Document the window, or have readers retry once on an nlink refusal.
+
+  Raised in review of PR-2712: https://github.com/joemooney/aida/pull/2712#issuecomment-6275752654
+  --- TASK-1965: Carry-over base refusal text has a wide whitespace gap mid-sentence :: review_carryover.rs:393 and :396 (proven_base_refusal). Both format! string literals contain a run of about 14 spaces mid-sentence ("...against `main`, but the              PR now targets `x`..."). This looks like a lost backslash line continuation. The user-visible ship refusal prints with a wide gap. Fix: restore the `\` continuations, or split the literal.
+
+  Raised in review of PR-2758 (round 2, head 57b4081532): https://github.com/joemooney/aida/pull/2758
+  --- TASK-1966: mandate_ship_cover runs the carry-over proof even where it is ignored :: pr_cmd.rs mandate_ship_cover always calls mandate_carry_over, which runs git ls-remote origin HEAD plus a fetch of the base and of any missing shas. rework_release_decision ignores ShipCheck.carry_over, so the proof is wasted there. A mandate ship also computes the cover twice (mandate_cover_now at the start and again at the re-check). Consider computing the carry-over only for ship_decision.
+
+  Raised in review of PR-2758 (round 2, head 57b4081532): https://github.com/joemooney/aida/pull/2758
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T19:47:50.636653217Z
+modified_at: 2026-10-19T19:47:50.636653217Z
+req_type: Task
+tags:
+- review
+- sweep
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dd4b6ed730
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
