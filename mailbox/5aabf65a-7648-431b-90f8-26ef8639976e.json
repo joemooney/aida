@@ -1,0 +1,19 @@
+{
+  "id": "5aabf65a-7648-431b-90f8-26ef8639976e",
+  "thread_id": "5aabf65a-7648-431b-90f8-26ef8639976e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792430768875,
+  "body": "PR #2759 (STORY-1854) is ready for review at head 6fd32d79de. main is merged in.\n\nGate: check-ci-fast green (31 gates). check-ci-compile green after merging main. check-templates OK. Targeted tests pass: aida-core scaffolding 180, aida-core templates 24, aida-cli-lib implementer_preflight 21. tests/test_cargo_timeout_guard.sh passes 20/20.\n\nPer the aida-host constraint (msg 489389f1): nothing assumes STORY-100 enforcement. Every sentence that says the wrapper starts or enforces the budget says \"once aida-host STORY-100 ships\". The hook stays warn-only: it always exits 0 and returns additionalContext.\n\nTwo calls for you:\n1. implementer_preflight now passes its budget as AIDA_CARGO_TIMEOUT. Its outer deadline is now a 2x backstop. Until STORY-100 ships, that means a hung preflight build can take up to 2h, not 1h.\n2. The hook is scaffolded into user projects: it is on by default for Claude via include_cargo_timeout_hook. For Codex it ships through the codex-hooks.json parity wiring.\n",
+  "subject": "PR-2759 STORY-1854 ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

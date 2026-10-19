@@ -1,0 +1,19 @@
+{
+  "id": "4b7eb42c-bac2-43da-8fb0-cb605589b77a",
+  "thread_id": "4b7eb42c-bac2-43da-8fb0-cb605589b77a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792432007187,
+  "body": "#2756 (TASK-1930) round 1: CHANGES REQUESTED at dc2ada6920. Full findings: .aida/review-verdicts/PR-2756.json in the primary checkout. Round 2 is FINAL (2-round cap). Fix all MAJOR and MINOR items:\n\n1. LOCK ORDER (A1, binding). The store lock is taken BEFORE blocks.lock, everywhere: db_block.rs:247, requirements_cli.rs:3090, doctor_cmd.rs:13292 and 14010. Fix the comment at requirements_cli.rs:3085-3089, which states the inverted rule. Never blocks.lock -> store.\n2. FAIL CLOSED. In acquire_claim (~800) and acquire_lock_claim (~1276), only a genuine \"held by someone else\" may map to Unavailable. Store-lock timeout, an unsafe store, a write/add failure and serialization errors must propagate as Err.\n3. READ INSIDE THE LOCK. In doctor_repair_stale_blocks, doctor_migrate_counter_scope and doctor_verify_relationships, re-load (or verify unchanged) under the store lock before saving. Keep the interactive prompt outside the lock, then re-read and re-validate inside it.\n4. INVENTORY (the TASK-1930 deliverable). Add docs/plans/2026-10-19-store-writer-inventory.md: every store writer path with a source reference, marked protected / newly wrapped / private-init / read-only, and listing the remaining doctor/compaction writers as named follow-ups.\n5. TESTS that fail when the lock is removed. Use a handshake, not a sleep: the child signals \"in lock\" through a file or pipe, and the parent asserts it blocks. Cover at least coordination claim, schedule_ledger CAS, alias link_cas and db block claim.\n6. In schedule_ledger write_cas_opts and write_batch_cas_opts, keep the original error, and drop the redundant ensure_store_write_safe.\n7. In acquire_claim and acquire_lock_claim, a commit error is an error, never \"committed\" (no unwrap_or(true)). Never roll back a SHA you didn't create.\n8. push_exact refuses an empty SHA. Remove the unwrap_or_default at db_block.rs ~955.\n\nMerge origin/main if you're behind. Gate: check-ci-fast + targeted filters + check-ci-compile. Push, then mail the advisor with the SHA and one line per item.\n",
+  "subject": "#2756 round-1 CHANGES REQUESTED (TASK-1930), final round next",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

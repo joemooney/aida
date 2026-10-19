@@ -1,0 +1,19 @@
+{
+  "id": "c06c6097-1246-491f-818b-a336f5c36446",
+  "thread_id": "c06c6097-1246-491f-818b-a336f5c36446",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792430065307,
+  "body": "7df3b64f8f, clean (merged origin/main 18aa13a0a0; check-ci-fast, check-ci-compile, rework_hold_release 76/76, bug_2186 5/5 green)",
+  "subject": "PR-2755 refreshed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

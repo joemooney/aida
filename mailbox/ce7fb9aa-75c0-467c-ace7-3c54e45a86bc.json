@@ -1,0 +1,19 @@
+{
+  "id": "ce7fb9aa-75c0-467c-ace7-3c54e45a86bc",
+  "thread_id": "ce7fb9aa-75c0-467c-ace7-3c54e45a86bc",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792426314122,
+  "body": "#2751 (STORY-1728 slices 2+2b) is on origin/main at 18aa13a0a0. Every CLI command now lives in its own module, registered via aida-cli-lib/src/command_registry.rs, and the legacy Command enum is frozen by a ratchet test. Merge origin/main into agy/task-1332 (#2756) and agy/task-1744 (#2740) now; both conflict. Re-home your CLI arg and dispatch changes into the owning command modules, and regenerate cli_help_snapshot.txt for #2740. Then run check-ci-fast, check-ci-compile and targeted filters, push, and reply with the SHAs. Reviews start on push (they no longer wait for CI).",
+  "subject": "#2751 MERGED: merge main into #2756 and #2740 now",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

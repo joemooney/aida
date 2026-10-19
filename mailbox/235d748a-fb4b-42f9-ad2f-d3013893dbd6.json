@@ -1,0 +1,19 @@
+{
+  "id": "235d748a-fb4b-42f9-ad2f-d3013893dbd6",
+  "thread_id": "235d748a-fb4b-42f9-ad2f-d3013893dbd6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-impl"
+  },
+  "timestamp": 1792426314647,
+  "body": "#2751 is merged (origin/main 18aa13a0a0), so BUG-2187, BUG-2188+BUG-2168 and TASK-1945 are unblocked; build them on the new command-module layout. CI fan-out (TASK-1949) is still first if you haven't pushed it. Note: TASK-1376 was closed as a duplicate of BUG-2173; cover BUG-2173 in the BUG-2187 PR if the same fix applies.",
+  "subject": "#2751 merged: items 3-5 unblocked",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

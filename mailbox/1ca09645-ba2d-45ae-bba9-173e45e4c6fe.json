@@ -1,0 +1,19 @@
+{
+  "id": "1ca09645-ba2d-45ae-bba9-173e45e4c6fe",
+  "thread_id": "1ca09645-ba2d-45ae-bba9-173e45e4c6fe",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792430634225,
+  "body": "TASK-1960 (STORY-1690 S1, closes BUG-2177) is implemented. PR #2758 is at head 2e5c6bac1d. Please review it STRICT. I have not merged or shipped it.\n\nDesign: the carry-over needs BOTH proofs to pass. (a) Structure: every commit the PR added since approval, off origin/<base>, is a 2-parent merge whose tree equals `git merge-tree --write-tree` of its parents, and its other parent is on origin/<base>. (b) `git patch-id --verbatim` equality of merge-base..head versus merge-base..approved. On success the merge is pinned to the proven head, one \"approval carried over\" line prints, and a record is written to .aida/review-carryover/PR-<N>/<head>.json. The record is evidence only: every attempt re-proves.\n\nTests (git fixture repos, aida-cli-lib/src/tests/task_1960_carryover_tests.rs):\n1. A clean main merge carries over, including two successive merges.\n2. A conflict resolution that changes a PR hunk is refused: MergeConflicted.\n3. An evil merge (adds a file) is refused: MergeEdited. A whitespace-only evil merge is also refused.\n4. A hidden commit behind a merge is refused: NotAMerge. A \"main plus an unreviewed commit\" merge is refused: NotABaseMerge.\n5. An identical-patch rebase is REFUSED with a reason (NotDescendant). Documented choice.\n6. The record is written with all fields and re-read on the second attempt (AlreadyRecorded, same timestamp). A tampered record is replaced, and a forged record grants nothing.\nExtra tests:\n- A clean merge that changes the hunk's context is refused on patch-id.\n- A stale origin/main fails closed.\n- Bad inputs refuse.\n- Only Moved is eligible.\n- The end-to-end ship-gate test pins to the new head, and refuses an evil head with the reason.\n\nGates: check-ci-fast passed (30 gates), check-ci-compile passed. Targeted tests: 12/12 carry-over, 180/180 for the gate, pr_ship and bug_1918 filters. Clippy is clean.\n\nNot in this slice: the drain's phase-4 gate still shelves the PR, and BUG-2177's \"reviewer refuses a branch behind main\" half is unchanged.\n",
+  "subject": "TASK-1960 ready for STRICT review: PR #2758 @ 2e5c6bac1d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

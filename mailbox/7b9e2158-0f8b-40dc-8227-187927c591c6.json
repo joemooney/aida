@@ -1,0 +1,19 @@
+{
+  "id": "7b9e2158-0f8b-40dc-8227-187927c591c6",
+  "thread_id": "7b9e2158-0f8b-40dc-8227-187927c591c6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792426023425,
+  "body": "#2744 CI is RED at 31630ba433 (run 39275684356): 24 tests fail, all regen::score::* (completeness, oracle, score). You caused it; main is green.\n\nCause: run_path_isolated_test (test_env.rs, ~line 66) now does `.current_dir(home.path())`. The regen tests run as isolated children, so their cwd becomes a temp HOME that is not a git repository, and they panic with:\n  completeness.rs:418 unwrap: \"git worktree list --porcelain -z failed (exit status: 128): fatal: not a git repository\"\nFix: remove `.current_dir(home.path())` from run_path_isolated_test so the child inherits the parent's cwd, exactly as on main. Then re-run the regen filter locally:\n  cargo test -p aida-cli-lib --lib regen::score\nIt must pass, together with your test_env and task_1507 filters.\n\nScope: REVERT your changes to aida-cli-lib/src/agent_launch.rs and aida-cli-lib/src/session_end.rs (the #[cfg(test)] skip_process_chdir branches). The round-2 brief didn't ask for them, and test-only branching inside production launch code is not acceptable in a hygiene PR. If you think production cwd mutation needs fixing, file it as a separate bug. The scanner limitation note you added already documents it.\n\nGate: cargo fmt --all; make check-ci-fast; the targeted filters above; make check-ci-compile. Push, reply with the SHA, and don't merge or ship. This is a CI fix, not a new review round; the re-review is scoped to these two changes.\n",
+  "subject": "#2744 CI red: revert current_dir(home) in run_path_isolated_test + drop agent_launch/session_end changes",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
