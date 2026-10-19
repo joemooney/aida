@@ -3,12 +3,12 @@ spec_id: TASK-1772
 agreed_id: TASK-1772
 title: ensure_spec_worktree (worktree add/enter, do-guided) passes self_claim=false though the caller works the lease
 description: 'From #2657 (BUG-2010) round-2 review, non-blocking: worktree_gc.rs:1633 ensure_spec_worktree passes self_claim=false, so worktree add/enter and do-guided lose lane attribution even though the caller itself works the lease. Harmless (fails toward unattributed) but ps shows those lanes less precisely. Pass true where the caller is the worker; test.'
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T06:26:36.630620824Z
-modified_at: 2026-10-19T16:03:49.076382739Z
+modified_at: 2026-10-19T16:03:51.307809052Z
 req_type: Task
 comments:
 - id: 01a154e7-a2d4-7b62-9310-beef3e6048fb
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-19T16:03:49.076382739Z
   modified_at: 2026-10-19T16:03:49.076382739Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e7-ab8b-7a33-8199-ea2c3c8721af
+  author: joe
+  timestamp: 2026-10-19T16:03:51.307801823Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 732db496014cc356d823a0a8d8cb5a4623f61f8b
   branch: main
