@@ -6,12 +6,12 @@ description: |
   PR #2711's mandate-exclusion edits leave one ~140-column unwrapped line in OVERVIEW.md, in the mandate paragraph ("...The first code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable"). They also leave a short orphan line in AGENTS.md ("with full-file fallback when attribution"). Rewrap both to the surrounding ~80-column prose. This is cosmetic only and changes no behavior.
 
   Raised in review of PR-2711: https://github.com/joemooney/aida/pull/2711
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T02:03:42.442417321Z
-modified_at: 2026-10-19T16:00:37.290443331Z
+modified_at: 2026-10-19T16:00:39.411987764Z
 req_type: Task
 tags:
 - docs
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T16:00:37.290443331Z
   modified_at: 2026-10-19T16:00:37.290443331Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e4-bdf3-7da1-aee2-a49bc69bff7f
+  author: joe
+  timestamp: 2026-10-19T16:00:39.411979790Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: afad958ccd67b84917da7950a2b4fd900306046e
   branch: pr-2711
