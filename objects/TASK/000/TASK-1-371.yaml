@@ -1,0 +1,28 @@
+id: 01a155e6-c083-7f20-8c10-2d0b488c2717
+spec_id: TASK-1-371
+title: 'AC ac7f9407 (non-blocking, unverified by reviewer this round): real_claude_cont…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-1982, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  AC ac7f9407 (non-blocking, unverified by reviewer this round): real_claude_contained_session_cannot_redirect_main_git_metadata exists, is traced and keeps its fixture under ~/.cache outside TMPDIR, but it is env-gated (AIDA_TEST_REAL_CLAUDE=1) and was not re-run at bc8bdd9; the reviewer sandbox cannot nest claude. Commit-succeeds half is met via the BUG-2169 seat clone (linked-worktree commit is asserted to fail, documented in OVERVIEW). Operator should run it once on the live Claude Code before relying on it.
+  Reviewed sha: bc8bdd901deb2e2a0fd34589a9f6f20cc2507ae6
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T20:42:28.355632373Z
+modified_at: 2026-10-19T20:42:28.355632373Z
+req_type: Task
+tags:
+- carried-from:BUG-1982
+- finding-hash:3449d9ed
+- from-review:BUG-1982
+- kind:carried-forward
+filed_at:
+  code_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: dd4b6ed730
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
