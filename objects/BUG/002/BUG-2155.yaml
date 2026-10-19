@@ -12,12 +12,12 @@ description: |
   - Capture Git exit status/signal and process association for an intermittent failing parallel run.
   - Identify the root cause or record why it remains unresolved; do not infer it solely from a later passing rerun.
   - If a repair is warranted, scope and review it separately from consensus behavior; preserve all frozen execution and survivor-detection limits.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T18:05:27.573763584Z
-modified_at: 2026-10-19T16:10:23.090069775Z
+modified_at: 2026-10-19T16:10:25.867303337Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1679
@@ -31,6 +31,15 @@ comments:
   created_at: 2026-10-19T16:10:23.090069775Z
   modified_at: 2026-10-19T16:10:23.090069775Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154ed-b0cb-7660-825c-f3ef65be8803
+  author: joe
+  timestamp: 2026-10-19T16:10:25.867296378Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: ebfef68065ce3842a935bb6f14e515d1971ed1f6
   branch: codex/story-1679
