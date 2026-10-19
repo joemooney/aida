@@ -1,0 +1,26 @@
+id: 01a15174-41f1-73c2-a757-e6d150c83ec8
+spec_id: TASK-1928
+agreed_id: TASK-1928
+title: MCP mailbox send does not canonicalize a known recipient to its stored spelling (CLI does)
+description: |
+  aida-cli-lib/src/mcp.rs:2747-2753 trims `to` but stores it verbatim, while the CLI path (mailbox_cmd.rs:146-155) maps a known identity to its stored spelling via known_mailbox_recipients. Message::addressed_to (aida-core/src/mailbox.rs:506) is case-sensitive, so MCP `to: "ADVISOR"` opens a phantom ADVISOR inbox that `aida mailbox gc --phantoms` also does not clean (not a mention body, not a rejected shape).
+  Raised in review of PR-2737: https://github.com/joemooney/aida/pull/2737
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-18T23:58:55.985345539Z
+modified_at: 2026-10-18T23:58:55.985345539Z
+req_type: Task
+tags:
+- from-review:PR-2737
+- mailbox
+- severity:minor
+filed_at:
+  code_sha: f22c0c8e910bd9472780a1d092360454556b3d2f
+  branch: pr-2737
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: 01a1517149f7
