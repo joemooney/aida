@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T17:28:47.783769497Z
-modified_at: 2026-10-18T17:28:47.783769497Z
+modified_at: 2026-10-19T15:47:26.033701039Z
 req_type: Task
 tags:
 - carried-from:TASK-1783
 - finding-hash:7472e82e
 - from-review:TASK-1783
 - kind:carried-forward
+comments:
+- id: 01a154d8-a2d1-77c1-9867-69b179a18f51
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1916. aida show TASK-1405 and TASK-1916 both specify same-line functions and nested-method function attribution; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the targ'
+  created_at: 2026-10-19T15:47:26.033701039Z
+  modified_at: 2026-10-19T15:47:26.033701039Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15019-ed88-7393-9437-a2e75b71ad59
   author: joe
