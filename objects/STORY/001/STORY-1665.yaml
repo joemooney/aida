@@ -8,10 +8,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T17:48:41.338189773Z
-modified_at: 2026-10-12T15:02:31.428040123Z
+modified_at: 2026-10-19T15:50:39.031477145Z
 req_type: Story
 tags:
 - groom:needs-decision
+- operator-held
 comments:
 - id: 01a12eae-4a50-7d20-aa9f-ee4553c8c606
   author: joe
@@ -38,6 +39,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a154db-95cf-78b0-a477-990f1995725a
+  author: joe
+  timestamp: 2026-10-19T15:50:39.311664227Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:39.031477145Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: 92781f85ad0b7f73e16f817e8b2df77aed8d56fb
   branch: main
