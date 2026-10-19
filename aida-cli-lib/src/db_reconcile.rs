@@ -112,6 +112,13 @@ pub(crate) fn auto_bump_evidence_is_stale(
     req: &Requirement,
     sha: &str,
 ) -> bool {
+    // STORY-1663: a commit recorded by a non-final `aida pr ship --rebase`
+    // slice merge must not auto-bump the owning spec on `aida pull` or
+    // `aida db reconcile-status`.
+    // trace:STORY-1663 | ai:antigravity
+    if spec_ignores_non_completing_rebase_commit(project_root, req, sha) {
+        return true;
+    }
     // trace:TASK-1338 | ai:codex
     // Older human reopens predate reopened_at_sha. Ignore automated status
     // rewrites when finding the latest deliberate decision: a replayed bump
@@ -127,6 +134,64 @@ pub(crate) fn auto_bump_evidence_is_stale(
     }
     info.reopened_at_sha.as_deref().is_some_and(|reopen_sha| {
         sha.is_empty() || sha_at_or_before_reopen(project_root, sha, reopen_sha)
+    })
+}
+
+/// STORY-1663: true when `req` carries a `[aida:non-completing-rebase]` marker
+/// comment matching `sha` or the commit subject of `sha` in `project_root`.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn spec_ignores_non_completing_rebase_commit(
+    project_root: &std::path::Path,
+    req: &Requirement,
+    sha: &str,
+) -> bool {
+    let sha = sha.trim();
+    if sha.is_empty() {
+        return false;
+    }
+    let has_marker = req.comments.iter().any(|c| {
+        c.content
+            .contains(crate::pr_ship::NON_COMPLETING_REBASE_MARKER)
+    });
+    if !has_marker {
+        return false;
+    }
+    let sha_line = format!("sha: {sha}");
+    if req.comments.iter().any(|c| {
+        c.content
+            .contains(crate::pr_ship::NON_COMPLETING_REBASE_MARKER)
+            && c.content
+                .lines()
+                .any(|l| l.trim().eq_ignore_ascii_case(&sha_line))
+    }) {
+        return true;
+    }
+    if !crate::git_arg_guard::is_hex_sha(sha) {
+        return false;
+    }
+    let Some(subject) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "show",
+            "-s",
+            "--format=%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            sha,
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+    else {
+        return false;
+    };
+    let subject_line = format!("subject: {subject}");
+    req.comments.iter().any(|c| {
+        c.content
+            .contains(crate::pr_ship::NON_COMPLETING_REBASE_MARKER)
+            && c.content.lines().any(|l| l.trim() == subject_line)
     })
 }
 
@@ -2014,7 +2079,14 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // its title trailer survived into the subject) completes no spec,
         // whatever status the spec is in — the same rule ship applies.
         // trace:BUG-2134 | ai:claude
-        if !is_plan_commit_subject(subject) && !commit_declares_non_completing(message) {
+        // STORY-1663: rebased slice commits (`refactor(cli-lib): extract|extend <m>.rs`
+        // or `[k/N]` slice subjects) never auto-complete their owning spec;
+        // `--final-slice` completes the spec explicitly.
+        // trace:STORY-1663 | ai:antigravity
+        if !is_plan_commit_subject(subject)
+            && !commit_declares_non_completing(message)
+            && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
+        {
             for spec_id in extract_spec_ids_from_commit(subject) {
                 candidates.entry(spec_id).or_insert_with(|| sha.to_string());
             }
@@ -2948,7 +3020,13 @@ pub(crate) fn handle_db_reconcile_status(
         // the live pull already (correctly) left alone. trace:BUG-426 | ai:claude
         // BUG-2134: and a non-completing-slice merge, as the live scan does.
         // trace:BUG-2134 | ai:claude
-        if !is_plan_commit_subject(subject) && !commit_declares_non_completing(message) {
+        // STORY-1663: skip slice commits (`refactor(cli-lib): extract|extend <m>.rs`
+        // or `[k/N]` slice subjects), matching the live auto-bump scan.
+        // trace:STORY-1663 | ai:antigravity
+        if !is_plan_commit_subject(subject)
+            && !commit_declares_non_completing(message)
+            && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
+        {
             for id in extract_spec_ids_from_commit(subject) {
                 if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
                     candidate_sources.insert(

@@ -1,3 +1,9 @@
+Rust mandate exclusions also add module comments outside fn/impl ranges and
+inline-module headers, including traces between items and at EOF. Leading
+comments of unchanged sibling fn/impl items retain their scope; attribution
+fallback is unchanged. See OVERVIEW.md.
+<!-- trace:TASK-1800 | ai:codex -->
+
 Contained plan-only queue pickups select Claude plan mode while retaining
 contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
 Plan-only rejects headless flags before setup; headless drains use --with-plan.

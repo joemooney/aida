@@ -140,7 +140,9 @@ fn shape(events: &[Event]) -> Vec<(String, String, String)> {
     events
         .iter()
         .map(|e| match &e.kind {
-            EventKind::StatusChange { from, to } => (e.spec_id.clone(), from.clone(), to.clone()),
+            EventKind::StatusChange { from, to, .. } => {
+                (e.spec_id.clone(), from.clone(), to.clone())
+            }
             EventKind::Added { .. } => (e.spec_id.clone(), "+".into(), String::new()),
             EventKind::CommentsAdded { .. } => (e.spec_id.clone(), "c".into(), String::new()),
             other => panic!("unexpected event kind {other:?}"),
@@ -505,7 +507,7 @@ fn human_toon_and_json_agree() {
         // JSON carries the transition ends the filter selected on.
         for (row, e) in json["events"].as_array().unwrap().iter().zip(&events) {
             match &e.kind {
-                EventKind::StatusChange { from, to } => {
+                EventKind::StatusChange { from, to, .. } => {
                     assert_eq!(row["kind"], "status_change");
                     assert_eq!(row["from"], from.as_str());
                     assert_eq!(row["to"], to.as_str());

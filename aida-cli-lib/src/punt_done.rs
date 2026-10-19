@@ -186,6 +186,9 @@ pub(crate) fn send_notification(
     body: String,
 ) {
     use aida_core::mailbox::{Intent, Message, Recipient};
+    // TASK-1766: trim recipient id so Recipient::Agent stores the same trimmed
+    // id that recipient_id_rejection validates. trace:TASK-1766 | ai:antigravity
+    let recipient = recipient.trim();
     // BUG-2132: never open a mailbox for a junk id (a flag, a number, a spec
     // ID, a line ref) — that mail is never read. trace:BUG-2132 | ai:claude
     if aida_core::mailbox::recipient_id_rejection(recipient).is_some() {
@@ -227,20 +230,82 @@ pub(crate) fn send_notification(
 
 /// Extract distinct `@mention` handles from free text (STORY-644). Conservative
 /// word-boundary parse: a `@` that is NOT preceded by a word char (so `foo@bar`
-/// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`. The
+/// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`, ignoring
+/// any `@` inside Markdown backtick code spans/fences (TASK-1766). The
 /// trailing run is trimmed of `.` and `-` so sentence punctuation (`@bob.`) and
 /// hyphen-tails don't leak into the handle. Returns handles in first-seen order,
 /// deduped. trace:STORY-644 | ai:claude
+// trace:TASK-1766 | ai:antigravity
 pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
+    extract_raw_mention_tokens(text)
+        .into_iter()
+        .filter(|h| is_mention_handle(h))
+        .collect()
+}
+
+/// Extract all `@token` candidates outside backtick code spans that pass
+/// non-code/non-spec/non-numeric shape checks, including all-uppercase handles
+/// such as `@QA` or `@ADVISOR`.
+// trace:TASK-1766 | ai:antigravity
+pub(crate) fn extract_mention_candidates(text: &str) -> Vec<String> {
+    extract_raw_mention_tokens(text)
+        .into_iter()
+        .filter(|h| is_mention_candidate(h))
+        .collect()
+}
+
+// trace:TASK-1766 | ai:antigravity
+fn extract_raw_mention_tokens(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     let mut out: Vec<String> = Vec::new();
     let mut i = 0usize;
     while i < chars.len() {
+        // TASK-1766: skip backtick-delimited inline code spans (`...`, ``...``)
+        // and fenced code blocks (```...```) so `@param`, `@dataclass`, etc.
+        // inside code spans are never extracted as mentions.
+        if chars[i] == '`' {
+            let mut tick_len = 0usize;
+            while i + tick_len < chars.len() && chars[i + tick_len] == '`' {
+                tick_len += 1;
+            }
+            let mut k = i + tick_len;
+            let mut close_end = None;
+            while k < chars.len() {
+                if chars[k] == '`' {
+                    let mut run = 0usize;
+                    while k + run < chars.len() && chars[k + run] == '`' {
+                        run += 1;
+                    }
+                    if run == tick_len || (tick_len >= 3 && run >= tick_len) {
+                        close_end = Some(k + run);
+                        break;
+                    }
+                    k += run;
+                } else {
+                    k += 1;
+                }
+            }
+            if let Some(end) = close_end {
+                i = end;
+                continue;
+            } else if tick_len >= 3 {
+                // Unclosed fenced code block extends to end of text.
+                break;
+            } else {
+                i += tick_len;
+                continue;
+            }
+        }
         if chars[i] == '@' {
-            // Word-boundary: skip `foo@bar` (email local-part / handle-in-word).
+            // Word-boundary: skip `foo@bar` (email local-part / handle-in-word)
+            // and a `:`/`/` that ends a line-ref or path (`main.rs:@L4425`,
+            // `src/x/@y`), while prose such as `cc:@advisor` still mentions.
+            // trace:TASK-1766 | ai:claude
             let prev_is_word = i > 0 && {
                 let p = chars[i - 1];
-                p.is_alphanumeric() || p == '_'
+                p.is_alphanumeric()
+                    || p == '_'
+                    || ((p == ':' || p == '/') && follows_line_ref_shape(&chars[..i - 1]))
             };
             if !prev_is_word {
                 let mut j = i + 1;
@@ -255,7 +320,7 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
                 let raw: String = chars[i + 1..j].iter().collect();
                 // Trim trailing sentence punctuation so `@bob.` -> `bob`.
                 let handle = raw.trim_end_matches(['.', '-']).to_string();
-                if !handle.is_empty() && is_mention_handle(&handle) && !out.contains(&handle) {
+                if !handle.is_empty() && !out.contains(&handle) {
                     out.push(handle);
                 }
                 i = j;
@@ -267,20 +332,84 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
     out
 }
 
-/// BUG-2132: whether an `@token` in comment prose is plausibly a person or
-/// agent rather than code-ish text. Comments quoting `@-include`,
-/// `@33492/34424`, `@BUG-52`, `@SCOPE`, `@L4425` (a thread-local selector)
-/// or `@main.rs:47359` each opened a junk mailbox that nobody reads. Refused:
-/// every shape `--to` refuses, a token with no lower-case letter (upper-case
-/// words and selectors such as `SPEC`, `L`), and a source file name.
+/// Whether the non-whitespace run ending `before` looks like a source path or
+/// line ref (`main.rs`, `main.rs:47`, `src/x`), so a `:`/`/` after it and
+/// before `@` is part of that reference rather than prose.
+// trace:TASK-1766 | ai:claude
+fn follows_line_ref_shape(before: &[char]) -> bool {
+    let start = before
+        .iter()
+        .rposition(|c| c.is_whitespace())
+        .map_or(0, |k| k + 1);
+    let run = &before[start..];
+    run.last().is_some_and(|c| c.is_ascii_digit()) || run.iter().any(|c| *c == '.' || *c == '/')
+}
+
+/// BUG-2132 / TASK-1766: whether an `@token` in comment prose is a candidate
+/// mention handle (excluding flags, bare numbers, spec IDs, line refs, source
+/// filenames, and hex commit SHAs).
 // trace:BUG-2132 | ai:claude
-fn is_mention_handle(handle: &str) -> bool {
+// trace:TASK-1766 | ai:antigravity
+fn is_mention_candidate(handle: &str) -> bool {
     const SOURCE_EXTS: &[&str] = &[
         ".rs", ".md", ".toml", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".py", ".sh",
     ];
     aida_core::mailbox::recipient_id_rejection(handle).is_none()
-        && handle.chars().any(|c| c.is_lowercase())
         && !SOURCE_EXTS.iter().any(|ext| handle.ends_with(ext))
+        && !aida_core::mailbox::looks_like_hex_sha(handle)
+}
+
+/// BUG-2132: whether an `@token` in comment prose is plausibly a person or
+/// agent rather than code-ish text when no roster/registry is consulted.
+// trace:BUG-2132 | ai:claude
+fn is_mention_handle(handle: &str) -> bool {
+    is_mention_candidate(handle) && handle.chars().any(|c| c.is_lowercase())
+}
+
+/// TASK-1766: resolve `@mention` tokens in comment text against the project's
+/// known mailbox recipients (canonical roles, role files, registered agents,
+/// and the people roster), delivering each under its stored spelling.
+/// Returns `(deliverable_handles, warnings)`:
+/// - Known handles (including all-uppercase handles like `@QA` or `@ADVISOR`
+///   when present in the roster/registry) are returned in `deliverable_handles`.
+/// - Unknown handles (including unknown all-uppercase handles like `@QA`) are
+///   dropped with a warning and NEVER delivered, preventing phantom inboxes.
+/// - Spec-ID-shaped, numeric, flag, line-ref, source-file, and hex-SHA tokens
+///   never count as mentions at all.
+// trace:TASK-1766 | ai:antigravity
+pub(crate) fn resolve_comment_mentions(
+    store_root: &std::path::Path,
+    comment_author: &str,
+    text: &str,
+) -> (Vec<String>, Vec<String>) {
+    // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
+    // are known too, and delivery uses the identity's stored spelling.
+    let known = crate::known_mailbox_recipients(store_root);
+    let author_trimmed = comment_author.trim();
+    let mut deliverable = Vec::new();
+    let mut warnings = Vec::new();
+    for handle in extract_mention_candidates(text) {
+        let trimmed = handle.trim();
+        if trimmed.eq_ignore_ascii_case(author_trimmed) {
+            continue;
+        }
+        if let Some(canonical) = known.get(&trimmed.to_lowercase()) {
+            if !deliverable.contains(canonical) {
+                deliverable.push(canonical.clone());
+            }
+        } else if !trimmed.chars().any(|c| c.is_lowercase()) {
+            warnings.push(format!(
+                "@{} is an all-uppercase handle matching no known person, role or registered agent — mention dropped",
+                trimmed
+            ));
+        } else {
+            warnings.push(format!(
+                "@{} matches no known person, role or registered agent — mention dropped",
+                trimmed
+            ));
+        }
+    }
+    (deliverable, warnings)
 }
 
 /// One-line snippet of `text` for a mention notice: collapsed whitespace,

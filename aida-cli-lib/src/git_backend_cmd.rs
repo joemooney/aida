@@ -1227,6 +1227,9 @@ fn db_sync_local_window(
     // trace:BUG-1-051 | ai:claude
     // trace:TASK-1717 | ai:claude — a failing `git status` is an error,
     // never "clean".
+    // trace:BUG-2140 | ai:antigravity — refuse embedded git repos even when
+    // `git status` would not report an empty nested `.git` as a dirty tree.
+    aida_core::git_ops::refuse_embedded_repos(store_path)?;
     let has_changes = aida_core::git_ops::has_changes_checked(store_path)?;
     if has_changes {
         let msg = message.unwrap_or("chore: sync pending changes");
@@ -4334,7 +4337,9 @@ pub(crate) fn handle_git_backend_command(
                                         // Persist the updated next pointer
                                         if let Err(e) = registry.save(&blocks_path) {
                                             eprintln!("Warning: could not save blocks.yaml: {}", e);
-                                        } else {
+                                        } else if !aida_core::git_ops::store_commit_deferred_to_host(
+                                            store_path,
+                                        ) {
                                             // Commit the pointer advance to the store
                                             let _ = aida_core::git_ops::add(
                                                 store_path,
@@ -7775,10 +7780,6 @@ pub(crate) fn handle_git_backend_command(
 
             let now = chrono::Utc::now();
             let comment_author = author.clone().unwrap_or_else(get_default_author);
-            // STORY-644: capture @mentions before `body` is moved into the
-            // comment, so we can notify each mentioned user after the write
-            // lands. trace:STORY-644 | ai:claude
-            let mentions = extract_mentions(&body);
             let mention_body = body.clone();
             let comment = aida_core::Comment {
                 id: Uuid::now_v7(),
@@ -7805,24 +7806,38 @@ pub(crate) fn handle_git_backend_command(
             record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             println!("Comment added to {}", req_id);
 
-            // STORY-644: notify each @mentioned user via the mailbox
-            // (best-effort; STORY-643 auto-sync delivers on their next pull).
-            // The named identity is routed to directly — matching how the
-            // mailbox addresses any agent/user id — and a self-mention is
-            // skipped. trace:STORY-644 | ai:claude
-            if !mentions.is_empty() {
-                let display = req.spec_id.as_deref().unwrap_or(req_id);
-                let snippet = mention_snippet(&mention_body, 80);
-                for handle in &mentions {
-                    if handle == &comment_author {
-                        continue;
-                    }
-                    send_notification(
-                        store_path,
-                        &comment_author,
-                        handle,
-                        format!("You were mentioned on {display} by {comment_author}: {snippet}"),
+            // STORY-644 / TASK-1766: notify each @mentioned user via the mailbox
+            // only when the handle resolves to a known person, role or registered agent.
+            // Unknown handles (including unrecognized all-uppercase handles)
+            // emit a warning and are never delivered.
+            // trace:STORY-644 | ai:claude
+            // trace:TASK-1766 | ai:antigravity
+            {
+                let (mentions, warnings) = crate::punt_done::resolve_comment_mentions(
+                    store_path,
+                    &comment_author,
+                    &mention_body,
+                );
+                for warning in &warnings {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        warning
                     );
+                }
+                if !mentions.is_empty() {
+                    let display = req.spec_id.as_deref().unwrap_or(req_id);
+                    let snippet = mention_snippet(&mention_body, 80);
+                    for handle in &mentions {
+                        send_notification(
+                            store_path,
+                            &comment_author,
+                            handle,
+                            format!(
+                                "You were mentioned on {display} by {comment_author}: {snippet}"
+                            ),
+                        );
+                    }
                 }
             }
         }
