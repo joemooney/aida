@@ -6,7 +6,7 @@
 //! Under a contained parent:
 //! - `--permission-mode` must be refused for burndown run and autopilot intake.
 //! - The launch posture defaults to `dontAsk` for burndown run and autopilot intake.
-//! - Containment flags (`claude_contained_flags()`) are added to argv.
+//! - Containment flags (`claude_contained_flags().unwrap()`) are added to argv.
 //! - Interactive questions clarify adds containment flags to argv.
 //! - `AIDA_CONTAINED=1` is exported to child commands.
 //! - `AIDA_SESSION_PURPOSE` is scrubbed from all child commands (BUG-2170).
@@ -112,7 +112,8 @@ fn uncontained_autopilot_intake_preserves_mode_or_defaults_to_bypass() {
 fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
     // Contained
     let cmd =
-        build_burndown_quiet_command("prompt-quiet", "dontAsk", "", "CEILING_KEY", "10", true);
+        build_burndown_quiet_command("prompt-quiet", "dontAsk", "", "CEILING_KEY", "10", true)
+            .unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -144,7 +145,8 @@ fn burndown_quiet_builder_argv_and_env_contained_vs_uncontained() {
         "CEILING_KEY",
         "10",
         false,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
         Some(None),
@@ -174,7 +176,8 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
         "CEILING_KEY",
         "10",
         true,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -214,7 +217,8 @@ fn burndown_verbose_builder_argv_and_env_contained_vs_uncontained() {
         "CEILING_KEY",
         "10",
         false,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
         Some(None),
@@ -252,7 +256,8 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
         crate::backlog::RiskLevel::Low,
         Some(5),
         true,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -292,7 +297,8 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
         crate::backlog::RiskLevel::Low,
         Some(5),
         false,
-    );
+    )
+    .unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
         Some(None),
@@ -315,7 +321,8 @@ fn autopilot_intake_builder_argv_and_env_contained_vs_uncontained() {
 #[test]
 fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
     // Contained
-    let cmd = build_questions_clarify_command("prompt-clarify", "child-clarify-grant", true);
+    let cmd =
+        build_questions_clarify_command("prompt-clarify", "child-clarify-grant", true).unwrap();
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
         Some(Some("1".to_string())),
@@ -343,7 +350,7 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
 
     // Uncontained
     let cmd_uncontained =
-        build_questions_clarify_command("prompt-clarify", "child-clarify-grant", false);
+        build_questions_clarify_command("prompt-clarify", "child-clarify-grant", false).unwrap();
     assert_eq!(
         env_of(&cmd_uncontained, "AIDA_CONTAINED"),
         Some(None),
@@ -365,12 +372,13 @@ fn questions_clarify_builder_argv_and_env_contained_vs_uncontained() {
 #[test]
 fn burndown_verbose_args_with_containment_helper() {
     let uncontained_args =
-        burndown_verbose_claude_args_with_containment("/aida-burndown", "acceptEdits", false);
+        burndown_verbose_claude_args_with_containment("/aida-burndown", "acceptEdits", false)
+            .unwrap();
     assert!(!uncontained_args.contains(&"--settings".to_string()));
     assert_eq!(uncontained_args.last().unwrap(), "/aida-burndown");
 
     let contained_args =
-        burndown_verbose_claude_args_with_containment("/aida-burndown", "dontAsk", true);
+        burndown_verbose_claude_args_with_containment("/aida-burndown", "dontAsk", true).unwrap();
     assert!(contained_args.contains(&"--settings".to_string()));
     assert_eq!(contained_args.last().unwrap(), "/aida-burndown");
 }

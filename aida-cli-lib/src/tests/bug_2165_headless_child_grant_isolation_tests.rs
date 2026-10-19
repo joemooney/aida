@@ -27,7 +27,8 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -59,7 +60,8 @@ fn burndown_quiet_command_supports_baseline_child() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -87,7 +89,8 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),

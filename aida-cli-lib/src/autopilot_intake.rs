@@ -980,7 +980,7 @@ pub(crate) fn handle_intake_command(
         max_risk,
         max_approvals,
         contained,
-    );
+    )?;
 
     let status_code = command.status().map_err(|e| {
         anyhow::anyhow!(
@@ -1014,7 +1014,7 @@ pub(crate) fn build_autopilot_intake_command(
     max_risk: backlog::RiskLevel,
     max_approvals: Option<usize>,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut command = std::process::Command::new("claude");
     command
         .arg("-p")
@@ -1022,7 +1022,7 @@ pub(crate) fn build_autopilot_intake_command(
         .arg("--permission-mode")
         .arg(mode);
     if contained {
-        command.args(crate::session::claude_contained_flags());
+        command.args(crate::session::claude_contained_flags()?);
     }
     command
         .env("AIDA_SESSION_ROLE", "advisor")
@@ -1049,7 +1049,7 @@ pub(crate) fn build_autopilot_intake_command(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
-    command
+    Ok(command)
 }
 
 /// Inspect, audit, and reverse advisor-autopilot disposition decisions.

@@ -1607,7 +1607,7 @@ pub(crate) fn questions_clarify(
         if contained {
             println!(
                 "  claude {} {prompt:?}",
-                crate::session::claude_contained_flags().join(" ")
+                crate::session::claude_contained_flags()?.join(" ")
             );
         } else {
             println!("  claude {prompt:?}");
@@ -1625,7 +1625,7 @@ pub(crate) fn questions_clarify(
             "→".green(),
             format!(
                 "claude {} {prompt:?}",
-                crate::session::claude_contained_flags().join(" ")
+                crate::session::claude_contained_flags()?.join(" ")
             )
             .dimmed()
         );
@@ -1648,7 +1648,7 @@ pub(crate) fn questions_clarify(
     let project_root = find_project_root()?;
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)
+    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -1676,10 +1676,10 @@ pub(crate) fn build_questions_clarify_command(
     prompt: &str,
     child_grant_id: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     if contained {
-        cmd.args(crate::session::claude_contained_flags());
+        cmd.args(crate::session::claude_contained_flags()?);
     }
     cmd.arg(prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
@@ -1690,7 +1690,7 @@ pub(crate) fn build_questions_clarify_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring
