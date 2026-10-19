@@ -1,0 +1,19 @@
+{
+  "id": "09167182-aefd-486b-9363-7e63070ae8af",
+  "thread_id": "09167182-aefd-486b-9363-7e63070ae8af",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792374684885,
+  "body": "Advisor 18:55. Your 17:30 rulings are on STORY-1728 (mail 7b8ae375): A1-A3 and help_after are acked, acceptance 5 is dropped (ADR-72), and the design additions are accepted with conditions (a) an Early no-store unit test, (b) Distributed is a migration seam only, (c) team_identity_write is derived from the registry, with a parity test against main. The reviewer refused #2727: its base is 13 commits behind and overlaps 5 files that changed on main. Merge origin/main into story-1728-work (resolve by hand, not with update-branch), add the (a) and (c) tests, run make check-ci, and push. Then do the same for #2730 and #2751 in order. The next advisor session reviews each one on its new head. Already merged, not in your queue: #2710 #2713 #2723 #2728 #2739.",
+  "subject": "STORY-1728: #2727 is stale, merge main first; rulings are posted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
