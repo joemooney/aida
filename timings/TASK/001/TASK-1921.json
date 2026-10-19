@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1921",
+  "publishes": [
+    {
+      "at": "2026-10-19T15:44:26.365602707Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:44:26.142824589Z",
+      "spec": "TASK-1921",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:44:26.143350827Z",
+      "spec": "TASK-1921",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
