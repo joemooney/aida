@@ -3,17 +3,26 @@ spec_id: TASK-1958
 agreed_id: TASK-1958
 title: 'STORY-1853 slice S3: one integration-test harness (aida-cli/tests/it/main.rs)'
 description: 'Approved sketch: STORY-1853 comment 4. PR 1 is measurement only: a cargo build --tests --timings artifact for one CI run, to size the per-binary link cost. PR 2 is the move: aida-cli/tests/*.rs become modules under tests/it/main.rs, with autotests=false and one [[test]] it. Keep the module names greppable. test-touched maps tests/it/<mod>.rs to ''--test it -- <mod>::''; budget keys follow. Sequence: after S2 PR 2. Coverage: passed+ignored count unchanged.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:42.914143023Z
-modified_at: 2026-10-19T16:13:42.914143023Z
+modified_at: 2026-10-19T16:14:11.278174215Z
 req_type: Task
 tags:
 - ci
 - story-1853
 - throughput
+history:
+- id: 01a154f1-214e-78d3-b5b5-60e4b67c8803
+  author: joe
+  timestamp: 2026-10-19T16:14:11.278169550Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
