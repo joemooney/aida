@@ -1,11 +1,11 @@
 // `aida help commands` — the flat, comprehensive catalog of every command
 // and subcommand, one line each. The rows are derived live from the clap
-// definition (a recursive walk over `Cli::command()`), NOT hand-maintained,
+// definition (a recursive walk over `command_registry::built_command()`), NOT hand-maintained,
 // so the catalog can never drift from the real surface: a new subcommand
 // appears here the moment it exists, a removed one disappears.
 // trace:TASK-1098 | ai:claude
 
-use clap::{ArgAction, Command, CommandFactory};
+use clap::{ArgAction, Command};
 use colored::Colorize;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
@@ -37,7 +37,7 @@ pub(crate) struct CatalogFlag {
 /// and flags stay out of the default grep surface unless explicitly requested.
 // trace:STORY-1027 | ai:codex
 pub(crate) fn catalog_rows(include_hidden: bool) -> Vec<CatalogRow> {
-    let mut cmd = crate::cli::Cli::command();
+    let mut cmd = crate::command_registry::built_command();
     cmd.build();
     let mut rows = Vec::new();
     collect(
@@ -418,7 +418,7 @@ pub(crate) fn print_semantic_help_topic(term: &str, project_root: Option<&Path>)
 }
 
 pub(crate) fn print_exact_command_help(path: &str) -> bool {
-    let mut cmd = crate::cli::Cli::command();
+    let mut cmd = crate::command_registry::built_command();
     cmd.build();
     let mut current = &mut cmd;
     for part in path.split_whitespace() {
@@ -573,7 +573,7 @@ struct HelpDocument {
 }
 
 fn help_documents() -> Vec<HelpDocument> {
-    let mut cmd = crate::cli::Cli::command();
+    let mut cmd = crate::command_registry::built_command();
     cmd.build();
     let mut docs = Vec::new();
     collect_help_documents(&cmd, "aida", false, &mut docs);
