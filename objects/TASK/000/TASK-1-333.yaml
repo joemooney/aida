@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T15:10:31.111549888Z
-modified_at: 2026-10-18T15:10:31.111549888Z
+modified_at: 2026-10-19T15:59:47.474044158Z
 req_type: Task
 tags:
 - carried-from:TASK-1794
 - finding-hash:725275e7
 - from-review:TASK-1794
 - kind:carried-forward
+comments:
+- id: 01a154e3-f312-72a0-99b7-78b92ca4bc1b
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1953 (Sweep: docs, help-text and trace-tag nits); full text copied there.'
+  created_at: 2026-10-19T15:59:47.474044158Z
+  modified_at: 2026-10-19T15:59:47.474044158Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1500d-6171-70c3-ba34-9f32e2dcb76b
   author: joe
