@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/drain_gate.rs:1288-1305 — PR-2713 inserted the plan_session_args `///` block directly under run_plan_prelude's STORY-265 doc block, so rustdoc attaches run_plan_prelude's doc to plan_session_args and run_plan_prelude is left undocumented. Move the STORY-265 block back above run_plan_prelude.
 
   Raised in review of PR-2713: https://github.com/joemooney/aida/pull/2713
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T10:19:55.136989580Z
-modified_at: 2026-10-19T15:45:02.449896638Z
+modified_at: 2026-10-19T15:45:04.865769085Z
 req_type: Task
 tags:
 - docs
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T15:45:02.449896638Z
   modified_at: 2026-10-19T15:45:02.449896638Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d6-7b61-7540-9416-a542ba0b22fd
+  author: joe
+  timestamp: 2026-10-19T15:45:04.865762232Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 6ed0a81659732ee9b51691e8952a63ea326a1fb9
   branch: pr-2713
