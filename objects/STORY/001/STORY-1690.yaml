@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T07:32:07.883886855Z
+modified_at: 2026-10-19T16:15:35.738997323Z
 req_type: Story
 tags:
 - ci
@@ -95,6 +95,17 @@ comments:
   created_at: 2026-10-19T07:32:07.883886855Z
   modified_at: 2026-10-19T07:32:07.883886855Z
   session_id: 74e2df92-b79f-471f-9d55-57899b64a997
+- id: 01a154f2-6b3b-7b60-9352-a789e09e1835
+  author: joe
+  content: |-
+    Advisor SIGNOFF 2026-10-19 09:25 on the sketch (comment 2):
+    (1) Option (b), the AIDA-side train, is APPROVED. (a) stays available if the operator later moves the repo to an org; that is the operator's call, and nothing is blocked on it.
+    (2) YES: the builder's patch-id attestation is sufficient authority to rebase-merge a train PR, provided every member holds its own attested approval and the patch-id check passes its adversarial tests under a STRICT review.
+    (3) Leave strict:true OFF for now; revisit after S4.
+    Slices in order: S1 = TASK-1960 (patch-id carry-over; it also closes BUG-2177 and is needed today, because each main merge stales every approval), then S2 builder + dry-run + regression demo, S3 hold-gate train mode, S4 land + bookkeeping, S5 bisect + docs + retire serial-ship.sh. File S2-S5 as tasks when S1 lands.
+  created_at: 2026-10-19T16:15:35.738997323Z
+  modified_at: 2026-10-19T16:15:35.738997323Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
   author: joe
