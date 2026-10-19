@@ -1,0 +1,39 @@
+id: 01a15267-5354-7f42-8d8e-91a759d9be3b
+spec_id: STORY-1854
+agreed_id: STORY-1854
+title: Callers hand cargo time budgets to the wrapper (AIDA_CARGO_TIMEOUT) instead of an outer timeout
+description: |
+  ## Problem (operator, 2026-10-18 21:22 MST)
+  Agents wrap cargo as `timeout 3000 cargo test ...` (74 occurrences in this project's transcripts; it isn't in any template). GNU timeout's clock starts at issue time, so the slot-queue wait on a loaded host (WAIT 31m observed) eats the budget. The host wrapper can't prevent an outer timeout killing it. Killed runs get retried, re-queue, and the failures back up. The same applies to the Claude Code Bash tool's 1h foreground cap, which no env var can change.
+
+  Host half: aida-host STORY-100 adds `AIDA_CARGO_TIMEOUT=<dur>`, a run budget that starts at slot acquisition and is enforced by the wrapper. This story is the caller half in aida.
+
+  ## Acceptance
+  1. Discipline guidance (template master `aida-core/templates/.aida/discipline/`, implementer and reviewer discipline plus the rework-brief craft; synced with `make sync-templates`):
+     - Write `AIDA_CARGO_TIMEOUT=<dur> cargo ...`, never `timeout <N> cargo ...` or `timeout <N> make <cargo target>`.
+     - Run any cargo invocation that can exceed about 10 min (test, check-ci-compile, full builds) in the tool's background mode, where no 1h foreground cap applies, not as a foreground call.
+     - After a timeout or KILLED, check `cargo ps` before retrying, and never retry blindly. Briefs must not stack an outer timeout inside the tool cap.
+  2. A PreToolUse Bash hook (template master `.claude/hooks`) that detects `timeout <N> cargo|make` and warns with the replacement (`AIDA_CARGO_TIMEOUT=<N> cargo ...`, run in the background). Warn-only in the first slice. It never blocks non-cargo timeouts (e.g. `timeout 540 gh pr checks`).
+  3. aida's own launch paths (scripts/, Makefile targets, relay/queue-work cargo invocations), if any wrap cargo in an outer timeout, pass the budget via AIDA_CARGO_TIMEOUT instead.
+  4. Until STORY-100 ships, AIDA_CARGO_TIMEOUT is ignored by the wrapper. The guidance must say so, and background mode is then the only protection.
+  5. Tests: the hook pattern unit tests (positive: `timeout 3000 cargo test`, `timeout 50m make test-touched`; negative: `timeout 540 gh ...`, `AIDA_CARGO_TIMEOUT=3000 cargo test`); `make check-templates` passes.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T04:24:25.684853123Z
+modified_at: 2026-10-19T04:24:25.684853123Z
+req_type: Story
+tags:
+- cargo
+- discipline
+- hooks
+- timeout
+filed_at:
+  code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
