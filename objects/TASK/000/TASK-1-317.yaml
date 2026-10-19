@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T02:03:21.008225929Z
-modified_at: 2026-10-18T02:03:21.008225929Z
+modified_at: 2026-10-19T15:46:12.254248651Z
 req_type: Task
 tags:
 - carried-from:STORY-1654
 - finding-hash:eaa7d31a
 - from-review:PR-2661
 - kind:carried-forward
+comments:
+- id: 01a154d7-829e-7060-8901-9b29a2e4da0b
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1799. aida show TASK-1388 and TASK-1799 both specify fire-mode two-round cap must retain independent reviewer-process approval; the target description explicitly includes this obligation. Preserve the narrower finding evidence'
+  created_at: 2026-10-19T15:46:12.254248651Z
+  modified_at: 2026-10-19T15:46:12.254248651Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: d96f18d4d5f831ee26fdab95b483708a607d8d0f
   branch: main
