@@ -13,12 +13,12 @@ description: |-
   (4) an evil merge (a merge commit carrying non-main changes) does not;
   (5) a rebase with an identical patch carries over, if supported, or is refused with a reason.
   Closes BUG-2177. Trailer (TASK-ID BUG-2177).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:15:17.615382008Z
-modified_at: 2026-10-19T17:27:33.207622338Z
+modified_at: 2026-10-19T17:35:52.990976467Z
 req_type: Task
 tags:
 - review
@@ -37,6 +37,17 @@ relationships:
   target_id: 01a15531-bb2d-7ca2-88cc-92f3e1202481
   created_at: 2026-10-19T17:25:09.071800355Z
   created_by: joe
+comments:
+- id: 01a1553b-ec9e-7fc2-8c63-d19552be798f
+  author: joe
+  content: |-
+    Advisor ruling 2026-10-19 10:37 on the #2758 round-1 findings:
+    (2) SCOPE AMENDED: the 'aida review' surface (verdict/status showing a carry-over as current) is OUT of this slice. Ship-side carry-over is the deliverable. Follow-up only if needed.
+    (3) Drop BUG-2177 from the PR title and commit trailer. BUG-2177 stays open for symptom 2 (reviewer stale-base refusal), which needs its own ruling.
+    (1), (4), (5), (6) must be fixed in round 2.
+  created_at: 2026-10-19T17:35:52.990976467Z
+  modified_at: 2026-10-19T17:35:52.990976467Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154f2-5519-7783-9c57-242fd2774f5a
   author: joe
@@ -64,6 +75,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1553a-bd05-7102-bc0b-fccd20ccff6d
+  author: aida-orchestrator
+  timestamp: 2026-10-19T17:34:35.269782511Z
+  session_id: 01a155363634
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -72,3 +91,11 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Core proof (review_carryover.rs) is sound and the adversarial tests 1-6 are covered, but the carry-over misses one aida pr ship path (mandate), the 'aida review' surface the spec names is not addressed, BUG-2177 symptom 2 is closed unfixed, and the proof is not bound to the base the merge lands on. PR CI Build was still pending at review time.
+  recovery_hint: address the review findings, move TASK-1960 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-19T17:34:35.269762256Z
