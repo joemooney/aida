@@ -6,12 +6,12 @@ description: |
   The implementer phase runs commit_contained_child_store_changes("implementer phase")? BEFORE the BUG-420 WatchdogTripped classification. If the store commit is refused (an embedded-repo plant, or an unsafe store with pending changes) on a watchdog-tripped implementer, the drain sees FailureKind::Internal instead of the shelvable Watchdog failure with its BUG-1299 hint. The reviewer phase (phase_driver_trait.rs ~2137) already calls the commit best-effort inside the watchdog arm; mirror that pattern for the implementer phase.
 
   Raised in review of PR-2749: https://github.com/joemooney/aida/pull/2749
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:41:07.006343545Z
-modified_at: 2026-10-19T15:47:57.004574456Z
+modified_at: 2026-10-19T15:47:59.239004742Z
 req_type: Task
 tags:
 - from-review:PR-2749
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-19T15:47:57.004574456Z
   modified_at: 2026-10-19T15:47:57.004574456Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d9-2486-7781-9f9a-a9b8de762fb1
+  author: joe
+  timestamp: 2026-10-19T15:47:59.238998401Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
   branch: pr-2749
