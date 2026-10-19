@@ -2744,8 +2744,9 @@ impl<'a> McpServer<'a> {
         let recipient = if broadcast {
             Recipient::Broadcast
         } else if let Some(a) = args.get("to").and_then(|v| v.as_str()) {
+            let a = a.trim();
             // BUG-2132: same recipient-shape refusal as the CLI.
-            // trace:BUG-2132 | ai:claude
+            // trace:BUG-2132 trace:TASK-1766 | ai:claude
             if let Some(why) = aida_core::mailbox::recipient_id_rejection(a) {
                 return Err(format!("send refused: `to` {why}"));
             }

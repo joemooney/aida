@@ -215,6 +215,17 @@ pub(crate) fn fold_run(run: &[&aida_core::AgreedIdBlock]) -> MergedBlockRow {
     }
 }
 
+/// A block-claim retry's refresh: transport failures stay best-effort (the
+/// push retry decides), but a hypothesis evidence refusal stops the claim
+/// before it commits or publishes.
+// trace:BUG-2162 | ai:claude
+fn pull_unless_refused(store_path: &std::path::Path, branch: &str) -> Result<()> {
+    match aida_core::git_ops::pull_rebase(store_path, "origin", branch) {
+        Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => Err(e),
+        _ => Ok(()),
+    }
+}
+
 pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::BlockRegistry;
 
@@ -232,7 +243,7 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                 let branch = aida_core::git_ops::current_branch(store_path)
                     .unwrap_or_else(|_| "aida-store".to_string());
                 if attempt > 0 {
-                    let _ = aida_core::git_ops::pull_rebase(store_path, "origin", &branch);
+                    pull_unless_refused(store_path, &branch)?;
                 }
 
                 let mut registry = BlockRegistry::load(&blocks_path)?;
@@ -855,14 +866,15 @@ pub(crate) fn auto_allocate_block_inner(
     // BUG-40: same local-only short-circuit as register_node_full —
     // claim the block on the local orphan branch and let the next
     // `aida push` upload it.
-    let local_only = !aida_core::git_ops::has_remote(store_path, "origin");
+    let deferred = aida_core::git_ops::store_commit_deferred_to_host(store_path);
+    let local_only = !aida_core::git_ops::has_remote(store_path, "origin") || deferred;
 
     let max_retries = 3;
     for attempt in 0..max_retries {
         if attempt > 0 && !local_only {
             let branch = aida_core::git_ops::current_branch(store_path)
                 .unwrap_or_else(|_| "aida-store".to_string());
-            let _ = aida_core::git_ops::pull_rebase(store_path, "origin", &branch);
+            pull_unless_refused(store_path, &branch)?;
         }
 
         let mut registry = BlockRegistry::load(&blocks_path)?;
@@ -902,8 +914,12 @@ pub(crate) fn auto_allocate_block_inner(
                 type_prefix, block.range_start, block.range_end, node_id
             ),
         };
-        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
-        aida_core::git_ops::commit(store_path, &commit_subject)?;
+        if deferred {
+            aida_core::git_ops::notice_store_commit_deferred(store_path);
+        } else {
+            aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+            aida_core::git_ops::commit(store_path, &commit_subject)?;
+        }
 
         if local_only {
             return Ok(Some(format!(

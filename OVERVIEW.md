@@ -44,8 +44,12 @@ from pinned Git object IDs, never checkout contents. Rust comments are parsed
 separately from string fixtures. Changed hunks contribute their enclosing fn/impl
 traces and always add the file’s leading header traces, including inner/outer
 doc comments and same-line block comments before the first item. The first
-code-token line is conservatively included in full. A hunk without safe item attribution, a mode-only change, an unparseable
-Rust file, or any other text format falls back to full-file union.
+code-token line is conservatively included in full. Module comments outside
+fn/impl items and their attached leading prefixes also add evidence, including
+between items and at EOF. Inline-module headers apply even when attached to an
+unchanged first function. Leading comments owned by other unchanged fn/impl
+items retain their scope. A hunk without safe item attribution, a mode-only
+change, an unparseable Rust file, or any other text format falls back to full-file union.
 For other formats that fallback conservatively includes raw trace tokens,
 including strings. Documentation, configuration, hooks and nested build paths
 are included. Trace markers are case insensitive. Diff ranges and Rust item
@@ -470,6 +474,14 @@ edits direct amendments to comments. CLI and MCP share this preflight, including
 indirect lock writes when an experiment completes. See
 [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+AIDA-owned store syncs keep that evidence across clones: rebase, union merge
+and reconcile fast-forward pin both tips and their merge bases, refuse a
+changed, deleted or divergent locked description before Git runs, and commit
+any lock the combined graph first establishes before reporting success. A
+failure after Git is reported with exact commits and is never reset. Raw Git,
+older binaries and lock-free readers are outside this guarantee. See
+[store sync](docs/cli/10-storage.md#store-sync-and-pre-registration).
+<!-- trace:BUG-2162 | ai:claude -->
 
 ## Feature surface (high level)
 
@@ -1015,6 +1027,15 @@ the protected canonical edit flow; YAML row roundtrips preserve the data, while
 archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
+
+Contained `queue work --plan-only` selects Claude's `plan` permission mode
+alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
+to inherited, explicit sandbox and configured containment. Ordinary contained
+pickups retain `dontAsk`; caller permission overrides under contained parents
+and bypass/contained combinations still refuse. The documented interactive-only
+plan lane rejects headless flags at parsing, before lifecycle setup; headless
+planning remains the separate `--with-plan` drain phase.
+<!-- trace:TASK-1794 | ai:codex -->
 
 Standalone reviewer pickup coexists with a live implementer only with explicit
 `queue work --role reviewer` and an unambiguous backing spec. An inferred role

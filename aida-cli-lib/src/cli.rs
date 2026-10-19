@@ -498,12 +498,14 @@ pub enum TraceCommand {
     /// vendored / pure-deletion / fmt-only / trivial). Distinct from `gate`,
     /// which validates the trailer spec-ids; this checks that the changed CODE
     /// is traced. Report-only by default (CI succeeds); `--block` fails CI on
-    /// any uncovered coverable hunk.
+    /// any uncovered coverable hunk. `--all` / `--path` switch to whole-tree
+    /// mode: per Rust file, the functions with no trace marker in or directly
+    /// above them.
     Coverage {
         /// Git revision range to scan (e.g. `origin/main..HEAD`). Defaults to
         /// `<default-branch>..HEAD` (the commits this branch adds), falling
         /// back to `HEAD~20..HEAD` when no default branch resolves.
-        #[clap(long)]
+        #[clap(long, conflicts_with_all = ["all", "path"])]
         range: Option<String>,
 
         /// Emit machine-readable JSON instead of human text.
@@ -512,8 +514,23 @@ pub enum TraceCommand {
 
         /// Fail (exit non-zero) when any coverable changed hunk is uncovered.
         /// Default is report-only: the report prints but CI succeeds.
-        #[clap(long)]
+        #[clap(long, conflicts_with_all = ["all", "path"])]
         block: bool,
+
+        /// Whole-tree mode over the project: report every Rust function no
+        /// trace marker claims, per file.
+        // trace:TASK-1783 | ai:claude
+        #[clap(long, conflicts_with = "path")]
+        all: bool,
+
+        /// Whole-tree mode over one file or directory.
+        #[clap(long, value_name = "PATH")]
+        path: Option<PathBuf>,
+
+        /// Whole-tree mode only: exit non-zero when the report contains
+        /// findings of this kind. Without it the report always exits 0.
+        #[clap(long, value_enum, value_name = "KIND")]
+        fail_on: Option<TraceCoverageFailOn>,
     },
 
     /// Trace-ROT detector: scan source for inline code-to-spec trace markers,
@@ -2405,6 +2422,28 @@ pub enum PrCommand {
         // trace:BUG-1919 | ai:claude — plain `//` keeps the marker out of `--help`.
         #[clap(long)]
         no_complete: bool,
+
+        /// Rebase-merge the PR (`gh pr merge --rebase --match-head-commit <SHA>`)
+        /// instead of squash-merging, preserving each slice commit on the base
+        /// branch. Runs the same approval, authority, CI, and merge-hold gates
+        /// as squash. Rebase merges produce no squash subject and complete no
+        /// spec unless `--final-slice` is also passed.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long)]
+        rebase: bool,
+
+        /// Explicit merge method (`squash` or `rebase`). Equivalent to `--rebase`
+        /// when set to `rebase`.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long, value_enum, value_name = "METHOD", conflicts_with = "rebase")]
+        merge_method: Option<crate::pr_ship::ShipMergeMethod>,
+
+        /// Complete the PR's resolved spec(s) after a `--rebase` merge lands.
+        /// Without this flag, a rebase merge treats the PR as a non-completing
+        /// slice and leaves the owning spec's status unchanged.
+        // trace:STORY-1663 | ai:antigravity
+        #[clap(long, visible_alias = "complete-spec", conflicts_with = "no_complete")]
+        final_slice: bool,
     },
 
     /// Deliberately HOLD the PR on the current session — push the branch but
@@ -3884,6 +3923,14 @@ pub enum MailboxCommand {
         /// Whose read-watermark gates archive safety (default: current inbox identities).
         #[clap(long)]
         agent: Option<String>,
+
+        /// Instead of the age sweep, archive mail addressed to phantom
+        /// recipients (flags, numbers, spec IDs, commit SHAs, unknown
+        /// @mention handles) and re-address whitespace-padded recipients,
+        /// printing each message it touches.
+        // trace:TASK-1766 | ai:claude
+        #[clap(long)]
+        phantoms: bool,
     },
 
     /// Show a full conversation thread, oldest-first.
@@ -6576,8 +6623,22 @@ pub enum QueueCommand {
         /// auto-complete plan-phase is separate; this flag is interactive
         /// only, so it conflicts with --auto-complete for now.
         // trace:STORY-265 | ai:claude
-        #[clap(long, conflicts_with = "auto_complete")]
+        // trace:TASK-1794 | ai:codex — the headless launcher owns a separate
+        // permission posture; plan-only is the documented interactive lane.
+        #[clap(long, conflicts_with_all = ["autonomous", "no_human"])]
         plan_only: bool,
+        /// Internal: the headless planning session the `--with-plan` drain
+        /// prelude launches. Same planning prompt as `--plan-only`, but under
+        /// the headless launcher's own posture; requires `--no-human`.
+        // trace:TASK-1794 | ai:claude — hidden so `--plan-only` stays the only
+        // user-facing plan lane and keeps its interactive-only conflict.
+        #[clap(
+            long,
+            hide = true,
+            requires = "no_human",
+            conflicts_with_all = ["autonomous", "plan_only", "guided"]
+        )]
+        plan_phase: bool,
         /// Guided keystone-implementation mode: launch a structured,
         /// step-by-step decision dialog for the spec instead of a normal
         /// pickup. Runs `/aida-guided-implement <SPEC>` — the agent surfaces
@@ -14640,6 +14701,14 @@ pub enum LintCommand {
 pub enum LintConstantsFailOn {
     /// Any literal the owning spec does not explain.
     Unexplained,
+}
+
+/// What whole-tree `aida trace coverage --fail-on` turns into a non-zero exit.
+// trace:TASK-1783 | ai:claude
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraceCoverageFailOn {
+    /// Any function no trace marker claims.
+    Uncovered,
 }
 
 /// The shipped gate library. Read-only.

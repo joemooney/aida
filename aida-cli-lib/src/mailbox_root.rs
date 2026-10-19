@@ -352,11 +352,21 @@ pub(crate) fn inbox_identities() -> Vec<String> {
 pub(crate) fn known_mailbox_identities(
     project_root: &std::path::Path,
 ) -> std::collections::HashSet<String> {
-    let mut set: std::collections::HashSet<String> = std::collections::HashSet::new();
+    known_identity_spellings(project_root).into_keys().collect()
+}
+
+/// [`known_mailbox_identities`] keyed by the case-folded id, valued by the
+/// identity's stored spelling (first source wins), so a resolved recipient is
+/// delivered under the spelling its owner reads its inbox as.
+// trace:BUG-679 trace:TASK-1766 | ai:claude
+fn known_identity_spellings(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let mut map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut add = |s: &str| {
-        let t = s.trim().to_lowercase();
+        let t = s.trim();
         if !t.is_empty() {
-            set.insert(t);
+            map.entry(t.to_lowercase()).or_insert_with(|| t.to_string());
         }
     };
     for role in AGENT_ROLES {
@@ -373,7 +383,43 @@ pub(crate) fn known_mailbox_identities(
             add(name);
         }
     }
-    set
+    map
+}
+
+/// Every identity a direct message or `@mention` may be delivered to: the
+/// agent identities of [`known_mailbox_identities`] plus the people roster —
+/// team members (`build_team_members`), `registry/team.toml` keys, user
+/// handles (the store's user list), and the person-alias registry. Keyed by
+/// the case-folded id; the value is the spelling to deliver to.
+// trace:TASK-1766 | ai:claude
+pub(crate) fn known_mailbox_recipients(
+    store_root: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let project_root = store_root.parent().unwrap_or(store_root);
+    let mut map = known_identity_spellings(project_root);
+    let mut add = |s: &str| {
+        let t = s.trim();
+        if !t.is_empty() {
+            map.entry(t.to_lowercase()).or_insert_with(|| t.to_string());
+        }
+    };
+    for member in aida_core::team::build_team_members(store_root) {
+        add(&member.user_id);
+    }
+    for (user, _) in aida_core::team::TeamRoster::load(store_root).entries() {
+        add(&user);
+    }
+    if let Ok(store) = aida_core::GitBackend::read_metadata_only(store_root) {
+        for user in store.users {
+            add(&user.handle);
+        }
+    }
+    let aliases = aida_core::alias::AliasRegistry::load(store_root);
+    for (alias, canonical) in &aliases.aliases {
+        add(canonical);
+        add(alias);
+    }
+    map
 }
 
 /// Render an unread-mail notice as plain, agent-facing context text (no ANSI —

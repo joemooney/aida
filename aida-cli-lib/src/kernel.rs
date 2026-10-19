@@ -313,8 +313,10 @@ pub(crate) fn resolve_forge_binary(
     test_env: &str,
     debug_env: &str,
 ) -> Option<std::path::PathBuf> {
-    if let Ok(test_path) = std::env::var(test_env) {
-        return Some(std::path::PathBuf::from(test_path));
+    if !test_env.is_empty() {
+        if let Ok(test_path) = std::env::var(test_env) {
+            return Some(std::path::PathBuf::from(test_path));
+        }
     }
     let debug = std::env::var(debug_env)
         .map(|v| !v.is_empty() && v != "0")
@@ -420,6 +422,14 @@ pub(crate) fn resolve_forge_binary(
             v.push(home.join(".local").join("bin").join(&exe_name));
             v.push(home.join("bin").join(&exe_name));
         }
+        // Tests replace the host directories so a fixture cannot be shadowed
+        // by a binary installed on the machine. trace:TASK-1803 | ai:claude
+        #[cfg(test)]
+        if let Some(dirs) = std::env::var_os("AIDA_TEST_FORGE_FALLBACK_DIRS") {
+            v = std::env::split_paths(&dirs)
+                .map(|d| d.join(&exe_name))
+                .collect();
+        }
         v
     };
     for candidate in &fallbacks {
@@ -462,6 +472,18 @@ pub(crate) fn resolve_forge_binary(
 /// trace:BUG-74 trace:STORY-621 | ai:claude
 pub(crate) fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     resolve_forge_binary("gh", "AIDA_TEST_GH_BINARY", "AIDA_DEBUG_GH")
+}
+
+/// Resolve `gh` using the shared BUG-74/79 PATH-walk and fallback directories,
+/// while ignoring `AIDA_TEST_GH_BINARY` in non-test builds so production
+/// authority probes cannot be redirected by test environment variables.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn resolve_gh_binary_for_probe() -> Option<std::path::PathBuf> {
+    #[cfg(test)]
+    let test_env = "AIDA_TEST_GH_BINARY";
+    #[cfg(not(test))]
+    let test_env = "";
+    resolve_forge_binary("gh", test_env, "AIDA_DEBUG_GH")
 }
 
 /// BUG-1288: run `cmd` but never block past `timeout` waiting on it — a

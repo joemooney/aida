@@ -7,6 +7,17 @@ source-lease conflict handling.
 <!-- trace:TASK-1801 | ai:codex -->
 <!-- trace:TASK-1801 | ai:claude -->
 
+Rust mandate exclusions also add module comments outside fn/impl ranges and
+inline-module headers, including traces between items and at EOF. Leading
+comments of unchanged sibling fn/impl items retain their scope; attribution
+fallback is unchanged. See OVERVIEW.md.
+<!-- trace:TASK-1800 | ai:codex -->
+
+Contained plan-only queue pickups select Claude plan mode while retaining
+contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
+Plan-only rejects headless flags before setup; headless drains use --with-plan.
+<!-- trace:TASK-1794 | ai:codex -->
+
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
 invalid probes clear inherited context; previews perform no version probe.
@@ -84,6 +95,11 @@ once a references/verified-by neighbor is Completed (either direction). Persiste
 `hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
 amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+Store rebase/union-merge/fast-forward (`git_ops::pull_rebase*`, `merge_union_auto`,
+`fast_forward_store`) take the store lock, refuse incompatible evidence before
+Git, and commit combined-graph locks before success; check refusals with
+`git_ops::is_evidence_refusal` and never publish after one.
+<!-- trace:BUG-2162 | ai:claude -->
 
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid

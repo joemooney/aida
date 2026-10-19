@@ -1505,6 +1505,7 @@ pub(crate) fn parse_help_commands_args(args: &[String]) -> Result<(bool, bool, b
 }
 
 pub(crate) fn run() -> Result<()> {
+    crate::seat_authority::ensure_commit_authority_resolver_registered();
     let raw_args: Vec<String> = std::env::args().collect();
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's
@@ -2901,8 +2902,24 @@ pub(crate) fn run() -> Result<()> {
     // — it reads git for the diff + range and self-loads the store to resolve
     // `// trace:` anchors / `(SPEC-ID)` trailers. Dispatch it early so it never
     // needs the shared storage handle. trace:STORY-499 | ai:claude
-    if let Command::Trace(TraceCommand::Coverage { range, json, block }) = &cli.command {
-        return handle_trace_coverage(range.as_deref(), *json, *block);
+    if let Command::Trace(TraceCommand::Coverage {
+        range,
+        json,
+        block,
+        all,
+        path,
+        fail_on,
+    }) = &cli.command
+    {
+        // trace:TASK-1783 | ai:claude
+        return trace_tree_coverage::dispatch_coverage(
+            range.as_deref(),
+            *json,
+            *block,
+            *all,
+            path.as_deref(),
+            *fail_on,
+        );
     }
 
     // `aida changelog` is self-contained: git + read-only store, no shared

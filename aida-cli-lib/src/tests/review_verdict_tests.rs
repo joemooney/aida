@@ -2345,3 +2345,139 @@ fn task1801_failed_fallback_publication_leaves_no_refused_verdict() {
     link_then_unlink(&temp, &dest, |p| std::fs::remove_file(p)).unwrap();
     assert!(read_verdict_body(&dest).is_ok());
 }
+
+// trace:TASK-1766 | ai:antigravity
+#[test]
+fn pr_keyed_shaless_round_deduplicates_when_identical_and_counts_as_prior_round_when_replaced() {
+    let dir = TempDir::new().unwrap();
+    let path = verdict_path(dir.path(), "PR-99");
+
+    // Round 1: PR-keyed handshake write with no reviewed_sha/head.
+    let first_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(None, &first_obj),
+        RecordOutcome::Recorded { round: 1 }
+    );
+    write_verdict_object(&path, &first_obj).unwrap();
+
+    // Re-recording the exact same shaless round is Unchanged.
+    let repeat_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(Some(&first_obj), &repeat_obj),
+        RecordOutcome::Unchanged
+    );
+
+    // Replacing the shaless round with a commit-identified round reports round 2
+    // without pushing the shaless round into `rounds` (avoiding false survivors).
+    let sha = "4444444444444444444444444444444444444444";
+    let second_obj = build_verdict_object(
+        dir.path(),
+        &path,
+        Some("approved"),
+        Some(sha),
+        None,
+        None,
+        &["finding 1".to_string()],
+        "claude-reviewer-1",
+    )
+    .unwrap();
+    assert_eq!(
+        record_outcome(Some(&first_obj), &second_obj),
+        RecordOutcome::Recorded { round: 2 }
+    );
+    assert!(
+        second_obj.get("rounds").is_none(),
+        "unidentifiable round must still not enter `rounds`"
+    );
+    assert!(
+        findings_surviving_round(&serde_json::Value::Object(second_obj).to_string()).is_empty(),
+        "no false surviving-finding attribution from displaced shaless round"
+    );
+}
+
+// F5: the per-sha archive keeps the displaced shaless-round count.
+// trace:TASK-1766 | ai:claude
+#[test]
+fn per_sha_archive_carries_unarchived_rounds() {
+    let tmp = TempDir::new().unwrap();
+    let root = tmp.path();
+    let path = verdict_path(root, "PR-77");
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &["a".into()],
+        "x",
+    )
+    .unwrap();
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("approved"),
+        Some(SHA_R1),
+        None,
+        None,
+        &[],
+        "y",
+    )
+    .unwrap();
+    let archive = verdict_archive_dir(&path)
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    let obj: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    assert_eq!(
+        obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+
+    // A later recording at the same sha whose current file has lost the count
+    // (rewritten by a writer that predates it) does not erase it from the archive.
+    let mut current: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    current.as_object_mut().unwrap().remove("unarchived_rounds");
+    std::fs::write(&path, current.to_string()).unwrap();
+    record_verdict_at_path(
+        root,
+        &path,
+        Some("approved"),
+        Some(SHA_R1),
+        None,
+        None,
+        &[],
+        "z",
+    )
+    .unwrap();
+    let archive = verdict_archive_dir(&path)
+        .unwrap()
+        .join(format!("{SHA_R1}.json"));
+    let obj: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+    assert_eq!(
+        obj.get("unarchived_rounds").and_then(|v| v.as_u64()),
+        Some(1)
+    );
+}
