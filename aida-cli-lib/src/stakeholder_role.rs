@@ -304,6 +304,10 @@ mod stakeholder_cli_policy_tests {
 }
 
 pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
+    // trace:STORY-1728 | ai:claude
+    if let Command::Registered(invocation) = command {
+        return invocation.policy().stakeholder;
+    }
     if matches!(command, Command::Add { .. }) {
         StakeholderAction::Intake
     } else if matches!(

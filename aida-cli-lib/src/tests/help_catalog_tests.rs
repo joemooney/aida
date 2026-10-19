@@ -121,7 +121,7 @@ fn visible_catalog_requires_about_for_every_command() {
 
 #[test]
 fn catalog_contains_every_visible_top_level_help_command() {
-    let mut cmd = crate::cli::Cli::command();
+    let mut cmd = crate::command_registry::built_command();
     cmd.build();
     let rows: std::collections::HashSet<String> = catalog_rows(false)
         .into_iter()

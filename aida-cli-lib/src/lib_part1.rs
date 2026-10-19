@@ -332,8 +332,7 @@ pub(crate) fn enforce_json_format_capability(argv: &mut Vec<String>) -> Result<(
         return Ok(());
     }
 
-    use clap::CommandFactory;
-    let root = Cli::command();
+    let root = crate::command_registry::built_command();
     let matches = root.clone().try_get_matches_from(argv.clone())?;
     let mut command = &root;
     let mut selected = &matches;
@@ -931,12 +930,13 @@ pub(crate) fn maybe_run_asciinema_wrapper(raw_args: &[String], cli: &Cli) -> Res
 
     let aida_exe = resolve_aida_exe();
     let inner_args = strip_asciinema_wrapper_args(raw_args);
-    let cast_path = resolve_cast_output_path(cli.cast_out.as_ref(), &inner_args)?;
+    let cast_path = resolve_cast_output_path(cli.globals.cast_out.as_ref(), &inner_args)?;
     if let Some(parent) = cast_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating cast output directory {}", parent.display()))?;
     }
     let title = cli
+        .globals
         .cast_title
         .clone()
         .unwrap_or_else(|| default_cast_title(&inner_args));
@@ -1637,12 +1637,12 @@ pub(crate) fn run() -> Result<()> {
     if let Some(code) = external_cmd::maybe_dispatch(&after_alias_rewrites)? {
         std::process::exit(code);
     }
-    let mut cli = Cli::parse_from(after_alias_rewrites.clone());
+    let mut cli = crate::command_registry::parse_from(after_alias_rewrites.clone());
 
     // STORY-764: install the explicit output-format pin before any handler
     // renders. `--format` wins; else `AIDA_OUTPUT_FORMAT`; else the TTY-based
     // default stands. trace:STORY-764 | ai:claude
-    set_output_format_override(cli.format);
+    set_output_format_override(cli.globals.format);
     // trace:TASK-1526 | ai:codex
     cache_output::set_toon_cache_output(matches!(
         &cli.command,
@@ -1681,7 +1681,7 @@ pub(crate) fn run() -> Result<()> {
     // Reparse only when capability materialization changed argv. This makes
     // the local `json` field authoritative for every downstream dispatcher.
     if dispatch_argv.len() != dispatch_len {
-        cli = Cli::parse_from(dispatch_argv);
+        cli = crate::command_registry::parse_from(dispatch_argv);
     }
 
     // STORY-708: one-line, non-blocking deprecation hint. Printed to stderr (so
@@ -1699,15 +1699,15 @@ pub(crate) fn run() -> Result<()> {
         return result;
     }
 
-    if cli.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
+    if cli.globals.asciinema && std::env::var_os(ASCIINEMA_WRAPPED_ENV).is_none() {
         if let Some(exit_code) = maybe_run_asciinema_wrapper(&raw_args, &cli)? {
             std::process::exit(exit_code);
         }
     }
 
     // Check for AIDA_SERVER environment variable if --server not specified
-    if cli.server.is_none() {
-        cli.server = std::env::var("AIDA_SERVER").ok();
+    if cli.globals.server.is_none() {
+        cli.globals.server = std::env::var("AIDA_SERVER").ok();
     }
 
     enforce_stakeholder_role_capabilities(&mut cli.command)?;
@@ -2856,7 +2856,7 @@ pub(crate) fn run() -> Result<()> {
     // Explicit only: no sync/drain/hook path invokes host probes.
     // trace:STORY-1673 | ai:codex
     if let Command::Verify(cmd) = &cli.command {
-        return verify_cmd::handle_verify_command(cmd, cli.file.as_deref());
+        return verify_cmd::handle_verify_command(cmd, cli.globals.file.as_deref());
     }
 
     // `aida gate` reads the embedded gate library (and, for `run`, self-loads
@@ -3102,18 +3102,18 @@ pub(crate) fn run() -> Result<()> {
             }
         }
     }
-    // STORY-79: hidden background-fetch worker spawned by statusline.
-    // Dispatch before storage init — this is a self-contained worker
-    // that owns its own git/toml side effects. trace:STORY-79 | ai:claude
-    if let Command::BgFetch { store_path } = &cli.command {
-        return session_misc_cmd::handle_bg_fetch_command(store_path);
+    // Registered store-less commands dispatch here, where the legacy
+    // `_bg-fetch` / `away` / `home` arms they replaced ran.
+    // trace:STORY-1728 | ai:claude
+    if let Command::Registered(invocation) = &cli.command {
+        match invocation.reg.phase {
+            crate::command_registry::Phase::PreStore => return invocation.run(&cli.globals),
+        }
     }
     // TASK-756: operator-presence primitive. Dispatched before storage init —
     // these only touch the machine-global `~/.aida/presence.toml` file; no
     // requirement-store handle needed. trace:TASK-756 | ai:claude
     match &cli.command {
-        Command::Away => return presence_cmd::handle_away_command(),
-        Command::Home => return presence_cmd::handle_home_command(),
         // trace:TASK-1231 | ai:claude
         Command::Autoprogress {
             project,
@@ -3380,7 +3380,7 @@ pub(crate) fn run() -> Result<()> {
 
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
-    let requirements_path = if let Some(ref explicit_file) = cli.file {
+    let requirements_path = if let Some(ref explicit_file) = cli.globals.file {
         let explicit_path = std::path::PathBuf::from(explicit_file);
         // If path is a directory, use GitBackend and route through the backend
         // API. Goes through `run_on_distributed_store` — not straight to
@@ -3503,7 +3503,7 @@ pub(crate) fn run() -> Result<()> {
         }
 
         // Auto-detect: first find the base path, then check migration status
-        let initial_path = determine_requirements_path(cli.project.as_deref())?;
+        let initial_path = determine_requirements_path(cli.globals.project.as_deref())?;
 
         // If path is already a .db file, skip migration check (no YAML to migrate from)
         if initial_path.extension().and_then(|e| e.to_str()) == Some("db") {
@@ -4256,8 +4256,8 @@ pub(crate) fn run() -> Result<()> {
         // trace:TASK-1167
         Command::Tail { .. } => unreachable!("tail is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
-        Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
-        Command::Away | Command::Home | Command::Presence { .. } | Command::Solo { .. } => {
+        Command::Registered(_) => unreachable!("registered commands dispatch before storage init"),
+        Command::Presence { .. } | Command::Solo { .. } => {
             unreachable!("presence/solo commands are dispatched before storage init")
         }
         // trace:TASK-784
@@ -4370,7 +4370,7 @@ pub(crate) fn run() -> Result<()> {
             open_user_guide(*dark)?;
         }
         Command::Server(server_cmd) => {
-            server_cmd::handle_server_command(server_cmd, cli.server.as_deref())?;
+            server_cmd::handle_server_command(server_cmd, cli.globals.server.as_deref())?;
         }
         Command::Trace(trace_cmd) => {
             crate::trace_cmd::handle_trace_command(trace_cmd, &storage)?;
@@ -5163,6 +5163,10 @@ pub(crate) fn parse_review_mode(content: &str) -> String {
 mod delegated_reviewer_tests;
 
 pub(crate) fn command_triggers_per_write_auto_push(command: &Command) -> bool {
+    // trace:STORY-1728 | ai:claude
+    if let Command::Registered(invocation) = command {
+        return invocation.policy().per_write_auto_push;
+    }
     match command {
         Command::Add { .. }
         | Command::Edit { .. }

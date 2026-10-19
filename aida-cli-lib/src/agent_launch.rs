@@ -905,12 +905,11 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
 /// usual clap help/usage instead of a hung prompt.
 // trace:TASK-837 | ai:claude
 pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>> {
-    use clap::CommandFactory;
     use std::io::IsTerminal;
     // Non-TTY (piped/headless): don't block on a picker — fall through to the
     // historical clap-help behavior by re-emitting the help for `agent new`.
     if !std::io::stdin().is_terminal() {
-        let mut cmd = Cli::command();
+        let mut cmd = crate::command_registry::built_command();
         if let Some(agent) = cmd.find_subcommand_mut("agent") {
             if let Some(new) = agent.find_subcommand_mut("new") {
                 let _ = new.clone().print_help();
