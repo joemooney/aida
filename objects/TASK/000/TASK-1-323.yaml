@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T09:39:05.956006132Z
-modified_at: 2026-10-18T09:39:05.956006132Z
+modified_at: 2026-10-19T15:46:28.675416133Z
 req_type: Task
 tags:
 - carried-from:STORY-1655
 - finding-hash:edfc9df5
 - from-review:STORY-1655
 - kind:carried-forward
+comments:
+- id: 01a154d7-c2c3-7073-a197-1e82e3e91941
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1808. aida show TASK-1392 and TASK-1808 both specify STORY-1655 trace relocation and module ordering; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:28.675416133Z
+  modified_at: 2026-10-19T15:46:28.675416133Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f37-3f69-70d3-9e3c-e1c48f7361a5
   author: joe
