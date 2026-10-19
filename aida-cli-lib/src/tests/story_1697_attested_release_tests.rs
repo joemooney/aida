@@ -205,6 +205,7 @@ impl Case {
                         override_stale_approval: false,
                         ledger: &ledger,
                         hold: &HoldFacts::of(hold.as_ref(), None),
+                        carry_over: None,
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },

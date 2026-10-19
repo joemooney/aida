@@ -19,6 +19,12 @@
 //!    `merge-base(base, approved)..approved`. `--verbatim` keeps whitespace,
 //!    so an indentation change still counts as a content change.
 //!
+//! The base is the PROTECTED base: the remote's default branch as the
+//! remote reports it (`git ls-remote --symref origin HEAD`), never the PR's
+//! own base, which its author can retarget. A PR whose base is not that
+//! branch does not carry over, and the merge re-reads the PR's base right
+//! before merging and refuses if it no longer matches the proven base.
+//!
 //! A rebase (the head no longer descends from the approved commit) is
 //! REFUSED with its own reason, even when its patch is identical: rewritten
 //! history cannot be shown to contain nothing but base merges, and patch-id
@@ -100,6 +106,9 @@ pub(crate) enum CarryOverRefusal {
         approved_patch_id: String,
         head_patch_id: String,
     },
+    /// The PR's base is not the remote's default branch, so the carry-over
+    /// has no protected base to be proven against.
+    BaseNotProtected { base: String, protected: String },
     /// git itself failed.
     Git { detail: String },
 }
@@ -144,6 +153,10 @@ impl CarryOverRefusal {
                 "the PR's own diff changed (patch-id {} at the approved commit, {} at the head)",
                 short(approved_patch_id),
                 short(head_patch_id)
+            ),
+            Self::BaseNotProtected { base, protected } => format!(
+                "the PR targets `{base}`, not the repository's default branch `{protected}`, so \
+                 there is no protected base to prove the merges against"
             ),
             Self::Git { detail } => format!("git failed: {detail}"),
         }
@@ -227,25 +240,94 @@ pub(crate) fn carry_over_line(proof: &CarryOver, outcome: &RecordOutcome) -> Str
 }
 
 /// Where a merge gate may try a carry-over: the clone to compute the proof
-/// in (and record it under), and the PR's base branch (`None` = read it
-/// from the forge, falling back to `main`).
+/// in (and record it under), and the PR's base branch as the forge reports
+/// it (`None` = read it from the forge). The proof itself is always computed
+/// against the remote's default branch, never against the PR's base: a base
+/// the author can retarget must not choose what "a merge of the base" means.
 // trace:TASK-1960 | ai:claude
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub(crate) struct CarryOverSite<'a> {
     pub repo: &'a Path,
     pub base_branch: Option<&'a str>,
+    /// Prove only: write no record and let the caller print nothing. For a
+    /// preflight pass ahead of the gate that pins the merge, so one ship
+    /// records, prints and logs one carry-over.
+    pub quiet: bool,
+    /// The proof the last successful carry-over through this site applied,
+    /// so the caller can re-check the PR's base right before it merges.
+    pub proven: std::cell::RefCell<Option<CarryOver>>,
 }
 
-/// The carry-over a merge gate may apply to `refusal`: `None` when the
-/// refusal is not a moved head (no other refusal can carry over), else the
-/// recorded proof or the reason it failed. A proof that cannot be recorded
-/// refuses: a carry-over is never applied without its evidence on disk.
+impl<'a> CarryOverSite<'a> {
+    // trace:TASK-1960 | ai:claude
+    pub(crate) fn new(repo: &'a Path, base_branch: Option<&'a str>) -> Self {
+        Self {
+            repo,
+            base_branch,
+            quiet: false,
+            proven: std::cell::RefCell::new(None),
+        }
+    }
+
+    // trace:TASK-1960 | ai:claude
+    pub(crate) fn quiet(repo: &'a Path, base_branch: Option<&'a str>) -> Self {
+        Self {
+            quiet: true,
+            ..Self::new(repo, base_branch)
+        }
+    }
+
+    /// The base branch the applied proof is bound to, when one was applied.
+    // trace:TASK-1960 | ai:claude
+    pub(crate) fn proven_base(&self) -> Option<String> {
+        self.proven.borrow().as_ref().map(CarryOver::base_branch)
+    }
+}
+
+impl CarryOver {
+    /// The branch name of [`CarryOver::base_ref`] (`origin/main` → `main`).
+    // trace:TASK-1960 | ai:claude
+    pub(crate) fn base_branch(&self) -> String {
+        self.base_ref
+            .strip_prefix("origin/")
+            .unwrap_or(&self.base_ref)
+            .to_string()
+    }
+}
+
+/// The remote's default branch, as the remote itself reports it
+/// (`git ls-remote --symref origin HEAD`) — not a local `origin/HEAD`,
+/// which any session sharing the clone could repoint. Unreadable refuses.
 // trace:TASK-1960 | ai:claude
-pub(crate) fn carry_over_for_refusal(
+pub(crate) fn protected_base(repo: &Path) -> Result<String, CarryOverRefusal> {
+    let unresolvable = || CarryOverRefusal::Unresolvable {
+        what: "the remote's default branch".to_string(),
+    };
+    let out =
+        git(repo, &["ls-remote", "--symref", "origin", "HEAD"]).map_err(|_| unresolvable())?;
+    out.lines()
+        .find_map(|l| {
+            let rest = l.strip_prefix("ref:")?;
+            let (target, name) = rest.trim().split_once(char::is_whitespace)?;
+            (name.trim() == "HEAD")
+                .then(|| target.strip_prefix("refs/heads/"))
+                .flatten()
+                .map(str::to_string)
+        })
+        .filter(|b| !b.is_empty())
+        .ok_or_else(unresolvable)
+}
+
+/// Prove the carry-over `refusal` may get, with no side effects: `None` when
+/// the refusal is not a moved head (no other refusal can carry over). The
+/// PR's base must be the remote's default branch, and the proof runs
+/// against that branch.
+// trace:TASK-1960 | ai:claude
+pub(crate) fn prove_for_refusal(
     site: &CarryOverSite<'_>,
     pr: u64,
     refusal: &crate::pr_ship::ApprovalHeadRefusal,
-) -> Option<Result<(CarryOver, RecordOutcome), CarryOverRefusal>> {
+) -> Option<Result<CarryOver, CarryOverRefusal>> {
     let crate::pr_ship::ApprovalHeadRefusal::Moved {
         reviewed_sha,
         head_sha,
@@ -253,21 +335,67 @@ pub(crate) fn carry_over_for_refusal(
     else {
         return None;
     };
-    let base = site
+    let pr_base = site
         .base_branch
         .map(str::trim)
         .filter(|b| !b.is_empty())
         .map(str::to_string)
         .unwrap_or_else(|| crate::pr_cmd::pr_ship_target_branch(pr));
-    Some(
-        prove_carry_over(site.repo, pr, &base, reviewed_sha, head_sha).and_then(|proof| {
-            record_carry_over(site.repo, &proof)
-                .map(|outcome| (proof, outcome))
-                .map_err(|e| CarryOverRefusal::Git {
+    Some(protected_base(site.repo).and_then(|protected| {
+        if pr_base != protected {
+            return Err(CarryOverRefusal::BaseNotProtected {
+                base: pr_base,
+                protected,
+            });
+        }
+        prove_carry_over(site.repo, pr, &protected, reviewed_sha, head_sha)
+    }))
+}
+
+/// [`prove_for_refusal`], then — unless the site is quiet — record the
+/// proof. `RecordOutcome` is `None` for a quiet site. A proof that cannot be
+/// recorded refuses: a carry-over is never applied without its evidence on
+/// disk. A success is remembered on the site ([`CarryOverSite::proven`]).
+// trace:TASK-1960 | ai:claude
+pub(crate) fn carry_over_for_refusal(
+    site: &CarryOverSite<'_>,
+    pr: u64,
+    refusal: &crate::pr_ship::ApprovalHeadRefusal,
+) -> Option<Result<(CarryOver, Option<RecordOutcome>), CarryOverRefusal>> {
+    let proved = prove_for_refusal(site, pr, refusal)?;
+    Some(proved.and_then(|proof| {
+        let outcome = if site.quiet {
+            None
+        } else {
+            Some(
+                record_carry_over(site.repo, &proof).map_err(|e| CarryOverRefusal::Git {
                     detail: format!("the carry-over could not be recorded: {e}"),
-                })
-        }),
-    )
+                })?,
+            )
+        };
+        *site.proven.borrow_mut() = Some(proof.clone());
+        Ok((proof, outcome))
+    }))
+}
+
+/// Why a merge bound to a carried-over approval must not proceed: the PR's
+/// base as the forge reports it at merge time (`None` = unreadable) is not
+/// the base the proof was computed against. `None` = proceed.
+// trace:TASK-1960 | ai:claude
+pub(crate) fn proven_base_refusal(
+    pr: u64,
+    proven_base: &str,
+    base_at_merge: Option<&str>,
+) -> Option<String> {
+    match base_at_merge.map(str::trim).filter(|b| !b.is_empty()) {
+        Some(base) if base == proven_base => None,
+        Some(base) => Some(format!(
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR now targets `{base}`. Re-run `aida pr ship` against the current base."
+        )),
+        None => Some(format!(
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR's base could not be re-read before the merge, so the carry-over cannot be shown              to still apply."
+        )),
+    }
 }
 
 /// The `.aida/advisor-activity.jsonl` line recording an applied carry-over.
@@ -612,4 +740,4 @@ fn git_ok(repo: &Path, args: &[&str]) -> bool {
 
 #[cfg(test)]
 #[path = "tests/task_1960_carryover_tests.rs"]
-mod tests;
+pub(crate) mod tests;

