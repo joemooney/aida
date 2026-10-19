@@ -502,5 +502,7 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
 - the driver would run as a different user than the one who started the
   mandate. The fix is `AIDA_USER=<you>` in the driver's environment.
 
-`aida fleet drive` (without `--tick`) previews what a tick would route.
+`aida fleet drive` on its own previews what `aida fleet drive --tick` would
+route, and changes nothing. `aida fleet drive --json` prints that preview as
+JSON.
 <!-- trace:STORY-1700 | ai:claude -->
