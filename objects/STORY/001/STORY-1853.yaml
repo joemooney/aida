@@ -49,12 +49,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T02:43:59.810701479Z
+modified_at: 2026-10-19T02:44:35.681395576Z
 req_type: Story
 tags:
 - architecture
 - ci
 - test-speed
+comments:
+- id: 01a1520b-ece1-7e93-90e1-6c5c87e95fb2
+  author: joe
+  content: 'Correction to S0: the templates already say the full suite runs only in CI (implementer-discipline.md:257, aida-pickup.md:478). The violations come from briefs. The advisor''s own briefs told the integrator to run ''make check-ci'' (relay 20261017-182837, 18:55 and 19:18 mails), and fix-2725 ran ''make check'' with AIDA_CARGO_NO_SLOT=1. So S0 is: (a) advisor and fixer briefs say check-ci-fast + test-touched + check-ci-compile and never the full suite; (b) a guard. cargo-slot should refuse AIDA_CARGO_NO_SLOT for agent-role sessions, or warn loudly, so a brief can''t bypass the limiter. No template rewrite needed.'
+  created_at: 2026-10-19T02:44:35.681395576Z
+  modified_at: 2026-10-19T02:44:35.681395576Z
+  session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
