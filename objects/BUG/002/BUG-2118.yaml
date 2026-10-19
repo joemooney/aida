@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T18:20:13.880079609Z
-modified_at: 2026-10-18T21:06:30.596283871Z
+modified_at: 2026-10-19T15:10:51.885448450Z
 req_type: Bug
 tags:
 - from-implementer:BUG-1994
@@ -18,6 +18,12 @@ relationships:
   target_id: 01a150cc-44eb-7502-9b6e-cda8265f1425
   created_at: 2026-10-18T20:55:47.960828289Z
   created_by: joe
+comments:
+- id: 01a154b7-27ed-70b2-bf4b-f3cbd84f40a7
+  author: joe
+  content: 'PR #2744 re-scoped to working-directory test hygiene and cwd-scanner fn-reset fix (Refs BUG-2118, does not close it). BUG-2118 remains open and unreproduced: git -C /abs succeeds even when the caller cwd is removed, and the underlying mechanism of the CI run 38123466347 ENOENT in start_loose_object_common has not been reproduced.'
+  created_at: 2026-10-19T15:10:51.885448450Z
+  modified_at: 2026-10-19T15:10:51.885448450Z
 history:
 - id: 01a14039-fa30-75f2-a174-7c28c074b509
   author: joe
