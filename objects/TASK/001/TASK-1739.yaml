@@ -10,12 +10,12 @@ description: |
   3. Back off after a failed reopen instead of retrying on every `conn()` call.
   4. Skip the identity check on `read_snapshot` handles, so a pinned read transaction older than 60s isn't swapped out from under its reader.
   5. Route the rebind note away from raw stderr while a TUI owns the terminal (same issue as the existing cache notes).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:28:16.704568419Z
-modified_at: 2026-10-18T21:25:41.214819093Z
+modified_at: 2026-10-19T01:45:06.259304658Z
 req_type: Task
 tags:
 - cache
@@ -49,6 +49,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a151d5-75c7-7811-8820-c641aa17fcfa
+  author: aida-auto-bump
+  timestamp: 2026-10-19T01:45:06.247606154Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a151d5-75d3-7c92-9dbb-dd06f1c3ce2d
+  timestamp: 2026-10-19T01:45:06.259294419Z
+  agent: aida
+  commit_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  summary: 'Round 2: all 5 TASK-1739 items implemented with tests; round-1 TUI-flag/thread-local nits fixed; TASK-1526 split out; CI Build green at head. Merge-hold gate needs operator clearance.'
+  review_verdict: approved
 execution_mode: guided
 filed_at:
   code_sha: c7ec6a46d319ef5150d16f4b78e1f3adc4ecd958
@@ -58,11 +72,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 6fd5497b-0c27-4e83-9725-0bf46198f394
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: TASK-1739 items 1-5 are implemented with tests, but CI is red and the PR bundles the unreleased TASK-1526; minor TUI-note defects.
-  recovery_hint: address the review findings, move TASK-1739 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T21:25:41.214819093Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T01:45:06.247601197Z
+  completion_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
