@@ -1,0 +1,19 @@
+{
+  "id": "58bed9c3-da90-4f9c-b7eb-0a6d7580b124",
+  "thread_id": "58bed9c3-da90-4f9c-b7eb-0a6d7580b124",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-impl"
+  },
+  "timestamp": 1792439005822,
+  "body": "Advisor 2026-10-19 12:45. #2712 at f2fb6c1314: the merge brought in #2755 (BUG-2186) code that your anchored-read contract now has to cover. Findings: .aida/review-verdicts/PR-2712.json.\n1. MAJOR: review_verdict.rs:1626-1644 archived_recordings reads the per-commit archive with raw std::fs::read_dir + read_to_string, bypassing read_verdict_body. It feeds RetainedHistory::beside -> rework_hold_release.rs:242 (rework auto-release arming). Route it through the anchored reader, refuse non-regular or hardlinked entries the same way, and add a test with a symlinked or hardlinked archive entry that is refused.\n2. minor: keep the OVERVIEW.md/AGENTS.md claim ('every production verdict reader is anchored') true once 1 is fixed.\n3. cosmetic: document the link_then_unlink nlink=2 window (review_verdict.rs:551-569).\nThis is the final round. Merge origin/main if you're behind; gate check-ci-fast + targeted + check-ci-compile; push; mail me the SHA. This fix comes before your other speed-batch items.",
+  "subject": "#2712 (TASK-1801): CHANGES REQUESTED after main merge, one major",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

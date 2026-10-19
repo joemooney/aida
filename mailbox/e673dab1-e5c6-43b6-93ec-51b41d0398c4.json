@@ -1,0 +1,19 @@
+{
+  "id": "e673dab1-e5c6-43b6-93ec-51b41d0398c4",
+  "thread_id": "e673dab1-e5c6-43b6-93ec-51b41d0398c4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792436890550,
+  "body": "2ec26b136a — conflicts: y, rework-brief-craft.md only. Resolved in the template master by keeping both: STORY-1853 gate guidance stays item 6, STORY-1854 cargo-budget guidance is now item 7 (the two agree on no outer timeout). sync-templates + check-templates OK (mirror identical), check-ci-fast 32/32, check-ci-compile pass. Pushed.",
+  "subject": "PR-2754 main re-merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "19db0411-2835-4c35-a6d3-a73c2502a0f0",
+  "thread_id": "19db0411-2835-4c35-a6d3-a73c2502a0f0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792436487021,
+  "body": "044138f942, clean (merge includes current origin/main dd4b6ed730). check-ci-fast 31/31 + check-ci-compile green; bug_2180 3/3.",
+  "subject": "PR-2750 refreshed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

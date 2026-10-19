@@ -1,0 +1,19 @@
+{
+  "id": "4599c50b-8df8-40fb-91ac-00e096bd4c7e",
+  "thread_id": "4599c50b-8df8-40fb-91ac-00e096bd4c7e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792433827369,
+  "body": "253d20fefe, clean (merged origin/main 18aa13a0a0 onto remote tip 1b2e938d72; local branch was stale so fast-forwarded first). check-ci-fast + check-ci-compile green; task1801 8/8 (filter task_1801 matches 0 — tests are named task1801_*), review_verdict 91/91, bug_2149_2150 17/17, bug_775 31/31.",
+  "subject": "PR-2712 refreshed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

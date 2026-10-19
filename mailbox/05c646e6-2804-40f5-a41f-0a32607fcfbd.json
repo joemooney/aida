@@ -1,0 +1,19 @@
+{
+  "id": "05c646e6-2804-40f5-a41f-0a32607fcfbd",
+  "thread_id": "05c646e6-2804-40f5-a41f-0a32607fcfbd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792440058527,
+  "body": "bc8bdd901d, conflicts resolved: OVERVIEW.md only (two independent paragraphs, PR's BUG-1982 .git-deny one and main's BUG-1985 submodule one; kept both, PR's first). No Rust conflicts: git placed the PR's Result-threading cleanly against main's STORY-1728 layout. cargo check --all-targets is clean and every non-test caller of claude_contained_flags/_for/_for_roots/claude_contained_settings_json propagates the Result (?), compete_cmd included. No Command enum changes. Merged origin/main dd4b6ed730. check-ci-fast 31/31, check-ci-compile green. Tests: bug_1982 4/4, bug_1929 19+5, contained 144+2+4, story_1728 19/19, contained_boundary:: 33/33. Filter bug_1928 matches 0 because that file is mounted as contained_boundary::tests and its names lack the token; the contained_boundary:: run covers it.",
+  "subject": "PR-2752 refreshed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

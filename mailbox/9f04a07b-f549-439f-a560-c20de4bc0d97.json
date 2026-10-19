@@ -1,0 +1,19 @@
+{
+  "id": "9f04a07b-f549-439f-a560-c20de4bc0d97",
+  "thread_id": "9f04a07b-f549-439f-a560-c20de4bc0d97",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792435265185,
+  "body": "d69e78a580 — conflicts: n. check-ci-fast 31/31 pass, check-ci-compile pass. Pushed to origin/story-1853.",
+  "subject": "PR-2754 main merged",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

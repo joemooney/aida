@@ -1,0 +1,19 @@
+{
+  "id": "f13a5e14-d80c-4df7-b58e-90c65f8e5f8c",
+  "thread_id": "f13a5e14-d80c-4df7-b58e-90c65f8e5f8c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792435096745,
+  "body": "Round 2 for #2758 is pushed: 40ccfa77de, on top of 2e5c6bac1d. origin/main had not moved, so there was nothing to merge.\n\n1. MANDATE: ship_decision accepts a Moved head only when pr_cmd::mandate_carry_over's proof (proof only, no side effects) covers that exact head. A failed proof adds \"did not carry over: <reason>\" to StaleApproval. Test mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one: with a held PR and an active mandate, a clean main merge ships; a proof made for a different head does not count; an evil merge is StaleApproval.\n2. BASE BINDING: the proof always runs against the remote's default branch, from `git ls-remote --symref origin HEAD`. It never uses the forge-reported PR base or a local origin/HEAD. A PR whose base is something else refuses with BaseNotProtected. The proven base is carried on the site, and ship re-reads the PR's base from the forge just before merge_change; the merge path re-reads it just before returning its pin. A mismatch, or a base that can't be read, refuses. Tests:\n   - retargeted_base_with_an_unreviewed_commit_refuses: base x is refused as a base, and the same merge proven against main is refused with NotABaseMerge.\n   - merge_time_base_must_match_the_proven_base.\n   - protected_base_reads_the_remote_default_branch: a repointed local origin/HEAD is ignored.\n3. DE-DUP: preflight uses a quiet site that proves but writes no record, line or event; the pinning gate does those once. A literal None in preflight would have made preflight refuse every moved head before the pinning gate ran. Test quiet_site_proves_without_recording.\n4. MERGE-PATH TEST: merge_path_approval_gate is split into gathering plus merge_path_approval_decision. merge_path_gate_carries_over_and_refuses_with_the_reason: a clean merge returns the proven head and writes the record; a retargeted base refuses; an evil merge refuses with \"did not carry over\".\nScope and title: the PR is retitled without BUG-2177, the body no longer names it, and the round-2 commit has the trailer (TASK-1960) only. The round-1 commit 2e5c6bac1d still has \"(TASK-1960 BUG-2177)\" in its own subject. Rewriting that needs a force-push, which I won't do without your or the operator's say-so. The squash subject is derived from the PR title, so what lands is clean.\n\nGates: check-ci-fast passed (30 gates), check-ci-compile passed. Targeted tests: 18/18 carry-over plus the mandate test, and 116 + 237 for the story_1697/1698, task_1458, wiring, pr_ship and bug_1918 filters. Clippy is clean. I have not merged it.\n",
+  "subject": "TASK-1960 round 2 pushed: PR #2758 @ 40ccfa77de",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

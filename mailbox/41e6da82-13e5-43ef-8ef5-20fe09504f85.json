@@ -1,0 +1,19 @@
+{
+  "id": "41e6da82-13e5-43ef-8ef5-20fe09504f85",
+  "thread_id": "41e6da82-13e5-43ef-8ef5-20fe09504f85",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792437161986,
+  "body": "PR #2760 at 707b797f61 (TASK-1959, STORY-1853 S4). Local median of 3, before -> after (s), on a loaded box (load 8-13): agent_error_channel 7.0 (54 cold) -> 0.18; bug_1947 175 -> 49; task_1290 57 -> 29; bug_1940 37 -> 22; bug_1502 93 -> 60; journey 57 -> 50; task_1335 56 -> 51; task_1717 233 -> 319 (noise; only edit merges 4 back-to-back PARKED windows). Passed counts unchanged per binary; +1 aida-core unit test for the new shorten-only seam AIDA_TEST_CACHE_LOCK_WAIT_MS (documented). Gates: check-ci-fast (30) + check-ci-compile + the 8 binaries x3, all green. Remaining floor is per-call aida cost: ~130 of ~190 git spawns per 'aida add' are host-git hardening lookups; measured on TASK-1952 (TASK-1942 item), needs a security call, not done here. task_1717 resists for that reason (details in the PR body).",
+  "subject": "PR-2760 ready (TASK-1959)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
