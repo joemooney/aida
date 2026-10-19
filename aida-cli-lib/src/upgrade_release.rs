@@ -1534,14 +1534,13 @@ pub(crate) fn handle_release(
         match &repo {
             Some(r) => {
                 let branch = current_branch_at(r).unwrap_or_else(|| "?".to_string());
-                let dirty = std::process::Command::new("git")
-                    .arg("-C")
-                    .arg(r)
+                // trace:BUG-1985 | ai:claude
+                let dirty = aida_core::git_ops::host_git_command(r)
                     .args(["status", "--porcelain"])
                     .output()
                     .ok()
-                    .map(|o| !o.stdout.is_empty())
-                    .unwrap_or(false);
+                    .map(|o| !o.status.success() || !o.stdout.is_empty())
+                    .unwrap_or(true);
                 println!("  repo:    {}", r.display());
                 println!("  branch:  {branch}");
                 println!(
