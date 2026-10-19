@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-19T06:56:35.473990734Z
+modified_at: 2026-10-19T10:25:32.981181566Z
 req_type: Bug
 tags:
 - contained
@@ -97,6 +97,12 @@ comments:
   created_at: 2026-10-19T06:56:35.473990734Z
   modified_at: 2026-10-19T06:56:35.473990734Z
   session_id: eb0e25ae-df6f-4890-9d44-3d4a5878659a
+- id: 01a153b1-f135-7190-be5c-2e7659be679a
+  author: joe
+  content: 'Advisor 2026-10-19 03:25: the #2753 attested review at 545c84a359 is CHANGES REQUESTED. Blocker, reproduced: a nested-submodule filter-driver bypass, because git recursion reads the writable dep/.gitmodules. Major: a check-then-recurse TOCTOU. Minor: status_says_rebasing fails open. Cosmetic: a refused status renders as clean. The rework brief went to split-2731; this is the final round, with all four items required. Fix shape: the safety checks never let git recurse, and each submodule''s status runs with its validated --git-dir.'
+  created_at: 2026-10-19T10:25:32.981181566Z
+  modified_at: 2026-10-19T10:25:32.981181566Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a130a2-bce0-74e2-8634-0063cf48c11a
   author: joe
@@ -156,6 +162,11 @@ history:
   timestamp: 2026-10-19T06:19:12.388438985Z
   session_id: eb0e25ae-df6f-4890-9d44-3d4a5878659a
   changes: []
+- id: 01a153b0-b4d5-7841-a161-6437c8654b97
+  author: joe
+  timestamp: 2026-10-19T10:24:11.989634381Z
+  session_id: 01a153a872eb
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
@@ -169,7 +180,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'BUG-1982 PASS. BUG-1985 PARTIAL: the round-1 security blocker is still open. A .gitmodules ''ignore = none'' on a registered plant overrides -c diff.ignoreSubmodules=dirty, so incidental hardened host git status/diff (for example phase_gates progress_signature via git_capture) runs the planted filter driver. Reproduced on git 2.43.'
+  detail: Policy A + the guard are sound and CI is green, but the safety-check recursion (--ignore-submodules=none after refuse_untrusted_gitlinks) still runs a planted filter driver through a nested submodule (reproduced), so ac027ce2 is not met; a check-then-recurse race and one F4-class fail-open remain.
   recovery_hint: address the review findings, move BUG-1985 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-19T01:44:43.899055439Z
+  shelved_at: 2026-10-19T10:24:11.777192607Z
