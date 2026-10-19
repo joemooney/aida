@@ -27,13 +27,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:10:09.552795156Z
-modified_at: 2026-10-19T16:10:20.671849994Z
+modified_at: 2026-10-19T16:10:29.994791638Z
 req_type: Task
 tags:
 - ci
 - flaky
 - sweep
 - throughput
+relationships:
+- rel_type: Supersedes
+  target_id: 01a140bd-9095-7501-9b23-25b50b4268a1
+  created_at: 2026-10-19T16:10:29.994787550Z
+  created_by: joe
 history:
 - id: 01a154ed-9c7f-7af0-a31a-f0ba19c4ea70
   author: joe
@@ -43,6 +48,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a154ed-c4f2-7163-bf22-f9a7a9c28665
+  author: joe
+  timestamp: 2026-10-19T16:10:31.026490267Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
