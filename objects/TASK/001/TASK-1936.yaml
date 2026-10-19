@@ -6,12 +6,12 @@ description: |
   team_identity_write_matches_mains_is_write_command_for_every_verb (story_1728_command_registry_tests.rs:591-615) compares against a hand-copied MAIN_TEAM_IDENTITY_WRITES whose doc comment cites origin/main aaff1236ad rather than the base a27fe3fc76. The list itself matches main's 11 entries. team_identity_write is not a column in golden/story_1728_main_policy.tsv, and team_identity_guard_exemptions_match_main never calls maybe_team_identity_guard (status --format json is uncovered).
 
   Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:05:17.754242291Z
-modified_at: 2026-10-19T15:51:43.332165543Z
+modified_at: 2026-10-19T15:51:45.229416093Z
 req_type: Task
 tags:
 - from-review:PR-2751
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-19T15:51:43.332165543Z
   modified_at: 2026-10-19T15:51:43.332165543Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154dc-974d-7850-8c95-1b2e693108ec
+  author: joe
+  timestamp: 2026-10-19T15:51:45.229409018Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
   branch: pr-2751
