@@ -47,12 +47,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-19T15:57:57.062786981Z
+modified_at: 2026-10-19T15:58:05.273847064Z
 req_type: Task
 tags:
 - contained
 - security
 - sweep
+relationships:
+- rel_type: Supersedes
+  target_id: 01a13ce4-137f-7a92-86dc-9e321614eb2a
+  created_at: 2026-10-19T15:58:05.273842206Z
+  created_by: joe
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
@@ -62,6 +67,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a154e2-67be-7d73-aecd-25fb95798ebd
+  author: joe
+  timestamp: 2026-10-19T15:58:06.270458142Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
