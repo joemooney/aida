@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:38.677178437Z
-modified_at: 2026-10-18T20:53:38.677178437Z
+modified_at: 2026-10-19T15:56:01.594450232Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
 - finding-hash:377e83e6
 - from-review:TASK-1803
 - kind:carried-forward
+comments:
+- id: 01a154e0-80ba-7200-a623-ed72b54db95b
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1951 (Sweep: ship / reconcile / auto-complete fail-open and dead-code follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:56:01.594450232Z
+  modified_at: 2026-10-19T15:56:01.594450232Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-7713-7202-b2fa-91505d194fb1
   author: joe
