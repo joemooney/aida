@@ -80,6 +80,9 @@ LOCAL_TEST_PROFILE = "agent"
 CARGO_TEST_RE = re.compile(r"\bcargo test\b(?![^\n]*--profile)")
 RUN_ONLY_ARGS = {"--no-fail-fast"}
 RUN_ONLY_REDIRECT = ["<", "/dev/null"]
+# CI tees the run into a log for the per-binary timings (STORY-1853 S1); a
+# compile-only run has nothing to log. trace:STORY-1853 | ai:claude
+RUN_ONLY_TEE = ["2>&1", "|", "tee"]
 
 
 class GateError(RuntimeError):
@@ -153,6 +156,8 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
     except ValueError as err:
         raise GateError(f"cannot derive a compile gate from {source_name!r}: {err}")
 
+    if len(argv) >= 4 and argv[-4:-1] == RUN_ONLY_TEE:
+        argv = argv[:-4]
     if argv[-2:] == RUN_ONLY_REDIRECT:
         argv = argv[:-2]
     if (
