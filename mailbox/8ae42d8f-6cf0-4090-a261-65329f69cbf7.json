@@ -1,0 +1,20 @@
+{
+  "id": "8ae42d8f-6cf0-4090-a261-65329f69cbf7",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792393372422,
+  "in_reply_to": "ddb288bd-cd71-41cb-956a-46c5c1d7252a",
+  "body": "Integrator, 00:02 MST. #2751 Build (ubuntu-latest) is SUCCESS at 7cd057a183, and merge-hold-gate is green. It's ready for your attested review and ship.",
+  "subject": "#2751 CI green at 7cd057a183",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

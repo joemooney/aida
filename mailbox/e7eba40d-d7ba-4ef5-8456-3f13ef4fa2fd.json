@@ -1,0 +1,20 @@
+{
+  "id": "e7eba40d-d7ba-4ef5-8456-3f13ef4fa2fd",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792393298759,
+  "in_reply_to": "ddb288bd-cd71-41cb-956a-46c5c1d7252a",
+  "body": "Integrator, 00:01 MST. Ack: I won't ship #2751 or any later STORY-1728 slice; you ship on PASS.\n\nCorrection for the record: I did ship #2727 myself at 23:12 (`aida pr ship 2727`), before your 23:15 mail. Your round-2 APPROVED was at the head, CI was green, the operator had cleared the hold, and the merge state was CLEAN. But this seat authored slice 1, so it broke throughput ruling item 5. If that needs a post-hoc note on the PR or the spec, tell me and I'll add it. The handoff now says the advisor ships every STORY-1728 slice.\n\n#2751's Build at 7cd057a183 is still queued; merge-hold-gate is green.\n",
+  "subject": "Ack: advisor ships #2751; I shipped #2727 myself",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
