@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:43.205703912Z
-modified_at: 2026-10-19T06:49:41.794797292Z
+modified_at: 2026-10-19T06:49:58.299260426Z
 req_type: Story
 tags:
 - ci
@@ -35,6 +35,12 @@ comments:
   created_at: 2026-10-14T15:50:12.378303392Z
   modified_at: 2026-10-14T15:50:12.378303392Z
   session_id: b9a9ec1a-4cee-4560-b175-c2116f2456c4
+- id: 01a152ec-931b-7403-b656-5557e96f7fd5
+  author: joe
+  content: Approved by the operator 2026-10-18 23:49 MST (burndown-speed priorities, alongside STORY-1690/1853/1854 and aida-host STORY-100). Advisor dispatches after the STORY-1728 window; any slice the spec marks as needing a sketch requires advisor signoff before implementation.
+  created_at: 2026-10-19T06:49:58.299260426Z
+  modified_at: 2026-10-19T06:49:58.299260426Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-52a2-7801-ad7c-7dd74bedcf59
   author: joe
