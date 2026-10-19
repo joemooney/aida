@@ -181,35 +181,7 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
             // `apply_requester_intake`, since parsed args cannot be rewritten
             // in place. trace:STORY-1728 | ai:claude
             if let Some(add) = requester_add_args(command) {
-                if add.interactive {
-                    return Err(stakeholder_refusal("requester", "interactive add"));
-                }
-                if add.queue || add.batch.is_some() || add.r#for.is_some() {
-                    return Err(stakeholder_refusal("requester", "queueing intake"));
-                }
-                let forbidden_fields = [
-                    ("parent", add.parent.is_some()),
-                    ("feature", add.feature.is_some()),
-                    ("owner", add.owner.is_some()),
-                ];
-                if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
-                    forbidden_fields
-                        .iter()
-                        .any(|(candidate, is_set)| candidate == field && *is_set)
-                }) {
-                    return Err(stakeholder_refusal(
-                        "requester",
-                        "setting parent, feature, or owner during intake",
-                    ));
-                }
-                let req_type = parse_requester_add_type(add.r#type.as_deref())?;
-                if !requester_add_type_allowed(&req_type) {
-                    return Err(stakeholder_refusal(
-                        "requester",
-                        "adding anything except change-request, bug, or user specs",
-                    ));
-                }
-                return Ok(());
+                return requester_intake_check(add);
             }
             let action = stakeholder_cli_action(command);
             if !stakeholder_action_allowed("requester", action) {
@@ -224,13 +196,58 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
     Ok(())
 }
 
-/// The parsed `aida add` args, when `command` is `aida add`.
+/// The decoded `aida add` args, when `command` is `aida add`. A decode
+/// failure is returned, not dropped, so the requester check can refuse it.
 // trace:STORY-1728 | ai:claude
-fn requester_add_args(command: &Command) -> Option<crate::requirements_cli::AddArgs> {
+fn requester_add_args(
+    command: &Command,
+) -> Option<Result<crate::requirements_cli::AddArgs, clap::Error>> {
     let Command::Registered(invocation) = command;
     (invocation.reg.name == "add")
-        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches).ok())
-        .flatten()
+        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches))
+}
+
+/// The requester's `aida add` refusals. Args that do not decode are refused:
+/// an add whose fields cannot be checked must not pass as plain intake.
+// trace:STORY-1728 | ai:claude
+fn requester_intake_check(
+    add: Result<crate::requirements_cli::AddArgs, clap::Error>,
+) -> Result<()> {
+    let Ok(add) = add else {
+        return Err(stakeholder_refusal(
+            "requester",
+            "an add whose arguments could not be checked",
+        ));
+    };
+    if add.interactive {
+        return Err(stakeholder_refusal("requester", "interactive add"));
+    }
+    if add.queue || add.batch.is_some() || add.r#for.is_some() {
+        return Err(stakeholder_refusal("requester", "queueing intake"));
+    }
+    let forbidden_fields = [
+        ("parent", add.parent.is_some()),
+        ("feature", add.feature.is_some()),
+        ("owner", add.owner.is_some()),
+    ];
+    if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
+        forbidden_fields
+            .iter()
+            .any(|(candidate, is_set)| candidate == field && *is_set)
+    }) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let req_type = parse_requester_add_type(add.r#type.as_deref())?;
+    if !requester_add_type_allowed(&req_type) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    Ok(())
 }
 
 /// Requester intake lands as a Draft change-request (unless typed) tagged
@@ -297,6 +314,68 @@ mod stakeholder_cli_policy_tests {
         assert!(guest_refusal(&["aida", "role", "enter", "advisor"])
             .to_string()
             .contains("refusing role writes"));
+    }
+
+    fn add_matches(args: &[&str]) -> clap::ArgMatches {
+        let cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let Command::Registered(invocation) = cli.command;
+        assert_eq!(invocation.reg.name, "add");
+        invocation.matches
+    }
+
+    // Requester intake still lands as Draft with the `intake:requester` tag
+    // (and a default change-request type) once `aida add` is a registered
+    // handler: the coercion runs in the args the handler files, whatever
+    // status the requester asked for. Other roles file the args unchanged.
+    // trace:STORY-1728.ac394c52 | ai:claude
+    #[test]
+    fn requester_intake_is_coerced_by_the_add_handler() {
+        let typed = add_matches(&[
+            "aida", "add", "--title", "request", "--type", "bug", "--status", "approved", "--tags",
+            "ui",
+        ]);
+        let untyped = add_matches(&["aida", "add", "--title", "request"]);
+        {
+            let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "requester");
+            let add = crate::requirements_cli::add_args_for_dispatch(&typed).unwrap();
+            assert_eq!(add.status.as_deref(), Some("draft"));
+            assert_eq!(add.r#type.as_deref(), Some("bug"));
+            assert_eq!(add.tags.as_deref(), Some("ui,intake:requester"));
+            let add = crate::requirements_cli::add_args_for_dispatch(&untyped).unwrap();
+            assert_eq!(add.status.as_deref(), Some("draft"));
+            assert_eq!(add.r#type.as_deref(), Some("change-request"));
+            assert_eq!(add.tags.as_deref(), Some("intake:requester"));
+        }
+        {
+            let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+            let add = crate::requirements_cli::add_args_for_dispatch(&typed).unwrap();
+            assert_eq!(add.status.as_deref(), Some("approved"));
+            assert_eq!(add.tags.as_deref(), Some("ui"));
+        }
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/requirements_cli.rs"),
+        )
+        .unwrap();
+        let run_add = &src[src.find("\nfn run_add(").expect("run_add")..];
+        let run_add = &run_add[..run_add.find("\n}\n").expect("run_add closes")];
+        assert!(
+            run_add.contains("add_args_for_dispatch(matches)")
+                && !run_add.contains("from_arg_matches"),
+            "the add handler files only coerced args"
+        );
+    }
+
+    // An `aida add` whose args cannot be decoded is refused for a requester,
+    // never waved through as ordinary intake.
+    // trace:STORY-1728.ac394c52 | ai:claude
+    #[test]
+    fn requester_add_check_fails_closed_when_args_do_not_decode() {
+        let undecodable = Err(clap::Error::new(clap::error::ErrorKind::ValueValidation));
+        let err = requester_intake_check(undecodable).expect_err("must refuse");
+        assert!(err.to_string().contains("could not be checked"), "{err}");
+        let ok = add_matches(&["aida", "add", "--title", "request", "--type", "bug"]);
+        requester_intake_check(clap::FromArgMatches::from_arg_matches(&ok))
+            .expect("a well-formed requester add passes");
     }
 
     #[test]

@@ -859,6 +859,7 @@ mod tests {
     // Regression test for BUG-227: SPEC-IDs are developer breadcrumbs and must
     // never reach `--help`. A `///` doc comment on a clap field/variant doubles
     // as help text, so any trace marker on one leaks — keep it a plain `//`.
+    // trace:STORY-1728.ac5ac281 | ai:claude
     #[test]
     fn help_text_carries_no_trace_markers() {
         let mut leaks = Vec::new();

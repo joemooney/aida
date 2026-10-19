@@ -2576,13 +2576,22 @@ pub(crate) struct AddArgs {
     pub gates: Vec<String>,
 }
 
+/// The `aida add` args the handler files: decoded, with requester intake
+/// coerced (Draft, default type, `intake:requester` tag) when that
+/// stakeholder role is active.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn add_args_for_dispatch(matches: &clap::ArgMatches) -> anyhow::Result<AddArgs> {
+    let mut args = <AddArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    crate::stakeholder_role::apply_requester_intake(&mut args);
+    Ok(args)
+}
+
 fn run_add(
     matches: &clap::ArgMatches,
     ctx: &crate::command_registry::DispatchCtx,
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
-    let mut args = <AddArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
-    crate::stakeholder_role::apply_requester_intake(&mut args);
+    let args = self::add_args_for_dispatch(matches)?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {

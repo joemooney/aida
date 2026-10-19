@@ -477,3 +477,7 @@ impl Command {
 #[cfg(test)]
 #[path = "tests/story_1728_command_registry_tests.rs"]
 mod story_1728_command_registry_tests;
+
+#[cfg(test)]
+#[path = "tests/story_1728_policy_parity_tests.rs"]
+mod story_1728_policy_parity_tests;

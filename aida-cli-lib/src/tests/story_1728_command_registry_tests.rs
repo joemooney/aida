@@ -63,7 +63,7 @@ fn render_help_snapshot() -> String {
 
 // The surface depends on cargo features (`tui` adds `aida tui`); the golden
 // file is recorded with the default feature set CI tests.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 #[cfg_attr(
     not(feature = "tui"),
@@ -111,7 +111,7 @@ fn help_surface_matches_golden_snapshot() {
 /// migration slice lowers this number in the same change.
 const LEGACY_TOP_LEVEL_COMMANDS: usize = 0;
 
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn legacy_command_enum_only_shrinks() {
     let count = Cli::command().get_subcommands().count();
@@ -128,7 +128,7 @@ fn legacy_command_enum_only_shrinks() {
     );
 }
 
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn registry_is_sorted_unique_and_self_consistent() {
     let names: Vec<&str> = REGISTRY.iter().map(|reg| reg.name).collect();
@@ -150,7 +150,7 @@ fn registry_is_sorted_unique_and_self_consistent() {
 
 // Every top-level name resolves to exactly one owner, so a command cannot be
 // both legacy and registered, and every registration's help anchor exists.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn every_top_level_name_has_exactly_one_owner() {
     let legacy: Vec<String> = Cli::command()
@@ -186,7 +186,7 @@ fn every_top_level_name_has_exactly_one_owner() {
 
 // Every registered command's policy answers for its bare invocation, so the
 // gates in `run()` never see an unclassified registered command.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn every_registered_command_parses_through_the_registry_path() {
     for (argv, name) in [
@@ -215,7 +215,7 @@ fn every_registered_command_parses_through_the_registry_path() {
 }
 
 // The presence verbs and the fetch worker keep their legacy policy answers.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn migrated_commands_keep_their_legacy_policy() {
     for argv in [
@@ -250,7 +250,7 @@ fn bg_fetch_handler_receives_its_positional() {
 }
 
 // Top-level options reach both dispatch paths, before or after the command.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn global_args_reach_registered_and_legacy_commands() {
     use crate::cli::OutputFormat;
@@ -278,7 +278,7 @@ fn global_args_reach_registered_and_legacy_commands() {
 }
 
 // A migrated built-in still shadows an `aida-<name>` extension on PATH.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn registered_commands_shadow_path_extensions() {
     let names = crate::user_alias::real_subcommand_names();
@@ -306,7 +306,7 @@ fn registered_commands_shadow_path_extensions() {
 /// Production code reaches the clap tree only through this module, so no
 /// consumer can miss a registered command. Test modules may still use the
 /// derived `Cli` parser directly.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn production_code_uses_only_the_built_command_tree() {
     const FORBIDDEN: &[&str] = &[
@@ -394,7 +394,7 @@ fn production_lines(text: &str) -> Vec<(usize, &str)> {
 
 // Commands whose read-only verbs stay open to guest stakeholders keep the
 // legacy per-verb answers once registered.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn per_verb_stakeholder_policy_matches_the_legacy_table() {
     use StakeholderAction::*;
@@ -456,7 +456,7 @@ fn synthetic_invocation(run: Handler) -> Invocation {
 // point, with no store, and always finishes there; it can never reach a
 // storage dispatcher. A store-phase handler that defers at the early point
 // sees no store there and runs again only when a dispatcher hands it one.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
     let globals = try_parse_from(["aida", "status"]).unwrap().globals;
@@ -518,7 +518,7 @@ fn run_fn_body() -> String {
 // exactly one dispatch site, so a `Flow::Continue` from the early point is
 // served by one store dispatch (legacy or git-backend, with the distributed
 // pre-backend stage only a pass-through seam in front of the latter).
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn run_dispatches_early_handlers_before_any_store_is_opened() {
     const STORE_INIT: &[&str] = &[
@@ -610,7 +610,7 @@ const MAIN_TEAM_IDENTITY_WRITES: &[&str] = &[
 // from each command's registration, and for every registered command and
 // every one of its verbs it equals main's `is_write_command`. Any divergence
 // changes which commands write under team identity, so it fails here.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
     let mut checked = 0;
@@ -669,7 +669,7 @@ fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
 
 // The team-identity guard's exemptions keep main's classification: `aida
 // team` and the machine-readable `aida status --json` stay silent.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn team_identity_guard_exemptions_match_main() {
     let team = parse_command(["aida", "team"]);
@@ -702,7 +702,7 @@ fn ordering_reg(name: &'static str, help_after: &'static str) -> &'static Comman
 
 // A help_after cycle among registered commands is rejected by name, never
 // appended silently at the end of help.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 fn help_after_cycle_is_rejected() {
     let a = ordering_reg("cyc-a", "cyc-b");
@@ -723,7 +723,7 @@ fn help_after_cycle_is_rejected() {
 
 // Entries sharing one anchor land right after it in name order, whatever the
 // input order, and chained anchors resolve across rounds.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 fn shared_help_after_anchor_places_entries_in_name_order() {
     let alpha = ordering_reg("alpha", "list");

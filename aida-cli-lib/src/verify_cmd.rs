@@ -411,8 +411,10 @@ pub(crate) static VERIFY: crate::command_registry::CommandReg =
         name: "verify",
         help_after: "lint",
         command: <VerifyArgs as clap::CommandFactory>::command,
+        // Main's table had no read arm for top-level `verify` (only `db block
+        // verify`), so it fell through to Write; guests stay refused.
         policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
             team_identity_write: false,
