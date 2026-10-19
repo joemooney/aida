@@ -13,6 +13,11 @@
             "type": "command",
             "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-git-guardrails.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-cargo-timeout-guard.sh",
+            "timeout": 5
           }
         ]
       },

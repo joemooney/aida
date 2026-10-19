@@ -46,6 +46,16 @@ impl Scaffolder {
           }"#,
             );
         }
+        // trace:STORY-1854 | ai:claude
+        if self.config.include_cargo_timeout_hook {
+            pre_entries.push(
+                r#"          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-cargo-timeout-guard.sh",
+            "timeout": 5
+          }"#,
+            );
+        }
         // PreToolUse holds one or more matcher objects: the Bash matcher
         // (validate-commit + git-guardrails) and, separately, the
         // Write|Edit|MultiEdit advisor-code-guard. trace:STORY-670 | ai:claude
@@ -400,13 +410,33 @@ mod tests {
         let entries = v["hooks"]["PreToolUse"][0]["hooks"]
             .as_array()
             .expect("PreToolUse hooks array");
-        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.len(), 3);
         let cmds: Vec<&str> = entries
             .iter()
             .map(|e| e["command"].as_str().unwrap())
             .collect();
         assert!(cmds.iter().any(|c| c.ends_with("/aida-validate-commit.sh")));
         assert!(cmds.iter().any(|c| c.ends_with("/aida-git-guardrails.sh")));
+        // trace:STORY-1854 | ai:claude
+        assert!(cmds
+            .iter()
+            .any(|c| c.ends_with("/aida-cargo-timeout-guard.sh")));
+    }
+
+    /// The cargo time-budget hint is opt-out like the other Bash hooks.
+    // trace:STORY-1854 | ai:claude
+    #[test]
+    fn pre_tool_use_omits_cargo_timeout_hook_when_disabled() {
+        let cfg = ScaffoldConfig {
+            include_cargo_timeout_hook: false,
+            ..ScaffoldConfig::default()
+        };
+        let v = parse_json(&build(cfg));
+        let entries = v["hooks"]["PreToolUse"][0]["hooks"]
+            .as_array()
+            .expect("PreToolUse hooks array");
+        assert_eq!(entries.len(), 2);
+        assert!(!v.to_string().contains("aida-cargo-timeout-guard.sh"));
     }
 
     /// The advisor-code-guard rides as its own PreToolUse matcher

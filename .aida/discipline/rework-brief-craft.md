@@ -25,6 +25,14 @@ A rework brief preserves a review finding across a cold session. It is not
    briefs ordered `make check-ci`, and fix-2725 ran `make check` with the slot
    limiter bypassed: 1h20m on a host where the targeted gate takes minutes.
    <!-- trace:STORY-1853 | ai:claude -->
+7. When the brief names a cargo command, write its budget as
+   `AIDA_CARGO_TIMEOUT=<dur> cargo ...` and tell the implementer to run anything
+   that can exceed about 10 minutes in the tool's background mode. Never stack
+   an outer `timeout <N>` inside the tool's own cap: slot-queue wait counts
+   against it. Tell them to check `cargo ps` after a timeout or KILLED run
+   instead of retrying blindly. Until aida-host STORY-100 ships, the wrapper
+   ignores the variable and background mode is the only protection. See "Cargo time budgets" in
+   `implementer-discipline.md`. <!-- trace:STORY-1854 | ai:claude -->
 
 A sufficient brief lets a fresh implementer answer: what failed, where, how to
 reproduce it, what outcome is required, and which evidence will prove it fixed.

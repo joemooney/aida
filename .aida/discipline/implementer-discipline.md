@@ -180,6 +180,35 @@ The four runtime banners that make up the implementer-discipline bouncer net:
 
 Together they bound the four boundaries of an implementer session lifecycle. Doctor's `spec-status-drift` category (STORY-462) catches anything that slips through.
 
+## Cargo time budgets: hand them to the wrapper
+<!-- trace:STORY-1854 | ai:claude -->
+
+On a host whose `cargo` is the AIDA slot wrapper, a cargo run first waits for a
+build slot, and on a loaded host that wait has passed 30 minutes. An outer
+`timeout` starts its clock when the command is issued, so the queue wait spends
+the budget and the run is killed partway through, then retried, then queued
+again behind itself.
+
+- Write `AIDA_CARGO_TIMEOUT=<dur> cargo ...` (or `AIDA_CARGO_TIMEOUT=<dur> make
+  <target>` for a make target that runs cargo). Never write `timeout <N> cargo
+  ...` or `timeout <N> make <cargo target>`. Once aida-host STORY-100 ships,
+  the wrapper starts that budget when the slot is acquired. Timeouts on
+  commands that are not cargo, such as `timeout 540 gh pr checks ...`, are
+  fine.
+- Run any cargo invocation that can exceed about 10 minutes (tests,
+  `make check-ci-compile`, full builds) in the tool's background mode, not as a
+  foreground call. A foreground tool call has its own cap (one hour for the
+  Claude Code Bash tool) that no environment variable can change.
+- After a timeout or a KILLED run, check `cargo ps` before retrying. The run
+  may still be queued or running, and a blind retry adds a second copy to the
+  queue.
+- **Until aida-host STORY-100 ships `AIDA_CARGO_TIMEOUT` support, the wrapper
+  ignores the variable, and background mode is the only protection.** Write the variable
+  anyway so the budget takes effect once the wrapper honours it.
+
+The `aida-cargo-timeout-guard.sh` PreToolUse hook warns (never blocks) when a
+command wraps cargo or make in an outer timeout, and states the replacement.
+
 ## Companion: the advisor role
 
 The implementer's discipline is the tactical counterpart to the [advisor's discipline](advisor-role.md). The advisor articulates strategy, captures friction, gardens the queue, escalates fork decisions. The implementer takes a single bounded spec and ships it. The two roles coordinate via the substrate — the advisor's filings become the implementer's briefs; the implementer's friction becomes the advisor's observations.
