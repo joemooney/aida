@@ -63,6 +63,8 @@
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
+# trace:STORY-1854 | ai:claude
+"Run cargo-timeout hook test" = "fast"
 "Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
 "Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"
