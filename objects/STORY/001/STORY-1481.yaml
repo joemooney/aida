@@ -20,11 +20,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-26T01:54:33.930129334Z
-modified_at: 2026-10-11T07:02:23.637361578Z
+modified_at: 2026-10-19T15:50:21.366078808Z
 req_type: Story
 tags:
 - lanes
 - needs-sketch
+- operator-held
 - orchestrator
 - plan:night
 - worktree
@@ -102,4 +103,14 @@ comments:
   created_at: 2026-10-11T07:01:53.634701225Z
   modified_at: 2026-10-11T07:01:53.634701225Z
   session_id: acdb011f-c2d9-4682-b4b1-08b1c979881c
+history:
+- id: 01a154db-50b2-7f61-bb26-5dba50236294
+  author: joe
+  timestamp: 2026-10-19T15:50:21.618190663Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:21.366078808Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 execution_mode: guided
