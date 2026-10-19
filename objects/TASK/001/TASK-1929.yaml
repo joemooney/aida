@@ -1,0 +1,26 @@
+id: 01a15186-f6f4-77e1-9885-ce3d9484a6d5
+spec_id: TASK-1929
+agreed_id: TASK-1929
+title: 'BUG-2180: test the launcher wiring of commit_child_store_writes'
+description: |
+  No test drives run_standalone_reviewer (aida-cli-lib/src/queue_cmd.rs:13400) or the RealPhaseDriver implementer/reviewer call sites (phase_driver_trait.rs ~506, ~2145). bug_2180_reviewer_request_changes_leaves_store_worktree_clean calls commit_child_store_writes directly, so deleting a call site would not fail any test.
+
+  Raised in review of PR-2750: https://github.com/joemooney/aida/pull/2750#issuecomment-6256980556
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T00:19:21.972764557Z
+modified_at: 2026-10-19T00:19:21.972764557Z
+req_type: Task
+tags:
+- from-review:PR-2750
+- severity:minor
+filed_at:
+  code_sha: f820d565f53e9b781db5f81cc063f4807ce89272
+  branch: pr-2750
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: befc5a2e23
+  vendor: claude
+  session: 01a1518009ce
