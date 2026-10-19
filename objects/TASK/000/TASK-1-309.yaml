@@ -8,11 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T23:33:35.204505969Z
-modified_at: 2026-10-15T23:33:35.204505969Z
+modified_at: 2026-10-19T19:51:25.467328782Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a155b8-041b-78d1-82aa-d0d0d362c8a4
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by STORY-1690. serial-ship.sh is being retired by the STORY-1690 train (slice S5 retires it; S1 TASK-1960 removes its base-only re-approval). The draft-PR fail-fast belongs in the train builder: refuse draft members with a stated reason.'
+  created_at: 2026-10-19T19:51:25.467328782Z
+  modified_at: 2026-10-19T19:51:25.467328782Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: c419f6a5efdbdf3c450a099b26f79428c01c8d3b
   branch: main
