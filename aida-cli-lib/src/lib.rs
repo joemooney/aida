@@ -395,6 +395,8 @@ mod human_cmd;
 mod metrics_cycle_time;
 // trace:STORY-1480 | ai:claude — per-spec timing records published to the store.
 mod timing_record;
+// trace:BUG-2180 | ai:claude — commit a contained child session's store writes.
+mod child_store_commit;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;

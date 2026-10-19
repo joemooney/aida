@@ -447,6 +447,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // (the tmux path recovers the implementer's real exit status and returns
         // the same `ExitOutcome::Natural`). Resolve the mode from the exported
         // `--panes` host + whether we're inside a tmux server. trace:TASK-1120
+        // trace:BUG-2180 | ai:claude
+        let launched_at = queue_cmd::reviewer_spawn_instant(&self.project_root);
         let pane_mode = pane_host::spawn_mode(pane_host::requested_host(), pane_host::in_tmux());
         let tmux_outcome: Option<exit_signal::ExitOutcome> = match pane_mode {
             #[cfg(unix)]
@@ -501,8 +503,19 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?,
         };
+        // BUG-2180: this orchestrator is the host a contained implementer's
+        // store writes (claim, comments, `queue done`) were deferred to; commit
+        // them whatever the outcome, so no phase leaves the store dirty for the
+        // mandate's fail-closed snapshot. trace:BUG-2180 | ai:claude
+        crate::child_store_commit::commit_child_store_writes(
+            &self.project_root,
+            launched_at,
+            "implementer",
+        );
         // BUG-2140: commit any pending store changes left by a contained
         // implementer child on the host before continuing phase evaluation.
+        // After the BUG-2180 commit above this sweeps only what it left (older
+        // dirt, deletions) and fails loudly on an embedded-repo plant.
         // trace:BUG-2140 | ai:antigravity
         self.commit_contained_child_store_changes("implementer phase")?;
         // BUG-420: the watchdog killed a degenerate headless session — surface
@@ -2120,6 +2133,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // launches `claude -p` + an agent worker pool), so reap by process group
         // on every exit path. The interactive `--zen` reviewer stays on the
         // tree-walk path. trace:TASK-298 | ai:claude
+        // trace:BUG-2180 | ai:claude
+        let launched_at = queue_cmd::reviewer_spawn_instant(&self.project_root);
         let outcome = exit_signal::spawn_and_wait_watched(
             cmd,
             &sentinel,
@@ -2133,6 +2148,14 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 format!("could not launch the reviewer session: {e}"),
             )
         })?;
+        // BUG-2180: commit a contained reviewer's deferred store writes (its
+        // `aida review record` shelve among them) before reading the verdict.
+        // trace:BUG-2180 | ai:claude
+        crate::child_store_commit::commit_child_store_writes(
+            &self.project_root,
+            launched_at,
+            "reviewer",
+        );
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
             let _ = self.commit_contained_child_store_changes("reviewer phase");
             // BUG-1299: attach the hint resolved alongside `reason` in the
