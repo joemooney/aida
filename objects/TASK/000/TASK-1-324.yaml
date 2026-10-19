@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:02.159503559Z
-modified_at: 2026-10-18T14:31:02.159503559Z
+modified_at: 2026-10-19T15:46:47.053568870Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
 - finding-hash:1f864644
 - from-review:TASK-1785
 - kind:carried-forward
+comments:
+- id: 01a154d8-0a8d-7561-b850-c0c13579b1a6
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1396 and TASK-1812 both specify re-key the 15/40/7 fixture trace to ac0ead8d; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:47.053568870Z
+  modified_at: 2026-10-19T15:46:47.053568870Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f90-0684-7d82-b399-0921d144623a
   author: joe
