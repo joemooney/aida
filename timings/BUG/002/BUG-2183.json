@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2183",
+  "publishes": [
+    {
+      "at": "2026-10-19T15:51:36.847709519Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:51:36.644772991Z",
+      "spec": "BUG-2183",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:51:36.645290897Z",
+      "spec": "BUG-2183",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
