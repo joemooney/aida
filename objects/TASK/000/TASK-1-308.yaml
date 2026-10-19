@@ -8,11 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T15:56:21.604668339Z
-modified_at: 2026-10-15T15:56:21.604668339Z
+modified_at: 2026-10-19T16:07:57.709544172Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a154eb-6e0d-76d2-8f68-eba787ee987e
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of BUG-2173. Same defect: an attested verdict cannot be recorded or bound for a PR in a sibling or non-AIDA repo (aida-relay, aida-host).'
+  created_at: 2026-10-19T16:07:57.709544172Z
+  modified_at: 2026-10-19T16:07:57.709544172Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
