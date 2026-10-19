@@ -12,8 +12,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T06:35:35.841948665Z
-modified_at: 2026-10-19T16:04:38.368398351Z
+modified_at: 2026-10-19T16:04:40.141378997Z
 req_type: Task
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-19T16:04:40.141375639Z
+  created_by: joe
 comments:
 - id: 01a154e8-5c6a-7e22-999d-947ae300164c
   author: joe
@@ -30,6 +35,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a154e8-6e0f-78e2-b2c6-de8449fa8bf8
+  author: joe
+  timestamp: 2026-10-19T16:04:41.103736714Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 913fe5334ebf3d0bd49461bbd0c6b88561bc598b
   branch: claude/story-1700
