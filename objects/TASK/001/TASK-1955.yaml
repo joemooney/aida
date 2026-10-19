@@ -1,0 +1,73 @@
+id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+spec_id: TASK-1955
+agreed_id: TASK-1955
+title: 'Sweep: launcher, session, mailbox and drive follow-ups + test coverage'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1772: ensure_spec_worktree (worktree add/enter, do-guided) passes self_claim=false though the caller works the lease
+  From #2657 (BUG-2010) round-2 review, non-blocking: worktree_gc.rs:1633 ensure_spec_worktree passes self_claim=false, so worktree add/enter and do-guided lose lane attribution even though the caller itself works the lease. Harmless (fails toward unattributed) but ps shows those lanes less precisely. Pass true where the caller is the worker; test.
+
+  ### TASK-1773: TASK-1768 test/UX nits: drop-guard the sleep child in the stop-now test; distinguish a kill failure from an unconfirmed identity
+  From the #2653 final review: (1) task_1768_stop_now_never_signals_an_unconfirmed_identity drops its Child without a kill on early assert failure, orphaning sleep 60; add a drop guard. (2) signal_drain_stop_now prints 'identity could not be confirmed' even when the strict match passed but kill itself failed; report that case accurately.
+
+  ### TASK-1804: Set AIDA_HARNESS_VERSION from the remaining launchers (queue work headless seats, drain phases)
+  Non-blocking follow-up from the PR #2710 r1 review (TASK-1793): agent new and relay now record the selected harness version for child writes, but aida queue work headless seats and drain phases still do not set AIDA_HARNESS_VERSION, so their write provenance records an unknown harness version. Reuse the #2710 probe (grant-scrubbed, os_wrap-consistent).
+
+  ### TASK-1805: Test session_start's consumption of review_coexistence (explicit role + unambiguous backing re-resolution)
+  TASK-1786's tests cover the QueueWorkRoleInput builder and the pure review_source_branch_conflict_decision, but not session_start.rs:1620-1632, where review_coexistence is mapped into the decision and the backing ID is re-resolved with get_requirement_unambiguous. Replacing that mapping with launch_role.as_deref(), or dropping the re-resolution, still passes every test. Add a session_start-level (or extracted-helper) test: an explicit reviewer with an ambiguous or unknown backing ID must refuse.
+
+  Raised in review of PR-2704: https://github.com/joemooney/aida/pull/2704#issuecomment-6246426026
+
+  ### TASK-1806: Show the active drive mandate to Antigravity seats (no SessionStart or per-turn hook)
+  Follow-up from STORY-1700 (non-blocking review point). Claude Code and Codex fire aida-session-context.sh (SessionStart) and aida-mail-notice.sh (SessionStart + UserPromptSubmit, via codex-hooks.json), so they print the MANDATE line at start and every turn. Antigravity installs neither hook, so an agy seat or relay lane never sees the active mandate or its expiry. Fix: write the 'aida mandate status --line' output into the launch context file agent_launch builds for every vendor (next to the STORY-619 Mailbox block), and refresh it wherever agy lanes get their per-session context.
+  ## Acceptance
+  - An Antigravity session launched by aida agent new or the relay sees the MANDATE line in its launch context while a mandate is active, and nothing when none is.
+  - A test covers the launch-context block with and without an active mandate.
+
+  ### TASK-1808: STORY-1655 follow-ups: end-to-end solo record-path test, doctor/awaiting mode-line tests, trace placement
+  Non-blocking findings from the PR #2724 review (PASS). (1) handle_review_record_at solo path (lib_part5.rs:3077-3123): add an injectable challenge seam and an end-to-end test proving the verdict JSON and the ~/.aida receipt both carry solo_human:true and that a CLI-recorded solo approval clears approval_authority_refusal. (2) Test that aida doctor and aida awaiting print MODE_ON_LINE when the mode is on and omit it when it is off or in the AIDA repo. (3) Move the STORY-1655 trace comment at lib.rs:489 onto mod solo_review and fix its alphabetical order; make the solo notice use the same stream (eprintln!) in pr_ship_approval_gate and merge_path_approval_gate. Parent: STORY-1655.
+
+  ### TASK-1918: Mailbox phantom cleanup: explicit one-shot command, re-route padded direct mail, SHA/roster precedence, test gaps
+  Follow-up from the PR #2737 (TASK-1766) review, round 1. Deferred minor findings, too large for that rework:
+
+  1. One-shot phantom cleanup. `archive_phantom_inboxes` (aida-cli-lib/src/mailbox_cmd.rs) runs as a side effect of the read-only `mailbox list` and of gc/sync. It re-reads every message plus the agent registry on every call, swallows errors with `let _ =`, and writes archive markers that `mailbox sync` publishes to canonical, judged against this machine's local identity set. Move it to an explicit one-shot command (`aida mailbox gc --phantoms` or a doctor fix) that reports how many it archived and surfaces errors.
+  2. Whitespace-padded direct mail. `is_phantom = r != trimmed` archives real direct (non-mention) mail sent to an id like `advisor `, so its intended reader never sees it. Re-route it to the trimmed recipient instead of archiving it.
+  3. SHA false positives. `aida_core::mailbox::looks_like_hex_sha` (now one shared helper) treats any 7-40 character all-hex id that contains a digit as a commit SHA. A registered agent named like `cafe1234` would be dropped. Check the known-identity roster before applying the SHA rule.
+  4. Test gaps: an end-to-end test that `aida comment add` with an unknown @handle creates no mailbox and prints the warning (git_backend_cmd.rs), the MCP send_message recipient trim (mcp.rs), and the send_notification trim (punt_done.rs).
+
+  ## Acceptance
+  - [ ] Phantom archiving runs only from an explicit command, reports how many it archived, and surfa
+
+  ### TASK-1928: MCP mailbox send does not canonicalize a known recipient to its stored spelling (CLI does)
+  aida-cli-lib/src/mcp.rs:2747-2753 trims `to` but stores it verbatim, while the CLI path (mailbox_cmd.rs:146-155) maps a known identity to its stored spelling via known_mailbox_recipients. Message::addressed_to (aida-core/src/mailbox.rs:506) is case-sensitive, so MCP `to: "ADVISOR"` opens a phantom ADVISOR inbox that `aida mailbox gc --phantoms` also does not clean (not a mention body, not a rejected shape).
+  Raised in review of PR-2737: https://github.com/joemooney/aida/pull/2737
+
+  ### TASK-1929: BUG-2180: test the launcher wiring of commit_child_store_writes
+  No test drives run_standalone_reviewer (aida-cli-lib/src/queue_cmd.rs:13400) or the RealPhaseDriver implementer/reviewer call sites (phase_driver_trait.rs ~506, ~2145). bug_2180_reviewer_request_changes_leaves_store_worktree_clean calls commit_child_store_writes directly, so deleting a call site would not fail any test.
+
+  Raised in review of PR-2750: https://github.com/joemooney/aida/pull/2750#issuecomment-6256980556
+
+  ### TASK-1933: fleet drive preview omits human_gates/operator-only holds; --json help names only the tick
+  mandate_drive.rs preview_hold reports only forced_gate and an unreadable store; run_tick additionally applies [mandate.human_gates] (gate_reason, ~:1074) and the operator-only/sticky floor (~:1083). The preview (human and --json) can show a lane as routed (held: null) that the tick would gate. Also cli.rs FleetAction::Drive json doc says "Print the tick report as JSON" but now governs the preview too.
+
+  Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T16:03:34.769123409Z
+modified_at: 2026-10-19T16:03:34.769123409Z
+req_type: Task
+tags:
+- launch
+- session
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
