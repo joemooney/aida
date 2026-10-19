@@ -7,12 +7,12 @@ description: |-
 
   cosmetic: CacheBinding::capture (cache_binding.rs:171) is now only called from tests; gate it #[cfg(test)] to avoid a dead_code warning
   Reviewed sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T01:45:20.749761137Z
-modified_at: 2026-10-19T15:47:50.483936249Z
+modified_at: 2026-10-19T15:47:53.251886615Z
 req_type: Task
 tags:
 - carried-from:TASK-1739
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-19T01:52:25.236859776Z
   changes: []
+- id: 01a154d9-0d23-7221-9463-bfbdeb1b8e9b
+  author: joe
+  timestamp: 2026-10-19T15:47:53.251822897Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
