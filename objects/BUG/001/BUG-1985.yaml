@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-19T14:30:03.958185897Z
+modified_at: 2026-10-19T14:32:20.022807008Z
 req_type: Bug
 tags:
 - contained
@@ -103,6 +103,12 @@ comments:
   created_at: 2026-10-19T10:25:32.981181566Z
   modified_at: 2026-10-19T10:25:32.981181566Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15493-e136-7121-a70d-4d620e8a6e4e
+  author: joe
+  content: Commit 6d590ed914 references this requirement
+  created_at: 2026-10-19T14:32:20.022807008Z
+  modified_at: 2026-10-19T14:32:20.022807008Z
+  session_id: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
 history:
 - id: 01a130a2-bce0-74e2-8634-0063cf48c11a
   author: joe
