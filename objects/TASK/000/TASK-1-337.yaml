@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T17:58:28.249322054Z
-modified_at: 2026-10-18T17:58:28.249322054Z
+modified_at: 2026-10-19T19:51:42.265717591Z
 req_type: Task
 tags:
 - from-advisor:BUG-2176
@@ -16,6 +16,13 @@ tags:
 - kind:observation
 - linked:BUG-2176
 - severity:minor
+comments:
+- id: 01a155b8-45b9-7771-841a-312ad2674dc9
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1951. Merge-hold event routing (MergeHoldChanged to hold_store_root) belongs with the ship/reconcile fail-open sweep. Full text stays on TASK-1406.'
+  created_at: 2026-10-19T19:51:42.265717591Z
+  modified_at: 2026-10-19T19:51:42.265717591Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15050-3f40-75a3-a01c-c6a980b1a498
   author: joe
