@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking): aida-cli-lib/src/timing_record.rs publish_to_store — if with_store_write_lock fails before the closure runs (lock timeout, or ensure_store_write_safe refusing a store that is mid-rebase or has a detached HEAD), write_record never runs, so the record is not written at all and publish returns None. Before this change it was always written. The stderr warning says 'not committed', which hides that the record was dropped. Since publish only runs at done/completed, the work machine's events for that spec never reach other clones. Suggested fix: on a lock error, fall back to the uncommitted write_record as before, and add a test that injects a lock or unsafe-state failure.
   Reviewed sha: 0d957f66dd92d6a16cd664aeaddac499b67a8ffe
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:41:30.280523362Z
-modified_at: 2026-10-19T19:51:55.449029183Z
+modified_at: 2026-10-19T19:51:58.671918386Z
 req_type: Task
 tags:
 - carried-from:BUG-2178
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-18T21:01:07.269001282Z
   changes: []
+- id: 01a155b8-85cf-7623-a579-b2e508de6433
+  author: joe
+  timestamp: 2026-10-19T19:51:58.671912490Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
   branch: main
