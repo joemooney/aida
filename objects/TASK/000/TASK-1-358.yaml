@@ -1,0 +1,27 @@
+id: 01a151cf-9403-75c0-8927-ce31a9f031eb
+spec_id: TASK-1-358
+title: 'cosmetic: aida-cli-lib/src/history.rs:2675-2679 — new fn yaml_status was insert…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1737, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: aida-cli-lib/src/history.rs:2675-2679 — new fn yaml_status was inserted under effective()'s doc comment, so effective() lost its doc and yaml_status carries a merged two-topic doc block; move the 'Read key first...' lines back above fn effective.
+  Reviewed sha: 170de75978b59a9c9dcfad90d557ac3c3f63c865
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T01:38:40.771924081Z
+modified_at: 2026-10-19T01:38:40.771924081Z
+req_type: Task
+tags:
+- carried-from:TASK-1737
+- finding-hash:71339401
+- from-review:TASK-1737
+- kind:carried-forward
+filed_at:
+  code_sha: aaff1236adf1557e45094a595b98167f54f641cb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4ac9efab32
+  vendor: claude
