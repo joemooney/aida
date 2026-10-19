@@ -14,7 +14,9 @@ use std::process::{Command, Output};
 
 mod support;
 
-static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// No process-wide test lock: every test owns its tempdir (repo, HOME,
+// worktree) and drives only child processes, so the tests run in parallel.
+// trace:TASK-1959 | ai:claude
 
 fn hermetic(cmd: &mut Command) {
     cmd.env("GIT_CONFIG_GLOBAL", "/dev/null")
@@ -272,7 +274,6 @@ impl Session {
 // and command, and leaves the lease and worktree untouched.
 #[test]
 fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let live = s.spawn_live_process();
     let pid = live.0.id();
@@ -301,7 +302,6 @@ fn session_end_refuses_while_a_live_process_is_inside_the_worktree() {
 // trace:BUG-1986 | ai:claude
 #[test]
 fn session_end_force_alone_does_not_override_the_live_process_refusal() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let live = s.spawn_live_process();
     let out = s.end(&s.repo, &["--force"]);
@@ -320,7 +320,6 @@ fn session_end_force_alone_does_not_override_the_live_process_refusal() {
 // (c): releasing the lease does not move the spec back out of In Progress.
 #[test]
 fn session_end_include_in_use_removes_a_worktree_with_a_live_process_inside() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let before = s.status_line();
     assert!(
@@ -352,7 +351,6 @@ fn session_end_include_in_use_removes_a_worktree_with_a_live_process_inside() {
 // from inside the worktree itself (the caller's own process is exempt).
 #[test]
 fn session_end_without_live_processes_removes_the_worktree_even_from_inside_it() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let out = s.end(&s.worktree, &[]);
     assert!(
@@ -370,7 +368,6 @@ fn session_end_without_live_processes_removes_the_worktree_even_from_inside_it()
 // `--include-in-use` must override it the same way.
 #[test]
 fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start_pooled();
     let live = s.spawn_live_process();
     let pid = live.0.id();
@@ -418,7 +415,6 @@ fn session_end_refuses_to_return_a_pooled_worktree_a_live_process_is_using() {
 // trace:BUG-1986 | ai:claude
 #[test]
 fn pool_return_refuses_a_worktree_a_live_process_is_using() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start_pooled();
     let live = s.spawn_live_process();
     let pid = live.0.id();
@@ -462,7 +458,6 @@ fn pool_return_refuses_a_worktree_a_live_process_is_using() {
 #[test]
 #[cfg(unix)]
 fn session_end_from_inside_with_its_own_helper_running_ends_cleanly() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     // The `sh` stands in for the agent: its cwd is the worktree, it starts a
     // helper in the tree, then runs `session end` from there.
@@ -532,7 +527,6 @@ fn end_with_a_holder_started_at(s: &Session, stage: &str) -> (Output, KillOnDrop
 #[test]
 #[cfg(debug_assertions)] // trace:BUG-1988 | ai:claude
 fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let (out, live) = end_with_a_holder_started_at(&s, "after-confirm");
     let msg = text(&out);
@@ -557,7 +551,6 @@ fn a_holder_started_after_the_confirmation_stops_the_end_cleanly() {
 #[test]
 #[cfg(debug_assertions)] // trace:BUG-1988 | ai:claude
 fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start_pooled();
     let branch_before = s.worktree_branch();
     let (out, live) = end_with_a_holder_started_at(&s, "before-teardown");
@@ -607,7 +600,6 @@ fn a_holder_started_just_before_the_teardown_keeps_the_lease_and_tree() {
 // trace:BUG-1988 | ai:claude
 #[test]
 fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start_pooled();
     let branch_before = s.worktree_branch();
     std::fs::write(s.worktree.join("work.txt"), "uncommitted work").unwrap();
@@ -685,7 +677,6 @@ fn a_failed_salvage_keeps_the_lease_and_names_the_recovery_command() {
 // trace:BUG-1991 | ai:claude
 #[test]
 fn session_end_with_its_own_mcp_claim_still_refuses_a_live_holder() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let s = Session::start();
     let claim = s
         .repo
