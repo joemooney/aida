@@ -33,11 +33,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-10-10T20:35:12.612220368Z
+modified_at: 2026-10-19T15:50:36.802464284Z
 req_type: Story
 tags:
 - docs
 - docs:impacted
+- operator-held
 relationships:
 - rel_type: BlockedBy
   target_id: 01a11726-87f0-7bb1-94dc-75c40b901e9d
@@ -51,6 +52,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a154db-8d07-7583-bd59-2e056ee4c2a7
+  author: joe
+  timestamp: 2026-10-19T15:50:37.063796734Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:50:36.802464284Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: f266cde60648dfa5846cc6556b8641e661b3694a
   branch: main
