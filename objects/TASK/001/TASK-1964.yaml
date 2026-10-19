@@ -6,12 +6,12 @@ description: |
   review_verdict.rs link_then_unlink (fallback for publish_verdict_no_replace when renameat2 RENAME_NOREPLACE is unsupported) hard-links temp to dest and then unlinks temp. Between the two calls dest has nlink=2, so a concurrent anchored reader (read_verdict_body) refuses the canonical verdict. This only happens on filesystems without no-replace rename. Document the window, or have readers retry once on an nlink refusal.
 
   Raised in review of PR-2712: https://github.com/joemooney/aida/pull/2712#issuecomment-6275752654
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T19:42:41.803091310Z
-modified_at: 2026-10-19T19:48:44.029169077Z
+modified_at: 2026-10-19T19:48:46.328596836Z
 req_type: Task
 tags:
 - from-review:PR-2712
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-19T19:48:44.029169077Z
   modified_at: 2026-10-19T19:48:44.029169077Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b5-9678-7d73-a595-d901fa958c26
+  author: joe
+  timestamp: 2026-10-19T19:48:46.328590456Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f2fb6c1314fb798950ed4acb956331c59cc5017b
   branch: pr-2712
