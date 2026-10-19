@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:36.474773540Z
-modified_at: 2026-10-18T20:53:36.474773540Z
+modified_at: 2026-10-19T15:44:48.297474298Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
 - finding-hash:377e83e6
 - from-review:TASK-1803
 - kind:carried-forward
+comments:
+- id: 01a154d6-3aa9-77f0-812f-a100e3cd7585
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1408. Same finding (same finding-hash or identical text).'
+  created_at: 2026-10-19T15:44:48.297474298Z
+  modified_at: 2026-10-19T15:44:48.297474298Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-7717-72e2-9720-7f35c558466a
   author: joe
