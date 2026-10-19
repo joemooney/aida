@@ -10,12 +10,12 @@ description: |-
   - Installer stderr is over-redacted on mapped runs.
   - The GAPS.toml read has no size cap (adapter.rs:178).
   - The AGENTS.md paragraph is misplaced (prepended above the first line).
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T12:07:32.089278044Z
-modified_at: 2026-10-19T15:55:39.895657191Z
+modified_at: 2026-10-19T15:55:42.308471461Z
 req_type: Task
 comments:
 - id: 01a13f76-8245-7192-a9ab-c5ed5397b39c
@@ -36,6 +36,15 @@ comments:
   created_at: 2026-10-19T15:55:39.895657191Z
   modified_at: 2026-10-19T15:55:39.895657191Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e0-3564-7fb3-a213-da53b31ae663
+  author: joe
+  timestamp: 2026-10-19T15:55:42.308466706Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4
   branch: main
