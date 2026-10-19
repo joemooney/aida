@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T20:53:26.134591979Z
-modified_at: 2026-10-18T20:53:26.134591979Z
+modified_at: 2026-10-19T15:47:30.232908767Z
 req_type: Task
 tags:
 - carried-from:TASK-1803
 - finding-hash:b2818303
 - from-review:TASK-1803
 - kind:carried-forward
+comments:
+- id: 01a154d8-b338-7253-af7e-9e56b0f5d038
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1920. aida show TASK-1407 and TASK-1920 both specify preserve the user GIT_SSH_COMMAND during bounded default-branch probes; the target description explicitly includes this obligation. Preserve the narrower finding evidence un'
+  created_at: 2026-10-19T15:47:30.232908767Z
+  modified_at: 2026-10-19T15:47:30.232908767Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150d1-76fa-7cc3-a1b2-928dbf84bc53
   author: joe
