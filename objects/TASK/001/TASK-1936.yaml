@@ -11,11 +11,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:05:17.754242291Z
-modified_at: 2026-10-19T09:05:17.754242291Z
+modified_at: 2026-10-19T15:51:43.332165543Z
 req_type: Task
 tags:
 - from-review:PR-2751
 - severity:minor
+comments:
+- id: 01a154dc-8fe4-77e3-8bad-0190c9e83483
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1940. TASK-1940 (STORY-1728 slice 3) carries this as items 4-8 of its scope.'
+  created_at: 2026-10-19T15:51:43.332165543Z
+  modified_at: 2026-10-19T15:51:43.332165543Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
   branch: pr-2751
