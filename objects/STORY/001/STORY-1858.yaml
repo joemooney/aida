@@ -1,0 +1,35 @@
+id: 01a15531-bb2d-7ca2-88cc-92f3e1202481
+spec_id: STORY-1858
+agreed_id: STORY-1858
+title: 'Review PR-2758: [AI:claude] feat(review): carry an attested approval across a clean merge from main (TASK-1960 BUG-2177)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/task-1960`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2758>
+  - Branch: `claude/task-1960` → `main`
+
+  ## Covers
+
+  - TASK-1960
+  - BUG-2177
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2758` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T17:24:44.973937070Z
+modified_at: 2026-10-19T17:24:44.973937070Z
+req_type: Story
+filed_at:
+  code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
