@@ -1,0 +1,63 @@
+id: 01a154e2-1411-71b0-9344-2a78faddcce9
+spec_id: TASK-1952
+agreed_id: TASK-1952
+title: 'Sweep: contained-launch, store-hook and host-git hardening follow-ups'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1759: store_hooks: group-writable hooks dir accepted when the group is the user's primary group, which may be a shared group
+  From the STRICT review of #2541. store_hooks.rs:41 (1a917fc7cd) accepts g+w when the gid equals the user's primary gid. On distros with a shared 'users' primary group, another local user could replace the pinned hooks. This is local multi-user risk, not a sandbox escape. Fix: also require that the group has no other members, or simply require no g+w.
+
+  ### TASK-1761: BUG-2124 follow-ups: dead env branch in the 8 uncontained builders; production-path tests for --sandbox and per-tool --settings
+  From the #2640 review: (a) the 8 new builders call containment_applied(..,false), which is always false, so the env(AIDA_CONTAINED,1) branch is dead; use plain env_remove. (b) Add tests: agent_new_claude --sandbox sets contained=true; a per-tool --settings in agents.toml reads as uncontained. (d) burndown_run.rs ~570/~1985 error-string indentation.
+
+  ### TASK-1770: Uncontained drain with os_wrap on does not bwrap-wrap CI-fix/advisor children; bwrap functional test skips on CI
+  From the #2655 review, gap 2 + non-blocking: (1) with os_wrap enabled in an UNcontained drain, CI-fix and advisor children are not bwrap-wrapped (inconsistent with implementer); (2) the bug_2133 real-bwrap functional test self-skips on CI runners without userns, so CI does not guard the regression — add a CI job/runner config where bwrap works or an equivalent argv-level assertion for Claude's default settings sandbox.
+
+  ### TASK-1798: CI-fix and quiet-burndown child grants are not stamped on a lease, so a launcher crash leaves them live until parent expiry
+  PR-2692 (BUG-2165) mints child grants for the orchestrator CI-fix child (phase_driver_trait.rs run_ci_fix, ~L3736) and the quiet burndown child (burndown_run.rs handle_burndown_run, ~L601). Both revoke the grant only in-process after the child exits. Neither calls stamp_lease_child_grant_at (session.rs:3602), so if the launcher is killed mid-child, the lease-end/reap revocation (revoke_lease_child_grant) never fires. The grant then stays live until its parent expires. The queue-work path (BUG-2139) stamps the lease. The verbose burndown path already had this gap before this PR. Not a blocker: the grant is still implementer-only with no delegable seats, and it expires with its parent.
+
+  Raised in review of PR-2692: https://github.com/joemooney/aida/pull/2692
+
+  ### TASK-1924: configure_git_remote_credentials scopes the helper to the first stored URL but takes creds from the first credentialed one (url/pushurl on different hosts)
+  aida-cli-lib/src/gitlab_project_create.rs configure_git_remote_credentials (~:540-560): `clean_stored` is the FIRST stored URL (credentialed or not), while `stored_creds` is the first CREDENTIALED one. Example: remote.X.url=https://hostA/... (clean) and remote.X.pushurl=https://u:tok@hostB/... In that case the pushurl is rewritten to clean B via insteadOf, but the helper is scoped to credential.https://hostA. So (1) B's token is offered to host A's credential requests, and (2) pushes to B lose their credential and fail, where before the PR they used the embedded token. This is a rare config. Fix: derive the scope per credentialed URL, either one scoped helper per host or pair each creds with its own clean URL's scope. Add a url-A + pushurl-B test.
+
+  Raised in review of PR-2736 (round 3, head 2b5fca7031).
+
+  ### TASK-1926: Widen or document the scope of bug_1985_host_status_guard (only aida-core/aida-cli-lib, only literal Command::new("git"))
+  Follow-up from the #2731 review (BUG-1985, finding 4). bug_1985_host_status_guard scans only aida-core/src and aida-cli-lib/src, and only literal Command::new("git") builders, including .args(var) wrappers. It misses a git binary passed as a variable and a status call in another crate (aida-cli, aida-server, ...).
+
+  ## Acceptance
+  - The guard's doc comment states its exact scope, or the guard is widened to the other crates and to variable git-binary builders.
+  - The guard self-test covers whichever forms are claimed.
+
+  ### TASK-1942: host_git_command spawns extra git config processes on every host git call in linked worktrees
+  aida-core/src/git_ops.rs host_git_command (around line 141) now calls gitmodules_submodule_names for every store tree and every contained-writable tree. That includes every linked worktree, so every pool and session tree is covered. The call starts one extra `git config` process when `.gitmodules` exists. When it doesn't exist, it starts two (`:.gitmodules` and `HEAD:.gitmodules` blobs). Every git_ops::git() call goes through host_git_command, so commands that run many git calls in a session worktree start 2-3x as many processes. Possible fixes: skip the blob probes when the index has no gitlink and no .gitmodules entry, or cache the result per toplevel for one command. Not a correctness problem.
+
+  Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
+
+  ### TASK-1943: contained_safety_scan dedupe misses quoted porcelain paths; collect_branch_facts refusal fix untested
+  1) aida-core/src/git_ops.rs contained_safety_scan compares `l.get(3..) == Some(link.path)` against porcelain v1 lines. Porcelain v1 C-quotes paths that hold special or non-ASCII characters (core.quotePath), so a moved-and-edited submodule with such a path gets a second, unquoted ` M <path>` line. It still reads as dirty, so no safety impact, but the entry is listed twice and the two lines are formatted differently.
+  2) aida-cli-lib/src/status_sections.rs collect_branch_facts now reads a refused or failed status as dirty (`working_tree_clean(..) != Some(true)`). That was the round-2 cosmetic item, but no test covers it.
+  3) A checked-out submodule whose `.git` was removed is skipped (the documented TOCTOU choice), and the toplevel status never lists files inside a gitlink path. Edits left inside such a directory are therefore invisible to the destructive gates. This is only reachable by a session tampering with its own submodule, but it is worth a line in OVERVIEW.
+
+  Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:57:44.849505155Z
+modified_at: 2026-10-19T15:57:44.849505155Z
+req_type: Task
+tags:
+- contained
+- security
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
