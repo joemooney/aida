@@ -1443,3 +1443,257 @@ fn task_1775_contained_marker_written_before_git_version_check() {
         assert!(marker.is_file(), "{fake}: marker written on old git");
     }
 }
+
+// BUG-2140: `pull_store_before_id_allocation` and `push_store_after_id_allocation`
+// defer when the store's git directory is not writable (even when an `origin`
+// remote is configured), `commit_pending_store_changes_on_host` commits the
+// deferred write on the host under default config (`auto_push = manual`), and
+// `collect_doctor_findings` reports `store-worktree-gitdir-unwritable` when a
+// host permission bug leaves the store's git metadata read-only.
+// trace:BUG-2140 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
+    use aida_core::db::DatabaseBackend;
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: root ignores directory write bits");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(tmp.path()).unwrap();
+    let remote = root.join("origin.git");
+    std::fs::create_dir_all(&remote).unwrap();
+    bug_1929_git(&remote, &["init", "-q", "--bare"]);
+
+    let main = root.join("main");
+    std::fs::create_dir_all(main.join(".aida")).unwrap();
+    std::fs::write(
+        main.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    bug_1929_git(&main, &["init", "-q", "-b", "main"]);
+    bug_1929_git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    bug_1929_git(
+        &main,
+        &["worktree", "add", "-q", "-b", "aida-store", ".aida-store"],
+    );
+    let store = main.join(".aida-store");
+    bug_1929_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(store.join("objects")).unwrap();
+    std::fs::write(store.join("metadata.yaml"), "name: test\n").unwrap();
+    bug_1929_git(&store, &["add", "."]);
+    bug_1929_git(&store, &["commit", "-q", "-m", "seed store"]);
+    bug_1929_git(&store, &["push", "-q", "-u", "origin", "aida-store"]);
+
+    // Make a leftover modified file in the store, then lock `.git/objects` read-only
+    // to simulate the contained sandbox's `denyWrite` on `<main>/.git`.
+    std::fs::write(store.join("metadata.yaml"), "name: dirty-in-sandbox\n").unwrap();
+    let objects_git = main.join(".git/objects");
+    let orig_perms = std::fs::metadata(&objects_git).unwrap().permissions();
+    std::fs::set_permissions(&objects_git, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    // 1. `pull_store_before_id_allocation` + `add_requirement` +
+    //    `push_store_after_id_allocation` succeed without touching `.git`.
+    let pull_res = crate::pull_store_before_id_allocation(&store, &main);
+    let backend = aida_core::db::GitBackend::new(&store).unwrap();
+    let added = backend.add_requirement(aida_core::models::Requirement::new(
+        "Sandbox filed spec".to_string(),
+        "filed while .git/objects is 0555".to_string(),
+    ));
+    let push_res = added.as_ref().ok().and_then(|req| {
+        crate::push_store_after_id_allocation(&store, &main, req.spec_id.as_deref().unwrap()).ok()
+    });
+
+    // 2. Doctor check flags `store-worktree-gitdir-unwritable` while `.git/objects` is 0555.
+    let loaded = backend.load().unwrap();
+    let doctor_findings =
+        crate::doctor_root::collect_doctor_findings(&main, &loaded, Some("store-worktree"))
+            .unwrap();
+
+    // Restore permissions before assertions so cleanup always succeeds.
+    std::fs::set_permissions(&objects_git, orig_perms.clone()).unwrap();
+
+    pull_res.expect("pull_store_before_id_allocation must defer when git dir is unwritable");
+    let added = added.expect("add_requirement must succeed when git dir is unwritable");
+    assert!(
+        push_res.is_some(),
+        "push_store_after_id_allocation must defer when git dir is unwritable"
+    );
+    assert!(
+        doctor_findings
+            .iter()
+            .any(|f| f.id == "store-worktree-gitdir-unwritable"
+                && f.summary.contains("cannot write ")),
+        "expected store-worktree-gitdir-unwritable doctor finding, got: {doctor_findings:?}"
+    );
+
+    // 3. On the host (with default config `auto_push = manual`),
+    // `session_end::finish_session_end_store_and_shell_cleanup` commits the
+    // sandbox's spec and emits shell cleanup (`unset AIDA_SESSION_ID` + `cd`).
+    let mut stdout_lines = Vec::new();
+    let mut stderr_lines = Vec::new();
+    crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| stdout_lines.push(l.to_string()),
+        |l| stderr_lines.push(l.to_string()),
+    )
+    .expect("session_end cleanup must commit pending contained store changes on host");
+    assert!(
+        stdout_lines.iter().any(|l| l == "unset AIDA_SESSION_ID")
+            && stdout_lines.iter().any(|l| l.starts_with("cd '")),
+        "expected unset + cd in session_end stdout: {stdout_lines:?}"
+    );
+    let rel =
+        aida_core::object_store::relative_object_path(added.spec_id.as_deref().unwrap()).unwrap();
+    let head_files = bug_1929_git(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(
+        head_files.lines().any(|l| l == rel),
+        "committed store HEAD must include {rel}: {head_files}"
+    );
+
+    // 4. F5 regression: if a planted embedded `.git` makes the host store commit
+    // fail during `session end`, the shell cleanup (`unset AIDA_SESSION_ID` +
+    // `cd '<main>'` / stale-cwd hint) is STILL emitted before returning Err.
+    std::fs::write(store.join("metadata.yaml"), "name: second-dirty\n").unwrap();
+    let planted_git = store.join("objects/evil/.git");
+    std::fs::create_dir_all(&planted_git).unwrap();
+    std::fs::write(planted_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+
+    let mut err_stdout = Vec::new();
+    let mut err_stderr = Vec::new();
+    let end_err = crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| err_stdout.push(l.to_string()),
+        |l| err_stderr.push(l.to_string()),
+    )
+    .expect_err("planted .git must fail session_end store commit");
+    assert!(
+        format!("{end_err:#}").contains("embedded git repository"),
+        "expected embedded git repository refusal: {end_err:#}"
+    );
+    assert!(
+        err_stdout.iter().any(|l| l == "unset AIDA_SESSION_ID")
+            && err_stdout.iter().any(|l| l.starts_with("cd '")),
+        "F5: session_end must still emit unset + cd before returning store commit Err: {err_stdout:?}"
+    );
+
+    // 5. F7 regression: `RealPhaseDriver::commit_contained_child_store_changes`
+    // surfaces the planted `.git` refusal as a loud `PhaseFailure`, and once
+    // removed, commits the pending contained child write on the host.
+    let mut driver = crate::phase_driver::RealPhaseDriver::new(
+        main.clone(),
+        "BUG-2140".into(),
+        "test".into(),
+        None,
+        true,
+        None,
+        crate::phase_driver::AutonomyMode::Default,
+        "tok".into(),
+        false,
+        false,
+        false,
+        false,
+        crate::auto_complete::LifecycleSkip::none(),
+        crate::auto_complete::AutoCompleteVariant::Full,
+    );
+    driver.contained = true;
+    let phase_err = driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect_err("RealPhaseDriver must refuse embedded git repository");
+    assert!(
+        phase_err.reason.contains("embedded git repository"),
+        "unexpected PhaseFailure: {phase_err:?}"
+    );
+
+    std::fs::remove_dir_all(store.join("objects/evil")).unwrap();
+    driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect("RealPhaseDriver must commit pending store changes after removing plant");
+    let status_after = bug_1929_git(&store, &["status", "--porcelain"]);
+    assert!(
+        status_after.trim().is_empty(),
+        "store must be clean after RealPhaseDriver host commit, got: {status_after}"
+    );
+
+    // 6. Round-2 F3 regression: when the store has a rebase in progress (or
+    // detached HEAD / wrong branch) and NOTHING is pending in the store worktree,
+    // `commit_pending_store_changes_on_host`, `session end`, and
+    // `RealPhaseDriver::commit_contained_child_store_changes` must return Ok
+    // without entering `with_store_write_lock` and failing closed — while an
+    // embedded-repository plant is STILL refused loudly.
+    let store_git_dir = PathBuf::from(bug_1929_git(&store, &["rev-parse", "--absolute-git-dir"]));
+    let rebase_merge = store_git_dir.join("rebase-merge");
+    std::fs::create_dir_all(&rebase_merge).unwrap();
+    assert_eq!(
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store)
+            .expect("clean store with rebase in progress must not fail host commit sweep"),
+        false
+    );
+    let mut rebase_stdout = Vec::new();
+    let mut rebase_stderr = Vec::new();
+    crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| rebase_stdout.push(l.to_string()),
+        |l| rebase_stderr.push(l.to_string()),
+    )
+    .expect("session_end must succeed when store has rebase in progress and nothing pending");
+    driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect(
+            "RealPhaseDriver must succeed when store has rebase in progress and nothing pending",
+        );
+    std::fs::remove_dir_all(&rebase_merge).unwrap();
+
+    // 7. Round-2 F5 regression: block allocation (`auto_allocate_block_inner`)
+    // under an unwritable store git dir with an `origin` remote claims a block
+    // in `registry/blocks.yaml`, leaves `registry/blocks.yaml` uncommitted
+    // without pushing to `origin`, and `commit_pending_store_changes_on_host`
+    // later commits `registry/blocks.yaml` on the host.
+    let head_before_block = bug_1929_git(&store, &["rev-parse", "HEAD"]);
+    std::fs::set_permissions(&objects_git, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let claimed_block = crate::db_block::auto_allocate_block_inner(
+        &store,
+        "node01",
+        "testhost",
+        Some("test@example.com"),
+        "BUG",
+        100,
+        crate::db_block::BlockClaimReason::OnFirstAdd,
+    );
+    std::fs::set_permissions(&objects_git, orig_perms).unwrap();
+    let claimed_label =
+        claimed_block.expect("auto_allocate_block_inner must succeed when git dir is unwritable");
+    assert_eq!(claimed_label.as_deref(), Some("BUG-1..100"));
+    assert_eq!(
+        bug_1929_git(&store, &["rev-parse", "HEAD"]),
+        head_before_block,
+        "deferred block allocation must not commit while git dir is unwritable"
+    );
+    assert!(
+        store.join("registry/blocks.yaml").is_file(),
+        "registry/blocks.yaml must be written during deferred block allocation"
+    );
+    assert_eq!(
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store)
+            .expect("host sweep must commit deferred blocks.yaml"),
+        true
+    );
+    let block_commit_files = bug_1929_git(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(
+        block_commit_files
+            .lines()
+            .any(|l| l == "registry/blocks.yaml"),
+        "host sweep commit must include registry/blocks.yaml: {block_commit_files}"
+    );
+}
