@@ -40,20 +40,30 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
             override_stale_approval,
             wait,
             no_complete,
-        } => pr_ship_handler(
-            *n,
-            *no_pull,
-            *no_cleanup,
-            *dry_run,
-            *force_delete_branch,
-            *complexity,
-            *effort,
-            *no_trailer_check,
-            *override_stale_check,
-            *override_stale_approval,
-            *wait,
-            *no_complete,
-        ),
+            rebase,
+            merge_method,
+            final_slice,
+        } => {
+            let resolved_method =
+                pr_ship::validate_ship_merge_method(*rebase, *merge_method, *final_slice)
+                    .map_err(anyhow::Error::msg)?;
+            pr_ship_with_method(
+                *n,
+                *no_pull,
+                *no_cleanup,
+                *dry_run,
+                *force_delete_branch,
+                *complexity,
+                *effort,
+                *no_trailer_check,
+                *override_stale_check,
+                *override_stale_approval,
+                *wait,
+                *no_complete,
+                resolved_method,
+                *final_slice,
+            )
+        }
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
         PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
@@ -1751,17 +1761,20 @@ pub(crate) struct MandateCover {
 
 /// Assemble exclusion subjects only; never use this union for authority inputs.
 // trace:TASK-1790 | ai:codex
+// trace:TASK-1800 | ai:antigravity
 pub(crate) fn mandate_exclusion_specs(
     named: &[String],
     traced: std::collections::BTreeSet<String>,
-    resolve: impl FnMut(&str) -> crate::mandate::ShipSpec,
+    mut resolve: impl FnMut(&str, bool) -> crate::mandate::ShipSpec,
 ) -> Vec<crate::mandate::ShipSpec> {
+    let named_set: std::collections::BTreeSet<String> =
+        normalized_spec_ids(named).into_iter().collect();
     let mut ids = named.to_vec();
     ids.extend(traced);
     normalized_spec_ids(&ids)
         .iter()
         .map(String::as_str)
-        .map(resolve)
+        .map(|id| resolve(id, named_set.contains(id)))
         .collect()
 }
 
@@ -1770,6 +1783,7 @@ pub(crate) fn mandate_exclusion_specs(
 /// instant (never cached); only when one is active does it read the forge,
 /// the verdicts and the store. `head` is read lazily for the same reason.
 // trace:STORY-1698 | ai:claude
+// trace:TASK-1800 | ai:antigravity
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn mandate_ship_cover(
     project_root: &std::path::Path,
@@ -1832,7 +1846,7 @@ pub(crate) fn mandate_ship_cover(
         .ok_or_else(|| MandateRefusal::TraceEvidenceUnreadable("no git-canonical store".into()))?;
     let store_snapshot = crate::mandate_traces::store_snapshot(&store_root).map_err(&unreadable)?;
     let store = load_store_for_lookup(project_root);
-    let specs = mandate_exclusion_specs(&ids, trace_evidence.ids, |id| {
+    let specs = mandate_exclusion_specs(&ids, trace_evidence.ids, |id, is_named| {
         let req = store.as_ref().and_then(|store| {
             store
                 .requirements
@@ -1847,10 +1861,68 @@ pub(crate) fn mandate_ship_cover(
                 })
                 .cloned()
         });
-        // STORY-1698: sticky exclusion reads every stored version.
-        let history = crate::mandate::store_history_versions(&store_root, id);
+        // TASK-1800: collect any recorded aliases (both spec_id and agreed_id)
+        // so that an agreed_id resolves to its stored spec_id object path for
+        // history, and the ledger check / note_exclusions cover both keys.
+        let mut aliases = Vec::new();
+        let mut history_keys = vec![id.to_owned()];
+        if let Some(ref r) = req {
+            for candidate in [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                let upper = candidate.trim().to_ascii_uppercase();
+                if !upper.is_empty() && !upper.eq_ignore_ascii_case(id) {
+                    if !aliases
+                        .iter()
+                        .any(|a: &String| a.eq_ignore_ascii_case(&upper))
+                    {
+                        aliases.push(upper.clone());
+                    }
+                    if !history_keys
+                        .iter()
+                        .any(|k: &String| k.eq_ignore_ascii_case(&upper))
+                    {
+                        history_keys.push(upper);
+                    }
+                }
+            }
+        }
+        // trace:TASK-1800 | ai:claude
+        // A deleted spec has no current record to name its aliases, so find
+        // every object that ever carried this ID in store history. A history
+        // that cannot be searched refuses below; it never makes the ID dangling.
+        let alias_search = if req.is_none() {
+            crate::mandate::store_history_alias_ids(&store_root, id)
+        } else {
+            Ok(Vec::new())
+        };
+        for alias in alias_search.iter().flatten() {
+            if !aliases.iter().any(|a| a.eq_ignore_ascii_case(alias)) {
+                aliases.push(alias.clone());
+            }
+            if !history_keys.iter().any(|k| k.eq_ignore_ascii_case(alias)) {
+                history_keys.push(alias.clone());
+            }
+        }
+        // STORY-1698 / TASK-1800: sticky exclusion reads every stored version
+        // across the ID and any resolved alias object path.
+        let history = (|| -> std::result::Result<Vec<aida_core::Requirement>, String> {
+            alias_search?;
+            let mut all_versions = Vec::new();
+            for key in &history_keys {
+                let versions = crate::mandate::store_history_versions_optional(&store_root, key)?;
+                all_versions.extend(versions);
+            }
+            if is_named && all_versions.is_empty() {
+                return Err(format!("no version of {id} in the store's history"));
+            }
+            Ok(all_versions)
+        })();
         crate::mandate::ShipSpec {
             id: id.to_owned(),
+            aliases,
+            named: is_named,
             current: req,
             history,
         }
@@ -1867,14 +1939,16 @@ pub(crate) fn mandate_ship_cover(
                 .map(crate::mandate::field_change_versions)
                 .unwrap_or_default();
             let history: &[aida_core::Requirement] = spec.history.as_deref().unwrap_or(&[]);
-            crate::mandate::note_exclusions(
-                dir,
-                &spec.id,
-                spec.current
-                    .iter()
-                    .chain(changes.iter())
-                    .chain(history.iter()),
-            );
+            for key in std::iter::once(&spec.id).chain(spec.aliases.iter()) {
+                crate::mandate::note_exclusions(
+                    dir,
+                    key,
+                    spec.current
+                        .iter()
+                        .chain(changes.iter())
+                        .chain(history.iter()),
+                );
+            }
         }
     }
     let ledger = match &mandate_dir {
@@ -2268,10 +2342,52 @@ pub(crate) fn pr_ship_handler(
     wait: Option<u64>,
     no_complete: bool,
 ) -> Result<()> {
+    pr_ship_with_method(
+        n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+        force_delete_branch,
+        complexity,
+        effort,
+        no_trailer_check,
+        override_stale_check,
+        override_stale_approval,
+        wait,
+        no_complete,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+}
+
+// trace:STORY-1663 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pr_ship_with_method(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    force_delete_branch: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    wait: Option<u64>,
+    no_complete: bool,
+    merge_method: crate::forge::MergeMethod,
+    final_slice: bool,
+) -> Result<()> {
     use pr_ship::{
-        branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan,
+        branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan_with_method,
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
+
+    if final_slice && merge_method != crate::forge::MergeMethod::Rebase {
+        anyhow::bail!(
+            "`--final-slice` (`--complete-spec`) requires `--rebase` or `--merge-method rebase`"
+        );
+    }
 
     let opts = PrShipOptions {
         pr_number: n,
@@ -2296,12 +2412,25 @@ pub(crate) fn pr_ship_handler(
         anyhow::bail!("could not detect current branch (detached HEAD?)");
     }
 
-    // BUG-2164: On the default branch with no explicit PR number, refuse before
-    // any push, trailer guard, or PR creation attempt.
-    // trace:BUG-2164 | ai:antigravity
-    if opts.pr_number.is_none() && ship_is_default_branch(&project_root, &branch) {
-        let approved = find_open_approved_prs(&project_root);
-        anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+    // BUG-2164 / TASK-1795 / TASK-1803: On the default branch (or when the
+    // default branch cannot be determined) with no explicit PR number, refuse
+    // before any push, trailer guard, or PR creation attempt.
+    // trace:BUG-2164 trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+    if opts.pr_number.is_none() {
+        match classify_ship_default_branch(&project_root, &branch) {
+            ShipDefaultBranchDisposition::FeatureBranch => {}
+            ShipDefaultBranchDisposition::OnDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!("{}", pr_ship::format_default_branch_ship_refusal(&approved));
+            }
+            ShipDefaultBranchDisposition::UnknownDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!(
+                    "{}",
+                    pr_ship::format_unknown_default_branch_ship_refusal(&approved)
+                );
+            }
+        }
     }
 
     // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
@@ -2551,11 +2680,19 @@ pub(crate) fn pr_ship_handler(
 
     // ---- Dry-run: print the resolved plan and exit. ----
     if dry_run {
-        let plan = format_dry_run_plan(&opts, &steps, forge_kind);
-        // trace:BUG-1957 | ai:claude
+        let plan = format_dry_run_plan_with_method(&opts, &steps, forge_kind, merge_method);
+        // trace:BUG-1957 trace:STORY-1663 | ai:antigravity
         print!(
             "{}",
-            pr_ship_dry_run_output(plan, &project_root, pr_number, &ship_branch, no_complete)
+            pr_ship_dry_run_output_for_method(
+                plan,
+                &project_root,
+                pr_number,
+                &ship_branch,
+                no_complete,
+                merge_method,
+                final_slice,
+            )
         );
         eprintln!(
             "  → PR target: {}",
@@ -2835,7 +2972,7 @@ pub(crate) fn pr_ship_handler(
         base: retarget_base.clone(),
         title: target_change.as_ref().and_then(|c| c.title.clone()),
     };
-    if !already_merged {
+    let preflight_head_sha = if !already_merged {
         ship_preflight_gates(
             &project_root,
             &main_worktree,
@@ -2846,7 +2983,10 @@ pub(crate) fn pr_ship_handler(
             delete_branch,
             floor_authority || mandate_cover.is_ok(),
         )?;
-    }
+        pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch)
+    } else {
+        None
+    };
 
     // BUG-574: if the PR is already merged (re-run on an already-shipped spec,
     // or a sibling beat us to the merge) there is nothing to watch or merge.
@@ -3042,6 +3182,7 @@ pub(crate) fn pr_ship_handler(
             );
         }
     }
+    let mut merged_head_sha: Option<String> = None;
     if !already_merged {
         // ---- TASK-1448: approval-covers-head gate. Checked under the merge
         // lease, immediately before the merge (and before any merge-hold is
@@ -3056,6 +3197,30 @@ pub(crate) fn pr_ship_handler(
             gate_spec_ids.extend(pr_ship::extract_spec_ids_from_text(title));
         }
         let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+        merged_head_sha = head_sha.clone();
+        // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
+        // before touching holds or merging.
+        // trace:STORY-1663 | ai:antigravity
+        if let Some(refusal) = pr_ship::stale_head_after_ci_refusal(
+            pr_number,
+            preflight_head_sha.as_deref(),
+            head_sha.as_deref(),
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_STALE_APPROVAL,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+        }
         // BUG-1918: what the PR ships comes from the forge too (head ref and
         // commit trailers), so shipping from main still finds its authors.
         let (candidates, policy) = merge_approval_inputs(
@@ -3078,6 +3243,17 @@ pub(crate) fn pr_ship_handler(
             override_stale_approval,
             delete_branch,
         )?;
+        // STORY-1663: optional slice-stack verifier hook before rebase merge.
+        // trace:STORY-1663 | ai:antigravity
+        if merge_method == crate::forge::MergeMethod::Rebase {
+            run_optional_slice_stack_verifier(
+                &project_root,
+                &main_worktree,
+                pr_number,
+                &format!("origin/{retarget_base}"),
+                head_sha.as_deref().unwrap_or(&ship_branch),
+            )?;
+        }
         if branch_in_sibling {
             eprintln!(
                 "  step 3: branch {} is checked out in a sibling worktree — \
@@ -3085,17 +3261,30 @@ pub(crate) fn pr_ship_handler(
                 ship_branch
             );
         }
+        let method_label = match merge_method {
+            crate::forge::MergeMethod::Squash => "squash",
+            crate::forge::MergeMethod::Rebase => "rebase",
+            crate::forge::MergeMethod::Merge => "merge",
+        };
         eprintln!(
-            "  step 3: merging PR-{} (squash{})",
+            "  step 3: merging PR-{} ({}{})",
             pr_number,
+            method_label,
             if delete_branch { ", delete-branch" } else { "" }
         );
-        // BUG-1919: say which ids the squash subject will carry and where
+        // BUG-1919 / STORY-1663: say which ids the merge will complete and where
         // they came from (title / branch / none) BEFORE the merge, so a
-        // branch-name fallback can never complete a spec silently.
-        // trace:BUG-1919 | ai:claude
-        let (explicit_squash_subject, completion_trailer) =
-            derive_pr_ship_squash_subject(&project_root, pr_number, &ship_branch, no_complete)?;
+        // branch-name fallback or non-final rebase slice never completes a spec
+        // silently. Rebase merges produce no squash subject.
+        // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
+        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method(
+            &project_root,
+            pr_number,
+            &ship_branch,
+            no_complete,
+            merge_method,
+            final_slice,
+        )?;
         eprintln!(
             "  step 3: {}",
             pr_ship::format_trailer_provenance(&completion_trailer)
@@ -3122,30 +3311,34 @@ pub(crate) fn pr_ship_handler(
         // uninspectable branch refuses the merge rather than publishing an
         // unchecked body. trace:TASK-1330 | ai:claude
         let identity_allowlist = crate::identity_gate::read_allowed_emails(&project_root)?;
-        let sanitized_squash_body = crate::identity_gate::squash_coauthor_body_override(
-            &project_root,
-            &retarget_base,
-            head_sha.as_deref().unwrap_or(&ship_branch),
-            &identity_allowlist,
-        )?;
-        let sanitized_squash_body = sanitized_squash_body.map(|(body, violations)| {
-            eprintln!(
-                "  step 3: identity gate — stripping {} non-allowlisted email reference(s) \
-                 from the squash body:",
-                violations.len()
-            );
-            for v in &violations {
+        let sanitized_squash_body = if merge_method == crate::forge::MergeMethod::Squash {
+            let override_body = crate::identity_gate::squash_coauthor_body_override(
+                &project_root,
+                &retarget_base,
+                head_sha.as_deref().unwrap_or(&ship_branch),
+                &identity_allowlist,
+            )?;
+            override_body.map(|(body, violations)| {
                 eprintln!(
-                    "    {} {} {}",
-                    &v.sha[..v.sha.len().min(10)],
-                    v.role,
-                    v.email
+                    "  step 3: identity gate — stripping {} non-allowlisted email reference(s) \
+                     from the squash body:",
+                    violations.len()
                 );
-            }
-            body
-        });
+                for v in &violations {
+                    eprintln!(
+                        "    {} {} {}",
+                        &v.sha[..v.sha.len().min(10)],
+                        v.role,
+                        v.email
+                    );
+                }
+                body
+            })
+        } else {
+            None
+        };
         let mut merge_opts = crate::forge::MergeOptions {
-            method: crate::forge::MergeMethod::Squash,
+            method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
             squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude
             delete_branch,
@@ -3273,6 +3466,21 @@ pub(crate) fn pr_ship_handler(
                 );
                 return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
+        }
+        // STORY-1663: rebase merges must always be pinned to a head SHA.
+        // trace:STORY-1663 | ai:antigravity
+        if let Err(refusal) = pr_ship::require_rebase_head_pin(
+            pr_number,
+            merge_opts.method,
+            merge_opts.match_head.as_deref(),
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
         if let Some(reason) = marker_reason.as_deref() {
             match &released_by_verdict {
@@ -3517,8 +3725,16 @@ pub(crate) fn pr_ship_handler(
         let spec_ids = Storage::new(main_worktree.join(".aida-store"))
             .load()
             .map(|store| {
-                ship_completion_trailer(&store, &pr_meta.title, &branch, &pr_meta.body, no_complete)
-                    .ids
+                ship_completion_trailer_for_method(
+                    &store,
+                    merge_method,
+                    final_slice,
+                    &pr_meta.title,
+                    &branch,
+                    &pr_meta.body,
+                    no_complete,
+                )
+                .ids
             })
             .unwrap_or_default();
         pr_merged_spec_ids = spec_ids.clone();
@@ -3559,6 +3775,33 @@ pub(crate) fn pr_ship_handler(
     // trace:BUG-1423 | ai:claude
     if merged_this_run {
         emit_ship_pr_merged(&main_worktree, pr_number as u32, &pr_merged_spec_ids);
+        // STORY-1663: rebase merges have no squash subject, so `aida pull`'s
+        // commit-subject auto-bump cannot distinguish a final-slice rebase merge
+        // from an intermediate slice. Explicitly mark the resolved specs Completed
+        // when `--final-slice` (`--complete-spec`) is passed on a rebase merge, or
+        // record a non-completing rebase marker when `--final-slice` is omitted so
+        // `aida pull` and `aida db reconcile-status` leave the owning spec's status
+        // unchanged without suppressing unrelated auto-bumps.
+        // trace:STORY-1663 | ai:antigravity
+        if merge_method == crate::forge::MergeMethod::Rebase {
+            if final_slice {
+                complete_rebase_final_slice_specs(
+                    &main_worktree,
+                    pr_number,
+                    &pr_merged_spec_ids,
+                    merged_head_sha.as_deref(),
+                );
+            } else {
+                record_non_completing_rebase_slice(
+                    &main_worktree,
+                    &project_root,
+                    pr_number,
+                    &retarget_base,
+                    merged_head_sha.as_deref(),
+                    &ship_branch,
+                );
+            }
+        }
     }
 
     // ---- Step 4: aida pull (from the main worktree). ----
@@ -3582,10 +3825,10 @@ pub(crate) fn pr_ship_handler(
                 // report "<path> (deleted)", which Command::new cannot spawn.
                 // trace:SPEC-411 | ai:codex
                 let aida_bin = pr_ship_post_merge_aida_exe();
+                let mut pull_cmd = std::process::Command::new(&aida_bin);
+                pull_cmd.current_dir(&main_worktree).arg("pull");
                 Some(
-                    std::process::Command::new(&aida_bin)
-                        .current_dir(&main_worktree)
-                        .arg("pull")
+                    pull_cmd
                         .status_retrying_etxtbsy()
                         .context("could not invoke `aida pull`")?,
                 )
@@ -4383,6 +4626,60 @@ pub(crate) fn derive_pr_ship_squash_subject_from(
     Ok((Some(normalized), trailer))
 }
 
+/// STORY-1663: method-aware subject + completion-trailer derivation.
+/// Squash merges derive both the squash subject and completion trailer;
+/// rebase merges produce `None` for the squash subject and suppress spec
+/// completion unless `final_slice` (`--final-slice` / `--complete-spec`) is set.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn derive_pr_ship_subject_for_method(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    branch: &str,
+    no_complete: bool,
+    method: crate::forge::MergeMethod,
+    final_slice: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
+    if method != crate::forge::MergeMethod::Rebase {
+        return derive_pr_ship_squash_subject(project_root, pr_number, branch, no_complete);
+    }
+    let pr = fetch_pr_ship_metadata_via_gh(project_root, pr_number)?;
+    derive_pr_ship_subject_for_method_from(
+        project_root,
+        &pr,
+        branch,
+        no_complete,
+        method,
+        final_slice,
+    )
+}
+
+/// Method-aware derivation given already-fetched `PrShipMetadata`.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn derive_pr_ship_subject_for_method_from(
+    project_root: &std::path::Path,
+    pr: &PrShipMetadata,
+    branch: &str,
+    no_complete: bool,
+    method: crate::forge::MergeMethod,
+    final_slice: bool,
+) -> Result<(Option<String>, pr_ship::SquashTrailer)> {
+    if method != crate::forge::MergeMethod::Rebase {
+        return derive_pr_ship_squash_subject_from(project_root, pr, branch, no_complete);
+    }
+    let store_root = main_worktree_root_from(project_root);
+    let store = Storage::new(store_root.join(".aida-store")).load()?;
+    let trailer = ship_completion_trailer_for_method(
+        &store,
+        method,
+        final_slice,
+        &pr.title,
+        branch,
+        &pr.body,
+        no_complete,
+    );
+    Ok((None, trailer))
+}
+
 /// The `aida pr ship --dry-run` output: the step plan followed by the
 /// completion-trailer provenance line, so the operator sees which specs the
 /// merge would complete, and why, without merging. `pr_number == 0` means
@@ -4395,12 +4692,41 @@ pub(crate) fn pr_ship_dry_run_output(
     ship_branch: &str,
     no_complete: bool,
 ) -> String {
+    pr_ship_dry_run_output_for_method(
+        plan,
+        project_root,
+        pr_number,
+        ship_branch,
+        no_complete,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+}
+
+/// Method-aware dry-run output for `aida pr ship --dry-run`.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn pr_ship_dry_run_output_for_method(
+    plan: String,
+    project_root: &std::path::Path,
+    pr_number: u64,
+    ship_branch: &str,
+    no_complete: bool,
+    method: crate::forge::MergeMethod,
+    final_slice: bool,
+) -> String {
     let provenance = if pr_number == 0 {
         pr_ship::format_dry_run_trailer_provenance(Err(
             "the PR does not exist yet; it is derived from the PR title or branch name at merge time",
         ))
     } else {
-        match derive_pr_ship_squash_subject(project_root, pr_number, ship_branch, no_complete) {
+        match derive_pr_ship_subject_for_method(
+            project_root,
+            pr_number,
+            ship_branch,
+            no_complete,
+            method,
+            final_slice,
+        ) {
             Ok((_, trailer)) => pr_ship::format_dry_run_trailer_provenance(Ok(&trailer)),
             Err(e) => pr_ship::format_dry_run_trailer_provenance(Err(&e.to_string())),
         }
@@ -4420,7 +4746,33 @@ pub(crate) fn ship_completion_trailer(
     pr_body: &str,
     no_complete: bool,
 ) -> pr_ship::SquashTrailer {
-    pr_ship::derive_squash_trailer(
+    ship_completion_trailer_for_method(
+        store,
+        crate::forge::MergeMethod::Squash,
+        false,
+        pr_title,
+        branch,
+        pr_body,
+        no_complete,
+    )
+}
+
+/// STORY-1663: method-aware store-qualified completion trailer derivation.
+/// Rebase merges suppress spec completion unless `final_slice` (`--final-slice`
+/// / `--complete-spec`) is set.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn ship_completion_trailer_for_method(
+    store: &aida_core::RequirementsStore,
+    method: crate::forge::MergeMethod,
+    final_slice: bool,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    no_complete: bool,
+) -> pr_ship::SquashTrailer {
+    pr_ship::derive_ship_trailer_for_method(
+        method,
+        final_slice,
         pr_title,
         branch,
         pr_body,
@@ -4430,12 +4782,364 @@ pub(crate) fn ship_completion_trailer(
     )
 }
 
+/// STORY-1663: optional slice-stack verifier hook before rebase merge.
+/// Reads `scripts/split-lib/verify_stack.py` from `origin/main` (falling back to
+/// `main_worktree/scripts/split-lib/verify_stack.py` only when `origin/main` is
+/// absent in a local-only repository). When the verifier is present, fails
+/// closed if the commit range `base_ref..head_ref` cannot be inspected, and
+/// invokes `python3 <verifier> <base_ref> <head_ref>` when any commit in the
+/// range matches `refactor(cli-lib): extract|extend <m>.rs`.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn run_optional_slice_stack_verifier(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    pr_number: u64,
+    base_ref: &str,
+    head_ref: &str,
+) -> Result<()> {
+    let origin_blob = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["show", "origin/main:scripts/split-lib/verify_stack.py"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success() && !out.stdout.is_empty())
+        .map(|out| out.stdout);
+    let fallback_path = main_worktree.join("scripts/split-lib/verify_stack.py");
+    if origin_blob.is_none() && !fallback_path.is_file() {
+        return Ok(());
+    }
+
+    // Ensure `head_ref` is resolvable locally when shipping by PR number from `main`.
+    let head_commit = format!("{head_ref}^{{commit}}");
+    let head_present = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["rev-parse", "--verify", "--quiet", &head_commit])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !head_present {
+        let _ = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args([
+                "fetch",
+                "--quiet",
+                "origin",
+                &format!("refs/pull/{pr_number}/head"),
+            ])
+            .output();
+        let _ = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["fetch", "--quiet", "origin", head_ref])
+            .output();
+    }
+
+    let range = format!("{base_ref}..{head_ref}");
+    let log_out = match std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["log", "--format=%s", &range])
+        .output()
+    {
+        Ok(out) => out,
+        Err(e) => {
+            let refusal = format!(
+                "PR-{pr_number} rebase ship refused: could not inspect commit range `{range}` for slice-stack verification ({e})"
+            );
+            return Err(pr_ship::ShipRefusal::Review.error(refusal));
+        }
+    };
+    if !log_out.status.success() {
+        let stderr = String::from_utf8_lossy(&log_out.stderr).trim().to_string();
+        let detail = if stderr.is_empty() {
+            format!("exit {}", log_out.status)
+        } else {
+            stderr
+        };
+        let refusal = format!(
+            "PR-{pr_number} rebase ship refused: could not inspect commit range `{range}` for slice-stack verification ({detail})"
+        );
+        return Err(pr_ship::ShipRefusal::Review.error(refusal));
+    }
+    let subjects = String::from_utf8_lossy(&log_out.stdout);
+    let has_slice_commits = subjects.lines().any(pr_ship::is_slice_stack_commit_subject);
+    if !has_slice_commits {
+        return Ok(());
+    }
+
+    let mut temp_verifier: Option<tempfile::NamedTempFile> = None;
+    let verifier_path = if let Some(bytes) = origin_blob {
+        use std::io::Write;
+        let mut tmp = tempfile::Builder::new()
+            .prefix("aida-verify-stack-")
+            .suffix(".py")
+            .tempfile()
+            .context("could not create temporary file for origin/main verify_stack.py")?;
+        tmp.write_all(&bytes)
+            .context("could not write origin/main verify_stack.py")?;
+        tmp.flush()
+            .context("could not flush origin/main verify_stack.py")?;
+        let path = tmp.path().to_path_buf();
+        temp_verifier = Some(tmp);
+        path
+    } else {
+        fallback_path
+    };
+
+    let output = std::process::Command::new("python3")
+        .current_dir(project_root)
+        .arg(&verifier_path)
+        .arg(base_ref)
+        .arg(head_ref)
+        .output()
+        .context("failed to run scripts/split-lib/verify_stack.py")?;
+    drop(temp_verifier);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            format!("exit {}", output.status)
+        };
+        let refusal = format!(
+            "PR-{pr_number} rebase ship refused: slice-stack verifier (`scripts/split-lib/verify_stack.py {base_ref} {head_ref}`) failed ({detail})"
+        );
+        return Err(pr_ship::ShipRefusal::Review.error(refusal));
+    }
+    Ok(())
+}
+
+/// STORY-1663: record a `[aida:non-completing-rebase]` marker comment on any
+/// spec referenced by a rebase-merged slice PR when `--final-slice` was not
+/// passed, so `aida pull` and `aida db reconcile-status` leave the spec's
+/// status unchanged even if a commit subject carried `(SPEC-ID)`.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn record_non_completing_rebase_slice(
+    main_worktree: &std::path::Path,
+    project_root: &std::path::Path,
+    pr_number: u64,
+    base_branch: &str,
+    merged_head_sha: Option<&str>,
+    ship_branch: &str,
+) {
+    let head_ref = merged_head_sha
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(ship_branch);
+    let mut range_subjects: Vec<String> = Vec::new();
+    for base_candidate in [format!("origin/{base_branch}"), base_branch.to_string()] {
+        let range = format!("{base_candidate}..{head_ref}");
+        if let Ok(out) = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["log", "--format=%s", &range])
+            .output()
+        {
+            if out.status.success() {
+                range_subjects = String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+                break;
+            }
+        }
+    }
+    if range_subjects.is_empty() {
+        if let Ok(out) = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args(["show", "-s", "--format=%s", head_ref])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !s.is_empty() {
+                    range_subjects.push(s);
+                }
+            }
+        }
+    }
+
+    let mut candidate_specs: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for id in pr_ship::extract_spec_ids_from_text(ship_branch) {
+        candidate_specs.insert(id);
+    }
+    for subj in &range_subjects {
+        for id in crate::extract_spec_ids_from_commit(subj) {
+            candidate_specs.insert(id);
+        }
+    }
+    if candidate_specs.is_empty() {
+        return;
+    }
+
+    let store_path = main_worktree.join(".aida-store");
+    let Ok(backend) = aida_core::CachedGitBackend::open(
+        &store_path,
+        &aida_core::CachedGitBackend::default_cache_path(&store_path),
+    ) else {
+        return;
+    };
+    use aida_core::DatabaseBackend;
+    let mut comment_lines = vec![format!(
+        "{} PR #{} rebase-merged without --final-slice; status stays unchanged until the final slice completes.",
+        pr_ship::NON_COMPLETING_REBASE_MARKER,
+        pr_number
+    )];
+    if let Some(sha) = merged_head_sha.filter(|s| !s.trim().is_empty()) {
+        comment_lines.push(format!("sha: {}", sha.trim()));
+    }
+    for subj in &range_subjects {
+        comment_lines.push(format!("subject: {subj}"));
+    }
+    let body = comment_lines.join("\n");
+    let now = chrono::Utc::now();
+    for spec_id in candidate_specs {
+        let Ok(Some(req)) = backend.get_requirement_unambiguous(&spec_id) else {
+            continue;
+        };
+        let _ = backend.update_spec_atomically(&req, |r| {
+            let already = r.comments.iter().any(|c| c.content == body);
+            if !already {
+                r.add_comment(aida_core::Comment::new(
+                    "aida-pr-ship".to_string(),
+                    body.clone(),
+                ));
+                r.modified_at = now;
+            }
+        });
+    }
+}
+
+/// STORY-1663: transition resolved specs to `Completed` when a rebase merge
+/// ships with `--final-slice` (`--complete-spec`).
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn complete_rebase_final_slice_specs(
+    main_worktree: &std::path::Path,
+    pr_number: u64,
+    spec_ids: &[String],
+    merged_head_sha: Option<&str>,
+) {
+    if spec_ids.is_empty() {
+        return;
+    }
+    let store_path = main_worktree.join(".aida-store");
+    let backend = match aida_core::CachedGitBackend::open(
+        &store_path,
+        &aida_core::CachedGitBackend::default_cache_path(&store_path),
+    ) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!(
+                "  {} could not open store at {} to complete {:?} after PR-{pr_number}: {e}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                store_path.display(),
+                spec_ids
+            );
+            return;
+        }
+    };
+    use aida_core::DatabaseBackend;
+    let sha = merged_head_sha.unwrap_or("");
+    let now = chrono::Utc::now();
+    let author = current_user_id(None);
+    for spec_id in spec_ids {
+        let req = match backend.get_requirement_unambiguous(spec_id) {
+            Ok(Some(req)) => req,
+            Ok(None) => {
+                eprintln!(
+                    "  {} could not complete {spec_id} after PR-{pr_number}: spec not found in store",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                continue;
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not resolve {spec_id} to complete after PR-{pr_number}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                continue;
+            }
+        };
+        let display_id = req.display_id();
+        match crate::completion::transition_to_completed_atomically(
+            &backend,
+            &req,
+            Some(main_worktree),
+            &display_id,
+            sha,
+            "pr-ship-rebase",
+            |r, prior| {
+                aida_core::conflict::record_status_transition(r, &author, prior);
+                r.modified_at = now;
+                if !sha.is_empty() {
+                    r.implementation_info
+                        .get_or_insert_with(aida_core::ImplementationInfo::default)
+                        .completion_sha = Some(sha.to_string());
+                }
+            },
+        ) {
+            Ok(crate::completion::AtomicCompletion::Completed) => {
+                eprintln!(
+                    "  {} completed {} via final-slice rebase merge of PR-{}",
+                    crate::glyph(crate::glyphs::Glyph::Check).green(),
+                    display_id,
+                    pr_number
+                );
+            }
+            Ok(crate::completion::AtomicCompletion::AlreadyCompleted) => {
+                eprintln!(
+                    "  {} {} is already Completed (PR-{})",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    display_id,
+                    pr_number
+                );
+            }
+            Ok(crate::completion::AtomicCompletion::Refused(status)) => {
+                eprintln!(
+                    "  {} could not complete {} after PR-{}: spec is in terminal status {}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    display_id,
+                    pr_number,
+                    status
+                );
+            }
+            Ok(crate::completion::AtomicCompletion::Gone) => {
+                eprintln!(
+                    "  {} could not complete {} after PR-{}: spec disappeared before write",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    display_id,
+                    pr_number
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not complete {} after final-slice rebase merge of PR-{}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    display_id,
+                    pr_number
+                );
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShipDefaultBranchDisposition {
+    FeatureBranch,
+    OnDefaultBranch,
+    UnknownDefaultBranch,
+}
+
 /// Protect conventional mainlines; otherwise require evidence of the default.
-/// Unknown evidence also requires an explicit PR number.
-// trace:TASK-1795 | ai:codex
-pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+/// Unknown evidence is reported distinctly from being on the default branch.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn classify_ship_default_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> ShipDefaultBranchDisposition {
     if matches!(branch, "main" | "master") {
-        return true;
+        return ShipDefaultBranchDisposition::OnDefaultBranch;
     }
     // Only origin/HEAD is local evidence, never a guess from leftover refs.
     // A stale origin/HEAD still wins over the forge, so refresh it when the
@@ -4456,9 +5160,18 @@ pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &st
         .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
         .filter(|name| !name.is_empty());
     match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
-        Some(default) => branch == default,
-        None => true,
+        Some(default) if branch == default => ShipDefaultBranchDisposition::OnDefaultBranch,
+        Some(_) => ShipDefaultBranchDisposition::FeatureBranch,
+        None => ShipDefaultBranchDisposition::UnknownDefaultBranch,
     }
+}
+
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
+    !matches!(
+        classify_ship_default_branch(project_root, branch),
+        ShipDefaultBranchDisposition::FeatureBranch
+    )
 }
 
 /// BUG-2164: Query forge for open approved PRs. Gracefully returns empty vec on any error.
@@ -5774,9 +6487,12 @@ mod pr_ship_environment_tests {
                 .contains("BUG-1188"),
             "pr ship launched from a sibling worktree must see the main clone's hold marker"
         );
+        // BUG-2176: a read keyed by the sibling resolves to the same primary
+        // marker — there is no per-worktree hold store left to read empty.
+        // trace:BUG-2176 | ai:claude
         assert!(
-            crate::merge_hold::read_hold(&sibling, 1188).is_none(),
-            "the regression was reading the sibling worktree's empty .aida directory"
+            crate::merge_hold::read_hold(&sibling, 1188).is_some_and(|r| r.contains("BUG-1188")),
+            "a sibling-rooted read must see the main clone's hold marker"
         );
     }
 
@@ -6296,5 +7012,505 @@ mod task_1458_pr_ship_wiring_guard {
             .find(concat!(".merge_", "change("))
             .expect("the handler merges");
         assert!(gate < opts && opts < merge, "gate → pin → merge order");
+    }
+}
+
+#[cfg(test)]
+mod story_1663_rebase_ship_tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
+        // trace:STORY-1663.ac5970a5 | ai:antigravity
+        let cli = crate::cli::Cli::try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+            .expect("parses --rebase");
+        match cli.command {
+            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
+                n,
+                rebase,
+                merge_method,
+                final_slice,
+                ..
+            }) => {
+                assert_eq!(n, Some(42));
+                assert!(rebase);
+                assert!(merge_method.is_none());
+                assert!(!final_slice);
+                assert_eq!(
+                    pr_ship::validate_ship_merge_method(rebase, merge_method, final_slice).unwrap(),
+                    crate::forge::MergeMethod::Rebase
+                );
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let cli2 = crate::cli::Cli::try_parse_from([
+            "aida",
+            "pr",
+            "ship",
+            "42",
+            "--merge-method",
+            "rebase",
+            "--final-slice",
+        ])
+        .expect("parses --merge-method rebase --final-slice");
+        match cli2.command {
+            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
+                rebase,
+                merge_method,
+                final_slice,
+                ..
+            }) => {
+                assert!(!rebase);
+                assert_eq!(merge_method, Some(pr_ship::ShipMergeMethod::Rebase));
+                assert!(final_slice);
+                assert_eq!(
+                    pr_ship::validate_ship_merge_method(rebase, merge_method, final_slice).unwrap(),
+                    crate::forge::MergeMethod::Rebase
+                );
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let cli3 = crate::cli::Cli::try_parse_from([
+            "aida",
+            "pr",
+            "ship",
+            "42",
+            "--rebase",
+            "--complete-spec",
+        ])
+        .expect("parses --complete-spec alias");
+        match cli3.command {
+            crate::cli::Command::Pr(crate::cli::PrCommand::Ship {
+                rebase,
+                final_slice,
+                ..
+            }) => {
+                assert!(rebase);
+                assert!(final_slice);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        // Conflicting --rebase and --merge-method is rejected by clap.
+        assert!(crate::cli::Cli::try_parse_from([
+            "aida",
+            "pr",
+            "ship",
+            "42",
+            "--rebase",
+            "--merge-method",
+            "squash"
+        ])
+        .is_err());
+
+        // --final-slice without --rebase or --merge-method rebase is rejected.
+        let err = pr_ship::validate_ship_merge_method(false, None, true)
+            .expect_err("--final-slice without --rebase must be rejected");
+        assert!(err.contains("requires `--rebase`"), "{err}");
+        let err_squash = pr_ship::validate_ship_merge_method(
+            false,
+            Some(pr_ship::ShipMergeMethod::Squash),
+            true,
+        )
+        .expect_err("--final-slice with --merge-method squash must be rejected");
+        assert!(err_squash.contains("requires `--rebase`"), "{err_squash}");
+    }
+
+    #[test]
+    fn rebase_ship_without_independent_approval_at_head_is_refused() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        let tmp = tempfile::tempdir().unwrap();
+        let policy = pr_ship::ShipApprovalPolicy::default();
+        let err = pr_ship_approval_gate(
+            tmp.path(),
+            1490,
+            &[],
+            Some("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+            &policy,
+            false,
+            true,
+        )
+        .expect_err("rebase ship uses the same approval gate and must refuse without verdict");
+        assert_eq!(
+            err.downcast_ref::<pr_ship::ShipFailure>().map(|f| f.reason),
+            Some(pr_ship::ShipRefusal::Review)
+        );
+    }
+
+    #[test]
+    fn pr_ship_with_method_wires_identical_gates_and_rebase_hooks() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let src = include_str!("pr_cmd.rs");
+        let start = src
+            .find(concat!("pub(crate) fn pr_ship_", "with_method("))
+            .expect("pr_ship_with_method exists");
+        let body = &src[start..];
+        let preflight = body
+            .find(concat!("ship_preflight_", "gates("))
+            .expect("runs preflight gates");
+        let stale_head = body
+            .find(concat!("stale_head_after_", "ci_refusal("))
+            .expect("checks stale head after CI");
+        let approval_gate = body
+            .find(concat!("let match_head = pr_ship_", "approval_gate("))
+            .expect("runs approval gate");
+        let verifier = body
+            .find(concat!("run_optional_slice_stack_", "verifier("))
+            .expect("runs optional slice-stack verifier");
+        let head_pin = body
+            .find(concat!("require_rebase_head_", "pin("))
+            .expect("requires rebase head pin");
+        let merge_call = body
+            .find(concat!(".merge_", "change("))
+            .expect("invokes merge_change");
+        assert!(
+            preflight < stale_head
+                && stale_head < approval_gate
+                && approval_gate < verifier
+                && verifier < head_pin
+                && head_pin < merge_call,
+            "expected preflight -> stale_head -> approval_gate -> verifier -> head_pin -> merge_change order"
+        );
+    }
+
+    #[test]
+    fn rebase_ship_refuses_stale_head_and_missing_head_pin() {
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let stale = pr_ship::stale_head_after_ci_refusal(
+            1490,
+            Some("1111111111111111111111111111111111111111"),
+            Some("2222222222222222222222222222222222222222"),
+        )
+        .expect("head movement after preflight/CI must refuse");
+        assert!(stale.contains("PR-1490"), "{stale}");
+        assert!(stale.contains("moved"), "{stale}");
+
+        let unpinned =
+            pr_ship::require_rebase_head_pin(1490, crate::forge::MergeMethod::Rebase, None)
+                .expect_err("rebase merge without --match-head-commit pin must refuse");
+        assert!(
+            unpinned.contains("without a pinned head commit"),
+            "{unpinned}"
+        );
+
+        assert!(pr_ship::require_rebase_head_pin(
+            1490,
+            crate::forge::MergeMethod::Rebase,
+            Some("1111111111111111111111111111111111111111"),
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rebase_ship_slice_leaves_spec_status_unchanged_and_completes_only_on_final_slice() {
+        // trace:STORY-1663.ac5970a5 | ai:antigravity
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = aida_core::Requirement::new(
+            "Slice stack parent".to_string(),
+            "Parent spec".to_string(),
+        );
+        req.spec_id = Some("STORY-1663".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        store.requirements.push(req.clone());
+
+        // Default rebase ship (intermediate slice): suppresses completion trailer IDs
+        // so the owning spec's status stays unchanged.
+        let default_rebase_trailer = ship_completion_trailer_for_method(
+            &store,
+            crate::forge::MergeMethod::Rebase,
+            false,
+            "[1/3] feat(ship): slice one (STORY-1663)",
+            "claude/story-1663-part1",
+            "",
+            false,
+        );
+        assert!(
+            default_rebase_trailer.ids.is_empty(),
+            "intermediate rebase slice must not complete owning spec: {default_rebase_trailer:?}"
+        );
+        assert!(
+            default_rebase_trailer
+                .notes
+                .iter()
+                .any(|n| n.contains("--final-slice")),
+            "expected note explaining --final-slice: {:?}",
+            default_rebase_trailer.notes
+        );
+
+        // Final-slice rebase ship (`--final-slice` / `--complete-spec`): resolves the
+        // owning spec ID so `complete_rebase_final_slice_specs` transitions it to Completed.
+        let final_slice_trailer = ship_completion_trailer_for_method(
+            &store,
+            crate::forge::MergeMethod::Rebase,
+            true,
+            "[3/3] feat(ship): slice three (STORY-1663)",
+            "claude/story-1663-part3",
+            "",
+            false,
+        );
+        assert_eq!(final_slice_trailer.ids, vec!["STORY-1663".to_string()]);
+
+        // Slice commit subject classifiers recognize both STORY-1488 moves and `[k/N]` slices.
+        assert!(pr_ship::is_non_completing_slice_commit_subject(
+            "refactor(cli-lib): extract pr_cmd.rs (STORY-1488)"
+        ));
+        assert!(pr_ship::is_non_completing_slice_commit_subject(
+            "[1/3] feat(ship): slice one (STORY-1663)"
+        ));
+        assert!(!pr_ship::is_non_completing_slice_commit_subject(
+            "feat(ship): standalone feature (STORY-1663)"
+        ));
+
+        // Verify in a real git repo + store that a non-final rebase slice with a
+        // trailing `(STORY-1663)` commit subject leaves an `InProgress` spec
+        // unchanged across `auto_bump_done_to_completed` (while an unrelated Done
+        // spec `BUG-999` still auto-bumps to Completed), and `complete_rebase_final_slice_specs`
+        // transitions `STORY-1663` to `Completed` on the final slice.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let run_git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {args:?} failed");
+        };
+        run_git(&["init", "-b", "main"]);
+        run_git(&["config", "user.name", "Test"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("README.md"), "init\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "chore: initial"]);
+
+        let store_dir = root.join(".aida-store");
+        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        backend.add_requirement(req).unwrap();
+        let mut other_req = aida_core::Requirement::new(
+            "Unrelated done bug".to_string(),
+            "Unrelated spec".to_string(),
+        );
+        other_req.spec_id = Some("BUG-999".to_string());
+        other_req.status = aida_core::RequirementStatus::Done;
+        backend.add_requirement(other_req).unwrap();
+
+        // Simulate a non-final rebase slice commit and an unrelated completing commit on main.
+        std::fs::write(root.join("README.md"), "slice 1\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "feat(ship): slice one (STORY-1663)"]);
+        let slice_sha = String::from_utf8(
+            std::process::Command::new("git")
+                .current_dir(root)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            1490,
+            "main",
+            Some(&slice_sha),
+            "claude/story-1663-part1",
+        );
+
+        std::fs::write(root.join("README.md"), "slice 1 + bug 999\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "fix: unrelated bug (BUG-999) (#1491)"]);
+
+        let storage = crate::Storage::new(&store_dir);
+        let flips =
+            crate::db_reconcile::auto_bump_done_to_completed(root, &store_dir, None, &storage)
+                .expect("auto_bump runs");
+        assert!(
+            flips.iter().any(|f| f.spec_id == "BUG-999"),
+            "unrelated spec must still auto-bump: {flips:?}"
+        );
+        assert!(
+            !flips.iter().any(|f| f.spec_id == "STORY-1663"),
+            "non-completing rebase slice must not auto-bump STORY-1663: {flips:?}"
+        );
+        let after_slice = backend
+            .get_requirement_unambiguous("STORY-1663")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_slice.status,
+            aida_core::RequirementStatus::InProgress,
+            "STORY-1663 status must stay unchanged after non-final slice"
+        );
+
+        // Now complete STORY-1663 via `--final-slice`.
+        complete_rebase_final_slice_specs(
+            root,
+            1492,
+            &["STORY-1663".to_string()],
+            Some(&slice_sha),
+        );
+        let after_final = backend
+            .get_requirement_unambiguous("STORY-1663")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_final.status,
+            aida_core::RequirementStatus::Completed,
+            "STORY-1663 must transition to Completed on --final-slice"
+        );
+        assert_eq!(
+            after_final
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some(slice_sha.as_str())
+        );
+    }
+
+    #[test]
+    fn rebase_dry_run_plan_renders_gh_pr_merge_rebase_with_match_head_commit() {
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let opts = pr_ship::PrShipOptions {
+            pr_number: Some(1490),
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+            complexity: None,
+            effort: None,
+        };
+        let steps = vec![
+            pr_ship::ShipStep::ResolvePr {
+                create_if_needed: false,
+            },
+            pr_ship::ShipStep::WatchCi,
+            pr_ship::ShipStep::Merge {
+                delete_branch: true,
+            },
+            pr_ship::ShipStep::Pull,
+            pr_ship::ShipStep::EndLease,
+        ];
+        let plan = pr_ship::format_dry_run_plan_with_method(
+            &opts,
+            &steps,
+            crate::forge::ForgeKind::GitHub,
+            crate::forge::MergeMethod::Rebase,
+        );
+        assert!(
+            plan.contains(
+                "gh pr merge <N> --rebase --delete-branch --match-head-commit <approved-head-sha>"
+            ),
+            "unexpected rebase dry-run plan:\n{plan}"
+        );
+    }
+
+    #[test]
+    fn slice_stack_verifier_runs_real_verify_stack_py_and_fails_closed_on_missing_range() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let run_git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {args:?} failed");
+        };
+        run_git(&["init", "-b", "main"]);
+        run_git(&["config", "user.name", "Test"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+
+        let script_dir = root.join("scripts/split-lib");
+        std::fs::create_dir_all(&script_dir).unwrap();
+        let real_verifier = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("scripts/split-lib/verify_stack.py");
+        std::fs::copy(&real_verifier, script_dir.join("verify_stack.py")).unwrap();
+        run_git(&["add", "scripts/split-lib/verify_stack.py"]);
+        run_git(&["commit", "-m", "chore: add verify_stack.py"]);
+        run_git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+        // 1. Fail-closed when the commit range cannot be inspected (e.g., bad head ref).
+        let range_err = run_optional_slice_stack_verifier(
+            root,
+            root,
+            1490,
+            "origin/main",
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )
+        .expect_err("unresolvable range must fail closed when verifier is present");
+        assert_eq!(
+            range_err
+                .downcast_ref::<pr_ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(pr_ship::ShipRefusal::Review)
+        );
+        assert!(
+            range_err
+                .to_string()
+                .contains("could not inspect commit range"),
+            "{range_err}"
+        );
+
+        // 2. Non-slice commits pass without invoking the slice-stack verifier.
+        std::fs::write(root.join("README.md"), "normal change\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "feat: normal change"]);
+        run_optional_slice_stack_verifier(root, root, 1490, "origin/main", "HEAD")
+            .expect("non-slice commit range should pass");
+
+        // 3. A slice-stack commit (`refactor(cli-lib): extract foo.rs`) invokes the
+        // real `verify_stack.py <base> <head>` from `origin/main` and refuses on FAIL.
+        std::fs::write(root.join("README.md"), "invalid slice move\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "refactor(cli-lib): extract foo.rs"]);
+        let err = run_optional_slice_stack_verifier(root, root, 1490, "origin/main", "HEAD")
+            .expect_err("invalid slice commit must fail real verify_stack.py");
+        assert_eq!(
+            err.downcast_ref::<pr_ship::ShipFailure>().map(|f| f.reason),
+            Some(pr_ship::ShipRefusal::Review)
+        );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("scripts/split-lib/verify_stack.py origin/main HEAD"),
+            "{msg}"
+        );
+        assert!(msg.contains("FAIL"), "{msg}");
+    }
+
+    #[test]
+    fn two_seat_docs_retire_slice_stack_exception_and_point_at_rebase_ship() {
+        // trace:STORY-1663.ac82754a | ai:antigravity
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        for rel in [
+            ".aida/discipline/two-seat-protocol.md",
+            "aida-core/templates/.aida/discipline/two-seat-protocol.md",
+        ] {
+            let raw = std::fs::read_to_string(repo_root.join(rel)).unwrap();
+            let doc = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(
+                doc.contains("aida pr ship <n> --rebase"),
+                "{rel} must point at `aida pr ship <n> --rebase`"
+            );
+            assert!(
+                doc.contains("Raw `gh pr merge --rebase` is no longer an exception"),
+                "{rel} must state that raw `gh pr merge --rebase` is no longer an exception"
+            );
+            assert!(
+                doc.contains("leaves the owning spec's status unchanged"),
+                "{rel} must state that rebase ship leaves the owning spec's status unchanged"
+            );
+        }
     }
 }

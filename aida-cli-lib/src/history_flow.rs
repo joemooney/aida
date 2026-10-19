@@ -91,7 +91,7 @@ pub(crate) fn flow_rows(store: &Path, events: &[Event]) -> Vec<FlowRow> {
         .iter()
         .filter_map(|e| {
             let (from, to, kind, own_title) = match &e.kind {
-                EventKind::StatusChange { from, to } => {
+                EventKind::StatusChange { from, to, .. } => {
                     (Some(from.clone()), to.clone(), "status_change", None)
                 }
                 EventKind::Added { title, status, .. } => {

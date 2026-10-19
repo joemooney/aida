@@ -28,11 +28,12 @@ static FALLBACK_NOTE_EMITTED: AtomicBool = AtomicBool::new(false);
 
 fn note_cache_fallback(original: &Path, fallback: &Path) {
     if !FALLBACK_NOTE_EMITTED.swap(true, Ordering::Relaxed) {
-        eprintln!(
+        // trace:TASK-1739 | ai:codex
+        super::cache_refresh::emit_cache_note(format!(
             "note: the AIDA cache at {} is not writable; using a private fallback cache at {}",
             original.display(),
             fallback.display()
-        );
+        ));
     }
 }
 
@@ -1097,14 +1098,15 @@ fn quarantine_or_remove_with_note(path: &Path) {
 
 // trace:BUG-1940 | ai:claude
 fn note_cache_quarantined(path: &Path, moved: &[PathBuf]) {
-    eprintln!(
+    // trace:TASK-1739 | ai:codex
+    super::cache_refresh::emit_cache_note(format!(
         "note: the AIDA cache at {} was corrupt; moved it aside to {} and started a fresh one",
         path.display(),
         moved
             .first()
             .map(|p| p.display().to_string())
             .unwrap_or_default()
-    );
+    ));
 }
 
 /// How long the open-time auto-heal waits for the cache refresh lock before
@@ -1380,7 +1382,7 @@ pub struct Cache {
     /// The file identities this handle's connection bound, re-checked during
     /// use so a holder follows a cache another process replaced on disk.
     // trace:BUG-1984 | ai:claude
-    binding: Mutex<CacheBinding>,
+    pub(super) binding: Mutex<CacheBinding>,
 }
 
 // trace:BUG-1752 | ai:codex
@@ -1527,6 +1529,8 @@ impl Cache {
         // trace:BUG-1644 | ai:claude
         let lock_info_path = cache_lock_info_path(&path);
         let read_only = !probe_cache_writable(&path, &lock_info_path);
+        // trace:TASK-1739 | ai:codex
+        let pre_open_fds = CacheBinding::open_fds_for(&path);
         let conn = match open_connection_with_retry(&path, &lock_info_path) {
             Ok(conn) => conn,
             Err(err) if read_only && allow_fallback => {
@@ -1704,7 +1708,8 @@ impl Cache {
                 },
             )?;
         }
-        let binding = Mutex::new(CacheBinding::capture(&path)); // trace:BUG-1984 | ai:claude
+        // trace:BUG-1984 trace:TASK-1739 | ai:claude
+        let binding = Mutex::new(CacheBinding::capture_with_excluded(&path, pre_open_fds));
         let cache = Cache {
             conn: Mutex::new(conn),
             lock_info_path,
@@ -1864,8 +1869,8 @@ impl Cache {
                 .lock()
                 .is_ok_and(|mut binding| binding.due(std::time::Instant::now()));
         if due {
-            // A failed re-open is retried at the next use; until then reads
-            // fail and callers fall back to the canonical store.
+            // A failed re-open backs off for one check interval; until then
+            // reads fail and callers fall back to the canonical store.
             let _ = self.rebind_if_replaced();
         }
         self.conn.lock().unwrap()
@@ -1903,17 +1908,19 @@ impl Cache {
         match Cache::open_at(self.path.clone(), false) {
             Ok(fresh) => {
                 self.adopt_connection(&mut guard, fresh);
-                eprintln!(
+                // trace:TASK-1739 | ai:codex
+                super::cache_refresh::emit_cache_note(format!(
                     "note: the AIDA cache at {} changed on disk ({reason}); re-opened it",
                     self.path.display()
-                );
+                ));
                 Ok(Some(reason))
             }
             Err(err) => {
+                // trace:TASK-1739 | ai:codex
                 self.binding
                     .lock()
                     .unwrap_or_else(|p| p.into_inner())
-                    .expire();
+                    .backoff();
                 Err(err.context(format!(
                     "the AIDA cache at {} changed on disk ({reason}) and could not be re-opened",
                     self.path.display()
@@ -1950,7 +1957,7 @@ impl Cache {
             migration_pending: AtomicBool::new(false),
             usable_snapshot: AtomicBool::new(true),
             read_only: self.read_only,
-            binding: Mutex::new(CacheBinding::capture(&self.path)), // trace:BUG-1984 | ai:claude
+            binding: Mutex::new(CacheBinding::pinned()), // trace:TASK-1739 | ai:codex
         })
     }
 

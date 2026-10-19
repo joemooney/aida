@@ -224,7 +224,7 @@ fn trace_ids(text: &str) -> BTreeSet<String> {
 /// raw strings and test fixtures. Rust doc-comment tokens carry the ORIGINAL
 /// comment span; retain those rather than masking their synthesized #[doc].
 /// If tokenization fails, raw full-file tokens are conservative fallback evidence.
-fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
+pub(crate) fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
     let stream: proc_macro2::TokenStream = text.parse().ok()?;
     let mut offsets = vec![0];
     for (i, b) in text.bytes().enumerate() {
@@ -299,9 +299,41 @@ fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
     )
 }
 
+/// Plain leading comments are not part of syn's item span. Extend an item
+/// starting at 0-based line `start` over its uninterrupted comment/blank
+/// prefix; `comments` is `rust_comments` output for the same text.
+// trace:TASK-1785 | ai:claude — shared with `aida lint constants`.
+pub(crate) fn leading_comment_start(
+    mut start: usize,
+    lines: &[&str],
+    comments: &[(usize, String)],
+) -> usize {
+    while start > 0 {
+        let i = start - 1;
+        if lines[i].trim().is_empty()
+            || (!comments[i].1.trim().is_empty() && lines[i].trim() == comments[i].1.trim())
+        {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    start
+}
+
 #[derive(Default)]
-struct Items(Vec<std::ops::Range<usize>>);
+struct Items {
+    ranges: Vec<std::ops::Range<usize>>,
+    module_opens: BTreeSet<(usize, usize)>,
+}
 impl<'ast> Visit<'ast> for Items {
+    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+        if let Some((brace, _)) = &node.content {
+            let start = brace.span.open().start();
+            self.module_opens.insert((start.line, start.column));
+        }
+        syn::visit::visit_item_mod(self, node);
+    }
     fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
         self.push(node.span());
         syn::visit::visit_item_fn(self, node);
@@ -317,9 +349,57 @@ impl<'ast> Visit<'ast> for Items {
 }
 impl Items {
     fn push(&mut self, span: proc_macro2::Span) {
-        self.0
+        self.ranges
             .push(span.start().line.saturating_sub(1)..span.end().line);
     }
+}
+
+// Skip attributes (including synthesized doc attributes) while retaining their
+// original comment lines and the first code-token line. Whole-line inclusion
+// preserves the established conservative same-line prefix behavior.
+// trace:TASK-1800 | ai:codex
+fn header_end(stream: proc_macro2::TokenStream, empty_end: usize) -> Option<usize> {
+    let mut tokens = stream.into_iter().peekable();
+    loop {
+        match tokens.peek() {
+            Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '#' => {
+                tokens.next();
+                if matches!(tokens.peek(), Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '!')
+                {
+                    tokens.next();
+                }
+                if !matches!(tokens.next(), Some(proc_macro2::TokenTree::Group(g)) if g.delimiter() == proc_macro2::Delimiter::Bracket)
+                {
+                    return None;
+                }
+            }
+            Some(token) => return Some(token.span().start().line),
+            None => return Some(empty_end),
+        }
+    }
+}
+
+// trace:TASK-1800 | ai:codex
+fn select_module_headers(
+    stream: proc_macro2::TokenStream,
+    module_opens: &BTreeSet<(usize, usize)>,
+    selected: &mut [bool],
+) -> Option<()> {
+    for tree in stream {
+        if let proc_macro2::TokenTree::Group(group) = tree {
+            let start = group.span_open().start();
+            if group.delimiter() == proc_macro2::Delimiter::Brace
+                && module_opens.contains(&(start.line, start.column))
+            {
+                let end = header_end(group.stream(), group.span_close().end().line)?;
+                let start = start.line.checked_sub(1)?;
+                let end = end.min(selected.len());
+                selected.get_mut(start..end)?.fill(true);
+            }
+            select_module_headers(group.stream(), module_opens, selected)?;
+        }
+    }
+    Some(())
 }
 
 fn source_ids(
@@ -351,19 +431,8 @@ fn source_ids(
     let mut items = Items::default();
     items.visit_file(&file);
     let lines: Vec<_> = text.lines().collect();
-    // Plain leading comments are not part of syn's item span. Attach an
-    // uninterrupted comment/blank prefix to its following function/impl.
-    for range in &mut items.0 {
-        while range.start > 0 {
-            let i = range.start - 1;
-            if lines[i].trim().is_empty()
-                || (!comments[i].1.trim().is_empty() && lines[i].trim() == comments[i].1.trim())
-            {
-                range.start -= 1;
-            } else {
-                break;
-            }
-        }
+    for range in &mut items.ranges {
+        range.start = leading_comment_start(range.start, &lines, &comments);
     }
     // Select item ranges first, then parse each selected comment ONCE. A new
     // large file must not rescan an entire impl for every changed source line.
@@ -384,7 +453,7 @@ fn source_ids(
         };
         for line in touched {
             let mut attributed = false;
-            for item in items.0.iter().filter(|r| r.contains(&line)) {
+            for item in items.ranges.iter().filter(|r| r.contains(&line)) {
                 attributed = true;
                 selected_items.insert((item.start, item.end));
             }
@@ -399,32 +468,28 @@ fn source_ids(
     // doc comments belong to the file attributes, before its first item too.
     // This only adds evidence; item/fallback attribution remains unchanged.
     // trace:TASK-1800 | ai:codex
-    let mut tokens = text
-        .parse::<proc_macro2::TokenStream>()
-        .unwrap()
-        .into_iter()
-        .peekable();
-    // Skip leading attributes, including doc comments synthesized as #[doc].
-    // Count the first token's line too: a leading block comment can share it.
-    // Whole-line selection is deliberately conservative for trailing comments.
-    let header_end = loop {
-        match tokens.peek() {
-            Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '#' => {
-                tokens.next();
-                if matches!(tokens.peek(), Some(proc_macro2::TokenTree::Punct(p)) if p.as_char() == '!')
-                {
-                    tokens.next();
-                }
-                if !matches!(tokens.next(), Some(proc_macro2::TokenTree::Group(g)) if g.delimiter() == proc_macro2::Delimiter::Bracket)
-                {
-                    return (full(), true);
-                }
-            }
-            Some(token) => break token.span().start().line.min(comments.len()),
-            None => break comments.len(),
-        }
+    let tokens = text.parse::<proc_macro2::TokenStream>().unwrap();
+    let Some(header_end) = header_end(tokens.clone(), comments.len()) else {
+        return (full(), true);
     };
-    selected_lines[..header_end].fill(true);
+    selected_lines[..header_end.min(comments.len())].fill(true);
+    // Comments not owned by any function/impl (including its leading prefix)
+    // are module evidence, wherever they occur in the file. This is additive:
+    // sibling item traces remain scoped and attribution fallback is unchanged.
+    // trace:TASK-1800 | ai:codex
+    let mut owned_lines = vec![false; comments.len()];
+    for range in &items.ranges {
+        owned_lines[range.start..range.end.min(comments.len())].fill(true);
+    }
+    for (line, owned) in owned_lines.into_iter().enumerate() {
+        selected_lines[line] |= !owned;
+    }
+    // A module header may be attached as a leading comment to its first fn;
+    // it still applies independently of which function changed. Use the actual
+    // syn module brace identities, never arbitrary function/macro brace groups.
+    if select_module_headers(tokens, &items.module_opens, &mut selected_lines).is_none() {
+        return (full(), true);
+    }
     for (start, end) in selected_items {
         selected_lines[start..end.min(comments.len())].fill(true);
     }

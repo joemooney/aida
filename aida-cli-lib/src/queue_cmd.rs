@@ -5606,6 +5606,7 @@ pub(crate) fn handle_queue_command(
             sandbox,
             no_launch,
             plan_only,
+            plan_phase,
             guided,
             with_plan,
             role,
@@ -6728,8 +6729,10 @@ pub(crate) fn handle_queue_command(
                 *effort,
                 *strict,
                 // STORY-265: plan-only mode — launch /aida-plan in `plan`
-                // permission mode instead of /aida-pickup implement.
-                *plan_only,
+                // permission mode instead of /aida-pickup implement. The
+                // hidden `--plan-phase` is the drain prelude's headless twin.
+                // trace:TASK-1794 | ai:claude
+                *plan_only || *plan_phase,
                 // STORY-735: guided keystone mode — launch
                 // /aida-guided-implement (structured decision dialog) instead
                 // of /aida-pickup. trace:STORY-735 | ai:claude
@@ -10993,7 +10996,16 @@ pub(crate) fn resolve_queue_work_posture(
         anyhow::bail!("[agents] bypass and contained mode are mutually exclusive launch postures");
     }
     let (permission_mode, permission_mode_origin) = if contained {
-        (Some("dontAsk".to_string()), "contained sandbox")
+        // Plan mode and containment are independent: retain the sandbox flags
+        // while requesting the planning permission posture.
+        // trace:TASK-1794 | ai:codex
+        let mode = if plan_only { "plan" } else { "dontAsk" };
+        let origin = if plan_only {
+            "contained sandbox + --plan-only"
+        } else {
+            "contained sandbox"
+        };
+        (Some(mode.to_string()), origin)
     } else {
         resolve_queue_work_permission_mode(
             permission_mode,
@@ -11494,7 +11506,11 @@ pub(crate) fn handle_queue_work(
         contained_env,
         contained_knob,
         bypass_knob,
-        plan_only,
+        // The headless launcher never runs Claude plan mode (it owns its own
+        // posture), so only an interactive plan lane resolves to `plan`; the
+        // headless plan phase must not report a mode it will not run.
+        // trace:TASK-1794 | ai:claude
+        plan_only && !no_human,
         env_mode.as_deref(),
         config_mode.as_deref(),
     )?;
@@ -13412,6 +13428,25 @@ pub(crate) fn run_standalone_reviewer(
         Err(why) => eprintln!(
             "  {} no verdict collected for PR-{pr}: {why}",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+        ),
+    }
+
+    // BUG-2176: a contained reviewer cannot write the primary checkout's
+    // merge-holds either, so its rework marker stays in the review worktree,
+    // invisible to `aida pr ship` and gone once the worktree is removed.
+    // Adopt it whatever the verdict collection decided — a hold only tightens.
+    // trace:BUG-2176 | ai:claude
+    match crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at) {
+        Ok(true) if !quiet => eprintln!(
+            "  {} adopted the reviewer's merge-hold marker for PR-{pr} from {}",
+            crate::glyph(crate::glyphs::Glyph::InfoAlt).cyan(),
+            worktree.display()
+        ),
+        Ok(_) => {}
+        Err(err) => eprintln!(
+            "  {} could not adopt the reviewer's merge-hold marker for PR-{pr} from {} ({err}) — copy it to the primary checkout's .aida/merge-holds/ before removing the worktree",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            worktree.display()
         ),
     }
 

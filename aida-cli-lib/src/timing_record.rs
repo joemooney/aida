@@ -7,9 +7,11 @@
 //! terminal clone publishes the spec's lifecycle events into the store
 //! worktree at `timings/<TYPE>/<shard>/<ID>.json` — sharded exactly like
 //! `objects/`, never UNDER `objects/`, whose scanners load every `*.yaml`
-//! there as a requirement. `aida db sync`'s `git add -A .` carries the record
-//! onto the `aida-store` orphan branch, so any clone can rebuild the spec's
-//! timeline after `aida pull`.
+//! there as a requirement. The publish commits the record itself, under the
+//! store write lock, so a completion never leaves the store worktree dirty
+//! (BUG-2178: the mandate's exclusion read refuses any uncommitted store
+//! change); `aida db sync` carries the commit onto the `aida-store` orphan
+//! branch, so any clone can rebuild the spec's timeline after `aida pull`.
 //!
 //! Publishes are union-merges: the auto-bump often completes a spec on a
 //! different machine than the one that did the work (any clone's `aida pull`
@@ -113,7 +115,13 @@ pub(crate) fn publish(project_root: &Path, spec_id: &str, closed_by: &str) -> Op
 }
 
 /// [`publish`] with the store worktree named explicitly (the testable form).
+///
+/// In a git store the read-merge-write and a commit of only the record run
+/// as one store-writer transaction, so no completion leaves the record
+/// untracked for some later commit to sweep up. A failed lock or commit is
+/// reported on stderr and never fails the caller's transition.
 // trace:STORY-1480 | ai:claude
+// trace:BUG-2178 | ai:claude
 pub(crate) fn publish_to_store(
     store_root: &Path,
     project_root: &Path,
@@ -126,7 +134,73 @@ pub(crate) fn publish_to_store(
         return None;
     }
     let rel = aida_core::object_store::relative_timing_record_path(spec_id).ok()?;
-    let path = store_root.join(&rel);
+    if !aida_core::git_ops::is_git_repo(store_root) {
+        return write_record(store_root, project_root, spec_id, &rel, closed_by);
+    }
+    let mut written = None;
+    let result = aida_core::db::with_store_write_lock(store_root, || {
+        written = write_record(store_root, project_root, spec_id, &rel, closed_by);
+        if written.is_some() {
+            commit_record(store_root, spec_id, &rel, closed_by)?;
+        }
+        Ok(())
+    });
+    if let Err(e) = result {
+        eprintln!("warning: timing record for {spec_id} not committed to the store: {e:#}");
+    }
+    written
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: fail the record's commit after the write.
+    static FAIL_COMMIT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Stage and commit only the record at `rel`, leaving every other store
+/// change alone. A record already committed unchanged stages nothing and
+/// makes no commit; one left untracked by an older binary is swept up here.
+// trace:BUG-2178 | ai:claude
+fn commit_record(
+    store_root: &Path,
+    spec_id: &str,
+    rel: &str,
+    closed_by: &str,
+) -> anyhow::Result<()> {
+    #[cfg(test)]
+    if FAIL_COMMIT.with(|f| f.get()) {
+        anyhow::bail!("injected timing record commit failure");
+    }
+    // A contained session cannot write the store's history; the host's next
+    // store sync commits the record.
+    if aida_core::git_ops::store_commit_deferred_to_host(store_root) {
+        aida_core::git_ops::notice_store_commit_deferred(store_root);
+        return Ok(());
+    }
+    aida_core::git_ops::add_all(store_root, rel)?;
+    let unchanged = aida_core::git_ops::host_git_command(store_root)
+        .args(["diff", "--cached", "--quiet", "--", rel])
+        .status()?;
+    if unchanged.success() {
+        return Ok(());
+    }
+    aida_core::git_ops::commit_paths(
+        store_root,
+        &format!("timing: publish {spec_id} record ({closed_by})"),
+        &[rel],
+    )
+}
+
+/// Read, union-merge and write the record at `rel` without committing it.
+// trace:STORY-1480 | ai:claude
+fn write_record(
+    store_root: &Path,
+    project_root: &Path,
+    spec_id: &str,
+    rel: &str,
+    closed_by: &str,
+) -> Option<PathBuf> {
+    let path = store_root.join(rel);
 
     let mut fresh: Vec<Event> = Vec::new();
     for feed in [
@@ -509,5 +583,132 @@ mod tests {
         // Missing record: empty, silent.
         let (none, no_notes) = load_published(&store, "BUG-78");
         assert!(none.is_empty() && no_notes.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // BUG-2178: a publish into a git store commits its record, so no
+    // completion leaves the store dirty for the mandate's exclusion read.
+    // trace:BUG-2178 | ai:claude
+    // -----------------------------------------------------------------------
+
+    /// A committed git store at `<tmp>/.aida-store` plus a feed holding one
+    /// lifecycle event for `spec`.
+    fn git_fixture(spec: &str) -> (tempfile::TempDir, PathBuf, PathBuf) {
+        let (g, project, store) = fixture();
+        aida_core::git_ops::init(&store).unwrap();
+        aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+        std::fs::write(store.join("metadata.yaml"), "version: 1\n").unwrap();
+        aida_core::git_ops::add(&store, &["metadata.yaml"]).unwrap();
+        aida_core::git_ops::commit(&store, "fixture").unwrap();
+        write_feed(
+            &project,
+            &[ev("2026-10-18T11:00:00Z", spec, EventKind::RunStarted)],
+        );
+        (g, project, store)
+    }
+
+    fn store_git(store: &Path, args: &[&str]) -> String {
+        let out = aida_core::git_ops::host_git_command(store)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?} failed");
+        String::from_utf8(out.stdout).unwrap()
+    }
+
+    fn porcelain(store: &Path) -> String {
+        store_git(
+            store,
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+        )
+    }
+
+    // trace:BUG-2178 | ai:claude
+    #[test]
+    fn bug_2178_completion_leaves_store_worktree_clean() {
+        let (_g, project, store) = git_fixture("BUG-9");
+        assert_eq!(porcelain(&store), "");
+        crate::completion::emit_spec_completed(&project, "BUG-9", "", None, "auto-bump");
+
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-9").unwrap();
+        assert!(store.join(&rel).is_file(), "record published");
+        assert_eq!(porcelain(&store), "", "completion left the store dirty");
+        assert_eq!(store_git(&store, &["ls-files", "--", &rel]).trim(), rel);
+
+        // A later publish with new evidence extends and commits the record
+        // again; one with nothing new makes no commit.
+        write_feed(
+            &project,
+            &[
+                ev("2026-10-18T11:00:00Z", "BUG-9", EventKind::RunStarted),
+                ev(
+                    "2026-10-18T11:05:00Z",
+                    "BUG-9",
+                    EventKind::PrMerged { pr: 7 },
+                ),
+            ],
+        );
+        publish(&project, "BUG-9", "queue-done").expect("second publish");
+        assert_eq!(porcelain(&store), "");
+        let commits = store_git(&store, &["rev-list", "--count", "HEAD"]);
+        publish(&project, "BUG-9", "queue-done").expect("unchanged publish");
+        assert_eq!(store_git(&store, &["rev-list", "--count", "HEAD"]), commits);
+    }
+
+    /// The record commit carries only the record: unrelated store changes
+    /// stay as they were, and a record an older binary left untracked is
+    /// swept into the commit even when it holds nothing new.
+    // trace:BUG-2178 | ai:claude
+    #[test]
+    fn bug_2178_commit_touches_only_the_record() {
+        let (_g, project, store) = git_fixture("BUG-10");
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-10").unwrap();
+        // An older binary's publish: written, never committed.
+        write_record(&store, &project, "BUG-10", &rel, "done").unwrap();
+        std::fs::write(store.join("unrelated.txt"), "x").unwrap();
+
+        publish(&project, "BUG-10", "auto-bump").expect("published");
+        assert_eq!(porcelain(&store), "?? unrelated.txt\n");
+        assert_eq!(store_git(&store, &["ls-files", "--", &rel]).trim(), rel);
+    }
+
+    /// The mandate's fail-closed snapshot accepts the store right after a
+    /// completion, and still refuses an uncommitted record.
+    // trace:BUG-2178 | ai:claude
+    #[test]
+    fn bug_2178_mandate_snapshot_reads_store_after_completion() {
+        let (_g, project, store) = git_fixture("BUG-11");
+        crate::completion::emit_spec_completed(&project, "BUG-11", "", None, "done");
+        assert!(crate::mandate_traces::store_snapshot(&store).is_ok());
+
+        // The strict check is unchanged: the pre-fix state still refuses.
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-12").unwrap();
+        write_feed(
+            &project,
+            &[ev("2026-10-18T11:00:00Z", "BUG-12", EventKind::RunStarted)],
+        );
+        write_record(&store, &project, "BUG-12", &rel, "done").unwrap();
+        let err = crate::mandate_traces::store_snapshot(&store).unwrap_err();
+        assert!(format!("{err:#}").contains("uncommitted evidence"));
+    }
+
+    /// A failed record commit is reported and never fails the completion:
+    /// the record stays written for the next store sync to commit.
+    // trace:BUG-2178 | ai:claude
+    #[test]
+    fn bug_2178_commit_failure_never_fails_the_completion() {
+        let (_g, project, store) = git_fixture("BUG-13");
+        FAIL_COMMIT.with(|f| f.set(true));
+        let published = publish(&project, "BUG-13", "done");
+        crate::completion::emit_spec_completed(&project, "BUG-13", "", None, "auto-bump");
+        FAIL_COMMIT.with(|f| f.set(false));
+
+        let rel = aida_core::object_store::relative_timing_record_path("BUG-13").unwrap();
+        assert_eq!(published, Some(store.join(&rel)));
+        assert!(store.join(&rel).is_file());
+        assert!(
+            porcelain(&store).contains(&rel),
+            "record left for the next sync"
+        );
     }
 }
