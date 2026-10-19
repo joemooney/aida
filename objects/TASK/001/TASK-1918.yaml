@@ -20,8 +20,13 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:13:03.706471090Z
-modified_at: 2026-10-19T16:04:56.542970723Z
+modified_at: 2026-10-19T16:04:58.490617365Z
 req_type: Task
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-19T16:04:58.490614551Z
+  created_by: joe
 comments:
 - id: 01a154e8-a292-7a20-98f6-481feeab80f8
   author: joe
@@ -38,6 +43,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a154e8-b5eb-7223-a941-5852d87f1cd0
+  author: joe
+  timestamp: 2026-10-19T16:04:59.499249980Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
