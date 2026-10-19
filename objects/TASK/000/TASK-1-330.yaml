@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:26.929384158Z
-modified_at: 2026-10-18T14:31:26.929384158Z
+modified_at: 2026-10-19T15:46:56.901668224Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
 - finding-hash:96c943f0
 - from-review:TASK-1785
 - kind:carried-forward
+comments:
+- id: 01a154d8-3105-7690-9722-77bacd005ec5
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1812. aida show TASK-1398 and TASK-1812 both specify trait-level marker coverage for default methods; the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:46:56.901668224Z
+  modified_at: 2026-10-19T15:46:56.901668224Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14f90-068e-7820-856c-101e2cbf9b28
   author: joe
