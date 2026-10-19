@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T00:28:48.048522447Z
-modified_at: 2026-10-19T00:28:48.048522447Z
+modified_at: 2026-10-19T16:01:53.429648451Z
 req_type: Task
 tags:
 - carried-from:BUG-2140
 - finding-hash:f7fdc4a2
 - from-review:PR-2749
 - kind:carried-forward
+comments:
+- id: 01a154e5-df15-7b70-85fc-46498d19c888
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1954 (Sweep: doctor / history / cache / lint / verify follow-ups); full text copied there.'
+  created_at: 2026-10-19T16:01:53.429648451Z
+  modified_at: 2026-10-19T16:01:53.429648451Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a151be-d7a6-74e2-ba21-befada8b02e0
   author: joe
