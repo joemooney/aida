@@ -7,12 +7,12 @@ description: |-
 
   cosmetic: aida-cli-lib/src/history.rs:2675-2679 — new fn yaml_status was inserted under effective()'s doc comment, so effective() lost its doc and yaml_status carries a merged two-topic doc block; move the 'Read key first...' lines back above fn effective.
   Reviewed sha: 170de75978b59a9c9dcfad90d557ac3c3f63c865
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T01:38:40.771924081Z
-modified_at: 2026-10-19T16:00:07.404680209Z
+modified_at: 2026-10-19T16:00:09.704399097Z
 req_type: Task
 tags:
 - carried-from:TASK-1737
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-19T01:44:49.257347658Z
   changes: []
+- id: 01a154e4-49e8-7e60-8c5f-6eb0b79754ad
+  author: joe
+  timestamp: 2026-10-19T16:00:09.704392057Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: aaff1236adf1557e45094a595b98167f54f641cb
   branch: main
