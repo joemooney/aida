@@ -20,12 +20,12 @@ description: |
   2. The reader derives the arming refusal from the retained history wherever the writer actually stores it, or the writer restores `rounds`. Choose one and pin it with a writer-to-reader round-trip test that uses the real record path (no hand-built JSON).
   3. It stays fail-closed: no rounds or history found means no release, but the error names the expected location and the writer version.
   4. Regression test: record REQUEST CHANGES, then APPROVE at a new head through `aida review record`, and assert the marker is gone.
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T05:58:44.088059619Z
-modified_at: 2026-10-19T17:51:44.099688289Z
+modified_at: 2026-10-19T19:05:56.971054189Z
 req_type: Bug
 tags:
 - auto-release
@@ -48,6 +48,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a1558e-618d-7da0-86f6-3fb38d4b6f61
+  author: aida-auto-bump
+  timestamp: 2026-10-19T19:05:56.877123217Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1558e-61eb-7aa2-825e-9930af652b34
+  timestamp: 2026-10-19T19:05:56.971041638Z
+  agent: aida
+  commit_sha: 477d0a51cfde26e27c5b12a852babd6dc39bfe60
+  summary: 'Carry-over of the attested PASS at e1b8ca661a: head 7df3b64f8f is a merge of origin/main only; the PR''s own patch-id (git patch-id --stable over merge-base..head) is identical (87275e5529) before and after. No PR content changed. Advisor carry-over per STORY-1690 S1 ruling (TASK-1960 automates this).'
+  review_verdict: approved
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
@@ -56,3 +71,7 @@ filed_at:
   aida_build_sha: 97987f04b5
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T19:05:56.877118167Z
+  completion_sha: 477d0a51cfde26e27c5b12a852babd6dc39bfe60
