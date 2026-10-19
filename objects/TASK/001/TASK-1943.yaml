@@ -1,0 +1,29 @@
+id: 01a153f8-ddcf-7510-9c34-4478d144ea8c
+spec_id: TASK-1943
+agreed_id: TASK-1943
+title: contained_safety_scan dedupe misses quoted porcelain paths; collect_branch_facts refusal fix untested
+description: |
+  1) aida-core/src/git_ops.rs contained_safety_scan compares `l.get(3..) == Some(link.path)` against porcelain v1 lines. Porcelain v1 C-quotes paths that hold special or non-ASCII characters (core.quotePath), so a moved-and-edited submodule with such a path gets a second, unquoted ` M <path>` line. It still reads as dirty, so no safety impact, but the entry is listed twice and the two lines are formatted differently.
+  2) aida-cli-lib/src/status_sections.rs collect_branch_facts now reads a refused or failed status as dirty (`working_tree_clean(..) != Some(true)`). That was the round-2 cosmetic item, but no test covers it.
+  3) A checked-out submodule whose `.git` was removed is skipped (the documented TOCTOU choice), and the toplevel status never lists files inside a gitlink path. Edits left inside such a directory are therefore invisible to the destructive gates. This is only reachable by a session tampering with its own submodule, but it is worth a line in OVERVIEW.
+
+  Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T11:43:01.071254375Z
+modified_at: 2026-10-19T11:43:01.071254375Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2753
+- severity:cosmetic
+filed_at:
+  code_sha: 43858629955c347bdb1549874a6b7955eb631e40
+  branch: pr-2753
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a153f4a511

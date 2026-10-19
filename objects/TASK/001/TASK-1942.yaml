@@ -1,0 +1,28 @@
+id: 01a153f8-cef4-7ea3-b1de-49e7327f8646
+spec_id: TASK-1942
+agreed_id: TASK-1942
+title: host_git_command spawns extra git config processes on every host git call in linked worktrees
+description: |
+  aida-core/src/git_ops.rs host_git_command (around line 141) now calls gitmodules_submodule_names for every store tree and every contained-writable tree. That includes every linked worktree, so every pool and session tree is covered. The call starts one extra `git config` process when `.gitmodules` exists. When it doesn't exist, it starts two (`:.gitmodules` and `HEAD:.gitmodules` blobs). Every git_ops::git() call goes through host_git_command, so commands that run many git calls in a session worktree start 2-3x as many processes. Possible fixes: skip the blob probes when the index has no gitlink and no .gitmodules entry, or cache the result per toplevel for one command. Not a correctness problem.
+
+  Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T11:42:57.268493157Z
+modified_at: 2026-10-19T11:42:57.268493157Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2753
+- perf
+- severity:minor
+filed_at:
+  code_sha: 43858629955c347bdb1549874a6b7955eb631e40
+  branch: pr-2753
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 01a153f4a511
