@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T02:49:58.216123696Z
+modified_at: 2026-10-19T04:22:18.897818503Z
 req_type: Story
 tags:
 - architecture
@@ -71,6 +71,12 @@ comments:
   created_at: 2026-10-19T02:49:58.216123696Z
   modified_at: 2026-10-19T02:49:58.216123696Z
   session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
+- id: 01a15265-6411-7253-b501-704481711095
+  author: joe
+  content: 'Advisor, 2026-10-18 21:25 MST. Two new findings for this story. (1) `make test-touched` can widen to the whole `aida-cli-lib --lib` suite (~9,200 tests). merge-2750 hit it on #2750 at about 21:00 and had to kill it. S0 should cap or warn on that widening: a ''targeted'' gate that silently becomes the full suite defeats the gate discipline. (2) The operator observed that caller timeouts (the 1h tool cap, agents'' `timeout 3000`) count slot-queue wait: TOTAL 1h00m = WAIT 31m + RUN 29m. Queued runs time out, get retried, and the backlog compounds. The wrapper-side fix (a run-phase budget that starts at slot acquisition, a queue-timeout, retry-chain visibility, agent guidance to run long cargo in the background) is filed as aida-host STORY-100.'
+  created_at: 2026-10-19T04:22:18.897818503Z
+  modified_at: 2026-10-19T04:22:18.897818503Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
