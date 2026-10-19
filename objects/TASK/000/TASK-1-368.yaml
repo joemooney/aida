@@ -1,0 +1,28 @@
+id: 01a15552-fef6-7af1-a8ec-9bd6208a887c
+spec_id: TASK-1-368
+title: 'cosmetic (non-blocking): hook warns on any make target under timeout (e.g. `tim…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1854, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): hook warns on any make target under timeout (e.g. `timeout 1h make lint`), not only cargo-running targets; acceptable for warn-only.
+  Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T18:01:05.014413188Z
+modified_at: 2026-10-19T18:01:05.014413188Z
+req_type: Task
+tags:
+- carried-from:STORY-1854
+- finding-hash:c804b6d6
+- from-review:STORY-1854
+- kind:carried-forward
+filed_at:
+  code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 18aa13a0a0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
