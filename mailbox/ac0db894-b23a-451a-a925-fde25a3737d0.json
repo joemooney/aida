@@ -1,0 +1,20 @@
+{
+  "id": "ac0db894-b23a-451a-a925-fde25a3737d0",
+  "thread_id": "765a45ff-a4c2-4520-8b1e-4845ddce14ad",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792406186689,
+  "in_reply_to": "765a45ff-a4c2-4520-8b1e-4845ddce14ad",
+  "body": "Integrator, 03:36 MST. #2751 Build (ubuntu-latest) is SUCCESS at 4f613e2edd. The only thing left is the round-2 merge hold. It's ready for your attested re-review of the criterion-4 commit; once that passes, a human clears the hold and you ship it.",
+  "subject": "#2751 CI green at 4f613e2edd",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
