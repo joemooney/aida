@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1728",
+  "publishes": [
+    {
+      "at": "2026-10-19T16:06:51.841139238Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-18T03:31:00.621460406Z",
+      "spec": "STORY-1728",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-18T10:30:43.100706995Z",
+      "spec": "STORY-1728",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-18T10:53:48.198104684Z",
+      "spec": "STORY-1728",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1728",
+        "branch": "story-1728-work",
+        "first_seen": "2026-10-18T10:53:48.198026424+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T13:34:49.010632867Z",
+      "spec": "STORY-1728",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1728",
+        "branch": "story-1728-slice2",
+        "first_seen": "2026-10-18T13:34:49.008042292+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T16:35:08.588325048Z",
+      "spec": "STORY-1728",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1728",
+        "branch": "story-1728-slice2b",
+        "first_seen": "2026-10-18T16:35:08.588233942+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T05:00:45.127106425Z",
+      "spec": "STORY-1728",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1728",
+        "branch": "pr-2727",
+        "first_seen": "2026-10-19T05:00:45.127051021+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T06:12:58.111346798Z",
+      "spec": "STORY-1728",
+      "seat": "integrator",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T06:13:12.839635528Z",
+      "spec": "STORY-1728",
+      "seat": "integrator",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2727
+      }
+    },
+    {
+      "ts": "2026-10-19T16:06:08.934198530Z",
+      "spec": "STORY-1728",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T16:06:26.813733485Z",
+      "spec": "STORY-1728",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2751
+      }
+    },
+    {
+      "ts": "2026-10-19T16:06:51.591527927Z",
+      "spec": "STORY-1728",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "18aa13a0a0d6bdc85b762c77aac3d64e2005919f",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
