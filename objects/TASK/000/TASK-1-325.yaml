@@ -7,12 +7,12 @@ description: |-
 
   minor (false positive): tuple-field indices are reported as numeric constants. proc_macro2 lexes 't.2' as the literal 2 and 'p.1.1' as the float 1.1; the built binary reports both ('1.1 (not in TASK-1785)'). Skip a literal token preceded by a '.' punct, or walk syn ExprLit/Index instead of raw tokens.
   Reviewed sha: 2a7d4df2dd56e5132fd7a3b21fcaf210870711e5
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T14:31:06.437909260Z
-modified_at: 2026-10-19T15:46:38.115033690Z
+modified_at: 2026-10-19T15:46:40.281548385Z
 req_type: Task
 tags:
 - carried-from:TASK-1785
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-10-18T15:10:01.267889174Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a154d7-f019-71c2-a1c0-6cc76c295fdd
+  author: joe
+  timestamp: 2026-10-19T15:46:40.281541349Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
   branch: main
