@@ -278,8 +278,8 @@ class RealRepoTest(unittest.TestCase):
         cls.idx = tt.build_index(str(REPO), cls.pkgs)
         cls.cli = next(p for p in cls.pkgs if p.name == "aida-cli-lib")
 
-    def run_plan(self, changed):
-        return tt.plan(changed, self.pkgs, "agent", [], self.idx)
+    def run_plan(self, changed, extra=(), allow_full=False):
+        return tt.plan(changed, self.pkgs, "agent", list(extra), self.idx, allow_full)
 
     def test_path_declared_test_maps_to_its_declaring_module(self):
         # role.rs: #[path = "tests/role_identity_tests.rs"] mod role_identity_tests;
@@ -291,11 +291,56 @@ class RealRepoTest(unittest.TestCase):
         p = self.run_plan(["aida-cli-lib/src/tests/glossary_render_tests.rs"])
         self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "glossary_render_tests"]])
 
-    def test_included_lib_parts_run_unfiltered(self):
+    def test_included_lib_parts_run_unfiltered_only_with_allow_full(self):
         for n in range(1, 7):
             with self.subTest(part=n):
-                p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"])
+                p = self.run_plan([f"aida-cli-lib/src/lib_part{n}.rs"], allow_full=True)
                 self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib"]])
+
+    # The heavy-package cap (STORY-1853): merge-2750 and split-2731 widened to
+    # the whole aida-cli-lib --lib suite. trace:STORY-1853 | ai:claude
+    def test_heavy_lib_widening_with_no_named_module_refuses(self):
+        p = self.run_plan(["aida-cli-lib/build.rs"])
+        self.assertEqual(p.commands, [])
+        self.assertIn("aida-cli-lib", p.too_wide)
+        self.assertIn("build.rs", " ".join(p.too_wide["aida-cli-lib"]))
+        rc = tt.execute(p, [], False, self.fail_run, self.fail_list)
+        self.assertEqual(rc, tt.TOO_WIDE_EXIT)
+
+    def test_heavy_lib_widening_narrows_to_the_named_modules(self):
+        # lib_part1.rs widens (crate root) but guard tests that include_str! it are named.
+        p = self.run_plan(["aida-cli-lib/src/lib_part1.rs", "aida-cli-lib/src/tests/role_identity_tests.rs"])
+        self.assertEqual(p.too_wide, {})
+        self.assertEqual(len(p.commands), 1)
+        cmd = p.commands[0]
+        self.assertEqual(cmd[:8], BASE + ["-p", "aida-cli-lib", "--lib", "--"])
+        self.assertIn("role::role_identity_tests", cmd)
+        self.assertIn("queue_cmd::headless_hint_tests", cmd)
+        self.assertTrue(any("CI's job" in n and "lib_part1.rs" in n for n in p.notes))
+
+    def test_caller_filter_lifts_the_heavy_lib_cap(self):
+        p = self.run_plan(["aida-cli-lib/build.rs"], extra=["story_1853"])
+        self.assertEqual(p.too_wide, {})
+        self.assertEqual(p.commands, [BASE + ["-p", "aida-cli-lib", "--lib", "--", "story_1853"]])
+
+    def test_untested_heavy_lib_module_is_dropped_not_widened(self):
+        p = self.run_plan(["aida-cli-lib/src/tests/role_identity_tests.rs", "aida-cli-lib/src/queue_cmd.rs"])
+        ran = []
+        listing = lambda c: (0, "queue_cmd::tests::t: test\n")
+        p.suspect = {}  # treat role_identity_tests as untested, not a mapping bug
+        self.assertEqual(tt.execute(p, [], False, lambda c: ran.append(c) or 0, listing), 0)
+        self.assertEqual(len(ran), 1)
+        self.assertNotIn("role::role_identity_tests", ran[0])
+        self.assertIn("queue_cmd", ran[0])
+        p.derived = {"aida-cli-lib": {"role::role_identity_tests"}}
+        p.commands = [BASE + ["-p", "aida-cli-lib", "--lib", "--", "role::role_identity_tests"]]
+        self.assertEqual(tt.execute(p, [], False, self.fail_run, listing), 0)
+
+    def fail_run(self, cmd):
+        self.fail(f"must not run {cmd}")
+
+    def fail_list(self, cmd):
+        self.fail(f"must not list {cmd}")
 
     def test_every_path_declared_file_resolves_to_its_declared_name(self):
         decl = re.compile(r'^#\[path = "([^"]+)"\]\s*\n(?:pub(?:\([^)]*\))? )?mod (\w+);', re.M)
@@ -344,14 +389,14 @@ class RealRepoTest(unittest.TestCase):
         self.assertIn("--", cli[0])
 
     def test_proto_runs_both_generated_client_packages(self):
-        p = self.run_plan(["proto/aida.proto"])
+        p = self.run_plan(["proto/aida.proto"], allow_full=True)
         self.assertEqual(p.commands, [
             BASE + ["-p", "aida-cli-lib", "--lib"],
             BASE + ["-p", "aida-server", "--bins"],
         ])
 
     def test_build_scripts_and_manifests_run_unfiltered(self):
-        p = self.run_plan(["aida-cli-lib/build.rs", "aida-core/Cargo.toml"])
+        p = self.run_plan(["aida-cli-lib/build.rs", "aida-core/Cargo.toml"], allow_full=True)
         self.assertEqual(p.commands, [
             BASE + ["-p", "aida-cli-lib", "--lib"],
             BASE + ["-p", "aida-core", "--lib"],

@@ -11,6 +11,7 @@
 #   aida-store/repo default); deleting a feature branch is allowed
 # - git stash drop (permanently drops stashed work)
 # - git rebase without confirmation context
+# - setting AIDA_CARGO_NO_SLOT (bypasses the cargo build-slot limiter)
 #
 # Install: add to .claude/settings.json hooks.PreToolUse
 # The hook reads the tool input from stdin as JSON.
@@ -534,6 +535,21 @@ if ! check_destructive "$SCAN_COMMAND" >&2; then
     {
         echo ""
         echo "To proceed anyway, ask the user to confirm the destructive operation."
+    } >&2
+    exit 2
+fi
+
+# An agent may not bypass the host cargo-slot limiter. Setting
+# AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
+# two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
+# Mentions inside quotes, heredocs and comments are already stripped, and
+# unsetting the variable (`env -u`, `unset`) stays allowed. trace:STORY-1853 | ai:claude
+if printf '%s' "$SCAN_COMMAND" | grep -qE '(^|[^A-Za-z0-9_])AIDA_CARGO_NO_SLOT=[^[:space:];&|)]'; then
+    {
+        echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
+        echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"
+        echo "commands in the background. A full suite is CI's job, not a pre-push step"
+        echo "(make check-ci-fast + make test-touched). Only the operator may bypass the queue."
     } >&2
     exit 2
 fi

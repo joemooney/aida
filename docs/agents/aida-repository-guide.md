@@ -608,7 +608,7 @@ Do NOT `AIDA_DRAIN_FORCE=1` past a LIVE drain — that bypass is only for a dead
 
 Installed 2026-09-26 at Joe's request to raise throughput.
 
-- `~/.local/bin/cargo` (ahead of ~/.cargo/bin on PATH) gates build/test/check/clippy/run/bench/doc/install on `AIDA_CARGO_SLOTS` (default 2) flock slots under `$XDG_RUNTIME_DIR/cargo-slots-<uid>/`; defaults CARGO_BUILD_JOBS=3; nested cargo passes through (AIDA_CARGO_SLOT_HELD); bypass with AIDA_CARGO_NO_SLOT=1. Prints "cargo: waiting for a build slot" while queued.
+- `~/.local/bin/cargo` (ahead of ~/.cargo/bin on PATH) gates build/test/check/clippy/run/bench/doc/install on `AIDA_CARGO_SLOTS` (default 2) flock slots under `$XDG_RUNTIME_DIR/cargo-slots-<uid>/`; defaults CARGO_BUILD_JOBS=3; nested cargo passes through (AIDA_CARGO_SLOT_HELD); the operator may bypass with AIDA_CARGO_NO_SLOT=1, and the `aida-git-guardrails.sh` hook blocks agents from setting it (STORY-1853). Prints "cargo: waiting for a build slot" while queued.
 - `~/.cargo/config.toml`: rustc-wrapper = sccache; linker clang + `-fuse-ld=mold`. `sccache --show-stats` for hit rate.
 - Consequence: the orchestrator no longer needs to count cargo processes by hand — dispatch freely; builds queue. Tell agents to use long timeouts (3600s) because of queueing.
 - Supersedes the manual "at most 2-3 cargo processes" rule in [[feedback_cap_parallel_cargo_builds]] (the cap is now enforced).
