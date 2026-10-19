@@ -17,12 +17,12 @@ description: |
   3. aida's own launch paths (scripts/, Makefile targets, relay/queue-work cargo invocations), if any wrap cargo in an outer timeout, pass the budget via AIDA_CARGO_TIMEOUT instead.
   4. Until STORY-100 ships, AIDA_CARGO_TIMEOUT is ignored by the wrapper. The guidance must say so, and background mode is then the only protection.
   5. Tests: the hook pattern unit tests (positive: `timeout 3000 cargo test`, `timeout 50m make test-touched`; negative: `timeout 540 gh ...`, `AIDA_CARGO_TIMEOUT=3000 cargo test`); `make check-templates` passes.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T04:24:25.684853123Z
-modified_at: 2026-10-19T17:28:16.101844801Z
+modified_at: 2026-10-19T18:00:48.374693259Z
 req_type: Story
 tags:
 - cargo
@@ -70,6 +70,21 @@ history:
   timestamp: 2026-10-19T17:28:17.410313669Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15552-bded-7322-8ff9-71f79471338f
+  author: aida-auto-bump
+  timestamp: 2026-10-19T18:00:48.365692412Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15552-bdf6-7f30-8136-d663bb259525
+  timestamp: 2026-10-19T18:00:48.374687883Z
+  agent: aida
+  commit_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
+  summary: 'All 8 STORY-1854 criteria met: discipline guidance (implementer/reviewer/rework-brief, mirrors synced), warn-only cargo-timeout PreToolUse hook wired for Claude+Codex+scaffolder with 20 pattern tests, preflight hands AIDA_CARGO_TIMEOUT to the wrapper; CI Build green at head.'
+  review_verdict: approved
 filed_at:
   code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
   branch: main
@@ -78,3 +93,7 @@ filed_at:
   aida_build_sha: 97987f04b5
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T18:00:48.365686922Z
+  completion_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
