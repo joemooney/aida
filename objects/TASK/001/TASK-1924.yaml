@@ -11,13 +11,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:15:14.999137916Z
-modified_at: 2026-10-18T23:15:14.999137916Z
+modified_at: 2026-10-19T15:58:35.611808157Z
 req_type: Task
 tags:
 - forge
 - from-review:PR-2736
 - security
 - severity:minor
+comments:
+- id: 01a154e2-da5b-73f3-b1f7-186a7abaefc5
+  author: joe
+  content: 'Advisor triage 2026-10-19: rolled up into TASK-1952 (Sweep: contained-launch, store-hook and host-git hardening follow-ups); full text copied there.'
+  created_at: 2026-10-19T15:58:35.611808157Z
+  modified_at: 2026-10-19T15:58:35.611808157Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
