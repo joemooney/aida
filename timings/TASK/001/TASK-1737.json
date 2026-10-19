@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1737",
+  "publishes": [
+    {
+      "at": "2026-10-19T01:38:36.190081738Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T12:28:12.449517094Z",
+      "spec": "TASK-1737",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:24.184252839Z",
+      "spec": "TASK-1737",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-18T20:35:59.238134480Z",
+      "spec": "TASK-1737",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1737",
+        "branch": "pr-2739",
+        "first_seen": "2026-10-18T20:35:59.238102351+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T01:37:47.510690884Z",
+      "spec": "TASK-1737",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T01:38:02.752132109Z",
+      "spec": "TASK-1737",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2739
+      }
+    },
+    {
+      "ts": "2026-10-19T01:38:35.742529796Z",
+      "spec": "TASK-1737",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "aaff1236adf1557e45094a595b98167f54f641cb",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
