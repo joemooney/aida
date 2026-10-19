@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T06:49:43.468869044Z
+modified_at: 2026-10-19T06:49:59.803638195Z
 req_type: Story
 tags:
 - architecture
@@ -76,6 +76,12 @@ comments:
   content: 'Advisor, 2026-10-18 21:25 MST. Two new findings for this story. (1) `make test-touched` can widen to the whole `aida-cli-lib --lib` suite (~9,200 tests). merge-2750 hit it on #2750 at about 21:00 and had to kill it. S0 should cap or warn on that widening: a ''targeted'' gate that silently becomes the full suite defeats the gate discipline. (2) The operator observed that caller timeouts (the 1h tool cap, agents'' `timeout 3000`) count slot-queue wait: TOTAL 1h00m = WAIT 31m + RUN 29m. Queued runs time out, get retried, and the backlog compounds. The wrapper-side fix (a run-phase budget that starts at slot acquisition, a queue-timeout, retry-chain visibility, agent guidance to run long cargo in the background) is filed as aida-host STORY-100.'
   created_at: 2026-10-19T04:22:18.897818503Z
   modified_at: 2026-10-19T04:22:18.897818503Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a152ec-98fb-7c00-bdff-c353e6c60f9c
+  author: joe
+  content: Approved by the operator 2026-10-18 23:49 MST (burndown-speed priorities, alongside STORY-1690/1853/1854 and aida-host STORY-100). Advisor dispatches after the STORY-1728 window; any slice the spec marks as needing a sketch requires advisor signoff before implementation.
+  created_at: 2026-10-19T06:49:59.803638195Z
+  modified_at: 2026-10-19T06:49:59.803638195Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
