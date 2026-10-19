@@ -1,0 +1,33 @@
+id: 01a15289-355e-7a70-b50f-434556d070c0
+spec_id: BUG-2185
+agreed_id: BUG-2185
+title: Contained child store commit misses deletions, rename sources and error exits; wiring untested (BUG-2180 follow-up)
+description: |
+  Follow-ups from the #2750 (BUG-2180) attested PASS at 7a87d51a1b, 2026-10-18 22:01. All non-blocking. Each leaves a contained child's store writes uncommitted in a corner case, so mandate store_snapshot refuses on a dirty store.
+
+  1. Deletions are missed. child_store_commit::dirty_paths_since filters by mtime, so deleted paths (e.g. a coordination/leases/*.toml release) are skipped. The standalone reviewer path (queue_cmd.rs ~13400) and the orchestrator reviewer path (non-watchdog) have no follow-up sweep to catch them.
+  2. Rename source left staged. A staged R/C entry commits only the destination via `commit_paths -- <new>`; the source-side deletion stays staged.
+  3. Error path skips the commit. In run_standalone_reviewer, the spawn_* calls use `?`, so an Err after the child ran (wait failure) returns before commit_child_store_writes.
+  4. Wiring is untested. bug_2180_reviewer_request_changes_leaves_store_worktree_clean calls commit_child_store_writes directly. Removing the call from run_standalone_reviewer or RealPhaseDriver::run_reviewer/run_implementer keeps every test green.
+
+  Acceptance: deletions and rename sources are committed. The commit runs on every exit after the child has run, including Err. At least one test drives the real reviewer entry point (standalone and phase driver) and fails if the call is removed.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T05:01:26.238526305Z
+modified_at: 2026-10-19T05:01:26.238526305Z
+req_type: Bug
+tags:
+- containment
+- follow-up
+- review
+- store
+filed_at:
+  code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
