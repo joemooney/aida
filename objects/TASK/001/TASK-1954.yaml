@@ -1,0 +1,73 @@
+id: 01a154e5-4ac4-7cc2-9d6e-f90cc88f6d08
+spec_id: TASK-1954
+agreed_id: TASK-1954
+title: 'Sweep: doctor / history / cache / lint / verify follow-ups'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1624: NON-BLOCKING (minor): doctor_root.rs:631 store-worktree-gitdir-unwritable fires…
+  NON-BLOCKING (minor): doctor_root.rs:631 store-worktree-gitdir-unwritable fires on every doctor run inside a contained sandbox, where <main>/.git is denied by design, and tells the operator to chmod -R u+w. Suppress it, or reword it as informational, when the process is contained.
+
+  PR: #2749
+  Reviewed sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
+
+  ### TASK-1625: NON-BLOCKING (minor): phase_driver_trait.rs:507 implementer phase calls commit_…
+  NON-BLOCKING (minor): phase_driver_trait.rs:507 implementer phase calls commit_contained_child_store_changes(...)? BEFORE the BUG-420 WatchdogTripped classification, so a store-commit refusal on a watchdog-tripped implementer reports FailureKind::Internal instead of the shelvable Watchdog failure plus BUG-1299 hint. The reviewer phase (line 2137) was fixed with a best-effort call in the watchdog arm; mirror that for the implementer phase.
+
+  PR: #2749
+  Reviewed sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
+
+  ### TASK-1626: NON-BLOCKING (cosmetic): git_backend_cmd.rs:4340 silently skips the blocks.yaml…
+  NON-BLOCKING (cosmetic): git_backend_cmd.rs:4340 silently skips the blocks.yaml pointer commit when deferred, with no notice_store_commit_deferred call. Also, auto_commit_paths now calls refuse_embedded_repos up front and again inside every add/add_all, so each targeted write walks the full store tree (~5.4k objects) several times.
+
+  PR: #2749
+  Reviewed sha: 1df8b54d1d77d9a6474f365051cb2f1d440ec29c
+
+  ### TASK-1629: cosmetic: a recorded TUI cache note stays on the status line until a deliberate…
+  cosmetic: a recorded TUI cache note stays on the status line until a deliberate refresh calls reset_cache_read_observations
+  Reviewed sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
+
+  ### TASK-1632: minor: excluded_fds is frozen at open time; if an excluded fd number is later r…
+  minor: excluded_fds is frozen at open time; if an excluded fd number is later reused by this handle's lazily opened sidecar, that file silently falls back to stat-only identity (A1 blind spot, not a false positive)
+  Reviewed sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
+
+  ### TASK-1760: Hook refresh follow-up nits: unused checksum, json/toon output for the hooks report, duplicated --only handling
+  Leftover nits from the BUG-2003 review, deferred by advisor ruling on #2644.
+
+  ### TASK-1762: History list views follow-ups: when without tz in JSON, 'closed' vs 'aida list closed' (Done), filter alias/priority validation, human golden test, approved-transition help text
+  Non-blocking from the #2639 (STORY-1664) review: (1) the JSON 'when' field is local YYYY-MM-DD HH:MM with no offset, while since/until are RFC3339; (2) the 'closed' view excludes Done but 'aida list closed' includes it, so document or align; (3) --status closed/open aliases are rejected and an invalid --priority silently returns empty; (4) no human-table golden test, although the acceptance criteria named one; (5) help should say that 'approved' counts NeedsAttention->Approved and reopen->Approved; (6) verify that renumbering doesn't make 'opened' show a renumbered spec as newly filed.
+
+  ### TASK-1771: BUG-2135 follow-ups: delete dead dev_build ensure_sccache_server; pass the RUSTC_WRAPPER opt-out into run_checked's hint
+  From the #2656 round-2 review: (1) dev_build.rs:765 ensure_sccache_server is now unused (dead_code warning) — delete it or document why it stays; (2) dev_build.rs:817 run_checked reads RUSTC_WRAPPER from the process env, but the cargo build sets RUSTC_WRAPPER="" only on the child (line 1505), so the sccache hint can still print on a dev-build failure. Pass the opt-out explicitly.
+
+  ### TASK-1796: verify constraints: reject leading // in path probes and add opt-in --fail-on-unknown
+  Follow-up from the #2683 re-review (STORY-1673). (1) In constraints.rs:152, valid_path accepts '//host/share/...'. On Windows, try_exists against a hostile shared store could open an outbound SMB connection. Reject a leading //. (2) fails_on_drift (verify_cmd.rs:98) passes unknown and invalid rows, as designed. Add an opt-in --fail-on-unknown (or --strict) so CI gates can't go green on a host without /proc or with a typo'd block. (3) AGENTS.md still says 'six closed built-in Linux probes', but two probes are now portable.
+
+  ### TASK-1812: aida lint constants follow-ups: skip #[cfg(test)] modules, tuple-index false positives, fixture trace, number-mention precision
+  From the PR #2723 round-2 review (PASS), TASK-1785 slice. ADVISOR RULING on finding 3: in-file #[cfg(test)] modules are exempt, the same as tests/ files (SPIKE-47 F1 covers 'mod tests' hunks, and test fns carry trace:<SPEC>.<ac> markers by convention). Dogfooding shows ~77% of findings are in test modules, so this is the main noise fix. Do it. Also: (1) change the fixture tests' 'trace:TASK-1785.Fixture' markers (lint_constants.rs:527, task_1785_lint_constants.rs:147) to trace:TASK-1785.ac0ead8d (re-keyed criterion). (2) Skip a literal preceded by '.' punct (tuple fields t.2, p.1.1) or walk syn ExprLit. (4) numbers_in_text: count range endpoints ('30-60 s') and match negatives ('-15'). (5) Don't merge '64,128,256' into one number when the groups aren't valid thousands groups. (6) Refuse or skip a non-.rs --path. (7) Make a trait-level marker cover default methods, or document it; same for enum discriminants. Share the region rules with TASK-1783 (one helper).
+
+  ### TASK-1916: TASK-1783 follow-ups: store-unchanged assertion, same-line fn coverage, non-.rs --path message
+  From PR #2729 PASS review non-blocking findings: (1) add a black-box assertion that a tree-coverage run leaves the store unchanged (like task_1785); (2) trace_tree_coverage::file_coverage uses specs_at(range.start), so two fns on one line share coverage, and nested fns inside methods are named Type::inner; (3) --path to a non-.rs file reports 'did not parse'; consider skipping #[cfg(test)] fns as in TASK-1812.
+
+  ### TASK-1927: Gate CacheBinding::capture behind #[cfg(test)] (now test-only)
+  aida-core/src/db/cache_binding.rs:171: after TASK-1739, production code calls capture_with_excluded; capture() is only used by tests, so non-test builds emit a dead_code warning.
+
+  Raised in review of PR-2746 (TASK-1739): https://github.com/joemooney/aida/pull/2746#issuecomment-6256684724
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T16:01:15.460127350Z
+modified_at: 2026-10-19T16:01:15.460127350Z
+req_type: Task
+tags:
+- cli
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
