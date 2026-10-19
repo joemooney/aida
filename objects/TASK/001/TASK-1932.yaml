@@ -6,12 +6,12 @@ description: |
   Every real relay.status has ticket= empty, so mandate_drive::run_spec returns None and every Redispatch/FixSetup lane is force-gated to the operator; the advisor redispatch route never fires in practice (safe, fails closed). Either have aida-relay record the spec ticket in relay.status or add an AC note on STORY-1700 narrowing the redispatch route.
 
   Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T06:10:52.725519241Z
-modified_at: 2026-10-19T15:45:21.816508929Z
+modified_at: 2026-10-19T15:45:24.076598079Z
 req_type: Task
 tags:
 - from-review:PR-2725
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T15:45:21.816508929Z
   modified_at: 2026-10-19T15:45:21.816508929Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d6-c66c-73c0-b1ae-db20712cc55c
+  author: joe
+  timestamp: 2026-10-19T15:45:24.076590264Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 2ced85b30183879504d98782c68854ca10a02c00
   branch: pr-2725
