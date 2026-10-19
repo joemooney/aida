@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T06:10:52.725519241Z
-modified_at: 2026-10-19T06:10:52.725519241Z
+modified_at: 2026-10-19T15:45:21.816508929Z
 req_type: Task
 tags:
 - from-review:PR-2725
 - relay
 - severity:minor
+comments:
+- id: 01a154d6-bd98-7d03-b822-63d9cbc72501
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1925. Same finding (same finding-hash or identical text).'
+  created_at: 2026-10-19T15:45:21.816508929Z
+  modified_at: 2026-10-19T15:45:21.816508929Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 2ced85b30183879504d98782c68854ca10a02c00
   branch: pr-2725
