@@ -6,12 +6,12 @@ description: |-
 
   cosmetic (non-blocking): hook warns on any make target under timeout (e.g. `timeout 1h make lint`), not only cargo-running targets; acceptable for warn-only.
   Reviewed sha: 6fd32d79dee4b0d13a5e98e41e0ec9e720350438
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T18:01:05.014413188Z
-modified_at: 2026-10-19T19:49:24.974324584Z
+modified_at: 2026-10-19T19:49:28.727078274Z
 req_type: Task
 tags:
 - carried-from:STORY-1854
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-19T19:49:24.974324584Z
   modified_at: 2026-10-19T19:49:24.974324584Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a155b6-3c17-7213-8fd4-e7b4c0c902bd
+  author: joe
+  timestamp: 2026-10-19T19:49:28.727071366Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
   branch: main
