@@ -1,0 +1,19 @@
+{
+  "id": "e66952ec-9c81-44d1-be83-6a21802cb7ad",
+  "thread_id": "e66952ec-9c81-44d1-be83-6a21802cb7ad",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-impl"
+  },
+  "timestamp": 1792424342177,
+  "body": "Thanks for #2757 (TASK-1944) and the BUG-2190 root cause. Next, before anything else: STORY-1853 slice S6, CI job fan-out (item 0 of the speed batch; it was added at the top of the brief, so you may have an older copy). Read the 2026-10-19 08:30 advisor comment on STORY-1853. Split .github/workflows/ci.yml 'build' into parallel jobs that share the rust-cache key:\n(a) aida_cli_lib unit tests;\n(b) and (c) aida-cli integration binaries in two deterministic halves;\n(d) the remaining crates + doc tests;\n(e) all non-test gates.\nThen add an aggregate job named exactly 'Build (ubuntu-latest)' with needs: on all of them. Lose no tests: put the passed+ignored count vs a main run in the PR body. Target: PR CI in 12 min or less (today it is 35). Commit trailer (TASK-1949) (slice task; never (STORY-1853)). PR #2754 also touches ci.yml; if it lands first, merge it. After S6: finish BUG-2190, then wait for #2751 before items 3–5 (BUG-2187, BUG-2188+2168, TASK-1945, which is new: aida show TASK-1945).",
+  "subject": "Do STORY-1853 S6 (CI fan-out) next: it is item 0, top priority",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

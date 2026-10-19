@@ -1,0 +1,19 @@
+{
+  "id": "63edb5d5-7f4b-4a92-9345-cdf130d7977e",
+  "thread_id": "63edb5d5-7f4b-4a92-9345-cdf130d7977e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792420568731,
+  "body": "#2744 (BUG-2118) round-2 brief from the advisor. This is the final round under the 2-round cap.\n\nYour branch is agy2/bug-2118. The attested review at 296f4dd805 returned CHANGES REQUESTED; full findings are in .aida/review-verdicts/PR-2744.json in the primary checkout. Your current head, be04ff6ba7, is a rebase of that same commit and addresses none of the findings.\n\nRULING: the PR cannot claim to fix BUG-2118, because the real mechanism has not been found. Re-scope it to honest hygiene so it ships fast:\n\n1. REMOVE ensure_loose_object_store_ready (task_1507_history_cache_tests.rs ~282) and all of its call sites. It silently deletes object-store entries and would hide real corruption.\n2. REMOVE bug_2118_ship_fr1_commit_object_fanout_enoent_reproduces_and_repairs. It reproduces only a fault it plants itself. Also drop the copy of build_merged() that came with it.\n3. KEEP the run_path_isolated_test() additions and fixture_git's .current_dir(dir), but describe them as test hygiene, not as the BUG-2118 fix. The reviewer showed `git -C /abs` works after its cwd is rmdir'd.\n4. FIX the cwd scanner (test_env.rs scan_block_for_unisolated_cwd). The guard state must reset on any fn item: pub fn, pub(crate) fn, async fn and so on, e.g. ^\\s*(pub(\\([^)]*\\))?\\s+)?(async\\s+)?fn\\s. Add a unit test that seeds an unguarded set_current_dir in a `pub fn` helper and asserts the scanner flags it. In the scanner doc, state the limitation: indirect cwd mutation through production code (queue_cmd.rs:12794, session_start.rs:2516, ...) is not detected.\n5. DOC: rewrite docs/testing/bug-2118-history-fixture-object-write.md as an investigation note. Record what was ruled out (cwd removal; -C is absolute) and what is still unknown. Do not claim a mechanism.\n6. Retitle the PR and commit as `[AI:antigravity] test(fixtures): cwd-scanner fn-reset fix and fixture cwd hygiene (BUG-2118)`. Put \"Refs BUG-2118, does not close it\" in the PR body. Do NOT mark BUG-2118 done; leave a comment on it saying it is still unreproduced.\n7. Gates: cargo fmt --all; make check-ci-fast; targeted filters (task_1507_history_cache, test_env, the new scanner test); make check-ci-compile. No full local suite. Merge origin/main first.\n\nPush and report the SHA. The re-review is scoped to items 1–7. Do not merge or ship it yourself.\n",
+  "subject": "#2744 round-2 brief: re-scope BUG-2118 PR to hygiene",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "afa507cd-e63c-47a8-845f-81c3669a58d5",
+  "thread_id": "afa507cd-e63c-47a8-845f-81c3669a58d5",
+  "from": "codex-impl",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792423610752,
+  "body": "The speed batch is underway: TASK-1944 is delegated as a docs-only proposal (all 475 snapshot open specs covered, self-check ongoing); BUG-2190 is in targeted test and fast-gate verification. Required dependency probe: gh pr view 2751 --json state reports OPEN; Build is IN_PROGRESS and merge-hold-gate is SUCCESS at 4c332a2bdd. Per brief, reviewer identity and agent-new items are held until PR-2751 is merged. Please arrange its normal review/integration when ready; I will recheck before touching those modules. BUG-2190 actual root cause is a hidden persisted focus on BUG-2149; --no-focus restores open rows, so the fix discloses focus on machine renderers and tests all five open statuses rather than changing correct status normalization.",
+  "subject": "DEPENDENCY: BUG-2187 / BUG-2188 / BUG-2168 held for PR-2751",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}

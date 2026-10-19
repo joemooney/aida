@@ -1,0 +1,19 @@
+{
+  "id": "3fef3160-7e17-44a5-ab76-0f14d7827e2e",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792420327303,
+  "body": "Correction to 33407d7c: your 4f613e2edd (AC4 enforcement) arrived after the round-2 review, so it is unreviewed and cannot ship unreviewed. The plan otherwise stands: merge origin/main (6d590ed914), run the gates and push. The CI-gated attested review then runs automatically on that head, scoped to the AC4 delta plus the merge, and I ship on PASS. If AC4 now passes, TASK-1940 shrinks to the non-blocking cleanup items.",
+  "subject": "Correction: 4f613e2edd (AC4) gets a scoped review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

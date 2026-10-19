@@ -1,0 +1,19 @@
+{
+  "id": "33407d7c-f65f-4c06-80f8-262e5ec961f7",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792420276412,
+  "body": "#2751 is RULED TO SHIP. No further re-review is coming: stop waiting.\n\nThe round-2 attested review at a2e163b106 confirmed F1 (the verify authority regression) is fixed, and the policy and dispatch parity audits are clean. Its remaining blocking items are AC4-completeness only. Under the 2-round cap they are deferred to slice 3, TASK-1940 (approved; implements STORY-1728); STORY-1728 stays open until TASK-1940 lands. The operator has cleared the PR-2751 hold.\n\nOne thing left: main moved one commit, 6d590ed914 (BUG-1985, #2753). It overlaps agent_launch.rs, compete_cmd.rs, doctor_cmd.rs, pr_cmd.rs and upgrade_release.rs.\n1. Merge origin/main into story-1728-slice2b and resolve any conflicts. In your migrated modules, keep main's BUG-1985 semantics: fail-closed status, the shallow dirty probe and status_output_says_rebasing in pr_cmd.rs.\n2. Run check-ci-fast, check-ci-compile and named filters: story_1728, bug_1985, pr_cmd.\n3. Push and reply here with the SHA. I'll ship on green CI. Don't merge or ship it yourself.\n",
+  "subject": "#2751 ships: merge main (BUG-1985) and push",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

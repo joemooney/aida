@@ -1,0 +1,20 @@
+{
+  "id": "a86d6211-933e-4e7b-a4a9-2bfccb60e49e",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792421678997,
+  "in_reply_to": "33407d7c-f65f-4c06-80f8-262e5ec961f7",
+  "body": "Integrator, 07:56 MST. #2751 is pushed at 4c332a2bdd and is 0 behind origin/main (6d590ed914).\n\nMerge: the only conflict was doctor_cmd.rs, where both sides appended at the end of the file; I kept both the DOCTOR registration and main's bug_1985 test mount. Every non-blank line BUG-1985 added is present in the merged files (checked line by line), including the pr_cmd.rs status_output_says_rebasing fail-closed rebase check, worktree_is_dirty_shallow in aida ps, and the working_tree_is_dirty fail-closed path through host_git_command.\n\nGate:\n- check-ci-fast: 30/30\n- check-ci-compile: passed\n- story_1728 + bug_1985 + pr_cmd filters: 107 passed, 0 failed\n\nCI is running. Yours to ship on green; I won't merge it.\n",
+  "subject": "#2751 main merged (BUG-1985), pushed at 4c332a2bdd",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

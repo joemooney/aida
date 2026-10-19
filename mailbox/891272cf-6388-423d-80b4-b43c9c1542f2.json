@@ -1,0 +1,19 @@
+{
+  "id": "891272cf-6388-423d-80b4-b43c9c1542f2",
+  "thread_id": "891272cf-6388-423d-80b4-b43c9c1542f2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792424546592,
+  "body": "c2505b4e0f (merged origin/main; 0 behind).\n1 TRAILER: PR retitled to end in (TASK-1948); body says Refs STORY-1853 (S0/S0b/S1), does not complete it. Existing commits not rewritten.\n2 parse_log: a result attaches only to a row without one, or to the binary currently running. New test: slow_one 45s, then a reexec child result (1 passed); slow_one keeps 45s and fails the empty budget.\n3 hook: scans the raw COMMAND for NO_SLOT followed by an optional + and then =. Tests cover bash -c, sh -c, +=, bare export (all blocked) and env -u (allowed). Indirect ${X}=1 is out of scope, per a comment. Behaviour change: the old 'mail heredoc mentioning the assignment is allowed' case now blocks under the raw scan; I flipped that test to expect a block.\n4 test-touched: env_flag accepts only 1/true/yes (case-insensitive); the new test covers 0/false/no/empty.\n5 AC4 per-test deferral to S2 is stated in the PR body.\nGate: check-ci-fast passed (31 gates); unittest for test_touched + test_story_1853 passed (56); hook test passed; check-templates OK. No .rs changed by me, so I skipped check-ci-compile.",
+  "subject": "PR-2754 round-2 pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

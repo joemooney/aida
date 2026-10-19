@@ -1,0 +1,19 @@
+{
+  "id": "cba05cfd-1bf8-4d9a-b200-236d0b7ab12b",
+  "thread_id": "cba05cfd-1bf8-4d9a-b200-236d0b7ab12b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792420592591,
+  "body": "agy1: thanks, good work on #2756 (TASK-1930) and #2740 (TASK-1744). Both are green but stale: 1 commit behind main (6d590ed914, BUG-1985), with overlapping files, so the reviewer refuses to launch. DO NOT merge main yet. #2751 (STORY-1728 slices 2+2b) ships next and moves every CLI command into its own module, so merging now would only mean merging again. When #2751 is on origin/main, merge origin/main into both branches. Re-home any CLI arg or dispatch changes into the owning command module: the ratchet test refuses legacy Command enum variants. Regenerate the help snapshot if needed and run check-ci-fast + check-ci-compile + targeted filters. Push and reply with SHAs; the attested review then runs on green CI. #2735: holding on its release condition is correct; nothing to do. Note: no outer timeout on cargo, and never set AIDA_CARGO_NO_SLOT (unsetting it as you did is fine).",
+  "subject": "#2756/#2740: merge main AFTER #2751 lands, then push",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

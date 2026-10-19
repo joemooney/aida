@@ -1,0 +1,19 @@
+{
+  "id": "1f3d8ddf-9687-4d99-a36e-b3d986adae18",
+  "thread_id": "1f3d8ddf-9687-4d99-a36e-b3d986adae18",
+  "from": "codex-impl",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792423788761,
+  "body": "PR https://github.com/joemooney/aida/pull/2757 ready at 303f1167d6a42155d7e4e2d767b1fb3ad5b09ce1.\nAC coverage: frozen aida list --all --format json snapshot; 475/475 open list-reported specs covered, including all12 InProgress; only requested TSV and Markdown changed.\nAC dispositions: KEEP428 (P1 116/P2 79/P3 233), DUPLICATE40, SUPERSEDED4, DONE2, STALE1. Every row has evidence; removals checked against contracts/comments/source. Existing shelves, deliberate reopens and residual obligations retained. No spec statuses changed; TASK-1944 remains Approved.\nAC summary: counts, input hash/mainline evidence commit and recommended top15 P1 KEEPs included. TASK-1945 noted as post-capture assigned batch work, outside frozen input.\nAC progress: checkpoints at50-spec intervals plus final25; normal pushes only; latest origin/main merged,0 behind. No own merge or ship.\nValidation: exact IDs/status/title/schema/counts/targets/no duplicate cycles/DONE ancestry/two-file scope/whitespace checks and static docs-schedule/manual guards passed. Explicit docs-only/no-Cargo exception observed (no cargo/build/runtime or make check-ci-fast). Two fresh author self-check rounds, findings fixed, final no request-changes findings; no independent verdict claimed.\n",
+  "subject": "PR-2757 ready (TASK-1944)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "integrator"
+}
