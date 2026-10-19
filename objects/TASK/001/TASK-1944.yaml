@@ -22,12 +22,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:14:28.804479257Z
-modified_at: 2026-10-19T15:14:54.765280617Z
+modified_at: 2026-10-19T16:07:48.668861233Z
 req_type: Task
 tags:
 - burndown
 - throughput
 - triage
+comments:
+- id: 01a154eb-4abc-7ba2-8092-42c13eee2029
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. Codex proposal PR #2757 (303f1167d6) plus advisor subagent triage of all open specs; rulings applied 2026-10-19 (closures, defers, six sweep roll-ups TASK-1950..1955).'
+  created_at: 2026-10-19T16:07:48.668861233Z
+  modified_at: 2026-10-19T16:07:48.668861233Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154ba-dcad-7d93-985f-00d2bd228810
   author: joe
