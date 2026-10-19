@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:54.167668605Z
-modified_at: 2026-10-19T20:02:23.178680984Z
+modified_at: 2026-10-19T21:03:59.686835025Z
 req_type: Task
 tags:
 - ci
@@ -31,6 +31,12 @@ comments:
   content: 'Advisor 2026-10-19 13:05: the #2760 round-1 CHANGES REQUESTED rested only on ''CI red, failing test unknown''. The logs show known flakes in UNTOUCHED lib unit tests: regen::score generated_tool_help_timeout (BUG-2182) and aida-core db::cache_binding rebind_note_routes_to_cache_read_note (the TASK-1956 cache-writer stale read). Attempt 1''s trace-gate failure was a CI store-attach transient. No code change needed; CI rerun, then re-review. The bug_1502 shared-fixture concurrency note is non-blocking.'
   created_at: 2026-10-19T20:02:23.178680984Z
   modified_at: 2026-10-19T20:02:23.178680984Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a155fa-74c6-76f2-94f3-8847e60bfae0
+  author: joe
+  content: 'Advisor 14:08 CORRECTION to my 13:05 note: #2760 has a REAL regression. The trace gate failed on both CI attempts because a test now leaks a plain .aida-store directory into the repo root, and the gate''s reset then hits the parent checkout. Rework brief: rework-2760.'
+  created_at: 2026-10-19T21:03:59.686835025Z
+  modified_at: 2026-10-19T21:03:59.686835025Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154f1-378a-7cd1-86db-af168db25873
