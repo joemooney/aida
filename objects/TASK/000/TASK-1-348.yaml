@@ -7,12 +7,12 @@ description: |-
 
   non-blocking (cosmetic): docs/autonomous-drain.md:1260 is an unwrapped over-long line compared with the surrounding prose.
   Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T21:02:29.234013200Z
-modified_at: 2026-10-19T15:47:45.794733221Z
+modified_at: 2026-10-19T15:47:48.015422230Z
 req_type: Task
 tags:
 - carried-from:TASK-1351
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-18T21:34:02.080495830Z
   changes: []
+- id: 01a154d8-f8af-7041-bd51-3b882d420b9c
+  author: joe
+  timestamp: 2026-10-19T15:47:48.015418186Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
