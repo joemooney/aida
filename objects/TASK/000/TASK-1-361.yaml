@@ -1,0 +1,27 @@
+id: 01a151d5-c737-76d1-825b-be646740e6f2
+spec_id: TASK-1-361
+title: 'minor: excluded_fds is frozen at open time; if an excluded fd number is later r…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1739, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: excluded_fds is frozen at open time; if an excluded fd number is later reused by this handle's lazily opened sidecar, that file silently falls back to stat-only identity (A1 blind spot, not a false positive)
+  Reviewed sha: 0335e70c6ec57efdafdad99d5e1d180858b8c5e5
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-19T01:45:27.095284274Z
+modified_at: 2026-10-19T01:45:27.095284274Z
+req_type: Task
+tags:
+- carried-from:TASK-1739
+- finding-hash:0c0c0ef9
+- from-review:TASK-1739
+- kind:carried-forward
+filed_at:
+  code_sha: 97987f04b5c6eb3e62bf294397bedbc2e76b1eee
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 4ac9efab32
+  vendor: claude
