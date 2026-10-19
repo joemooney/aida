@@ -8,12 +8,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T08:38:01.484588584Z
-modified_at: 2026-10-15T08:38:01.484588584Z
+modified_at: 2026-10-19T15:51:11.180954967Z
 req_type: Task
 tags:
+- operator-held
 - regen
 - sandbox
 - security
+history:
+- id: 01a154dc-1358-78c0-8e98-744fdcef396a
+  author: joe
+  timestamp: 2026-10-19T15:51:11.448082542Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
+deferred: true
+deferred_at: 2026-10-19T15:51:11.180954967Z
+deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
+deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
 filed_at:
   code_sha: efd3bba8de3e098599e85dd29c381d4066961994
   branch: main
