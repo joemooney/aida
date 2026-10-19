@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:39:09.353084265Z
-modified_at: 2026-10-19T15:39:27.894633836Z
+modified_at: 2026-10-19T21:04:08.935071695Z
 req_type: Task
 tags:
 - ci
@@ -20,6 +20,13 @@ relationships:
   target_id: 01a1520b-60c2-7532-8779-bf18cf4e5669
   created_at: 2026-10-19T15:39:27.894630313Z
   created_by: joe
+comments:
+- id: 01a155fa-98e7-7c51-8f0a-e315825d81bb
+  author: joe
+  content: 'Advisor 14:10, include in the ci.yml rewrite: the trace-gate step''s guard `git -C .aida-store rev-parse --is-inside-work-tree` is TRUE for a plain directory inside the main checkout, so a stray .aida-store dir makes it run `reset --hard origin/aida-store` on the MAIN checkout (seen on PR-2760, run 39309026167). Compare `git -C .aida-store rev-parse --show-toplevel` against "$PWD/.aida-store" (or check for .aida-store/.git as a gitfile); otherwise fail with the ::error:: message. Also fail any test shard that leaves untracked files at the repo root.'
+  created_at: 2026-10-19T21:04:08.935071695Z
+  modified_at: 2026-10-19T21:04:08.935071695Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154d1-4c98-7b90-86e7-2a418c6e8657
   author: joe
