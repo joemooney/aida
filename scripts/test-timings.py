@@ -85,8 +85,11 @@ def parse_log(lines) -> list[Binary]:
       result:` (one test run, the rest filtered out) inside the parent's output.
     So each `running N tests` line goes to the oldest header still without
     one (stdout order is preserved), and a result goes to the newest binary
-    whose N equals the tests the result ran; a later match replaces an earlier
-    one, since the binary's own result comes last.
+    whose N equals the tests the result ran and that either has no result yet
+    or is the one currently running (the newest with an N). Only the running
+    binary's result may be replaced, since its own result comes after its
+    children's; a child's 1-test result never overwrites an earlier, finished
+    1-test binary.
     """
     rows: list[dict] = []
     for raw in lines:
@@ -105,7 +108,9 @@ def parse_log(lines) -> list[Binary]:
             continue
         if (res := RESULT_RE.match(line)):
             ran = sum(int(res[k]) for k in ("passed", "failed", "ignored", "measured"))
-            row = next((r for r in reversed(rows) if r["n"] == ran), None)
+            current = next((r for r in reversed(rows) if r["n"] is not None), None)
+            row = next((r for r in reversed(rows)
+                        if r["n"] == ran and (r["result"] is None or r is current)), None)
             if row is not None:
                 row["result"] = res
     return [

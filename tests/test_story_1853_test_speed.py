@@ -83,6 +83,24 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0].passed, rows[0].seconds), (9180, 274.83))
 
+    def test_child_reexec_result_does_not_overwrite_an_earlier_finished_binary(self):
+        # A later binary's child re-exec ran 1 test; the newest 1-test row is
+        # slow_one, which already has its result and is no longer running.
+        log = [
+            HDR + "tests/slow_one.rs (target/debug/deps/slow_one-aa)",
+            "running 1 test", result(1, "45.00"),
+            HDR + "tests/reexec.rs (target/debug/deps/reexec-bb)",
+            "running 3 tests",
+            "running 1 test", result(1, "0.05", filtered=2),
+            result(3, "2.00"),
+        ]
+        rows = {r.key: r for r in tt.parse_log(log)}
+        self.assertEqual(rows["slow_one:tests/slow_one.rs"].seconds, 45.0)
+        self.assertEqual(rows["reexec:tests/reexec.rs"].seconds, 2.0)
+        v, _ = tt.check(list(rows.values()), tt.Budget(10, {}))
+        self.assertEqual(len(v), 1)
+        self.assertIn("slow_one:tests/slow_one.rs: 45.0s with no budget entry", v[0])
+
     def test_gh_download_prefixes_and_step_filter(self):
         pre = "Build (ubuntu-latest)\t{}\t2026-10-19T01:51:31.5Z "
         log = [

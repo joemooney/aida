@@ -566,6 +566,11 @@ def changed_files(root: str, base_ref: str) -> list[str]:
     return sorted(n for n in names if n)
 
 
+def env_flag(name: str) -> bool:
+    """True only for 1/true/yes, so TEST_TOUCHED_ALLOW_FULL=0 keeps the cap."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Targeted tests for the files changed vs a base ref.")
     ap.add_argument("--base", default=os.environ.get("TEST_TOUCHED_BASE", "origin/main"))
@@ -573,7 +578,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--filter", action="append", default=[], help="extra libtest filter (repeatable)")
     ap.add_argument("--print", action="store_true", help="print the commands; run nothing")
     ap.add_argument("--allow-full", action="store_true",
-                    default=bool(os.environ.get("TEST_TOUCHED_ALLOW_FULL")),
+                    default=env_flag("TEST_TOUCHED_ALLOW_FULL"),
                     help=f"let a heavy package ({', '.join(sorted(HEAVY_LIBS))}) run its whole unit suite")
     a = ap.parse_args(argv)
     try:

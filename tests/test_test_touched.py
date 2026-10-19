@@ -269,6 +269,20 @@ def real_packages():
     ]))
 
 
+class AllowFullEnvTest(unittest.TestCase):
+    def test_only_1_true_yes_lift_the_cap(self):
+        cases = {"1": True, "true": True, "TRUE": True, "Yes": True, "0": False,
+                 "false": False, "no": False, "": False}
+        for value, want in cases.items():
+            with self.subTest(value=value):
+                os.environ["TEST_TOUCHED_ALLOW_FULL"] = value
+                try:
+                    self.assertIs(tt.env_flag("TEST_TOUCHED_ALLOW_FULL"), want)
+                finally:
+                    del os.environ["TEST_TOUCHED_ALLOW_FULL"]
+        self.assertFalse(tt.env_flag("TEST_TOUCHED_ALLOW_FULL"))
+
+
 class RealRepoTest(unittest.TestCase):
     """The shapes the advisor found mis-mapped (TASK-1780 round 1), on the real tree."""
 
