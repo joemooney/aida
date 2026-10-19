@@ -6,12 +6,12 @@ description: |
   The /// spec-ID scan (aida-cli-lib/src/cli.rs:928-963) is not recursive and only covers cli.rs, *_args.rs and CommandReg files. It misses DriverCommand (driver_cmd.rs:19) and the ValueEnums at integrate.rs:413, complexity_calibration.rs:85, digest.rs:33/:60, pr_ship.rs:191 and findings.rs:114. None of them leak today. The doc at aida-tui/src/cmd_palette.rs:77 still tells callers to pass aida_cli::Cli::command().
 
   Raised in review of PR-2751: https://github.com/joemooney/aida/pull/2751#issuecomment-6263625639
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:05:24.422961425Z
-modified_at: 2026-10-19T15:51:51.209789319Z
+modified_at: 2026-10-19T15:51:53.243428449Z
 req_type: Task
 tags:
 - from-review:PR-2751
@@ -23,6 +23,15 @@ comments:
   created_at: 2026-10-19T15:51:51.209789319Z
   modified_at: 2026-10-19T15:51:51.209789319Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154dc-b69b-73e0-8be9-c435c0c0cee6
+  author: joe
+  timestamp: 2026-10-19T15:51:53.243421024Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
 filed_at:
   code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
   branch: pr-2751
