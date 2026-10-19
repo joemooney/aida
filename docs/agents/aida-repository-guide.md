@@ -226,6 +226,17 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 
 **Usage telemetry** (STORY-122): every `aida` invocation appends a single JSONL line at `~/.aida/usage.jsonl` with the command shape (e.g. `queue list`), `args_count`, `exit_code`, and `duration_ms`. Privacy floor: no argument values, no file paths, no requirement content. Opt out with `AIDA_TELEMETRY=0` or `[telemetry] enabled = false` in `.aida/config.toml`. Query with `aida usage` (top-20 in last 30d), `aida usage unused 30d` (deprecation candidates), `aida usage errors` (high error-rate commands), or `aida usage --json` for machine consumers. The monthly-cadence synthesis surface is `/aida-insights` (TASK-577) — wraps `aida usage` + `aida usage drains` + `aida findings calibration --stats` into the three top-line signals (most-used, drain success, calibration agreement) and the deprecation / UX-gap / orchestrator-fix / substrate-gap follow-ups they suggest. The log is local-only and never phoned home.
 
+### Adding or changing a CLI command
+
+Commands are moving out of the legacy `Command` enum in `aida-cli-lib/src/cli.rs` into per-module registrations (STORY-1728). A registered command lives entirely in its own module:
+
+- a `#[derive(clap::Parser)]` struct carrying the command's name, doc comment (its `--help`) and arguments;
+- a `pub(crate) static NAME: CommandReg` naming that struct's `command`, the top-level command it follows in help (`help_after`), its dispatch `Phase`, its `CmdPolicy` (stakeholder action, per-write auto-push, role-restore prompt; every field required), and its `run` handler;
+- one line in `command_registry::REGISTRY`, kept sorted by command name.
+
+Changing a registered command's flags or handler touches only its module. Production code reaches the clap tree only through `command_registry::{built_command, parse_from, try_parse_from}`; a guard test rejects `Cli::command()` / `Cli::parse*` outside it. Two more tests keep the migration honest: a ratchet on the number of legacy top-level commands (it may only go down), and the golden help snapshot `src/tests/golden/cli_help_snapshot.txt`, which pins every command's `--help` and the command catalog. After an intended surface change, regenerate it with `AIDA_UPDATE_SNAPSHOTS=1 cargo test -p aida-cli-lib story_1728_command_registry` and review the diff; the doc-intent gate treats a change to that file as a CLI surface change.
+<!-- trace:STORY-1728 | ai:claude -->
+
 ### Divergent-branch recovery
 
 The convention behind the two-leg git-mirror verbs (`fetch` / `pull` / `push` / `rebase`) — what bundles, what's a deliberate non-mirror, and the `--code-only` / `--store-only` / `--dry-run` / `--json` rules a new verb must follow — is `docs/git-verb-surface.md` (TASK-109).

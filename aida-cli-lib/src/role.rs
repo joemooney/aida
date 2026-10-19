@@ -399,6 +399,10 @@ pub(crate) fn role_restore_prompt_tty_id() -> Option<String> {
 }
 
 pub(crate) fn role_restore_prompt_should_skip(command: &Command) -> bool {
+    // trace:STORY-1728 | ai:claude
+    if let Command::Registered(invocation) = command {
+        return invocation.policy().skip_role_restore_prompt;
+    }
     matches!(
         command,
         Command::Init { .. }

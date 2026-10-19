@@ -8,6 +8,8 @@
 use anyhow::Result;
 use colored::Colorize;
 
+use crate::command_registry::{CmdPolicy, CommandReg, Phase};
+use crate::stakeholder_role::StakeholderAction;
 use crate::*;
 
 pub(crate) fn whoami_user_source(
@@ -119,6 +121,38 @@ pub(crate) fn handle_whoami_command() -> Result<()> {
 
     Ok(())
 }
+
+/// (internal) Background fetch worker spawned by `aida statusline`.
+/// Fetches `origin/<branch>` for the orphan store at <store-path>,
+/// updates `~/.aida/cache/last-fetch.toml`, and removes the
+/// per-project lockfile. Not intended for direct invocation —
+/// statusline forks this as a detached process with stdio nulled.
+// trace:STORY-79 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "_bg-fetch", hide = true)]
+pub(crate) struct BgFetchArgs {
+    /// Absolute path to the orphan-store worktree (`.aida-store/`).
+    pub store_path: std::path::PathBuf,
+}
+
+// Spawned detached by `aida statusline`; it only fetches the orphan store and
+// stamps the fetch cache, never a requirement write.
+// trace:STORY-1728 | ai:claude
+pub(crate) static BG_FETCH: CommandReg = CommandReg {
+    name: "_bg-fetch",
+    help_after: "whoami",
+    command: <BgFetchArgs as clap::CommandFactory>::command,
+    phase: Phase::PreStore,
+    policy: |_| CmdPolicy {
+        stakeholder: StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+    },
+    run: |matches, _| {
+        let args = <BgFetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+        handle_bg_fetch_command(&args.store_path)
+    },
+};
 
 pub(crate) fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
     // Always try to clean up the lockfile, even on early-exit paths.

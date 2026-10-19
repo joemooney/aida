@@ -9,8 +9,9 @@ gate refuses the change — so this is a CHECK, not a CLAUDE.md rule.
 
 RULE
 ----
-If a diff touches the CLI command/flag SURFACE (`aida-cli-lib/src/cli.rs`, or
-the legacy `aida-cli/src/cli.rs`) OR the
+If a diff touches the CLI command/flag SURFACE (`aida-cli-lib/src/cli.rs`, the
+legacy `aida-cli/src/cli.rs`, `command_registry.rs`, or the golden help snapshot
+every registered command's surface change regenerates) OR the
 agent-facing skill/command SET (`.claude/skills/`, `.claude/commands/`, or their
 `aida-core/templates/{skills,commands}/` masters), then at least one spec the diff
 REFERENCES must carry doc-impact intent — i.e. non-empty `interface_changes`
@@ -57,6 +58,12 @@ SURFACE_PATHS = (
     # trace:BUG-1238 | ai:codex
     "aida-cli-lib/src/cli.rs",  # current CLI command/flag definitions
     "aida-cli/src/cli.rs",  # legacy path, retained for backports/safety
+    # Commands registered from their own modules change the surface without
+    # touching cli.rs; every such change must regenerate the golden help
+    # snapshot of the built tree, so that file arms the gate for all of them.
+    # trace:STORY-1728 | ai:claude
+    "aida-cli-lib/src/command_registry.rs",
+    "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt",
 )
 SURFACE_DIRS = (
     ".claude/skills/",
