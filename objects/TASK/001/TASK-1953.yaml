@@ -51,16 +51,25 @@ description: |-
 
   ### BUG-2175: aida queue list --epic help text still names the removed 'aida graph <ID> --tree' spelling
   cli.rs:6145-6146 (queue list --epic help): '...the same hierarchy closure `aida graph <ID> --tree` walks'. The flag form was replaced by subcommands (STORY-1028). scripts/check-removed-flags.sh misses it because the doc comment wraps between 'aida graph' and '<ID> --tree'. Found when STORY-1728's golden help snapshot rendered the text onto one line. Fix: name the current graph subcommand spelling, regenerate the snapshot.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:59:11.076757281Z
-modified_at: 2026-10-19T15:59:11.076757281Z
+modified_at: 2026-10-19T15:59:26.968794192Z
 req_type: Task
 tags:
 - docs
 - sweep
+history:
+- id: 01a154e3-a2f8-70b3-bd25-285f82bcaae8
+  author: joe
+  timestamp: 2026-10-19T15:59:26.968789305Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
