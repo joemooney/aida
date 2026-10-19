@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-19T16:09:31.066341445Z
+modified_at: 2026-10-19T17:37:15.306267215Z
 req_type: Task
 tags:
 - contained
@@ -109,6 +109,12 @@ comments:
   created_at: 2026-10-19T16:08:47.952232152Z
   modified_at: 2026-10-19T16:08:47.952232152Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1553d-2e2a-75d0-b2a2-ba9af5e21ec0
+  author: joe
+  content: 'TASK-1959 measurement (2026-10-19, debug build, 18aa13a): one ''aida add'' in a fresh --no-hooks fixture spawns ~190 git processes; ~130 of them are the host-git hardening lookups that precede each real git call (rev-parse --git-common-dir x2 + config --blob :.gitmodules, repeated ~43 times). ''aida init'' and ''aida add'' take ~5 s each in debug, which is the floor under every binary-driving integration test (task_1717, bug_1947, task_1335, journey, task_1290 fixtures). Memoizing these per process/cwd (the TASK-1942 item) is the largest remaining lever on STORY-1853 integration-test time; it needs a security call on the TOCTOU window, so it is not done in TASK-1959.'
+  created_at: 2026-10-19T17:37:15.306267215Z
+  modified_at: 2026-10-19T17:37:15.306267215Z
+  session_id: 5e7cd0ae-fc8a-4e77-abf9-a8ab628b7a74
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
