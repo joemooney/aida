@@ -1,0 +1,80 @@
+id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+spec_id: TASK-1951
+agreed_id: TASK-1951
+title: 'Sweep: ship / reconcile / auto-complete fail-open and dead-code follow-ups'
+description: |-
+  Advisor triage 2026-10-19: rolls up the open P3 follow-ups below into one sweep. Each was a separate spec; each is now superseded by this sweep, and its original text is preserved here and on the old spec. Deliver as ONE PR (or two, if they split cleanly) that addresses every item, or rejects one with a stated reason in the PR body. Trace each change to this sweep's ID and the original item ID. Standard gate: check-ci-fast + targeted filters + check-ci-compile.
+
+  ### TASK-1408: [cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after class…
+  [cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after classify_ship_default_branch replaced it, so non-test builds get a dead_code warning. Gate it #[cfg(test)], as was done for store_history_versions.
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+
+  ### TASK-1411: [cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct un…
+  [cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct unit tests for malformed lines, multiple HEAD symrefs, a non-refs/heads target or an unsafe branch name. Only the happy path is covered through the GitLab integration test.
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+
+  ### TASK-1615: non-blocking (cosmetic): the Stalled latch (auto_complete.rs:5298-5303) sets se…
+  non-blocking (cosmetic): the Stalled latch (auto_complete.rs:5298-5303) sets serial_leg_broken, so in-flight members get skip reason 'serial leg broken — PR left open', which mislabels a stalled queue.
+  Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+
+  ### TASK-1617: non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt …
+  non-blocking (minor): auto_complete.rs:5394-5400 and :5431-5442 — after a halt has latched, a second in-flight member whose result is Held, Inconclusive, or an un-shelvable failure makes apply_batch_result return Some(...) without recording it, and halted.get_or_insert discards that result, so the member appears in no summary list (not shipped/shelved/skipped). Record it (e.g. in skipped with its stop reason).
+  Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
+
+  ### TASK-1618: minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merg…
+  minor: db_reconcile.rs:2088/3028 slice-subject exclusion is global; squash merges titled [k/N] or refactor(cli-lib): extract x.rs never auto-complete and --final-slice is refused for squash
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1619: cosmetic: pr_cmd.rs:4802 verifier hard-codes origin/main and falls back to loca…
+  cosmetic: pr_cmd.rs:4802 verifier hard-codes origin/main and falls back to local script more widely than documented; no PASS-path verifier test
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1620: cosmetic: db_reconcile.rs:143 marker matches by subject permanently; sha: line …
+  cosmetic: db_reconcile.rs:143 marker matches by subject permanently; sha: line records pre-rebase head that never lands on main
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1621: minor: pr_cmd.rs:3776 marker/final-slice completion only when merged_this_run; …
+  minor: pr_cmd.rs:3776 marker/final-slice completion only when merged_this_run; re-run after post-merge crash records neither
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1622: minor: pr_cmd.rs:4918/5001 record_non_completing_rebase_slice fails open silent…
+  minor: pr_cmd.rs:4918/5001 record_non_completing_rebase_slice fails open silently (store open error returns; update error discarded); spec can auto-complete on pull from non-slice (SPEC-ID) subjects
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1623: minor: pr_ship.rs:588 stale-head check fails open when preflight head lookup re…
+  minor: pr_ship.rs:588 stale-head check fails open when preflight head lookup returns None
+
+  PR: #2732
+  Reviewed sha: 4e96f28f950fa31753ec133de30f52090ade6f00
+
+  ### TASK-1814: TASK-1801 follow-ups: nlink race on sibling evidence publish, residual path read in stamp_pr_review_verdict, metadata-only mtime read
+  Non-blocking findings from PR #2712 round-2 review (PASS). (1) phase_gates.rs:508-509 publishes sibling evidence via hard_link(temp,dest) then remove_file(temp), so dest briefly has st_nlink=2, which the new nlink!=1 rule refuses, and a concurrent collision read (:513) or phase-4/ship read can fail spuriously. Publish with rename (or linkat then unlink before exposing), with a concurrency test. (2) pr_merge_gate.rs:248 stamp_pr_review_verdict re-reads and rewrites the just-recorded verdict by path; route it through the anchored handle reader, or narrow the AGENTS.md/OVERVIEW.md 'every production verdict reader' claim. (3) review_verdict.rs verdict_file_modified reads the full body (up to 1 MiB) just to get mtime; use a metadata-only handle open.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T15:55:48.750553278Z
+modified_at: 2026-10-19T15:55:48.750553278Z
+req_type: Task
+tags:
+- reconcile
+- ship
+- sweep
+filed_at:
+  code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 6d590ed914
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
