@@ -7,12 +7,12 @@ description: |-
 
   non-blocking (cosmetic): the Stalled latch (auto_complete.rs:5298-5303) sets serial_leg_broken, so in-flight members get skip reason 'serial leg broken — PR left open', which mislabels a stalled queue.
   Reviewed sha: 25a2c60eb274bfc46af1f0c9e778253e7d632a44
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-18T21:02:20.067101414Z
-modified_at: 2026-10-19T15:56:20.363356462Z
+modified_at: 2026-10-19T15:56:22.392991843Z
 req_type: Task
 tags:
 - carried-from:TASK-1351
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-18T21:34:02.008918379Z
   changes: []
+- id: 01a154e0-d1f8-7891-a661-f2bbc326e5d9
+  author: joe
+  timestamp: 2026-10-19T15:56:22.392985657Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
