@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1672",
+  "publishes": [
+    {
+      "at": "2026-10-19T15:44:44.425014596Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-15T15:38:07.541510478Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-18T03:06:57.153469463Z",
+      "spec": "STORY-1672",
+      "run_uuid": "01a14cf9-ef2b-7463-bac6-d19e1cc2f97c",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "tool-exit",
+        "detail": "phase 1 workspace resolver mismatch for STORY-1672: branch `main` (worktree ``) does not name STORY-1672, so it is not the workspace the pickup resolver (`aida queue work STORY-1672`) would use; refused before taking a lease",
+        "recovery_hint": "Continue the implementer session: `aida queue work STORY-1672 --resume`"
+      }
+    },
+    {
+      "ts": "2026-10-18T03:09:25.744514687Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-18T03:09:25.745107831Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-18T03:12:38.367694547Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-18T05:47:05.975533726Z",
+      "spec": "STORY-1672",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1672",
+        "branch": "story-1672-work",
+        "first_seen": "2026-10-18T05:47:05.975457292+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T13:35:54.978134121Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-19T15:44:44.220563621Z",
+      "spec": "STORY-1672",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-19T15:44:44.221105287Z",
+      "spec": "STORY-1672",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
