@@ -1,0 +1,34 @@
+id: 01a152cf-72dd-7d31-844c-0538d4df2513
+spec_id: STORY-1855
+agreed_id: STORY-1855
+title: 'Review PR-2752: [AI:claude] fix(contained): deny main .git whatever the store grant (BUG-1982)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/bug-1982-deny`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2752>
+  - Branch: `claude/bug-1982-deny` → `main`
+
+  ## Covers
+
+  - BUG-1982
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2752` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T06:18:09.501062512Z
+modified_at: 2026-10-19T06:18:09.501062512Z
+req_type: Story
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: eb0e25ae-df6f-4890-9d44-3d4a5878659a
