@@ -129,9 +129,8 @@ impl std::fmt::Display for DetectError {
 impl std::error::Error for DetectError {}
 
 fn git(repo: &Path, args: &[&str]) -> Result<String, DetectError> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    // trace:BUG-1985 | ai:claude
+    let out = crate::git_ops::host_git_command(repo)
         .args(args)
         .output()
         .map_err(|e| DetectError::Git(format!("spawn failed: {e}")))?;

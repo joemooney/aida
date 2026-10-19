@@ -290,9 +290,8 @@ fn refusal_message(reasons: &[String]) -> String {
 }
 
 fn git_out(repo: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(repo)
         .args(args)
         // A hook-exported GIT_DIR would silently redirect `-C`.
         .env_remove("GIT_DIR")
