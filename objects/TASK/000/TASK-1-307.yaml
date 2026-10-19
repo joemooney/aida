@@ -8,11 +8,18 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-15T15:56:16.799382386Z
-modified_at: 2026-10-15T15:56:16.799382386Z
+modified_at: 2026-10-19T15:48:48.166503154Z
 req_type: Task
 tags:
 - from-advisor:general
 - kind:observation
+comments:
+- id: 01a154d9-e3a6-72d0-89a2-cac0bc2471ef
+  author: joe
+  content: 'Advisor triage 2026-10-19: STALE, closed. A performance observation asking for an idle re-measure; 61fa2be061 since improved show latency. Re-file with numbers if it is still slow. Reopen if still wanted.'
+  created_at: 2026-10-19T15:48:48.166503154Z
+  modified_at: 2026-10-19T15:48:48.166503154Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 3d85bbde84130b00330ac845d79ffdd4eb9bcce7
   branch: main
