@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "collector_sha256": "a72616ecc36cc328a0fc528234d5a74c0d190b30f3125014653f1e688b462938",
+  "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
   "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
   "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
   "named_refusals": 22,
@@ -27,8 +27,8 @@
           "AGENTS.md",
           "OVERVIEW.md"
         ],
-        "ids_count": 81,
-        "ids_sha256": "f8531521493677d52c48be6b9c5c94a8b77b6fc5f55fbe9ff47ac368e363ad2f"
+        "ids_count": 93,
+        "ids_sha256": "a2d2d559e4fcd593b2419b6b491690919c95ba8db03fc3932d6cfde91d228f8c"
       },
       "subjects": [
         "[AI:codex] chore(git): merge main after mandate integration (TASK-1789)",
@@ -78,8 +78,8 @@
           "AGENTS.md",
           "OVERVIEW.md"
         ],
-        "ids_count": 55,
-        "ids_sha256": "1509e852e9a8baedcb2571b99fe574c914d045c899307ecac40a9040ed47279a"
+        "ids_count": 74,
+        "ids_sha256": "f2c852783b32a05ab1957a71dc6be6b3f7081507d7ad592407e25f04e5a79f9b"
       },
       "subjects": [
         "[AI:codex] fix(mandate): validate ledger metadata and clarify re-arm audits (TASK-1790)"
@@ -239,8 +239,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2165_headless_child_grant_isolation_tests.rs"
         ],
-        "ids_count": 356,
-        "ids_sha256": "96ab05823667d9138f554fd3daed653839df69bcece9d9f634a4731c7e6ea5b9"
+        "ids_count": 396,
+        "ids_sha256": "029aa30f53aca9bf13ea030c987bf684b84bcb0e2dd8b586e9712e5e7f174fd6"
       },
       "subjects": [
         "[AI:codex] test(session): complete merged grant TTL lease fixture (BUG-2165)",
@@ -309,8 +309,8 @@
           "scripts/generate-format-json-audit.py",
           "shared/types.ts"
         ],
-        "ids_count": 924,
-        "ids_sha256": "7c9c1378ac965015ba9c52332b60e78a27a3b1e016d3fff421ee0e23a7d8df9d"
+        "ids_count": 936,
+        "ids_sha256": "40b2c4bbd335f097675162f2c4d573bc05734453a9843f68c127d25e38b07d25"
       },
       "subjects": [
         "Merge remote-tracking branch 'origin/main' into codex/story-1673",
@@ -371,8 +371,8 @@
           "docs/cli/06-roles-sessions.md",
           "scripts/config-trust.toml"
         ],
-        "ids_count": 737,
-        "ids_sha256": "8cd8d9ee0aa3fa02429d07eba5ffb3ccc6d92b8c89e9696b3329fec8b1018ba8"
+        "ids_count": 739,
+        "ids_sha256": "1bd1e375143c25f8fe313e09f2d7ca8ace4e1f6c34a6876487cc96ccf2f29727"
       },
       "subjects": [
         "[AI:antigravity] fix(authority): classify config.toml readers and assert worktree cannot raise cap (TASK-1787)",
@@ -426,8 +426,8 @@
           "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs",
           "docs/cli/03-work-autonomy.md"
         ],
-        "ids_count": 82,
-        "ids_sha256": "c0afb58185cd641f06a4becee154fc1374745e4f4d30d9eccd3e6aa6ac021945"
+        "ids_count": 88,
+        "ids_sha256": "52efea19907d03db3c566f1814e4b990d85f259591bfba1a5cfbbbb6ccfa4f07"
       },
       "subjects": [
         "[AI:claude] fix(worktree): liveness-gated re-mint, mint before release (TASK-1784)",
@@ -482,8 +482,8 @@
           "aida-cli-lib/src/regen/score/report/cache.rs",
           "scripts/config-trust.toml"
         ],
-        "ids_count": 82,
-        "ids_sha256": "44de3f0f0bc640ad7ac8c71275a1ef1a0e572755dca63a03ad7d929ace7ceb70"
+        "ids_count": 83,
+        "ids_sha256": "ec8f66f1c890a5661ba10383149d728539fef156b6870d3541c5260788a051a7"
       },
       "subjects": [
         "Merge remote-tracking branch 'origin/main' into codex/task-1734",
@@ -543,8 +543,8 @@
           "aida-core/templates/.aida/discipline/git-sync-and-review.md",
           "docs/agents/aida-repository-guide.md"
         ],
-        "ids_count": 108,
-        "ids_sha256": "2bbe959153f21eda230ae7b2dd093056a5af476fbdee1083ce012ddd96ee737f"
+        "ids_count": 121,
+        "ids_sha256": "4e825df063c7572883182c1056502363197c67c48fe02c77950743305a21dc4b"
       },
       "subjects": [
         "[AI:claude] fix(review): mandate release honours the two-person rule (STORY-1697)",
@@ -593,8 +593,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2171_2170_contained_builders_tests.rs"
         ],
-        "ids_count": 74,
-        "ids_sha256": "b8e5f89754978d74443e7b4a4e243e058464667bb6f7dea37ad286106d280643"
+        "ids_count": 87,
+        "ids_sha256": "2ce0770682e6bf9110a02795c1edb2b23b9eeea82b39117ef1589b758a730c92"
       },
       "subjects": [
         "[AI:antigravity] fix(containment): enforce containment and purpose scrub in burndown, intake, clarify (BUG-2171 BUG-2170)"
@@ -657,8 +657,8 @@
           "docs/cli/02-specs.md",
           "shared/types.ts"
         ],
-        "ids_count": 173,
-        "ids_sha256": "37e95deced8bdb89f1737395c946fdbf9ae8cfbd1708813c92a10b4d4e19a996"
+        "ids_count": 189,
+        "ids_sha256": "07c5d7e96a79241fd1ea4924b730625323d4d5a503d5e0ef6ce05dd34684a3c1"
       },
       "subjects": [
         "Merge branch 'main' into codex/story-1675",
@@ -872,8 +872,8 @@
           "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs",
           "docs/cli/03-work-autonomy.md"
         ],
-        "ids_count": 176,
-        "ids_sha256": "892fd5c0437ae03d20432fdf6eb63dde078de11ec4e7f7822bfb784b96888522"
+        "ids_count": 191,
+        "ids_sha256": "c63ae44cce332b01549515cd1906b547ca6a5d484782aaeb0cf85a59bbda7b63"
       },
       "subjects": [
         "Merge branch 'main' into story-1699-heartbeat",
@@ -931,8 +931,8 @@
           "docs/cli/04-git-lifecycle.md",
           "docs/monitor-contract-fixtures/events-follow.json"
         ],
-        "ids_count": 828,
-        "ids_sha256": "5ebcee7ffffdda7df7d34ecc462dee3c8f4b80ae6da27816e4bd1c87bb775a45"
+        "ids_count": 839,
+        "ids_sha256": "7cd30dd1ed845b8f5451cdb16fb44575ac39bb14fef6991082eddd64e2b04236"
       },
       "subjects": [
         "Merge branch 'main' into story-1698-work",
@@ -1040,8 +1040,8 @@
           "aida-cli-lib/src/tests/bug_1808_delegation_preflight_tests.rs",
           "aida-cli/tests/bug_2139_headless_child_grant.rs"
         ],
-        "ids_count": 223,
-        "ids_sha256": "d70a6c4701d2c960395dddcb37ac00028dbf13a11efe849793b5668dd1a5aee1"
+        "ids_count": 276,
+        "ids_sha256": "45f499207c8f6045cfbefc1f2eec0842e1ee38a2b1f48a5235943e7c7f2e4748"
       },
       "subjects": [
         "[AI:claude] fix(session): every headless queue-work child runs under its own routed-seat grant (BUG-2139)"
@@ -1142,8 +1142,8 @@
           "aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs",
           "docs/agents/per-agent-config.md"
         ],
-        "ids_count": 173,
-        "ids_sha256": "8d555e988413532869c1854fa3d983b2d5c62100adb5f1d6e601f7dea42ec751"
+        "ids_count": 175,
+        "ids_sha256": "69a30acc33935fb0fc5e2d67d3842aca1f4840b181977fff31b77661b3ce6613"
       },
       "subjects": [
         "[AI:claude] test(contained): portable path literals in passthrough tests (BUG-2157 BUG-2158)",
@@ -1253,8 +1253,8 @@
         "fallbacks": [
           "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
         ],
-        "ids_count": 4,
-        "ids_sha256": "d0c89b2f415323681f5df9070b468a2aff9aaa8f70aa9c85ff1c26711ade2c5a"
+        "ids_count": 5,
+        "ids_sha256": "0db1c3e4baa8b59f88e5634a8c224f0a219a253fe0fd6d9771bf05952a1371c7"
       },
       "subjects": [
         "[AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)"
@@ -1305,8 +1305,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs"
         ],
-        "ids_count": 462,
-        "ids_sha256": "b64b3387b162a570ff7c9489368765ed816a2aa6d20ea6b1be2f474b208d07a4"
+        "ids_count": 477,
+        "ids_sha256": "518c8353655c155aa329ece334745591d22033c6e1f9ffbf99eb38b1c47035c4"
       },
       "subjects": [
         "Merge branch 'main' into bug-2149-2150",
@@ -1433,8 +1433,8 @@
           "aida-core/templates/hooks/aida-role-context.sh",
           "tests/test_session_role_grant.sh"
         ],
-        "ids_count": 663,
-        "ids_sha256": "ade02425b3b284be712c0842578b19e133129f0eb82deb43b73e10bffc43ceb6"
+        "ids_count": 664,
+        "ids_sha256": "e60440fb8e8ccb1689a644a6d8bff150eb7ba383f59cde3cb0e47d7f959f3dab"
       },
       "subjects": [
         "[AI:claude] fix(handoff): scaffold nested discipline keys; generic advisor standing orders (STORY-1693)",
@@ -1545,8 +1545,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
         ],
-        "ids_count": 119,
-        "ids_sha256": "06165b51e60e404389db37fa60b15a229f19a927f425e9b2bca239999cb71a61"
+        "ids_count": 120,
+        "ids_sha256": "b796a366d01549f5653169d2200ed55214c9906c15382d1994ef02b54bf1d937"
       },
       "subjects": [
         "[AI:antigravity] fix(liveness): check start-time identity before killing processes on agent stop and session end (BUG-2148)"
@@ -1758,8 +1758,8 @@
         "fallbacks": [
           "aida-cli-lib/src/session_reap.rs"
         ],
-        "ids_count": 150,
-        "ids_sha256": "18cf9446ac3fcb102938992d3436d4569e703a91e1e98cc189eda08c84cdb8f0"
+        "ids_count": 191,
+        "ids_sha256": "b4c51ef3e12e7ed4b78fb60d3a9ba94e032ebc0b268a67dc8260fe9b28c84cee"
       },
       "subjects": [
         "Merge branch 'main' into claude/bug-2143",
@@ -1895,8 +1895,8 @@
           "docs/cli/12-glossary.md",
           "docs/review-process.md"
         ],
-        "ids_count": 981,
-        "ids_sha256": "c708296c59d59bfc726b6b6f9bc51b69f8e8c27392ecd5354c90828581943d17"
+        "ids_count": 1026,
+        "ids_sha256": "8af4cfe1b55c250506711da72973b01266ad9535ed0b3b6fe62c8b1b57ca8ed8"
       },
       "subjects": [
         "[AI:claude] chore(merge): merge main into BUG-1918 branch (BUG-1918)",
@@ -1950,8 +1950,8 @@
           "aida-cli-lib/src/ps_integrate.rs",
           "aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs"
         ],
-        "ids_count": 181,
-        "ids_sha256": "90cc740f3a12d42bc2802942ca07b4be97851b6fb506dd8d64cd8d4a7315b530"
+        "ids_count": 222,
+        "ids_sha256": "ce1bb0ed5425157039e8ebe3f1070bd31b2a4b6e723d51419dab078b0dc0391f"
       },
       "subjects": [
         "Merge branch 'main' into bug-2010-work",
@@ -2020,8 +2020,8 @@
           "scripts/config-trust.toml",
           "tests/test_seat_takeover_lifecycle.py"
         ],
-        "ids_count": 741,
-        "ids_sha256": "adaa91a574aaf1625345f61a107915fd3bf0909cfd208987644527c529707ad0"
+        "ids_count": 749,
+        "ids_sha256": "6a4abec96b1847ea00491ccf0c933917991c8a57db917748be9f52f8f6c5ee78"
       },
       "subjects": [
         "Merge branch 'main' into story-1485",
@@ -2082,8 +2082,8 @@
         "fallbacks": [
           "aida-core/src/store_hooks.rs"
         ],
-        "ids_count": 28,
-        "ids_sha256": "8240a2f0c207497be4665c6ffc25aaf1aa0bb625548e0253abf6d0728038d687"
+        "ids_count": 47,
+        "ids_sha256": "603eaa0b5acb7ceabba80a8d12527a0206cd000aba17d86afa6feaa809956a44"
       },
       "subjects": [
         "Merge branch 'main' into task-1775",
@@ -2131,8 +2131,8 @@
         "fallbacks": [
           "docs/cli/03-work-autonomy.md"
         ],
-        "ids_count": 17,
-        "ids_sha256": "e848c0763e2cc36f9cd1997ae8b98a3c345789b0d24ce691dbb12b064418503e"
+        "ids_count": 20,
+        "ids_sha256": "5a3d1983dd8fae05d0a8a2476843474c7e9f1c2d48b5730b5390fa98955cf9c1"
       },
       "subjects": [
         "Merge branch 'main' into task-1769",
@@ -2225,8 +2225,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2144_2146_containment_refusal_tests.rs"
         ],
-        "ids_count": 829,
-        "ids_sha256": "96e78e6b0def9563ec85b60149daeedf4e68077c658c5753305129152e5505a1"
+        "ids_count": 861,
+        "ids_sha256": "35656de31ecc724a952d921a5d2902202a6379eb93a5957b6fc8b8ada4252320"
       },
       "subjects": [
         "Merge branch 'main' into claude/containment-2144",
@@ -2280,8 +2280,8 @@
           "aida-core/src/db/cache_lock.rs",
           "aida-core/src/liveness.rs"
         ],
-        "ids_count": 49,
-        "ids_sha256": "491197319a687b518c1489950a0e7033080414fd248d34c244abdc70a4c6c016"
+        "ids_count": 51,
+        "ids_sha256": "846c40ebe0624e4d8a1b2e5e43f15d537d1dd80257470ec420d19ee5aaef2157"
       },
       "subjects": [
         "Merge branch 'main' into task-1750-exact-reader",
@@ -2339,8 +2339,8 @@
           "aida-cli-lib/src/regen.rs",
           "docs/cli-format-json-audit.md"
         ],
-        "ids_count": 753,
-        "ids_sha256": "d48ad43ff7fc4b8d6ebb45ec3bde0224bc337582dcf20f7782a40b8eeb2d9c89"
+        "ids_count": 769,
+        "ids_sha256": "707b13f44e4d128acf6380e5a790dfc225d62d737d1a3b383de79d38ac2fc444"
       },
       "subjects": [
         "Merge branch 'main' into codex/task-1729",
@@ -2395,8 +2395,8 @@
           "docs/agents/claude-bubblewrap-sandbox.md",
           "scripts/config-trust.toml"
         ],
-        "ids_count": 179,
-        "ids_sha256": "26cabc7bd93aa0d6215adf100e87837a8eb7bdb6c6c11d6b54aee852cdb62e26"
+        "ids_count": 228,
+        "ids_sha256": "397470394cf2016e956c91d0abf381defa37c5f7a04d545e1f48240cd7abb5d5"
       },
       "subjects": [
         "Merge branch 'main' into claude/bug-2131",
@@ -2448,8 +2448,8 @@
           "scripts/ci-gate-tiers.toml",
           "tests/test_bug_2135_sccache_tmpdir.py"
         ],
-        "ids_count": 56,
-        "ids_sha256": "42ec22b14914d6b6abdf7e6419e9f377da2456c6660bc1d573ec7630b053e816"
+        "ids_count": 57,
+        "ids_sha256": "0d503f47ba34b5b7fc2622cde5da8c620bd223e8708fd5f82465a00adc4d35e0"
       },
       "subjects": [
         "Merge branch 'main' into bug-2135-sccache-tmpdir",
@@ -2551,8 +2551,8 @@
           "aida-cli-lib/src/status_sections.rs",
           "aida-cli-lib/src/tests/bug_2133_contained_drain_children_tests.rs"
         ],
-        "ids_count": 182,
-        "ids_sha256": "de8a19a5fd85a427077b04a61c25a6f05213a4041f829e3e645dfe48ea0cc09f"
+        "ids_count": 198,
+        "ids_sha256": "2a126fa2e125eb0a272e48afe85259e85bd6966d725314af21b3b49b9ffda5f0"
       },
       "subjects": [
         "Merge branch 'main' into claude/bug-2133",
@@ -2667,8 +2667,8 @@
           "aida-core/templates/hooks/aida-store-pre-push.sh",
           "tests/test_bug_1929_hook_templates.py"
         ],
-        "ids_count": 426,
-        "ids_sha256": "85ea8ce8fae5c5251e072a72d95c97b9823b586e9b71b91c05d4b9a7ebb2f906"
+        "ids_count": 498,
+        "ids_sha256": "96c6ae486e66686c51bfd4b838331fc3fa1eb38d0941a752f28a55d942301567"
       },
       "subjects": [
         "Merge branch 'main' into bug-1929-work",
@@ -2741,8 +2741,8 @@
         "fallbacks": [
           "aida-core/src/mailbox.rs"
         ],
-        "ids_count": 104,
-        "ids_sha256": "70be4b444735412da73570d34c7cb1762c5b3139db36a6eef7f8544fa86c76d0"
+        "ids_count": 107,
+        "ids_sha256": "9a621cd9d4be2a7fed072b08053b0c6e6edbbfd4177b396331e5b129d21c5437"
       },
       "subjects": [
         "Merge branch 'main' into fix/bug-2132-mailbox-recipient-validation",
@@ -2790,8 +2790,8 @@
         "fallbacks": [
           "aida-cli-lib/src/review_verdict.rs"
         ],
-        "ids_count": 45,
-        "ids_sha256": "aa8b027398d6916156003474b430947a8cb36c2a3fd39812d6bfbe1a294b25b0"
+        "ids_count": 51,
+        "ids_sha256": "a513744cff053a6882cdc1ed7c207e5a8806c71b91e9b81897d76a0b90999f44"
       },
       "subjects": [
         "Merge branch 'main' into fix/bug-2136-review-record-outcome",
@@ -2823,5 +2823,12 @@
         }
       }
     }
-  ]
+  ],
+  "module_comment_update": {
+    "previous_collector_sha256": "a72616ecc36cc328a0fc528234d5a74c0d190b30f3125014653f1e688b462938",
+    "cases_gaining_scoped_ids": 33,
+    "prior_ids_preserved": true,
+    "fallback_paths_unchanged": true,
+    "full_file_sets_unchanged": true
+  }
 }

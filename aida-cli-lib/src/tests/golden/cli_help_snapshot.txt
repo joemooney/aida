@@ -4762,6 +4762,11 @@ Options:
       --agent <AGENT>
           Whose read-watermark gates archive safety (default: current inbox identities)
 
+      --phantoms
+          Instead of the age sweep, archive mail addressed to phantom recipients (flags, numbers,
+          spec IDs, commit SHAs, unknown @mention handles) and re-address whitespace-padded
+          recipients, printing each message it touches
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -28232,6 +28237,11 @@ Options:
         "name": "older-than",
         "takes_value": true,
         "help": "Sweep read mail older than this point (default: 30d). Same forms as `aida mail archive --older-than`"
+      },
+      {
+        "name": "phantoms",
+        "takes_value": false,
+        "help": "Instead of the age sweep, archive mail addressed to phantom recipients (flags, numbers, spec IDs, commit SHAs, unknown @mention handles) and re-address whitespace-padded recipients, printing each message it touches"
       }
     ],
     "hidden": false

@@ -1094,6 +1094,15 @@ pub(crate) fn pull_store_before_id_allocation(
         return ensure_no_spec_id_collisions(store_path);
     }
 
+    // BUG-2140: inside a contained sandbox (or when the store's git directory
+    // is not writable), git commit and pull --rebase cannot touch `.git`.
+    // Emit the deferral notice once and run only the local collision check.
+    // trace:BUG-2140 | ai:antigravity
+    if git_ops::store_commit_deferred_to_host(store_path) {
+        git_ops::notice_store_commit_deferred(store_path);
+        return ensure_no_spec_id_collisions(store_path);
+    }
+
     // trace:TASK-1717 | ai:claude — the pending commit is a store-writer
     // transaction of its own; the commit is kept whatever the network does.
     // A failed stage/commit (a refusing hook) stops the allocation with the
@@ -1207,6 +1216,14 @@ pub(crate) fn push_store_after_id_allocation(
     // will publish on the next online `aida add` / `aida db sync --push`.
     // trace:TASK-857 | ai:claude
     if add_remote_sync_disabled() {
+        return Ok(());
+    }
+
+    // BUG-2140: when store commits are deferred to the host, the new spec is
+    // queued on disk without a git commit yet, so skip the store push too.
+    // trace:BUG-2140 | ai:antigravity
+    if git_ops::store_commit_deferred_to_host(store_path) {
+        git_ops::notice_store_commit_deferred(store_path);
         return Ok(());
     }
 

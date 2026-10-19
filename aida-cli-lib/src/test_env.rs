@@ -33,11 +33,19 @@ use std::sync::{Mutex, MutexGuard};
 /// Returns true in the parent after the child passed, so the caller returns.
 // trace:BUG-1994 | ai:codex
 pub(crate) fn run_path_isolated_test() -> bool {
+    run_path_isolated_test_output().is_some()
+}
+
+/// [`run_path_isolated_test`] that hands the parent the passed child's
+/// output, so a test can assert what the code under test never printed.
+/// Returns None in the child.
+// trace:BUG-2119 | ai:claude
+pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
     let thread = std::thread::current();
     let name = thread.name().expect("libtest thread name");
     if is_path_isolated_process() {
         assert_eq!(std::env::var("AIDA_TEST_PATH_CHILD").unwrap(), name);
-        return false;
+        return None;
     }
     assert!(
         !holds_env_lock(),
@@ -76,7 +84,7 @@ pub(crate) fn run_path_isolated_test() -> bool {
             .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed;")),
         "isolated test must actually run one test: {name}\n{stdout}"
     );
-    true
+    Some(output)
 }
 
 // trace:BUG-1994 | ai:codex

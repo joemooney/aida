@@ -6,6 +6,7 @@ fn status(from: &str, to: &str) -> EventKind {
     EventKind::StatusChange {
         from: from.to_string(),
         to: to.to_string(),
+        authority: None,
     }
 }
 

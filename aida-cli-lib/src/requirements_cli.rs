@@ -3207,7 +3207,9 @@ fn run_add(
                                                         "Warning: could not save blocks.yaml: {}",
                                                         e
                                                     );
-                                                } else {
+                                                } else if !aida_core::git_ops::store_commit_deferred_to_host(
+                                                    store_path,
+                                                ) {
                                                     // Commit the pointer advance to the store
                                                     let _ = aida_core::git_ops::add(
                                                         store_path,

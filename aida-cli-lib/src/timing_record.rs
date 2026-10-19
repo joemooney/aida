@@ -174,7 +174,7 @@ fn commit_record(
     // A contained session cannot write the store's history; the host's next
     // store sync commits the record.
     if aida_core::git_ops::store_commit_deferred_to_host(store_root) {
-        aida_core::git_ops::notice_store_commit_deferred();
+        aida_core::git_ops::notice_store_commit_deferred(store_root);
         return Ok(());
     }
     aida_core::git_ops::add_all(store_root, rel)?;

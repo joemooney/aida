@@ -2196,6 +2196,7 @@ impl RealPhaseDriver {
                 )
             })?;
         tee_handle.stop();
+        self.commit_contained_child_store_changes("advisor tier")?;
 
         // Clean up the fork JSONL if the config asks us to. Default is to
         // keep it for audit. Errors are non-fatal.
@@ -2224,6 +2225,33 @@ impl RealPhaseDriver {
             )
         })?;
         Ok((response, log_path))
+    }
+
+    /// BUG-2140: after a contained child exits, unconditionally commit any
+    /// pending store changes on the host through the hardened `add_all` /
+    /// `commit` path, surfacing embedded-repo / gitlink refusals loudly as a
+    /// `PhaseFailure`.
+    // trace:BUG-2140 | ai:antigravity
+    pub(crate) fn commit_contained_child_store_changes(
+        &self,
+        phase: &str,
+    ) -> Result<(), auto_complete::PhaseFailure> {
+        if !self.contained {
+            return Ok(());
+        }
+        let Some(store_path) = crate::detect_distributed_store_from(&self.project_root) else {
+            return Ok(());
+        };
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store_path)
+            .map(|_| ())
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!(
+                        "{phase}: failed to commit pending store changes after contained child exit: {e:#}"
+                    ),
+                )
+            })
     }
 }
 
