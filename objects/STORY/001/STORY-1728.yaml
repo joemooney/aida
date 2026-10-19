@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T03:28:13.919339215Z
-modified_at: 2026-10-19T04:30:26.343159617Z
+modified_at: 2026-10-19T04:49:46.554249328Z
 req_type: Story
 tags:
 - docs:impacted
@@ -171,6 +171,12 @@ comments:
   created_at: 2026-10-19T02:48:59.912030966Z
   modified_at: 2026-10-19T02:48:59.912030966Z
   session_id: 02ae01a2-5cde-49db-b318-efb49691c3e3
+- id: 01a1527e-883a-7971-8a48-03117006993b
+  author: joe
+  content: 'ADVISOR RULING 2026-10-18 21:52 MST (amends 17:30 ruling (3)). Slices 2 and 2b may land as ONE PR (#2751, retargeted to main), and #2730 closes with a pointer to it. Ruling (3)''s intent is one attested PASS per landing unit, not per branch. slice2b already contains all of slice 2, so landing them separately only adds a conflict cascade. Conditions: (a) the combined PR gets one attested PASS at its head, reviewing the full slice 2 + 2b diff against main; (b) the (2a) Early/no-store and (2c) team_identity parity tests are in it; (c) its body lists what slice 2 vs 2b each contribute, so the review can scope by area; (d) the F1–F3 changes from #2727 are folded in after #2727 lands.'
+  created_at: 2026-10-19T04:49:46.554249328Z
+  modified_at: 2026-10-19T04:49:46.554249328Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14d10-065d-75d3-b4dc-583cfad37dbc
   author: joe
