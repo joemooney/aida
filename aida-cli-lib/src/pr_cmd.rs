@@ -1612,6 +1612,7 @@ pub(crate) fn pr_ship_approval_gate(
     policy: &pr_ship::ShipApprovalPolicy,
     override_stale_approval: bool,
     delete_branch: bool,
+    carry_over: Option<&crate::review_carryover::CarryOverSite<'_>>,
 ) -> Result<Option<String>> {
     // BUG-1918: the approval must come from an authorized, non-author seat.
     // Checked first and NOT overridable: `--override-stale-approval` excuses
@@ -1643,7 +1644,38 @@ pub(crate) fn pr_ship_approval_gate(
     let Some(refusal) = pr_ship::approval_head_refusal(candidates, head_sha) else {
         return Ok(pr_ship::approved_match_head(candidates, head_sha));
     };
-    let message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+    let mut message = pr_ship::approval_head_refusal_message(pr_number, &refusal);
+    // TASK-1960: a head that moved only by clean merges of the base branch,
+    // with the PR's own diff unchanged, keeps the attested approval. The
+    // merge is pinned to the proven head, so a later push still refuses.
+    // trace:TASK-1960 | ai:claude
+    match carry_over
+        .and_then(|site| crate::review_carryover::carry_over_for_refusal(site, pr_number, &refusal))
+    {
+        Some(Ok((proof, outcome))) => {
+            println!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                crate::review_carryover::carry_over_line(&proof, &outcome)
+            );
+            append_ship_activity_line(
+                main_worktree,
+                &crate::review_carryover::carry_over_event(
+                    &chrono::Utc::now().to_rfc3339(),
+                    "aida pr ship",
+                    &proof,
+                ),
+            );
+            return Ok(Some(proof.new_head));
+        }
+        Some(Err(why)) => {
+            message = format!(
+                "{message} The approval did not carry over: {}.",
+                why.reason()
+            );
+        }
+        None => {}
+    }
     // BUG-1918: only a non-author session may ship commits no approval
     // covered; the override is neither honoured nor advertised to an author.
     // trace:BUG-1918 | ai:claude
@@ -2088,7 +2120,37 @@ pub(crate) fn merge_path_approval_gate(
         eprintln!("  {notice}");
     }
     if let Some(refusal) = pr_ship::approval_head_refusal(&candidates, head_sha) {
-        let message = pr_ship::approval_head_refusal_message(pr, &refusal);
+        let mut message = pr_ship::approval_head_refusal_message(pr, &refusal);
+        // TASK-1960: the same carry-over `aida pr ship` applies.
+        // trace:TASK-1960 | ai:claude
+        let site = crate::review_carryover::CarryOverSite {
+            repo: &main_worktree,
+            base_branch: None,
+        };
+        match crate::review_carryover::carry_over_for_refusal(&site, pr, &refusal) {
+            Some(Ok((proof, outcome))) => {
+                eprintln!(
+                    "  {}",
+                    crate::review_carryover::carry_over_line(&proof, &outcome)
+                );
+                append_ship_activity_line(
+                    &main_worktree,
+                    &crate::review_carryover::carry_over_event(
+                        &chrono::Utc::now().to_rfc3339(),
+                        "merge",
+                        &proof,
+                    ),
+                );
+                return Ok(Some(proof.new_head));
+            }
+            Some(Err(why)) => {
+                message = format!(
+                    "{message} The approval did not carry over: {}.",
+                    why.reason()
+                );
+            }
+            None => {}
+        }
         crate::events::record_gate_held(
             &main_worktree,
             crate::events::GATE_STALE_APPROVAL,
@@ -2309,6 +2371,11 @@ fn ship_preflight_gates(
         &policy,
         override_stale_approval,
         delete_branch,
+        // trace:TASK-1960 | ai:claude
+        Some(&crate::review_carryover::CarryOverSite {
+            repo: main_worktree,
+            base_branch: Some(change.base.as_str()),
+        }),
     )?;
     crate::merge_hold::enforce_corpus_gate_before_merge(project_root, change.id, &ids, || {
         Some(status.head_sha.clone())
@@ -3256,6 +3323,11 @@ pub(crate) fn pr_ship_with_method(
             &policy,
             override_stale_approval,
             delete_branch,
+            // trace:TASK-1960 | ai:claude
+            Some(&crate::review_carryover::CarryOverSite {
+                repo: &main_worktree,
+                base_branch: Some(retarget_base.as_str()),
+            }),
         )?;
         // STORY-1663: optional slice-stack verifier hook before rebase merge.
         // trace:STORY-1663 | ai:antigravity
@@ -6803,6 +6875,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &policy(&[approval(HEAD)]),
             false,
             true,
+            None,
         )
         .expect("an approval at the head merges");
         assert_eq!(pin.as_deref(), Some(HEAD));
@@ -6815,13 +6888,29 @@ mod task_1458_pr_ship_approval_gate_tests {
     #[test]
     fn no_approval_always_refuses() {
         let tmp = tempfile::tempdir().unwrap();
-        let err = pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), &policy(&[]), false, true)
-            .expect_err("no approval refuses");
+        let err = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[],
+            Some(HEAD),
+            &policy(&[]),
+            false,
+            true,
+            None,
+        )
+        .expect_err("no approval refuses");
         assert!(err.to_string().contains("no approval recorded"), "{err}");
-        assert!(
-            pr_ship_approval_gate(tmp.path(), 5, &[], Some(HEAD), &policy(&[]), true, true)
-                .is_err()
-        );
+        assert!(pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[],
+            Some(HEAD),
+            &policy(&[]),
+            true,
+            true,
+            None
+        )
+        .is_err());
     }
 
     /// BUG-1918 (round-2 regression): an honest approval of an older commit,
@@ -6845,16 +6934,33 @@ mod task_1458_pr_ship_approval_gate_tests {
             "authority holds: the approval post-dates the commit it reviewed"
         );
         let tmp = tempfile::tempdir().unwrap();
-        let err =
-            pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), &p, false, true)
-                .expect_err("stale without the override");
+        let err = pr_ship_approval_gate(
+            tmp.path(),
+            5,
+            &[approval(OLD)],
+            Some(HEAD),
+            &p,
+            false,
+            true,
+            None,
+        )
+        .expect_err("stale without the override");
         assert!(
             err.to_string().contains("--override-stale-approval"),
             "{err}"
         );
         assert!(
-            pr_ship_approval_gate(tmp.path(), 5, &[approval(OLD)], Some(HEAD), &p, true, true)
-                .is_ok(),
+            pr_ship_approval_gate(
+                tmp.path(),
+                5,
+                &[approval(OLD)],
+                Some(HEAD),
+                &p,
+                true,
+                true,
+                None
+            )
+            .is_ok(),
             "the override applies"
         );
     }
@@ -6887,6 +6993,7 @@ mod task_1458_pr_ship_approval_gate_tests {
                 &by_author,
                 override_stale,
                 true,
+                None,
             )
             .expect_err("the author never ships unreviewed commits");
             let msg = err.to_string();
@@ -6908,6 +7015,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &unanchored,
             true,
             true,
+            None,
         )
         .expect_err("an unanchored shipper cannot override");
         assert!(err.to_string().contains("no identity"), "{err}");
@@ -6928,6 +7036,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &policy(&[approval(OLD)]),
             false,
             true,
+            None,
         )
         .expect_err("a stale approval refuses");
         assert!(
@@ -6954,6 +7063,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &policy(&[approval(OLD)]),
             false,
             true,
+            None,
         );
         let evs = crate::events::read_all(tmp.path());
         assert_eq!(evs.len(), 1, "{evs:?}");
@@ -6971,6 +7081,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &policy(&[approval(OLD)]),
             true,
             true,
+            None,
         );
         assert!(crate::events::read_all(other.path()).is_empty());
     }
@@ -6986,6 +7097,7 @@ mod task_1458_pr_ship_approval_gate_tests {
             &policy(&[approval(OLD)]),
             true,
             true,
+            None,
         )
         .expect("the override ships");
         assert_eq!(
@@ -7294,6 +7406,7 @@ mod story_1663_rebase_ship_tests {
             &policy,
             false,
             true,
+            None,
         )
         .expect_err("rebase ship uses the same approval gate and must refuse without verdict");
         assert_eq!(
