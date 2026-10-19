@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T04:36:52.079506784Z
-modified_at: 2026-10-18T22:59:11.078078394Z
+modified_at: 2026-10-19T01:46:55.300440057Z
 req_type: Bug
 tags:
 - contained
@@ -74,6 +74,12 @@ comments:
   created_at: 2026-10-18T20:14:45.756475139Z
   modified_at: 2026-10-18T20:14:45.756475139Z
   session_id: 7ab3d93c-897f-48c5-8f2c-addf6c698cc1
+- id: 01a151d7-1fc4-78e3-b2d0-c40fab2f7fea
+  author: joe
+  content: 'ADVISOR RULING 2026-10-18 18:50 (PR-2731, review cap reached): round 4 passed BUG-1982 but left BUG-1985 BLOCKED. F1 is the round-1 security blocker: a .gitmodules ignore= override re-enables recursion into a planted filter driver. F4 is a regression this PR introduced (a refused host_git_command reads as a clean tree, so ship step 1 skips the commit). F3 and F5 are fail-open paths. I won''t sign off containment code with these. #2731 closes and resubmits as two fresh PRs: (A) BUG-1982 alone plus F5, and (B) BUG-1985 fail-closed, covering F1-F4 and F6. Implementer split-2731 is assigned.'
+  created_at: 2026-10-19T01:46:55.300440057Z
+  modified_at: 2026-10-19T01:46:55.300440057Z
+  session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
 history:
 - id: 01a130a2-bce0-74e2-8634-0063cf48c11a
   author: joe
@@ -123,6 +129,11 @@ history:
   timestamp: 2026-10-18T22:59:11.531675638Z
   session_id: 01a151370a56
   changes: []
+- id: 01a151d5-40a2-7483-abb7-71025b4f5f7f
+  author: joe
+  timestamp: 2026-10-19T01:44:52.642599786Z
+  session_id: 01a151cca39d
+  changes: []
 execution_mode: guided
 filed_at:
   code_sha: ae606ce935abe9808782078688b96d1d35773798
@@ -136,7 +147,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: BUG-1985 policy A hides uncommitted submodule edits from the CLI-side reap/doctor/gc dirty gates (data loss under worktree remove --force); also host git add -A in compete is ungated. BUG-1982 criteria met.
+  detail: 'BUG-1982 PASS. BUG-1985 PARTIAL: the round-1 security blocker is still open. A .gitmodules ''ignore = none'' on a registered plant overrides -c diff.ignoreSubmodules=dirty, so incidental hardened host git status/diff (for example phase_gates progress_signature via git_capture) runs the planted filter driver. Reproduced on git 2.43.'
   recovery_hint: address the review findings, move BUG-1985 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-18T22:59:11.078078394Z
+  shelved_at: 2026-10-19T01:44:43.899055439Z
