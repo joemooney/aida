@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-19T15:30:22.400604964Z
+modified_at: 2026-10-19T15:38:13.061256591Z
 req_type: Story
 tags:
 - architecture
@@ -159,6 +159,12 @@ comments:
     Owner: the codex speed batch, item 1. Merge it after #2754 if they conflict on ci.yml.
   created_at: 2026-10-19T15:22:11.779541518Z
   modified_at: 2026-10-19T15:22:11.779541518Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a154d0-32c5-73f3-9f10-9f2e1aa613b2
+  author: joe
+  content: 'Advisor 2026-10-19 08:40: #2754 (S0/S0b/S1) is retitled to TASK-1948 so that merging it does not auto-complete this umbrella story. AC4 ruling: S1 enforces the budget per binary; per-test enforcement (''no unbudgeted test over 10 s'') lands with S2 (nextest JUnit), and AC4 is met only then.'
+  created_at: 2026-10-19T15:38:13.061256591Z
+  modified_at: 2026-10-19T15:38:13.061256591Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
