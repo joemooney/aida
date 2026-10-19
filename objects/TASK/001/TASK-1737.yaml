@@ -3,12 +3,12 @@ spec_id: TASK-1737
 agreed_id: TASK-1737
 title: Record the authorizing seat and grant on advisor-gated status advances (commit trailers)
 description: 'Split from BUG-1983 (sketch item D4, approved by the advisor 2026-10-12 with conditions) so the refusal-wording and review-record fix could ship without waiting on it. An advisor-gated status advance should append git trailers to the store commit: Aida-Authority: grant|orchestrator, Aida-Seat, Aida-Grant (an 8-character prefix only, per BUG-1983 condition C2). Today the commit is a bare ''Update <ID>''. Advisor conditions: (1) emit the trailers from the single store-commit path for EVERY advisor-gated status advance, not only aida edit; (2) the history parser must tolerate both missing trailers and unknown trailer keys; (3) confirm the store''s commit-msg and provenance hooks accept them. aida history events then shows the authority on status_change rows that carry the trailers. Build on seat_authority::grant_check (from BUG-1983).'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:27:10.139520803Z
-modified_at: 2026-10-18T21:00:02.061396331Z
+modified_at: 2026-10-19T01:38:28.196991557Z
 req_type: Task
 tags:
 - audit
@@ -60,6 +60,20 @@ history:
   timestamp: 2026-10-18T21:00:02.862309001Z
   session_id: 01a150cc07be
   changes: []
+- id: 01a151cf-62db-7d62-b548-69762d008870
+  author: aida-auto-bump
+  timestamp: 2026-10-19T01:38:28.187304816Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a151cf-62e4-70e3-a6b8-1ec303d56d56
+  timestamp: 2026-10-19T01:38:28.196984588Z
+  agent: aida
+  commit_sha: aaff1236adf1557e45094a595b98167f54f641cb
+  summary: 'Round 2: all TASK-1737 conditions verified (trailers from single store-commit path, tolerant parser, hooks accept, history events surface authority, built on grant_check); round-1 fmt blocker and both minors fixed; CI Build green at head.'
+  review_verdict: approved
 execution_mode: guided
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
@@ -69,11 +83,7 @@ filed_at:
   aida_build_sha: 8dc1ae63c3
   vendor: claude
   session: 1dd86797-c3d1-407e-8495-d477a0e53767
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: All 6 acceptance conditions are implemented and the PR CI 'Run tests' step passed, but CI Build is red on 'Check formatting' (rustfmt drift in the new test file), so clippy and later gates never ran. One-command fix plus two minor history-attribution fixes.
-  recovery_hint: address the review findings, move TASK-1737 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T21:00:02.061396331Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T01:38:28.187300152Z
+  completion_sha: aaff1236adf1557e45094a595b98167f54f641cb
