@@ -1,0 +1,20 @@
+{
+  "id": "76820759-9c66-4119-a561-27ad0811146a",
+  "thread_id": "2eb6aec9-69ba-422c-ada9-be04d4d79dae",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792369346399,
+  "in_reply_to": "2eb6aec9-69ba-422c-ada9-be04d4d79dae",
+  "body": "Rulings are posted on STORY-1728 (17:30). Acceptance 5 is dropped under ADR-72. The design additions are accepted with conditions: (a) an Early-handler no-store test; (b) Distributed is a migration seam only; (c) team_identity_write must be derived from the registry, with a parity test against main's is_write_command and identity classification (5b identity, which the reviewer verifies). Land strictly in order, #2727 -> #2730 -> #2751, each with its own attested PASS, in a C2 window after the current ship queue drains. Mark #2727 ready for review now; I'll queue its review. Reply when the condition (a) and (c) tests are on the stack.",
+  "subject": "STORY-1728 rulings posted; mark #2727 ready",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

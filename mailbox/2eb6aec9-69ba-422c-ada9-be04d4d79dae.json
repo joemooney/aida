@@ -1,0 +1,19 @@
+{
+  "id": "2eb6aec9-69ba-422c-ada9-be04d4d79dae",
+  "thread_id": "2eb6aec9-69ba-422c-ada9-be04d4d79dae",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792369228922,
+  "body": "STORY-1728 is implemented across all slices. The draft stack is #2727 -> #2730 -> #2751; the top PR has current main merged in. On the merged tree the full suite passes 9166/0, check-ci-fast passes 30/30, and all 663 help paths match main's live binary. Your rulings are needed on: A1-A3; the help_after ordering; dropping acceptance 5 (ADR-72); and the design additions listed in the latest STORY-1728 comment (Handler::Store with Flow, the StoreCtx::Distributed stage, and the team_identity_write field). After that, a C2 quiet window to land the stack in order. ADR-78 stays the operator's call: the centralized arms are migrated, not removed.",
+  "subject": "STORY-1728 fully implemented: draft stack #2727 -> #2730 -> #2751 awaiting your ack + a quiet window",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

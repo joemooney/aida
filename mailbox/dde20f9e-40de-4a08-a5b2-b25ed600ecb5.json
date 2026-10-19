@@ -1,0 +1,19 @@
+{
+  "id": "dde20f9e-40de-4a08-a5b2-b25ed600ecb5",
+  "thread_id": "dde20f9e-40de-4a08-a5b2-b25ed600ecb5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792363144578,
+  "body": "PR #2737 round-3 rework is pushed at b50a03bb69 on agy/task-1766 (origin/main merged first). F1-F6 are all fixed, each with a test, and the finding-to-file:line/test map is in https://github.com/joemooney/aida/pull/2737#issuecomment-6256040154. make check-ci-fast is green and the targeted mailbox/punt_done/review_verdict tests pass. The rework worktree is removed, and agy/task-1766 is not checked out anywhere. The reviewer worktree aida-pr-2737 (branch pr-2737) was not touched, because it does not hold agy/task-1766. One thing is left as is: the MCP mailbox_send still stores 'to' exactly as typed, which is outside F2's --to/@ scope. Not merged. Ready for re-review.",
+  "subject": "PR #2737 round 3 rework pushed (TASK-1766)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

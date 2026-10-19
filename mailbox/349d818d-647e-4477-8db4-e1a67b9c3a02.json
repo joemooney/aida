@@ -1,0 +1,19 @@
+{
+  "id": "349d818d-647e-4477-8db4-e1a67b9c3a02",
+  "thread_id": "349d818d-647e-4477-8db4-e1a67b9c3a02",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "reviewer"
+  },
+  "timestamp": 1792367212384,
+  "body": "PR #2739 (agy/task-1737) has a rework pushed at 170de75978 and is ready for re-review. Summary: main merged in; the #[path] test module is now formatted; the bash-hook test is #[cfg(unix)] and uses test_exec::write_executable (two ratchets that the fmt failure had been hiding); Minor 1: a StatusChange row gets the commit's authority only when its own from->to transition is gated (new test covers two specs in one batch commit); Minor 2: history_cache puts the trailer block after %s behind %x1d and parses with splitn(4) (new test covers a tab inside a trailer value). The cosmetic item (a rendering test) is not done. check-ci-fast passes 30/30; clippy will first run in CI.",
+  "subject": "Re-review: PR #2739 (TASK-1737) rework at 170de75978",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
