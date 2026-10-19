@@ -1,0 +1,33 @@
+id: 01a15313-65ec-72f3-b4bb-7db29fa6b375
+spec_id: BUG-2188
+agreed_id: BUG-2188
+title: aida agent new --spec fails with an uninformative worktree error and leaves orphan leases on refusal
+description: |
+  2026-10-18 23:50–23:58, from the advisor seat. `aida agent new claude --bg --role implementer --spec <ID> --prompt-file F` failed for STORY-1853, STORY-1854, STORY-1690 and BUG-2186:
+  - With AIDA_SESSION_GRANT scrubbed (as standing order 8 instructs): error "no valid parent seat grant is active". But it had already created the branch, the pool worktree and the lease, leaving an orphan lease that blocked the retry ("already owned by session 01a152ee3681").
+  - With the grant intact: error "failed to create session worktree for `<ID>`; run `aida session leases`". No cause was given (no git error, no lease conflict shown). It persisted after the orphan leases were ended, with the pool worktrees free and detached.
+  Workaround used: git worktree add, then `claude --bg` with the scrubbed env.
+
+  Acceptance:
+  1. The worktree-creation error includes the underlying cause (git stderr, pool state, conflicting lease).
+  2. A launch refused after setup rolls back its branch, worktree and lease, so a failed launch leaves no orphan.
+  3. Standing order 8 and the launcher agree on how an advisor launches an implementer child (scrub vs delegate); fix whichever is wrong, and document it.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T07:32:22.636710022Z
+modified_at: 2026-10-19T07:32:22.636710022Z
+req_type: Bug
+tags:
+- agents
+- launcher
+- worktree
+filed_at:
+  code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a27fe3fc76
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
