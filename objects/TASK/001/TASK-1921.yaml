@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:00:49.188001183Z
-modified_at: 2026-10-18T21:00:49.188001183Z
+modified_at: 2026-10-19T15:44:21.473427934Z
 req_type: Task
 tags:
 - from-review:PR-2739
 - history
 - severity:minor
+comments:
+- id: 01a154d5-d1e1-7992-b6c9-47e79a970212
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. aaff1236ad: history.rs:2450-2463 attaches the authority trailer only to the gated status change.'
+  created_at: 2026-10-19T15:44:21.473427934Z
+  modified_at: 2026-10-19T15:44:21.473427934Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: d4f6e432d0c8d9a90e52ba993225b19992aa042d
   branch: main
