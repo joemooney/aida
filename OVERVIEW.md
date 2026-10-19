@@ -399,6 +399,37 @@ commits in its own private clone instead (BUG-2169). Real-sandbox and unit
 evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
 <!-- trace:BUG-1982 | ai:claude -->
 
+Host git over a code tree a contained session may have written (a linked
+worktree, or any tree of a repository a contained session was launched
+against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, plus `submodule.<name>.ignore=dirty` for
+every name in the `.gitmodules` git would read (the file, else the index or
+`HEAD` copy), because a `.gitmodules` `ignore = none` outranks
+`diff.ignoreSubmodules`. A `.gitmodules` that cannot be read, or that names a
+submodule the override cannot express, makes host git refuse. So incidental
+status and diff never enter a submodule, where a planted repository's own
+config (a filter driver, for example) would run on the host. Before any safety
+check in such a tree (pool, adopt, destroy, salvage, session reap, doctor
+heal, worktree gc) and before host staging (`aida compete`), every gitlink
+must be a host-owned submodule: registered in `.gitmodules`, with a `.git`
+pointer that resolves to a submodule git directory (`<common>/modules/...` or
+`<common>/worktrees/<wt>/modules/...`) inside the sandbox-denied common git
+directory. Staging also refuses an untracked nested repository at any depth.
+A tree that fails this is kept and treated as dirty, and so is a tree whose
+`git status` fails: no dirty check reads a git error as clean. Git itself never recurses into a
+submodule there, even once every gitlink passes, because it would read each
+submodule's session-writable work-tree `.gitmodules`. The checks inspect each
+checked-out submodule themselves instead: policy B again over that
+submodule's own index, then its status through the git directory validated a
+moment earlier (`--git-dir`, never re-reading the `.git` pointer), nested
+submodules likewise. So uncommitted edits there still keep the tree. A
+submodule with no `.git` is skipped. The non-destructive `aida ps` probe
+never looks inside a submodule. Salvage refuses edits inside a submodule, because a patch cannot
+hold them. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`, directly or via a
+wrapper; a guard test enforces it.
+<!-- trace:BUG-1985 | ai:claude -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.

@@ -187,7 +187,8 @@ fn allowed_direct_writes() -> BTreeMap<&'static str, usize> {
         ("aida-cli-lib/tracker_cmd.rs", 1),
         // `aida faq add` files an FAQ born Completed (FAQ is reference, not
         // work): not a transition, so no ship record. trace:STORY-1642 | ai:claude
-        ("aida-cli-lib/git_backend_cmd.rs", 1),
+        // The add handler moved to its registered module. trace:STORY-1728 | ai:claude
+        ("aida-cli-lib/requirements_cli.rs", 1),
     ])
 }
 
@@ -666,7 +667,8 @@ fn the_scan_sees_the_routed_paths() {
             || files["aida-cli-lib/punt_done.rs"].contains(transition)
     );
     assert!(files["aida-cli-lib/queue_cmd.rs"].contains(transition));
-    assert!(files["aida-cli-lib/git_backend_cmd.rs"].contains(stamp));
+    // trace:STORY-1728 | ai:claude — the edit handler moved to its module.
+    assert!(files["aida-cli-lib/requirements_cli.rs"].contains(stamp));
     assert!(files.contains_key("aida-core/models.rs"));
 }
 

@@ -758,9 +758,12 @@ fn bug_1657_unreadable_worktree_status_is_kept() {
     std::fs::write(wt.join(".git"), "not a gitdir pointer\n").unwrap();
 
     assert!(worktree_status_unreadable(&wt));
+    // The entries probe used to read this as clean; since BUG-1985 its
+    // gitlink check fails on the broken pointer, so it fails closed too.
+    // trace:BUG-1985 | ai:claude
     assert!(
-        worktree_dirty_entries(&wt).is_empty(),
-        "the old probe read this as clean"
+        !worktree_dirty_entries(&wt).is_empty(),
+        "the entries probe fails closed on an unreadable tree"
     );
     let dirty = worktree_status_dirty(&wt);
     assert!(dirty);

@@ -1,0 +1,2080 @@
+_bg-fetch TASK-1	Write	false	false
+add	Intake	true	false
+add --batch TASK-1	Intake	true	false
+add --blocked-by TASK-1	Intake	true	false
+add --description TASK-1	Intake	true	false
+add --description-from-file TASK-1	Intake	true	false
+add --description-stdin	Intake	true	false
+add --effort 15m	Intake	true	false
+add --feature TASK-1	Intake	true	false
+add --for TASK-1	Intake	true	false
+add --force-parent	Intake	true	false
+add --gates TASK-1	Intake	true	false
+add --human-only	Intake	true	false
+add --interactive	Intake	true	false
+add --mode TASK-1	Intake	true	false
+add --no-human-only	Intake	true	false
+add --owner TASK-1	Intake	true	false
+add --parent TASK-1	Intake	true	false
+add --prefix TASK-1	Intake	true	false
+add --priority TASK-1	Intake	true	false
+add --queue	Intake	true	false
+add --status TASK-1	Intake	true	false
+add --tags TASK-1	Intake	true	false
+add --title TASK-1	Intake	true	false
+add --type TASK-1	Intake	true	false
+add --weight 1	Intake	true	false
+advisor	Write	false	false
+advisor --short	Write	false	false
+advisor handoff --to TASK-1 --focus TASK-1	Write	false	false
+advisor handoff --to TASK-1 --focus TASK-1 --force	Write	false	false
+advisor register	Write	false	false
+advisor register --project-slug TASK-1	Write	false	false
+advisor register --uuid TASK-1	Write	false	false
+advisor schedule add --every TASK-1 --template TASK-1 --description TASK-1 TASK-1	Write	false	false
+advisor schedule add --every TASK-1 --template TASK-1 --for TASK-1 TASK-1	Write	false	false
+advisor schedule add --every TASK-1 --template TASK-1 --tags TASK-1 TASK-1	Write	false	false
+advisor schedule add --every TASK-1 --template TASK-1 TASK-1	Write	false	false
+advisor schedule disable TASK-1	Write	false	false
+advisor schedule enable TASK-1	Write	false	false
+advisor schedule list	Write	false	false
+advisor schedule list --json	Write	false	false
+advisor schedule remove TASK-1	Write	false	false
+advisor schedule run	Write	false	false
+advisor status	Write	false	false
+advisor status --json	Write	false	false
+advisor status --registration	Write	false	false
+advisor unregister	Write	false	false
+advisor watch	Write	false	false
+advisor watch --dry-run	Write	false	false
+advisor watch --fork-interval 1	Write	false	false
+advisor watch --once	Write	false	false
+advisor watch --poll-interval 1	Write	false	false
+advisor watch --triage-only	Write	false	false
+agent describe TASK-1 TASK-1	Write	false	false
+agent dispatch-health	Write	false	false
+agent dispatch-health --force	Write	false	false
+agent gc	Write	false	false
+agent gc --dry-run	Write	false	false
+agent gc --older-than 1	Write	false	false
+agent list-roles	Write	false	false
+agent list-roles --json	Write	false	false
+agent ls	Write	false	false
+agent ls --all	Write	false	false
+agent ls --ended	Write	false	false
+agent ls --stale	Write	false	false
+agent new	Write	false	false
+agent new antigravity	Write	false	false
+agent new antigravity --allow-duplicate	Write	false	false
+agent new antigravity --bypass-sandbox	Write	false	false
+agent new antigravity --cwd TASK-1	Write	false	false
+agent new antigravity --description TASK-1	Write	false	false
+agent new antigravity --extra-flag TASK-1	Write	false	false
+agent new antigravity --force	Write	false	false
+agent new antigravity --name TASK-1	Write	false	false
+agent new antigravity --no-context	Write	false	false
+agent new antigravity --no-default-flags	Write	false	false
+agent new antigravity --no-duplicate-check	Write	false	false
+agent new antigravity --no-exec	Write	false	false
+agent new antigravity --no-prompt	Write	false	false
+agent new antigravity --no-resume	Write	false	false
+agent new antigravity --no-title	Write	false	false
+agent new antigravity --prompt TASK-1	Write	false	false
+agent new antigravity --prompt-file TASK-1	Write	false	false
+agent new antigravity --resume TASK-1	Write	false	false
+agent new antigravity --role TASK-1	Write	false	false
+agent new antigravity --show-context	Write	false	false
+agent new antigravity --show-prompt	Write	false	false
+agent new antigravity --spec TASK-1	Write	false	false
+agent new antigravity --verbose	Write	false	false
+agent new claude	Write	false	false
+agent new claude --allow-duplicate	Write	false	false
+agent new claude --bg	Write	false	false
+agent new claude --cwd TASK-1	Write	false	false
+agent new claude --description TASK-1	Write	false	false
+agent new claude --extra-flag TASK-1	Write	false	false
+agent new claude --force	Write	false	false
+agent new claude --model TASK-1	Write	false	false
+agent new claude --name TASK-1	Write	false	false
+agent new claude --no-context	Write	false	false
+agent new claude --no-default-flags	Write	false	false
+agent new claude --no-duplicate-check	Write	false	false
+agent new claude --no-exec	Write	false	false
+agent new claude --no-prompt	Write	false	false
+agent new claude --no-resume	Write	false	false
+agent new claude --no-title	Write	false	false
+agent new claude --permission-mode TASK-1	Write	false	false
+agent new claude --prompt TASK-1	Write	false	false
+agent new claude --prompt-file TASK-1	Write	false	false
+agent new claude --resume TASK-1	Write	false	false
+agent new claude --role TASK-1	Write	false	false
+agent new claude --sandbox	Write	false	false
+agent new claude --show-context	Write	false	false
+agent new claude --show-prompt	Write	false	false
+agent new claude --spec TASK-1	Write	false	false
+agent new claude --verbose	Write	false	false
+agent new codex	Write	false	false
+agent new codex --allow-duplicate	Write	false	false
+agent new codex --bypass-sandbox	Write	false	false
+agent new codex --cwd TASK-1	Write	false	false
+agent new codex --description TASK-1	Write	false	false
+agent new codex --extra-flag TASK-1	Write	false	false
+agent new codex --force	Write	false	false
+agent new codex --model TASK-1	Write	false	false
+agent new codex --name TASK-1	Write	false	false
+agent new codex --no-context	Write	false	false
+agent new codex --no-default-flags	Write	false	false
+agent new codex --no-duplicate-check	Write	false	false
+agent new codex --no-exec	Write	false	false
+agent new codex --no-prompt	Write	false	false
+agent new codex --no-resume	Write	false	false
+agent new codex --no-title	Write	false	false
+agent new codex --prompt TASK-1	Write	false	false
+agent new codex --prompt-file TASK-1	Write	false	false
+agent new codex --resume TASK-1	Write	false	false
+agent new codex --role TASK-1	Write	false	false
+agent new codex --show-context	Write	false	false
+agent new codex --show-prompt	Write	false	false
+agent new codex --spec TASK-1	Write	false	false
+agent new codex --verbose	Write	false	false
+agent pause --reason TASK-1 TASK-1	Write	false	false
+agent pause --resets TASK-1 TASK-1	Write	false	false
+agent pause TASK-1	Write	false	false
+agent register --type TASK-1 --role TASK-1 --description TASK-1 1	Write	false	false
+agent register --type TASK-1 --role TASK-1 --name TASK-1 1	Write	false	false
+agent register --type TASK-1 --role TASK-1 --spec TASK-1 1	Write	false	false
+agent register --type TASK-1 --role TASK-1 1	Write	false	false
+agent resume TASK-1	Write	false	false
+agent status	Write	false	false
+agent status --all	Write	false	false
+agent status --ended	Write	false	false
+agent status --stale	Write	false	false
+agent stop TASK-1	Write	false	false
+alias	Write	false	false
+alias --json	Write	false	false
+alias add --global TASK-1 TASK-1	Write	false	false
+alias add --project TASK-1 TASK-1	Write	false	false
+alias add TASK-1 TASK-1	Write	false	false
+alias list	Write	false	false
+alias list --json	Write	false	false
+alias remove --global TASK-1	Write	false	false
+alias remove --project TASK-1	Write	false	false
+alias remove TASK-1	Write	false	false
+approvals	Write	false	false
+approvals --json	Write	false	false
+approvals --since TASK-1	Write	false	false
+approvals --until TASK-1	Write	false	false
+approvals add --decision TASK-1 --verdict TASK-1 --authorized-by TASK-1 --independent yes TASK-1	Write	false	false
+approvals add --decision TASK-1 --verdict TASK-1 --proxy TASK-1 --authorized-by TASK-1 --independent yes TASK-1	Write	false	false
+approvals add --decision TASK-1 --verdict TASK-1 --session TASK-1 --authorized-by TASK-1 --independent yes TASK-1	Write	false	false
+archive	Write	true	false
+archive --dry-run	Write	true	false
+archive --force	Write	true	false
+archive --older-than TASK-1	Write	true	false
+assign --to TASK-1 TASK-1	Write	true	false
+autonomy	Write	false	false
+autonomy calibration mismatches	Write	false	false
+autonomy calibration mismatches --json	Write	false	false
+autonomy calibration mismatches --last 1	Write	false	false
+autonomy calibration mismatches --since TASK-1	Write	false	false
+autonomy report	Write	false	false
+autonomy report --json	Write	false	false
+autonomy report --last 1	Write	false	false
+autopilot audit	Write	false	false
+autopilot audit --json	Write	false	false
+autopilot audit --limit 1	Write	false	false
+autopilot audit --open	Write	false	false
+autopilot challenge --note TASK-1 TASK-1	Write	false	false
+autopilot challenge TASK-1	Write	false	false
+autopilot executions	Write	false	false
+autopilot executions --from-product	Write	false	false
+autopilot executions --json	Write	false	false
+autopilot executions --limit 1	Write	false	false
+autopilot executions --mode TASK-1	Write	false	false
+autopilot executions --open	Write	false	false
+autopilot inspect	Write	false	false
+autopilot inspect --exclude-tag TASK-1	Write	false	false
+autopilot inspect --json	Write	false	false
+autopilot inspect --only-tag TASK-1	Write	false	false
+autopilot inspect --record	Write	false	false
+autopilot inspect --risk TASK-1	Write	false	false
+autopilot reindex	Write	false	false
+autopilot reindex --dry-run	Write	false	false
+autopilot revert --dry-run TASK-1	Write	false	false
+autopilot revert --json TASK-1	Write	false	false
+autopilot revert --note TASK-1 TASK-1	Write	false	false
+autopilot revert TASK-1	Write	false	false
+autoprogress	Write	false	false
+autoprogress --dry-run	Write	false	false
+autoprogress --groom	Write	false	false
+autoprogress --max 1	Write	false	false
+autoprogress --project TASK-1	Write	false	false
+awaiting	Read	false	false
+awaiting --json	Read	false	false
+awaiting --no-ci	Read	false	false
+awaiting --notice	Read	false	false
+awaiting --verbose	Read	false	false
+away	Write	false	false
+backlog analyze	Write	false	false
+backlog analyze --json	Write	false	false
+backlog analyze --specs TASK-1	Write	false	false
+backlog groom	Write	true	false
+backlog groom --apply	Write	true	false
+backlog groom --batch TASK-1	Write	true	false
+backlog groom --dry-run	Write	true	false
+backlog groom --from-stdin	Write	true	false
+backlog groom --note TASK-1	Write	true	false
+backlog groom --pickable	Write	true	false
+backlog groom --risk TASK-1	Write	true	false
+backlog groom --specs TASK-1	Write	true	false
+backlog groom --user TASK-1	Write	true	false
+backlog list	Write	false	false
+backlog list --json	Write	false	false
+backlog list --limit 1	Write	false	false
+backlog list --priority TASK-1	Write	false	false
+backlog list --risk TASK-1	Write	false	false
+backlog list --tag TASK-1	Write	false	false
+backlog list --tag-prefix TASK-1	Write	false	false
+backlog list --type TASK-1	Write	false	false
+backlog list --user TASK-1	Write	false	false
+backlog load	Write	false	false
+brief	Write	false	false
+brief --as-deep-link	Write	false	false
+brief --authorized-by TASK-1	Write	false	false
+brief --depends-on TASK-1	Write	false	false
+brief --note TASK-1	Write	false	false
+brief --notify	Write	false	false
+brief ack TASK-1	Write	false	false
+brief list	Read	false	false
+brief list --for-agent TASK-1	Read	false	false
+brief list --include-acked	Read	false	false
+brief read --latest TASK-1	Read	false	false
+brief read TASK-1	Read	false	false
+burndown explain	Write	false	false
+burndown explain --json	Write	false	false
+burndown plan	Write	false	false
+burndown plan --batch TASK-1	Write	false	false
+burndown plan --candidates	Write	false	false
+burndown plan --json	Write	false	false
+burndown plan --order TASK-1	Write	false	false
+burndown plan --status TASK-1	Write	false	false
+burndown plan --tag TASK-1	Write	false	false
+burndown plan --type TASK-1	Write	false	false
+burndown readiness	Write	false	false
+burndown readiness --hours 1	Write	false	false
+burndown readiness --json	Write	false	false
+burndown readiness --lanes 1	Write	false	false
+burndown readiness --specs 1	Write	false	false
+burndown run	Write	false	false
+burndown run --batch TASK-1	Write	false	false
+burndown run --concurrency 1	Write	false	false
+burndown run --dry-run	Write	false	false
+burndown run --force	Write	false	false
+burndown run --max 1	Write	false	false
+burndown run --order TASK-1	Write	false	false
+burndown run --panes TASK-1	Write	false	false
+burndown run --permission-mode TASK-1	Write	false	false
+burndown run --quiet	Write	false	false
+burndown run --require-head	Write	false	false
+burndown run --status TASK-1	Write	false	false
+burndown run --tag TASK-1	Write	false	false
+burndown run --vendor TASK-1	Write	false	false
+burndown run --verbose	Write	false	false
+burndown status	Write	false	false
+burndown status --json	Write	false	false
+cache rebuild	Write	false	false
+cache rebuild --history	Write	false	false
+cache refresh	Write	false	false
+cache refresh --cache TASK-1	Write	false	false
+cache refresh --history	Write	false	false
+cache refresh --if-requested	Write	false	false
+cache refresh --store TASK-1	Write	false	false
+cache refresh --worker	Write	false	false
+cache status	Read	false	false
+cache verify	Write	false	false
+cache verify --fix	Write	false	false
+cache verify --json	Write	false	false
+changelog generate	Write	false	false
+changelog generate --out TASK-1	Write	false	false
+changelog generate --since TASK-1	Write	false	false
+changelog generate --until TASK-1	Write	false	false
+changelog preview	Write	false	false
+changelog refresh	Write	false	false
+changelog refresh --out TASK-1	Write	false	false
+changelog refresh --released-as TASK-1	Write	false	false
+claim --worktree TASK-1 TASK-1	Write	false	false
+claim TASK-1	Write	false	false
+commands	Write	false	false
+commands --flags	Write	false	false
+commands --hidden	Write	false	false
+commands --json	Write	false	false
+comment add --author TASK-1 TASK-1	Comment	true	false
+comment add --body-file TASK-1 TASK-1	Comment	true	false
+comment add --content TASK-1 TASK-1	Comment	true	false
+comment add --interactive TASK-1	Comment	true	false
+comment add --parent TASK-1 TASK-1	Comment	true	false
+comment add --relayed-from TASK-1 TASK-1	Comment	true	false
+comment add --stdin TASK-1	Comment	true	false
+comment add TASK-1	Comment	true	false
+comment delete --req-id TASK-1 --comment-id TASK-1	Comment	true	false
+comment edit --req-id TASK-1 --comment-id TASK-1	Comment	true	false
+comment edit --req-id TASK-1 --comment-id TASK-1 --body-file TASK-1	Comment	true	false
+comment edit --req-id TASK-1 --comment-id TASK-1 --content TASK-1	Comment	true	false
+comment edit --req-id TASK-1 --comment-id TASK-1 --interactive	Comment	true	false
+comment edit --req-id TASK-1 --comment-id TASK-1 --stdin	Comment	true	false
+comment list TASK-1	Read	true	false
+commit --type TASK-1 --message TASK-1	Write	false	false
+commit --type TASK-1 --message TASK-1 --ai TASK-1	Write	false	false
+commit --type TASK-1 --message TASK-1 --all	Write	false	false
+commit --type TASK-1 --message TASK-1 --dry-run	Write	false	false
+commit --type TASK-1 --message TASK-1 --no-ai	Write	false	false
+commit --type TASK-1 --message TASK-1 --spec TASK-1	Write	false	false
+commit --type TASK-1 --scope TASK-1 --message TASK-1	Write	false	false
+compete --dry-run TASK-1	Write	false	false
+compete --gate TASK-1 TASK-1	Write	false	false
+compete --judge TASK-1	Write	false	false
+compete --judge-vendor TASK-1 TASK-1	Write	false	false
+compete --vendors TASK-1 TASK-1	Write	false	false
+compete TASK-1	Write	false	false
+config digits 1	Configuration	true	false
+config glyph list	Configuration	false	false
+config glyph reset	Configuration	false	false
+config glyph reset --user	Configuration	false	false
+config glyph set --user TASK-1 TASK-1	Configuration	false	false
+config glyph set TASK-1 TASK-1	Configuration	false	false
+config glyph theme	Configuration	false	false
+config glyph theme --expand	Configuration	false	false
+config glyph theme --user	Configuration	false	false
+config glyph unset --user TASK-1	Configuration	false	false
+config glyph unset TASK-1	Configuration	false	false
+config hints	Configuration	false	false
+config menu	Configuration	false	false
+config migrate	Configuration	true	false
+config migrate --yes	Configuration	true	false
+config numbering TASK-1	Configuration	true	false
+config permissions set --local contained	Configuration	false	false
+config permissions set --user contained	Configuration	false	false
+config permissions set contained	Configuration	false	false
+config permissions show	Configuration	false	false
+config permissions show --json	Configuration	false	false
+config show	Configuration	false	false
+config user	Configuration	false	false
+config user --email TASK-1	Configuration	false	false
+config user --node-id TASK-1	Configuration	false	false
+config user --toml	Configuration	false	false
+contract	Read	false	true
+contract --json	Read	false	true
+criteria --json TASK-1	Read	false	false
+criteria --window-days 1 TASK-1	Read	false	false
+criteria TASK-1	Read	false	false
+db block claim	Database	false	false
+db block claim --size 1	Database	false	false
+db block claim --type TASK-1	Database	false	false
+db block list	Read	false	false
+db block status	Read	false	false
+db block verify	Read	false	false
+db check	Database	false	false
+db check --collisions	Database	false	false
+db check --repair	Database	false	false
+db export-git --output TASK-1	Database	false	false
+db info	Read	false	false
+db merge-gate	MergeGate	false	false
+db migrate --from TASK-1 --to TASK-1	Database	false	false
+db migrate --from TASK-1 --to TASK-1 --force	Database	false	false
+db migrate --from TASK-1 --to TASK-1 --output TASK-1	Database	false	false
+db migrate-related-edges	Database	false	false
+db migrate-related-edges --dry-run	Database	false	false
+db migrate-related-edges --json	Database	false	false
+db path	Read	false	false
+db reconcile-status	Database	false	false
+db reconcile-status --dry-run	Database	false	false
+db reconcile-status --since TASK-1	Database	false	false
+db reconcile-status --spec TASK-1	Database	false	false
+db retire-legacy-ids	Database	false	false
+db retire-legacy-ids --dry-run	Database	false	false
+db status	Read	false	false
+db sync	Database	false	false
+db sync --message TASK-1	Database	false	false
+db sync --pull	Database	false	false
+db sync --push	Database	false	false
+db workspace-init	Database	false	false
+db workspace-init --name TASK-1	Database	false	false
+db workspace-init --remote TASK-1	Database	false	false
+decide TASK-1	Write	true	false
+defer --reason TASK-1 TASK-1	Write	true	false
+defer --until TASK-1 TASK-1	Write	true	false
+defer TASK-1	Write	true	false
+del --yes TASK-1	Write	true	false
+del TASK-1	Write	true	false
+deps sweep	Write	false	false
+deps sweep --for-spec TASK-1	Write	false	false
+deps sweep --json	Write	false	false
+derisk TASK-1	Write	false	false
+dev activate	Write	false	false
+dev activate --auto	Write	false	false
+dev activate --debug	Write	false	false
+dev activate --release	Write	false	false
+dev activate --repo TASK-1	Write	false	false
+dev build	Write	false	false
+dev build --after-wave	Write	false	false
+dev build --allow-dirty	Write	false	false
+dev build --install-links	Write	false	false
+dev build --no-promote	Write	false	false
+dev build-guard --after-wave debug	Write	false	false
+dev build-guard debug	Write	false	false
+dev deactivate	Write	false	false
+dev patch	Write	false	false
+dev ps1	Write	false	false
+dev release	Write	false	false
+dev rollback	Write	false	false
+dev rollback --after-wave	Write	false	false
+dev rollback --force	Write	false	false
+dev serve	Write	false	false
+dev serve --grpc-port 1	Write	false	false
+dev serve --no-web	Write	false	false
+dev serve --rest-port 1	Write	false	false
+dev serve --web-port 1	Write	false	false
+dev shell-init	Write	false	false
+dev shell-init --install	Write	false	false
+dev status	Write	false	false
+digest	Read	false	false
+digest --audience customer	Read	false	false
+digest --copy	Read	false	false
+digest --digest-format markdown	Read	false	false
+digest --out TASK-1	Read	false	false
+digest --reset	Read	false	false
+digest --since TASK-1	Read	false	false
+do --force TASK-1	BuildLoop	false	false
+do --mode TASK-1 TASK-1	BuildLoop	false	false
+do TASK-1	BuildLoop	false	false
+doc add --title TASK-1	Write	true	false
+doc add --title TASK-1 --about TASK-1	Write	true	false
+doc add --title TASK-1 --audience TASK-1	Write	true	false
+doc add --title TASK-1 --description TASK-1	Write	true	false
+doc add --title TASK-1 --description-from-file TASK-1	Write	true	false
+doc add --title TASK-1 --description-stdin	Write	true	false
+doc add --title TASK-1 --scenario TASK-1	Write	true	false
+doc add --title TASK-1 --tags TASK-1	Write	true	false
+doc coverage	Write	true	false
+doc coverage --json	Write	true	false
+doc coverage --since TASK-1	Write	true	false
+doc list	Write	true	false
+doc list --about TASK-1	Write	true	false
+doc list --audience TASK-1	Write	true	false
+doc list --scenario TASK-1	Write	true	false
+doc show TASK-1	Write	true	false
+doc suggest	Write	true	false
+doc suggest --json	Write	true	false
+doc suggest --range TASK-1	Write	true	false
+docs build	Write	true	false
+docs build --dry-run	Write	true	false
+docs build --output TASK-1	Write	true	false
+docs check	Write	true	false
+docs check --output TASK-1	Write	true	false
+docs glossary	Write	true	false
+docs glossary --lifecycle	Write	true	false
+docs glossary --machinery	Write	true	false
+doctor	Write	false	false
+doctor --all	Write	false	false
+doctor --category TASK-1	Write	false	false
+doctor --contradictions	Write	false	false
+doctor --contradictions-limit 1	Write	false	false
+doctor --contradictions-offset 1	Write	false	false
+doctor --fix-sandbox	Write	false	false
+doctor --force	Write	false	false
+doctor --heal	Write	false	false
+doctor --json	Write	false	false
+doctor --since TASK-1	Write	false	false
+doctor --yes	Write	false	false
+doctor check --all TASK-1	Write	false	false
+doctor check --fail-on-findings TASK-1	Write	false	false
+doctor check --json TASK-1	Write	false	false
+doctor check TASK-1	Write	false	false
+doctor convention-check	Write	false	false
+doctor convention-check --quiet	Write	false	false
+doctor fsck	Write	false	false
+doctor heal --all TASK-1	Write	false	false
+doctor heal --force TASK-1	Write	false	false
+doctor heal --json TASK-1	Write	false	false
+doctor heal --yes TASK-1	Write	false	false
+doctor heal TASK-1	Write	false	false
+doctor migrate-counter-scope --to global	Write	false	false
+doctor migrate-counter-scope --to global --dry-run	Write	false	false
+doctor migrate-counter-scope --to global --size 1	Write	false	false
+doctor migrate-counter-scope --to global --yes	Write	false	false
+doctor repair-stale-blocks	Write	false	false
+doctor repair-stale-blocks --dry-run	Write	false	false
+doctor repair-stale-blocks --yes	Write	false	false
+doctor scrub-collisions	Write	false	false
+doctor shell-substitution-holes	Write	false	false
+doctor shell-substitution-holes --exclude TASK-1	Write	false	false
+doctor validate-trace-comments	Write	false	false
+doctor validate-trace-comments --dry-run	Write	false	false
+doctor validate-trace-comments --strip-dangling	Write	false	false
+doctor validate-trace-comments --yes	Write	false	false
+doctor verify-relationships	Write	false	false
+doctor verify-relationships --repair	Write	false	false
+doctor verify-relationships --yes	Write	false	false
+done TASK-1	Write	false	false
+drain clear	Write	false	false
+drain resume --json TASK-1	Write	false	false
+drain resume TASK-1	Write	false	false
+drain start	Write	false	false
+drain start --batch TASK-1	Write	false	false
+drain start --json	Write	false	false
+drain start --max-failures 1	Write	false	false
+drain start --max-iterations 1	Write	false	false
+drain start --max-runtime TASK-1	Write	false	false
+drain start --max-tokens 1	Write	false	false
+drain start --model TASK-1	Write	false	false
+drain start --no-human TASK-1	Write	false	false
+drain start --once	Write	false	false
+drain start --project TASK-1	Write	false	false
+drain start --role TASK-1	Write	false	false
+drain start --vendor TASK-1	Write	false	false
+drain status	Write	false	false
+drain status --clear	Write	false	false
+drain status --json	Write	false	false
+drain stop	Write	false	false
+drain stop --now	Write	false	false
+drain stop --project TASK-1	Write	false	false
+drain tail	Write	false	false
+drain tail --annotate	Write	false	false
+drain tail --json	Write	false	false
+drain tail --lines 1	Write	false	false
+drain tail --no-follow	Write	false	false
+drain tail --no-timestamp	Write	false	false
+drain tail --since TASK-1	Write	false	false
+drain tail --with-tools	Write	false	false
+driver deregister --kind TASK-1 --run TASK-1	Write	false	false
+driver deregister --run TASK-1	Write	false	false
+driver list	Write	false	false
+driver list --json	Write	false	false
+driver register --kind TASK-1 --run TASK-1	Write	false	false
+driver register --run TASK-1	Write	false	false
+driver register --run TASK-1 --handoff TASK-1	Write	false	false
+driver register --run TASK-1 --json	Write	false	false
+driver register --run TASK-1 --pid 1	Write	false	false
+driver register --run TASK-1 --seat TASK-1	Write	false	false
+driver register --run TASK-1 --tag TASK-1	Write	false	false
+driver register --run TASK-1 --ttl 1	Write	false	false
+edit --add-ref TASK-1 TASK-1	EditRequirement	true	false
+edit --add-tag TASK-1 TASK-1	EditRequirement	true	false
+edit --blocked-by TASK-1 TASK-1	EditRequirement	true	false
+edit --clear-verify TASK-1	EditRequirement	true	false
+edit --description TASK-1 TASK-1	EditRequirement	true	false
+edit --description-from-file TASK-1 TASK-1	EditRequirement	true	false
+edit --description-stdin TASK-1	EditRequirement	true	false
+edit --feature TASK-1 TASK-1	EditRequirement	true	false
+edit --force TASK-1	EditRequirement	true	false
+edit --human-only TASK-1	EditRequirement	true	false
+edit --implementation-summary TASK-1 TASK-1	EditRequirement	true	false
+edit --interactive TASK-1	EditRequirement	true	false
+edit --mode TASK-1 TASK-1	EditRequirement	true	false
+edit --no-human-only TASK-1	EditRequirement	true	false
+edit --origin TASK-1 TASK-1	EditRequirement	true	false
+edit --owner TASK-1 TASK-1	EditRequirement	true	false
+edit --priority TASK-1 TASK-1	EditRequirement	true	false
+edit --remove-blocked-by TASK-1 TASK-1	EditRequirement	true	false
+edit --remove-ref TASK-1 TASK-1	EditRequirement	true	false
+edit --remove-tag TASK-1 TASK-1	EditRequirement	true	false
+edit --risk-notes TASK-1 TASK-1	EditRequirement	true	false
+edit --status TASK-1 TASK-1	EditRequirement	true	false
+edit --strict TASK-1	EditRequirement	true	false
+edit --superseded-by TASK-1 TASK-1	EditRequirement	true	false
+edit --tags TASK-1 TASK-1	EditRequirement	true	false
+edit --test-coverage-notes TASK-1 TASK-1	EditRequirement	true	false
+edit --title TASK-1 TASK-1	EditRequirement	true	false
+edit --type TASK-1 TASK-1	EditRequirement	true	false
+edit --verify TASK-1 TASK-1	EditRequirement	true	false
+edit --weight TASK-1 TASK-1	EditRequirement	true	false
+edit TASK-1	EditRequirement	true	false
+explain --audience TASK-1 TASK-1	Read	false	false
+explain --force TASK-1	Read	false	false
+explain --json TASK-1	Read	false	false
+explain --refresh TASK-1	Read	false	false
+explain TASK-1	Read	false	false
+fasttrack	Write	false	false
+fasttrack --express	Write	false	false
+fasttrack --type TASK-1	Write	false	false
+fasttrack status	Write	false	false
+fasttrack status --json	Write	false	false
+feature add	Write	false	false
+feature add --interactive	Write	false	false
+feature add --name TASK-1	Write	false	false
+feature add --prefix TASK-1	Write	false	false
+feature edit --interactive TASK-1	Write	false	false
+feature edit --new-name TASK-1 TASK-1	Write	false	false
+feature edit --new-prefix TASK-1 TASK-1	Write	false	false
+feature edit TASK-1	Write	false	false
+feature list	Write	false	false
+feature show TASK-1	Write	false	false
+fetch	Write	false	false
+fetch --code-only	Write	false	false
+fetch --quiet	Write	false	false
+fetch --store-only	Write	false	false
+field-study report	Write	false	false
+field-study report --json	Write	false	false
+field-study scan	Write	false	false
+field-study scan --limit 1	Write	false	false
+field-study scan --since TASK-1	Write	false	false
+field-study violations	Write	false	false
+field-study violations --json	Write	false	false
+findings	Read	false	false
+findings add --note TASK-1	Finding	true	false
+findings add --note TASK-1 --kind TASK-1	Finding	true	false
+findings add --note TASK-1 --linked-specs TASK-1	Finding	true	false
+findings add --note TASK-1 --severity TASK-1	Finding	true	false
+findings add --note TASK-1 --tags TASK-1	Finding	true	false
+findings add --note TASK-1 --title TASK-1	Finding	true	false
+findings calibration	Finding	true	false
+findings calibration --agreement	Finding	true	false
+findings calibration --all	Finding	true	false
+findings calibration --disagreement	Finding	true	false
+findings calibration --json	Finding	true	false
+findings calibration --last 1	Finding	true	false
+findings calibration --since TASK-1	Finding	true	false
+findings calibration --stats	Finding	true	false
+findings calibration annotate TASK-1 TASK-1	Finding	true	false
+findings classes	Read	false	false
+findings classes --json	Read	false	false
+findings classes --since TASK-1	Read	false	false
+findings dismiss --reason TASK-1 TASK-1	Finding	true	false
+findings dismiss TASK-1	Finding	true	false
+findings list	Read	false	false
+findings list --count	Read	false	false
+findings list --json	Read	false	false
+findings list --kind TASK-1	Read	false	false
+findings list --pr 1	Read	false	false
+findings list --source review	Read	false	false
+findings promote --auto-complete TASK-1	Finding	true	false
+findings promote --detectable TASK-1 TASK-1	Finding	true	false
+findings promote --for TASK-1 TASK-1	Finding	true	false
+findings promote --force TASK-1	Finding	true	false
+findings promote --reason TASK-1 TASK-1	Finding	true	false
+findings promote --to TASK-1 TASK-1	Finding	true	false
+findings promote TASK-1	Finding	true	false
+findings recur --note TASK-1 TASK-1	Finding	true	false
+findings recur TASK-1	Finding	true	false
+focus	Write	false	false
+focus --clear	Write	false	false
+focus --show	Write	false	false
+focus clear	Write	false	false
+focus show	Write	false	false
+gate list	Write	false	false
+gate list --json	Write	false	false
+gate list --moment TASK-1	Write	false	false
+gate run --json TASK-1 TASK-1	Write	false	false
+gate run TASK-1 TASK-1	Write	false	false
+gate show TASK-1	Write	false	false
+github config	Write	false	false
+github config --api-url TASK-1	Write	false	false
+github config --repo TASK-1	Write	false	false
+github config --show	Write	false	false
+github config --token TASK-1	Write	false	false
+github labels	Write	false	false
+github labels --create-missing	Write	false	false
+github list	Write	false	false
+github list --labels TASK-1	Write	false	false
+github list --limit 1	Write	false	false
+github list --state TASK-1	Write	false	false
+github pull	Write	true	false
+github pull --dry-run	Write	false	false
+github pull --labels TASK-1	Write	true	false
+github pull --limit 1	Write	true	false
+github pull --open-only	Write	true	false
+github push TASK-1	Write	false	false
+github show TASK-1	Write	false	false
+github sync	Write	false	false
+github sync --apply	Write	false	false
+github sync --linked-only	Write	false	false
+github test	Write	false	false
+gitlab config	Write	false	false
+gitlab config --project 1	Write	false	false
+gitlab config --show	Write	false	false
+gitlab config --token TASK-1	Write	false	false
+gitlab config --url TASK-1	Write	false	false
+gitlab labels	Write	false	false
+gitlab labels --create-missing	Write	false	false
+gitlab labels --init	Write	false	false
+gitlab labels --validate	Write	false	false
+gitlab list	Write	false	false
+gitlab list --labels TASK-1	Write	false	false
+gitlab list --limit 1	Write	false	false
+gitlab list --search TASK-1	Write	false	false
+gitlab list --state TASK-1	Write	false	false
+gitlab poll	Write	false	false
+gitlab poll --interval 1	Write	false	false
+gitlab refresh	Write	false	false
+gitlab refresh --force	Write	false	false
+gitlab show TASK-1	Write	false	false
+gitlab status	Write	false	false
+gitlab status --diverged	Write	false	false
+gitlab test	Write	false	false
+goal	Read	false	false
+goal --as-deep-link	Read	false	false
+goal --batch TASK-1	Read	false	false
+goal --copy	Read	false	false
+goal --epic TASK-1	Read	false	false
+goal --invoke	Read	false	false
+goal --pr 1	Read	false	false
+goal --queue-empty TASK-1	Read	false	false
+goal --spec TASK-1	Read	false	false
+graph	Read	false	false
+graph --blocked-by	Read	false	false
+graph --blocks	Read	false	false
+graph --depth 1	Read	false	false
+graph --follow TASK-1	Read	false	false
+graph --impact	Read	false	false
+graph --json	Read	false	false
+graph --tree	Read	false	false
+graph blocked-by TASK-1	Read	false	false
+graph blocks TASK-1	Read	false	false
+graph impact TASK-1	Read	false	false
+graph tree TASK-1	Read	false	false
+grep --after-context 1 TASK-1	Write	false	false
+grep --before-context 1 TASK-1	Write	false	false
+grep --context 1 TASK-1	Write	false	false
+grep --count TASK-1	Write	false	false
+grep --extended-regex TASK-1	Write	false	false
+grep --feature TASK-1 TASK-1	Write	false	false
+grep --field TASK-1 TASK-1	Write	false	false
+grep --files-with-matches TASK-1	Write	false	false
+grep --ignore-case TASK-1	Write	false	false
+grep --invert-match TASK-1	Write	false	false
+grep --status TASK-1 TASK-1	Write	false	false
+grep --type TASK-1 TASK-1	Write	false	false
+grep TASK-1	Write	false	false
+groom	Write	false	false
+groom --apply	Write	false	false
+groom --dry-run	Write	false	false
+groom --exclude-tag TASK-1	Write	false	false
+groom --max-approvals 1	Write	false	false
+groom --only-tag TASK-1	Write	false	false
+groom --permission-mode TASK-1	Write	false	false
+groom --risk TASK-1	Write	false	false
+groom --then-drain	Write	false	false
+harvest --base TASK-1 TASK-1	Write	false	false
+harvest --dry-run TASK-1	Write	false	false
+harvest --from TASK-1 TASK-1	Write	false	false
+harvest --json TASK-1	Write	false	false
+harvest --pr 1 TASK-1	Write	false	false
+harvest --yes-all TASK-1	Write	false	false
+harvest TASK-1	Write	false	false
+headless tail	Write	false	false
+headless tail --include-user	Write	false	false
+headless tail --list	Write	false	false
+headless tail --no-follow	Write	false	false
+headless tail --since TASK-1	Write	false	false
+headless tail --tools-only	Write	false	false
+headless tail --with-tools	Write	false	false
+health	Write	false	false
+health --brief	Write	false	false
+health --json	Write	false	false
+help-all	Read	false	false
+history	Read	false	false
+history --digest	Read	false	false
+history --json	Read	false	false
+history --timeline	Read	false	false
+history approved	Read	false	false
+history approved --all-events	Read	false	false
+history approved --json	Read	false	false
+history approved --oldest-first	Read	false	false
+history approved --priority TASK-1	Read	false	false
+history approved --status TASK-1	Read	false	false
+history approved --tags TASK-1	Read	false	false
+history closed	Read	false	false
+history closed --all-events	Read	false	false
+history closed --json	Read	false	false
+history closed --oldest-first	Read	false	false
+history closed --priority TASK-1	Read	false	false
+history closed --status TASK-1	Read	false	false
+history closed --tags TASK-1	Read	false	false
+history completed	Read	false	false
+history completed --all-events	Read	false	false
+history completed --json	Read	false	false
+history completed --oldest-first	Read	false	false
+history completed --priority TASK-1	Read	false	false
+history completed --status TASK-1	Read	false	false
+history completed --tags TASK-1	Read	false	false
+history events	Read	false	false
+history events --json	Read	false	false
+history opened	Read	false	false
+history opened --all-events	Read	false	false
+history opened --json	Read	false	false
+history opened --oldest-first	Read	false	false
+history opened --priority TASK-1	Read	false	false
+history opened --status TASK-1	Read	false	false
+history opened --tags TASK-1	Read	false	false
+history rejected	Read	false	false
+history rejected --all-events	Read	false	false
+history rejected --json	Read	false	false
+history rejected --oldest-first	Read	false	false
+history rejected --priority TASK-1	Read	false	false
+history rejected --status TASK-1	Read	false	false
+history rejected --tags TASK-1	Read	false	false
+history templates	Read	false	false
+history templates rm TASK-1	Read	false	false
+home	Write	false	false
+human	Write	false	false
+human --short	Write	false	false
+human answer --note TASK-1 TASK-1 TASK-1	Write	false	false
+human answer TASK-1 TASK-1	Write	false	false
+human audit	Write	false	false
+human audit --inject	Write	false	false
+human away	Write	false	false
+human decide --note TASK-1 TASK-1 TASK-1	Write	false	false
+human decide TASK-1 TASK-1	Write	false	false
+human home	Write	false	false
+human presence	Write	false	false
+human review --allow-stale-base TASK-1	Write	false	false
+human review --guided TASK-1	Write	false	false
+human review --no-agent TASK-1	Write	false	false
+human review TASK-1	Write	false	false
+human status	Write	false	false
+human unblock	Write	false	false
+human unblock --copy	Write	false	false
+human unblock --interactive	Write	false	false
+human unblock --json	Write	false	false
+human unblock --stdout	Write	false	false
+identity check	Write	false	false
+identity check-push TASK-1	Write	false	false
+identity install-hook	Write	false	false
+identity link TASK-1 TASK-1	Write	false	false
+identity list	Write	false	false
+identity list --json	Write	false	false
+identity show --json TASK-1	Write	false	false
+identity show TASK-1	Write	false	false
+import --on-conflict TASK-1 TASK-1	Write	true	false
+import --parent TASK-1 TASK-1	Write	true	false
+import TASK-1	Write	true	false
+import-plan --request-review TASK-1	Write	false	false
+import-plan --spec TASK-1 TASK-1	Write	false	false
+import-plan TASK-1	Write	false	false
+init	Write	false	true
+init --agent TASK-1	Write	false	true
+init --attach	Write	false	true
+init --centralized	Write	false	true
+init --commit-scaffold	Write	false	true
+init --distributed	Write	false	true
+init --focus TASK-1	Write	false	true
+init --footprint full	Write	false	true
+init --force	Write	false	true
+init --git-init	Write	false	true
+init --minimal	Write	false	true
+init --name TASK-1	Write	false	true
+init --no-agent-config	Write	false	true
+init --no-hooks	Write	false	true
+init --no-post-hooks	Write	false	true
+init --no-roles	Write	false	true
+init --no-schedule	Write	false	true
+init --no-skills	Write	false	true
+init --node-name TASK-1	Write	false	true
+init --refresh	Write	false	true
+init --registry-remote TASK-1	Write	false	true
+init --sibling	Write	false	true
+init --store-path TASK-1	Write	false	true
+init --verbose	Write	false	true
+init --with-mcp	Write	false	true
+init --with-memories	Write	false	true
+integrate	BuildLoop	false	false
+integrate --dry-run	BuildLoop	false	false
+integrate --focus TASK-1	BuildLoop	false	false
+integrate --force	BuildLoop	false	false
+integrate --idle-minutes 1	BuildLoop	false	false
+integrate --interval 1	BuildLoop	false	false
+integrate --json	BuildLoop	false	false
+integrate --max 1	BuildLoop	false	false
+integrate --no-rebase	BuildLoop	false	false
+integrate --no-wait-ci	BuildLoop	false	false
+integrate --run	BuildLoop	false	false
+integrate --strategy per-item	BuildLoop	false	false
+integrate --user TASK-1	BuildLoop	false	false
+integrate --wait-ci	BuildLoop	false	false
+integrate --watch	BuildLoop	false	false
+intent --audience layman TASK-1	Write	false	false
+intent --json TASK-1	Write	false	false
+intent --refresh TASK-1	Write	false	false
+intent TASK-1	Write	false	false
+internal advisor-code-gate	Write	false	true
+internal locking-gate	Write	false	true
+internal record-no-verify-bypass	Write	false	true
+internal solo-active	Write	false	true
+internal worktree-scope-gate	Write	false	true
+jira config	Write	false	false
+jira config --email TASK-1	Write	false	false
+jira config --project TASK-1	Write	false	false
+jira config --show	Write	false	false
+jira config --show-mapping	Write	false	false
+jira config --url TASK-1	Write	false	false
+jira list	Write	false	false
+jira list --jql TASK-1	Write	false	false
+jira list --limit 1	Write	false	false
+jira pull	Write	true	false
+jira pull --dry-run	Write	false	false
+jira pull --jql TASK-1	Write	true	false
+jira pull --limit 1	Write	true	false
+jira push TASK-1	Write	false	false
+jira show TASK-1	Write	false	false
+jira sync	Write	false	false
+jira sync --apply	Write	false	false
+jira test	Write	false	false
+lifecycle	Write	false	false
+lifecycle --check	Write	false	false
+lifecycle --diagram	Write	false	false
+lifecycle --diff	Write	false	false
+lifecycle --doc TASK-1	Write	false	false
+lifecycle --empirical	Write	false	false
+lifecycle --write	Write	false	false
+lint	Write	false	false
+lint --json	Write	false	false
+lint --scope TASK-1	Write	false	false
+lint constants	Write	false	false
+lint constants --fail-on unexplained	Write	false	false
+lint constants --json	Write	false	false
+lint constants --path TASK-1	Write	false	false
+list	Read	false	false
+list --all	Read	false	false
+list --archived	Read	false	false
+list --assigned TASK-1	Read	false	false
+list --blocked	Read	false	false
+list --deferred	Read	false	false
+list --driver TASK-1	Read	false	false
+list --feature TASK-1	Read	false	false
+list --fields TASK-1	Read	false	false
+list --human	Read	false	false
+list --include-knowledge	Read	false	false
+list --include-meta	Read	false	false
+list --json	Read	false	false
+list --limit 1	Read	false	false
+list --max-weight 1	Read	false	false
+list --min-weight 1	Read	false	false
+list --mine	Read	false	false
+list --no-flow	Read	false	false
+list --no-focus	Read	false	false
+list --no-glyph	Read	false	false
+list --no-scope	Read	false	false
+list --parent TASK-1	Read	false	false
+list --priority TASK-1	Read	false	false
+list --short	Read	false	false
+list --show-origin	Read	false	false
+list --show-tags	Read	false	false
+list --sort TASK-1	Read	false	false
+list --status TASK-1	Read	false	false
+list --sync	Read	false	false
+list --tags TASK-1	Read	false	false
+list --topics	Read	false	false
+list --tree	Read	false	false
+list --type TASK-1	Read	false	false
+list --user TASK-1	Read	false	false
+load backlog	Write	false	false
+load calibration	Write	false	false
+load calibration --by-type	Write	false	false
+load calibration --json	Write	false	false
+load calibration --since TASK-1	Write	false	false
+load queue	Write	false	false
+load report	Write	false	false
+lock acquire --advisor TASK-1 TASK-1	Write	false	false
+lock release TASK-1	Write	false	false
+lock status	Write	false	false
+lock verify	Write	false	false
+lock verify --as TASK-1	Write	false	false
+mailbox archive	Write	false	false
+mailbox archive --agent TASK-1	Write	false	false
+mailbox archive --older-than TASK-1	Write	false	false
+mailbox delete TASK-1	Write	false	false
+mailbox gc	Write	false	false
+mailbox gc --agent TASK-1	Write	false	false
+mailbox gc --older-than TASK-1	Write	false	false
+mailbox gc --phantoms	Write	false	false
+mailbox inbox	Read	false	false
+mailbox inbox --all	Read	false	false
+mailbox inbox --archived	Read	false	false
+mailbox inbox --peek	Read	false	false
+mailbox inbox --recent-read-tail 1	Read	false	false
+mailbox inbox --unread	Read	false	false
+mailbox latency	Write	false	false
+mailbox latency --for TASK-1	Write	false	false
+mailbox latency --json	Write	false	false
+mailbox list	Write	false	false
+mailbox list --stranded	Write	false	false
+mailbox notice	Write	false	false
+mailbox notice --cap 1	Write	false	false
+mailbox read TASK-1	Write	false	false
+mailbox retract TASK-1	Write	false	false
+mailbox send	Write	false	false
+mailbox send --allow-second-person	Write	false	false
+mailbox send --body-file TASK-1	Write	false	false
+mailbox send --broadcast	Write	false	false
+mailbox send --from TASK-1	Write	false	false
+mailbox send --in-reply-to TASK-1	Write	false	false
+mailbox send --intent TASK-1	Write	false	false
+mailbox send --relayed-from TASK-1	Write	false	false
+mailbox send --stdin	Write	false	false
+mailbox send --subject TASK-1	Write	false	false
+mailbox send --thread TASK-1	Write	false	false
+mailbox send --to TASK-1	Write	false	false
+mailbox send --urgent	Write	false	false
+mailbox sync	Write	false	false
+mailbox thread TASK-1	Read	false	false
+mandate start	Write	false	false
+mandate start --include-supervised	Write	false	false
+mandate start --reason TASK-1	Write	false	false
+mandate start --ship-held	Write	false	false
+mandate start --ttl TASK-1	Write	false	false
+mandate status	Write	false	false
+mandate status --json	Write	false	false
+mandate stop	Write	false	false
+manual TASK-1	Write	false	false
+mcp register-agent	Write	false	false
+mcp register-agent --force	Write	false	false
+mcp register-agent --name TASK-1	Write	false	false
+mcp register-agent --print	Write	false	false
+mcp skill lint	Write	false	false
+mcp skill lint --json	Write	false	false
+mcp skill lint --quiet	Write	false	false
+mcp skill render TASK-1	Write	false	false
+mcp translate	Write	false	false
+mcp translate --dry-run	Write	false	false
+mcp translate --force	Write	false	false
+mcp translate --project-root TASK-1	Write	false	false
+mcp-serve	Read	false	true
+memories check	Write	false	false
+memories check --json	Write	false	false
+memories check --verbose	Write	false	false
+merge-hold add --head TASK-1 1	Write	false	false
+merge-hold add --reason TASK-1 1	Write	false	false
+merge-hold add --reason-kind TASK-1 1	Write	false	false
+merge-hold add --recused-principal TASK-1 1	Write	false	false
+merge-hold add --release-condition TASK-1 1	Write	false	false
+merge-hold add --replace 1	Write	false	false
+merge-hold add --route-to TASK-1 1	Write	false	false
+merge-hold add --verdict TASK-1 1	Write	false	false
+merge-hold add 1	Write	false	false
+merge-hold auto-release	Write	false	false
+merge-hold clear	Write	false	false
+merge-hold clear --stale	Write	false	false
+merge-hold labels	Write	false	false
+merge-hold labels --create-missing	Write	false	false
+merge-hold labels --json	Write	false	false
+merge-hold list	Write	false	false
+merge-hold list --fix	Write	false	false
+merge-hold list --json	Write	false	false
+merge-lock	Write	false	false
+merge-lock --json	Write	false	false
+metrics agent-lift	Write	false	false
+metrics agent-lift --json	Write	false	false
+metrics agent-lift --markdown	Write	false	false
+metrics agent-lift --since TASK-1	Write	false	false
+metrics ai-lift	Write	false	false
+metrics ai-lift --json	Write	false	false
+metrics ai-lift --markdown	Write	false	false
+metrics cycle-time	Write	false	false
+metrics cycle-time --json	Write	false	false
+metrics cycle-time --since TASK-1	Write	false	false
+metrics cycle-time --slowest 1	Write	false	false
+metrics cycle-time --tags TASK-1	Write	false	false
+metrics cycle-time --type TASK-1	Write	false	false
+metrics cycle-time --until TASK-1	Write	false	false
+no-human acknowledge	Write	false	false
+no-human acknowledge --project	Write	false	false
+no-human revoke	Write	false	false
+no-human revoke --project	Write	false	false
+no-human status	Write	false	false
+node acquire	Write	false	false
+node acquire --email TASK-1	Write	false	false
+node acquire --force	Write	false	false
+node acquire --hijack TASK-1	Write	false	false
+node acquire --hostname TASK-1	Write	false	false
+node acquire --id TASK-1	Write	false	false
+node acquire --node-name TASK-1	Write	false	false
+node acquire --remote-only	Write	false	false
+node acquire --yes	Write	false	false
+node list	Write	false	false
+node release --yes TASK-1	Write	false	false
+node release TASK-1	Write	false	false
+node set-name --name TASK-1 TASK-1	Write	false	false
+node set-owner --user TASK-1 TASK-1	Write	false	false
+node show	Write	false	false
+node team	Write	false	false
+node team --json	Write	false	false
+node team allow-seat TASK-1 TASK-1	Write	false	false
+node team disallow-seat TASK-1 TASK-1	Write	false	false
+node team my-role	Write	false	false
+node team my-role --json	Write	false	false
+node team set-role --role TASK-1 TASK-1	Write	false	false
+node team unset-role TASK-1	Write	false	false
+node whoami	Write	false	false
+notify check	Write	false	false
+notify status	Write	false	false
+notify test	Write	false	false
+orchestrator status	Write	false	false
+orchestrator status --json	Write	false	false
+plan capture --stdout TASK-1	Write	false	false
+plan capture TASK-1	Write	false	false
+plan fan-out	Write	false	false
+plan fan-out --batch TASK-1	Write	false	false
+plan fan-out --dry-run	Write	false	false
+plan fan-out --epic TASK-1	Write	false	false
+plan fan-out --include-low	Write	false	false
+plan fan-out --promote-only	Write	false	false
+plan helpers --append TASK-1 TASK-1	Write	false	false
+plan helpers TASK-1	Read	false	false
+plan promote	Write	false	false
+plan promote --all	Write	false	false
+plan promote --dry-run	Write	false	false
+plan scan --append TASK-1 TASK-1	Write	false	false
+plan scan --attach TASK-1	Write	false	false
+plan scan --json TASK-1	Write	false	false
+plan scan TASK-1	Write	false	false
+plan verify --fix TASK-1	Write	false	false
+plan verify --quiet TASK-1	Read	false	false
+plan verify TASK-1	Read	false	false
+pr auto-queue-review	Write	false	false
+pr auto-queue-review --branch TASK-1	Write	false	false
+pr gc	Write	false	false
+pr gc --dry-run	Write	false	false
+pr hold	Write	false	false
+pr hold --reason TASK-1	Write	false	false
+pr list	Write	false	false
+pr list --json	Write	false	false
+pr list --mapped-only	Write	false	false
+pr rebase --base TASK-1 1	Write	false	false
+pr rebase --check 1	Write	false	false
+pr rebase --interactive 1	Write	false	false
+pr rebase --no-smoke 1	Write	false	false
+pr rebase --onto-parent TASK-1 1	Write	false	false
+pr rebase 1	Write	false	false
+pr ship	Write	false	false
+pr ship --complexity low	Write	false	false
+pr ship --dry-run	Write	false	false
+pr ship --effort 15m	Write	false	false
+pr ship --final-slice	Write	false	false
+pr ship --force-delete-branch	Write	false	false
+pr ship --merge-method squash	Write	false	false
+pr ship --no-cleanup	Write	false	false
+pr ship --no-complete	Write	false	false
+pr ship --no-pull	Write	false	false
+pr ship --no-trailer-check	Write	false	false
+pr ship --override-stale-approval	Write	false	false
+pr ship --override-stale-check	Write	false	false
+pr ship --rebase	Write	false	false
+pr ship --wait 1	Write	false	false
+presence	Write	false	false
+presence away	Write	false	false
+presence home	Write	false	false
+presence status	Write	false	false
+protocol list	Read	false	false
+protocol seed	Read	false	false
+protocol show --lane TASK-1 TASK-1	Read	false	false
+protocol show TASK-1	Read	false	false
+ps	Write	false	false
+ps --all	Write	false	false
+ps --json	Write	false	false
+pull	Write	false	false
+pull --auto	Write	false	false
+pull --code-only	Write	false	false
+pull --dry-run	Write	false	false
+pull --json	Write	false	false
+pull --no-gate	Write	false	false
+pull --quiet	Write	false	false
+pull --store-only	Write	false	false
+punt --category TASK-1 --reason TASK-1 --lean TASK-1 TASK-1	Write	true	false
+punt --category TASK-1 --reason TASK-1 TASK-1	Write	true	false
+punts analyze	Write	false	false
+punts analyze --all	Write	false	false
+punts dismiss --reason TASK-1 TASK-1	Write	false	false
+punts dismiss TASK-1	Write	false	false
+punts escalate --reasoning TASK-1 --classification TASK-1 TASK-1	Write	false	false
+punts escalate --reasoning TASK-1 --escalation-reason TASK-1 TASK-1	Write	false	false
+punts escalate --reasoning TASK-1 TASK-1	Write	false	false
+punts list	Read	false	false
+punts list --all	Read	false	false
+punts list --category TASK-1	Read	false	false
+punts list --resolution TASK-1	Read	false	false
+punts list --spec TASK-1	Read	false	false
+punts promote TASK-1 TASK-1	Write	false	false
+punts read TASK-1	Read	false	false
+punts resolve --answer TASK-1 --classification TASK-1 TASK-1	Write	false	false
+punts resolve --answer TASK-1 --reasoning TASK-1 TASK-1	Write	false	false
+punts resolve --answer TASK-1 TASK-1	Write	false	false
+push	Write	false	false
+push --code-only	Write	false	false
+push --dry-run	Write	false	false
+push --json	Write	false	false
+push --message TASK-1	Write	false	false
+push --no-notice	Write	false	false
+push --no-rebase-check	Write	false	false
+push --store-only	Write	false	false
+questions	Question	false	false
+questions answer	Question	true	false
+questions answer --all-defaults	Question	true	false
+questions answer --note TASK-1	Question	true	false
+questions ask --question TASK-1 --choice TASK-1 TASK-1	Question	true	false
+questions ask --question TASK-1 --force TASK-1	Question	true	false
+questions ask --question TASK-1 --rationale TASK-1 TASK-1	Question	true	false
+questions ask --question TASK-1 --recommend 1 TASK-1	Question	true	false
+questions ask --question TASK-1 TASK-1	Question	true	false
+questions clarify	Question	false	false
+questions clarify --dry-run	Question	false	false
+questions list	Question	false	false
+questions remedy --dry-run TASK-1	Question	true	false
+questions remedy TASK-1	Question	true	false
+questions sweep	Question	false	false
+questions sweep --apply	Question	false	false
+queue add --bottom TASK-1	Queue	true	false
+queue add --for TASK-1 TASK-1	Queue	true	false
+queue add --for-session TASK-1 TASK-1	Queue	true	false
+queue add --force TASK-1	Queue	true	false
+queue add --global TASK-1	Queue	true	false
+queue add --no-scope TASK-1	Queue	true	false
+queue add --note TASK-1 TASK-1	Queue	true	false
+queue add --scope TASK-1 TASK-1	Queue	true	false
+queue add --top TASK-1	Queue	true	false
+queue add --user TASK-1 TASK-1	Queue	true	false
+queue add TASK-1	Queue	true	false
+queue advance	Queue	false	false
+queue advance --user TASK-1	Queue	false	false
+queue advance --yes	Queue	false	false
+queue clear	Queue	true	false
+queue clear --completed	Queue	true	false
+queue clear --user TASK-1	Queue	true	false
+queue done --force TASK-1	Queue	true	false
+queue done --interface-cli TASK-1 TASK-1	Queue	true	false
+queue done --interface-mcp TASK-1 TASK-1	Queue	true	false
+queue done --interface-other TASK-1 TASK-1	Queue	true	false
+queue done --interface-tui TASK-1 TASK-1	Queue	true	false
+queue done --no-interface-change TASK-1	Queue	true	false
+queue done --no-test-plan TASK-1	Queue	true	false
+queue done --skip-pr-check TASK-1	Queue	true	false
+queue done --test-plan TASK-1 TASK-1	Queue	true	false
+queue done --user TASK-1 TASK-1	Queue	true	false
+queue done --yes TASK-1	Queue	true	false
+queue done TASK-1	Queue	true	false
+queue gc	Queue	true	false
+queue gc --dry-run	Queue	true	false
+queue gc --for TASK-1	Queue	true	false
+queue gc --user TASK-1	Queue	true	false
+queue integrate	Queue	false	false
+queue integrate --dry-run	Queue	false	false
+queue integrate --focus TASK-1	Queue	false	false
+queue integrate --force	Queue	false	false
+queue integrate --idle-minutes 1	Queue	false	false
+queue integrate --interval 1	Queue	false	false
+queue integrate --max 1	Queue	false	false
+queue integrate --no-wait-ci	Queue	false	false
+queue integrate --once	Queue	false	false
+queue integrate --rebase	Queue	false	false
+queue integrate --strategy per-item	Queue	false	false
+queue integrate --user TASK-1	Queue	false	false
+queue integrate --wait-ci	Queue	false	false
+queue integrate --watch	Queue	false	false
+queue list	Read	false	false
+queue list --all	Read	false	false
+queue list --all-users	Read	false	false
+queue list --batch TASK-1	Read	false	false
+queue list --by-batch	Read	false	false
+queue list --epic TASK-1	Read	false	false
+queue list --for TASK-1	Read	false	false
+queue list --global	Read	false	false
+queue list --in-flight-only	Read	false	false
+queue list --include-completed	Read	false	false
+queue list --include-terminal	Read	false	false
+queue list --json	Read	false	false
+queue list --local	Read	false	false
+queue list --no-focus	Read	false	false
+queue list --no-in-flight	Read	false	false
+queue list --no-scope	Read	false	false
+queue list --scope TASK-1	Read	false	false
+queue list --sync	Read	false	false
+queue list --tag TASK-1	Read	false	false
+queue list --tag-prefix TASK-1	Read	false	false
+queue list --tree	Read	false	false
+queue list --user TASK-1	Read	false	false
+queue load	Queue	false	false
+queue load --user TASK-1	Queue	false	false
+queue move --after TASK-1 TASK-1	Queue	true	false
+queue move --before TASK-1 TASK-1	Queue	true	false
+queue move --bottom TASK-1	Queue	true	false
+queue move --force TASK-1	Queue	true	false
+queue move --to 1 TASK-1	Queue	true	false
+queue move --top TASK-1	Queue	true	false
+queue move --user TASK-1 TASK-1	Queue	true	false
+queue move TASK-1	Queue	true	false
+queue next	Read	false	false
+queue next --all	Read	false	false
+queue next --for TASK-1	Read	false	false
+queue next --global	Read	false	false
+queue next --local	Read	false	false
+queue next --no-scope	Read	false	false
+queue next --user TASK-1	Read	false	false
+queue progress	Read	false	false
+queue progress --batch TASK-1	Read	false	false
+queue progress --json	Read	false	false
+queue progress --session TASK-1	Read	false	false
+queue progress --since TASK-1	Read	false	false
+queue progress --verbose	Read	false	false
+queue prune	Queue	true	false
+queue prune --dry-run	Queue	true	false
+queue prune --for TASK-1	Queue	true	false
+queue prune --merged	Queue	true	false
+queue prune --orphaned	Queue	true	false
+queue prune --user TASK-1	Queue	true	false
+queue recover --auto TASK-1	Queue	false	false
+queue recover --dry-run TASK-1	Queue	false	false
+queue recover --user TASK-1 TASK-1	Queue	false	false
+queue recover TASK-1	Queue	false	false
+queue remove --for TASK-1 TASK-1	Queue	true	false
+queue remove --global TASK-1	Queue	true	false
+queue remove --user TASK-1 TASK-1	Queue	true	false
+queue remove TASK-1	Queue	true	false
+queue rework	Queue	true	false
+queue rework --for TASK-1	Queue	true	false
+queue rework --force	Queue	true	false
+queue rework --no-pull	Queue	true	false
+queue rework --permission-mode TASK-1	Queue	true	false
+queue rework --reason TASK-1	Queue	true	false
+queue rework --resume	Queue	true	false
+queue rework --status TASK-1	Queue	true	false
+queue rework --steal	Queue	true	false
+queue rework --tail	Queue	true	false
+queue rework --user TASK-1	Queue	true	false
+queue rework --work	Queue	true	false
+queue work	Queue	false	false
+queue work --allow-intermediate-only	Queue	false	false
+queue work --allow-stale-base	Queue	false	false
+queue work --assist-est none	Queue	false	false
+queue work --auto-complete TASK-1	Queue	false	false
+queue work --base TASK-1	Queue	false	false
+queue work --batch TASK-1	Queue	false	false
+queue work --branch TASK-1	Queue	false	false
+queue work --calibrate	Queue	false	false
+queue work --complexity low	Queue	false	false
+queue work --drain	Queue	false	false
+queue work --dry-run	Queue	false	false
+queue work --effort 15m	Queue	false	false
+queue work --escalate-blocks	Queue	false	false
+queue work --escalate-defaults	Queue	false	false
+queue work --force	Queue	false	false
+queue work --force-base	Queue	false	false
+queue work --force-claim	Queue	false	false
+queue work --fresh	Queue	false	false
+queue work --guided	Queue	false	false
+queue work --list-sessions	Queue	false	false
+queue work --model TASK-1	Queue	false	false
+queue work --no-auto-rebase	Queue	false	false
+queue work --no-calibrate	Queue	false	false
+queue work --no-human TASK-1	Queue	false	false
+queue work --no-launch	Queue	false	false
+queue work --no-pull	Queue	false	false
+queue work --no-tee-headless	Queue	false	false
+queue work --panes TASK-1	Queue	false	false
+queue work --path TASK-1	Queue	false	false
+queue work --pause-always	Queue	false	false
+queue work --permission-mode TASK-1	Queue	false	false
+queue work --plan-only	Queue	false	false
+queue work --quiet	Queue	false	false
+queue work --resume TASK-1	Queue	false	false
+queue work --role TASK-1	Queue	false	false
+queue work --sandbox	Queue	false	false
+queue work --session-id TASK-1	Queue	false	false
+queue work --stack	Queue	false	false
+queue work --steal	Queue	false	false
+queue work --strict	Queue	false	false
+queue work --type TASK-1	Queue	false	false
+queue work --user TASK-1	Queue	false	false
+queue work --vendor TASK-1	Queue	false	false
+queue work --zen	Queue	false	false
+rebase	Write	false	false
+rebase --auto	Write	false	false
+rebase --branch TASK-1	Write	false	false
+rebase --dry-run	Write	false	false
+rebase --json	Write	false	false
+rebase --no-fetch	Write	false	false
+rebase --no-stash	Write	false	false
+reconstitute --dry-run TASK-1	Write	false	false
+reconstitute --json TASK-1	Write	false	false
+reconstitute --yes TASK-1	Write	false	false
+reconstitute TASK-1	Write	false	false
+record list	Write	false	false
+record prune	Write	false	false
+record prune --apply	Write	false	false
+record prune --older-than 1	Write	false	false
+record prune --spec TASK-1	Write	false	false
+regen corpus --allow-dirty TASK-1	Write	false	false
+regen corpus TASK-1	Write	false	false
+regen report	Write	false	false
+rel add --from TASK-1 --type TASK-1	Relationship	true	false
+rel add --to TASK-1 --type TASK-1	Relationship	true	false
+rel add --type TASK-1	Relationship	true	false
+rel add --type TASK-1 --bidirectional	Relationship	true	false
+rel add --type TASK-1 --force-parent	Relationship	true	false
+rel list	Relationship	true	false
+rel list --all	Relationship	true	false
+rel list --dangling	Relationship	true	false
+rel list --limit 1	Relationship	true	false
+rel list --source TASK-1	Relationship	true	false
+rel list --target TASK-1	Relationship	true	false
+rel list --type TASK-1	Relationship	true	false
+rel remove --from TASK-1 --type TASK-1	Relationship	true	false
+rel remove --to TASK-1 --type TASK-1	Relationship	true	false
+rel remove --type TASK-1	Relationship	true	false
+rel remove --type TASK-1 --bidirectional	Relationship	true	false
+rel-def add --name TASK-1	Write	true	false
+rel-def add --name TASK-1 --cardinality TASK-1	Write	true	false
+rel-def add --name TASK-1 --color TASK-1	Write	true	false
+rel-def add --name TASK-1 --description TASK-1	Write	true	false
+rel-def add --name TASK-1 --display-name TASK-1	Write	true	false
+rel-def add --name TASK-1 --inverse TASK-1	Write	true	false
+rel-def add --name TASK-1 --source-types TASK-1	Write	true	false
+rel-def add --name TASK-1 --symmetric	Write	true	false
+rel-def add --name TASK-1 --target-types TASK-1	Write	true	false
+rel-def edit --color TASK-1 TASK-1	Write	true	false
+rel-def edit --description TASK-1 TASK-1	Write	true	false
+rel-def edit --display-name TASK-1 TASK-1	Write	true	false
+rel-def edit --source-types TASK-1 TASK-1	Write	true	false
+rel-def edit --target-types TASK-1 TASK-1	Write	true	false
+rel-def edit TASK-1	Write	true	false
+rel-def list	Write	true	false
+rel-def remove --yes TASK-1	Write	true	false
+rel-def remove TASK-1	Write	true	false
+rel-def show TASK-1	Write	true	false
+release	Write	false	false
+release --after-pr 1	Write	false	false
+release --check	Write	false	false
+release --major	Write	false	false
+release --minor	Write	false	false
+release --patch	Write	false	false
+release --skip-xplat-check	Write	false	false
+release check	Write	false	false
+release major	Write	false	false
+release minor	Write	false	false
+release patch	Write	false	false
+remote attach TASK-1	Write	false	false
+remote create	Write	false	false
+remote create --attach TASK-1	Write	false	false
+remote create --github	Write	false	false
+remote create --gitlab TASK-1	Write	false	false
+remote create --public	Write	false	false
+remote mirror --url TASK-1 TASK-1	Write	false	false
+remote mirror TASK-1	Write	false	false
+remote mirror-push --dry-run TASK-1	Write	false	false
+remote mirror-push TASK-1	Write	false	false
+remote mirror-sync	Write	false	false
+remote mirror-sync --json	Write	false	false
+remote reconcile	Write	false	false
+remote reconcile --execute	Write	false	false
+remote reconcile --json	Write	false	false
+remote reconcile --yes	Write	false	false
+remote status	Write	false	false
+remote status --json	Write	false	false
+remote status --no-fetch	Write	false	false
+report	Write	false	false
+report --recheck	Write	false	false
+report bug --title TASK-1	Write	false	false
+report bug --title TASK-1 --copy	Write	false	false
+report bug --title TASK-1 --description TASK-1	Write	false	false
+report bug --title TASK-1 --no-file	Write	false	false
+report idea --title TASK-1	Write	false	false
+report idea --title TASK-1 --copy	Write	false	false
+report idea --title TASK-1 --description TASK-1	Write	false	false
+report idea --title TASK-1 --no-file	Write	false	false
+research --artifact-dir TASK-1 TASK-1	Write	false	false
+research --dry-run TASK-1	Write	false	false
+research TASK-1	Write	false	false
+review	Write	false	false
+review --allow-stale-base	Write	false	false
+review --no-agent	Write	false	false
+review --target-branch TASK-1	Write	false	false
+review assemble	Write	false	false
+review assemble --output TASK-1	Write	false	false
+review claim --pr 1	Write	false	false
+review claim --pr 1 --release	Write	false	false
+review claim --pr 1 --sha TASK-1	Write	false	false
+review claim --pr 1 --spec TASK-1	Write	false	false
+review claim --pr 1 --ttl-mins 1	Write	false	false
+review classes	Write	false	false
+review classes --json	Write	false	false
+review classes --since TASK-1	Write	false	false
+review list	Write	false	false
+review list --json	Write	false	false
+review mode mass-change --days 1 on	Write	false	false
+review mode mass-change --json on	Write	false	false
+review mode mass-change on	Write	false	false
+review normalize-shas	Write	false	false
+review normalize-shas --dry-run	Write	false	false
+review prompt	Write	false	false
+review prompt --forge TASK-1	Write	false	false
+review prompt --pr 1	Write	false	false
+review prompt --specs TASK-1	Write	false	false
+review prompt --write TASK-1	Write	false	false
+review record --verdict TASK-1 --branch TASK-1 TASK-1	Write	false	false
+review record --verdict TASK-1 --finding TASK-1 TASK-1	Write	false	false
+review record --verdict TASK-1 --finding-class TASK-1 TASK-1	Write	false	false
+review record --verdict TASK-1 --pr 1 TASK-1	Write	false	false
+review record --verdict TASK-1 --sha TASK-1 TASK-1	Write	false	false
+review record --verdict TASK-1 --summary TASK-1 TASK-1	Write	false	false
+review record --verdict TASK-1 TASK-1	Write	false	false
+review stranded	Write	false	false
+review stranded --age	Write	false	false
+review stranded --fix	Write	false	false
+review stranded --json	Write	false	false
+review verdict --json TASK-1	Write	false	false
+review verdict TASK-1	Write	false	false
+rework	Write	true	false
+rework --for TASK-1	Write	true	false
+rework --force	Write	true	false
+rework --no-pull	Write	true	false
+rework --permission-mode TASK-1	Write	true	false
+rework --reason TASK-1	Write	true	false
+rework --resume	Write	true	false
+rework --status TASK-1	Write	true	false
+rework --steal	Write	true	false
+rework --tail	Write	true	false
+rework --user TASK-1	Write	true	false
+rework --work	Write	true	false
+role active	Read	false	true
+role add --global TASK-1	Role	false	true
+role add --purpose TASK-1 TASK-1	Role	false	true
+role add TASK-1	Role	false	true
+role current	Read	false	true
+role current --check	Read	false	true
+role delete --yes TASK-1	Role	false	true
+role delete TASK-1	Role	false	true
+role end	Role	false	true
+role enter	Role	false	true
+role enter --cd	Role	false	true
+role enter --delegate-seat TASK-1	Role	false	true
+role enter --no-resume	Role	false	true
+role enter --no-title	Role	false	true
+role enter --ttl TASK-1	Role	false	true
+role expiry	Role	false	true
+role expiry --refuse-within TASK-1	Role	false	true
+role expiry --warn-within TASK-1	Role	false	true
+role expiry-notice	Role	false	true
+role list	Read	false	true
+role prompt clear	Role	false	true
+role prompt clear --name TASK-1	Role	false	true
+role prompt set	Role	false	true
+role prompt set --content-flag TASK-1	Role	false	true
+role prompt set --name TASK-1	Role	false	true
+role prompt set --stdin	Role	false	true
+role prompt show	Role	false	true
+role prompt show --name TASK-1	Role	false	true
+role repair	Role	false	true
+role scaffold	Role	false	true
+role scope clear	Role	false	true
+role scope clear --name TASK-1	Role	false	true
+role scope clear --status	Role	false	true
+role scope clear --tags	Role	false	true
+role scope set	Role	false	true
+role scope set --name TASK-1	Role	false	true
+role scope set --status TASK-1	Role	false	true
+role scope set --tags TASK-1	Role	false	true
+role scope show	Role	false	true
+role scope show --name TASK-1	Role	false	true
+role show	Read	false	true
+rules sync	Write	false	false
+rules sync --dry-run	Write	false	false
+rules sync --review-md	Write	false	false
+sandbox create	Write	false	false
+sandbox create --force	Write	false	false
+sandbox create --path TASK-1	Write	false	false
+sandbox create --seed	Write	false	false
+sandbox destroy	Write	false	false
+sandbox destroy --path TASK-1	Write	false	false
+sandbox path	Write	false	false
+sandbox path --export	Write	false	false
+sandbox path --path TASK-1	Write	false	false
+sandbox reset	Write	false	false
+sandbox reset --path TASK-1	Write	false	false
+sandbox reset --seed	Write	false	false
+scaffold apply	Write	false	false
+scaffold apply --dry-run	Write	false	false
+scaffold apply --force	Write	false	false
+scaffold apply --project-root TASK-1	Write	false	false
+scaffold apply --prune	Write	false	false
+scaffold codex-prompts	Write	false	false
+scaffold codex-prompts --dest TASK-1	Write	false	false
+scaffold codex-prompts --force	Write	false	false
+scaffold diff	Write	false	false
+scaffold diff --context 1	Write	false	false
+scaffold diff --list	Write	false	false
+scaffold diff --no-color	Write	false	false
+scaffold diff --project-root TASK-1	Write	false	false
+scaffold extract	Write	false	false
+scaffold extract --force	Write	false	false
+scaffold extract --output TASK-1	Write	false	false
+scaffold preview	Write	false	false
+scaffold preview --project-root TASK-1	Write	false	false
+scaffold refresh	Write	false	false
+scaffold refresh --dest TASK-1	Write	false	false
+scaffold refresh --project-root TASK-1	Write	false	false
+scaffold status	Write	false	false
+scaffold status --output TASK-1	Write	false	false
+scaffold status --project-root TASK-1	Write	false	false
+scaffold status --report	Write	false	false
+scaffold status --verbose	Write	false	false
+scaffold upgrade	Write	false	false
+scaffold upgrade --dry-run	Write	false	false
+scaffold upgrade --force	Write	false	false
+scaffold upgrade --only git-hooks	Write	false	false
+scaffold upgrade --project-root TASK-1	Write	false	false
+scaffold upgrade --prune	Write	false	false
+scaffold user-instructions	Write	false	false
+scaffold user-instructions --refresh	Write	false	false
+schedule done --note TASK-1 TASK-1	Write	false	false
+schedule done TASK-1	Write	false	false
+schedule due	Write	false	false
+schedule due --json	Write	false	false
+schedule due --seat TASK-1	Write	false	false
+schedule emit-cron	Write	false	false
+schedule install-cron	Write	false	false
+schedule install-systemd	Write	false	false
+schedule list	Write	false	false
+schedule list --json	Write	false	false
+schedule list --seat TASK-1	Write	false	false
+schedule run	Write	false	false
+schedule status	Write	false	false
+schedule status --json	Write	false	false
+schedule tick	Write	false	false
+schedule tick --hook	Write	false	false
+schedule uninstall-cron	Write	false	false
+schedule uninstall-systemd	Write	false	false
+schema	Read	false	false
+schema --all	Read	false	false
+schema --explain	Read	false	false
+schema --json	Read	false	false
+search --all TASK-1	Read	false	false
+search --archived TASK-1	Read	false	false
+search --case-sensitive TASK-1	Read	false	false
+search --deferred TASK-1	Read	false	false
+search --feature TASK-1 TASK-1	Read	false	false
+search --fields TASK-1 TASK-1	Read	false	false
+search --include-meta TASK-1	Read	false	false
+search --json TASK-1	Read	false	false
+search --limit 1 TASK-1	Read	false	false
+search --short TASK-1	Read	false	false
+search --status TASK-1 TASK-1	Read	false	false
+search --sync TASK-1	Read	false	false
+search TASK-1	Read	false	false
+server get TASK-1	Write	false	false
+server list	Write	false	false
+server list --feature TASK-1	Write	false	false
+server list --limit 1	Write	false	false
+server list --status TASK-1	Write	false	false
+server ping	Write	false	false
+server status	Write	false	false
+session conversations	Session	false	false
+session conversations --all	Session	false	false
+session conversations --limit 1	Session	false	false
+session conversations --no-color	Session	false	false
+session end	Session	false	false
+session end --branch TASK-1	Session	false	false
+session end --force	Session	false	false
+session end --include-in-use	Session	false	false
+session end --purge-cc	Session	false	false
+session end --remove	Session	false	false
+session end --return	Session	false	false
+session end --skip-ci	Session	false	false
+session end --spec TASK-1	Session	false	false
+session end --wait-ci	Session	false	false
+session end --watch-ci	Session	false	false
+session end --yes	Session	false	false
+session focus TASK-1	Session	false	false
+session gc	Session	false	false
+session gc --dry-run	Session	false	false
+session gc --yes	Session	false	false
+session handoff	Session	false	false
+session handoff --check	Session	false	false
+session handoff --seat TASK-1	Session	false	false
+session handoff --show	Session	false	false
+session handoff --standing-orders TASK-1	Session	false	false
+session handoff --write TASK-1	Session	false	false
+session harness-worktree-register --agent-id TASK-1 --cwd TASK-1	Session	false	false
+session harness-worktree-register --agent-id TASK-1 --cwd TASK-1 --agent-type TASK-1	Session	false	false
+session harness-worktree-register --agent-id TASK-1 --cwd TASK-1 --branch TASK-1	Session	false	false
+session harness-worktree-register --agent-id TASK-1 --cwd TASK-1 --scope TASK-1	Session	false	false
+session harness-worktree-release --agent-id TASK-1	Session	false	false
+session leases	Read	false	false
+session leases --all	Read	false	false
+session leases --json	Read	false	false
+session leases --prune-stale	Read	false	false
+session leases --verbose	Read	false	false
+session leases --yes	Read	false	false
+session manifest mark-completed --session TASK-1 TASK-1	Session	false	false
+session manifest mark-completed TASK-1	Session	false	false
+session manifest mark-started --session TASK-1 TASK-1	Session	false	false
+session manifest mark-started TASK-1	Session	false	false
+session manifest write --items TASK-1	Session	false	false
+session manifest write --items TASK-1 --session TASK-1	Session	false	false
+session manifest write --items TASK-1 --source TASK-1	Session	false	false
+session new	Session	false	false
+session new --no-title	Session	false	false
+session new --permission-mode TASK-1	Session	false	false
+session new --role TASK-1	Session	false	false
+session new --sandbox	Session	false	false
+session new --title TASK-1	Session	false	false
+session pending-approval-clear --session TASK-1	Session	false	false
+session pending-approval-set --session TASK-1	Session	false	false
+session pending-approval-set --session TASK-1 --message TASK-1	Session	false	false
+session pending-approval-set --session TASK-1 --tool TASK-1	Session	false	false
+session prune	Session	false	false
+session prune --days 1	Session	false	false
+session prune --dry-run	Session	false	false
+session prune --escalations	Session	false	false
+session prune --orphans	Session	false	false
+session prune --yes	Session	false	false
+session reap	Session	false	false
+session reap --dry-run	Session	false	false
+session reap --json	Session	false	false
+session reap --yes	Session	false	false
+session resume	Session	false	false
+session resume --limit 1	Session	false	false
+session seat ack --request TASK-1 --generation 1	Session	false	false
+session seat ack --request TASK-1 --generation 1 --safe-to-stop	Session	false	false
+session seat ack --seat TASK-1 --request TASK-1 --generation 1	Session	false	false
+session seat claim	Session	false	false
+session seat claim --force	Session	false	false
+session seat claim --seat TASK-1	Session	false	false
+session seat release --generation 1	Session	false	false
+session seat release --generation 1 --request TASK-1	Session	false	false
+session seat release --seat TASK-1 --generation 1	Session	false	false
+session seat status	Session	false	false
+session seat status --json	Session	false	false
+session seat status --seat TASK-1	Session	false	false
+session seat takeover	Session	false	false
+session seat takeover --force	Session	false	false
+session seat takeover --grace-secs 1	Session	false	false
+session seat takeover --no-wait	Session	false	false
+session seat takeover --request TASK-1	Session	false	false
+session seat takeover --seat TASK-1	Session	false	false
+session send --enter TASK-1 TASK-1	Session	false	false
+session send --mail TASK-1 TASK-1	Session	false	false
+session send TASK-1 TASK-1	Session	false	false
+session show	Read	false	false
+session show --plan	Read	false	false
+session start --owns TASK-1	Session	false	false
+session start --owns TASK-1 --base TASK-1	Session	false	false
+session start --owns TASK-1 --branch TASK-1	Session	false	false
+session start --owns TASK-1 --branch-style TASK-1	Session	false	false
+session start --owns TASK-1 --force-claim	Session	false	false
+session start --owns TASK-1 --forge TASK-1	Session	false	false
+session start --owns TASK-1 --launch	Session	false	false
+session start --owns TASK-1 --name TASK-1	Session	false	false
+session start --owns TASK-1 --no-pool	Session	false	false
+session start --owns TASK-1 --no-title	Session	false	false
+session start --owns TASK-1 --path TASK-1	Session	false	false
+session start --owns TASK-1 --permission-mode TASK-1	Session	false	false
+session start --owns TASK-1 --pool	Session	false	false
+session start --owns TASK-1 --reuse-branch	Session	false	false
+session start --owns TASK-1 --role TASK-1	Session	false	false
+session start --owns TASK-1 --sandbox	Session	false	false
+session start --owns TASK-1 --title TASK-1	Session	false	false
+shift disable	Write	false	false
+shift enable	Write	false	false
+shift install --cron	Write	false	false
+shift install --systemd-user	Write	false	false
+shift resume	Write	false	false
+shift status	Write	false	false
+shift status --json	Write	false	false
+shift tick	Write	false	false
+shift tick --dry-run	Write	false	false
+shift tick --json	Write	false	false
+ship	BuildLoop	false	false
+ship --dry-run	BuildLoop	false	false
+ship --keep-worktree	BuildLoop	false	false
+ship --message TASK-1	BuildLoop	false	false
+ship --no-merge	BuildLoop	false	false
+ship --no-pr	BuildLoop	false	false
+ship --no-trailer-check	BuildLoop	false	false
+show --brief TASK-1	Read	false	false
+show --card TASK-1	Read	false	false
+show --comments TASK-1	Read	false	false
+show --depth 1 TASK-1	Read	false	false
+show --full TASK-1	Read	false	false
+show --json TASK-1	Read	false	false
+show --no-comments TASK-1	Read	false	false
+show --no-git TASK-1	Read	false	false
+show --raw TASK-1	Read	false	false
+show --rels TASK-1	Read	false	false
+show --sync TASK-1	Read	false	false
+show --tree TASK-1	Read	false	false
+show --verbose TASK-1	Read	false	false
+show TASK-1	Read	false	false
+skill lint	Write	false	false
+skill lint --json	Write	false	false
+skill lint --quiet	Write	false	false
+skill render TASK-1	Write	false	false
+solo	Write	false	false
+solo --dry-run	Write	false	false
+solo --interval 1	Write	false	false
+solo --off	Write	false	false
+solo --status	Write	false	false
+solo --ttl TASK-1	Write	false	false
+solo --watch	Write	false	false
+spec dryrun --ai TASK-1	Write	false	false
+spec dryrun --json TASK-1	Write	false	false
+spec dryrun TASK-1	Write	false	false
+spec interview --ai TASK-1	Write	false	false
+spec interview --answers TASK-1 TASK-1	Write	false	false
+spec interview --apply TASK-1	Write	false	false
+spec interview --json TASK-1	Write	false	false
+spec interview TASK-1	Write	false	false
+stack list	Write	false	false
+stack list --json	Write	false	false
+stack show	Write	false	false
+stack show --json	Write	false	false
+stack show --prune-stale	Write	false	false
+state-snapshot --spec TASK-1	Write	false	false
+state-snapshot --spec TASK-1 --fmt TASK-1	Write	false	false
+state-snapshot --spec TASK-1 --json	Write	false	false
+state-snapshot --spec TASK-1 --tests TASK-1	Write	false	false
+status	Read	false	false
+status --activity	Read	false	false
+status --all	Read	false	false
+status --awaiting	Read	false	false
+status --ci	Read	false	false
+status --cleanup	Read	false	false
+status --full	Read	false	false
+status --idle-minutes 1	Read	false	false
+status --json	Read	false	false
+status --no-ci	Read	false	false
+status --no-dev-context	Read	false	false
+status --no-focus	Read	false	false
+status --no-hygiene	Read	false	false
+status --queue	Read	false	false
+status --short	Read	false	false
+status --stale	Read	false	false
+status --verbose	Read	false	false
+statusbar	Write	false	true
+statusbar --interval 1	Write	false	true
+statusbar --once	Write	false	true
+statusbar --plain	Write	false	true
+statusbar --restore-title	Write	false	true
+statusline	Write	false	true
+statusline --client claude	Write	false	true
+statusline --color auto	Write	false	true
+statusline --title	Write	false	true
+statusline setup	Write	false	true
+statusline setup --client claude	Write	false	true
+statusline setup --install	Write	false	true
+statusline setup --replace-default	Write	false	true
+statusline setup --settings-path TASK-1	Write	false	true
+statusline title	Write	false	true
+store compact	Write	false	false
+store compact --squash	Write	false	false
+store compact --yes	Write	false	false
+store install-hook	Write	false	false
+store install-hook --force	Write	false	false
+store scrub-preview	Write	false	false
+store status	Write	false	false
+supervise nudge	Write	false	false
+supervise redrive	Write	false	false
+supervise redrive --execute	Write	false	false
+supervise redrive --json	Write	false	false
+supervise redrive --max 1	Write	false	false
+supervise redrive --max-attempts 1	Write	false	false
+supervise watch	Write	false	false
+supervise watch --execute	Write	false	false
+supervise watch --interval 1	Write	false	false
+supervise watch --json	Write	false	false
+supervise watch --objective TASK-1	Write	false	false
+tail	Write	false	false
+tail --annotate	Write	false	false
+tail --json	Write	false	false
+tail --lines 1	Write	false	false
+tail --list	Write	false	false
+tail --no-follow	Write	false	false
+tail --no-timestamp	Write	false	false
+tail --since TASK-1	Write	false	false
+tail --with-tools	Write	false	false
+team	Write	false	false
+team --json	Write	false	false
+team allow-seat TASK-1 TASK-1	Write	false	false
+team disallow-seat TASK-1 TASK-1	Write	false	false
+team my-role	Write	false	false
+team my-role --json	Write	false	false
+team set-role --role TASK-1 TASK-1	Write	false	false
+team unset-role TASK-1	Write	false	false
+terminal install TASK-1	Write	false	false
+trace add --req TASK-1 --file TASK-1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --commit TASK-1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --line-end 1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --line-start 1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --notes TASK-1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --symbol TASK-1	Trace	true	false
+trace add --req TASK-1 --file TASK-1 --type TASK-1	Trace	true	false
+trace check	Trace	false	false
+trace check --block	Trace	false	false
+trace check --json	Trace	false	false
+trace coverage	Trace	false	false
+trace coverage --all	Trace	false	false
+trace coverage --block	Trace	false	false
+trace coverage --fail-on uncovered	Trace	false	false
+trace coverage --json	Trace	false	false
+trace coverage --path TASK-1	Trace	false	false
+trace coverage --range TASK-1	Trace	false	false
+trace gate	Trace	false	false
+trace gate --json	Trace	false	false
+trace gate --range TASK-1	Trace	false	false
+trace list	Trace	false	false
+trace list --file TASK-1	Trace	false	false
+trace list --req TASK-1	Trace	false	false
+trace remove --req TASK-1 --link-id TASK-1	Trace	true	false
+trace scan	Trace	false	false
+trace scan --extensions TASK-1	Trace	false	false
+trace scan --update	Trace	true	false
+trace scan --verbose	Trace	false	false
+trace sweep	Trace	false	false
+trace sweep --branch TASK-1	Trace	false	false
+trace sweep --dry-run	Trace	false	false
+trace sweep --limit 1	Trace	false	false
+trace sweep --verbose	Trace	false	false
+triage acquire	Write	false	false
+triage acquire --scope TASK-1	Write	false	false
+triage acquire --user TASK-1	Write	false	false
+triage release	Write	false	false
+triage release --scope TASK-1	Write	false	false
+triage release --user TASK-1	Write	false	false
+triage status	Write	false	false
+triage status --json	Write	false	false
+tui	Write	false	false
+tui --intent-fd 1	Write	false	false
+tui --launcher	Write	false	false
+tui --no-recover	Write	false	false
+type add --name TASK-1 --prefix TASK-1	Type	true	false
+type add --name TASK-1 --prefix TASK-1 --description TASK-1	Type	true	false
+type list	Type	true	false
+type remove --yes TASK-1	Type	true	false
+type remove TASK-1	Type	true	false
+ultraplan --copy TASK-1	Read	false	false
+ultraplan --json TASK-1	Read	false	false
+ultraplan --no-comments TASK-1	Read	false	false
+ultraplan --stdout TASK-1	Read	false	false
+ultraplan TASK-1	Read	false	false
+unarchive TASK-1	Write	true	false
+unassign --from-queue TASK-1	Write	true	false
+unassign TASK-1	Write	true	false
+unclaim TASK-1	Write	false	false
+undefer TASK-1	Write	true	false
+upgrade	Write	false	false
+upgrade --check	Write	false	false
+upgrade --diff	Write	false	false
+upgrade --target TASK-1	Write	false	false
+upgrade --yes	Write	false	false
+upgrade check	Write	false	false
+upgrade diff	Write	false	false
+usage	Read	false	false
+usage --auto-complete	Read	false	false
+usage --cmd TASK-1	Read	false	false
+usage --errors	Read	false	false
+usage --events	Read	false	false
+usage --health	Read	false	false
+usage --json	Read	false	false
+usage --limit 1	Read	false	false
+usage --read-write	Read	false	false
+usage --since TASK-1	Read	false	false
+usage --slower-than 1	Read	false	false
+usage --slowest	Read	false	false
+usage --unused TASK-1	Read	false	false
+usage drains	Read	false	false
+usage drains --failures	Read	false	false
+usage drains --pattern	Read	false	false
+usage errors	Read	false	false
+usage events	Read	false	false
+usage health	Read	false	false
+usage rebuild	Read	false	false
+usage rebuild --json	Read	false	false
+usage rebuild --project TASK-1	Read	false	false
+usage show --cost TASK-1	Read	false	false
+usage show --group-by TASK-1 TASK-1	Read	false	false
+usage show --json TASK-1	Read	false	false
+usage show --provenance TASK-1	Read	false	false
+usage show --toon TASK-1	Read	false	false
+usage show TASK-1	Read	false	false
+usage slowest	Read	false	false
+usage timeline	Read	false	false
+usage unused TASK-1	Read	false	false
+user-guide	Write	false	false
+user-guide --dark	Write	false	false
+verify constraints	Write	false	false
+verify constraints --fail-on-drift	Write	false	false
+verify constraints --json	Write	false	false
+verify constraints --verbose	Write	false	false
+watch	Write	false	false
+watch --all	Write	false	false
+watch --backlog	Write	false	false
+watch --emit-wakes	Write	false	false
+watch --once	Write	false	false
+watch --verbose	Write	false	false
+whoami	Write	false	false
+why --json TASK-1	Read	false	false
+why --plain TASK-1	Read	false	false
+why TASK-1	Read	false	false
+wiki build	Read	false	false
+wiki build --out TASK-1	Read	false	false
+wiki serve	Read	false	false
+wiki serve --dir TASK-1	Read	false	false
+wiki serve --port 1	Read	false	false
+worker directives	Read	false	false
+worker directives --json	Read	false	false
+worker gc	Write	false	false
+worker gc --dry-run	Write	false	false
+worktree add --branch TASK-1 TASK-1	Write	false	false
+worktree add --path TASK-1 TASK-1	Write	false	false
+worktree add TASK-1	Write	false	false
+worktree dismiss	Write	false	false
+worktree dismiss --category TASK-1	Write	false	false
+worktree enter --branch TASK-1 TASK-1	Write	false	false
+worktree enter --path TASK-1 TASK-1	Write	false	false
+worktree enter TASK-1	Write	false	false
+worktree exit	Write	false	false
+worktree gc	Write	false	false
+worktree gc --force	Write	false	false
+worktree gc --json	Write	false	false
+worktree gc --yes	Write	false	false
+worktree list	Write	false	false
+worktree list --json	Write	false	false
+worktree pool acquire	Write	false	false
+worktree pool acquire --json	Write	false	false
+worktree pool acquire --lease-holder TASK-1	Write	false	false
+worktree pool adopt	Write	false	false
+worktree pool adopt --all	Write	false	false
+worktree pool adopt --include-unlanded	Write	false	false
+worktree pool adopt --json	Write	false	false
+worktree pool adopt --no-dry-run	Write	false	false
+worktree pool destroy	Write	false	false
+worktree pool destroy --all	Write	false	false
+worktree pool destroy --include-in-use	Write	false	false
+worktree pool destroy --include-leased	Write	false	false
+worktree pool destroy --include-unlanded	Write	false	false
+worktree pool destroy --json	Write	false	false
+worktree pool destroy --no-dry-run	Write	false	false
+worktree pool return	Write	false	false
+worktree pool return --include-in-use	Write	false	false
+worktree pool status	Write	false	false
+worktree pool status --json	Write	false	false
+worktree reclaim	Write	false	false
+worktree reclaim --apply	Write	false	false
+worktree reclaim --include-live	Write	false	false
+worktree reclaim --include-open-prs	Write	false	false
+worktree reclaim --json	Write	false	false
+worktree reclaim --min-age-mins 1	Write	false	false
+worktree reclaim --target-pct 1	Write	false	false
+zen	BuildLoop	false	false
+zen --compete	BuildLoop	false	false
+zen --dry-run	BuildLoop	false	false
+zen --force	BuildLoop	false	false
+zen --into-epic	BuildLoop	false	false
+zen --json	BuildLoop	false	false
+zen --no-human TASK-1	BuildLoop	false	false
+zen --no-pull	BuildLoop	false	false
+zen --solo	BuildLoop	false	false
+zen --supervised	BuildLoop	false	false
+zen --vendor TASK-1	BuildLoop	false	false
+zen finish	BuildLoop	false	false
+zen finish --json	BuildLoop	false	false
+zen needs-human --reason TASK-1	BuildLoop	false	false
+zen status	BuildLoop	false	false
+zen status --json	BuildLoop	false	false

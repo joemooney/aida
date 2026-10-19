@@ -228,13 +228,13 @@ For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the work
 
 ### Adding or changing a CLI command
 
-Commands are moving out of the legacy `Command` enum in `aida-cli-lib/src/cli.rs` into per-module registrations (STORY-1728). A registered command lives entirely in its own module:
+Every top-level command is registered from its own module (STORY-1728); the legacy `Command` enum in `aida-cli-lib/src/cli.rs` only wraps a parsed registration and a ratchet keeps it from growing. A command lives entirely with its module:
 
-- a `#[derive(clap::Parser)]` struct carrying the command's name, doc comment (its `--help`) and arguments;
-- a `pub(crate) static NAME: CommandReg` naming that struct's `command`, the top-level command it follows in help (`help_after`), its dispatch `Phase`, its `CmdPolicy` (stakeholder action, per-write auto-push, role-restore prompt; every field required), and its `run` handler;
+- a `#[derive(clap::Parser)]` `*Args` struct in the module (name, doc comment = `--help`, arguments), and its nested clap types (subcommand enums, value enums) in the sibling `<module>_args.rs`, which `cli.rs` re-exports so `crate::cli::X` paths keep working;
+- a `pub(crate) static NAME: CommandReg` with the `command` builder, the top-level command it follows in help (`help_after`; `""` for the first), its `CmdPolicy` (stakeholder action, per-write auto-push, role-restore prompt, team-identity write; every field required) and its `run` handler: `Handler::Early` for store-less commands, or `Handler::Store` for one that branches on `ctx.store` (`None` at the early point, then `Distributed`, `Git` or `Legacy`) and returns `Flow::Return` or `Flow::Continue`;
 - one line in `command_registry::REGISTRY`, kept sorted by command name.
 
-Changing a registered command's flags or handler touches only its module. Production code reaches the clap tree only through `command_registry::{built_command, parse_from, try_parse_from}`; a guard test rejects `Cli::command()` / `Cli::parse*` outside it. Two more tests keep the migration honest: a ratchet on the number of legacy top-level commands (it may only go down), and the golden help snapshot `src/tests/golden/cli_help_snapshot.txt`, which pins every command's `--help` and the command catalog. After an intended surface change, regenerate it with `AIDA_UPDATE_SNAPSHOTS=1 cargo test -p aida-cli-lib story_1728_command_registry` and review the diff; the doc-intent gate treats a change to that file as a CLI surface change.
+Changing a command's flags, subcommands, handler or policy touches only its module and `<module>_args.rs`. Production code reaches the clap tree only through `command_registry::{built_command, parse_from, try_parse_from}` (a guard test rejects `Cli::command()` / `Cli::parse*`); cross-cutting hooks read a command through `Command::name()` / `Command::args::<T>()`. The golden help snapshot `src/tests/golden/cli_help_snapshot.txt` pins every command's `--help` and the catalog; after an intended surface change, regenerate it with `AIDA_UPDATE_SNAPSHOTS=1 cargo test -p aida-cli-lib story_1728_command_registry` and review the diff (the doc-intent gate treats that file as CLI surface). Tests build commands by parsing (`command_registry::parse_command`) and read typed args with `Command::registered::<T>()`.
 <!-- trace:STORY-1728 | ai:claude -->
 
 ### Divergent-branch recovery

@@ -400,19 +400,8 @@ pub(crate) fn role_restore_prompt_tty_id() -> Option<String> {
 
 pub(crate) fn role_restore_prompt_should_skip(command: &Command) -> bool {
     // trace:STORY-1728 | ai:claude
-    if let Command::Registered(invocation) = command {
-        return invocation.policy().skip_role_restore_prompt;
-    }
-    matches!(
-        command,
-        Command::Init { .. }
-            | Command::Role(_)
-            | Command::McpServe
-            | Command::Internal { .. }
-            | Command::Statusline { .. }
-            | Command::Statusbar { .. }
-            | Command::Contract { .. }
-    )
+    let Command::Registered(invocation) = command;
+    invocation.policy().skip_role_restore_prompt
 }
 
 pub(crate) fn maybe_prompt_role_restore(command: &Command) -> Result<()> {

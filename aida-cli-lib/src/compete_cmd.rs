@@ -950,16 +950,24 @@ fn run_compete_arm(
 
     // Ensure the work is committed on the per-vendor branch even if the vendor
     // left changes uncommitted.
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(&worktree_dir)
-        .output();
-    let has_staged = !std::process::Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .current_dir(&worktree_dir)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(true);
+    // BUG-1985: the vendor ran contained in this tree, so host staging first
+    // refuses a planted embedded repository; host git staging into it would
+    // run the repository's own filter drivers.
+    // trace:BUG-1985 | ai:claude
+    let staging_refused = aida_core::git_ops::refuse_untrusted_staging(&worktree_dir).err();
+    if let Some(err) = &staging_refused {
+        eprintln!("     not committing the vendor's leftover changes: {err:#}");
+    } else {
+        let _ = aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["add", "-A"])
+            .output();
+    }
+    let has_staged = staging_refused.is_none()
+        && !aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["diff", "--cached", "--quiet"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(true);
     if has_staged {
         let _ = std::process::Command::new("git")
             .args([
@@ -1383,3 +1391,101 @@ mod containment_tests {
         assert!(!log.exists());
     }
 }
+
+/// Run one spec through N vendors headless, in isolated worktrees, then an
+/// objective gate — the neutral cross-vendor quality layer. For each vendor
+/// AIDA creates a per-vendor worktree+branch, assembles the implementer
+/// brief from the spec, runs the vendor headless (claude/codex), commits the
+/// result, and runs a deterministic gate that mirrors PR CI by default
+/// (fmt-check + build + tests + clippy + glyph-lint, so a gate-passing
+/// winner is actually mergeable). Reports a
+/// table, ranks the gate-passers (smaller/focused diff first), optionally
+/// runs a rubric LLM judge (--judge), and leaves every branch in place to
+/// pick. Report-only: it recommends a winner but never merges.
+// trace:STORY-659 trace:STORY-660 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "compete")]
+pub(crate) struct CompeteArgs {
+    /// SPEC-ID (or UUID) to run through the vendors.
+    pub spec: String,
+
+    /// Comma-separated vendors to run, e.g. `claude,codex`. Headless
+    /// vendors run directly; a non-headless vendor (antigravity) is emitted
+    /// as a human-run brief instead.
+    #[clap(long, value_delimiter = ',')]
+    pub vendors: Vec<String>,
+
+    /// Override the deterministic gate command run in each worktree.
+    /// Default mirrors PR CI: fmt-check + build + the aida-cli test suite +
+    /// clippy correctness + glyph-lint, so a gate-passing winner is
+    /// mergeable. Pass your own command for non-Rust repos / custom CI.
+    #[clap(long)]
+    pub gate: Option<String>,
+
+    /// Assemble the briefs + plan the run and print what WOULD happen
+    /// without spawning any vendor or touching git.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Add a rubric LLM judge after the gate: spawn a `claude -p` judge over
+    /// the spec + each candidate's diff, scoring spec-adherence / correctness
+    /// / simplicity / test-coverage (1-5) and recommending a winner. Opt-in
+    /// and REPORT-ONLY — it never merges; the human/advisor still picks. The
+    /// cheap deterministic ranking (smaller, focused diff first) is always
+    /// shown regardless of this flag.
+    // trace:STORY-660 | ai:claude
+    #[clap(long)]
+    pub judge: bool,
+
+    /// Which vendor renders the rubric judgment (claude or codex). The judge
+    /// PROMPT is identical for both — only the executing model changes — so a
+    /// codex judge over a claude-vs-codex run is no longer the same model
+    /// grading itself, removing the self-evaluation caveat. Defaults to
+    /// claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the
+    /// judge binary. Only applies with --judge.
+    // trace:TASK-869 | ai:claude
+    #[clap(long = "judge-vendor", default_value = "claude")]
+    pub judge_vendor: String,
+}
+
+// `aida compete` self-loads the store (to assemble the brief) and
+// orchestrates worktrees + headless vendor runs + the objective gate.
+// Dispatch early alongside ultraplan — it doesn't need the shared storage
+// handle. trace:STORY-659 | ai:claude
+fn run_compete(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <CompeteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let CompeteArgs {
+        spec,
+        vendors,
+        gate,
+        dry_run,
+        judge,
+        judge_vendor,
+    } = &args;
+    return self::handle_compete_command(
+        spec,
+        vendors,
+        gate.as_deref(),
+        *dry_run,
+        *judge,
+        judge_vendor,
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static COMPETE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "compete",
+        help_after: "brief",
+        command: <CompeteArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_compete),
+    };

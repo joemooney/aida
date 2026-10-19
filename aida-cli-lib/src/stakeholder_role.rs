@@ -175,54 +175,13 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
             }
         }
         "requester" => {
-            if let Command::Add {
-                status,
-                r#type,
-                owner,
-                feature,
-                tags,
-                parent,
-                queue,
-                batch,
-                r#for,
-                interactive,
-                ..
-            } = command
-            {
-                if *interactive {
-                    return Err(stakeholder_refusal("requester", "interactive add"));
-                }
-                if *queue || batch.is_some() || r#for.is_some() {
-                    return Err(stakeholder_refusal("requester", "queueing intake"));
-                }
-                let forbidden_fields = [
-                    ("parent", parent.is_some()),
-                    ("feature", feature.is_some()),
-                    ("owner", owner.is_some()),
-                ];
-                if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
-                    forbidden_fields
-                        .iter()
-                        .any(|(candidate, is_set)| candidate == field && *is_set)
-                }) {
-                    return Err(stakeholder_refusal(
-                        "requester",
-                        "setting parent, feature, or owner during intake",
-                    ));
-                }
-                let req_type = parse_requester_add_type(r#type.as_deref())?;
-                if !requester_add_type_allowed(&req_type) {
-                    return Err(stakeholder_refusal(
-                        "requester",
-                        "adding anything except change-request, bug, or user specs",
-                    ));
-                }
-                *status = Some("draft".to_string());
-                if r#type.is_none() {
-                    *r#type = Some("change-request".to_string());
-                }
-                add_csv_tag(tags, "intake:requester");
-                return Ok(());
+            // `aida add` is the requester's one intake write. The refusals run
+            // here, before dispatch; the coercions (draft status, default
+            // type, intake tag) run in the add handler through
+            // `apply_requester_intake`, since parsed args cannot be rewritten
+            // in place. trace:STORY-1728 | ai:claude
+            if let Some(add) = requester_add_args(command) {
+                return requester_intake_check(add);
             }
             let action = stakeholder_cli_action(command);
             if !stakeholder_action_allowed("requester", action) {
@@ -237,12 +196,85 @@ pub(crate) fn enforce_stakeholder_role_capabilities_for_role(
     Ok(())
 }
 
+/// The decoded `aida add` args, when `command` is `aida add`. A decode
+/// failure is returned, not dropped, so the requester check can refuse it.
+// trace:STORY-1728 | ai:claude
+fn requester_add_args(
+    command: &Command,
+) -> Option<Result<crate::requirements_cli::AddArgs, clap::Error>> {
+    let Command::Registered(invocation) = command;
+    (invocation.reg.name == "add")
+        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches))
+}
+
+/// The requester's `aida add` refusals. Args that do not decode are refused:
+/// an add whose fields cannot be checked must not pass as plain intake.
+// trace:STORY-1728 | ai:claude
+fn requester_intake_check(
+    add: Result<crate::requirements_cli::AddArgs, clap::Error>,
+) -> Result<()> {
+    let Ok(add) = add else {
+        return Err(stakeholder_refusal(
+            "requester",
+            "an add whose arguments could not be checked",
+        ));
+    };
+    if add.interactive {
+        return Err(stakeholder_refusal("requester", "interactive add"));
+    }
+    if add.queue || add.batch.is_some() || add.r#for.is_some() {
+        return Err(stakeholder_refusal("requester", "queueing intake"));
+    }
+    let forbidden_fields = [
+        ("parent", add.parent.is_some()),
+        ("feature", add.feature.is_some()),
+        ("owner", add.owner.is_some()),
+    ];
+    if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
+        forbidden_fields
+            .iter()
+            .any(|(candidate, is_set)| candidate == field && *is_set)
+    }) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let req_type = parse_requester_add_type(add.r#type.as_deref())?;
+    if !requester_add_type_allowed(&req_type) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    Ok(())
+}
+
+/// Requester intake lands as a Draft change-request (unless typed) tagged
+/// for advisor grooming. Applied by the add handler when the active
+/// stakeholder role is `requester`; the refusals ran before dispatch.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn apply_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    if active_stakeholder_role().as_deref() != Some("requester") {
+        return;
+    }
+    coerce_requester_intake(add);
+}
+
+pub(crate) fn coerce_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    add.status = Some("draft".to_string());
+    if add.r#type.is_none() {
+        add.r#type = Some("change-request".to_string());
+    }
+    add_csv_tag(&mut add.tags, "intake:requester");
+}
+
 #[cfg(test)]
 mod stakeholder_cli_policy_tests {
     use super::*;
 
     fn guest_refusal(args: &[&str]) -> anyhow::Error {
-        let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+        let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
         enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
             .expect_err("guest command must be refused")
     }
@@ -271,7 +303,7 @@ mod stakeholder_cli_policy_tests {
             &["aida", "queue", "list"][..],
             &["aida", "mailbox", "inbox", "--peek"][..],
         ] {
-            let mut cli = Cli::try_parse_from(args).expect("valid CLI command");
+            let mut cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
             enforce_stakeholder_role_capabilities_for_role(&mut cli.command, "guest")
                 .unwrap_or_else(|err| panic!("guest read {args:?} was refused: {err}"));
         }
@@ -284,11 +316,73 @@ mod stakeholder_cli_policy_tests {
             .contains("refusing role writes"));
     }
 
+    fn add_matches(args: &[&str]) -> clap::ArgMatches {
+        let cli = crate::command_registry::try_parse_from(args).expect("valid CLI command");
+        let Command::Registered(invocation) = cli.command;
+        assert_eq!(invocation.reg.name, "add");
+        invocation.matches
+    }
+
+    // Requester intake still lands as Draft with the `intake:requester` tag
+    // (and a default change-request type) once `aida add` is a registered
+    // handler: the coercion runs in the args the handler files, whatever
+    // status the requester asked for. Other roles file the args unchanged.
+    // trace:STORY-1728.ac394c52 | ai:claude
+    #[test]
+    fn requester_intake_is_coerced_by_the_add_handler() {
+        let typed = add_matches(&[
+            "aida", "add", "--title", "request", "--type", "bug", "--status", "approved", "--tags",
+            "ui",
+        ]);
+        let untyped = add_matches(&["aida", "add", "--title", "request"]);
+        {
+            let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "requester");
+            let add = crate::requirements_cli::add_args_for_dispatch(&typed).unwrap();
+            assert_eq!(add.status.as_deref(), Some("draft"));
+            assert_eq!(add.r#type.as_deref(), Some("bug"));
+            assert_eq!(add.tags.as_deref(), Some("ui,intake:requester"));
+            let add = crate::requirements_cli::add_args_for_dispatch(&untyped).unwrap();
+            assert_eq!(add.status.as_deref(), Some("draft"));
+            assert_eq!(add.r#type.as_deref(), Some("change-request"));
+            assert_eq!(add.tags.as_deref(), Some("intake:requester"));
+        }
+        {
+            let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "implementer");
+            let add = crate::requirements_cli::add_args_for_dispatch(&typed).unwrap();
+            assert_eq!(add.status.as_deref(), Some("approved"));
+            assert_eq!(add.tags.as_deref(), Some("ui"));
+        }
+        let src = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/requirements_cli.rs"),
+        )
+        .unwrap();
+        let run_add = &src[src.find("\nfn run_add(").expect("run_add")..];
+        let run_add = &run_add[..run_add.find("\n}\n").expect("run_add closes")];
+        assert!(
+            run_add.contains("add_args_for_dispatch(matches)")
+                && !run_add.contains("from_arg_matches"),
+            "the add handler files only coerced args"
+        );
+    }
+
+    // An `aida add` whose args cannot be decoded is refused for a requester,
+    // never waved through as ordinary intake.
+    // trace:STORY-1728.ac394c52 | ai:claude
+    #[test]
+    fn requester_add_check_fails_closed_when_args_do_not_decode() {
+        let undecodable = Err(clap::Error::new(clap::error::ErrorKind::ValueValidation));
+        let err = requester_intake_check(undecodable).expect_err("must refuse");
+        assert!(err.to_string().contains("could not be checked"), "{err}");
+        let ok = add_matches(&["aida", "add", "--title", "request", "--type", "bug"]);
+        requester_intake_check(clap::FromArgMatches::from_arg_matches(&ok))
+            .expect("a well-formed requester add passes");
+    }
+
     #[test]
     fn requester_cli_rejects_every_shared_forbidden_intake_field() {
         for field in REQUESTER_INTAKE_FORBIDDEN_FIELDS {
             let flag = format!("--{field}");
-            let mut cli = Cli::try_parse_from([
+            let mut cli = crate::command_registry::try_parse_from([
                 "aida", "add", "--title", "request", "--type", "bug", &flag, "EPIC-5",
             ])
             .expect("valid CLI command");
@@ -304,96 +398,7 @@ mod stakeholder_cli_policy_tests {
 }
 
 pub(crate) fn stakeholder_cli_action(command: &Command) -> StakeholderAction {
-    // trace:STORY-1728 | ai:claude
-    if let Command::Registered(invocation) = command {
-        return invocation.policy().stakeholder;
-    }
-    if matches!(command, Command::Add { .. }) {
-        StakeholderAction::Intake
-    } else if matches!(
-        command,
-        Command::Why { .. }
-            | Command::Explain { .. }
-            | Command::Wiki(_)
-            | Command::List { .. }
-            | Command::Show { .. }
-            | Command::Status { .. }
-            | Command::Graph { .. }
-            | Command::Search { .. }
-            | Command::Digest { .. }
-            | Command::History { .. }
-            | Command::McpServe
-            | Command::Awaiting { .. }
-            | Command::Protocol(_)
-            | Command::Queue(QueueCommand::List { .. })
-            | Command::Queue(QueueCommand::Next { .. })
-            | Command::Queue(QueueCommand::Progress { .. })
-            | Command::Mailbox(MailboxCommand::Inbox { .. })
-            | Command::Mailbox(MailboxCommand::Thread { .. })
-            | Command::Brief {
-                cmd: Some(BriefCommand::List { .. } | BriefCommand::Read { .. }),
-                ..
-            }
-            | Command::Findings {
-                cmd: None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }),
-            }
-            | Command::Punts(PuntsCommand::List { .. } | PuntsCommand::Read { .. })
-            | Command::Worker(WorkerCommand::Directives { .. })
-            | Command::Comment(CommentCommand::List { .. })
-            | Command::Role(
-                RoleCommand::List
-                    | RoleCommand::Show { .. }
-                    | RoleCommand::Active
-                    | RoleCommand::Current { .. },
-            )
-            | Command::Session(SessionCommand::Leases { .. } | SessionCommand::Show { .. })
-            | Command::Schema { .. }
-            | Command::Contract { .. }
-            | Command::Cache(CacheCommand::Status)
-            // trace:BUG-1486 | ai:claude — `aida db` gates per-verb: these
-            // are pure reads (path/info/status printouts, block
-            // list/status/verify reports) and must not inherit the
-            // "refusing database writes" refusal meant for the genuinely
-            // mutating verbs (Migrate/Sync/MergeGate/ReconcileStatus/
-            // Block::Claim/...), which stay gated below via the
-            // `Command::Db(_) => StakeholderAction::Database` fail-closed
-            // default.
-            | Command::Db(DbCommand::Path)
-            | Command::Db(DbCommand::Info)
-            | Command::Db(DbCommand::Status)
-            | Command::Db(DbCommand::Block {
-                subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
-            })
-            | Command::Usage { .. }
-            | Command::Plan(PlanCommand::Verify { fix: false, .. })
-            | Command::Plan(PlanCommand::Helpers { append: None, .. })
-            | Command::Ultraplan { .. }
-            | Command::Goal { .. }
-            | Command::Criteria { .. }
-            | Command::HelpAll
-    ) {
-        StakeholderAction::Read
-    } else {
-        match command {
-            Command::Add { .. } => StakeholderAction::Intake,
-            Command::Edit { .. } => StakeholderAction::EditRequirement,
-            Command::Queue(_) => StakeholderAction::Queue,
-            Command::Db(DbCommand::MergeGate) => StakeholderAction::MergeGate,
-            Command::Db(_) => StakeholderAction::Database,
-            Command::Session(_) => StakeholderAction::Session,
-            Command::Role(_) => StakeholderAction::Role,
-            Command::Rel(_) => StakeholderAction::Relationship,
-            Command::Comment(_) => StakeholderAction::Comment,
-            Command::Type(_) => StakeholderAction::Type,
-            Command::Trace(_) => StakeholderAction::Trace,
-            Command::Findings { .. } => StakeholderAction::Finding,
-            Command::Questions { .. } => StakeholderAction::Question,
-            Command::Config(_) => StakeholderAction::Configuration,
-            Command::Zen { .. }
-            | Command::Do { .. }
-            | Command::Ship { .. }
-            | Command::Integrate { .. } => StakeholderAction::BuildLoop,
-            _ => StakeholderAction::Write,
-        }
-    }
+    // Every command answers through its registration. trace:STORY-1728 | ai:claude
+    let Command::Registered(invocation) = command;
+    invocation.policy().stakeholder
 }

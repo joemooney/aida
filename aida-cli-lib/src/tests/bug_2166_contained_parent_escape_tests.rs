@@ -296,7 +296,7 @@ fn plan_only_refuses_headless_launch_before_setup() {
             if sandbox {
                 args.push("--sandbox");
             }
-            let error = crate::cli::Cli::try_parse_from(args)
+            let error = crate::command_registry::try_parse_from(args)
                 .expect_err("headless/autonomous launch must not discard plan mode");
             assert_eq!(
                 error.kind(),
@@ -305,7 +305,7 @@ fn plan_only_refuses_headless_launch_before_setup() {
             );
         }
     }
-    assert!(crate::cli::Cli::try_parse_from([
+    assert!(crate::command_registry::try_parse_from([
         "aida",
         "queue",
         "work",
@@ -315,7 +315,7 @@ fn plan_only_refuses_headless_launch_before_setup() {
     ])
     .is_ok());
     assert!(
-        crate::cli::Cli::try_parse_from([
+        crate::command_registry::try_parse_from([
             "aida",
             "queue",
             "work",
@@ -342,14 +342,17 @@ fn plan_prelude_session_argv_parses_for_headless_and_interactive() {
             };
             let args = crate::drain_gate::plan_session_args(&spec, headless);
             let argv = std::iter::once("aida".to_string()).chain(args.iter().cloned());
-            let cli = crate::cli::Cli::try_parse_from(argv)
+            let cli = crate::command_registry::try_parse_from(argv)
                 .unwrap_or_else(|e| panic!("headless={headless}: {args:?} rejected: {e}"));
-            let crate::cli::Command::Queue(crate::cli::QueueCommand::Work {
-                plan_only,
-                plan_phase,
-                no_human,
-                ..
-            }) = cli.command
+            let crate::queue_cmd::QueueArgs {
+                inner:
+                    crate::cli::QueueCommand::Work {
+                        plan_only,
+                        plan_phase,
+                        no_human,
+                        ..
+                    },
+            } = cli.command.registered::<crate::queue_cmd::QueueArgs>()
             else {
                 panic!("headless={headless}: {args:?} did not parse as queue work");
             };
@@ -366,15 +369,20 @@ fn plan_prelude_session_argv_parses_for_headless_and_interactive() {
 #[test]
 fn plan_phase_requires_headless_and_conflicts_with_other_lanes() {
     use clap::Parser;
-    let error =
-        crate::cli::Cli::try_parse_from(["aida", "queue", "work", "TASK-1", "--plan-phase"])
-            .expect_err("--plan-phase without --no-human must refuse");
+    let error = crate::command_registry::try_parse_from([
+        "aida",
+        "queue",
+        "work",
+        "TASK-1",
+        "--plan-phase",
+    ])
+    .expect_err("--plan-phase without --no-human must refuse");
     assert_eq!(
         error.kind(),
         clap::error::ErrorKind::MissingRequiredArgument
     );
     for other in ["--plan-only", "--guided", "--auto-complete", "--drain"] {
-        let error = crate::cli::Cli::try_parse_from([
+        let error = crate::command_registry::try_parse_from([
             "aida",
             "queue",
             "work",
