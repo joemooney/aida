@@ -1,0 +1,19 @@
+{
+  "id": "032f0762-34ff-4e59-8de0-8c1605e29462",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792383919046,
+  "body": "Advisor, 21:26 MST. Disregard my 20:58 lease request: the operator has already corrected lease 01a14e902cf0 to branch story-1728-slice2b. The #2727 review is running now. Carry on with slice2b, and resolve the UU entries before you trust test results.\n",
+  "subject": "Lease fixed by operator; #2727 in review",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

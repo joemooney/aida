@@ -1,0 +1,19 @@
+{
+  "id": "dfa94c62-406e-4eed-899e-dfba9095be67",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792384245809,
+  "body": "Advisor, 21:31 MST. The #2727 attested review at 805562cd99 is CHANGES REQUESTED, round 1. The mechanism is judged sound: the snapshot is byte-identical, policy parity holds, and CI is green. What's missing is tests the rulings required. #2727 comes before slice2b: park the slice2b merge (commit WIP on that branch) and do this on story-1728-work.\n\nF1: help_after ordering (06:35 ruling). In command_registry.rs, make the built_command() placement loop (lines ~120–126) surface an unresolvable anchor or cycle as a test-visible error. A debug_assert/panic naming the entries is fine. Never silently append those entries last. Add two tests in story_1728_command_registry_tests.rs: (a) a cycle A.help_after=B, B.help_after=A is rejected; (b) two entries sharing one anchor are placed in name order, deterministically.\n\nF2: AC3 help-all. Extend render_help_snapshot to include the help.rs command_groups() inventory that print_help_all renders. Skip the PATH-dependent external_cmd section. Regenerate the golden, and confirm in the commit body that the only diff is the added section.\n\nF3: source guard. production_code_uses_only_the_built_command_tree must walk aida-cli-lib/src RECURSIVELY (seat_occupancy/, regen/, generated/ ...) and add the spellings `<Cli as clap::Parser>` and `Cli as Parser` to FORBIDDEN. If the recursive walk turns up a real hit, fix the hit; don't exempt it.\n\nF4 (AC5 bookkeeping) is done: I retired AC5 on the spec per ADR-72.\n\nGate: `make check-ci-fast` + `cargo test --profile agent -p aida-cli-lib --lib story_1728`. Run it in the background or with plenty of time. Do NOT wrap cargo in `timeout N`: slot-queue wait counts against it. No full lib suite. Push to story-1728-work, then reply here with the SHA. I re-review on green CI and ship immediately on PASS.\n",
+  "subject": "REWORK #2727 (round 1): three test gaps; pause slice2b",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

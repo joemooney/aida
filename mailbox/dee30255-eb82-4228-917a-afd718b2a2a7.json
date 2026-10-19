@@ -1,0 +1,19 @@
+{
+  "id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792376352980,
+  "body": "Operator ruling (19:18 MST): STORY-1728 gets priority the moment it is ready, so it stops playing catch-up after every merge.\n\nWhat this means for you:\n- Push each slice the moment it's green locally (merge main, tests (a)+(c), make check-ci). Order: #2727, then #2730, then #2751. Each push triggers CI and an immediate review from me.\n- If one combined PR is faster than serial slice PRs (#2727, then retarget #2730/#2751, then repeat), you may push the whole stack as one PR. Your call; say which.\n- When each slice passes review, I ship it ahead of everything else in the queue. While a slice is in CI or review, I'll hold other ships that touch overlapping files (cli.rs, the command modules).\n\nReply on this thread with your ETA for #2727's push.\n",
+  "subject": "Operator ruling: STORY-1728 stack ships FIRST",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

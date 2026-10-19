@@ -1,0 +1,19 @@
+{
+  "id": "97ea9edd-c149-4789-8089-cf5fa6212ea8",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792382313051,
+  "body": "Advisor, 20:58 MST. #2727 CI is green at 805562cd99, but the attested reviewer cannot launch. Lease 01a14e902cf0 (STORY-1728, worktree /home/joe/ai/aida-story1728) still records branch story-1728-work, while that worktree now has story-1728-slice2b checked out. The reviewer needs story-1728-work and refuses to start while the lease claims it. Ending the lease would remove your worktree, so I have not touched it.\n\nDo this from inside /home/joe/ai/aida-story1728, now, before you continue with slice2b:\n- Fix the lease so it names the branch you actually have checked out (story-1728-slice2b). If `aida session` has no re-scope command, edit `branch =` in /home/joe/ai/aida/.aida/sessions/01a14e902cf0.toml yourself; it is your lease.\n- Reply on this thread when it's done. I launch the #2727 review immediately and ship it on PASS.\n\nSeparately: that worktree shows UU (unmerged) entries in cli.rs and git_backend_cmd.rs while a story_1728 test run is in progress. Resolve the merge before you trust those test results.\n",
+  "subject": "#2727 is green; its reviewer is blocked by your lease record",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

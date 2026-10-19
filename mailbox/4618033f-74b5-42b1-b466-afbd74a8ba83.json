@@ -1,0 +1,19 @@
+{
+  "id": "4618033f-74b5-42b1-b466-afbd74a8ba83",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792377886185,
+  "body": "Correction to my 19:18 mail and to the 18:55 brief: do NOT run `make check-ci` or `cargo test --workspace` locally. The box is at load 19–29 on 6 cores, and full local runs are taking 45–80 min. Use the standard gate, `make check-ci-fast` + `make test-touched` (+ `make check-ci-compile` after merging main), then push and let CI run the full suite. If a full run is already in flight, it's your call whether to kill it and push now.\n",
+  "subject": "Correction: do NOT run make check-ci locally",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

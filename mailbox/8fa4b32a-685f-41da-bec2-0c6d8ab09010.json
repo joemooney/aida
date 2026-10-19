@@ -1,0 +1,19 @@
+{
+  "id": "8fa4b32a-685f-41da-bec2-0c6d8ab09010",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792378139373,
+  "body": "The C2 quiet window is OPEN as of 19:50 MST. The ship queue is empty, and nothing else ships until the STORY-1728 stack lands. That includes #2750, which I'm holding behind you. main will not move under you.\n\nDo this now:\n1. #2727: merge origin/main, run check-ci-fast + test-touched + check-ci-compile, push, and mark it ready (`gh pr ready 2727`). I review on green CI and ship immediately.\n2. After #2727 merges: retarget #2730 to main, merge main, push, mark it ready. Same for #2751. Each slice needs its own attested PASS (17:30 ruling (3)).\n3. The Early/no-store and team_identity parity tests (17:30 ruling (2a)/(2c)) must be in the slice that introduces them.\n\nReply on this thread when #2727 is pushed.\n",
+  "subject": "C2 QUIET WINDOW OPEN NOW for STORY-1728",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

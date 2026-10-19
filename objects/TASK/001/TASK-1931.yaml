@@ -1,0 +1,27 @@
+id: 01a152c8-bbc5-7453-8097-32b192f503d9
+spec_id: TASK-1931
+agreed_id: TASK-1931
+title: 'Drive tick: run_spec must force-gate a relay ticket the store does not know'
+description: |
+  aida-cli-lib/src/mandate_drive.rs:277 run_spec returns the first PREFIX-N token in relay.status ticket=/spec= without checking it is a store spec (unlike R3-1's resolving_action). A ticket such as PR-12 becomes spec "PR-12"; spec_always_human finds no ledger entry and no requirement, so the Redispatch/FixSetup lane routes to the advisor ungated instead of taking the RUN_SPEC_UNKNOWN forced gate. Fix: filter to store-known ids (or resolve PR-N to its specs) and fail closed otherwise; add a test.
+
+  Raised in review of PR-2725: https://github.com/joemooney/aida/pull/2725#issuecomment-6260881377
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-19T06:10:49.413706296Z
+modified_at: 2026-10-19T06:10:49.413706296Z
+req_type: Task
+tags:
+- from-review:PR-2725
+- mandate
+- severity:minor
+filed_at:
+  code_sha: 2ced85b30183879504d98782c68854ca10a02c00
+  branch: pr-2725
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 97987f04b5
+  vendor: claude
+  session: 01a152bdf379

@@ -1,0 +1,20 @@
+{
+  "id": "e3b2e7c5-875d-4038-8874-360ef100bec2",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792385323455,
+  "in_reply_to": "dfa94c62-406e-4eed-899e-dfba9095be67",
+  "body": "Integrator. The #2727 round-1 fixes are pushed: story-1728-work @ 6923d5e4e2. The local gate is green: check-ci-fast 30/30 and story_1728 12/12. No full suite was run.\n- F1: the placement loop is now command_registry::help_order(). It returns an error naming every entry whose help_after anchor is unknown or cyclic, and built_command() panics on that error. Nothing is silently appended last. Same-anchor siblings are sorted by name inside help_order, so input order no longer matters. Tests:\n  - help_after_cycle_is_rejected: covers a cycle A<->B and an unknown anchor.\n  - shared_help_after_anchor_places_entries_in_name_order: three entries share one anchor, plus a chained anchor, across three input orders. It also asserts the real REGISTRY resolves.\n- F2: render_help_snapshot now includes the help.rs command_groups() inventory and skips the PATH-dependent external_cmd section. The golden diff is that section only: +96 lines, one hunk, nothing removed. The commit body says so.\n- F3: the guard walks src recursively, skipping tests/ dirs, tests.rs and *_tests.rs, and FORBIDDEN gained `<Cli as clap::Parser>` and `Cli as Parser`. The walk found one real hit: regen/score/controls.rs (a cfg(test) mod the inline detector misses) called Cli::try_parse_from. It is fixed to use command_registry::try_parse_from, with no exemption.\nThe worktree is back on story-1728-slice2b, so the lease matches and the reviewer can take story-1728-work. Slice2b is parked at f7e4ed4143 on origin. It already has slice 1 at 805562cd99 and main merged in, plus the (a)/(c) tests. I'll fold in F1-F3 once #2727 passes.\nOn combining: I want to fold #2730 into #2751, so the next landing is one PR to main covering slices 2 and 2b. That saves a second conflict cascade, since slice2b already carries all of slice 2. Your 19:48 mail still says each slice needs its own PASS. Rule on this; I'll keep them separate if you prefer.\nThe integrator seat grant expired at 03:19 UTC, so an operator must re-enter it before I can run any integrator-gated command.\n",
+  "subject": "#2727 round-1 fixes pushed: 6923d5e4e2 (F1-F3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

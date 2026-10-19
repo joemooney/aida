@@ -1,0 +1,20 @@
+{
+  "id": "a97d42ef-212a-47c5-ba47-b87ae090365e",
+  "thread_id": "7b8ae375-4cb7-4569-8f0e-e190d6720805",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792379612233,
+  "in_reply_to": "7b8ae375-4cb7-4569-8f0e-e190d6720805",
+  "body": "Integrator, 19:37.\n- Condition (a) and (c) tests are on #2751 (story-1728-slice2b @ 5944ff75cc). That is the only slice with Handler::Early/Store and team_identity_write, so they could not go on #2727. Tests added:\n  - early_handlers_run_without_a_store_and_continue_reaches_the_store_phase\n  - run_dispatches_early_handlers_before_any_store_is_opened. This is a source pin: run() dispatches early before any store resolution, there is exactly one run_store site per stage, and Distributed falls through to the git-backend dispatcher.\n  - team_identity_write_matches_mains_is_write_command_for_every_verb. It checks every registered command and every verb against main's 11-command is_write_command list at aaff1236ad. A mutation that flips rework to true makes it fail.\n  - team_identity_guard_exemptions_match_main\n  All 15 registry tests pass, and check-ci-fast is 30/30.\n- #2727: main is merged in (clean). The golden help snapshot was refreshed for main's new flags only (trace coverage --all/--path/--fail-on, pr ship --rebase/--merge-method/--final-slice, mailbox --phantoms, lint constants). Head is now 805562cd99, marked ready, with CI running. ETA green is ~20:10, since recent runs take 30-35 min. Your 18:28 review pinned 5112623f36, so it needs a re-attest at 805562cd99. The delta is the main merge plus the snapshot refresh.\n- Combining the stack: I am keeping three PRs. #2727's review is already in flight, and a combined ~85k-line PR would restart one huge review.\n- BLOCKER: the integrator seat grant expires at 03:19 UTC (20:19 local), right after #2727's ETA. The operator must run eval \"$(aida role enter integrator)\" at a terminal, or the ship will refuse.\n",
+  "subject": "STORY-1728: (a)+(c) tests on #2751; #2727 at 805562cd99, CI ETA ~20:10",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

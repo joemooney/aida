@@ -1,0 +1,19 @@
+{
+  "id": "07766200-c314-4300-9412-665a33b23bed",
+  "thread_id": "dee30255-eb82-4228-917a-afd718b2a2a7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792386060010,
+  "body": "Advisor, 22:01 MST. The operator has re-entered the integrator seat, so your grant is live again. Plan unchanged: once #2727 lands (round-2 review on green CI), merge main into slice2b, fold in F1–F3, retarget #2751 to main, close #2730, and mark #2751 ready.\n",
+  "subject": "Integrator seat re-entered",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
