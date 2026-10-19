@@ -13,12 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:42:29.673877976Z
-modified_at: 2026-10-18T23:42:29.673877976Z
+modified_at: 2026-10-19T15:51:32.128643821Z
 req_type: Bug
 tags:
 - contained
 - sandbox
 - security
+comments:
+- id: 01a154dc-6420-7dc1-86b1-8b2539177c53
+  author: joe
+  content: 'Advisor triage 2026-10-19: DONE on origin/main. 6d590ed914 (#2753, BUG-1985 round 2): contained_safety_scan never lets git recurse and inspects each submodule through its validated --git-dir; an absent .git is skipped; probe_worktree uses worktree_is_dirty_shallow (git_ops.rs:3383-3433).'
+  created_at: 2026-10-19T15:51:32.128643821Z
+  modified_at: 2026-10-19T15:51:32.128643821Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
