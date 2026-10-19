@@ -6,12 +6,12 @@ description: |
   aida-core/src/git_ops.rs host_git_command (around line 141) now calls gitmodules_submodule_names for every store tree and every contained-writable tree. That includes every linked worktree, so every pool and session tree is covered. The call starts one extra `git config` process when `.gitmodules` exists. When it doesn't exist, it starts two (`:.gitmodules` and `HEAD:.gitmodules` blobs). Every git_ops::git() call goes through host_git_command, so commands that run many git calls in a session worktree start 2-3x as many processes. Possible fixes: skip the blob probes when the index has no gitlink and no .gitmodules entry, or cache the result per toplevel for one command. Not a correctness problem.
 
   Raised in review of PR-2753: https://github.com/joemooney/aida/pull/2753
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T11:42:57.268493157Z
-modified_at: 2026-10-19T15:58:54.279353254Z
+modified_at: 2026-10-19T15:58:56.252005824Z
 req_type: Task
 tags:
 - contained
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-19T15:58:54.279353254Z
   modified_at: 2026-10-19T15:58:54.279353254Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e3-2afb-7a82-adff-b448cc75860b
+  author: joe
+  timestamp: 2026-10-19T15:58:56.251998898Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 43858629955c347bdb1549874a6b7955eb631e40
   branch: pr-2753
