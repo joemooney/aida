@@ -3,12 +3,12 @@ spec_id: TASK-1814
 agreed_id: TASK-1814
 title: 'TASK-1801 follow-ups: nlink race on sibling evidence publish, residual path read in stamp_pr_review_verdict, metadata-only mtime read'
 description: 'Non-blocking findings from PR #2712 round-2 review (PASS). (1) phase_gates.rs:508-509 publishes sibling evidence via hard_link(temp,dest) then remove_file(temp), so dest briefly has st_nlink=2, which the new nlink!=1 rule refuses, and a concurrent collision read (:513) or phase-4/ship read can fail spuriously. Publish with rename (or linkat then unlink before exposing), with a concurrency test. (2) pr_merge_gate.rs:248 stamp_pr_review_verdict re-reads and rewrites the just-recorded verdict by path; route it through the anchored handle reader, or narrow the AGENTS.md/OVERVIEW.md ''every production verdict reader'' claim. (3) review_verdict.rs verdict_file_modified reads the full body (up to 1 MiB) just to get mtime; use a metadata-only handle open.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T14:06:19.557571907Z
-modified_at: 2026-10-19T15:57:35.718521035Z
+modified_at: 2026-10-19T15:57:37.810899977Z
 req_type: Task
 comments:
 - id: 01a154e1-f066-7633-aeb6-df13a30d97aa
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-19T15:57:35.718521035Z
   modified_at: 2026-10-19T15:57:35.718521035Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154e1-f892-7aa1-af9e-e9a883bd48b1
+  author: joe
+  timestamp: 2026-10-19T15:57:37.810892547Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f14ef5f1e81a99904f13c9ad309b572e2e16eae2
   branch: main
