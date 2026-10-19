@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/history_cache.rs parse_header uses splitn(7, '\t') with the %(trailers:...) field placed BEFORE %s in the LogStream --format. A literal tab inside a trailer value (git unfold joins folded lines but does not strip tabs inside a value) shifts text into the cached subject column. history.rs collect_filtered_events_git uses the same ordering (there it only truncates the trailer field). Fix: put the trailer field last in both formats, or replace tabs in the trailer output.
 
   Raised in review of PR-2739: https://github.com/joemooney/aida/pull/2739#issuecomment-6255086840
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:01:16.525838950Z
-modified_at: 2026-10-19T15:44:30.198007892Z
+modified_at: 2026-10-19T15:44:32.475871234Z
 req_type: Task
 tags:
 - from-review:PR-2739
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-19T15:44:30.198007892Z
   modified_at: 2026-10-19T15:44:30.198007892Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a154d5-fcdb-74f2-bb9b-cc27c67849cc
+  author: joe
+  timestamp: 2026-10-19T15:44:32.475866026Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
@@ -32,3 +41,6 @@ filed_at:
   aida_build_sha: 555237eca9
   vendor: claude
   session: 01a150cc07be
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-19T15:44:32.475854588Z
