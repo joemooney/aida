@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-18T14:46:52.408769963Z
+modified_at: 2026-10-19T18:19:14.603233925Z
 req_type: Task
 relationships:
 - rel_type:
@@ -42,6 +42,12 @@ comments:
   content: 'Normal cleanup completed: lease 01a1485adf2b, own worktree and allocated target removed; branch retained and origin is exact published head. Session-end auto-filed canonical review STORY-1718. Its generated covers list also names already-merged TASK-1790 due the inherited main merge; this PR authors only TASK-1801 and grants no new TASK-1790 completion credit. Reviewers/advisor should use the documented implementation-only commit/base and retarget after #2704 merges.'
   created_at: 2026-10-17T05:51:51.467054223Z
   modified_at: 2026-10-17T05:51:51.467054223Z
+- id: 01a15563-9f2b-7e11-9aae-288dfa62b004
+  author: joe
+  content: 'Advisor 2026-10-19 11:19: carried the PASS from 1b2e938d72 over to 253d20fefe (merge of origin/main only; PR patch-id faaaebf6e5 identical before and after). The recorded summary ''x'' at that SHA is a typo; this comment is the carry-over evidence.'
+  created_at: 2026-10-19T18:19:14.603233925Z
+  modified_at: 2026-10-19T18:19:14.603233925Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1485a-e1b6-7b12-9d59-d3a2ba1fafd8
   author: aida-session-start
