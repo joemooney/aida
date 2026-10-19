@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T01:45:20.749761137Z
-modified_at: 2026-10-19T01:45:20.749761137Z
+modified_at: 2026-10-19T15:47:50.483936249Z
 req_type: Task
 tags:
 - carried-from:TASK-1739
 - finding-hash:c41644d3
 - from-review:TASK-1739
 - kind:carried-forward
+comments:
+- id: 01a154d9-0253-7c92-b8cf-0e5ba1bddf9c
+  author: joe
+  content: 'Advisor triage 2026-10-19: DUPLICATE of TASK-1927. aida show TASK-1631 and TASK-1927 both specify gate test-only CacheBinding::capture behind cfg(test); the target description explicitly includes this obligation. Preserve the narrower finding evidence under the target.'
+  created_at: 2026-10-19T15:47:50.483936249Z
+  modified_at: 2026-10-19T15:47:50.483936249Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a151dc-2894-7dd0-b9c7-0054febb8a16
   author: joe
