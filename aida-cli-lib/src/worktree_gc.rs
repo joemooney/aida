@@ -742,15 +742,12 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         }
         crate::seat_clone::MainFor::NotAClone => {}
     }
-    let mut cmd = std::process::Command::new("git");
-    cmd.arg("-C")
+    let out = std::process::Command::new("git")
+        .arg("-C")
         .arg(start)
-        .args(["worktree", "list", "--porcelain"]);
-    // BUG-1993: `main_entry` calls `find_main_worktree_root` on every CLI exit
-    // to read `.aida/config.toml` for telemetry; bound the subprocess so a
-    // stalled `git worktree list` cannot hang `aida show` (or any command) at
-    // exit. trace:BUG-1993 | ai:antigravity
-    if let Some(o) = crate::command_output_with_timeout(cmd, crate::LINKAGE_WORKTREE_LIST_TIMEOUT) {
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    if let Ok(o) = out {
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {

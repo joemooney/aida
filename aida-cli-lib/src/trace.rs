@@ -50,7 +50,7 @@ pub(crate) fn walk_source_for_traces(
     for entry in entries.flatten() {
         let path = entry.path();
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        // Skip noise dirs and nested git worktrees/subrepositories (BUG-1993).
+        // Skip noise dirs.
         if path.is_dir() {
             if matches!(
                 name,
@@ -64,8 +64,7 @@ pub(crate) fn walk_source_for_traces(
                     | ".cache"
                     | ".venv"
                     | "venv"
-            ) || path.join(".git").exists()
-            {
+            ) {
                 continue;
             }
             walk_source_for_traces(&path, re, out);
@@ -407,6 +406,7 @@ pub(crate) fn format_change_linkage(
 /// unit-testable against a temp repo. trace:TASK-241 | ai:claude
 // trace:STORY-82 | ai:claude — `pub(crate)` so the MCP `show_requirement`
 // tool can reuse the same git-linkage collection `aida show` renders.
+#[derive(Debug)]
 pub(crate) struct GitLinkage {
     /// (full_sha, short_sha, subject), newest first.
     pub(crate) commits: Vec<(String, String, String)>,
@@ -524,8 +524,12 @@ pub(crate) const LINKAGE_UNKNOWN_REASON_BRANCH_SCAN: &str = "branch scan stopped
 pub(crate) const LINKAGE_COMMIT_LOG_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(3);
 
-/// BUG-1993: the budget for the `merge-base --is-ancestor` shipped check.
-/// Measured on this repo: ~22 ms. Past it the shipped state is unknown.
+/// BUG-1993: the budget for the shipped check. Unbounded callers apply it to
+/// `merge-base --is-ancestor` alone; `aida show` applies it to the combined
+/// default-branch resolution plus ancestor check. Measured on this repo
+/// (load 11-25, 2026-10-20): `symbolic-ref` 9-14 ms, the no-`origin/HEAD`
+/// fallback chain ~10 ms per call (at most 7), `merge-base` 32-127 ms, so
+/// the combined worst case is ~0.2 s. Past it the shipped state is unknown.
 // trace:BUG-1993 | ai:claude
 pub(crate) const LINKAGE_SHIPPED_CHECK_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(1);
@@ -540,11 +544,33 @@ pub(crate) const LINKAGE_BRANCH_SCAN_MAX_COMMITS: usize = 20;
 pub(crate) const LINKAGE_BRANCH_SCAN_BUDGET: std::time::Duration =
     std::time::Duration::from_secs(2);
 
-/// BUG-1993: the wall-clock budget for `git worktree list --porcelain`
-/// (measured ~3 ms on this repo; 1 s headroom for a loaded host).
+/// BUG-1993: the `aida show` cap for `git worktree list --porcelain`
+/// (measured 15-21 ms on this repo; 1 s headroom for a loaded host).
+/// Non-show callers run it unbounded.
 // trace:BUG-1993 | ai:antigravity
 pub(crate) const LINKAGE_WORKTREE_LIST_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(1);
+
+/// BUG-1993: ONE wall-clock deadline for the whole `aida show` linkage
+/// phase: the commit log and trace walk, the shipped check, the branch
+/// search, the worktree probe, the forge lookups, the `--shortstat` lines,
+/// and the filing-drift hint. Each per-call budget above still applies,
+/// clipped to what is left of this deadline, so the phase cannot exceed it
+/// however many calls run. Only show surfaces take a deadline; every other
+/// caller of the linkage collectors keeps its unbounded behaviour.
+// trace:BUG-1993 | ai:claude
+pub(crate) const SHOW_LINKAGE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(4);
+
+/// BUG-1993: what is left of a show linkage `deadline`, at most `cap`.
+// trace:BUG-1993 | ai:claude
+pub(crate) fn linkage_time_left(
+    deadline: std::time::Instant,
+    cap: std::time::Duration,
+) -> std::time::Duration {
+    deadline
+        .saturating_duration_since(std::time::Instant::now())
+        .min(cap)
+}
 
 /// BUG-1594: the wall-clock budget for the trace-comment source walk.
 // trace:BUG-1594 | ai:claude
@@ -590,6 +616,40 @@ pub(crate) fn filing_drift_hint(
     linkage_files: &[(String, Option<String>)],
     linkage_commits: &[(String, String, String)],
 ) -> Option<String> {
+    filing_drift_hint_inner(project_root, filed_at, linkage_files, linkage_commits, None)
+}
+
+/// [`filing_drift_hint`] for `aida show`: each git call is also clipped to
+/// the linkage `deadline`; a call the deadline cuts short reads "unknown".
+// trace:BUG-1993 | ai:claude
+pub(crate) fn filing_drift_hint_until(
+    project_root: &std::path::Path,
+    filed_at: Option<&aida_core::FilingProvenance>,
+    linkage_files: &[(String, Option<String>)],
+    linkage_commits: &[(String, String, String)],
+    deadline: std::time::Instant,
+) -> Option<String> {
+    filing_drift_hint_inner(
+        project_root,
+        filed_at,
+        linkage_files,
+        linkage_commits,
+        Some(deadline),
+    )
+}
+
+fn filing_drift_hint_inner(
+    project_root: &std::path::Path,
+    filed_at: Option<&aida_core::FilingProvenance>,
+    linkage_files: &[(String, Option<String>)],
+    linkage_commits: &[(String, String, String)],
+    deadline: Option<std::time::Instant>,
+) -> Option<String> {
+    // trace:BUG-1993 | ai:claude
+    let call_timeout = || match deadline {
+        Some(d) => linkage_time_left(d, DRIFT_HINT_GIT_TIMEOUT),
+        None => DRIFT_HINT_GIT_TIMEOUT,
+    };
     let code_sha = filed_at.and_then(|p| p.code_sha.as_deref())?.trim();
     // `code_sha` comes from the shared store, which another writer controls:
     // only a commit ID may reach `git log`. trace:BUG-1622 | ai:claude
@@ -615,7 +675,7 @@ pub(crate) fn filing_drift_hint(
             // trace:BUG-1622 | ai:claude
             .arg(git_arg_guard::END_OF_OPTIONS)
             .args(&shas);
-        if let Some(out) = command_output_with_timeout(cmd, DRIFT_HINT_GIT_TIMEOUT) {
+        if let Some(out) = command_output_with_timeout(cmd, call_timeout()) {
             if out.status.success() {
                 for line in String::from_utf8_lossy(&out.stdout).lines() {
                     let line = line.trim();
@@ -651,7 +711,7 @@ pub(crate) fn filing_drift_hint(
         ])
         .arg("--")
         .args(traced.iter());
-    match command_output_with_timeout(log_cmd, DRIFT_HINT_GIT_TIMEOUT) {
+    match command_output_with_timeout(log_cmd, call_timeout()) {
         Some(out) if out.status.success() => {
             let text = String::from_utf8_lossy(&out.stdout);
             let mut commit_count = 0usize;
@@ -695,6 +755,21 @@ pub(crate) fn collect_git_linkage(project_root: &std::path::Path, ids: &[String]
     collect_git_linkage_opts(project_root, ids, true)
 }
 
+/// [`collect_git_linkage`] for `aida show`, under the one linkage `deadline`
+/// ([`SHOW_LINKAGE_DEADLINE`]). Every git call, including default-branch
+/// resolution (via [`resolve_default_branch_ref_until`]) and the worktree
+/// probe, is clipped to it; a call it cuts short marks that part of the
+/// linkage unknown. Non-show callers use [`collect_git_linkage_opts`], which
+/// keeps the shared resolvers unbounded.
+// trace:BUG-1993 | ai:claude
+pub(crate) fn collect_git_linkage_until(
+    project_root: &std::path::Path,
+    ids: &[String],
+    deadline: std::time::Instant,
+) -> GitLinkage {
+    collect_git_linkage_inner(project_root, ids, true, Some(deadline))
+}
+
 /// The orphan git-canonical requirements-store branch name (see CLAUDE.md
 /// "Storage model"). Its `update SPEC-NNN` / `add SPEC-NNN` bookkeeping
 /// commits — and cross-node store-lineage merges — mention a bare spec id in
@@ -731,7 +806,26 @@ pub(crate) fn collect_git_linkage_opts(
     ids: &[String],
     scan_trace: bool,
 ) -> GitLinkage {
+    collect_git_linkage_inner(project_root, ids, scan_trace, None)
+}
+
+/// The linkage collector. `deadline` is `Some` only for `aida show`
+/// ([`collect_git_linkage_until`]); with `None` every call keeps its
+/// pre-BUG-1993-rework bound (the shared resolvers and the worktree probe
+/// unbounded).
+// trace:BUG-1993 | ai:claude
+fn collect_git_linkage_inner(
+    project_root: &std::path::Path,
+    ids: &[String],
+    scan_trace: bool,
+    deadline: Option<std::time::Instant>,
+) -> GitLinkage {
     use std::process::Command as PCmd;
+    // BUG-1993: a per-call budget, clipped to the show deadline when there is one.
+    let cap = |budget: std::time::Duration| match deadline {
+        Some(d) => linkage_time_left(d, budget),
+        None => budget,
+    };
 
     // BUG-568: linkage (commits/files/PR) is collected only from the LOCAL
     // repo. In a shared-store multi-repo workspace, work done in a sibling repo
@@ -804,7 +898,7 @@ pub(crate) fn collect_git_linkage_opts(
                 }
                 let mut log_cmd = PCmd::new("git");
                 log_cmd.arg("-C").arg(project_root).args(&args);
-                match command_output_with_timeout_detail(log_cmd, LINKAGE_COMMIT_LOG_TIMEOUT) {
+                match command_output_with_timeout_detail(log_cmd, cap(LINKAGE_COMMIT_LOG_TIMEOUT)) {
                     BoundedCommandOutput::Completed(o) if o.status.success() => (
                         String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
                         false,
@@ -818,7 +912,7 @@ pub(crate) fn collect_git_linkage_opts(
                 let (trace_hits, complete) = scan_trace_graph_bounded(
                     project_root,
                     &wanted,
-                    Some(LINKAGE_TRACE_SCAN_BUDGET),
+                    Some(cap(LINKAGE_TRACE_SCAN_BUDGET)),
                 );
                 let mut f: Vec<(String, Option<String>)> = trace_hits
                     .values()
@@ -878,14 +972,29 @@ pub(crate) fn collect_git_linkage_opts(
         // literal "main"; on master-default repos the literal leaks
         // `fatal: Not a valid object name 'main'` from git through
         // is_ancestor's inherited stderr.
-        // BUG-1993: bound default-branch resolution and `is-ancestor` under
-        // [`LINKAGE_SHIPPED_CHECK_TIMEOUT`]; a timeout yields `None`
-        // (`shipped_unknown = true`), never `Some(false)`.
-        let shipped_deadline = std::time::Instant::now() + LINKAGE_SHIPPED_CHECK_TIMEOUT;
-        let verdict = match resolve_default_branch_ref_until(project_root, shipped_deadline) {
-            Ok(Some(main_ref)) => is_ancestor(full, &main_ref, shipped_deadline),
-            Ok(None) => Some(false),
-            Err(DefaultBranchResolveTimedOut) => None,
+        // BUG-1993: only `aida show` bounds default-branch resolution (with
+        // `is-ancestor`, under one shipped-check budget clipped to the show
+        // deadline); a timeout yields `None` (`shipped_unknown`), never
+        // `Some(false)`. Other callers resolve unbounded, as before.
+        let verdict = match deadline {
+            Some(d) => {
+                let shipped_deadline =
+                    std::time::Instant::now() + linkage_time_left(d, LINKAGE_SHIPPED_CHECK_TIMEOUT);
+                match resolve_default_branch_ref_until(project_root, shipped_deadline) {
+                    Ok(Some(main_ref)) => is_ancestor(full, &main_ref, shipped_deadline),
+                    Ok(None) => Some(false),
+                    Err(DefaultBranchResolveTimedOut) => None,
+                }
+            }
+            None => resolve_default_branch_ref(project_root)
+                .map(|main_ref| {
+                    is_ancestor(
+                        full,
+                        &main_ref,
+                        std::time::Instant::now() + LINKAGE_SHIPPED_CHECK_TIMEOUT,
+                    )
+                })
+                .unwrap_or(Some(false)),
         };
         shipped = verdict == Some(true);
         // trace:BUG-1993 | ai:claude
@@ -924,7 +1033,7 @@ pub(crate) fn collect_git_linkage_opts(
             // commit cap AND a wall-clock budget; if either stops the walk,
             // record it so the renderer says the branch search is partial.
             // trace:BUG-1594 | ai:claude
-            let branch_deadline = std::time::Instant::now() + LINKAGE_BRANCH_SCAN_BUDGET;
+            let branch_deadline = std::time::Instant::now() + cap(LINKAGE_BRANCH_SCAN_BUDGET);
             let mut scanned = 0usize;
             for (commit_full, _, _) in &commits {
                 if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS {
@@ -943,7 +1052,17 @@ pub(crate) fn collect_git_linkage_opts(
                     commit_full,
                     "--format=%(refname:short)",
                 ]);
-                let contains = match command_output_with_timeout_detail(cmd, remaining) {
+                // BUG-1993: only `aida show` bounds each call; other callers
+                // keep the unbounded call and the between-call budget check.
+                let result = if deadline.is_some() {
+                    command_output_with_timeout_detail(cmd, remaining)
+                } else {
+                    match cmd.output() {
+                        Ok(o) => BoundedCommandOutput::Completed(o),
+                        Err(_) => BoundedCommandOutput::SpawnFailed,
+                    }
+                };
+                let contains = match result {
                     BoundedCommandOutput::Completed(o) if o.status.success() => {
                         scanned += 1;
                         String::from_utf8_lossy(&o.stdout).trim_end().to_string()
@@ -1024,16 +1143,25 @@ pub(crate) fn collect_git_linkage_opts(
                 branch = Some(id_matches.remove(0));
                 other_branches = id_matches;
             }
-            // BUG-1993: bound `git worktree list --porcelain` so a stalled git
-            // cannot hang `aida show`, and record `worktree_scan_incomplete`
-            // on timeout (PRIN-5). trace:BUG-1993 | ai:antigravity
+            // BUG-1993: under the show deadline, bound `git worktree list
+            // --porcelain` so a stalled git cannot hang `aida show`, and record
+            // `worktree_scan_incomplete` on timeout (PRIN-5). Other callers
+            // run it unbounded. trace:BUG-1993 | ai:antigravity
             if let Some(b) = branch.as_deref() {
                 let mut wt_cmd = PCmd::new("git");
                 wt_cmd
                     .arg("-C")
                     .arg(project_root)
                     .args(["worktree", "list", "--porcelain"]);
-                match command_output_with_timeout_detail(wt_cmd, LINKAGE_WORKTREE_LIST_TIMEOUT) {
+                let result = if deadline.is_some() {
+                    command_output_with_timeout_detail(wt_cmd, cap(LINKAGE_WORKTREE_LIST_TIMEOUT))
+                } else {
+                    match wt_cmd.output() {
+                        Ok(o) => BoundedCommandOutput::Completed(o),
+                        Err(_) => BoundedCommandOutput::SpawnFailed,
+                    }
+                };
+                match result {
                     BoundedCommandOutput::Completed(o) if o.status.success() => {
                         let wt = String::from_utf8_lossy(&o.stdout);
                         let mut cur_path: Option<String> = None;
@@ -1082,8 +1210,12 @@ pub(crate) fn print_git_linkage(
 ) {
     use std::process::Command as PCmd;
 
-    let git_until = |args: &[&str], deadline: std::time::Instant| -> Option<String> {
-        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+    // BUG-1993: one deadline covers everything below — collection, forge
+    // lookups, `--shortstat` lines, and the drift hint.
+    // trace:BUG-1993 | ai:claude
+    let deadline = std::time::Instant::now() + SHOW_LINKAGE_DEADLINE;
+    let git_until = |args: &[&str]| -> Option<String> {
+        let remaining = linkage_time_left(deadline, SHOW_LINKAGE_DEADLINE);
         if remaining.is_zero() {
             return None;
         }
@@ -1109,7 +1241,7 @@ pub(crate) fn print_git_linkage(
         shipped_pr,
         // trace:STORY-634 | ai:claude
         repo,
-    } = collect_git_linkage(project_root, ids);
+    } = collect_git_linkage_until(project_root, ids, deadline);
 
     if commits.is_empty() && files.is_empty() && commits_scan_incomplete {
         // BUG-1993 (PRIN-5): the commit scan timed out — the linkage is
@@ -1251,16 +1383,20 @@ pub(crate) fn print_git_linkage(
                     // BUG-1594: every lookup is capped per call and the whole
                     // set shares one budget; a lookup the budget no longer
                     // covers is rendered as skipped, never as "no PR".
-                    // trace:BUG-1594 | ai:claude
-                    let forge_started = std::time::Instant::now();
+                    // BUG-1993: the lookups also share the linkage deadline;
+                    // each call is clipped to what is left of it.
+                    // trace:BUG-1594 trace:BUG-1993 | ai:claude
+                    let forge_deadline =
+                        deadline.min(std::time::Instant::now() + SHOW_FORGE_LOOKUP_BUDGET);
                     let bounded_lookup = |branch_name: &str| {
-                        if forge_started.elapsed() >= SHOW_FORGE_LOOKUP_BUDGET {
+                        let call_timeout =
+                            linkage_time_left(forge_deadline, FORGE_CLI_CALL_TIMEOUT);
+                        if call_timeout.is_zero() {
                             return (ChangeLinkageState::LookupSkipped, None);
                         }
-                        change_linkage_state_for(with_forge_lookup_timeout(
-                            FORGE_CLI_CALL_TIMEOUT,
-                            || change_lookup_for_branch(project_root, branch_name),
-                        ))
+                        change_linkage_state_for(with_forge_lookup_timeout(call_timeout, || {
+                            change_lookup_for_branch(project_root, branch_name)
+                        }))
                     };
                     let (state, url) = bounded_lookup(b);
                     render(format_change_linkage(forge, &state), url.as_deref());
@@ -1317,17 +1453,14 @@ pub(crate) fn print_git_linkage(
                 String::new()
             }
         );
-        // BUG-1993: share one deadline across all verbose `--shortstat` calls
-        // so N commits cannot cost N seconds. trace:BUG-1993 | ai:antigravity
-        let shortstat_deadline = std::time::Instant::now() + LINKAGE_SHIPPED_CHECK_TIMEOUT;
+        // BUG-1993: every verbose `--shortstat` call shares the linkage
+        // deadline, so N commits cannot cost N seconds.
+        // trace:BUG-1993 | ai:claude
         for (full, short, subject) in commits.iter().take(cap) {
             println!("    {} {}", short.yellow(), subject);
             if verbose {
-                if let Some(stat) = git_until(
-                    &["show", "--shortstat", "--format=", full],
-                    shortstat_deadline,
-                )
-                .filter(|s| !s.is_empty())
+                if let Some(stat) =
+                    git_until(&["show", "--shortstat", "--format=", full]).filter(|s| !s.is_empty())
                 {
                     if let Some(last) = stat.lines().last() {
                         println!("      {}", last.trim().dimmed());
@@ -1368,7 +1501,9 @@ pub(crate) fn print_git_linkage(
     // state this spec was filed against. Silent when there's nothing to
     // say (no provenance, unresolvable sha, no traced files, or no drift).
     // trace:TASK-1475 | ai:claude
-    if let Some(hint) = filing_drift_hint(project_root, filed_at, &files, &commits) {
+    // trace:BUG-1993 | ai:claude
+    if let Some(hint) = filing_drift_hint_until(project_root, filed_at, &files, &commits, deadline)
+    {
         println!("  {}", hint.dimmed());
     }
 }
@@ -3417,12 +3552,8 @@ pub(crate) fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> 
 
 #[cfg(test)]
 mod show_forge_budget_tests {
-    use super::{
-        ensure_pr_open_spec_attribution, walk_source_for_traces, SHOW_FORGE_LOOKUP_BUDGET,
-    };
-    use crate::{
-        resolve_default_branch_ref_until, DefaultBranchResolveTimedOut, FORGE_CLI_CALL_TIMEOUT,
-    };
+    use super::SHOW_FORGE_LOOKUP_BUDGET;
+    use crate::FORGE_CLI_CALL_TIMEOUT;
     use std::time::Duration;
 
     /// BUG-1594's integration test reports its wall-clock only as a soft
@@ -3439,159 +3570,8 @@ mod show_forge_budget_tests {
         );
         assert!(FORGE_CLI_CALL_TIMEOUT > Duration::ZERO);
     }
-
-    // trace:BUG-1993 | ai:antigravity
-    #[test]
-    fn trace_walk_skips_nested_git_worktrees_and_subrepos() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let root = tmp.path();
-        std::fs::create_dir_all(root.join(".git")).unwrap();
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::write(
-            root.join("src/lib.rs"),
-            "// trace:BUG-1993 | ai:antigravity\npub fn main_fn() {}\n",
-        )
-        .unwrap();
-
-        let nested_wt = root.join("nested-worktree");
-        std::fs::create_dir_all(nested_wt.join("src")).unwrap();
-        // Worktrees have a `.git` file; subrepos have a `.git` directory.
-        std::fs::write(
-            nested_wt.join(".git"),
-            format!("gitdir: {}\n", root.join("elsewhere").display()),
-        )
-        .unwrap();
-        std::fs::write(
-            nested_wt.join("src/dup.rs"),
-            "// trace:BUG-1993 | ai:antigravity\npub fn dup_fn() {}\n",
-        )
-        .unwrap();
-
-        let nested_subrepo = root.join("nested-subrepo");
-        std::fs::create_dir_all(nested_subrepo.join(".git")).unwrap();
-        std::fs::create_dir_all(nested_subrepo.join("src")).unwrap();
-        std::fs::write(
-            nested_subrepo.join("src/sub.rs"),
-            "// trace:BUG-1993 | ai:antigravity\npub fn sub_fn() {}\n",
-        )
-        .unwrap();
-
-        let re = regex::Regex::new(r"trace:([A-Z]+-\d+)").unwrap();
-        let mut traces = std::collections::HashMap::new();
-        walk_source_for_traces(root, &re, &mut traces);
-        assert_eq!(
-            traces.get("BUG-1993"),
-            Some(&vec![(root.join("src/lib.rs"), 1)])
-        );
-    }
-
-    // trace:BUG-1993 | ai:antigravity
-    #[test]
-    fn bounded_default_branch_timeout_is_distinct_from_no_default_branch() {
-        let tmp = tempfile::TempDir::new().unwrap();
-        let root = tmp.path().join("repo");
-        std::fs::create_dir_all(&root).unwrap();
-        let status = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&root)
-            .args(["init", "--initial-branch=main", "--quiet"])
-            .status()
-            .unwrap();
-        assert!(status.success());
-
-        // An expired deadline on the bounded helper returns `Err(DefaultBranchResolveTimedOut)`,
-        // distinct from `Ok(None)` ("no candidate ref exists").
-        let res = resolve_default_branch_ref_until(&root, std::time::Instant::now());
-        assert_eq!(res, Err(DefaultBranchResolveTimedOut));
-
-        // And the TOON linkage scan on an expired budget never reports "no default branch".
-        let scan = crate::shipped_linkage::scan_default_branch_linkage_within(
-            &root,
-            &["BUG-1993".to_string()],
-            Duration::ZERO,
-        );
-        let rendered = crate::shipped_linkage::render_toon_linkage(&scan);
-        assert!(
-            !rendered.contains("no default branch"),
-            "timed-out linkage scan must not claim 'no default branch': {rendered}"
-        );
-        assert!(rendered.contains("reason=scan-timeout"), "{rendered}");
-    }
-
-    /// BUG-1993 regression guard: `ensure_pr_open_spec_attribution` must use the
-    /// unbounded `resolve_default_branch_ref` so a slow `git symbolic-ref`
-    /// (> `LINKAGE_SHIPPED_CHECK_TIMEOUT`) does not map to `None` ("no default
-    /// branch") and fail open on an unattributed branch.
-    // trace:BUG-1993 | ai:antigravity
-    #[cfg(unix)]
-    #[test]
-    fn slow_symbolic_ref_does_not_fail_open_pr_open_spec_attribution() {
-        // trace:BUG-1994 | ai:codex
-        if crate::test_env::run_path_isolated_test() {
-            return;
-        }
-        use std::os::unix::fs::PermissionsExt;
-
-        let tmp = tempfile::TempDir::new().unwrap();
-        let repo = tmp.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        let real_git = std::env::var_os("PATH")
-            .and_then(|paths| {
-                std::env::split_paths(&paths)
-                    .map(|d| d.join("git"))
-                    .find(|p| p.is_file())
-            })
-            .expect("real git on PATH");
-
-        let run_git = |args: &[&str]| {
-            let st = std::process::Command::new(&real_git)
-                .arg("-C")
-                .arg(&repo)
-                .args(args)
-                .status()
-                .unwrap();
-            assert!(st.success(), "git {args:?} failed");
-        };
-        run_git(&["init", "--initial-branch=main", "--quiet"]);
-        run_git(&["config", "user.email", "t@example.com"]);
-        run_git(&["config", "user.name", "Test"]);
-        run_git(&["commit", "-q", "--allow-empty", "-m", "chore: base"]);
-        run_git(&["checkout", "-q", "-b", "feat/unattributed"]);
-        run_git(&[
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            "feat: unattributed work without spec trailer",
-        ]);
-
-        // Shim `git` so `symbolic-ref` sleeps longer than `LINKAGE_SHIPPED_CHECK_TIMEOUT` (1s)
-        // before exiting non-zero (no origin/HEAD), while all other git subcommands pass through.
-        let shim_dir = tmp.path().join("shim");
-        std::fs::create_dir_all(&shim_dir).unwrap();
-        let shim_git = shim_dir.join("git");
-        std::fs::write(
-            &shim_git,
-            format!(
-                "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"symbolic-ref\" ]; then\n    sleep 1.2\n    exit 1\n  fi\ndone\nexec '{}' \"$@\"\n",
-                real_git.display()
-            ),
-        )
-        .unwrap();
-        let mut perms = std::fs::metadata(&shim_git).unwrap().permissions();
-        perms.set_mode(0o755);
-        std::fs::set_permissions(&shim_git, perms).unwrap();
-
-        let old_path = std::env::var_os("PATH").unwrap_or_default();
-        let mut new_paths = vec![shim_dir];
-        new_paths.extend(std::env::split_paths(&old_path));
-        let joined = std::env::join_paths(new_paths).unwrap();
-        let _guard = crate::test_env::EnvVarGuard::set("PATH", joined);
-
-        let res = ensure_pr_open_spec_attribution(&repo, "feat/unattributed", "BUG-1993");
-        assert!(
-            res.is_err(),
-            "ensure_pr_open_spec_attribution must refuse unattributed branch even when symbolic-ref is slow"
-        );
-    }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_1993_show_deadline_tests.rs"]
+mod bug_1993_show_deadline_tests;

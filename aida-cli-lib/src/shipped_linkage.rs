@@ -363,7 +363,9 @@ pub(crate) fn scan_default_branch_linkage(
     scan_default_branch_linkage_within(project_root, ids, SHIPPED_SCAN_BUDGET)
 }
 
-/// [`scan_default_branch_linkage`] with an explicit budget.
+/// [`scan_default_branch_linkage`] with an explicit budget. Default-branch
+/// resolution stays unbounded: this serves the completion warning, not only
+/// `aida show`.
 // trace:BUG-1993 | ai:claude
 pub(crate) fn scan_default_branch_linkage_within(
     project_root: &std::path::Path,
@@ -371,20 +373,43 @@ pub(crate) fn scan_default_branch_linkage_within(
     budget: std::time::Duration,
 ) -> DefaultBranchLinkage {
     let deadline = std::time::Instant::now() + budget;
-    let wanted: HashSet<String> = ids
-        .iter()
-        .map(|id| id.trim().to_ascii_uppercase())
-        .filter(|id| !id.is_empty())
-        .collect();
+    // trace:BUG-1958 | ai:claude
+    let refs = refs_worth_scanning(project_root, &default_branch_refs(project_root), deadline);
+    scan_refs_until(project_root, ids, refs, deadline)
+}
+
+/// The `aida show` scan: default-branch resolution is bounded by `deadline`
+/// too, and a resolution it cuts short reads as an incomplete scan
+/// ("unknown"), never as "no default branch found".
+// trace:BUG-1993 | ai:claude
+pub(crate) fn scan_default_branch_linkage_until(
+    project_root: &std::path::Path,
+    ids: &[String],
+    deadline: std::time::Instant,
+) -> DefaultBranchLinkage {
     // trace:BUG-1993 | ai:antigravity
     let Ok(branch_refs) = default_branch_refs_until(project_root, deadline) else {
         return DefaultBranchLinkage {
-            scan_incomplete: !wanted.is_empty(),
+            scan_incomplete: ids.iter().any(|id| !id.trim().is_empty()),
             ..Default::default()
         };
     };
     // trace:BUG-1958 | ai:claude
     let refs = refs_worth_scanning(project_root, &branch_refs, deadline);
+    scan_refs_until(project_root, ids, refs, deadline)
+}
+
+fn scan_refs_until(
+    project_root: &std::path::Path,
+    ids: &[String],
+    refs: Vec<String>,
+    deadline: std::time::Instant,
+) -> DefaultBranchLinkage {
+    let wanted: HashSet<String> = ids
+        .iter()
+        .map(|id| id.trim().to_ascii_uppercase())
+        .filter(|id| !id.is_empty())
+        .collect();
     let mut out = DefaultBranchLinkage {
         scanned_refs: refs.clone(),
         ..Default::default()
@@ -486,10 +511,16 @@ pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
 }
 
 /// The `linkage:` scalar for the TOON `aida show` surface (AC1). The caller
-/// skips this entirely under `--no-git` (AC2).
-// trace:STORY-1649 | ai:claude
+/// skips this entirely under `--no-git` (AC2). BUG-1993: this scan is the
+/// whole TOON linkage phase, so its [`SHIPPED_SCAN_BUDGET`] deadline (inside
+/// [`crate::SHOW_LINKAGE_DEADLINE`]) covers default-branch resolution too.
+// trace:STORY-1649 trace:BUG-1993 | ai:claude
 pub(crate) fn toon_show_linkage_line(project_root: &std::path::Path, ids: &[String]) -> String {
-    let linkage = scan_default_branch_linkage(project_root, ids);
+    let linkage = scan_default_branch_linkage_until(
+        project_root,
+        ids,
+        std::time::Instant::now() + SHIPPED_SCAN_BUDGET,
+    );
     crate::toon::scalar("linkage", &render_toon_linkage(&linkage))
 }
 

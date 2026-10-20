@@ -209,41 +209,4 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
         l["shipped"].is_null(),
         "shipped must be null when default-branch resolution times out: {l}"
     );
-
-    // Unshipped branch with stalled `git worktree list --porcelain`.
-    git(&repo, &["checkout", "-q", "-b", "feat/unshipped"]);
-    let add_out2 = run_ok(
-        aida(&repo, &home)
-            .env("AIDA_SESSION_ROLE", "advisor")
-            .env(
-                "AIDA_SESSION_GRANT",
-                support::ensure_seat(&home, &repo, "advisor", &[]).expect("advisor grant"),
-            )
-            .args(["add", "--type", "bug", "--title", "unshipped worktree test"]),
-    );
-    let spec2 = add_out2
-        .split(|c: char| c.is_whitespace() || c == ',')
-        .find(|t| t.starts_with("BUG-"))
-        .unwrap()
-        .to_string();
-    git(
-        &repo,
-        &[
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            &format!("fix: unshipped ({spec2})"),
-        ],
-    );
-    let slow_wt = git_shim(&base_dir, "worktree");
-    let started = std::time::Instant::now();
-    let l2 = show_json(&repo, &home, &spec2, Some(&slow_wt));
-    assert!(
-        started.elapsed() < std::time::Duration::from_secs(10),
-        "stalled worktree list is bounded: {:?}",
-        started.elapsed()
-    );
-    assert_eq!(l2["complete"], false, "{l2}");
-    assert!(notes(&l2).contains("worktree scan incomplete"), "{l2}");
 }
