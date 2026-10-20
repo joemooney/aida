@@ -1,0 +1,27 @@
+id: 01a156c0-23d4-7230-8889-b5fb9e978b6c
+spec_id: TASK-1-375
+title: 'info: STORY-1853 AC5 (passed+ignored >= baseline) is recorded on the spec but n…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1948, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  info: STORY-1853 AC5 (passed+ignored >= baseline) is recorded on the spec but not enforced by any gate; AC1/AC2 remain open for S2-S6.
+  Reviewed sha: 2ec26b136a34893242acd55a87da35d1a287ee1c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T00:39:55.092165340Z
+modified_at: 2026-10-20T00:39:55.092165340Z
+req_type: Task
+tags:
+- carried-from:TASK-1948
+- finding-hash:6cebaee6
+- from-review:TASK-1948
+- kind:carried-forward
+filed_at:
+  code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c416dbcc0b
+  vendor: claude
