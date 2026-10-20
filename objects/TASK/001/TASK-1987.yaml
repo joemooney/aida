@@ -6,12 +6,12 @@ description: |
   The comment at Cargo.toml:81-83 says "CI exports CARGO_INCREMENTAL=0". No file in .github/workflows sets it; Swatinem/rust-cache@v2 sets it implicitly. CI also never builds with --profile agent (only the dev profile and --release), so the profile change cannot reach CI either way. Reword the comment to state the real reason.
 
   Raised in review of PR-2765: https://github.com/joemooney/aida/pull/2765
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:59:38.707914141Z
-modified_at: 2026-10-20T08:23:43.972741265Z
+modified_at: 2026-10-20T10:57:30.312920760Z
 req_type: Task
 tags:
 - docs
@@ -28,6 +28,14 @@ history:
   timestamp: 2026-10-20T08:23:45.932495349Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a158f5-8ec8-7880-a2bd-f92d551e7373
+  author: joe
+  timestamp: 2026-10-20T10:57:30.312914636Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 187896cd54410f9cb9c5f8d713eff31c0cda9741
   branch: pr-2765
