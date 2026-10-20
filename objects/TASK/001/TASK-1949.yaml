@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:39:09.353084265Z
-modified_at: 2026-10-20T01:11:20.370151215Z
+modified_at: 2026-10-20T01:25:12.635451973Z
 req_type: Task
 tags:
 - ci
@@ -27,6 +27,11 @@ comments:
   created_at: 2026-10-19T21:04:08.935071695Z
   modified_at: 2026-10-19T21:04:08.935071695Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a156e9-9b3b-7d31-9f41-be2ba77df5b0
+  author: ai:codex:joe
+  content: Implementation committed as 515c0944eb with main merged at 3617ffee71 in /home/joe/ai/aida-task-1949. Five CI matrix lanes retain exact Build aggregate; measured CLI target split 34/34; rest preserves original core feature union; both store guards reject parent checkout discovery; shard root hygiene and per-lane timing artifacts remain. 23 Python tests pass. Three author-check rounds caught/fixed core feature coverage and incomplete-suite tally classification; no independent approval. Main run39348896342 at128a5bb6eb baseline11721 passed+ignored across85 binaries,34m29s job/17m45s tests. Mandatory local fast/targeted/compile checks pending behind host Cargo slots; no push or CI acceptance claim yet.
+  created_at: 2026-10-20T01:25:12.635451973Z
+  modified_at: 2026-10-20T01:25:12.635451973Z
 history:
 - id: 01a154d1-4c98-7b90-86e7-2a418c6e8657
   author: joe
