@@ -409,7 +409,12 @@ fn emit_persona_enter_eval(project_root: &std::path::Path, persona: &str, grant_
         eval_comment_text(persona)
     );
     println!("export AIDA_SESSION_ROLE='{}'", sh_single_quote(persona));
-    println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id));
+    // trace:TASK-1752 | ai:claude
+    println!(
+        "export {}='{}'",
+        crate::seat_authority::GRANT_ENV,
+        sh_single_quote(grant_id)
+    );
     println!("unset AIDA_SESSION_PURPOSE");
     println!(
         "export AIDA_SESSION_PROJECT='{}'",
@@ -706,10 +711,13 @@ fn emit_role_enter_eval(
     // stale grant so the shell cannot keep a previous seat's authority under
     // the new label. trace:STORY-1473 | ai:claude
     match grant_id {
-        Some(grant_id) => {
-            println!("export AIDA_SESSION_GRANT='{}'", sh_single_quote(grant_id))
-        }
-        None => println!("unset AIDA_SESSION_GRANT"),
+        // trace:TASK-1752 | ai:claude
+        Some(grant_id) => println!(
+            "export {}='{}'",
+            crate::seat_authority::GRANT_ENV,
+            sh_single_quote(grant_id)
+        ),
+        None => println!("unset {}", crate::seat_authority::GRANT_ENV),
     }
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", sh_single_quote(p));
@@ -985,8 +993,10 @@ fn handle_role_end() -> Result<()> {
     println!("    done");
     println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
+    // trace:TASK-1752 | ai:claude
     println!(
-        "unset AIDA_SESSION_ROLE AIDA_SESSION_GRANT AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT"
+        "unset AIDA_SESSION_ROLE {} AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT",
+        crate::seat_authority::GRANT_ENV
     );
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
     println!(

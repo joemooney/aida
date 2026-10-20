@@ -3709,7 +3709,7 @@ pub(crate) fn revoke_headless_child_grant(id: &str) {
 }
 
 /// BUG-2139: the seat env every headless child gets. `AIDA_SESSION_ROLE` and
-/// `AIDA_SESSION_GRANT` are set explicitly (never inherited), and the
+/// [`crate::seat_authority::GRANT_ENV`] are set explicitly (never inherited), and the
 /// launcher's `AIDA_SESSION_PURPOSE` is scrubbed (BUG-2153 class): it describes
 /// the launcher's session, not the child's.
 // trace:BUG-2139 | ai:claude
