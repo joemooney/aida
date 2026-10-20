@@ -9,12 +9,12 @@ description: |-
   - Every test-fixture git invocation suppresses auto-maintenance, either per command or through one workspace-wide mechanism (e.g. GIT_CONFIG_COUNT in the test environment). Picking the mechanism needs an advisor sketch signoff because it is cross-cutting.
   - A guard or regression test fails if a new fixture runs git commit with auto-maintenance enabled.
   - The reproduction recipe in docs/testing/bug-2118-history-fixture-object-write.md (git 2.55 + LD_PRELOAD mkdir widening) shows no failure for a representative sample of converted fixtures.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:08:45.955661905Z
-modified_at: 2026-10-20T15:44:22.833086579Z
+modified_at: 2026-10-20T16:09:32.053615690Z
 req_type: Bug
 tags:
 - ci
@@ -68,6 +68,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15a13-3a95-74a1-b2ad-91161732e928
+  author: aida-orchestrator
+  timestamp: 2026-10-20T16:09:32.053638465Z
+  session_id: 01a159fd5c86
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
   branch: claude/bug-2118
@@ -76,3 +84,11 @@ filed_at:
   aida_build_sha: 419579e7c4
   vendor: claude
   session: 8eb7f358-17d3-47ea-9584-5285a9a5eab8
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Helper + ratchet match the advisor sketch, but CI lib-1 is red (gating and nextest shadow) from a regression this PR introduces in the seat-clone guard test; also untraced criteria and ratchet coverage gaps.
+  recovery_hint: address the review findings, move BUG-2191 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T16:09:32.053615690Z
