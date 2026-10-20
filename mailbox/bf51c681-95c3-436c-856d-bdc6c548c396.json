@@ -1,0 +1,19 @@
+{
+  "id": "bf51c681-95c3-436c-856d-bdc6c548c396",
+  "thread_id": "bf51c681-95c3-436c-856d-bdc6c548c396",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792447588800,
+  "body": "PR #2760 (TASK-1959) round 2 pushed: c6a248b661 on claude/task-1959.\n\nROOT CAUSE (not a de-serialized test). Round 1 made agent_error_channel hermetic. On main its old default cwd (aida-cli/, inside the checkout) made `aida show NOSUCH-1` fetch origin/aida-store and attach it as a real .aida-store worktree. That is why it takes 40s in main's CI (run 39315760508: 20:08:33 -> 20:09:14), and why that run's trace gate sees `aida-store` as an existing ref while ours shows `[new branch]`. The trace gate's `git -C .aida-store` has silently depended on that side effect. Without it, tests/test_distributed.sh Tests 1-7 run `aida --file <tmp store> add/list/edit/db info` with cwd = the repo root. Because the repo's .aida/config.toml names an unattached worktree store, that leaves a PLAIN .aida-store/ (objects/, .aida/dispenser.toml) at the root. That step runs just before the gate, which then resets the parent checkout. I reproduced it in an isolated git repo carrying this repo's .aida/config.toml: `aida --file X edit ...` creates <repo>/.aida-store/. Locally, all 8 changed binaries leave nothing at the root, both before and after the fix.\n\nFIX\n- tests/test_distributed.sh: every aida now runs from $TEST_DIR, never the checkout. The script fails if the checkout gains a .aida-store it didn't have.\n- New support::CheckoutGuard (aida-cli/tests/support/mod.rs): snapshots whether <workspace>/.aida-store exists, then asserts on drop that no test created one. It's held by the de-serialized bug_1947 Session and task_1290 Project fixtures, both agent_error_channel tests, and the threaded bug_1502 audit. It watches only that one name: root files like .aida-compete-claude-gate.log come and go under concurrent tooling and would make a broader guard flaky.\n- bug_1502 (552-578): each worker builds its own fixture() repo+HOME, so no shared store, cache or lock between concurrent refusals.\n\nNOT CHANGED: ci.yml (per the rules). The gate is still fragile: `git -C .aida-store rev-parse --is-inside-work-tree` is true for any plain dir inside the checkout. A `--show-toplevel` == $PWD/.aida-store check would fail closed. Also a product bug worth filing: `aida --file <store>` still writes into the cwd project's .aida-store.\n\nGATES: make check-ci-fast (31 gates ok), make check-ci-compile ok, the 8 changed binaries all ok, and test_distributed.sh passes locally. CI is the confirmation for the trace gate itself. Not merged.\n",
+  "subject": "PR #2760 TASK-1959 r2: c6a248b661, trace-gate root cause + fix",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
