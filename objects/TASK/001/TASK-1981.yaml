@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T16:02:26.003489498Z
+modified_at: 2026-10-20T17:09:56.014751454Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -62,6 +62,11 @@ comments:
   content: 'Relay session 3: read primary-checkout advisor mail 2c34c612 (round 1). Locally reproduced gc_runs_after_the_store_window failure unchanged (held vs free), matching CI log job 118720135550. Rework moves auto/aggressive GC outside AIDA writer lock per binding ruling, preserves Git config precedence/off behavior, adds real contention barriers for parent-tag heal, orphan queue heal, and compaction history rewrite plus concurrent-GC coverage. Gates are compiling; no green/push claim. F6 untouched pending all four round-1 fixes.'
   created_at: 2026-10-20T16:02:26.003489498Z
   modified_at: 2026-10-20T16:02:26.003489498Z
+- id: 01a15a4a-86ae-7133-b522-82172779f7c4
+  author: ai:codex:joe
+  content: 'Relay session 3: PR-2778 round-1 rework pushed for round 2 of 2 at 9aec7abd4653b2a9ed3caaecc87ca7693d1b1eeb. Addressed all four advisor items from mail 2c34c612: original CI GC-lock assertion reproduced and unchanged test now passes; GC moved outside AIDA writer lock; global/system/off GC semantics preserved; parent-tag/orphan-queue/compaction barriers added. Final merged-source gates: fast 32, targeted 202 CLI + 140 core, original GC regression 1, compile every test target (920.7s). Author self-check 3 rounds for rework, not independent review. Advisor handoff sent f3c5b74c-3128-4cc3-9a0f-84bf2d2fb103. The verified head includes main 1456ad35b0; main advanced afterward with unrelated BUG-2190 commit 03fe56b082, disclosed in PR/mail and still needs integration before merge. No CI green, approval, hold clear or merge claimed. Remote head frozen during re-review. Non-completing slice; F6/F7 remain. Scratch notes include a proven raw-Git node rollback fixture, not Rust caller coverage.'
+  created_at: 2026-10-20T17:09:56.014751454Z
+  modified_at: 2026-10-20T17:09:56.014751454Z
 history:
 - id: 01a158f3-5991-7fc2-ba6f-30ab954f620e
   author: joe
