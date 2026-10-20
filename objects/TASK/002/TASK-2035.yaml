@@ -1,0 +1,26 @@
+id: 01a15bbe-0756-7b83-b614-6c77cea17ecc
+spec_id: TASK-2035
+agreed_id: TASK-2035
+title: '''(Refs X)'' title trailer is not recognized by aida pr ship, so the branch-name fallback silently completes X'
+description: |
+  The advisor rulings and implementers use '(Refs SPEC-ID)' to mean "this PR does not complete the spec". The ship trailer parser does not support it: in aida-cli-lib/src/pr_ship.rs, parse_spec_id_group (around line 895) rejects the whole group because 'Refs' is not an ID. derive_squash_trailer (around line 477) then falls back to the spec ID in the branch name, so a spec-named branch completes the spec on merge. PR-2786 (branch claude/bug-2192) would have completed BUG-2192 against the advisor's ruling. Options: (a) treat a leading 'Refs'/'Relates' token in the trailing group as non-completing and suppress the branch fallback; or (b) have ship warn when the title carries a Refs group but the trailer comes from the branch.
+
+  Raised in review of PR-2786: https://github.com/joemooney/aida/pull/2786
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T23:55:42.806615861Z
+modified_at: 2026-10-20T23:55:42.806615861Z
+req_type: Task
+tags:
+- from-review:PR-2786
+- severity:minor
+filed_at:
+  code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15bbb3f3e
