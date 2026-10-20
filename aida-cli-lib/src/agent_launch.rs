@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "agent_launch_args.rs"]
+pub(crate) mod agent_launch_args;
+pub(crate) use agent_launch_args::*;
+
 pub(crate) fn validate_session_start_args(args: &[String]) -> Result<()> {
     let has_owns = args
         .iter()
@@ -605,9 +610,8 @@ pub(crate) fn render_dispatch_toon(rows: &[DispatchReportRow]) -> String {
 }
 
 pub(crate) fn dispatch_worktree_dirty_fingerprint(path: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(path)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(path)
         .args(["status", "--porcelain"])
         .output();
     match out {
@@ -906,12 +910,11 @@ pub(crate) fn agent_new_command_for_type(token: &str) -> Option<AgentNewCommand>
 /// usual clap help/usage instead of a hung prompt.
 // trace:TASK-837 | ai:claude
 pub(crate) fn pick_agent_type_interactively() -> Result<Option<AgentNewCommand>> {
-    use clap::CommandFactory;
     use std::io::IsTerminal;
     // Non-TTY (piped/headless): don't block on a picker — fall through to the
     // historical clap-help behavior by re-emitting the help for `agent new`.
     if !std::io::stdin().is_terminal() {
-        let mut cmd = Cli::command();
+        let mut cmd = crate::command_registry::built_command();
         if let Some(agent) = cmd.find_subcommand_mut("agent") {
             if let Some(new) = agent.find_subcommand_mut("new") {
                 let _ = new.clone().print_help();
@@ -1289,7 +1292,7 @@ pub(crate) fn agent_resume_launch_config(
         // The child runs in `worktree`, so its write boundary is that
         // worktree — not the launcher's cwd (`tool_contained_flags` would
         // resolve the parent's git root). trace:BUG-2151 | ai:claude
-        config.default_args = session::claude_contained_flags_for(worktree);
+        config.default_args = session::claude_contained_flags_for(worktree)?;
         config.contained = true;
     }
     config.default_args.extend(agent_resume_args(
@@ -1646,11 +1649,11 @@ pub(crate) fn refuse_unallowlisted_contained_passthrough(
 }
 
 // trace:BUG-1178 | ai:codex
-pub(crate) fn tool_contained_flags(agent_type: &str) -> Vec<String> {
-    match agent_type {
+pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
+    Ok(match agent_type {
         "claude" => {
             let mut flags = Vec::new();
-            flags.extend(session::claude_contained_flags());
+            flags.extend(session::claude_contained_flags()?);
             flags
         }
         // trace:STORY-1124 | ai:codex
@@ -1661,7 +1664,7 @@ pub(crate) fn tool_contained_flags(agent_type: &str) -> Vec<String> {
             "never".to_string(),
         ],
         _ => Vec::new(),
-    }
+    })
 }
 
 // trace:BUG-1178 | ai:codex
@@ -2055,7 +2058,7 @@ pub(crate) fn resolve_claude_new_posture(
         // trace:BUG-2131 | ai:claude
         aida_core::git_ops::ensure_git_supports_contained()?;
         Ok(ClaudeNewPosture {
-            default_args: tool_contained_flags("claude"),
+            default_args: tool_contained_flags("claude")?,
             contained: true,
             explicit: true,
         })
@@ -5257,6 +5260,138 @@ pub(crate) fn run_tracked_agent(
 #[cfg(test)]
 #[path = "tests/bug_2002_launch_lease_tests.rs"]
 mod bug_2002_launch_lease_tests;
+
+/// Inspect or resume past Claude Code sessions in this project,
+/// enriched with the AIDA role + most-recent spec for each session
+/// (extracted from the SessionStart hook output stored in each
+/// session's `.jsonl`). Wrapper around `claude --resume` since
+/// Claude Code's auto-generated subject can't be customized.
+// trace:FR-1-043 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "session")]
+pub(crate) struct SessionArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::SessionCommand,
+}
+
+// trace:FR-1-043 | ai:claude
+fn run_session(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let session_cmd = &args.inner;
+    return handle_session_command(session_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SESSION: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "session",
+        help_after: "role",
+        command: <SessionArgs as clap::CommandFactory>::command,
+        policy: session_cli_policy,
+        run: crate::command_registry::Handler::Early(run_session),
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Session. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn session_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::SessionCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <SessionArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            SessionCommand::Leases { .. } | SessionCommand::Show { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Session
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    }
+}
+
+/// Launch and track AI agent processes for this AIDA project.
+// trace:STORY-432 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "agent")]
+pub(crate) struct AgentArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::AgentCommand,
+}
+
+fn run_agent(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <AgentArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // EPIC-31 agent launchers supervise external CLIs and write process
+            // registry state directly; no requirement store handle needed.
+            // trace:STORY-432 | ai:codex
+            if let AgentArgs { inner: agent_cmd } = &args {
+                return crate::command_registry::returned(handle_agent_command(agent_cmd));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                AgentArgs { inner: agent_cmd } => {
+                    return crate::command_registry::returned(handle_agent_command(agent_cmd));
+                }
+                #[allow(unreachable_patterns)]
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                AgentArgs { inner: agent_cmd } => {
+                    handle_agent_command(agent_cmd)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida agent` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AGENT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "agent",
+        help_after: "compete",
+        command: <AgentArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_agent),
+    };
 
 // trace:TASK-1793 | ai:codex
 #[cfg(test)]

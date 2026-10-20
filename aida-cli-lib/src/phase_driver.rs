@@ -6,9 +6,8 @@ use crate::*;
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
 /// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
 pub(crate) fn git_capture(worktree: &std::path::Path, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(args)
         .output()
         .ok()?;
@@ -2147,7 +2146,7 @@ impl RealPhaseDriver {
         // advisor reads untrusted PR content and runs commands. Scoped to the
         // advisor's cwd (the project root, where it writes its punt response).
         let contained_in = self.contained.then_some(self.project_root.as_path());
-        let (program, advisor_args) = session::advisor_tier_program_and_args_with_posture(
+        let advisor_tier = session::advisor_tier_program_and_args_with_posture(
             vendor,
             is_fork,
             &seeded,
@@ -2156,6 +2155,18 @@ impl RealPhaseDriver {
             advisor_tuning.effort.as_deref(),
             contained_in,
         );
+        // BUG-1982: a refused contained launch is a spawn failure.
+        // trace:BUG-1982 | ai:claude
+        let (program, advisor_args) = match advisor_tier {
+            Ok(pair) => pair,
+            Err(e) => {
+                tee_handle.stop();
+                return Err(PhaseFailure::of(
+                    FailureKind::Spawn,
+                    format!("advisor tier: {e:#}"),
+                ));
+            }
+        };
         let (program, advisor_args) = match contained_child_program_and_args(
             vendor,
             self.contained,
@@ -2196,6 +2207,7 @@ impl RealPhaseDriver {
                 )
             })?;
         tee_handle.stop();
+        self.commit_contained_child_store_changes("advisor tier")?;
 
         // Clean up the fork JSONL if the config asks us to. Default is to
         // keep it for audit. Errors are non-fatal.
@@ -2224,6 +2236,33 @@ impl RealPhaseDriver {
             )
         })?;
         Ok((response, log_path))
+    }
+
+    /// BUG-2140: after a contained child exits, unconditionally commit any
+    /// pending store changes on the host through the hardened `add_all` /
+    /// `commit` path, surfacing embedded-repo / gitlink refusals loudly as a
+    /// `PhaseFailure`.
+    // trace:BUG-2140 | ai:antigravity
+    pub(crate) fn commit_contained_child_store_changes(
+        &self,
+        phase: &str,
+    ) -> Result<(), auto_complete::PhaseFailure> {
+        if !self.contained {
+            return Ok(());
+        }
+        let Some(store_path) = crate::detect_distributed_store_from(&self.project_root) else {
+            return Ok(());
+        };
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store_path)
+            .map(|_| ())
+            .map_err(|e| {
+                auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::Internal,
+                    format!(
+                        "{phase}: failed to commit pending store changes after contained child exit: {e:#}"
+                    ),
+                )
+            })
     }
 }
 

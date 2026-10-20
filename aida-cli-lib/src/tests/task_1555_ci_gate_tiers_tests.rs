@@ -264,8 +264,10 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
     }
 
     // The derivation in the runner understands exactly one shape: a single
-    // `cargo test ...` command. Pin that here so CI moving to another runner
-    // fails in CI, not only on the next local `make check-ci-compile`.
+    // `cargo test ...` command, optionally teeing its output into the timing
+    // log (`2>&1 | tee <log>`, STORY-1853 S1). Pin that here so CI moving to
+    // another runner fails in CI, not only on the next local
+    // `make check-ci-compile`. trace:STORY-1853 | ai:claude
     let workflow: serde_yaml::Value = serde_yaml::from_str(
         &std::fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci.yml readable"),
     )
@@ -280,6 +282,10 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
         .expect("CI's `Run tests` step must have a run body")
         .trim()
         .to_string();
+    let run_tests = match run_tests.rsplit_once(" 2>&1 | tee ") {
+        Some((head, log)) if !log.contains(' ') => head.to_string(),
+        _ => run_tests,
+    };
     assert!(
         run_tests.starts_with("cargo test ")
             && !run_tests.contains('\n')

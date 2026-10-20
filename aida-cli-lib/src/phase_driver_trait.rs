@@ -447,6 +447,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // (the tmux path recovers the implementer's real exit status and returns
         // the same `ExitOutcome::Natural`). Resolve the mode from the exported
         // `--panes` host + whether we're inside a tmux server. trace:TASK-1120
+        // trace:BUG-2180 | ai:claude
+        let launched_at = queue_cmd::reviewer_spawn_instant(&self.project_root);
         let pane_mode = pane_host::spawn_mode(pane_host::requested_host(), pane_host::in_tmux());
         let tmux_outcome: Option<exit_signal::ExitOutcome> = match pane_mode {
             #[cfg(unix)]
@@ -501,6 +503,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 )
             })?,
         };
+        // BUG-2180: this orchestrator is the host a contained implementer's
+        // store writes (claim, comments, `queue done`) were deferred to; commit
+        // them whatever the outcome, so no phase leaves the store dirty for the
+        // mandate's fail-closed snapshot. trace:BUG-2180 | ai:claude
+        crate::child_store_commit::commit_child_store_writes(
+            &self.project_root,
+            launched_at,
+            "implementer",
+        );
+        // BUG-2140: commit any pending store changes left by a contained
+        // implementer child on the host before continuing phase evaluation.
+        // After the BUG-2180 commit above this sweeps only what it left (older
+        // dirt, deletions) and fails loudly on an embedded-repo plant.
+        // trace:BUG-2140 | ai:antigravity
+        self.commit_contained_child_store_changes("implementer phase")?;
         // BUG-420: the watchdog killed a degenerate headless session — surface
         // it as a shelvable phase-1 failure so a batch drain parks the spec and
         // advances. trace:BUG-420 | ai:claude
@@ -2116,6 +2133,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // launches `claude -p` + an agent worker pool), so reap by process group
         // on every exit path. The interactive `--zen` reviewer stays on the
         // tree-walk path. trace:TASK-298 | ai:claude
+        // trace:BUG-2180 | ai:claude
+        let launched_at = queue_cmd::reviewer_spawn_instant(&self.project_root);
         let outcome = exit_signal::spawn_and_wait_watched(
             cmd,
             &sentinel,
@@ -2129,7 +2148,16 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 format!("could not launch the reviewer session: {e}"),
             )
         })?;
+        // BUG-2180: commit a contained reviewer's deferred store writes (its
+        // `aida review record` shelve among them) before reading the verdict.
+        // trace:BUG-2180 | ai:claude
+        crate::child_store_commit::commit_child_store_writes(
+            &self.project_root,
+            launched_at,
+            "reviewer",
+        );
         if let exit_signal::ExitOutcome::WatchdogTripped(reason) = &outcome {
+            let _ = self.commit_contained_child_store_changes("reviewer phase");
             // BUG-1299: attach the hint resolved alongside `reason` in the
             // same `watchdog_trip_report` match arm rather than let
             // `recovery_hint` re-derive one from `FailureKind` alone.
@@ -2143,6 +2171,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             }
             return Err(failure);
         }
+        // BUG-2140: commit any pending store changes left by a contained
+        // reviewer child on the host before continuing phase evaluation.
+        // trace:BUG-2140 | ai:antigravity
+        self.commit_contained_child_store_changes("reviewer phase")?;
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
             if !status.success() {
                 return Err(auto_complete::PhaseFailure::new(format!(
@@ -3704,14 +3736,25 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // builder (mirrors the advisor tier's spawn), never a hand-rolled
         // `claude -p`.
         let program = session::resolve_agent_program(vendor.program());
-        let fix_args = session::headless_vendor_args_contained_in(
+        let fix_args = match session::headless_vendor_args_contained_in(
             vendor,
             &prompt,
             &fix_uuid,
             contained_in,
             None,
             None,
-        );
+        ) {
+            Ok(args) => args,
+            // trace:BUG-1982 | ai:claude
+            Err(e) => {
+                tee.stop();
+                eprintln!(
+                    "  {} {e:#} — leaving the red-CI failure standing",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                return false;
+            }
+        };
         let (program, fix_args) = match crate::phase_driver::contained_child_program_and_args(
             vendor,
             self.contained,
@@ -3774,6 +3817,17 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         tee.stop();
         if let Some(id) = child_grant.id() {
             session::revoke_headless_child_grant(id);
+        }
+        // BUG-2140: commit any pending store changes left by a contained
+        // CI-fix child on the host before continuing.
+        // trace:BUG-2140 | ai:antigravity
+        if let Err(e) = self.commit_contained_child_store_changes("CI-fix session") {
+            eprintln!(
+                "  {} {}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                e.reason
+            );
+            return false;
         }
         match status {
             Ok(s) if s.success() => {}

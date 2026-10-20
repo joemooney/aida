@@ -112,6 +112,7 @@ struct Case {
     now: DateTime<Utc>,
     ledger: std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
     hold: HoldFacts,
+    carry_over: Option<std::result::Result<String, String>>,
 }
 
 impl Case {
@@ -134,6 +135,7 @@ impl Case {
                 kind: crate::merge_hold::HoldReasonKind::Supervision,
                 legacy: false,
             },
+            carry_over: None,
         }
     }
 
@@ -150,6 +152,7 @@ impl Case {
             override_stale_approval: self.override_stale,
             ledger: &self.ledger,
             hold: &self.hold,
+            carry_over: self.carry_over.clone(),
         })
     }
 }
@@ -1371,7 +1374,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     );
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 1; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 1; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1380,7 +1383,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     git(root, &["update-ref", "refs/remotes/origin/main", &base]);
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 2; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 2; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1447,7 +1450,12 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                             .iter()
                             .map(|s| (s.id.as_str(), s.named))
                             .collect::<Vec<_>>(),
-                        vec![("SUP-1", false), ("TASK-1", true)]
+                        vec![
+                            ("ITEM-3", false),
+                            ("MODULE-2", false),
+                            ("SUP-1", false),
+                            ("TASK-1", true)
+                        ]
                     );
                     // No approval/clearance is fabricated: the fixture decision refuses.
                     Err(MandateRefusal::SpecsUnresolved)
@@ -1875,4 +1883,55 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
         matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
         "a deleted spec named by its agreed_id must be judged, not dropped: {result:?}"
     );
+}
+
+/// TASK-1960: a held PR shipped under an active mandate whose head moved only
+/// by a clean main merge proceeds on the carried-over approval; an evil merge
+/// is still a stale approval, and the refusal names why.
+// trace:TASK-1960 | ai:claude
+#[test]
+fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
+    use crate::review_carryover::tests as fx;
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let (tmp, approved) = fx::fixture();
+    let repo = tmp.path();
+    let approved: &'static str = leak(approved);
+
+    let mut case = Case::ok();
+    case.candidates = vec![approval(approved)];
+    case.policy = policy(&case.candidates);
+    let clean = leak(fx::clean_merge(repo));
+    case.head = Some(clean);
+    // Without a proof the moved head is stale, as before.
+    assert!(matches!(
+        case.decide(),
+        Err(MandateRefusal::StaleApproval(_))
+    ));
+    case.carry_over =
+        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    assert_eq!(case.carry_over, Some(Ok(clean.to_string())));
+    assert_eq!(
+        case.decide().as_deref(),
+        Ok("6f1c1d6e-0000-4000-8000-000000000001"),
+        "a held PR ships under the mandate on the carried-over approval"
+    );
+    // A proof for some other head never covers this one.
+    case.carry_over = Some(Ok(approved.to_string()));
+    assert!(matches!(
+        case.decide(),
+        Err(MandateRefusal::StaleApproval(_))
+    ));
+
+    let evil = leak(fx::evil_merge(repo, approved));
+    case.head = Some(evil);
+    case.carry_over =
+        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    match case.decide() {
+        Err(MandateRefusal::StaleApproval(why)) => {
+            assert!(why.contains("did not carry over"), "{why}")
+        }
+        other => panic!("an evil merge must stay a stale approval: {other:?}"),
+    }
+    // The mandate path only proves; the pinning gate records.
+    assert!(crate::review_carryover::read_record(repo, 42, clean).is_none());
 }

@@ -484,3 +484,91 @@ mod tests {
         }
     }
 }
+
+/// Author a conventional-format-compliant commit and run `git commit`.
+/// Builds the `[AI:tool]? type(scope): description (REQ-ID)` shape the
+/// commit-msg hook requires, so a plain-terminal commit can't be rejected
+/// for format. The REQ-ID is inferred from staged trace comments when a
+/// single spec is present; `--spec` sets it explicitly. The CLI-native
+/// counterpart to the `/aida-commit` skill.
+///
+/// Example: aida commit --type fix --scope rel --message "accept --spec alias" --spec <SPEC-ID>
+// trace:STORY-663 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "commit")]
+pub(crate) struct CommitCmdArgs {
+    /// Conventional commit type: feat, fix, docs, style, refactor, perf,
+    /// test, build, ci, chore, revert.
+    #[clap(long = "type", value_name = "TYPE")]
+    pub commit_type: String,
+    /// Optional scope (component/area), e.g. --scope rel.
+    #[clap(long)]
+    pub scope: Option<String>,
+    /// The commit description (the part after the colon).
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'm', allow_hyphen_values = true)]
+    pub message: String,
+    /// Spec id for the (REQ-ID) trailer, e.g. `--spec BUG-N`. When omitted,
+    /// inferred from staged trace comments if exactly one spec is present.
+    #[clap(long)]
+    pub spec: Option<String>,
+    /// AI tool for the [AI:tool] prefix (default: claude when AI-authored
+    /// traces are staged). Use --no-ai to force it off.
+    #[clap(long)]
+    pub ai: Option<String>,
+    /// Omit the [AI:tool] prefix even if AI-authored traces are staged.
+    #[clap(long, conflicts_with = "ai")]
+    pub no_ai: bool,
+    /// Stage and commit all tracked changes (git commit -a).
+    #[clap(long, short = 'a')]
+    pub all: bool,
+    /// Print the assembled message without committing.
+    #[clap(long)]
+    pub dry_run: bool,
+}
+
+// `aida commit` is self-contained — git + the staged diff (for REQ-ID
+// inference), no requirements store. Dispatch before storage init like
+// goal / ultraplan. trace:STORY-663 | ai:claude
+fn run_commit(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <CommitCmdArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let CommitCmdArgs {
+        commit_type,
+        scope,
+        message,
+        spec,
+        ai,
+        no_ai,
+        all,
+        dry_run,
+    } = &args;
+    return self::handle_commit_command(&CommitArgs {
+        commit_type: commit_type.clone(),
+        scope: scope.clone(),
+        message: message.clone(),
+        spec: spec.clone(),
+        ai: ai.clone(),
+        no_ai: *no_ai,
+        all: *all,
+        dry_run: *dry_run,
+    });
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static COMMIT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "commit",
+        help_after: "internal",
+        command: <CommitCmdArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_commit),
+    };

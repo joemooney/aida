@@ -253,7 +253,7 @@ fn pool_worktree_announcement_matches_rule_path() {
     assert!(rules.iter().all(|r| !r.contains(&requested_str)));
 
     // The full launch flags carry the same rules.
-    let flags = crate::session::claude_contained_flags_for(&worktree);
+    let flags = crate::session::claude_contained_flags_for(&worktree).unwrap();
     let pos = flags.iter().position(|f| f == "--settings").unwrap();
     let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
     let allow: Vec<String> = v["permissions"]["allow"]
@@ -417,7 +417,7 @@ fn symlinked_worktree_announcement_matches_settings_roots() {
 
     let announced = announced_roots(&crate::session::contained_write_boundary_announcement());
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags(),
+        &crate::session::claude_contained_flags().unwrap(),
     ));
     assert_eq!(announced, in_settings);
     // Both spellings of the symlinked tree, and nothing else.
@@ -457,7 +457,7 @@ fn outside_git_contained_session_has_no_write_roots() {
     let _cwd = crate::session::contained_cwd_seam::pin(&outside);
     let roots = crate::session::contained_session_write_roots();
     assert!(roots.is_empty(), "outside git, no write roots: {roots:?}");
-    let allow = allow_rules_in_flags(&crate::session::claude_contained_flags());
+    let allow = allow_rules_in_flags(&crate::session::claude_contained_flags().unwrap());
     assert!(
         allow.iter().all(|r| !r.starts_with("Edit(")),
         "no Edit allow rule outside git: {allow:?}"
@@ -503,7 +503,7 @@ fn queue_work_boundary_line_uses_the_launch_roots_not_the_lease_path() {
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].starts_with("workspace: "), "{lines:?}");
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags(),
+        &crate::session::claude_contained_flags().unwrap(),
     ));
     assert_eq!(announced_roots(&lines[1]), in_settings);
     assert!(!lines[1].contains("aida-requested"), "{lines:?}");
@@ -527,7 +527,8 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
     );
     let sub = worktree.join("src");
     assert!(crate::session::contained_resume_write_roots(&sub).is_empty());
-    let args = crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub));
+    let args =
+        crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub)).unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -546,7 +547,8 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
 fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     let (_tmp, _parent, worktree) = pool_fixture();
     let args =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree));
+        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree))
+            .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -567,7 +569,8 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
         "{args:?}"
     );
     // The uncontained resume carries no contained flags.
-    let plain = crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None);
+    let plain =
+        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None).unwrap();
     assert!(!plain.iter().any(|a| a == "--settings"), "{plain:?}");
     assert!(
         plain.contains(&"bypassPermissions".to_string()),

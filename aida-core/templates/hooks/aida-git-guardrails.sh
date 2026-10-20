@@ -11,6 +11,7 @@
 #   aida-store/repo default); deleting a feature branch is allowed
 # - git stash drop (permanently drops stashed work)
 # - git rebase without confirmation context
+# - setting AIDA_CARGO_NO_SLOT (bypasses the cargo build-slot limiter)
 #
 # Install: add to .claude/settings.json hooks.PreToolUse
 # The hook reads the tool input from stdin as JSON.
@@ -534,6 +535,25 @@ if ! check_destructive "$SCAN_COMMAND" >&2; then
     {
         echo ""
         echo "To proceed anyway, ask the user to confirm the destructive operation."
+    } >&2
+    exit 2
+fi
+
+# An agent may not bypass the host cargo-slot limiter. Setting
+# AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
+# two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
+# This scans the raw COMMAND, not SCAN_COMMAND: quoted bodies are commands too
+# (`bash -c "AIDA_CARGO_NO_SLOT=1 make check"`), so any assignment (`=`, `+=`,
+# `export`, `env`) anywhere is blocked, a mail body that spells one out included.
+# Unsetting it (`env -u`, `unset`) has no `=` and stays allowed. An indirect
+# name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope: that is
+# deliberate evasion, not an accident. trace:TASK-1948 | ai:claude
+if printf '%s' "$COMMAND" | grep -qE '(^|[^A-Za-z0-9_])AIDA_CARGO_NO_SLOT\+?='; then
+    {
+        echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
+        echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"
+        echo "commands in the background. A full suite is CI's job, not a pre-push step"
+        echo "(make check-ci-fast + make test-touched). Only the operator may bypass the queue."
     } >&2
     exit 2
 fi

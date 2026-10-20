@@ -681,7 +681,7 @@ pub(crate) fn build_contained_resume_command(
     cmd.args(["--resume", &target.id]);
     cmd.args(claude_contained_flags_for_roots(
         &contained_session_write_roots_from(&worktree),
-    ));
+    )?);
     cmd.env("AIDA_CONTAINED", "1");
     cmd.current_dir(&worktree);
     Ok(cmd)
@@ -1018,6 +1018,9 @@ pub fn exec_claude_with_session(
 /// path uses a separate [`claude_headless_args_with_posture`] builder that
 /// always forces `bypassPermissions`, so this change never touches the
 /// unattended drain.
+///
+/// Errors when a contained launch must be refused (BUG-1982).
+// trace:BUG-1982 | ai:claude
 pub fn claude_session_args(
     permission_mode: Option<&str>,
     name: Option<&str>,
@@ -1025,14 +1028,14 @@ pub fn claude_session_args(
     session_id: Option<&str>,
     contained: bool,
     model: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let mut args = Vec::new();
     if let Some(m) = permission_mode {
         args.push("--permission-mode".to_string());
         args.push(m.to_string());
     }
     if contained {
-        args.extend(claude_contained_flags());
+        args.extend(claude_contained_flags()?);
     }
     if let Some(n) = name {
         args.push("--name".to_string());
@@ -1052,7 +1055,7 @@ pub fn claude_session_args(
         // as the initial prompt for the session.
         args.push(p.to_string());
     }
-    args
+    Ok(args)
 }
 
 // trace:BUG-2006 | ai:antigravity
@@ -1064,7 +1067,7 @@ pub(crate) fn build_claude_exec_command(
     contained: bool,
     model: Option<&str>,
     grant_id: Option<&str>,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     if let Some(grant) = grant_id {
@@ -1082,8 +1085,8 @@ pub(crate) fn build_claude_exec_command(
         session_id,
         contained,
         model,
-    ));
-    cmd
+    )?);
+    Ok(cmd)
 }
 
 // trace:TASK-1594 | ai:claude
@@ -1104,7 +1107,7 @@ fn exec_claude(
         contained,
         model,
         grant_id,
-    );
+    )?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -1147,7 +1150,7 @@ pub(crate) fn build_run_claude_session_command(
     session_id: Option<&str>,
     contained: bool,
     model: Option<&str>,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
@@ -1161,8 +1164,8 @@ pub(crate) fn build_run_claude_session_command(
         session_id,
         contained,
         model,
-    ));
-    cmd
+    )?);
+    Ok(cmd)
 }
 
 // trace:STORY-994 | ai:codex
@@ -1183,7 +1186,7 @@ fn run_claude_session(
         session_id,
         contained,
         model,
-    );
+    )?;
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => {
@@ -1326,7 +1329,7 @@ pub(crate) fn compose_headless_command(
             contained,
             model,
             effort,
-        ),
+        )?,
     )
 }
 
@@ -1626,7 +1629,7 @@ pub(crate) fn spawn_claude_resume_with_grant(
         cmd.args(["--permission-mode", m]);
     }
     if contained {
-        cmd.args(claude_contained_flags());
+        cmd.args(claude_contained_flags()?);
     }
     // trace:BUG-2006 | ai:antigravity
     if contained {
@@ -1753,7 +1756,7 @@ pub(crate) fn interactive_reviewer_launch_plan(
                 Some(session_id),
                 contained,
                 None,
-            ),
+            )?,
             contained: containment_applied(vendor, contained),
         }),
         HeadlessVendor::Codex => {
@@ -2277,19 +2280,19 @@ pub fn headless_vendor_args(
     contained: bool,
     model: Option<&str>,
     effort: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let actually_contained = containment_applied(vendor, contained);
-    match vendor {
+    Ok(match vendor {
         HeadlessVendor::Claude => claude_headless_args_with_posture_model_and_effort(
             prompt,
             session_id,
             actually_contained,
             model,
             effort,
-        ),
+        )?,
         HeadlessVendor::Codex => codex_headless_args_with_model_and_effort(prompt, model, effort),
         HeadlessVendor::Agy => agy_headless_args_with_effort(prompt, effort),
-    }
+    })
 }
 
 /// BUG-2133: [`headless_vendor_args`] for a drain child whose working
@@ -2306,7 +2309,7 @@ pub(crate) fn headless_vendor_args_contained_in(
     contained_in: Option<&Path>,
     model: Option<&str>,
     effort: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     match (vendor, contained_in) {
         (HeadlessVendor::Claude, Some(dir)) => claude_headless_args_for_roots(
             prompt,
@@ -2532,14 +2535,14 @@ pub fn codex_headless_args_with_model_and_effort(
 // production launch builds its argv through `headless_vendor_args`.
 #[cfg(test)]
 pub fn claude_headless_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_args_with_posture(prompt, session_id, false)
+    claude_headless_args_with_posture(prompt, session_id, false).unwrap()
 }
 
 pub fn claude_headless_args_with_posture(
     prompt: &str,
     session_id: &str,
     contained: bool,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     claude_headless_args_with_posture_and_model(prompt, session_id, contained, None)
 }
 
@@ -2549,7 +2552,7 @@ pub fn claude_headless_args_with_posture_and_model(
     session_id: &str,
     contained: bool,
     model: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     claude_headless_args_with_posture_model_and_effort(prompt, session_id, contained, model, None)
 }
 
@@ -2560,7 +2563,7 @@ pub fn claude_headless_args_with_posture_model_and_effort(
     contained: bool,
     model: Option<&str>,
     effort: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let roots = contained.then(contained_session_write_roots);
     claude_headless_args_for_roots(prompt, session_id, roots.as_deref(), model, effort)
 }
@@ -2580,23 +2583,23 @@ pub(crate) fn claude_headless_args_for_roots(
     contained_roots: Option<&[PathBuf]>,
     model: Option<&str>,
     effort: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
+    let contained_flags = contained_roots
+        .map(claude_contained_flags_for_roots)
+        .transpose()?
+        .unwrap_or_default();
     let permission_mode = if contained_roots.is_some() {
         "dontAsk"
     } else {
         "bypassPermissions"
     };
-    vec![
+    let args: Vec<String> = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
         permission_mode.to_string(),
     ]
     .into_iter()
-    .chain(
-        contained_roots
-            .map(claude_contained_flags_for_roots)
-            .unwrap_or_default(),
-    )
+    .chain(contained_flags)
     .chain([
         "--output-format".to_string(),
         "stream-json".to_string(),
@@ -2619,7 +2622,8 @@ pub(crate) fn claude_headless_args_for_roots(
             .unwrap_or_default(),
     )
     .chain([prompt.to_string()])
-    .collect()
+    .collect();
+    Ok(args)
 }
 
 /// STORY-263: build the argv (after the `claude` program name) for a headless
@@ -2647,7 +2651,7 @@ pub(crate) fn claude_headless_args_for_roots(
 /// Pure — the flag set is unit-tested without spawning claude.
 /// trace:STORY-263 | ai:claude
 
-pub fn claude_contained_flags() -> Vec<String> {
+pub fn claude_contained_flags() -> Result<Vec<String>> {
     // BUG-1928: the write boundary is the worktree this process runs in — the
     // git root of cwd, which `queue work` has already `set_current_dir`'d to the
     // lease's worktree (pool or named), and the same root the STORY-612 OS
@@ -2661,19 +2665,21 @@ pub fn claude_contained_flags() -> Vec<String> {
 /// BUG-1928: the contained launch flags with the write boundary scoped to
 /// `worktree` (see `crate::contained_boundary`).
 // trace:BUG-1928 | ai:claude
-pub fn claude_contained_flags_for(worktree: &Path) -> Vec<String> {
+pub fn claude_contained_flags_for(worktree: &Path) -> Result<Vec<String>> {
     claude_contained_flags_for_roots(&crate::contained_boundary::contained_write_roots(worktree))
 }
 
-/// The contained launch flags for an explicit list of write roots.
+/// The contained launch flags for an explicit list of write roots. Errors when
+/// the launch must be refused ([`claude_contained_settings_json`]).
 // trace:BUG-1971 | ai:claude
-pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Vec<String> {
-    vec![
+// trace:BUG-1982 | ai:claude
+pub(crate) fn claude_contained_flags_for_roots(write_roots: &[PathBuf]) -> Result<Vec<String>> {
+    Ok(vec![
         "--setting-sources".to_string(),
         "project".to_string(),
         "--settings".to_string(),
-        claude_contained_settings_json(write_roots),
-    ]
+        claude_contained_settings_json(write_roots)?,
+    ])
 }
 
 /// Which AIDA surface a supervised seat gets. TASK-1558 default is `Off`: SPIKE-73 measured MCP at
@@ -2761,7 +2767,13 @@ pub(crate) fn aida_mcp_server_config_json() -> String {
     .to_string()
 }
 
-pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String {
+/// The contained launch settings for `write_roots`. Errors (the launch is
+/// refused) when the main git directory's deny cannot be expressed exactly as
+/// a sandbox and tool rule (BUG-1982): Claude Code's own sandbox would leave
+/// it writable to a linked-worktree session, so a launch without that deny
+/// fails open.
+// trace:BUG-1982 | ai:claude
+pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<String> {
     // Egress allowlist is strictly opt-in via `[contained] allowed_hosts`. When
     // the project root or config can't be resolved we fall back to an empty
     // allowlist — i.e. the pre-STORY-605 behavior. trace:STORY-605 | ai:claude
@@ -2782,9 +2794,28 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String 
     // root, so no write roots (outside git) grants no store paths either: the
     // boundary stays fail closed.
     // trace:BUG-1929 | ai:claude
+    // BUG-1982: `<main>/.git` is denied whatever the store grant, so a launch
+    // that grants no store paths (the git version check below failing) still
+    // keeps the main git directory read-only. trace:BUG-1982.ace25510
+    // trace:BUG-1982 | ai:claude
+    let mut main_git_deny: Vec<PathBuf> = Vec::new();
     let store_paths = match write_roots.first() {
         Some(worktree) => {
             let main = crate::main_worktree_root_from(worktree);
+            // Review round 1 F3: every spelling, from every write root (the
+            // as-given and canonical roots may resolve to differently spelled
+            // mains). trace:BUG-1982 | ai:claude
+            for root in write_roots {
+                let root_main = crate::main_worktree_root_from(root);
+                for spelling in main_spellings_via(root, &root_main) {
+                    for path in main_git_deny_paths(&spelling) {
+                        if !main_git_deny.contains(&path) {
+                            main_git_deny.push(path);
+                        }
+                    }
+                }
+            }
+            refuse_unexpressible_main_git_deny(&main_git_deny)?;
             aida_core::db::prime_cache_sidecars(&main.join(".aida").join("cache.db"));
             // Host-owned hooks must exist before the sandbox makes the common
             // git directory read-only. Every later store write re-verifies them
@@ -2818,7 +2849,82 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> String 
         }
         None => Vec::new(),
     };
-    contained_settings_json_with_store(&allowed_hosts, managed_only, write_roots, &store_paths)
+    Ok(contained_settings_json_with_boundary(
+        &allowed_hosts,
+        managed_only,
+        write_roots,
+        &store_paths,
+        &main_git_deny,
+    ))
+}
+
+/// Every spelling of `<main>/.git` a tool or sandbox path may resolve to: the
+/// main checkout as given and canonical ([`contained_write_roots`]), each
+/// joined with `.git`, plus the canonical `.git` itself when it is a symlink.
+///
+/// [`contained_write_roots`]: crate::contained_boundary::contained_write_roots
+// trace:BUG-1982 | ai:claude
+pub(crate) fn main_git_deny_paths(main: &Path) -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = crate::contained_boundary::contained_write_roots(main)
+        .into_iter()
+        .map(|root| root.join(".git"))
+        .collect();
+    if paths.is_empty() {
+        paths.push(main.join(".git"));
+    }
+    if let Ok(canonical) = std::fs::canonicalize(main.join(".git")) {
+        if !paths.contains(&canonical) {
+            paths.push(canonical);
+        }
+    }
+    paths
+}
+
+/// The spellings of the main checkout `main` (as git resolved it, usually
+/// canonical) that the write root `root` implies: `main` itself, plus, when
+/// `root` lies inside the main checkout, the same directory spelled the way
+/// `root` spells it (a symlinked checkout given as `/link/sub` yields `/link`).
+// trace:BUG-1982 | ai:claude
+fn main_spellings_via(root: &Path, main: &Path) -> Vec<PathBuf> {
+    let mut spellings = vec![main.to_path_buf()];
+    let (Ok(root_canonical), Ok(main_canonical)) =
+        (std::fs::canonicalize(root), std::fs::canonicalize(main))
+    else {
+        return spellings;
+    };
+    let Ok(rel) = root_canonical.strip_prefix(&main_canonical) else {
+        return spellings;
+    };
+    let mut given = root.to_path_buf();
+    for _ in rel.components() {
+        if !given.pop() {
+            return spellings;
+        }
+    }
+    if given.is_absolute() && !spellings.contains(&given) {
+        spellings.push(given);
+    }
+    spellings
+}
+
+/// Refuse a contained launch when some spelling of `<main>/.git` cannot be
+/// written as an exact deny rule (a rule metacharacter such as `( [ ! {` in
+/// the path, or a non-UTF-8 segment).
+// trace:BUG-1982 | ai:claude
+fn refuse_unexpressible_main_git_deny(deny: &[PathBuf]) -> Result<()> {
+    if let Some(path) = deny
+        .iter()
+        .find(|path| crate::contained_boundary::root_rule_path(path).is_none())
+    {
+        anyhow::bail!(
+            "refusing to launch a contained session: the main git directory {} cannot be \
+             denied exactly in the sandbox and tool rules (its path holds a character such \
+             as `( ) [ ] {{ }} * ? ! \\`), so the session could rewrite the host's git \
+             metadata. Move the checkout to a path without those characters.",
+            path.display()
+        );
+    }
+    Ok(())
 }
 
 /// Read `[contained] allowed_hosts` (a string array) from the project config.
@@ -2947,6 +3053,45 @@ pub(crate) fn contained_settings_json_with_store(
     write_roots: &[PathBuf],
     store_write_paths: &[PathBuf],
 ) -> String {
+    contained_settings_json_with_boundary(
+        allowed_hosts,
+        managed_domains_only,
+        write_roots,
+        store_write_paths,
+        &[],
+    )
+}
+
+/// [`contained_settings_json_with_store`] plus `extra_deny`: paths denied in
+/// both the sandbox (`denyWrite`) and the direct tool rules even when no store
+/// path is granted (BUG-1982: the main git directory). When an `extra_deny`
+/// path cannot be expressed exactly (a rule metacharacter in it), the settings
+/// grant no writes at all: no write-root allow rules and no store paths. A
+/// missing deny never sits beside a write grant (fails closed).
+// trace:BUG-1982 | ai:claude
+pub(crate) fn contained_settings_json_with_boundary(
+    allowed_hosts: &[String],
+    managed_domains_only: bool,
+    write_roots: &[PathBuf],
+    store_write_paths: &[PathBuf],
+    extra_deny: &[PathBuf],
+) -> String {
+    // trace:BUG-1982 | ai:claude
+    let deny_expressible = extra_deny
+        .iter()
+        .all(|path| crate::contained_boundary::root_rule_path(path).is_some());
+    let (write_roots, store_write_paths): (&[PathBuf], &[PathBuf]) = if deny_expressible {
+        (write_roots, store_write_paths)
+    } else {
+        (&[], &[])
+    };
+    let mut deny_paths =
+        crate::contained_boundary::contained_store_deny_write_paths(store_write_paths);
+    for path in extra_deny {
+        if !deny_paths.contains(path) {
+            deny_paths.push(path.clone());
+        }
+    }
     let mut sandbox = serde_json::json!({
         "enabled": true,
         "failIfUnavailable": true,
@@ -2972,8 +3117,24 @@ pub(crate) fn contained_settings_json_with_store(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
-    if let Some(filesystem) = crate::contained_boundary::sandbox_filesystem(store_write_paths) {
-        sandbox["filesystem"] = filesystem;
+    let extra_entries = crate::contained_boundary::sandbox_allow_write_entries(extra_deny);
+    match crate::contained_boundary::sandbox_filesystem(store_write_paths) {
+        Some(mut filesystem) => {
+            if let Some(entries) = filesystem["denyWrite"].as_array_mut() {
+                for entry in extra_entries {
+                    let entry = serde_json::Value::String(entry);
+                    if !entries.contains(&entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+            sandbox["filesystem"] = filesystem;
+        }
+        // trace:BUG-1982 | ai:claude
+        None if !extra_entries.is_empty() => {
+            sandbox["filesystem"] = serde_json::json!({ "denyWrite": extra_entries });
+        }
+        None => {}
     }
     // Tool writes do not pass through Bash's OS sandbox, so deny the host
     // git authority paths in both layers (including exact pointer files).
@@ -2984,15 +3145,13 @@ pub(crate) fn contained_settings_json_with_store(
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let mut deny_paths =
-        crate::contained_boundary::contained_store_deny_write_paths(store_write_paths);
     for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
         if !deny_paths.contains(&path) {
             deny_paths.push(path);
         }
     }
-    for path in deny_paths {
-        if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
+    for path in &deny_paths {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(path) {
             for tool in crate::contained_boundary::WRITE_TOOLS {
                 deny.push(format!("{tool}(/{abs})"));
                 deny.push(format!("{tool}(/{abs}/**)"));
@@ -3777,7 +3936,8 @@ fn stamp_lease_active_pid_at(project_root: &Path, lease_id: &str, pid: u32) -> R
 /// conversation with the working model it had already built. Pure — the flag
 /// set is unit-tested without spawning claude. trace:STORY-306 | ai:claude
 pub fn claude_headless_resume_args(prompt: &str, session_id: &str) -> Vec<String> {
-    claude_headless_resume_args_with_posture(prompt, session_id, None)
+    // Uncontained: no contained settings are built, so nothing can refuse.
+    claude_headless_resume_args_with_posture(prompt, session_id, None).unwrap_or_default()
 }
 
 /// `contained_in` is `Some(worktree)` for a contained resume: the write
@@ -3788,7 +3948,7 @@ pub fn claude_headless_resume_args_with_posture(
     prompt: &str,
     session_id: &str,
     contained_in: Option<&Path>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let permission_mode = if contained_in.is_some() {
         "dontAsk"
     } else {
@@ -3804,7 +3964,7 @@ pub fn claude_headless_resume_args_with_posture(
         // write roots. trace:BUG-1971 | ai:claude
         args.extend(claude_contained_flags_for_roots(
             &contained_resume_write_roots(worktree),
-        ));
+        )?);
     }
     args.extend([
         "--output-format".to_string(),
@@ -3820,7 +3980,7 @@ pub fn claude_headless_resume_args_with_posture(
         session_id.to_string(),
         prompt.to_string(),
     ]);
-    args
+    Ok(args)
 }
 
 /// TASK-894: build the `(program, args)` for one launch of the headless
@@ -3885,6 +4045,8 @@ pub fn advisor_tier_program_and_args_with_tuning(
         effort,
         None,
     )
+    // Uncontained: no contained settings are built, so nothing can refuse.
+    .unwrap_or_else(|_| (resolve_agent_program(vendor.program()), Vec::new()))
 }
 
 /// BUG-2133: the advisor tier's `(program, args)` with the drain's
@@ -3902,12 +4064,16 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
     model: Option<&str>,
     effort: Option<&str>,
     contained_in: Option<&Path>,
-) -> (String, Vec<String>) {
-    match vendor {
+) -> Result<(String, Vec<String>)> {
+    Ok(match vendor {
         HeadlessVendor::Claude => {
             let args = if is_fork {
                 // Fork branch inherits the live advisor's context via --resume.
-                claude_headless_resume_args_with_posture("/aida-advise", advisor_uuid, contained_in)
+                claude_headless_resume_args_with_posture(
+                    "/aida-advise",
+                    advisor_uuid,
+                    contained_in,
+                )?
             } else {
                 let roots = contained_in.map(contained_resume_write_roots);
                 claude_headless_args_for_roots(
@@ -3916,7 +4082,7 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
                     roots.as_deref(),
                     model,
                     effort,
-                )
+                )?
             };
             // TASK-1081: route the vendor binary through the mock resolver — an
             // `AIDA_AGENT_CMD` override swaps the program, argv unchanged; unset
@@ -3945,7 +4111,7 @@ pub(crate) fn advisor_tier_program_and_args_with_posture(
                 agy_headless_args_with_effort(seeded_prompt, effort),
             )
         }
-    }
+    })
 }
 
 /// STORY-306: spawn a headless `claude -p --resume <id>` run and wait,
@@ -4006,7 +4172,7 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         cwd,
         // BUG-1971: the write boundary is the worktree being resumed in.
         // trace:BUG-1971 | ai:claude
-        claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd)),
+        claude_headless_resume_args_with_posture(prompt, session_id, contained.then_some(cwd))?,
     )?;
     // TASK-1169 / ADR-22: the resume path is a headless child too — same
     // bounded ceiling, so a resumed drain can't diverge from a fresh one.
@@ -5378,7 +5544,7 @@ pub(crate) fn build_claude_resume_exec_command(
     permission_mode: Option<&str>,
     contained: bool,
     grant_id: Option<&str>,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     if let Some(grant) = grant_id {
@@ -5389,14 +5555,14 @@ pub(crate) fn build_claude_resume_exec_command(
         cmd.args(["--permission-mode", m]);
     }
     if contained {
-        cmd.args(claude_contained_flags());
+        cmd.args(claude_contained_flags()?);
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 // trace:TASK-1594 | ai:claude
@@ -5406,7 +5572,7 @@ pub fn exec_claude_resume(
     contained: bool,
     grant_id: Option<&str>,
 ) -> Result<()> {
-    let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id);
+    let mut cmd = build_claude_resume_exec_command(id, permission_mode, contained, grant_id)?;
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -6735,7 +6901,8 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_native_omits_permission_mode() {
-        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false, None);
+        let args = claude_session_args(None, None, Some("/aida-pickup"), Some("sid"), false, None)
+            .unwrap();
         assert!(
             !args.iter().any(|a| a == "--permission-mode"),
             "native launch must not inject --permission-mode: {args:?}"
@@ -6749,7 +6916,8 @@ mod tests {
     /// trace:STORY-495 | ai:claude
     #[test]
     fn claude_session_args_some_injects_permission_mode() {
-        let args = claude_session_args(Some("bypassPermissions"), None, None, None, false, None);
+        let args =
+            claude_session_args(Some("bypassPermissions"), None, None, None, false, None).unwrap();
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -6806,7 +6974,8 @@ mod tests {
             Some("sid"),
             false,
             Some("opus-alias"),
-        );
+        )
+        .unwrap();
         assert_eq!(
             claude
                 .windows(2)
@@ -6840,7 +7009,8 @@ mod tests {
     fn headless_args_force_bypass_regardless_of_interactive_default() {
         // The interactive builder is now native-by-default…
         let interactive =
-            claude_session_args(None, None, Some("/aida-review"), Some("sid"), false, None);
+            claude_session_args(None, None, Some("/aida-review"), Some("sid"), false, None)
+                .unwrap();
         assert!(!interactive.iter().any(|a| a == "--permission-mode"));
         // …yet the headless builder still hard-forces bypass.
         let headless = claude_headless_args("/aida-review", "sid");
@@ -6883,7 +7053,8 @@ mod tests {
             false,
             Some("opus-alias"),
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(
             claude
                 .windows(2)
@@ -6900,7 +7071,8 @@ mod tests {
             false,
             Some("gpt-alias"),
             None,
-        );
+        )
+        .unwrap();
         assert_eq!(
             codex
                 .windows(2)
@@ -6917,7 +7089,8 @@ mod tests {
             false,
             Some("ignored"),
             None,
-        );
+        )
+        .unwrap();
         assert!(!agy.iter().any(|arg| arg == "--model"), "{agy:?}");
     }
 
@@ -6933,7 +7106,8 @@ mod tests {
             false,
             None,
             Some("high"),
-        );
+        )
+        .unwrap();
         assert_eq!(
             claude
                 .windows(2)
@@ -6950,7 +7124,8 @@ mod tests {
             false,
             None,
             Some("medium"),
-        );
+        )
+        .unwrap();
         assert_eq!(
             codex
                 .windows(2)
@@ -6960,7 +7135,8 @@ mod tests {
         );
         assert_eq!(codex.last().map(String::as_str), Some(prompt));
 
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, Some("low"));
+        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, Some("low"))
+            .unwrap();
         assert_eq!(
             agy.windows(2)
                 .find(|w| w[0] == "--effort")
@@ -6972,7 +7148,7 @@ mod tests {
 
     #[test]
     fn contained_headless_args_use_strict_sandbox_settings() {
-        let args = claude_headless_args_with_posture("/aida-review", "sid", true);
+        let args = claude_headless_args_with_posture("/aida-review", "sid", true).unwrap();
         let pos = args
             .iter()
             .position(|a| a == "--permission-mode")
@@ -7057,7 +7233,8 @@ mod tests {
         let sid = "019e0000-0000-7000-8000-000000000000";
 
         // Claude arm: -p print mode + the prompt survives, NOT a codex command.
-        let claude = headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None);
+        let claude =
+            headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None).unwrap();
         assert!(claude.contains(&"-p".to_string()), "claude -p: {claude:?}");
         assert!(
             claude.contains(&"bypassPermissions".to_string()),
@@ -7071,12 +7248,13 @@ mod tests {
         // Identical to the dedicated claude builder — the default path is unchanged.
         assert_eq!(
             claude,
-            claude_headless_args_with_posture(prompt, sid, false)
+            claude_headless_args_with_posture(prompt, sid, false).unwrap()
         );
 
         // Codex arm: `codex exec --json --dangerously-bypass-approvals-and-sandbox
         // <prompt>`, with the prompt as the final positional and NO claude `-p`.
-        let codex = headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None);
+        let codex =
+            headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None).unwrap();
         assert_eq!(codex.first().map(String::as_str), Some("exec"), "{codex:?}");
         assert!(
             codex.contains(&"--json".to_string()),
@@ -7096,7 +7274,8 @@ mod tests {
         // with the prompt as `-p`'s value at the tail and NO codex `exec`.
         // BUG-1686: the permission flag leads; `-p` is value-taking on agy.
         // trace:BUG-1686 | ai:claude
-        let agy = headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None);
+        let agy =
+            headless_vendor_args(HeadlessVendor::Agy, prompt, sid, false, None, None).unwrap();
         assert_eq!(agy, agy_headless_args(prompt), "{agy:?}");
         assert_eq!(
             agy.first().map(String::as_str),
@@ -7642,6 +7821,7 @@ mod tests {
                 true,
                 None,
             )
+            .unwrap()
         );
     }
 
@@ -8868,7 +9048,8 @@ mod tests {
     #[test]
     fn build_claude_exec_command_exports_when_contained_and_strips_when_uncontained() {
         let cmd_contained =
-            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), true, None, None);
+            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), true, None, None)
+                .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -8878,7 +9059,8 @@ mod tests {
         );
 
         let cmd_uncontained =
-            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), false, None, None);
+            build_claude_exec_command(None, None, Some("prompt"), Some("sid"), false, None, None)
+                .unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(
@@ -8893,7 +9075,8 @@ mod tests {
     #[test]
     fn build_run_claude_session_command_exports_when_contained_and_strips_when_uncontained() {
         let cmd_contained =
-            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), true, None);
+            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), true, None)
+                .unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -8903,7 +9086,8 @@ mod tests {
         );
 
         let cmd_uncontained =
-            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), false, None);
+            build_run_claude_session_command(None, None, Some("prompt"), Some("sid"), false, None)
+                .unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(
@@ -8917,7 +9101,8 @@ mod tests {
     // trace:BUG-2006 | ai:antigravity
     #[test]
     fn build_claude_resume_exec_command_exports_when_contained_and_strips_when_uncontained() {
-        let cmd_contained = build_claude_resume_exec_command("session-123", None, true, None);
+        let cmd_contained =
+            build_claude_resume_exec_command("session-123", None, true, None).unwrap();
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_contained.get_envs().collect();
         assert!(
@@ -8926,7 +9111,8 @@ mod tests {
             "contained build_claude_resume_exec_command must export AIDA_CONTAINED=1: {envs:?}"
         );
 
-        let cmd_uncontained = build_claude_resume_exec_command("session-123", None, false, None);
+        let cmd_uncontained =
+            build_claude_resume_exec_command("session-123", None, false, None).unwrap();
         let envs_uncontained: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> =
             cmd_uncontained.get_envs().collect();
         assert!(

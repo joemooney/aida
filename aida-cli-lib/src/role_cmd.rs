@@ -15,11 +15,17 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::IsTerminal;
 
+// trace:STORY-1728 | ai:claude
+#[path = "role_cmd_args.rs"]
+pub(crate) mod role_cmd_args;
+pub(crate) use role_cmd_args::*;
+
 pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     // The hook path must not initialize storage or statusline/cache context.
     // trace:BUG-2014 | ai:codex
-    if matches!(cmd, RoleCommand::ExpiryNotice) {
-        return crate::grant_expiry_notice::handle();
+    // trace:TASK-1744 | ai:antigravity
+    if let RoleCommand::ExpiryNotice { client } = cmd {
+        return crate::grant_expiry_notice::handle(client);
     }
     let project_root = statusline_project_root();
     match cmd {
@@ -53,7 +59,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             warn_within,
             refuse_within,
         } => handle_role_expiry(warn_within, refuse_within.as_deref()),
-        RoleCommand::ExpiryNotice => unreachable!("notice dispatches before role setup"),
+        RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -1379,15 +1385,24 @@ mod tests {
     // trace:STORY-994 | ai:codex
     #[test]
     fn parses_role_enter_no_title_flag() {
-        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
-            .expect("parse role enter");
-        let Command::Role(RoleCommand::Enter {
-            name,
-            cd: false,
-            no_resume: false,
-            no_title,
-            ..
-        }) = cli.command
+        let cli = crate::command_registry::try_parse_from([
+            "aida",
+            "role",
+            "enter",
+            "advisor",
+            "--no-title",
+        ])
+        .expect("parse role enter");
+        let crate::role_cmd::RoleArgs {
+            inner:
+                RoleCommand::Enter {
+                    name,
+                    cd: false,
+                    no_resume: false,
+                    no_title,
+                    ..
+                },
+        } = cli.command.registered::<crate::role_cmd::RoleArgs>()
         else {
             panic!("expected role enter command");
         };
@@ -1399,7 +1414,7 @@ mod tests {
     // trace:TASK-1592 | ai:antigravity
     #[test]
     fn parses_role_enter_delegate_seat() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "role",
             "enter",
@@ -1410,11 +1425,14 @@ mod tests {
             "reviewer",
         ])
         .expect("parse role enter");
-        let Command::Role(RoleCommand::Enter {
-            name,
-            delegate_seats,
-            ..
-        }) = cli.command
+        let crate::role_cmd::RoleArgs {
+            inner:
+                RoleCommand::Enter {
+                    name,
+                    delegate_seats,
+                    ..
+                },
+        } = cli.command.registered::<crate::role_cmd::RoleArgs>()
         else {
             panic!("expected role enter command");
         };
@@ -1429,9 +1447,14 @@ mod tests {
     // trace:TASK-1787 | ai:antigravity
     #[test]
     fn parses_role_enter_ttl() {
-        let cli = Cli::try_parse_from(["aida", "role", "enter", "advisor", "--ttl", "72h"])
-            .expect("parse role enter --ttl");
-        let Command::Role(RoleCommand::Enter { name, ttl, .. }) = cli.command else {
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "role", "enter", "advisor", "--ttl", "72h",
+        ])
+        .expect("parse role enter --ttl");
+        let crate::role_cmd::RoleArgs {
+            inner: RoleCommand::Enter { name, ttl, .. },
+        } = cli.command.registered::<crate::role_cmd::RoleArgs>()
+        else {
             panic!("expected role enter command");
         };
 
@@ -1568,5 +1591,62 @@ mod tests {
         assert!(!role_resume_prompt_enabled_from(
             "[role]\nresume_prompt = false\n"
         ));
+    }
+}
+
+/// Manage personas / hats — persistent named contexts that resume
+/// across shells. `aida role enter <name>` switches; `aida role list`
+/// shows what's defined for this project. State at `.aida/roles/`.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "role")]
+pub(crate) struct RoleArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::RoleCommand,
+}
+
+// Roles + statusline dispatch before storage init — roles are TOML
+// files at .aida/roles/, statusline reads the cache directly.
+fn run_role(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <RoleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let role_cmd = &args.inner;
+    return self::handle_role_command(role_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ROLE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "role",
+    help_after: "schedule",
+    command: <RoleArgs as clap::CommandFactory>::command,
+    policy: role_cli_policy,
+    run: crate::command_registry::Handler::Early(run_role),
+};
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Role. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn role_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::RoleCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <RoleArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            RoleCommand::List
+                | RoleCommand::Show { .. }
+                | RoleCommand::Active
+                | RoleCommand::Current { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Role
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
     }
 }

@@ -173,6 +173,7 @@ impl Case {
                         key,
                     ))?)?)
                 },
+                read_history: &|_| Ok(RetainedHistory::default()),
                 read_corpus: &|ids| {
                     mh::corpus_gate_bodies(&[root.path()], PR, ids).map_err(anyhow::Error::msg)
                 },
@@ -205,6 +206,7 @@ impl Case {
                         override_stale_approval: false,
                         ledger: &ledger,
                         hold: &HoldFacts::of(hold.as_ref(), None),
+                        carry_over: None,
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },
@@ -417,6 +419,7 @@ fn the_mandate_is_consulted_only_for_a_sensitive_spec() {
     let release = eligible(
         &case.hold,
         &case.body,
+        &RetainedHistory::default(),
         HEAD,
         &[Some(&case.req)],
         &sa::GrantCheck::Valid(case.grant.clone()),

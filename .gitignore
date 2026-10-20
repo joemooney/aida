@@ -184,13 +184,18 @@ __pycache__/
 # trace:BUG-1511 | ai:claude
 /.codex/hooks/
 
-# The portable skill pack Codex and Antigravity read. In THIS repo it holds
-# generated regular-file copies of the skill masters under
+# The portable skill pack and Antigravity hook surface under `.agents/`. In
+# THIS repo it holds generated regular-file copies of the skill masters under
 # `aida-core/templates/` (Codex skips a symlinked SKILL.md, so the `.claude/`
-# symlink layout cannot be reused), plus any third-party skills the operator
-# installs locally. Regenerated, never tracked here. Downstream projects track
-# their `.agents/skills/aida-*` pack; the scaffolder never ignores it there.
+# symlink layout cannot be reused), plus machine-local `.agents/hooks/` handler
+# copies and `.agents/hooks.json` (which mirrors `antigravity-hooks.json`),
+# plus any third-party skills/hooks the operator installs locally. Regenerated,
+# never tracked here. Downstream projects track their `.agents/skills/aida-*`
+# pack; `add_aida_gitignore_entries` ignores `.agents/hooks/` and
+# `.agents/hooks.json` there so generated hook wiring and handler copies never
+# linger untracked (matching BUG-1587 for `.codex/hooks/`).
 # trace:BUG-1639 | ai:claude
+# trace:TASK-1744 | ai:antigravity
 /.agents/
 
 # codegraph index (local tooling, not part of the repo)

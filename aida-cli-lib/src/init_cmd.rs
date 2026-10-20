@@ -16,6 +16,11 @@ use crate::process_retry::RetryEtxtbsy;
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "init_cmd_args.rs"]
+pub(crate) mod init_cmd_args;
+pub(crate) use init_cmd_args::*;
+
 use crate::*;
 
 #[derive(Debug, Clone)]
@@ -1853,6 +1858,10 @@ fn complete_init_scaffolding(
     if codex_profile_selected {
         maybe_scaffold_codex_hooks_on_init(root, force);
     }
+    // trace:TASK-1744 | ai:antigravity
+    if antigravity_profile_selected && !no_hooks {
+        maybe_scaffold_antigravity_hooks_on_init(root, force);
+    }
 
     let manifest_written = ensure_project_manifest_scaffold(root, force).unwrap_or(false);
     if manifest_written {
@@ -3369,6 +3378,9 @@ mod task_631_init_self_commit_tests {
             ".codex/skills",
             ".agents/skills/aida-queue/SKILL.md",
             ".agents/skills/aida-implement/SKILL.md",
+            // trace:TASK-1744 | ai:antigravity
+            ".agents/hooks.json",
+            ".agents/hooks",
             ".antigravity",
         ] {
             assert!(
@@ -3630,6 +3642,151 @@ mod task_631_init_self_commit_tests {
             assert!(
                 !dir.path().join(".codex/hooks.json").exists(),
                 "agent={agent:?}, no_hooks={no_hooks} must not scaffold Codex hooks"
+            );
+        }
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn reinit_repairs_missing_antigravity_hook_handlers_without_force() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        aida_core::scaffolding::codex_hooks::scaffold_antigravity_hooks(root, false).unwrap();
+        let wiring = root.join(".agents/hooks.json");
+        let customized = format!("{}\n", std::fs::read_to_string(&wiring).unwrap());
+        std::fs::write(&wiring, &customized).unwrap();
+        std::fs::remove_dir_all(root.join(".agents/hooks")).unwrap();
+
+        maybe_repair_codex_hooks_on_reinit(root, None, false).unwrap();
+
+        for name in aida_core::scaffolding::codex_hooks::antigravity_handler_names() {
+            assert!(
+                root.join(".agents/hooks").join(&name).is_file(),
+                "re-init must restore missing Antigravity handler {name}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(wiring).unwrap(),
+            customized,
+            "non-force repair must preserve customized Antigravity wiring"
+        );
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn reinit_antigravity_hook_repair_honors_agent_allow_list_no_hooks_and_third_party_hooks_json()
+    {
+        for (agent, no_hooks) in [
+            (Some("claude"), false),
+            (Some("codex"), false),
+            (Some("antigravity"), true),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            maybe_repair_codex_hooks_on_reinit(dir.path(), agent, no_hooks).unwrap();
+            assert!(
+                !dir.path().join(".agents/hooks.json").exists(),
+                "agent={agent:?}, no_hooks={no_hooks} must not scaffold Antigravity hooks"
+            );
+            assert!(
+                !dir.path().join(".agents/hooks").exists(),
+                "agent={agent:?}, no_hooks={no_hooks} must not drop Antigravity handlers"
+            );
+        }
+
+        // Pre-existing third-party .agents/hooks.json without AIDA's key must not
+        // trigger handler installation on re-init, even when antigravity is enabled.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_enabled_agent_selection(
+            root,
+            AgentSelection {
+                claude: true,
+                codex: true,
+                antigravity: true,
+            },
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".agents")).unwrap();
+        let third_party =
+            "{\"third-party\":{\"PreInvocation\":[{\"type\":\"command\",\"command\":\"true\"}]}}\n";
+        std::fs::write(root.join(".agents/hooks.json"), third_party).unwrap();
+
+        maybe_repair_codex_hooks_on_reinit(root, None, false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join(".agents/hooks.json")).unwrap(),
+            third_party
+        );
+        assert!(
+            !root.join(".agents/hooks").exists(),
+            "third-party .agents/hooks.json without AIDA wiring must not receive unreferenced handlers"
+        );
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn fresh_init_scaffolds_antigravity_hooks_only_when_selected_and_hooks_enabled() {
+        let store = aida_core::models::RequirementsStore::new();
+
+        // 1. `--agent antigravity` with hooks enabled scaffolds `.agents/hooks.json` and handler.
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+            complete_init_scaffolding(
+                root,
+                &store,
+                Some("antigravity"),
+                false, // with_mcp
+                true,  // no_skills
+                false, // no_hooks
+                false, // force
+                root.join(".aida-store"),
+                "test store",
+                false, // verbose
+                crate::cli::InitFootprint::Full,
+                true, // suppress scaffold commit
+            )
+            .unwrap();
+            assert!(
+                root.join(".agents/hooks.json").is_file(),
+                "fresh init with --agent antigravity must scaffold .agents/hooks.json"
+            );
+            assert!(
+                root.join(".agents/hooks/aida-grant-expiry-notice.sh")
+                    .is_file(),
+                "fresh init with --agent antigravity must scaffold handler"
+            );
+        }
+
+        // 2. `--agent antigravity --no-hooks` or non-antigravity allow-list (`--agent codex`) does not.
+        for (agent, no_hooks) in [(Some("antigravity"), true), (Some("codex"), false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+            complete_init_scaffolding(
+                root,
+                &store,
+                agent,
+                false, // with_mcp
+                true,  // no_skills
+                no_hooks,
+                false, // force
+                root.join(".aida-store"),
+                "test store",
+                false, // verbose
+                crate::cli::InitFootprint::Full,
+                true, // suppress scaffold commit
+            )
+            .unwrap();
+            assert!(
+                !root.join(".agents/hooks.json").exists(),
+                "fresh init with agent={agent:?}, no_hooks={no_hooks} must not scaffold .agents/hooks.json"
+            );
+            assert!(
+                !root.join(".agents/hooks").exists(),
+                "fresh init with agent={agent:?}, no_hooks={no_hooks} must not scaffold .agents/hooks"
             );
         }
     }
@@ -4809,6 +4966,38 @@ fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: boo
     }
 }
 
+// trace:TASK-1744 | ai:antigravity
+fn maybe_scaffold_antigravity_hooks_on_init(project_root: &std::path::Path, force: bool) {
+    match aida_core::scaffolding::codex_hooks::scaffold_antigravity_hooks(project_root, force) {
+        Ok(outcome) if outcome.warning.is_some() => {
+            if let Some(w) = outcome.warning {
+                eprintln!("  {} {w}", "Warning:".yellow());
+            }
+        }
+        Ok(outcome) if !outcome.written.is_empty() => {
+            println!(
+                "  {} wrote Antigravity hook wiring ({} file(s) under .agents/) — mid-session grant expiry notices now fire in Antigravity sessions too",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                outcome.written.len(),
+            );
+        }
+        Ok(outcome) if !outcome.skipped_existing.is_empty() => {
+            println!(
+                "  {} Antigravity hook wiring already present ({} file(s) skipped; use --force to overwrite)",
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                outcome.skipped_existing.len(),
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} Antigravity hook scaffold skipped ({e})",
+                "Warning:".yellow()
+            );
+        }
+    }
+}
+
 /// Repair the ignored, machine-local Codex hook handlers when `aida init` is
 /// re-run in an existing project. The normal already-initialized guard returns
 /// before full scaffolding, but a tracked/retained `.codex/hooks.json` can
@@ -4836,6 +5025,23 @@ fn maybe_repair_codex_hooks_on_reinit(
     };
     if codex_selected {
         maybe_scaffold_codex_hooks_on_init(project_root, false);
+    }
+    // trace:TASK-1744 | ai:antigravity
+    let antigravity_selected = match agent {
+        Some(agent) => parse_agent_selection(agent)?.antigravity,
+        None => {
+            if project_root.join(".agents/hooks.json").exists() {
+                aida_core::scaffolding::codex_hooks::antigravity_hooks_wired(project_root)
+            } else {
+                read_enabled_agent_selection(project_root)
+                    .is_some_and(|selection| selection.antigravity)
+                    || aida_core::agents_config::resolve_default_vendor(project_root).as_deref()
+                        == Some("antigravity")
+            }
+        }
+    };
+    if antigravity_selected {
+        maybe_scaffold_antigravity_hooks_on_init(project_root, false);
     }
     Ok(())
 }
@@ -5962,8 +6168,12 @@ mod init_roster_tests {
     use super::*;
 
     // trace:STORY-1540 | ai:antigravity
+    // trace:TASK-1970 | ai:antigravity
     #[test]
     fn init_at_non_tty_writes_no_team_roster() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let _env = crate::test_env::EnvVarsGuard::apply(&[
@@ -6032,3 +6242,647 @@ mod story_1674_minimal_cache_tests {
         assert!(row.filed_at.is_none(), "no invented filing provenance");
     }
 }
+
+/// Initialize AIDA in the current project
+#[derive(clap::Parser, Debug)]
+#[clap(name = "init")]
+#[clap(group(
+    clap::ArgGroup::new("init_remote")
+        .args(["github", "remote", "forge"])
+        .multiple(false)
+))]
+#[clap(group(
+    clap::ArgGroup::new("init_visibility_target")
+        .args(["github", "forge", "gitlab"])
+        .multiple(true)
+))]
+pub(crate) struct InitArgs {
+    /// Skip generating agent skills and commands (.claude/* and .agents/skills/aida-*)
+    // trace:TASK-457 | ai:claude
+    #[clap(long)]
+    pub no_skills: bool,
+
+    /// Opt into scaffolding AIDA MCP registrations for Claude/Codex.
+    ///
+    /// The token-efficient CLI/TOON surface is the default for
+    /// CLI-capable agents; MCP remains available as the typed surface for
+    /// MCP-native clients and explicit opt-ins.
+    // trace:STORY-1129 | ai:codex
+    #[clap(long)]
+    pub with_mcp: bool,
+
+    /// Agent profiles to scaffold — a STRICT allow-list: only the named
+    /// agents' surfaces are written. Accepts `claude`, `codex`,
+    /// `antigravity`, a comma-list (`claude,codex`), `both`
+    /// (= claude,codex exactly — no antigravity), or `all` (every
+    /// profile). Omit to use PATH detection.
+    // trace:BUG-794 | ai:claude
+    #[clap(long)]
+    pub agent: Option<String>,
+
+    /// Skip generating commit validation hooks
+    #[clap(long)]
+    pub no_hooks: bool,
+
+    /// Skip machine-global post-init hooks from ~/.aida/init.d/*.sh.
+    // trace:STORY-828 | ai:codex
+    #[clap(long)]
+    pub no_post_hooks: bool,
+
+    /// Skip bootstrapping the default global role set (implementer, product,
+    /// advisor, reviewer, integrator) into ~/.aida/roles/. By default
+    /// `aida init` scaffolds them so a fresh machine is ready out of the box.
+    // trace:TASK-638 TASK-1200 | ai:claude,codex
+    #[clap(long)]
+    pub no_roles: bool,
+
+    /// Skip the first-machine-setup prompt for the agent permission
+    /// posture (~/.aida/agents.toml). By default, the first `aida init` on
+    /// a machine asks how `aida agent new` should handle permissions and
+    /// records the choice globally. Non-interactive init never prompts.
+    // trace:TASK-698 | ai:claude
+    #[clap(long)]
+    pub no_agent_config: bool,
+
+    /// Skip the TTY offer to install the scheduler-tick crontab entry
+    /// (`aida schedule tick`, every 15m). Without this flag, a TTY init
+    /// still only offers — the default answer is no — and a
+    /// non-interactive init never prompts or installs anything either
+    /// way. Use this to suppress the offer itself, e.g. in a scripted
+    /// session run at a TTY.
+    // trace:STORY-1463 | ai:claude
+    #[clap(long)]
+    pub no_schedule: bool,
+
+    /// Overwrite existing files if already initialized
+    #[clap(long)]
+    pub force: bool,
+
+    /// Project footprint for git-canonical init. `minimal` writes only the
+    /// store, .aida/config.toml, .aida/cache.db, and AIDA .gitignore block;
+    /// `memory-lane` adds only reflex guidance plus aida-capture/aida-learn.
+    // trace:STORY-830 | ai:codex
+    // trace:STORY-1093 | ai:codex
+    #[clap(long, value_enum, value_name = "full|minimal|memory-lane")]
+    pub footprint: Option<crate::cli::InitFootprint>,
+
+    /// Markdown-only first run: scaffold just a `specs/` folder + a runnable
+    /// `aida why` demo — no orphan branch, cache, MCP, skills, or roles. The
+    /// 60-second magic with zero machine; add full `aida init` later.
+    // trace:STORY-757 | ai:claude
+    #[clap(long)]
+    pub minimal: bool,
+
+    /// Bootstrap a BRAND-NEW project: create DIR, optionally scaffold it
+    /// (--lang), git init + first commit, run the standard init inside it,
+    /// then (with --github or --remote) create the remote and push the
+    /// code branch and aida-store in the order that never leaves divergent
+    /// history. Omit DIR to initialize in place, exactly as before.
+    // trace:STORY-780 | ai:claude
+    #[clap(value_name = "DIR")]
+    pub dir: Option<String>,
+
+    /// Language scaffold for a new DIR, delegated to the native tool:
+    /// rust (cargo init), python (uv init), or node (npm init -y).
+    // trace:STORY-780 | ai:claude
+    #[clap(long, value_name = "LANG", requires = "dir")]
+    pub lang: Option<String>,
+
+    /// Create the GitHub repo for a new DIR (PRIVATE by default) and push
+    /// both legs. Needs an authenticated `gh`.
+    // trace:STORY-780 | ai:claude
+    #[clap(long, requires = "dir")]
+    pub github: bool,
+
+    /// Make the --github repo public instead of private.
+    // trace:STORY-780 | ai:claude
+    // trace:STORY-823 | ai:codex
+    #[clap(long, requires_all = ["dir", "init_visibility_target"])]
+    pub public: bool,
+
+    /// Bring-your-own remote URL for a new DIR: set origin and push both
+    /// legs. Covers GitLab and any host with push-to-create.
+    // trace:STORY-780 | ai:claude
+    #[clap(long, value_name = "URL", requires = "dir")]
+    pub remote: Option<String>,
+
+    /// Use a named machine-global forge profile from ~/.aida/forges.toml.
+    // trace:STORY-823 | ai:codex
+    #[clap(long, value_name = "NAME", requires = "dir")]
+    pub forge: Option<String>,
+
+    /// Also create the project on this GitLab host and group
+    /// (HOST or HOST/GROUP; PRIVATE unless --public) and publish both
+    /// legs there. With --github it becomes a mirror hub; alone it is
+    /// origin. When the group refuses push-to-create, the project is
+    /// created through the GitLab API (needs a `glab` login for the
+    /// host, else GITLAB_TOKEN).
+    // trace:STORY-1656 | ai:claude
+    #[clap(
+        long,
+        value_name = "HOST[/GROUP]",
+        requires = "dir",
+        conflicts_with = "remote"
+    )]
+    pub gitlab: Option<String>,
+
+    /// (deprecated, accepted for backwards compat) Initialize in
+    /// distributed mode. Distributed is now the default, so this
+    /// flag is a no-op. Use `--centralized` to opt out.
+    // trace:EPIC-1-001 | ai:claude
+    // trace:TASK-487 | ai:claude
+    #[clap(long, hide = true)]
+    pub distributed: bool,
+
+    /// Initialize in legacy centralized mode (SQLite-canonical, single
+    /// requirements.db). Deprecated — git-canonical is now the default.
+    #[clap(long)]
+    pub centralized: bool,
+
+    /// Use a sibling repo instead of an orphan branch for the store.
+    /// Recommended for multi-repo workspaces where multiple code repos
+    /// share one store. Implies distributed mode.
+    #[clap(long)]
+    pub sibling: bool,
+
+    /// Attach this repo to an EXISTING sibling store (multi-repo) instead of
+    /// creating a new one. Writes the local config + rebuilds the cache and
+    /// never touches the store's contents — the shared dispenser serializes
+    /// id allocation across repos, so no separate node id is needed.
+    // trace:STORY-674 | ai:claude
+    #[clap(long, visible_alias = "join")]
+    pub attach: bool,
+
+    /// Explicit store location for distributed mode — a separate store repo
+    /// at PATH (relative to this repo, or absolute). Several code repos that
+    /// point at the SAME path share one store. `--sibling` is sugar for
+    /// `--store-path ../aida-store`. Combine with `--attach` to join an
+    /// existing store at PATH.
+    // trace:STORY-676 | ai:claude
+    #[clap(long, value_name = "PATH")]
+    pub store_path: Option<String>,
+
+    /// Git remote URL for the shared aida registry (used with --sibling).
+    /// Example: git@github.com:org/aida-registry.git
+    #[clap(long)]
+    pub registry_remote: Option<String>,
+
+    /// Verbose output — list every file scaffolded. Default is a brief
+    /// summary suitable for first-run UX.
+    // trace:BUG-19 | ai:claude
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
+
+    /// Project name. Stored in the store's metadata and used as the
+    /// title in scaffolded CLAUDE.md / `aida status` output. Defaults
+    /// to the current working directory's basename when omitted, so a
+    /// fresh init in `~/projects/tzconv/` lands `name = "tzconv"`.
+    // trace:BUG-25 | ai:claude
+    #[clap(long)]
+    pub name: Option<String>,
+
+    /// Also write the starter memory pack — generic AIDA-using
+    /// discipline as Claude Code project memories. Opt-in; off by
+    /// default so first-time projects start with an empty memory dir.
+    // trace:STORY-255 | ai:claude
+    #[clap(long)]
+    pub with_memories: bool,
+
+    /// Refresh every installed pack — starter memories, agent skills and
+    /// commands, and the Codex custom prompts: overlay updated versions
+    /// of the files you have not edited, leaving your own edits intact.
+    /// Implies --with-memories. No --force needed, and nothing you wrote
+    /// is overwritten.
+    // trace:STORY-255 trace:TASK-1170 | ai:claude
+    #[clap(long)]
+    pub refresh: bool,
+
+    /// Scope the starter memory pack to a subsystem. Memory files
+    /// carrying a `subsystem:` frontmatter tag load only when their
+    /// value matches; untagged memories are universal and always load.
+    /// Omit to load the full pack.
+    // trace:STORY-362 | ai:claude
+    #[clap(long, value_name = "SUBSYSTEM")]
+    pub focus: Option<String>,
+
+    /// Run `git init` automatically when the current directory is not yet
+    /// a git repository, instead of bailing. At a TTY this is offered
+    /// interactively; in scripts pass this flag to opt into creating the
+    /// repo (otherwise non-interactive init keeps the safe bail).
+    // trace:STORY-552 | ai:claude
+    #[clap(long)]
+    pub git_init: bool,
+
+    /// When bootstrapping a clone of an already-initialized AIDA project,
+    /// commit the locally-written scaffold files to the code branch. The
+    /// safe default leaves them uncommitted so a clone never pushes a
+    /// scaffold dump to the shared default branch; pass this to opt into a
+    /// deliberate scaffold commit. No effect on a genuinely-new first init,
+    /// which always commits its own scaffolding.
+    // trace:BUG-570 | ai:claude
+    #[clap(long)]
+    pub commit_scaffold: bool,
+
+    /// Friendly name for this node, recorded alongside the node id in the
+    /// shared roster (`aida team`). Defaults to `<host>-<user>-<seq>` (e.g.
+    /// `imac-joe-1`). At a TTY with no flag you are prompted with the
+    /// default pre-filled; non-interactive init uses the default silently.
+    // trace:STORY-652 | ai:claude
+    #[clap(long, value_name = "NAME")]
+    pub node_name: Option<String>,
+}
+
+// Handle init before path resolution (no DB exists yet)
+fn run_init(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <InitArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let InitArgs {
+        no_skills,
+        with_mcp,
+        agent,
+        no_hooks,
+        no_post_hooks,
+        no_roles,
+        no_agent_config,
+        no_schedule,
+        force,
+        footprint,
+        distributed: _,
+        centralized,
+        sibling,
+        attach,
+        store_path,
+        registry_remote,
+        verbose,
+        name,
+        with_memories,
+        refresh,
+        focus,
+        git_init,
+        commit_scaffold,
+        node_name,
+        minimal,
+        dir,
+        lang,
+        github,
+        public,
+        remote,
+        forge,
+        gitlab,
+    } = &args;
+    // STORY-757: the markdown-only first run — scaffold just a `specs/`
+    // folder + a runnable `aida why` demo, none of the orphan-branch / cache
+    // / MCP / skills / roles machine. Proves the 60-second magic needs no
+    // setup. Short-circuits before every heavy init path. trace:STORY-757
+    if *minimal {
+        handle_init_minimal(*force)?;
+        return Ok(());
+    }
+    // STORY-780: `aida init <DIR>` bootstraps a brand-new project. The
+    // pre-steps (mkdir → native-tool scaffold → git init → first commit)
+    // run from the caller's cwd, then cwd moves INTO the new dir so the
+    // entire standard init below runs there unchanged; the remote/push
+    // post-steps run at the end of this block, after the store branch
+    // exists. trace:STORY-780 | ai:claude
+    let bootstrap: Option<init_bootstrap::BootstrapPlan> = match dir {
+        Some(d) => {
+            let mut plan = init_bootstrap::BootstrapPlan {
+                dir: std::path::PathBuf::from(d),
+                lang: lang
+                    .as_deref()
+                    .map(init_bootstrap::Lang::parse)
+                    .transpose()?,
+                github: *github,
+                public: *public,
+                remote: remote.clone(),
+                forge: forge.clone(),
+                github_repo: None,
+                // trace:STORY-1656 | ai:claude
+                gitlab: gitlab
+                    .as_deref()
+                    .map(gitlab_project_create::GitLabHub::parse)
+                    .transpose()?,
+            };
+            init_bootstrap::resolve_forge_profile(&mut plan)?;
+            init_bootstrap::preflight(&plan)?;
+            init_bootstrap::create_and_scaffold(&plan)?;
+            std::env::set_current_dir(&plan.dir)
+                .with_context(|| format!("could not enter {}", plan.dir.display()))?;
+            Some(plan)
+        }
+        None => None,
+    };
+    // Default: distributed (git-canonical) mode per EPIC-1-001.
+    // --sibling implies distributed-sibling. --centralized opts into
+    // the deprecated SQLite-canonical path.
+    // trace:EPIC-1-001 | ai:claude
+    if *centralized {
+        self::handle_init_command(
+            *no_skills,
+            agent.as_deref(),
+            *with_mcp,
+            *no_hooks,
+            *force,
+            *verbose,
+            name.as_deref(),
+            *footprint,
+        )?;
+    } else if *sibling || store_path.is_some() {
+        // STORY-676: --store-path implies the sibling storage model at an
+        // explicit path; --sibling is sugar for --store-path ../aida-store.
+        self::handle_init_distributed_sibling(
+            registry_remote.as_deref(),
+            *force,
+            *attach,
+            store_path.as_deref(),
+            *no_skills,
+            agent.as_deref(),
+            *with_mcp,
+            *no_hooks,
+            *verbose,
+            name.as_deref(),
+            *footprint,
+        )?;
+    } else {
+        self::handle_init_distributed_worktree(
+            *force,
+            *no_skills,
+            agent.as_deref(),
+            *with_mcp,
+            *no_hooks,
+            *verbose,
+            name.as_deref(),
+            *git_init,
+            *commit_scaffold,
+            node_name.as_deref(),
+            *footprint,
+        )?;
+    }
+    // TASK-638: bootstrap the default GLOBAL role set so a fresh machine is
+    // ready out of the box — consistent with how init already scaffolds
+    // skills / hooks / discipline-pack. Idempotent + non-destructive
+    // (existing roles preserved). The write lands in GLOBAL ~/.aida/roles/
+    // from a project-scoped command, so report it explicitly. Non-fatal:
+    // a hiccup writing global state must not abort an otherwise-successful
+    // init. trace:TASK-638 | ai:claude
+    let init_footprint = self::resolve_init_footprint(&statusline_project_root(), *footprint)?;
+    if !*no_roles && init_footprint == cli::InitFootprint::Full {
+        match scaffold_starter_roles(&statusline_project_root()) {
+            Ok((created, skipped)) => {
+                println!(
+                    "  {} global roles installed: implementer, product, advisor, reviewer, integrator",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+                if created.is_empty() {
+                    println!(
+                        "  {} starter global roles already present at ~/.aida/roles/ ({} role(s))",
+                        "Note:".dimmed(),
+                        skipped.len()
+                    );
+                } else {
+                    println!(
+                        "  {} scaffolded {} starter global role(s) at ~/.aida/roles/: {}",
+                        "+".green(),
+                        created.len(),
+                        created.join(", ")
+                    );
+                }
+            }
+            Err(e) => {
+                eprintln!("  {} starter roles skipped: {}", "Note:".dimmed(), e);
+            }
+        }
+    }
+    // TASK-698 / TASK-1233: first-machine setup plus existing-project
+    // posture repair. The first-machine prompt writes GLOBAL ~/.aida/ and,
+    // for contained, the matching ~/.codex/config.toml sandbox table. A
+    // re-init over existing config never re-prompts unless the read-only
+    // posture report already flags an incoherent state, and even then only
+    // at a TTY. Non-interactive / --no-agent-config init writes nothing.
+    // trace:TASK-698 trace:TASK-1233 | ai:codex
+    if !*no_agent_config && init_footprint == cli::InitFootprint::Full {
+        if let Err(e) = maybe_prompt_agent_posture() {
+            eprintln!(
+                "  {} agent permission posture skipped: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
+        if let Err(e) = config_cmd::maybe_offer_permission_posture_fix(&statusline_project_root()) {
+            eprintln!(
+                "  {} agent permission posture check skipped: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
+        if let Err(e) = maybe_prompt_confirm_bypass() {
+            eprintln!(
+                "  {} bypass confirmation setting skipped: {}",
+                "Note:".dimmed(),
+                e
+            );
+        }
+    }
+    if init_footprint == cli::InitFootprint::Full {
+        let setting = bypass_confirm::load(&statusline_project_root());
+        println!(
+            "  Agent bypass confirmation: {} ({})",
+            if setting.on { "on" } else { "off" },
+            setting.source
+        );
+    }
+    // STORY-1463: a registered `[schedule]` job only ever runs when
+    // something invokes `aida schedule tick`; nothing does that by
+    // default. At a TTY, offer to install the crontab entry that drives
+    // it (default: no — writing to the operator's crontab is a real
+    // side effect). Non-interactive init and --no-schedule never prompt
+    // and never install anything. trace:STORY-1463 | ai:claude
+    if !*no_schedule && init_footprint == cli::InitFootprint::Full {
+        maintenance_schedule::maybe_offer_tick_install(&statusline_project_root());
+    }
+    // STORY-831: minimal-footprint projects intentionally do not commit
+    // agent instruction files, so the machine-global awareness snippet is
+    // the path that lets a fresh agent notice AIDA. Keep every other
+    // first-machine global setup full-only, but offer this idempotent
+    // snippet for both full and minimal TTY init. Non-interactive init and
+    // a declined prompt leave user files untouched.
+    if let Err(e) = maybe_offer_user_aida_instructions() {
+        eprintln!(
+            "  {} user AIDA instructions skipped: {}",
+            "Note:".dimmed(),
+            e
+        );
+    }
+    // Starter memory pack — opt-in, orthogonal to storage mode. Failure
+    // is non-fatal: it writes outside the project root, so a hiccup
+    // there must not abort an otherwise-successful init. trace:STORY-255
+    if (*with_memories || *refresh) && init_footprint == cli::InitFootprint::Full {
+        // STORY-362: --focus <subsystem> scopes the pack to universal
+        // (untagged) memories plus those whose `subsystem:` frontmatter
+        // matches. trace:STORY-362 | ai:claude
+        if let Err(e) = scaffold_memory_pack(*refresh, focus.as_deref()) {
+            eprintln!("  {} starter memory pack skipped: {}", "Note:".dimmed(), e);
+        }
+    }
+    // TASK-1170: --refresh is not memory-pack-only any more. The same
+    // edit-preserving overlay now converges every installed agent pack
+    // (Claude skills/commands, Codex skills, Antigravity skills, and the
+    // machine-global Codex custom prompts) onto this binary's templates,
+    // so a template fix reaches a non-Claude agent without --force.
+    if *refresh && init_footprint == cli::InitFootprint::Full {
+        let packs = scaffold_refresh::refresh_agent_packs(&statusline_project_root(), None);
+        scaffold_refresh::print_refresh_summary(&packs);
+        // Seed into THIS project's store: the distributed store first, then
+        // a local legacy store. Never the registry's ambient default, which
+        // could be an unrelated project's database. trace:BUG-1603 | ai:claude
+        // A distributed project whose store isn't attached here must not
+        // fall through to a stale `requirements.db` in the cwd either: try
+        // to attach the store, and otherwise skip seeding. trace:TASK-1486 | ai:claude
+        let cwd = std::env::current_dir()?;
+        let target = refresh_seed_target(
+            detect_distributed_store(),
+            unattached_distributed_root(&cwd).is_some(),
+            || determine_requirements_path(None),
+        );
+        let target = match target {
+            RefreshSeedTarget::DistributedUnattached => {
+                match unattached_distributed_root(&cwd) {
+                    // BUG-433 shape: the store is already physically
+                    // attached at `<root>/.aida-store` (no fetch/attach
+                    // needed) — use it directly, matching the main
+                    // resolver's `store_path_opt` computation.
+                    // trace:TASK-1487 | ai:claude
+                    Some(ref root) if attached_store_present(root) => {
+                        RefreshSeedTarget::Store(root.join(".aida-store"))
+                    }
+                    Some(root) if branch_exists_anywhere(&root, "aida-store") => {
+                        match try_attach_store_worktree(&root) {
+                            Ok(store_path) => {
+                                eprintln!(
+                                    "  {} attached the AIDA store worktree from \
+                                     `aida-store`",
+                                    "Note:".dimmed()
+                                );
+                                RefreshSeedTarget::Store(store_path)
+                            }
+                            // Auto-attach failed (offline, diverged/locked
+                            // branch, git too old, …) — print the cause,
+                            // as the main resolver does for the same
+                            // failure, instead of silently dropping it.
+                            // trace:TASK-1487 | ai:claude
+                            Err(e) => {
+                                eprintln!(
+                                    "  {} couldn't auto-attach the store worktree: {}",
+                                    "Note:".dimmed(),
+                                    e
+                                );
+                                RefreshSeedTarget::DistributedUnattached
+                            }
+                        }
+                    }
+                    _ => RefreshSeedTarget::DistributedUnattached,
+                }
+            }
+            other => other,
+        };
+        match target {
+            RefreshSeedTarget::Store(store_path) => {
+                let storage = Storage::new(store_path);
+                let seeded = protocol_cmd::seed_missing_protocols(&storage)?;
+                if seeded > 0 {
+                    println!("  {} seeded {seeded} missing type protocol(s)", "+".green());
+                }
+            }
+            RefreshSeedTarget::DistributedUnattached => eprintln!(
+                "  {} type protocols not seeded: this is a distributed AIDA project, but \
+                 its store isn't attached in this working copy (no `.aida-store/` \
+                 worktree). A local legacy requirements store here was left untouched.",
+                "Note:".dimmed()
+            ),
+            RefreshSeedTarget::NoStore => eprintln!(
+                "  {} type protocols not seeded: no requirements store found here",
+                "Note:".dimmed()
+            ),
+        }
+    }
+    // TASK-859: surface a small curated set of high-value config knobs that
+    // are otherwise silent defaults (telemetry opt-out today) and offer to
+    // open `aida config menu` for the full surface. TTY-gated + idempotent,
+    // mirroring the agent-posture prompt above — non-interactive init writes
+    // nothing and keeps every default. Non-fatal: a hiccup here must not
+    // abort an otherwise-successful init. trace:TASK-859 | ai:claude
+    if init_footprint == cli::InitFootprint::Full {
+        if let Err(e) = maybe_prompt_init_config(&statusline_project_root()) {
+            eprintln!("  {} config prompts skipped: {}", "Note:".dimmed(), e);
+        }
+    }
+    // BUG-1938: the steps below may rewrite the committed config
+    // (provider refresh, capabilities); snapshot its state first.
+    let cfg_root = statusline_project_root();
+    let cfg_was_clean = config_commit::config_is_clean(&cfg_root);
+    // STORY-780: remote + ordered pushes, only for a bootstrap init and
+    // only now that the store branch exists. trace:STORY-780 | ai:claude
+    if let Some(plan) = &bootstrap {
+        init_bootstrap::finish_remote(plan)?;
+    }
+    // STORY-1467: classify forge / CI / local-only capabilities now that
+    // any bootstrap remote exists, record them under
+    // `[project.capabilities]`, and print them so forge-dependent features
+    // degrade explicitly. Best-effort. trace:STORY-1467 | ai:claude
+    project_capabilities::record_and_report(&statusline_project_root());
+    // trace:BUG-1938 | ai:claude
+    config_commit::finish_init_refresh(&cfg_root, cfg_was_clean);
+    // Register the initialized project in the machine-global project
+    // registry after bootstrap remote setup, so `repo` reflects the final
+    // origin URL when one was configured. Best-effort because this writes
+    // outside the project root. trace:STORY-827 | ai:codex
+    if init_footprint == cli::InitFootprint::Full {
+        if let Err(e) = register_project_in_global_registry(&statusline_project_root()) {
+            eprintln!("  {} project registry skipped: {}", "Note:".dimmed(), e);
+        }
+    }
+    // STORY-828: machine-global personal hooks run only after the whole
+    // init lifecycle has succeeded, including bootstrap remote setup and
+    // the best-effort global project registry write.
+    if !*no_post_hooks && init_footprint == cli::InitFootprint::Full {
+        let project_root = statusline_project_root();
+        let remote_url = self::git_origin_url(&project_root).unwrap_or_default();
+        let preferred_forge = bootstrap.as_ref().and_then(|plan| {
+            if plan.github {
+                Some("github")
+            } else if plan.forge.is_some() && plan.remote.is_some() {
+                Some("gitlab")
+            } else {
+                None
+            }
+        });
+        let forge = self::detect_init_forge(preferred_forge, &remote_url);
+        let context = init_cmd::PostInitHookContext {
+            project_root,
+            project_name: self::init_project_name(name.as_deref()),
+            lang: lang.clone().unwrap_or_default(),
+            remote_url,
+            forge,
+        };
+        if let Err(e) = self::run_post_init_hooks(&context) {
+            eprintln!("  {} post-init hooks skipped: {}", "Note:".dimmed(), e);
+        }
+    }
+    return Ok(());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static INIT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "init",
+    help_after: "report",
+    command: <InitArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_init),
+};

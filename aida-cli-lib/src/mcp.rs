@@ -2744,8 +2744,9 @@ impl<'a> McpServer<'a> {
         let recipient = if broadcast {
             Recipient::Broadcast
         } else if let Some(a) = args.get("to").and_then(|v| v.as_str()) {
+            let a = a.trim();
             // BUG-2132: same recipient-shape refusal as the CLI.
-            // trace:BUG-2132 | ai:claude
+            // trace:BUG-2132 trace:TASK-1766 | ai:claude
             if let Some(why) = aida_core::mailbox::recipient_id_rejection(a) {
                 return Err(format!("send refused: `to` {why}"));
             }
@@ -12976,7 +12977,7 @@ mod tests {
 
         for role in ["guest", "requester"] {
             for (argv, mcp_tool) in cases {
-                let mut cli = crate::Cli::try_parse_from(*argv)
+                let mut cli = crate::command_registry::try_parse_from(*argv)
                     .unwrap_or_else(|err| panic!("invalid parity argv {argv:?}: {err}"));
                 let cli_action = crate::stakeholder_cli_action(&cli.command);
                 let cli_result =
@@ -14221,3 +14222,81 @@ mod tests {
         assert!(pull.contains("aida pull --store-only"), "pull: {pull}");
     }
 }
+
+/// Start MCP (Model Context Protocol) server over stdio
+///
+/// Exposes AIDA requirements as MCP tools for Claude Code integration.
+/// Reads JSON-RPC 2.0 requests from stdin, writes responses to stdout.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mcp-serve")]
+#[clap(hide = true)]
+pub(crate) struct McpServeArgs {}
+
+fn run_mcp_serve(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <McpServeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed {
+            store_path,
+            project_root_hint,
+        }) => {
+            let (store_path, project_root_hint) = (*store_path, *project_root_hint);
+            // MCP server reads/writes through the same canonical git store the CLI
+            // uses. The previous YAML-snapshot approach wrote to
+            // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
+            // every MCP restart. trace:BUG-310 | ai:claude
+            let storage = Storage::new(store_path);
+            let project_root = crate::store_sync::mcp_serve_project_root(
+                store_path,
+                project_root_hint,
+                find_project_root().ok(),
+            );
+            crate::command_registry::returned(self::run_mcp_server(&storage, project_root))
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                McpServeArgs {} => {
+                    // STORY-361: project root for coordination tools.
+                    let project_root = find_project_root()
+                        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+                    self::run_mcp_server(&storage, project_root)?;
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!("`aida mcp-serve` finished before storage init"),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MCP_SERVE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "mcp-serve",
+        help_after: "jira",
+        command: <McpServeArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_mcp_serve),
+    };

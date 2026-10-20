@@ -6,6 +6,11 @@
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "solo_cmd_args.rs"]
+pub(crate) mod solo_cmd_args;
+pub(crate) use solo_cmd_args::*;
+
 /// STORY-625: one cycle of the solo loop — the safe-backlog pipeline, composed
 /// from the existing (individually-safe) commands by shelling out to this same
 /// binary. Order: garden (hygiene) → assess+queue (advisor sign-off, keystone
@@ -397,3 +402,87 @@ pub(crate) fn handle_solo_command(
 #[cfg(test)]
 #[path = "tests/solo_tests.rs"]
 mod solo_tests;
+
+/// Enter solo mode — mark this session as the advisor+integrator working the
+/// SAFE backlog end-to-end with maximum discretion (groom → implement →
+/// integrate → repeat), parking keystone/architecture for you. A timestamped
+/// flag (~/.aida/solo.toml, 24h safety TTL) the statusline surfaces. `--off`
+/// exits; `--status` prints current state; `--ttl <DURATION>` overrides the
+/// 24h cap (e.g. 8h, 2h30m).
+// trace:STORY-624 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "solo")]
+pub(crate) struct SoloArgs {
+    /// What to do: `run` (start the loop), `stop` (stop it), or `status`.
+    /// Omit to enter solo MODE (the work-state flag). The legacy
+    /// `--watch`/`--off`/`--status` flags are silent aliases for
+    /// run/stop/status.
+    // trace:STORY-627 | ai:claude
+    #[clap(value_enum)]
+    pub action: Option<crate::cli::SoloAction>,
+    /// Exit solo mode.
+    #[clap(long)]
+    pub off: bool,
+    /// Print whether solo mode is active, without changing it.
+    #[clap(long)]
+    pub status: bool,
+    /// Safety TTL for the solo flag (default 24h); accepts 8h / 30m / 2h30m.
+    #[clap(long, value_name = "DURATION")]
+    pub ttl: Option<String>,
+    /// Run the solo LOOP in the foreground: the single leave-it-running
+    /// command that works the safe backlog end-to-end on a cadence
+    /// (garden → assess/queue → implement → integrate → repeat), keystone
+    /// parked. Subsumes `aida queue integrate --watch`. Stops on `aida solo
+    /// --off`, Ctrl-C, or the TTL.
+    // trace:STORY-625 | ai:claude
+    #[clap(long)]
+    pub watch: bool,
+    /// With `--watch`: run ONE tick that PRINTS the cycle it would execute,
+    /// then exit — verify the loop without running a live drain.
+    #[clap(long)]
+    pub dry_run: bool,
+    /// With `--watch`: seconds between cycles (default 300).
+    // trace:STORY-625 | ai:claude
+    #[clap(long, value_name = "SECS", default_value_t = 300)]
+    pub interval: u64,
+}
+
+// STORY-624: solo-mode flag — machine-global ~/.aida/solo.toml, no
+// requirement store needed (mirrors the away/home early dispatch).
+fn run_solo(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let SoloArgs {
+        action,
+        off,
+        status,
+        ttl,
+        watch,
+        dry_run,
+        interval,
+    } = <SoloArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    self::handle_solo_command(
+        action,
+        off,
+        status,
+        ttl.as_deref(),
+        watch,
+        dry_run,
+        interval,
+    )
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SOLO: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "solo",
+    help_after: "presence",
+    command: <SoloArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_solo),
+};
