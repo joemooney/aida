@@ -1,0 +1,27 @@
+id: 01a156c0-1022-7483-bf05-c8c27f478801
+spec_id: TASK-1-374
+title: 'minor (non-blocking): aida-git-guardrails.sh now scans the raw COMMAND for the …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1948, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor (non-blocking): aida-git-guardrails.sh now scans the raw COMMAND for the NO_SLOT assignment, so it blocks benign text: rg/grep searches for the assignment, git commit -m messages, aida comment add and mailbox bodies that quote it (reproduced: exit 2 for each). Consider scanning quoted bodies only for bash -c/sh -c/eval payloads instead of the whole raw command.
+  Reviewed sha: 2ec26b136a34893242acd55a87da35d1a287ee1c
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T00:39:50.050168302Z
+modified_at: 2026-10-20T00:39:50.050168302Z
+req_type: Task
+tags:
+- carried-from:TASK-1948
+- finding-hash:1b2d1ea6
+- from-review:TASK-1948
+- kind:carried-forward
+filed_at:
+  code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c416dbcc0b
+  vendor: claude
