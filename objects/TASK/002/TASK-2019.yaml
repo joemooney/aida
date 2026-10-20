@@ -1,0 +1,29 @@
+id: 01a15acc-acef-79a0-b712-e6355d6c5359
+spec_id: TASK-2019
+agreed_id: TASK-2019
+title: Mandate exclusion re-collection does not retry a dirty-store snapshot
+description: |
+  collect_on_stable_store (aida-cli-lib/src/pr_cmd.rs ~1866-1885, BUG-2179) retries the mandate exclusion collection only when two clean store snapshots differ. store_snapshot (mandate_traces.rs:80-87) returns Err on a dirty store ("mandate exclusion store has uncommitted evidence"). That Err returns at once through `snapshot()?`, with no retry. This is the exact #2741 failure in the advisor's 2026-10-18 comment on BUG-2179: a concurrent writer dirtied the store mid-scan. The snapshot also covers every ref (show-ref --head, ~5k refs), so on a live multi-agent store a ~30 s scan can still use up all 3 attempts.
+
+  Two possible fixes: a bounded retry on the dirty-store error, or taking the before/after snapshots under with_store_write_lock. Keep it fail-closed after the bound.
+
+  Raised in review of PR-2776: https://github.com/joemooney/aida/pull/2776#issuecomment-6299542117
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T19:32:05.487861700Z
+modified_at: 2026-10-20T19:32:05.487861700Z
+req_type: Task
+tags:
+- from-review:PR-2776
+- mandate
+- severity:minor
+filed_at:
+  code_sha: bae947dfe86601ba4ba22d367597eb232b841337
+  branch: pr-2776
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15ac34759
