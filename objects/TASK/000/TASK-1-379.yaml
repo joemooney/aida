@@ -1,0 +1,28 @@
+id: 01a157a0-5fc7-74f1-ae74-147c9f61dddf
+spec_id: TASK-1-379
+title: 'cosmetic: AC2 asks both counts recorded in the PR; PR body carries only the mai…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1949, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: AC2 asks both counts recorded in the PR; PR body carries only the main baseline (11721). PR count 11747 (lib 9249 + cli-0 187 + cli-1 143 + rest 2168) is recorded in the review comment.
+  Reviewed sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T04:44:50.503873974Z
+modified_at: 2026-10-20T04:44:50.503873974Z
+req_type: Task
+tags:
+- carried-from:TASK-1949
+- finding-hash:4398185c
+- from-review:TASK-1949
+- kind:carried-forward
+filed_at:
+  code_sha: 1ad2024f9dd843b1896c67976d23a683a434bd7a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
