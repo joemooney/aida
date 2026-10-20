@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T12:47:12.308287689Z
-modified_at: 2026-10-20T12:47:12.308287689Z
+modified_at: 2026-10-20T21:32:05.567253033Z
 req_type: Task
+comments:
+- id: 01a15b3a-8a3f-78d3-b8e2-3f0f199aa118
+  author: claude
+  content: 'Kept separate from STORY-1688 (advisor ruling 2026-10-20 13:20). STORY-1688 and this task overlap in one place: when a rework push moves a PR''s head past its Rework merge hold and CI goes green, lane-liveness reports `unpicked-ready-pr:PR-<n>@<sha8>` and wakes the reviewer seat. It does not change the spec''s status. This task still owns that status change (NeedsAttention back to an in-review state with PR, head and round) and the last-activity column in `aida list`. There is still no head-push event; lane-liveness only sees the new head through `gh pr list` each tick.'
+  created_at: 2026-10-20T21:32:05.567253033Z
+  modified_at: 2026-10-20T21:32:05.567253033Z
+  session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
 filed_at:
   code_sha: fe70a874c6dee801991780f6ceccf8e9aeb3c124
   branch: main
