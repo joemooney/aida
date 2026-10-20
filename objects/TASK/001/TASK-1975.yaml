@@ -11,17 +11,26 @@ description: |
   Each one should either fold into the locked transaction or re-read under with_store_write_lock.
 
   Raised in review of PR-2756: https://github.com/joemooney/aida/pull/2756#issuecomment-6283079499
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:02:35.297471995Z
-modified_at: 2026-10-20T04:02:35.297471995Z
+modified_at: 2026-10-20T10:55:00.868127927Z
 req_type: Task
 tags:
 - from-review:PR-2756
 - severity:minor
 - store-lock
+history:
+- id: 01a158f3-4704-7440-accd-fc2a627e6fa6
+  author: joe
+  timestamp: 2026-10-20T10:55:00.868118102Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: eea970fc24ee08d5ccf93340f1f99273b6356052
   branch: pr-2756
