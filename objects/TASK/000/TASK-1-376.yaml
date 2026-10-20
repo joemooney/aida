@@ -1,0 +1,28 @@
+id: 01a157a0-0864-7841-8029-e93458b234a8
+spec_id: TASK-1-376
+title: 'minor: no guard that the shard union equals cargo test --workspace''s target set…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1949, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: no guard that the shard union equals cargo test --workspace's target set — scripts/ci-test-shards.py commands() hardcodes aida-cli --bins/--test and aida-cli-lib --lib/--doc/--test; a future aida-cli lib target or aida-cli-lib bin/test=true example would be silently dropped. Add a test over real cargo metadata asserting every test=true/doctest target is selected by exactly one shard.
+  Reviewed sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T04:44:28.132631982Z
+modified_at: 2026-10-20T04:44:28.132631982Z
+req_type: Task
+tags:
+- carried-from:TASK-1949
+- finding-hash:8585babc
+- from-review:TASK-1949
+- kind:carried-forward
+filed_at:
+  code_sha: 1ad2024f9dd843b1896c67976d23a683a434bd7a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
