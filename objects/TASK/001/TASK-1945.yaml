@@ -25,6 +25,10 @@ tags:
 - review
 - ship
 - throughput
+relationships:
+- rel_type: Parent
+  target_id: 01a15831-5bfb-7272-8f2c-8a2054a510bf
+  created_at: 2026-10-20T07:23:23.774922454Z
 comments:
 - id: 01a15770-4d0f-72f2-aa34-f40d497df07c
   author: ai:codex:joe
@@ -63,6 +67,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a15831-ab04-7500-9811-8f5a2b07644b
+  author: ai:codex:joe
+  timestamp: 2026-10-20T07:23:32.484327370Z
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
