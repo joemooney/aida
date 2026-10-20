@@ -1,0 +1,34 @@
+id: 01a15a87-5942-7b03-8ee8-47e33a5e67ba
+spec_id: STORY-1882
+agreed_id: STORY-1882
+title: 'Review PR-2783: [AI:claude] docs(scaffold): keep per-change notes out of AGENTS.md and OVERVIEW.md (BUG-2174)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `bug-2174-work`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2783>
+  - Branch: `bug-2174-work` → `main`
+
+  ## Covers
+
+  - BUG-2174
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2783` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:16:22.082110372Z
+modified_at: 2026-10-20T18:16:22.082110372Z
+req_type: Story
+filed_at:
+  code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
