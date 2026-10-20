@@ -1,0 +1,44 @@
+# Slow-test budget: allowed wall seconds per test binary in CI's "Run tests"
+# step (ubuntu-latest, 4 cores, debug profile, binaries run one at a time).
+# scripts/test-timings.py --budget enforces it in the "Test time budget" step:
+# - a binary over default_limit seconds with no entry fails the build;
+# - a binary over its entry fails the build.
+# Keys are <deps stem>:<src> or doctests:<crate>, as test-timings.py prints them.
+#
+# Seeded from main runs 39186737460 and 39208649075 (2026-10-19; summed binary
+# time 747 s and 958 s: shared runners vary by ~30%). Each entry is the slower
+# run's time x1.5, rounded up to 5 s, for every binary whose x1.5 crosses the
+# default limit. Lower an entry when you speed a binary up; raise one only with
+# a reason in the PR. STORY-1853 S4 targets the top of this list.
+# trace:STORY-1853 | ai:claude
+
+default_limit = 10
+
+[budget]
+"aida_cli_lib:src/lib.rs" = 560  # max measured 370.8s, 9195 tests
+"task_1717_store_writer_lock:tests/task_1717_store_writer_lock.rs" = 100  # max measured 65.9s, 43 tests
+"aida_core:src/lib.rs" = 80  # max measured 52.1s, 1552 tests
+"agent_error_channel:tests/agent_error_channel.rs" = 70  # max measured 44.0s, 2 tests
+"bug_1502_format_json_audit:tests/bug_1502_format_json_audit.rs" = 45  # max measured 29.1s, 9 tests
+"bug_1947_session_end_live_process:tests/bug_1947_session_end_live_process.rs" = 45  # max measured 29.1s, 11 tests
+"task_1335_reconcile_unavailable_evidence:tests/task_1335_reconcile_unavailable_evidence.rs" = 35  # max measured 20.2s, 17 tests
+"task_1290_criteria_gate:tests/task_1290_criteria_gate.rs" = 30  # max measured 19.5s, 5 tests
+"journey:tests/journey.rs" = 30  # max measured 18.2s, 5 tests
+"bug_1940_corrupt_cache:tests/bug_1940_corrupt_cache.rs" = 25  # max measured 15.7s, 7 tests
+"queue_work_dry_run:tests/queue_work_dry_run.rs" = 25  # max measured 15.6s, 15 tests
+"path_isolation_guardrail:tests/path_isolation_guardrail.rs" = 25  # max measured 15.3s, 3 tests
+"story_1653_derived_driver:tests/story_1653_derived_driver.rs" = 20  # max measured 11.1s, 11 tests
+"bug_2139_headless_child_grant:tests/bug_2139_headless_child_grant.rs" = 20  # max measured 11.0s, 6 tests
+"story_1649_show_linkage:tests/story_1649_show_linkage.rs" = 20  # max measured 11.0s, 12 tests
+"story_1644_list_sort_cap:tests/story_1644_list_sort_cap.rs" = 20  # max measured 11.0s, 2 tests
+"task_1283_protocol_cli:tests/task_1283_protocol_cli.rs" = 20  # max measured 10.9s, 4 tests
+"bug_1993_linkage_budgets:tests/bug_1993_linkage_budgets.rs" = 20  # max measured 10.8s, 1 tests
+"bug_1956_reader_fallbacks_bounded_under_writer:tests/bug_1956_reader_fallbacks_bounded_under_writer.rs" = 15  # max measured 9.9s, 4 tests
+"bug_1252_structural_tags:tests/bug_1252_structural_tags.rs" = 15  # max measured 9.2s, 2 tests
+"story_1650_history_status_flow:tests/story_1650_history_status_flow.rs" = 15  # max measured 8.6s, 13 tests
+"bug_1993_toon_linkage_budget:tests/bug_1993_toon_linkage_budget.rs" = 15  # max measured 8.3s, 1 tests
+"bug_1921_faq_short_ids:tests/bug_1921_faq_short_ids.rs" = 15  # max measured 8.1s, 9 tests
+"bug_1771_status_lens_filters:tests/bug_1771_status_lens_filters.rs" = 15  # max measured 8.1s, 4 tests
+"task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 7.5s, 4 tests
+"bug_1687_defer_status_lens:tests/bug_1687_defer_status_lens.rs" = 15  # max measured 7.1s, 4 tests
+"bug_1808_delegation_preflight:tests/bug_1808_delegation_preflight.rs" = 15  # max measured 6.7s, 5 tests

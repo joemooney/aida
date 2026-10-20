@@ -106,7 +106,8 @@ fn contained_parent_plan_only_preserves_containment_and_plan_argv_and_env() {
         session_id,
         None,
         None,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         env_of(&cmd, "AIDA_CONTAINED"),
@@ -192,7 +193,8 @@ fn uncontained_plan_only_defaults_to_plan_permission_mode() {
         "01a14325-157c-7dd1-97b6-82f8cf2c7a5a",
         None,
         None,
-    );
+    )
+    .unwrap();
     let args = args_of(&cmd);
     let perm_idx = args.iter().position(|a| a == "--permission-mode").unwrap();
     assert_eq!(
