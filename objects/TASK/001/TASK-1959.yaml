@@ -3,12 +3,12 @@ spec_id: TASK-1959
 agreed_id: TASK-1959
 title: 'STORY-1853 slice S4: fix the slowest tests (sleeps and wall-clock waits replaced by injected clocks or readiness signals)'
 description: 'From the S1 timings (STORY-1853 comment 4): task_1717_store_writer_lock 50 s/43 tests, agent_error_channel 44 s/2 tests, bug_1502_format_json_audit 23 s, bug_1947_session_end_live_process 23 s, task_1335 15 s, journey 14 s, bug_1940 14 s, task_1290 14 s. Replace fixed sleeps and polling with readiness signals (pipes, files, condvars) or injected clocks. Keep every assertion: no test deleted or #[ignore]d, and the passed+ignored count is unchanged. Report before/after per binary in the PR body (local median of 3 under the slot wrapper). Target: each of these is 5 s or less, or comes with a stated reason. No ci.yml change, so this runs in parallel with S6/S2.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:54.167668605Z
-modified_at: 2026-10-19T21:03:59.686835025Z
+modified_at: 2026-10-20T06:27:09.049901233Z
 req_type: Task
 tags:
 - ci
@@ -73,6 +73,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a157fe-0a72-7ba2-a5c3-d3c3036db55a
+  author: aida-auto-bump
+  timestamp: 2026-10-20T06:27:09.042045355Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a157fe-0a79-73e1-ab30-027f391a9445
+  timestamp: 2026-10-20T06:27:09.049890736Z
+  agent: aida
+  commit_sha: 58218872e47c81d0b327eba59d06ec353bd3a3c9
+  summary: 'Carry-over (advisor): the independent reviewer PASSED round 2 at d275edcc00. ccb13f932b is gh pr update-branch onto main (#2767 budget change) with an IDENTICAL own patch-id. Manual because of the corpus-gate carry-over gap (TASK-1968).'
+  review_verdict: approved
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -81,11 +96,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Code meets all 5 TASK-1959 acceptance criteria on inspection, but PR CI is red on 707b797f61 and the failing test could not be identified from the review sandbox
-  recovery_hint: address the review findings, move TASK-1959 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-19T20:00:35.104528639Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T06:27:09.042040501Z
+  completion_sha: 58218872e47c81d0b327eba59d06ec353bd3a3c9
