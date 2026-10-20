@@ -17,8 +17,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:57:44.815274718Z
-modified_at: 2026-10-19T07:57:44.815274718Z
+modified_at: 2026-10-20T10:15:22.243750962Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a158ce-beaf-7121-90b4-f2ca67cb237f
+  created_at: 2026-10-20T10:15:22.243747620Z
+  created_by: joe
+history:
+- id: 01a158cf-0048-7cf2-94c4-2735aaa930fc
+  author: joe
+  timestamp: 2026-10-20T10:15:23.464406447Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
