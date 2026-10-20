@@ -1,0 +1,20 @@
+id: 01a1578e-27c6-7cc0-9451-3e7efee7ce89
+spec_id: TASK-1985
+agreed_id: TASK-1985
+title: 'Local compile speed: enable incremental compilation in [profile.agent]'
+description: 'Operator-directed 2026-10-19 21:24 (STORY-1853 local leg). profile.agent inherits release, where incremental is off, so every local rebuild after a merge or an edit recompiles aida-cli-lib from scratch: 20-22 min for workspace --no-run and 8-12 min for a single targeted test binary (slot log, 2026-10-19). Set incremental = true in [profile.agent]. CI is unaffected because it exports CARGO_INCREMENTAL=0. Accepted trade-off: larger per-worktree caches. Measure: the same rebuild-after-small-edit, before and after, median of 3. Follow-up candidates: mold for local links via the cargo wrapper; splitting aida-cli-lib into crates (needs a sketch).'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:24:56.518624197Z
+modified_at: 2026-10-20T04:24:56.518624197Z
+req_type: Task
+filed_at:
+  code_sha: 3c7e184d14f171218ad70453efee47cd99730122
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
