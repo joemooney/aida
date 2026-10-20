@@ -372,7 +372,9 @@ pub(crate) fn json_capability_gate(argv: &mut Vec<String>) -> Result<()> {
         // --format json`) names that option, not just `--format human|toon`.
         // trace:BUG-2189 | ai:claude
         if selected.value_source("format") == Some(clap::parser::ValueSource::CommandLine) {
-            if let Some(error) = crate::command_registry::renamed_format_error(&path[1..].join(" "), "json") {
+            if let Some(error) =
+                crate::command_registry::renamed_format_error(&path[1..].join(" "), "json")
+            {
                 return Err(error);
             }
         }
