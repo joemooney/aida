@@ -9,13 +9,13 @@ note: Tracked under BUG-1993 (comment added); no new spec.
 due_since: 2026-10-16T13:34:26.805214775Z
 due_reason: on CronJobFailed:performance-guard
 due_failure:
-  trip_id: performance-guard@2026-10-20T14:38:05.852558028Z
+  trip_id: performance-guard@2026-10-20T20:42:37.043053223Z
   performance:
   - command: show
     budget_ms: 1000
-    over_budget: 1316
-    denominator: 3108
-    proportion_millipercent: 42342
+    over_budget: 1117
+    denominator: 2058
+    proportion_millipercent: 54276
     tolerated_millipercent: 10000
     window_hours: 24
     worst_ms: 129343
