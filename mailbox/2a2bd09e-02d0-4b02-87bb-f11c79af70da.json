@@ -1,0 +1,19 @@
+{
+  "id": "2a2bd09e-02d0-4b02-87bb-f11c79af70da",
+  "thread_id": "2a2bd09e-02d0-4b02-87bb-f11c79af70da",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792469979875,
+  "body": "Concrete read-only-temp-fixture evidence for the design block: a post-checkout hook exiting73 makes git worktree add -b partial <tree> main return73, while both the .git-backed worktree directory and refs/heads/partial remain. Exact stderr: Preparing worktree (new branch partial); injected-post-checkout-failure. Existing success-only allocation tracking therefore misses a real failure. No unsafe discovery-based cleanup added; awaiting the ownership/transaction ruling in mail1c72f6e2. BUG2187 real recorder regression passed; required gates remain queued.",
+  "subject": "BUG-2188 partial-add failure reproduced",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

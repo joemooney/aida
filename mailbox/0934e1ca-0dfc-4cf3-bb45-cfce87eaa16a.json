@@ -1,0 +1,19 @@
+{
+  "id": "0934e1ca-0dfc-4cf3-bb45-cfce87eaa16a",
+  "thread_id": "0934e1ca-0dfc-4cf3-bb45-cfce87eaa16a",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792469624503,
+  "body": "BUG-2187 real CLI regression passed (16.84s): queue work headless fresh launch with TYPE/NAME scrubbed records an attested approval using the actual aida review record command; labeled implementer grant is refused. Recovery retains Claude/Codex/plain AGY drafts without treating them as authority. Three author-check rounds complete; final no new findings (not independent approval). Fresh fast/compile and unit filters pending before push. TASK1801 fast32passed, targeted library is still compiling; BUG2190 timing fixture passed retry and its focus test now compiling. TASK1945 sketch posted, awaiting signoff.",
+  "subject": "BUG-2187 real recorder regression passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
