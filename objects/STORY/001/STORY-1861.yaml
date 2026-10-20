@@ -1,0 +1,34 @@
+id: 01a1573a-dad9-7123-a86d-dc027354cc72
+spec_id: STORY-1861
+agreed_id: STORY-1861
+title: 'Review PR-2761: [AI:claude] test(flaky): fix three CI flakes at their races, not their windows (TASK-1956)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/task-1956`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2761>
+  - Branch: `claude/task-1956` → `main`
+
+  ## Covers
+
+  - TASK-1956
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2761` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T02:53:57.337447983Z
+modified_at: 2026-10-20T02:53:57.337447983Z
+req_type: Story
+filed_at:
+  code_sha: 9be73d9a8f13e2b61e9196b3e24c5fcfdc90f4ad
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
