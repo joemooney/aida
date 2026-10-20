@@ -6,18 +6,27 @@ description: |
   The TASK-1752 acceptance comment asks the guard to "exempt test helpers explicitly, by name". `rust_files` in aida-cli-lib/src/tests/task_1752_grant_env_guard_tests.rs:40-43 skips every directory named `tests`, and `production_lines` skips every inline `#[cfg(test)] mod … { }` block. That is a structural exemption, not a named list. Nothing escapes today: I checked that no non-cfg(test) `#[path = "…tests/…"]` module exists, and test_env.rs (a cfg(test) helper outside tests/) is still scanned and passes because it uses the GRANT_ENV constant. But a production file that lands under a `tests/` directory, or a `#[path]` module without `#[cfg(test)]`, would be skipped silently. Possible hardening: assert that every file skipped under `tests/` is reached only through a `#[cfg(test)]` `#[path]` declaration, or record the advisor's acceptance of the structural rule on the spec.
 
   Raised in review of PR-2763: https://github.com/joemooney/aida/pull/2763
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:04:11.368415974Z
-modified_at: 2026-10-20T04:04:11.368415974Z
+modified_at: 2026-10-20T10:55:19.954641733Z
 req_type: Task
 tags:
 - from-review:PR-2763
 - guard
 - seat-authority
 - severity:cosmetic
+history:
+- id: 01a158f3-9192-73b0-a0de-76342aa4da92
+  author: joe
+  timestamp: 2026-10-20T10:55:19.954635398Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: dc521b2acf8609e4c0f0f0f1fafbd1f92c460416
   branch: pr-2763
