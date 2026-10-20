@@ -17,12 +17,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:02.280632663Z
-modified_at: 2026-10-20T01:39:07.392830436Z
+modified_at: 2026-10-20T04:18:32.276054727Z
 req_type: Bug
 tags:
 - headless
 - review
 - verdict
+comments:
+- id: 01a15788-4ad4-7b50-a7c1-3dd9e2b9b36b
+  author: mcp
+  content: 'Real CLI regression passed at base857e2ef848 plus current patch (16.84s, /tmp/bug2187-real-cli-final.log): actual queue-work headless launch with AIDA_AGENT_TYPE/NAME scrubbed records an attested approval via the real recorder; reviewer labels with an implementer grant are refused. Recovery preserves Claude/Codex/plain AGY diagnostics without accepting log text as a verdict. Three author self-check rounds, final no new findings; not independent approval. Added scoped fixture-root pin for the unit headless path and30s binary budget after measured16.84s. Required unit filters/fast/compile gates queued before commit/push; no PR or approval claim.'
+  created_at: 2026-10-20T04:18:32.276045217Z
+  modified_at: 2026-10-20T04:18:32.276045217Z
 history:
 - id: 01a154ba-afcb-70d1-9f20-d3e603d2a98e
   author: joe
