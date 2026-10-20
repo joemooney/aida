@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:57:44.815274718Z
-modified_at: 2026-10-20T10:28:52.309417695Z
+modified_at: 2026-10-20T11:26:32.755763921Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -25,6 +25,13 @@ relationships:
   target_id: 01a158ce-beaf-7121-90b4-f2ca67cb237f
   created_at: 2026-10-20T10:15:22.243747620Z
   created_by: joe
+comments:
+- id: 01a15910-2533-72f1-8e06-95df846446c5
+  author: joe
+  content: Commit 8f84085e76 references this requirement
+  created_at: 2026-10-20T11:26:32.755763921Z
+  modified_at: 2026-10-20T11:26:32.755763921Z
+  session_id: b0ee124a-e27e-4e6e-b872-844a6b0e9cd7
 history:
 - id: 01a158cf-0048-7cf2-94c4-2735aaa930fc
   author: joe
