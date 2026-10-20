@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:14:07.605406343Z
-modified_at: 2026-10-20T01:50:29.201749320Z
+modified_at: 2026-10-20T01:52:01.486317805Z
 req_type: Bug
 tags:
 - burndown
@@ -26,6 +26,11 @@ comments:
   content: 'Root cause reproduced: the primary checkout has persisted focus BUG-2149, whose subtree contains no open matches. Bare list and explicit statuses return 0 there; --no-focus restores 240 open rows. A fresh sibling worktree has no focus and returns rows normally. Cache statuses and SQL normalization are correct. The existing focus banner is emitted only after the machine-output early returns, so TOON, JSON and --short silently hide the scope. Fix will disclose focus on every renderer (JSON/short stderr) and add real-CLI open-status plus focused-empty regressions; preserve intentional focus semantics.'
   created_at: 2026-10-19T15:21:14.919487310Z
   modified_at: 2026-10-19T15:21:14.919487310Z
+- id: 01a15702-27ce-7c43-bd7b-6f6d54f15240
+  author: ai:codex:joe
+  content: 'Resumed original lease01a154bd56f4 in codex/bug-2190 and fast-forwarded to current mainf801433bcd after preserving the old patch. Handler now lives in requirements_cli.rs. Full original integration matrix passes (51.13s): every open status and renderer, focused-empty disclosure, exact hidden count excluding META/other lenses, no-focus/all escapes. The earlier short stdout failure was existing TOON cache metadata, confirmed by isolated old-binary write tracing; focus text is stderr and no focused IDs appear. Third author checker found pre-lens counts; fixed by applying focus after other lenses while retaining focus-local hidden footers. Reduced redundant status-by-renderer combinations and added80s binary budget; reduced fixture still needs final targeted execution. Fast/compile checks pending; no PR yet.'
+  created_at: 2026-10-20T01:52:01.486317805Z
+  modified_at: 2026-10-20T01:52:01.486317805Z
 history:
 - id: 01a154ba-d525-7cf0-b362-1254df941302
   author: joe
