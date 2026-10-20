@@ -145,8 +145,6 @@ fn run_human(
                         self::handle_human_command(*short, backend)?;
                     }
                 },
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -166,8 +164,6 @@ fn run_human(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida human` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

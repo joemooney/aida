@@ -328,8 +328,6 @@ fn run_protocol(
                         &storage,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -344,8 +342,6 @@ fn run_protocol(
                         "`aida protocol` is available in the default (distributed) mode."
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida protocol` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

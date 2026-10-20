@@ -581,8 +581,6 @@ fn run_docs(
                         docs_cmd, &store,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -596,8 +594,6 @@ fn run_docs(
                     // trace:FR-1-077 | ai:claude
                     self::handle_docs_command(docs_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida docs` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -654,8 +650,6 @@ fn run_doc(
                     // trace:STORY-104 | ai:claude
                     self::handle_doc_command(doc_cmd, store_path, backend)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -675,8 +669,6 @@ fn run_doc(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida doc` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

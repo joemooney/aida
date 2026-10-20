@@ -871,7 +871,6 @@ fn run_db(
                         output_path.display()
                     );
                 }
-                #[allow(unreachable_patterns)]
                 _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
@@ -885,8 +884,6 @@ fn run_db(
                 DbArgs { inner: db_cmd } => {
                     self::handle_db_command(db_cmd, &requirements_path.to_path_buf())?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida db` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

@@ -608,8 +608,6 @@ fn run_rel(
                         *limit,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -622,8 +620,6 @@ fn run_rel(
                 RelArgs { inner: rel_cmd } => {
                     self::handle_relationship_command(rel_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rel` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

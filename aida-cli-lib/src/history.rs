@@ -5682,8 +5682,6 @@ fn run_history(
                         self::run(store_path, &opts, json, bare_view)?;
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -5721,8 +5719,6 @@ fn run_history(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida history` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

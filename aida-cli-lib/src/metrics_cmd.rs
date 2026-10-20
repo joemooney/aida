@@ -600,8 +600,6 @@ fn run_metrics(
                     // telemetry logs; no store load required.
                     return crate::command_registry::returned(self::handle_metrics_command(cmd));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -616,8 +614,6 @@ fn run_metrics(
                     // telemetry logs; backend-agnostic.
                     self::handle_metrics_command(cmd)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida metrics` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

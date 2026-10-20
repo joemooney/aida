@@ -322,20 +322,52 @@ impl Fx {
         git_in(&self.repo, &["rev-parse", "HEAD"], None)
     }
 
+    /// `count` empty `chore: filler <i>` commits on top of `main`, dated
+    /// 2026-09-20T00:00:00Z. One `git fast-import` stream writes the same
+    /// commits a `git commit --allow-empty` loop would, in one process
+    /// instead of `count`.
+    // trace:TASK-1959 | ai:claude
     fn fillers(&self, count: usize) {
+        use std::io::Write;
+        let head = git_in(&self.repo, &["rev-parse", "HEAD"], None);
+        let stamp = "1789862400 +0000"; // 2026-09-20T00:00:00Z
+        let mut stream = String::new();
         for i in 0..count {
-            git_in(
-                &self.repo,
-                &[
-                    "commit",
-                    "-q",
-                    "--allow-empty",
-                    "-m",
-                    &format!("chore: filler {i}"),
-                ],
-                Some("2026-09-20T00:00:00Z"),
-            );
+            let msg = format!("chore: filler {i}\n");
+            stream.push_str(&format!(
+                "commit refs/heads/main\n\
+                 author Fixture <fixture@example.com> {stamp}\n\
+                 committer Fixture <fixture@example.com> {stamp}\n\
+                 data {}\n{msg}",
+                msg.len()
+            ));
+            if i == 0 {
+                stream.push_str(&format!("from {head}\n"));
+            }
+            stream.push('\n');
         }
+        let mut child = Command::new("git")
+            .current_dir(&self.repo)
+            .args(["fast-import", "--quiet"])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", &self.repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(stream.as_bytes())
+            .unwrap();
+        assert!(child.wait().unwrap().success(), "git fast-import failed");
+        assert_eq!(
+            git_in(&self.repo, &["log", "-1", "--format=%s"], None),
+            format!("chore: filler {}", count - 1)
+        );
     }
 
     fn mode(&self, name: &str, mode: &str) {

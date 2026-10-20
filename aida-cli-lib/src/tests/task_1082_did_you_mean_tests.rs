@@ -1,4 +1,4 @@
-use super::{nearest_spec_id, not_found_requested_id};
+use super::{known_spec_ids_for_suggestion, nearest_spec_id, not_found_requested_id};
 
 fn ids(list: &[&str]) -> Vec<String> {
     list.iter().map(|s| s.to_string()).collect()
@@ -90,4 +90,24 @@ fn requested_id_parsed_from_not_found_message() {
     assert_eq!(not_found_requested_id("Requirement not found"), None);
     // Unrelated errors are ignored.
     assert_eq!(not_found_requested_id("some other error"), None);
+}
+
+// The suggestion lens is read-only: a project whose store is not attached
+// yields no ids and gains no `.aida-store/` (it used to scaffold `objects/`
+// and `.aida/dispenser.toml` there).
+// trace:TASK-1959 | ai:claude
+#[test]
+fn suggestion_lookup_never_scaffolds_an_unattached_store() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    std::fs::write(
+        tmp.path().join(".aida/config.toml"),
+        "[deployment]\nmode = \"distributed\"\nstore_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    assert!(known_spec_ids_for_suggestion(tmp.path()).is_empty());
+    assert!(
+        !tmp.path().join(".aida-store").exists(),
+        "the did-you-mean lookup created a store"
+    );
 }

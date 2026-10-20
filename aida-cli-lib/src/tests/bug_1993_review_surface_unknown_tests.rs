@@ -15,6 +15,7 @@ fn timed_out_linkage(commits_scan_incomplete: bool, shipped_unknown: bool) -> Gi
         files_scan_incomplete: false,
         commits_scan_incomplete,
         shipped_unknown,
+        worktree_scan_incomplete: false,
         worktree: None,
         shipped_pr: None,
         repo: None,

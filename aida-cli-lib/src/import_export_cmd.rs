@@ -218,8 +218,6 @@ fn run_export(
                         id.as_deref(),
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida export` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -291,8 +289,6 @@ fn run_import(
                 } => {
                     self::handle_import_command(&storage, file, parent.as_deref(), on_conflict)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida import` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

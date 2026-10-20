@@ -193,4 +193,20 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
         !human.contains("in flight") && !human.contains("not found"),
         "an unknown shipped state must not read as unshipped:\n{human}"
     );
+
+    // `symbolic-ref` inside `resolve_default_branch_ref` stalls.
+    let slow_symref = git_shim(&base_dir, "symbolic-ref");
+    let started = std::time::Instant::now();
+    let l = show_json(&repo, &home, &spec, Some(&slow_symref));
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "stalled symbolic-ref is bounded: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(l["complete"], false, "{l}");
+    assert!(notes(&l).contains("shipped state unknown"), "{l}");
+    assert!(
+        l["shipped"].is_null(),
+        "shipped must be null when default-branch resolution times out: {l}"
+    );
 }
