@@ -14,6 +14,13 @@ also matches another module's tests share a half; the halves are disjoint and
 cover every listed test, or the lane fails. Before running anything, every lane
 checks that the shards' union is cargo test --workspace's target set.
 trace:TASK-1979 | ai:claude
+
+--runner nextest runs the same selections under cargo-nextest's `ci` profile
+(.config/nextest.toml) for the non-gating shadow lanes; doctests stay on
+cargo test. Each nextest invocation's JUnit report is kept as
+junit-<shard>-<n>.xml. --totals sums passed/failed/ignored from either
+runner's log, so a shadow lane is compared with its cargo-test lane by count.
+trace:TASK-1957 | ai:claude
 """
 from __future__ import annotations
 
@@ -34,6 +41,20 @@ _touched = sys.modules.setdefault('test_touched', importlib.util.module_from_spe
 _spec.loader.exec_module(_touched)
 LIB_KINDS = set(_touched.LIB_KINDS)  # One definition of a library target's kinds.
 LIB_UNIT = ['-p', 'aida-cli-lib', '--lib']
+NEXTEST_PROFILE = 'ci'
+ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+TARGET_FILTERS = {'--lib', '--bins', '--bin', '--test', '--tests', '--doc'}
+LIBTEST_HEADER_RE = re.compile(r'^\s*(?:Running \S|Doc-tests \S)')
+LIBTEST_RE = re.compile(r'test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored;')
+# `Summary [  12.3s] 120 tests run: 118 passed, 2 failed, 1 exec failed, 3 skipped`;
+# a cancelled run prints `118/120 tests run`. skipped is #[ignore] plus every
+# test a name filter excluded; FILTERED_RE's marker says how many of those.
+NEXTEST_RE = re.compile(r'Summary \[\s*[\d.]+s\] \d+(?:/\d+)? tests? run: (.*)$')
+NEXTEST_PART_RE = re.compile(r'(\d+) (passed|failed|exec failed|timed out|skipped)')
+FILTERED_RE = re.compile(r'^# \S+: \d+ module filters, (\d+) tests? filtered out$')
+# nextest's own output: its start line and the headers of captured test output
+# (0.9.146: `  stdout ───`, or `── stdout ──` without indentation).
+NEXTEST_OUTPUT_RE = re.compile(r'^\s*(?:Starting \d+ tests?|(?:─+ )?(?:stdout|stderr|output|execfail) ─+$)')
 
 
 def cli_halves(targets, budgets):
@@ -124,6 +145,77 @@ def commands(shard, packages, budgets):
             result.append(base + ['-p', 'aida-cli-lib'] + [arg for t in extra for arg in ('--test', t['name'])])
         return result
     raise ValueError(f'unknown shard: {shard}')
+
+
+def for_runner(command, runner, cargo_profile=None):
+    """A libtest selection as the runner's commands; doctests stay on cargo test.
+
+    A selection with no target filter (`--lib`, `--bins`, `--test`) runs its
+    packages' doctests too under cargo test, so under nextest it keeps a
+    `cargo test --doc` companion for them.
+    """
+    cargo = command + (['--profile', cargo_profile] if cargo_profile else [])
+    if runner != 'nextest' or '--doc' in command:
+        return [cargo]
+    assert command[:3] == ['cargo', 'test', '--no-fail-fast'], command
+    # nextest's own --profile is the .config/nextest.toml one; cargo test
+    # accepts an empty selection, so nextest must too.
+    nextest = (['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', NEXTEST_PROFILE,
+                '--no-tests', 'warn'] + command[3:] +
+               (['--cargo-profile', cargo_profile] if cargo_profile else []))
+    if TARGET_FILTERS.isdisjoint(command):
+        return [nextest, cargo[:3] + ['--doc'] + cargo[3:]]
+    return [nextest]
+
+
+def totals(lines):
+    """Passed/failed/ignored over libtest results and nextest summaries.
+
+    A libtest binary counts its LAST result line: tests that re-run their own
+    binary as a child (with a filter) print the child's result line first.
+    libtest lines count only while cargo test is the runner: from a `+ cargo
+    test` echo until nextest output or a `+ cargo nextest` echo. Only an echo
+    switches back, so a child's `Running`/`test result:` lines in nextest's
+    captured output count nowhere. A nextest summary's skipped count, less the
+    filtered-out tests its marker line names, is the run's #[ignore] count.
+    """
+    result = dict(passed=0, failed=0, ignored=0)
+    sections, section, cargo, filtered = {}, 0, True, 0
+    for line in lines:
+        line = ANSI_RE.sub('', line)
+        if line.startswith('+ '):
+            cargo = not line.startswith('+ cargo nextest ')
+            filtered = 0 if cargo else filtered
+        elif match := FILTERED_RE.search(line):
+            filtered = int(match.group(1))
+        elif match := NEXTEST_RE.search(line):
+            cargo = False
+            for count, kind in NEXTEST_PART_RE.findall(match.group(1)):
+                key = {'skipped': 'ignored', 'timed out': 'failed', 'exec failed': 'failed'}.get(kind, kind)
+                result[key] += int(count) - (filtered if kind == 'skipped' else 0)
+            filtered = 0
+        elif NEXTEST_OUTPUT_RE.search(line):
+            cargo = False
+        elif not cargo:
+            continue
+        elif LIBTEST_HEADER_RE.search(line):
+            section += 1
+        elif match := LIBTEST_RE.search(line):
+            sections[section] = [int(value) for value in match.groups()]
+    for counts in sections.values():
+        for key, value in zip(('passed', 'failed', 'ignored'), counts):
+            result[key] += value
+    return result
+
+
+def keep_junit(target_dir, shard, index):
+    """Move the `ci` profile's report aside so the next invocation can't overwrite it."""
+    report = Path(target_dir) / 'nextest' / NEXTEST_PROFILE / 'junit.xml'
+    if not report.exists():
+        return None
+    kept = report.with_name(f'junit-{shard}-{index}.xml')
+    report.replace(kept)
+    return kept
 
 
 def unit_kind(target):
@@ -244,13 +336,25 @@ def main(argv=None):
     mode.add_argument('--shard', choices=(*SHARDS, 'all'))
     mode.add_argument('--compile', action='store_true')
     mode.add_argument('--check-root', action='store_true')
+    mode.add_argument('--totals', metavar='LOG', nargs='+')
     mode.add_argument('--lib-weights', nargs='+', metavar='JOB_LOG',
                       help='print [lib_module_seconds] entries from timestamped lib-lane job logs')
     parser.add_argument('--profile')
+    parser.add_argument('--runner', choices=('cargo', 'nextest'), default='cargo')
+    parser.add_argument('--summary', metavar='OUT', help='append a Markdown totals line (with --totals)')
     parser.add_argument('--threads', type=int, default=4, help="the logs' test threads (CI runners: 4)")
     args = parser.parse_args(argv)
     if args.lib_weights:
         print('\n'.join(lib_weights(args.lib_weights, args.threads)))
+        return 0
+    if args.totals:
+        lines = [line for log in args.totals for line in Path(log).read_text(errors='replace').splitlines()]
+        counted = totals(lines)
+        counted['passed+ignored'] = counted['passed'] + counted['ignored']
+        print(json.dumps(counted))
+        if args.summary:
+            with open(args.summary, 'a') as handle:
+                handle.write('Test totals: ' + ', '.join(f'{v} {k}' for k, v in counted.items()) + '\n')
         return 0
     root = Path(__file__).resolve().parents[1]
     if args.check_root:
@@ -275,24 +379,32 @@ def main(argv=None):
     if gaps or repeats:
         return 1
     profile = ['--profile', args.profile] if args.profile else []
-    status = 0
+    status, reports = 0, 0
     for shard in SHARDS if args.shard == 'all' else [args.shard]:
         if shard == 'lib-1' and args.shard == 'all':
             continue  # lib-0 ran the whole binary.
-        for command in commands(shard, packages, budgets):
-            command += profile
+        for selection in commands(shard, packages, budgets):
+            filters = []
             if shard.startswith('lib-') and args.shard != 'all':
                 try:
-                    filters = lib_halves(lib_test_names(root, profile), module_seconds)[int(shard[-1])]
+                    names = lib_test_names(root, profile)
+                    filters = lib_halves(names, module_seconds)[int(shard[-1])]
                 except ValueError as err:
                     print(f'::error::cannot plan {shard}: {err}', file=sys.stderr)
                     return 1
-                print(f'# {shard}: {len(filters)} module filters', flush=True)
-                command += ['--'] + filters
-            print('+ ' + ' '.join(command), flush=True)
-            code = subprocess.call(command, cwd=root)
-            if code:
-                status = 1  # --no-fail-fast also spans separate cargo invocations.
+                # nextest reports the other half's tests as skipped; --totals
+                # takes this count back out. trace:TASK-1957 | ai:claude
+                excluded = len(names) - len(matched(filters, names))
+                print(f'# {shard}: {len(filters)} module filters, {excluded} tests filtered out', flush=True)
+            for command in for_runner(selection, args.runner, args.profile):
+                # Both runners take libtest-style substring filters after `--`.
+                command += ['--'] + filters if filters else []
+                print('+ ' + ' '.join(command), flush=True)
+                code = subprocess.call(command, cwd=root)
+                if code:
+                    status = 1  # --no-fail-fast also spans separate cargo invocations.
+                if command[1] == 'nextest':
+                    reports += keep_junit(metadata['target_directory'], shard, reports) is not None
     return status
 
 
