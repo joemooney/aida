@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T14:38:06.951994021Z
+modified_at: 2026-10-20T19:19:06.093830629Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -46,6 +46,12 @@ comments:
   created_at: 2026-10-20T14:38:06.951994021Z
   modified_at: 2026-10-20T14:38:06.951994021Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15ac0-c86d-71b0-85bd-acb71d97a54c
+  author: joe
+  content: 'PR #2776 round 2 pushed at bae947dfe8. Scan-path timing: release build of this branch, live store (78,124 commits), production functions collect_pr, store_snapshot, store_history_alias_map and StoreHistoryBatch::read. One warm-up, then 3 runs. #2725 (403 traced specs, 6,421 versions): median 26.2 s (load 2.2/2.0/1.7). #2779 (621 specs, 10,473 versions): median 35.6 s (load 1.5/1.5/1.7). Both are under the amended 60 s warm. Cold first run: 264.9 s (load 10.3), 252 s of it in the deleted-spec -G alias walk, for the <30 s follow-up. NOT timed on the real ''aida pr ship <N>'': it runs the scan only under an active mandate (none since 2026-10-19 09:23Z; starting one needs a human at a terminal), and after the scan it goes on to the CI watch and merge. Real-command recipe for the operator: mandate start, then ''aida pr ship <held PR without attested approval> --wait 0'' with target/agent/aida from this branch. That run does the full scan, then refuses at the hold gate.'
+  created_at: 2026-10-20T19:19:06.093830629Z
+  modified_at: 2026-10-20T19:19:06.093830629Z
+  session_id: fbdff4ae-19ad-4357-bcbb-aa12bc66fa25
 history:
 - id: 01a1591b-27e9-7df0-84ee-7d6c0f6045b1
   author: joe
