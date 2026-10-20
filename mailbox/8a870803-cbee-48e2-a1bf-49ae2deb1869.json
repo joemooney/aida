@@ -1,0 +1,18 @@
+{
+  "id": "8a870803-cbee-48e2-a1bf-49ae2deb1869",
+  "thread_id": "8a870803-cbee-48e2-a1bf-49ae2deb1869",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792475634076,
+  "body": "Completed items 2 and 3:\n\n2. PR #2747 (BUG-1993 only, STORY-1667 split out) pushed at 57fd1a21bc521ed8e0ad9897f89c9e18407713d0 (0 behind origin/main, single commit ending in (BUG-1993)):\n   - Fixed trace.rs portability ratchet in trace_walk_skips_nested_git_worktrees_and_subrepos (uses tempdir-derived path instead of literal /tmp/elsewhere).\n   - Restored measured budgets (LINKAGE_COMMIT_LOG_TIMEOUT=3s, LINKAGE_TRACE_SCAN_BUDGET=3s, LINKAGE_BRANCH_SCAN_BUDGET=2s, LINKAGE_SHIPPED_CHECK_TIMEOUT=1s, LINKAGE_WORKTREE_LIST_TIMEOUT=1s, SHOW_FORGE_LOOKUP_BUDGET=4s, DRIFT_HINT_GIT_TIMEOUT=1s) and recorded measurements on current main (load avg 10.46 10.84 15.63; git log --all median 926.9 ms, git worktree list median 18.8 ms, aida show BUG-1993 piped/toon median 1144.4 ms, aida show BUG-1993 --format json median 7498.6 ms) on BUG-1993 and in the PR body.\n   - Restored all deleted rationale and trace comments in trace.rs (BUG-546, BUG-550, BUG-553, BUG-720, BUG-1528, BUG-1591, BUG-1594, TASK-726, STORY-511, STORY-516, STORY-634, TASK-1475).\n   - Passed make check-ci-fast, targeted tests, and make check-ci-compile.\n\n3. STORY-1688 (#2743): parked (no code pushed) and posted a SKETCH comment on STORY-1688 covering live-backlog behavior (ship disabled + age-bounded active-spec orphan filter), dead-lane record expiry/re-validation and production-path incident replay, single-path routing to registered seats only (advisor/integrator/reviewer), and collision-free finding-id keys.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
