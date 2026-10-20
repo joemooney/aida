@@ -2244,9 +2244,13 @@ fn task1801_ship_and_phase_gates_refuse_linked_verdicts() {
     let gates_accept = || {
         let cands = crate::pr_ship::merge_gate_verdict_candidates(&[root], 30, &[], Some(SHA_R1));
         let pin = crate::pr_ship::approved_match_head(&cands, Some(SHA_R1));
-        let ship = crate::merge_hold::enforce_corpus_gate_before_merge(root, 30, &[], || {
-            Some(SHA_R1.to_string())
-        });
+        let ship = crate::merge_hold::enforce_corpus_gate_before_merge(
+            root,
+            30,
+            &[],
+            Some("main"),
+            || Some(SHA_R1.to_string()),
+        );
         let phase4 = crate::phase_gates::read_verdict_file_for_head(&path, Some(SHA_R1));
         (cands.len(), pin, ship, phase4)
     };
