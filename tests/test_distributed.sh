@@ -45,6 +45,14 @@ cargo build -p aida-cli --quiet 2>/dev/null || cargo build -p aida-cli
 CHECKOUT_HAD_STORE=0
 if [ -e "$PROJECT_ROOT/.aida-store" ] || [ -L "$PROJECT_ROOT/.aida-store" ]; then
     CHECKOUT_HAD_STORE=1
+    # CI's checkout never has a store at this point (the trace gate attaches
+    # one later), so one here was written by an earlier test step. Name it
+    # now, while the culprit is still a few steps back.
+    if [ -n "${CI:-}" ]; then
+        ls -la "$PROJECT_ROOT/.aida-store" || true
+        git worktree list || true
+        fail "an earlier CI step left .aida-store in the checkout at $PROJECT_ROOT"
+    fi
 fi
 cd "$TEST_DIR"
 
