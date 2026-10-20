@@ -1,0 +1,248 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-1993",
+  "publishes": [
+    {
+      "at": "2026-10-20T10:26:11.278295331Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-13T18:09:55.018165234Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:33:51.336962248Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-10-14T02:37:06.683611869Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "RunStarted"
+      }
+    },
+    {
+      "ts": "2026-10-14T02:37:38.886156344Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "claude",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-14T02:48:36.291981440Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "tool-exit",
+        "attempt": 2,
+        "max": 3,
+        "detail": "implementer preflight refused to open the PR:\nguard `CLI-manual drift-guard (every command documented)` failed:\nbinary: /home/joe/ai/aida-worktrees/aida-pool-aida-6/target/debug/aida (aida 0.15.0 (built 2026-10-13 19:39:55 -07:00, sha 014a28d3f7))\nFAIL completeness — 2 command(s) with no manual entry:\n    aida gui\n    aida host-bench\nOK spec-ids — no SPEC-ID noise in the manual\nOK reflection — all 14 surface-changing spec(s)' interface_changes reflected in the manual\nOK subcommands — every cited subcommand exists in the CLI\nOK flags — every cited --flag found in its command's --help"
+      }
+    },
+    {
+      "ts": "2026-10-14T02:48:36.519984163Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "claude",
+        "attempt": 2
+      }
+    },
+    {
+      "ts": "2026-10-14T02:48:38.829967812Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "SpecRetried",
+        "phase": "implementer",
+        "cause": "lost-child-state",
+        "attempt": 2,
+        "max": 2,
+        "detail": "phase 1 child session 01a1384f exited with code 1 after 2309ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup."
+      }
+    },
+    {
+      "ts": "2026-10-14T02:48:38.830462735Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "vendor": "claude",
+        "attempt": 3
+      }
+    },
+    {
+      "ts": "2026-10-14T02:48:41.840750176Z",
+      "spec": "BUG-1993",
+      "run_uuid": "01a13845-46ed-78c0-af71-cde931223ea5",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "implementer",
+        "kind": "launch-refused",
+        "detail": "phase 1 child session 01a1384f exited with code 1 after 2009ms without a session lease or an orchestrator handoff receipt: no implementer session started, so there is nothing to resume; the child refused: branch `bug-1993` is held by worktree /home/joe/ai/aida-worktrees/aida-pool-aida-6 before pickup setup. It is idle, clean, and unleased. To retire it, run `git worktree remove /home/joe/ai/aida-worktrees/aida-pool-aida-6` then retry pickup.. The single clean replacement launch already ran and was refused; no session lease was left behind, and that replacement launch did not advance BUG-1993 — the store reports BUG-1993 as In Progress. The elapsed time above is that replacement child's own lifetime; phase 1's recorded duration covers every launch in the phase, not this child alone",
+        "recovery_hint": "The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-1993`."
+      }
+    },
+    {
+      "ts": "2026-10-14T03:38:50.541556870Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T03:38:50.542075796Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T18:10:36.422808071Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1993",
+        "branch": "bug-1993-agy",
+        "first_seen": "2026-10-14T18:10:36.422756161+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-14T19:22:18.086330525Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-14T23:27:50.623082892Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-14T23:30:50.099920631Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T00:26:28.726999410Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-15T13:12:21.147781548Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1993",
+        "branch": "bug-1993-fix-local",
+        "first_seen": "2026-10-15T13:12:21.147700405+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:12:21.158830265Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1993",
+        "branch": "origin/bug-1993-linkage-budgets",
+        "first_seen": "2026-10-15T13:12:21.158774810+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:12:21.165502420Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1993",
+        "branch": "bug-1993-linkage-budgets-fix",
+        "first_seen": "2026-10-15T13:12:21.165429348+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-15T13:12:21.200264592Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-1993",
+        "branch": "origin/bug-1993-toon-budgets",
+        "first_seen": "2026-10-15T13:12:21.200190571+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T10:25:24.127827602Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T10:25:35.016247053Z",
+      "spec": "BUG-1993",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2772
+      }
+    },
+    {
+      "ts": "2026-10-20T10:26:10.997174614Z",
+      "spec": "BUG-1993",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "a4fb8e6c076a5f8c66025e8d0a0925cbc4f6c5dc",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
