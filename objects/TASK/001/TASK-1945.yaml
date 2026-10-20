@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-20T03:52:19.983586923Z
+modified_at: 2026-10-20T05:08:07.916366262Z
 req_type: Task
 tags:
 - review
@@ -44,6 +44,16 @@ comments:
     Open design boundary for signoff: initial watcher emits readiness only, with auto-ship left to the existing mandate-governed consumer. This satisfies the explicit 'auto-ship only under active fire-mode mandate' restriction while keeping implementation within this lane's NEVER MERGE instruction. If direct watcher auto-ship is required, make it a separate signed-off slice using existing pr ship unchanged.
   created_at: 2026-10-20T03:52:19.983586923Z
   modified_at: 2026-10-20T03:52:19.983586923Z
+- id: 01a157b5-b26c-7880-a23e-569acf6f2b2f
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-19 22:18: the SKETCH (codex, 03:52Z) is APPROVED with 3 conditions. Approved: `aida review watch` in its own review_watch module via command_registry; the bounded poll; reviews dispatch only through the ordinary attested `aida queue work PR-N --role reviewer` path and never synthesize a verdict; the per-PR lock plus versioned atomic state under .aida/review-watch/; the launch reservation persisted before spawn, with a PID/start receipt; at most 2 concurrent reviewers; one notification per head/verdict identity, with a sent receipt only after success; the ship-ready output is REPORT-ONLY and it never merges; anchored verdict readers; refusal on unknown evidence; the acceptance tests (a) to (e) plus concurrency/PID-reuse/cap tests.
+    Condition 1 (slicing; one PR each, strict review): S1 = discovery + dispatch + state/locks + stale-overlap author notification. S2 = head-change supersede (the only slice that signals processes: PID+start-identity check, our recorded process group only, reap before re-admit). S3 = the ship-ready report + the advisor wake. Don't put process termination in S1.
+    Condition 2 (carry-over): ship-ready must NOT require reviewed_sha == head exactly. Use the same TASK-1960 clean-merge carry-over proof that aida pr ship uses (and the verdict-corpus gate will use once TASK-1968 lands), so a gh pr update-branch doesn't force a re-review. A changed own diff still requires one.
+    Condition 3 (stale base): a stale NON-overlapping base can be reviewed and reported as 'ready after update-branch'. Don't auto-run update-branch from the watcher in S1-S3; leave that for a later, separately signed-off step.
+  created_at: 2026-10-20T05:08:07.916366262Z
+  modified_at: 2026-10-20T05:08:07.916366262Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
