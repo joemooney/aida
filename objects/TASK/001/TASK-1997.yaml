@@ -1,0 +1,27 @@
+id: 01a158b4-5f2c-7fb0-9ab9-0f33b33de4a7
+spec_id: TASK-1997
+agreed_id: TASK-1997
+title: ci-test-shards.py --lib-weights crashes with bare StopIteration on a log with no >1000-test run
+description: |
+  scripts/ci-test-shards.py lib_test_seconds(): `start = next(... int(m[2]) > 1000)` has no default. Passing a non-lib lane log, an untimestamped log (not `gh run view --log`), or a truncated log produces a StopIteration traceback rather than a message that names the file and says what was expected. Developer tool only; cosmetic.
+
+  Raised in review of PR-2769: https://github.com/joemooney/aida/pull/2769
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T09:46:18.284253188Z
+modified_at: 2026-10-20T09:46:18.284253188Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-2769
+- severity:cosmetic
+filed_at:
+  code_sha: 76205c358d1ff7a9fe34031495942af5cdb8010a
+  branch: pr-2769
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 419579e7c4
+  vendor: claude
+  session: 01a158ab5fad
