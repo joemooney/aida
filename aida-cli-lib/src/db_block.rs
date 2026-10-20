@@ -242,40 +242,51 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                 // Pull before modifying to reduce races
                 let branch = aida_core::git_ops::current_branch(store_path)
                     .unwrap_or_else(|_| "aida-store".to_string());
-                if attempt > 0 {
-                    pull_unless_refused(store_path, &branch)?;
-                }
+                // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock BEFORE
+                // blocks.lock, and network pull runs before acquiring blocks.lock.
+                let (block, committed_sha) =
+                    aida_core::db::with_store_write_lock(store_path, || {
+                        if attempt > 0 {
+                            pull_unless_refused(store_path, &branch)?;
+                        }
 
-                let mut registry = BlockRegistry::load(&blocks_path)?;
-                // Honor the agreed-id counter floor so a fresh block can't
-                // start at a number already issued in past merge-gate runs
-                // or retire-legacy-ids migrations.
-                // trace:FR-1-073 | ai:claude
-                let counter_floor = read_agreed_counter(store_path, &type_prefix);
-                // BUG-715: redact the hostname before it lands in blocks.yaml.
-                let (block_host, _) = aida_core::git_ops::redacted_identity(&hostname(), None);
-                let block = registry.claim_block_with_floor(
-                    node_id.clone(),
-                    std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
-                    block_host,
-                    type_prefix.clone(),
-                    *size,
-                    counter_floor,
-                );
-                registry.save(&blocks_path)?;
+                        BlockRegistry::with_dispense_lock(&blocks_path, || {
+                            let mut registry = BlockRegistry::load(&blocks_path)?;
+                            // Honor the agreed-id counter floor so a fresh block can't
+                            // start at a number already issued in past merge-gate runs
+                            // or retire-legacy-ids migrations.
+                            // trace:FR-1-073 | ai:claude
+                            let counter_floor = read_agreed_counter(store_path, &type_prefix);
+                            // BUG-715: redact the hostname before it lands in blocks.yaml.
+                            let (block_host, _) =
+                                aida_core::git_ops::redacted_identity(&hostname(), None);
+                            let block = registry.claim_block_with_floor(
+                                node_id.clone(),
+                                std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
+                                block_host,
+                                type_prefix.clone(),
+                                *size,
+                                counter_floor,
+                            );
+                            registry.save(&blocks_path)?;
 
-                // Commit the new block
-                aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
-                aida_core::git_ops::commit(
-                    store_path,
-                    &format!(
-                        "chore: claim {}-{}..{} for node {}",
-                        type_prefix, block.range_start, block.range_end, node_id
-                    ),
-                )?;
+                            // Commit the new block
+                            aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+                            aida_core::git_ops::commit(
+                                store_path,
+                                &format!(
+                                    "chore: claim {}-{}..{} for node {}",
+                                    type_prefix, block.range_start, block.range_end, node_id
+                                ),
+                            )?;
+                            let sha = aida_core::git_ops::head_sha(store_path)?;
+                            Ok((block, sha))
+                        })
+                    })?;
 
                 // Push — retry on rejection
-                match aida_core::git_ops::push(store_path, "origin", &branch) {
+                match aida_core::git_ops::push_exact(store_path, "origin", &committed_sha, &branch)
+                {
                     Ok(true) => {
                         println!(
                             "{} Claimed {}-{}..{} for node {} ({})",
@@ -290,9 +301,10 @@ pub(crate) fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::P
                     }
                     Ok(false) => {
                         // Push rejected — undo commit, pull, retry
-                        let _ = aida_core::git_ops::host_git_command(store_path)
-                            .args(["reset", "--soft", "HEAD~1"])
-                            .output();
+                        let _ = aida_core::git_ops::rollback_commit_if_head_matches(
+                            store_path,
+                            &committed_sha,
+                        );
                         if attempt + 1 == max_retries {
                             anyhow::bail!(
                                 "Could not push block claim after {} attempts. Run `aida db sync --pull` and retry.",
@@ -871,76 +883,101 @@ pub(crate) fn auto_allocate_block_inner(
 
     let max_retries = 3;
     for attempt in 0..max_retries {
-        if attempt > 0 && !local_only {
-            let branch = aida_core::git_ops::current_branch(store_path)
-                .unwrap_or_else(|_| "aida-store".to_string());
-            pull_unless_refused(store_path, &branch)?;
-        }
-
-        let mut registry = BlockRegistry::load(&blocks_path)?;
-        if reason != BlockClaimReason::OnThresholdCross
-            && registry.find_active_block(node_id, type_prefix).is_some()
-        {
-            return Ok(None);
-        }
-
-        let counter_floor = read_agreed_counter(store_path, type_prefix);
-        // BUG-715: redact owner (email) + hostname before they land in blocks.yaml.
-        let raw_owner = owner.to_string();
-        let raw_hn = hn.to_string();
-        let (block_host, block_owner) =
-            aida_core::git_ops::redacted_identity(&raw_hn, Some(raw_owner.as_str()));
-        let block = registry.claim_block_with_floor(
-            node_id.to_string(),
-            block_owner.unwrap_or(raw_owner),
-            block_host,
-            type_prefix.to_string(),
-            size,
-            counter_floor,
-        );
-        registry.save(&blocks_path)?;
-
-        let commit_subject = match reason {
-            BlockClaimReason::OnAcquire => format!(
-                "chore(registry): auto-allocate {}-{}..{} for node {} on acquire",
-                type_prefix, block.range_start, block.range_end, node_id
-            ),
-            BlockClaimReason::OnThresholdCross => format!(
-                "chore(registry): auto-claim {}-{}..{} for node {} on threshold cross",
-                type_prefix, block.range_start, block.range_end, node_id
-            ),
-            BlockClaimReason::OnFirstAdd => format!(
-                "chore(registry): claim first {}-{}..{} for node {} on first add",
-                type_prefix, block.range_start, block.range_end, node_id
-            ),
-        };
-        if deferred {
-            aida_core::git_ops::notice_store_commit_deferred(store_path);
-        } else {
-            aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
-            aida_core::git_ops::commit(store_path, &commit_subject)?;
-        }
-
-        if local_only {
-            return Ok(Some(format!(
-                "{}-{}..{}",
-                type_prefix, block.range_start, block.range_end
-            )));
-        }
-
         let branch = aida_core::git_ops::current_branch(store_path)
             .unwrap_or_else(|_| "aida-store".to_string());
-        match aida_core::git_ops::push(store_path, "origin", &branch) {
+        // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
+        // with network pull outside blocks.lock and push_exact outside both locks.
+        let claimed = aida_core::db::with_store_write_lock(
+            store_path,
+            || -> Result<Option<(String, Option<String>)>> {
+                if attempt > 0 && !local_only {
+                    pull_unless_refused(store_path, &branch)?;
+                }
+
+                BlockRegistry::with_dispense_lock(&blocks_path, || {
+                    let mut registry = BlockRegistry::load(&blocks_path)?;
+                    if reason == BlockClaimReason::OnFirstAdd {
+                        if registry
+                            .find_active_block_or_global(node_id, type_prefix)
+                            .is_some()
+                            || registry.blocks.iter().any(|b| {
+                                b.node_id == node_id
+                                    && b.type_prefix.eq_ignore_ascii_case(type_prefix)
+                            })
+                        {
+                            return Ok(None);
+                        }
+                    } else if reason != BlockClaimReason::OnThresholdCross
+                        && registry.find_active_block(node_id, type_prefix).is_some()
+                    {
+                        return Ok(None);
+                    }
+
+                    let counter_floor = read_agreed_counter(store_path, type_prefix);
+                    // BUG-715: redact owner (email) + hostname before they land in blocks.yaml.
+                    let raw_owner = owner.to_string();
+                    let raw_hn = hn.to_string();
+                    let (block_host, block_owner) =
+                        aida_core::git_ops::redacted_identity(&raw_hn, Some(raw_owner.as_str()));
+                    let block = registry.claim_block_with_floor(
+                        node_id.to_string(),
+                        block_owner.unwrap_or(raw_owner),
+                        block_host,
+                        type_prefix.to_string(),
+                        size,
+                        counter_floor,
+                    );
+                    registry.save(&blocks_path)?;
+
+                    let commit_subject = match reason {
+                        BlockClaimReason::OnAcquire => format!(
+                            "chore(registry): auto-allocate {}-{}..{} for node {} on acquire",
+                            type_prefix, block.range_start, block.range_end, node_id
+                        ),
+                        BlockClaimReason::OnThresholdCross => format!(
+                            "chore(registry): auto-claim {}-{}..{} for node {} on threshold cross",
+                            type_prefix, block.range_start, block.range_end, node_id
+                        ),
+                        BlockClaimReason::OnFirstAdd => format!(
+                            "chore(registry): claim first {}-{}..{} for node {} on first add",
+                            type_prefix, block.range_start, block.range_end, node_id
+                        ),
+                    };
+                    let committed_sha = if deferred {
+                        aida_core::git_ops::notice_store_commit_deferred(store_path);
+                        None
+                    } else {
+                        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+                        aida_core::git_ops::commit(store_path, &commit_subject)?;
+                        Some(aida_core::git_ops::head_sha(store_path)?)
+                    };
+
+                    Ok(Some((
+                        format!("{}-{}..{}", type_prefix, block.range_start, block.range_end),
+                        committed_sha,
+                    )))
+                })
+            },
+        )?;
+
+        let Some((label, committed_sha)) = claimed else {
+            return Ok(None);
+        };
+
+        if local_only {
+            return Ok(Some(label));
+        }
+
+        let Some(committed_sha) = committed_sha else {
+            return Ok(Some(label));
+        };
+        match aida_core::git_ops::push_exact(store_path, "origin", &committed_sha, &branch) {
             Ok(true) => {
-                return Ok(Some(format!(
-                    "{}-{}..{}",
-                    type_prefix, block.range_start, block.range_end
-                )));
+                return Ok(Some(label));
             }
             Ok(false) => {
-                let _ = aida_core::git_ops::host_git_command(store_path)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ =
+                    aida_core::git_ops::rollback_commit_if_head_matches(store_path, &committed_sha);
                 continue;
             }
             Err(e) => anyhow::bail!("Push failed: {}", e),
@@ -1225,74 +1262,78 @@ pub(crate) fn claim_first_block(
     let blocks_path = store_path.join("registry").join("blocks.yaml");
     let has_remote = aida_core::git_ops::has_remote(store_path, "origin");
 
-    BlockRegistry::with_dispense_lock(&blocks_path, || {
-        let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
-        if registry
-            .find_active_block_or_global(node_id, type_prefix)
-            .is_some()
-        {
-            // A concurrent first add claimed it while we waited.
-            return Ok(None);
-        }
-        let ever_had_block = registry
-            .blocks
-            .iter()
-            .any(|b| b.node_id == node_id && b.type_prefix.eq_ignore_ascii_case(type_prefix));
-        if ever_had_block {
-            return Ok(None);
-        }
-        if has_remote && add_remote_sync_disabled() {
+    // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
+    // and never hold blocks.lock across network pull/push in auto_allocate_block_inner.
+    let already_has_block = aida_core::db::with_store_write_lock(store_path, || {
+        BlockRegistry::with_dispense_lock(&blocks_path, || {
+            let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+            if registry
+                .find_active_block_or_global(node_id, type_prefix)
+                .is_some()
+            {
+                return Ok(true);
+            }
+            let ever_had_block = registry
+                .blocks
+                .iter()
+                .any(|b| b.node_id == node_id && b.type_prefix.eq_ignore_ascii_case(type_prefix));
+            Ok(ever_had_block)
+        })
+    })?;
+    if already_has_block {
+        return Ok(None);
+    }
+    if has_remote && add_remote_sync_disabled() {
+        eprintln!(
+            "{} No {} id block for this clone and remote sync is off; using a \
+             node-aware id. Run `aida db block claim --type {} --size 100` online \
+             for short ids.",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+            type_prefix,
+            type_prefix,
+        );
+        return Ok(None);
+    }
+
+    let pre_head = aida_core::git_ops::head_sha(store_path).ok();
+    let email = aida_core::git_ops::git_config_get("user.email").ok();
+    let hn = hostname();
+    let claimed = auto_allocate_block_inner(
+        store_path,
+        node_id,
+        &hn,
+        email.as_deref(),
+        type_prefix,
+        size,
+        BlockClaimReason::OnFirstAdd,
+    );
+    let label = match claimed {
+        Ok(Some(label)) => label,
+        Ok(None) => return Ok(None),
+        Err(e) => {
+            rollback_unpushed_claim(store_path, pre_head.as_deref(), node_id, type_prefix);
             eprintln!(
-                "{} No {} id block for this clone and remote sync is off; using a \
-                 node-aware id. Run `aida db block claim --type {} --size 100` online \
-                 for short ids.",
+                "{} Could not claim a {} id block ({}); using a node-aware id. \
+                 Run `aida db block claim --type {} --size 100` once online.",
                 crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
                 type_prefix,
+                e.to_string()
+                    .lines()
+                    .next()
+                    .unwrap_or("claim failed")
+                    .trim(),
                 type_prefix,
             );
             return Ok(None);
         }
-
-        let pre_head = aida_core::git_ops::head_sha(store_path).ok();
-        let email = aida_core::git_ops::git_config_get("user.email").ok();
-        let hn = hostname();
-        let claimed = auto_allocate_block_inner(
-            store_path,
-            node_id,
-            &hn,
-            email.as_deref(),
-            type_prefix,
-            size,
-            BlockClaimReason::OnFirstAdd,
-        );
-        let label = match claimed {
-            Ok(Some(label)) => label,
-            Ok(None) => return Ok(None),
-            Err(e) => {
-                rollback_unpushed_claim(store_path, pre_head.as_deref(), node_id, type_prefix);
-                eprintln!(
-                    "{} Could not claim a {} id block ({}); using a node-aware id. \
-                     Run `aida db block claim --type {} --size 100` once online.",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    type_prefix,
-                    e.to_string()
-                        .lines()
-                        .next()
-                        .unwrap_or("claim failed")
-                        .trim(),
-                    type_prefix,
-                );
-                return Ok(None);
-            }
-        };
-        let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
-        Ok(Some(AutoClaimOutcome {
-            label,
-            previous_remaining: 0,
-            new_remaining: registry.aggregate_remaining(node_id, type_prefix),
-            bootstrap: true,
-        }))
-    })
+    };
+    let registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+    Ok(Some(AutoClaimOutcome {
+        label,
+        previous_remaining: 0,
+        new_remaining: registry.aggregate_remaining(node_id, type_prefix),
+        bootstrap: true,
+    }))
 }
 
 /// Undo a first-add block claim that failed part-way, so no unpushed claim
@@ -1316,39 +1357,46 @@ fn rollback_unpushed_claim(
     node_id: &str,
     type_prefix: &str,
 ) {
-    let git = |args: &[&str]| {
-        aida_core::git_ops::host_git_command(store_path)
-            .args(args)
-            .output()
-    };
-    let head = aida_core::git_ops::head_sha(store_path).ok();
-    let head_moved = match (head.as_deref(), pre_head) {
-        (Some(h), Some(p)) => h.trim() != p.trim(),
-        _ => false,
-    };
-    if head_moved {
-        let subject = git(&["log", "-1", "--format=%s"])
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-            .unwrap_or_default();
-        let is_our_claim = subject
-            .starts_with(&format!("chore(registry): claim first {}-", type_prefix))
-            && subject.ends_with(&format!(" for node {} on first add", node_id));
-        let branch = aida_core::git_ops::current_branch(store_path)
-            .unwrap_or_else(|_| "aida-store".to_string());
-        let from_remote = git(&[
-            "merge-base",
-            "--is-ancestor",
-            "HEAD",
-            &format!("refs/remotes/origin/{}", branch),
-        ])
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-        if is_our_claim && !from_remote {
-            let _ = git(&["reset", "--mixed", "-q", "HEAD~1"]);
-        }
-    }
-    let _ = git(&["reset", "-q", "HEAD", "--", "registry/blocks.yaml"]);
-    let _ = git(&["checkout", "HEAD", "--", "registry/blocks.yaml"]);
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock.
+    let _ = aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
+        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<()> {
+            let git = |args: &[&str]| {
+                aida_core::git_ops::host_git_command(store_path)
+                    .args(args)
+                    .output()
+            };
+            let head = aida_core::git_ops::head_sha(store_path).ok();
+            let head_moved = match (head.as_deref(), pre_head) {
+                (Some(h), Some(p)) => h.trim() != p.trim(),
+                _ => false,
+            };
+            if head_moved {
+                let subject = git(&["log", "-1", "--format=%s"])
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .unwrap_or_default();
+                let is_our_claim = subject
+                    .starts_with(&format!("chore(registry): claim first {}-", type_prefix))
+                    && subject.ends_with(&format!(" for node {} on first add", node_id));
+                let branch = aida_core::git_ops::current_branch(store_path)
+                    .unwrap_or_else(|_| "aida-store".to_string());
+                let from_remote = git(&[
+                    "merge-base",
+                    "--is-ancestor",
+                    "HEAD",
+                    &format!("refs/remotes/origin/{}", branch),
+                ])
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+                if is_our_claim && !from_remote {
+                    let _ = git(&["reset", "--mixed", "-q", "HEAD~1"]);
+                }
+            }
+            let _ = git(&["reset", "-q", "HEAD", "--", "registry/blocks.yaml"]);
+            let _ = git(&["checkout", "HEAD", "--", "registry/blocks.yaml"]);
+            Ok(())
+        })
+    });
 }
 
 #[cfg(test)]
@@ -1358,3 +1406,233 @@ mod block_allocation_reader_tests;
 #[cfg(test)]
 #[path = "tests/merge_contiguous_blocks_tests.rs"]
 mod merge_contiguous_blocks_tests;
+
+#[cfg(test)]
+mod task_1930_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    // trace:TASK-1930 | ai:agy
+    fn task_1930_block_claim_and_doctor_writers_obey_a1_and_preserve_concurrent_updates() {
+        let dir = tempfile::tempdir().unwrap();
+        let project_root = dir.path().join("proj");
+        let store_path = project_root.join(".aida-store");
+        let origin_path = dir.path().join("origin.git");
+        std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+        std::fs::write(
+            project_root.join(".aida/config.toml"),
+            "[id_format]\ncounter_scope = \"per_type\"\n",
+        )
+        .unwrap();
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "--bare", origin_path.to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success());
+        aida_core::git_ops::init(&store_path).unwrap();
+        aida_core::git_ops::configure_user(&store_path, "Test", "test@example.com").unwrap();
+        assert!(std::process::Command::new("git")
+            .current_dir(&store_path)
+            .args(["remote", "add", "origin", origin_path.to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success());
+
+        // Seed node registry (`n1` registered, `n_stale` unregistered) and blocks.yaml.
+        let nodes_path = store_path.join("registry").join("nodes.toml");
+        let mut nodes = aida_core::NodeRegistry::default();
+        nodes.nodes.push(aida_core::node::NodeRegistryEntry {
+            id: "n1".into(),
+            user_id: 1,
+            hostname: "host".into(),
+            email: None,
+            clone_path: None,
+            name: Some("node-1".into()),
+            user: Some("tester".into()),
+            registered: chrono::Utc::now(),
+        });
+        nodes.save(&nodes_path).unwrap();
+        let node_cfg = aida_core::NodeConfig {
+            node_id: "n1".into(),
+            user_id: 1,
+            hostname: "host".into(),
+            email: None,
+            name: Some("node-1".into()),
+            user: Some("tester".into()),
+            registered_at: chrono::Utc::now(),
+        };
+        node_cfg
+            .save(&store_path.join(".aida").join("node.toml"))
+            .unwrap();
+
+        let blocks_path = store_path.join("registry").join("blocks.yaml");
+        let mut reg = aida_core::BlockRegistry::default();
+        reg.blocks.push(aida_core::AgreedIdBlock {
+            node_id: "n1".into(),
+            owner: "tester".into(),
+            hostname: "host".into(),
+            type_prefix: "TASK".into(),
+            range_start: 1,
+            range_end: 100,
+            next: 10,
+            allocated_at: chrono::Utc::now(),
+        });
+        reg.blocks.push(aida_core::AgreedIdBlock {
+            node_id: "n_stale".into(),
+            owner: "ghost".into(),
+            hostname: "host".into(),
+            type_prefix: "BUG".into(),
+            range_start: 101,
+            range_end: 200,
+            next: 105,
+            allocated_at: chrono::Utc::now(),
+        });
+        reg.save(&blocks_path).unwrap();
+
+        // Seed two requirements where r1 has a dangling relationship to a missing UUID.
+        let objects_root = store_path.join("objects");
+        let mut r1 = aida_core::Requirement::new("Title 1".into(), "Desc 1".into());
+        r1.spec_id = Some("TASK-1".into());
+        r1.relationships.push(aida_core::Relationship {
+            rel_type: aida_core::RelationshipType::References,
+            target_id: uuid::Uuid::new_v4(),
+            created_at: None,
+            created_by: None,
+        });
+        aida_core::object_store::write_object(&objects_root, &r1).unwrap();
+
+        aida_core::git_ops::add(&store_path, &["registry", "objects"]).unwrap();
+        aida_core::git_ops::commit(&store_path, "seed store").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store_path).unwrap();
+        assert!(aida_core::git_ops::push(&store_path, "origin", &branch).unwrap());
+
+        // 1. Barrier test: handle_block_command(BlockCommand::Claim) waits on store_write_lock
+        // and obeys A1 lock order (store_write_lock -> blocks.lock).
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let store_holder = store_path.clone();
+        let holder = std::thread::spawn(move || {
+            aida_core::db::with_store_write_lock(&store_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let before_contended = aida_core::db::store_write_lock_contended_for(&store_path);
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let store_claim = store_path.clone();
+        let claimer = std::thread::spawn(move || {
+            handle_block_command(
+                &BlockCommand::Claim {
+                    r#type: "FR".into(),
+                    size: 50,
+                },
+                &store_claim,
+            )
+            .unwrap();
+            done_tx.send(()).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&store_path) <= before_contended {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for BlockCommand::Claim to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            done_rx.try_recv().is_err(),
+            "BlockCommand::Claim must block while store_write_lock is held"
+        );
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        done_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        claimer.join().unwrap();
+
+        // 2. Doctor stale-snapshot preservation: simulate a concurrent `aida add`
+        // advancing `n1`'s `next` from 10 -> 11 and editing `r1.title` on disk before
+        // the doctor repair functions run.
+        aida_core::db::with_store_write_lock(&store_path, || {
+            aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+                let mut current = aida_core::BlockRegistry::load(&blocks_path)?;
+                let (dispensed, _) = current.dispense("n1", "TASK").unwrap();
+                assert_eq!(dispensed, "TASK-10");
+                current.save(&blocks_path)?;
+                Ok(())
+            })
+        })
+        .unwrap();
+        let mut r1_concurrent =
+            aida_core::object_store::read_object(&objects_root, "TASK-1").unwrap();
+        r1_concurrent.title = "Title 1 edited concurrently".into();
+        aida_core::object_store::write_object(&objects_root, &r1_concurrent).unwrap();
+
+        // Run doctor_tombstone_stale_blocks_in_store and doctor_repair_dangling_relationships_in_store.
+        let tombstoned =
+            crate::doctor_cmd::doctor_tombstone_stale_blocks_in_store(&store_path).unwrap();
+        assert_eq!(tombstoned, 1);
+        let after_blocks = aida_core::BlockRegistry::load(&blocks_path).unwrap();
+        let n1_block = after_blocks
+            .blocks
+            .iter()
+            .find(|b| b.node_id == "n1" && b.type_prefix == "TASK")
+            .unwrap();
+        assert_eq!(
+            n1_block.next, 11,
+            "doctor_tombstone_stale_blocks_in_store must preserve concurrent dispense next=11"
+        );
+        let stale_block = after_blocks
+            .blocks
+            .iter()
+            .find(|b| b.node_id == "n_stale")
+            .unwrap();
+        assert!(stale_block.is_exhausted());
+
+        let repaired =
+            crate::doctor_cmd::doctor_repair_dangling_relationships_in_store(&store_path).unwrap();
+        assert_eq!(repaired, 1);
+        let r1_after = aida_core::object_store::read_object(&objects_root, "TASK-1").unwrap();
+        assert_eq!(
+            r1_after.title, "Title 1 edited concurrently",
+            "doctor_repair_dangling_relationships_in_store must preserve concurrent spec edits"
+        );
+        assert!(r1_after.relationships.is_empty());
+
+        // 3. Run doctor_migrate_counter_scope_in_store after another concurrent block
+        // claim raises `highest_end` to 500; migration must allocate above 500 (501..600).
+        aida_core::db::with_store_write_lock(&store_path, || {
+            aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+                let mut current = aida_core::BlockRegistry::load(&blocks_path)?;
+                current.claim_block_with_floor(
+                    "n2".into(),
+                    "other".into(),
+                    "host2".into(),
+                    "STORY".into(),
+                    100,
+                    400,
+                );
+                current.save(&blocks_path)?;
+                Ok(())
+            })
+        })
+        .unwrap();
+        let (mig_start, mig_end) = crate::doctor_cmd::doctor_migrate_counter_scope_in_store(
+            &project_root,
+            &store_path,
+            "n1",
+            100,
+        )
+        .unwrap();
+        assert_eq!(
+            (mig_start, mig_end),
+            (501, 600),
+            "doctor_migrate_counter_scope_in_store must re-read blocks.yaml inside lock and start above fresh highest_end=500"
+        );
+    }
+}
