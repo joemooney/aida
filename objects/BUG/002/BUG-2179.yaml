@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T19:19:06.093830629Z
+modified_at: 2026-10-20T19:32:48.890031026Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -52,6 +52,12 @@ comments:
   created_at: 2026-10-20T19:19:06.093830629Z
   modified_at: 2026-10-20T19:19:06.093830629Z
   session_id: fbdff4ae-19ad-4357-bcbb-aa12bc66fa25
+- id: 01a15acd-567a-76b1-bb61-a01e9c38b352
+  author: joe
+  content: 'Advisor 12:33: AC3 evidence accepted. Round 2 timed the production scan functions at 26.2 s and 35.6 s warm medians, under the amended 60 s. Real-command timing comes for free once this ships: every later aida pr ship runs the new code, and TASK-2008 tracks the sub-30 s goal.'
+  created_at: 2026-10-20T19:32:48.890031026Z
+  modified_at: 2026-10-20T19:32:48.890031026Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591b-27e9-7df0-84ee-7d6c0f6045b1
   author: joe
