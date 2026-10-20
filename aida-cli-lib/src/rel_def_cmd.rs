@@ -419,8 +419,6 @@ fn run_rel_def(
                 RelDefArgs { inner: rel_def_cmd } => {
                     self::handle_rel_def_command(rel_def_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rel-def` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

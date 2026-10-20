@@ -397,8 +397,6 @@ fn run_team(
                         }
                     });
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -418,8 +416,6 @@ fn run_team(
                      no node roster."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida team` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

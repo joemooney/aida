@@ -14278,8 +14278,6 @@ fn run_mcp_serve(
                         .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
                     self::run_mcp_server(&storage, project_root)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida mcp-serve` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

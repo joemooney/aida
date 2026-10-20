@@ -262,8 +262,6 @@ fn run_import_plan(
                         *request_review,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -282,8 +280,6 @@ fn run_import_plan(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida import-plan` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

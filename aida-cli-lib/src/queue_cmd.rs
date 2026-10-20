@@ -16528,8 +16528,6 @@ fn run_queue(
                     let storage = Storage::new(store_path);
                     handle_queue_command(queue_cmd, &storage, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16542,8 +16540,6 @@ fn run_queue(
                 QueueArgs { inner: queue_cmd } => {
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida queue` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16666,8 +16662,6 @@ fn run_rework(
                         },
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16713,8 +16707,6 @@ fn run_rework(
                         },
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rework` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

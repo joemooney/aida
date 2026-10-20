@@ -538,8 +538,6 @@ fn run_user_guide(
                 UserGuideArgs { dark } => {
                     open_user_guide(*dark)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida user-guide` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

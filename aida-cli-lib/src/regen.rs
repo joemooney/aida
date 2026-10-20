@@ -752,8 +752,6 @@ fn run_regen(
                     "regeneration requires a git-canonical store; migrate the legacy store first"
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida regen` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
