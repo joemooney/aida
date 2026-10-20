@@ -3,12 +3,12 @@ spec_id: BUG-2184
 agreed_id: BUG-2184
 title: 'pr ship: the slow mandate scan uses up the --wait budget, then the CI wait times out without polling and reports ''checks have not registered'''
 description: 'Observed 2026-10-18 on PR-2749, twice. ''aida pr ship 2749 --wait 900'' spends more than 15 min in step 1 (the mandate trace scan, BUG-2179). At step 2 (ci_gate.rs wait_for_ship_ci) the timeout check at the top of the loop fires before the first forge.checks_registered call: the log has no ''CI pending for'' lines. It returns ''CI wait timed out for PR-2749 — still pending: checks have not registered'', the initial placeholder string. Meanwhile gh pr checks 2749 shows every check passed (Build pass, merge-hold-gate pass). Two defects: (1) the CI-wait budget is shared with, or eaten by, pre-CI steps, so --wait has to cover the mandate scan; (2) on a zero or exhausted budget the wait should poll at least once before declaring a timeout, and should never report the unpolled placeholder as the pending reason. Fix: give the CI wait its own deadline starting at step 2, poll at least once, and make the timeout message say ''never polled'' when it wasn''t. Workaround: --wait 3600. Related: BUG-2179.'
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:57:07.069855639Z
-modified_at: 2026-10-20T14:26:07.839585452Z
+modified_at: 2026-10-20T19:53:49.548581528Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -51,6 +51,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15ae0-92e4-73e3-a618-9da3f055b2a1
+  author: aida-auto-bump
+  timestamp: 2026-10-20T19:53:49.540882931Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15ae0-92ec-73e0-aa04-2c7fb1fcf4f7
+  timestamp: 2026-10-20T19:53:49.548576277Z
+  agent: aida
+  commit_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  summary: 'Carry-over (advisor): the independent reviewer PASSED round 2 at bae947dfe8; ad22bc2ac3 is gh pr update-branch onto main (#2784 CI-definition change) with an IDENTICAL own patch-id.'
+  review_verdict: approved
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
@@ -59,3 +74,7 @@ filed_at:
   aida_build_sha: befc5a2e23
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T19:53:49.540877099Z
+  completion_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
