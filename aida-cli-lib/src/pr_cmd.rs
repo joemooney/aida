@@ -6,6 +6,7 @@
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use serde::{Deserialize, Serialize};
 
 // trace:STORY-1728 | ai:claude
@@ -536,6 +537,8 @@ pub(crate) fn pr_rebase_handler(
         .arg("-C")
         .arg(&project_root)
         .args(["fetch", "origin", "--prune"])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .status();
     match fetch {
         Ok(s) if s.success() => {}
@@ -570,6 +573,8 @@ pub(crate) fn pr_rebase_handler(
         .arg("-C")
         .arg(&project_root)
         .args(["fetch", "origin", pr_refspec.as_str()])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .output();
     let fetch_ok = matches!(&pr_fetch, Ok(o) if o.status.success());
     if !fetch_ok {
@@ -843,6 +848,8 @@ pub(crate) fn pr_rebase_handler(
             .arg("-C")
             .arg(wt_path)
             .args(["ls-remote", remote, &full_ref])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(wt_path, remote)
             .output();
         let ls = match ls {
             Ok(o) if o.status.success() => o,
@@ -947,6 +954,8 @@ pub(crate) fn pr_rebase_handler(
             "origin",
             &format!("HEAD:refs/heads/{}", info.head_ref),
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&wt_path, "origin")
         .status();
     let push_ok = matches!(push_status, Ok(s) if s.success());
     if !push_ok {
@@ -1357,6 +1366,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
             "origin",
             &remote_branch,
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .status()
         .context("could not invoke `git fetch`")?;
     if !fetch.success() {
@@ -1390,6 +1401,8 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     let push = std::process::Command::new("git")
         .current_dir(&project_root)
         .args(["push", "--force-with-lease", "-u", "origin", &branch])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .status()
         .context("could not invoke `git push`")?;
     if !push.success() {
@@ -2375,6 +2388,8 @@ fn commit_committed_at_fetching(
             .args(["fetch", "--quiet", "--no-tags", "origin", sha])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(repo, "origin")
             .status()
             .is_ok_and(|s| s.success());
         fetched.then(|| commit_committed_at(repo, sha)).flatten()
@@ -4492,6 +4507,8 @@ pub(crate) fn pr_ship_create_pr(project_root: &std::path::Path, branch: &str) ->
     let push_status = std::process::Command::new("git")
         .current_dir(project_root)
         .args(["push", "-u", "origin", branch])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status()
         .context("could not invoke `git push`")?;
     if !push_status.success() {
@@ -5100,10 +5117,14 @@ pub(crate) fn run_optional_slice_stack_verifier(
                 "origin",
                 &format!("refs/pull/{pr_number}/head"),
             ])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(project_root, "origin")
             .output();
         let _ = std::process::Command::new("git")
             .current_dir(project_root)
             .args(["fetch", "--quiet", "origin", head_ref])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(project_root, "origin")
             .output();
     }
 
@@ -5998,6 +6019,8 @@ pub(crate) fn preflight_stale_base_check_with_info(
         .arg("-C")
         .arg(project_root)
         .args(["fetch", "origin", "--prune"])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .status();
     // BUG-1218: reviewer probes must not update the conventional pr-N branch:
     // a stale/sibling worktree may have it checked out. A per-process scratch
@@ -6013,6 +6036,8 @@ pub(crate) fn preflight_stale_base_check_with_info(
         .args(["fetch", "origin", pr_refspec.as_str()])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status();
     if !matches!(pr_fetch, Ok(s) if s.success()) {
         anyhow::bail!(
@@ -6170,6 +6195,8 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
         .arg("-C")
         .arg(project_root)
         .args(["fetch", "origin", "--prune"])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(&project_root, "origin")
         .status();
     // trace:BUG-1218 | ai:codex
     let pr_local_branch = format!("refs/aida/preflight/pr-{n}-{}", std::process::id());
@@ -6182,6 +6209,8 @@ pub(crate) fn preflight_intermediate_only_check_with_info(
         .args(["fetch", "origin", pr_refspec.as_str()])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status();
     if !matches!(pr_fetch, Ok(s) if s.success()) {
         anyhow::bail!(
@@ -6293,6 +6322,8 @@ pub(crate) fn preflight_mr_base(
             "origin",
             base,
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .output();
     match out {
         Ok(o) if o.status.success() && !o.stdout.is_empty() => MrBasePreflight::Ok,

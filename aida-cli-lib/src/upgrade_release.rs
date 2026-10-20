@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 // trace:STORY-1728 | ai:claude
 #[path = "upgrade_release_args.rs"]
@@ -1691,6 +1692,8 @@ pub(crate) fn handle_release(
                 .arg("-C")
                 .arg(r)
                 .args(["pull", "--ff-only"])
+                // trace:BUG-2181 | ai:claude
+                .remote_credentials(r, &aida_core::git_ops::upstream_remote(r))
                 .status();
             if !matches!(pull, Ok(s) if s.success()) {
                 anyhow::bail!(
@@ -1759,7 +1762,10 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
         // Use rebase: bare `git pull` fails on divergent branches when
         // the user has no pull.rebase/pull.ff config; the orphan-store
         // model wants linear history. trace:BUG-1-051 | ai:claude
-        match aida_core::git_ops::pull_rebase(sp, "origin", &branch) {
+        // trace:TASK-1930 | ai:agy
+        match aida_core::db::with_store_write_lock(sp, || {
+            aida_core::git_ops::pull_rebase(sp, "origin", &branch)
+        }) {
             Ok(()) => println!("  Store pull complete."),
             Err(e) => {
                 anyhow::bail!(
@@ -1869,25 +1875,34 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
             aida_core::git_ops::current_branch(sp).unwrap_or_else(|_| "aida-store".to_string());
 
         // Commit any pending store changes (e.g., block pointer updates)
-        if aida_core::git_ops::has_changes(sp).unwrap_or(false) {
-            let msg = format!("chore: sync store for release {}", new_tag);
-            let _ = aida_core::git_ops::add_all(sp, "objects");
-            let _ = aida_core::git_ops::add_all(sp, "registry");
-            if sp.join("metadata.yaml").exists() {
-                let _ = aida_core::git_ops::add(sp, &["metadata.yaml"]);
+        // trace:TASK-1930 | ai:agy
+        if let Err(e) = aida_core::db::with_store_write_lock(sp, || -> Result<()> {
+            if aida_core::git_ops::has_changes(sp).unwrap_or(false) {
+                let msg = format!("chore: sync store for release {}", new_tag);
+                let _ = aida_core::git_ops::add_all(sp, "objects");
+                let _ = aida_core::git_ops::add_all(sp, "registry");
+                if sp.join("metadata.yaml").exists() {
+                    let _ = aida_core::git_ops::add(sp, &["metadata.yaml"]);
+                }
+                if let Err(e) = aida_core::git_ops::commit(sp, &msg) {
+                    eprintln!("  Warning: could not commit store changes: {}", e);
+                } else {
+                    println!("  Committed store changes: {}", msg);
+                }
             }
-            if let Err(e) = aida_core::git_ops::commit(sp, &msg) {
-                eprintln!("  Warning: could not commit store changes: {}", e);
-            } else {
-                println!("  Committed store changes: {}", msg);
-            }
+            Ok(())
+        }) {
+            eprintln!("  Warning: could not commit store changes: {}", e);
         }
 
         match aida_core::git_ops::push(sp, "origin", &branch) {
             Ok(true) => println!("  Store push complete."),
             Ok(false) => {
                 println!("  Push rejected. Pulling and retrying...");
-                if let Err(e) = aida_core::git_ops::pull_rebase(sp, "origin", &branch) {
+                let pull_res = aida_core::db::with_store_write_lock(sp, || {
+                    aida_core::git_ops::pull_rebase(sp, "origin", &branch)
+                });
+                if let Err(e) = pull_res {
                     eprintln!("  Warning: store pull-rebase failed: {}", e);
                 } else {
                     match aida_core::git_ops::push(sp, "origin", &branch) {
