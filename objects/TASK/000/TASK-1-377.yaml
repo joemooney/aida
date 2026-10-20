@@ -1,0 +1,28 @@
+id: 01a157a0-2628-70e1-bd7d-b62dc45d5bf2
+spec_id: TASK-1-377
+title: 'minor: AC1 headroom is thin — CI (lib) lane is 11m11s of an 11m21s run; rust-ca…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1949, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: AC1 headroom is thin — CI (lib) lane is 11m11s of an 11m21s run; rust-cache save-if is gates-only, and gates never compiles the test lanes' test binaries/aida-cli dev-deps. Split lib next (advisor already noted) or let a test lane save the cache.
+  Reviewed sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T04:44:35.752267331Z
+modified_at: 2026-10-20T04:44:35.752267331Z
+req_type: Task
+tags:
+- carried-from:TASK-1949
+- finding-hash:37cc9d11
+- from-review:TASK-1949
+- kind:carried-forward
+filed_at:
+  code_sha: 1ad2024f9dd843b1896c67976d23a683a434bd7a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
