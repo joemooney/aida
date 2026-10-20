@@ -11,7 +11,9 @@ trap 'rm -rf "$tmp"' EXIT
 export AIDA_OUTPUT_FORMAT=human
 export NO_COLOR=1
 
-(cd "$ROOT" && cargo build -p aida-cli --quiet)
+# CI's gates and contracts lanes already built the workspace binary.
+# trace:TASK-1979 | ai:claude
+[ "${AIDA_CI_PREBUILT_CLI:-}" = 1 ] || (cd "$ROOT" && cargo build -p aida-cli --quiet)
 
 project="$tmp/project"
 mkdir -p "$project"

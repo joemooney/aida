@@ -34,7 +34,9 @@ aida_test_cleanup() {
 # Build first
 info "Building aida..."
 cd "$PROJECT_ROOT"
-cargo build -p aida-cli --quiet 2>/dev/null || cargo build -p aida-cli
+# CI's gates and contracts lanes already built the workspace binary.
+# trace:TASK-1979 | ai:claude
+[ "${AIDA_CI_PREBUILT_CLI:-}" = 1 ] || cargo build -p aida-cli --quiet 2>/dev/null || cargo build -p aida-cli
 
 # Every aida below runs from a scratch directory, never the checkout: with
 # cwd inside this repository, even `aida --file <store>` resolves the

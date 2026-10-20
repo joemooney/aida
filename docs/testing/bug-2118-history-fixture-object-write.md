@@ -13,26 +13,119 @@ error: unable to create temporary file: No such file or directory
 fatal: failed to write commit object
 ```
 
-## Status: Unreproduced
+## Status: Mechanism identified and reproduced
 
-The underlying mechanism of the CI failure has **not** been reproduced or identified. `BUG-2118` remains open as unreproduced.
+<!-- trace:BUG-2118 | ai:claude -->
 
-## What Was Checked and Ruled Out
+The fixture's own `git` commands started **detached auto-maintenance**, and
+it raced the fixture's next object write.
 
-1. **Where the error text originates in Git 2.43.0:**
-   - `"unable to create temporary file"` is formatted in `start_loose_object_common` (`object-file.c`), which calls `git_mkstemp_mode(".git/objects/<aa>/tmp_obj_XXXXXX", 0444)` and, if that fails with `ENOENT` and `mkdir(".git/objects/<aa>", 0777) == 0`, retries `git_mkstemp_mode` once.
-   - `"fatal: failed to write commit object"` is emitted by `cmd_commit` (`builtin/commit.c`) after `setup_git_directory`, `prepare_to_commit` (tree building), and the root-tree lookup in `commit_tree_extended` have completed.
-2. **Process-wide `cwd` removal is ruled out as the cause of `git -C` failing:**
-   - `fixture_git` passes `-C <dir>` where `<dir>` is an absolute `TempDir` path (`fx.store`).
-   - Running `git -C /abs/repo commit --allow-empty` after `rmdir`ing the caller's current working directory still succeeds (`exit 0`) on Git 2.43.0 because `git -C` `chdir`s to the absolute target path directly without resolving relative to the caller's deleted `cwd`.
-3. **Self-planted fanout faults are not a reproduction:**
-   - Planting a dangling symlink at `.git/objects/<aa>` or concurrently calling `rmdir` on `.git/objects/<aa>` in a tight loop can force `start_loose_object_common` to emit the same two-line stderr, but nothing in `Fixture`, `build_merged`, or `task_1507_history_cache_tests.rs` creates symlinks in `.git/objects` or spawns a concurrent pruner (`fixture_git` already passes `-c maintenance.auto=false -c gc.auto=0`).
+1. CI ran **git 2.55.0** (`actions/checkout` "Getting Git version info" step
+   of run `38123466347`). Git 2.54 made the **geometric** maintenance strategy
+   the default (`Documentation/RelNotes/2.54.0.adoc`: "git maintenance starts
+   using the geometric strategy by default").
+2. Every `git commit` / `git merge` calls `run_auto_maintenance()`, which runs
+   `git maintenance run --auto --quiet --detach` (`run-command.c`,
+   `prepare_auto_maintenance`: `--detach` unless `maintenance.autoDetach` or
+   `gc.autoDetach` is false). The child daemonizes, and the fixture's `git`
+   returns while maintenance still runs.
+3. The geometric-repack auto condition is `too_many_loose_objects(100)`. Its
+   approximate count is `entries in objects/17 * 256 > 256`, so **two** loose
+   objects in `objects/17` trigger it. The fixture's dates and contents are
+   fixed, so the trigger is deterministic for this fixture.
+4. The task runs `git repack -d -l --cruft ...`. With `-d` it deletes the now
+   packed loose objects and `rmdir`s every emptied `.git/objects/<xx>` fanout
+   dir.
+5. Meanwhile the fixture's next `git` call writes an object.
+   `create_tmpfile()` (`object-file.c`) tries `mkstemp(objects/<xx>/tmp_obj_*)`.
+   On ENOENT it runs `mkdir(objects/<xx>)` and retries once. When the
+   background prune removes the fanout dir between that `mkdir` and the
+   retry, git reports `error: unable to create temporary file: No such file
+   or directory`. The caller then reports `fatal: failed to write commit
+   object` (commit) or `failed to insert into database` (add).
 
-## What Remains Unknown
+Git 2.43 (the local default on Ubuntu 24.04) uses the `gc` strategy. Its
+threshold (`gc.auto`=6700) is never reached by this fixture, which is why
+local traces never saw the race.
 
-- Why `start_loose_object_common` received `ENOENT` when creating `.git/objects/<aa>/tmp_obj_XXXXXX` during `ship FR-1` in CI run `38123466347` after earlier commits and tree writes in the same `TempDir` succeeded.
-- Whether `.git/objects` or the `TempDir` was affected by an external cleaner, filesystem anomaly, or another process during that CI run.
-- `git_in` now logs `status`, `dir`, `dir_exists`, `objects_exists`, and `cwd` on failure so that if the failure recurs in CI, the state of the fixture directory at the moment of failure is captured.
+### Raw evidence
+
+- **trace2 timeline** (git 2.55, fixture without the guard): the detached
+  `repack -d` started by `commit -m "side2: add STORY-4"` ran
+  13.882–13.934. During that window the fixture ran `rev-parse HEAD`
+  (13.904), `checkout -q aida-store` (13.910) and
+  `merge --no-ff --no-edit side2` (13.918–13.937), and the merge writes a
+  commit object.
+- **strace** (`-f -e execve,mkdir,rmdir,exit_group`): the fixture's commit,
+  pid 76051, called `exit_group` at 05.991950. Its daemonized `repack -d`,
+  pid 76115, ran `rmdir(".git/objects/0e") = 0` … 49 fanout dirs at
+  06.115–06.122, about 124 ms after the fixture's `git` had returned.
+- **Panic with the window widened** (see below): `git ["add", "-A"] failed
+  (status=Some(128), dir_exists=true, objects_exists=true …): error: unable
+  to create temporary file: No such file or directory`. The store and
+  `.git/objects` survive; only a fanout dir disappears. This matches CI,
+  where earlier commits in the same repo had succeeded.
+
+### Deterministic reproduction
+
+An `LD_PRELOAD` shim adds a pause after a successful
+`mkdir("<…>/objects/<xx>")`. That widens git's mkdir→mkstemp window without
+changing any logic:
+
+```c
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <string.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <sys/stat.h>
+int mkdir(const char *p, mode_t m) {
+    static int (*real)(const char *, mode_t);
+    if (!real) real = dlsym(RTLD_NEXT, "mkdir");
+    int r = real(p, m);
+    size_t n = strlen(p);
+    if (r == 0 && n >= 10 && isxdigit(p[n-1]) && isxdigit(p[n-2]) &&
+        !strncmp(p + n - 10, "objects/", 8))
+        usleep(300 * 1000);
+    return r;
+}
+```
+
+Build it with `gcc -shared -fPIC -o libwiden.so widen.c -ldl`. Then put a
+`git` wrapper first on `PATH` that runs
+`LD_PRELOAD=libwiden.so exec <git-2.55>/bin/git "$@"`, and run
+`cargo test -p aida-cli-lib --lib history_cache_merge_commit_decodes_like_git_show_cc`.
+
+| fixture `git` | git 2.55 + widened window |
+|---|---|
+| without `-c maintenance.auto=false -c gc.auto=0` (as on `36c906f453`) | **5/5 FAILED**, "unable to create temporary file" |
+| with the guard (current `fixture_git`) | 5/5 passed |
+| git 2.43 + widened window, shell loop, no guard | 20/20 passed (no trigger) |
+
+### Fix and regression
+
+`fixture_git` passes `NO_AUTO_MAINTENANCE`
+(`-c maintenance.auto=false -c gc.auto=0`), which makes
+`prepare_auto_maintenance` return before spawning anything. This guard
+landed in #2560 as hardening, before anyone knew why it mattered; this
+investigation shows it is the actual fix.
+`fixture_git_never_starts_auto_maintenance` keeps it in place on every git
+version. It sets the repo up so that any maintenance run packs in the
+foreground (`maintenance.loose-objects.enabled=true`,
+`maintenance.loose-objects.auto=-1`, both `autoDetach` false). It then
+checks that `build_merged` leaves zero packs, with an unguarded control that
+must pack. Dropping the guard fails the test on git 2.43 (11 packs) and on
+git 2.55 (3 packs).
+
+Ruled out along the way: PATH shims (they exec the real git), removal of
+the caller's cwd (`git -C /abs` still succeeds), inherited `GIT_DIR` /
+`GIT_OBJECT_DIRECTORY` (no process-wide `GIT_*` writer existed on
+`36c906f453`), and early `TempDir` drop (`Fixture` owns it for the whole
+test).
+
+Other repository test fixtures that run bare `git commit` without this
+guard are exposed to the same race on git 2.54+. That is tracked as BUG-2191, a
+follow-up.
 
 ## General Test-Isolation Hygiene Landed in This PR (TASK-1970, Refs BUG-2118)
 

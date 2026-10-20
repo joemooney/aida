@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 /// Open-PR metadata captured by `gh pr list` for a session's branch. Just
 /// the fields the auto-queue side-effect needs to brief a reviewer.
@@ -323,6 +324,8 @@ pub(crate) fn probe_branch_on_origin(
             "origin",
             &format!("refs/heads/{branch}"),
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .output();
     match out {
         Ok(o) if o.status.success() => BranchOriginProbe::Present,

@@ -136,7 +136,7 @@ organize everything else.
 **For:** hierarchy and grouping — a stateless container for organizing the spec
 tree.
 **Write it well:** use folders to give a large graph navigable structure
-(`aida export --format tree --id FOLDER-…`). A folder is never "completed"; it's
+(`aida export --export-format tree --id FOLDER-…`). A folder is never "completed"; it's
 furniture. Don't put behaviour in a folder's description — that belongs in a
 child spec.
 
