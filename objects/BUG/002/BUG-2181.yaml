@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:06:36.673317847Z
-modified_at: 2026-10-20T11:39:30.246016742Z
+modified_at: 2026-10-20T11:39:38.109993869Z
 req_type: Bug
 tags:
 - forge
@@ -33,6 +33,12 @@ comments:
   created_at: 2026-10-20T10:03:38.492767064Z
   modified_at: 2026-10-20T10:03:38.492767064Z
   session_id: 8eb7f358-17d3-47ea-9584-5285a9a5eab8
+- id: 01a1591c-20fd-7db0-bc5b-20a6db1b940b
+  author: joe
+  content: 'Advisor 04:43: promoted to Approved (assigned to a fixer tonight).'
+  created_at: 2026-10-20T11:39:38.109993869Z
+  modified_at: 2026-10-20T11:39:38.109993869Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1510e-1cbd-7661-bf85-4b7b1342939d
   author: joe
