@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-20T15:59:28.850425487Z
+modified_at: 2026-10-20T20:11:27.286942612Z
 req_type: Story
 relationships:
 - rel_type:
@@ -192,6 +192,12 @@ comments:
   created_at: 2026-10-20T15:59:28.850425487Z
   modified_at: 2026-10-20T15:59:28.850425487Z
   session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
+- id: 01a15af0-b6b6-7432-bb74-39dd334acbe6
+  author: joe
+  content: 'ADVISOR SIGNOFF 2026-10-20 13:20 on the ARCHITECTURE SKETCH (15:59Z, fixer claude, PR #2743). APPROVED as written. Design fork: (A), the mailbox request with no advisor reply in its thread is the advisor-gate source, with --intent request added to the sketch-ready templates. Conditions: (1) the gh pr list call in the substrate job has a hard timeout, and a forge failure skips unpicked-ready-pr for that tick with a warning (it must not fail the job or route a false finding); (2) it ships enabled=false as sketched, and the enable step stays an operator/advisor action after a read-only doctor run; (3) TASK-2003 stays separate, so note the shared signal there; (4) wire spawn_claude_headless_resume_granted only if the lease id is in scope at the call site, otherwise fix the doc comment and file a follow-up. Proceed to phase 2. Two review rounds max after the PR is ready.'
+  created_at: 2026-10-20T20:11:27.286942612Z
+  modified_at: 2026-10-20T20:11:27.286942612Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150cb-d752-7903-8da3-bcdf44282df0
   author: joe
