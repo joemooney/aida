@@ -3,12 +3,12 @@ spec_id: BUG-2118
 agreed_id: BUG-2118
 title: Identify and reproduce the history fixture Git temporary-file/object-write failure
 description: 'Split from the carried BUG-1955 obligation in BUG-1994 under ADVISOR SKETCH SIGNOFF C2. PATH isolation does NOT establish the root cause of unable to create temporary file / failed to write commit object. Earlier foreign-shim strace claims were retracted: the entries were ENOENT search probes. Acceptance: name the actual mechanism using raw exec/exit/cwd/fixture-lifetime evidence; provide a reproduction that fails before the fix; make the failure non-recurring with a permanent regression. Do not treat passing PATH/history stress as proof of this mechanism.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T18:20:13.880079609Z
-modified_at: 2026-10-20T09:47:05.332702437Z
+modified_at: 2026-10-20T09:56:30.016797586Z
 req_type: Bug
 tags:
 - from-implementer:BUG-1994
@@ -76,6 +76,21 @@ history:
   timestamp: 2026-10-20T09:47:07.027189805Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a158bd-b484-7462-90db-9d2a2289ffde
+  author: aida-auto-bump
+  timestamp: 2026-10-20T09:56:29.956394619Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a158bd-b4c0-76a0-9e61-6a9e606e54c4
+  timestamp: 2026-10-20T09:56:30.016777518Z
+  agent: aida
+  commit_sha: 9da063dc15ddfec1108ee626296a811969ef1f09
+  summary: 'All 3 BUG-2118 acceptance criteria met: mechanism named with raw trace2/strace evidence (CI git 2.55.0 confirmed in run 38123466347 log), LD_PRELOAD reproduction documented failing 5/5 unguarded, permanent non-vacuous regression fixture_git_never_starts_auto_maintenance (reviewer shell replication on git 2.43: unguarded 5 packs, guarded 0); CI all green, mergeStateStatus CLEAN. One cosmetic non-blocking nit: real_git doc comment (task_1507_history_cache_tests.rs:~205) still says ''the CI root cause is unconfirmed''.'
+  review_verdict: approved
 filed_at:
   code_sha: 66d923f1483cbadebff41d7d89030a94f8146798
   branch: bug-1994-work
@@ -83,11 +98,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 3163cc1b21
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Mechanism not named: the reproduction plants its own fault (dangling .git/objects/a2 symlink), the repair heals only that planted fault, the cwd-isolation theory does not hold, and cargo fmt --check fails.'
-  recovery_hint: address the review findings, move BUG-2118 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T21:06:30.596283871Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T09:56:29.956390515Z
+  completion_sha: 9da063dc15ddfec1108ee626296a811969ef1f09
