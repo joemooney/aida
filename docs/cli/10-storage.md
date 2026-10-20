@@ -147,10 +147,10 @@ Every other custom edge type — for example `implements`, `implemented-by`, or 
 
 **Key options (rationale only).**
 - `--id <ID>` — the pivot for **tree** export: exports this spec and everything beneath it. Without it, a tree export has no root to walk from; this is what makes export → import a subtree-transplant tool.
-- `--format <FORMAT>` — `tree` for the export/import round-trip, `json`/`mapping` for flatter tooling/ID-reference consumption. Pick `tree` whenever the destination is another AIDA project.
+- `--export-format <FORMAT>` (`-f`) — `tree` for the export/import round-trip, `json`/`mapping` for flatter tooling/ID-reference consumption. Pick `tree` whenever the destination is another AIDA project.
 - `--output <OUTPUT>` — write to a file instead of stdout. Pipe-friendly either way; use a file when the consumer is `aida import`.
 
-**Chains with** — the egress half of the cross-project transplant: `aida export --format tree --id <ID> -o file.json` here, then `aida import file.json` there.
+**Chains with** — the egress half of the cross-project transplant: `aida export --export-format tree --id <ID> -o file.json` here, then `aida import file.json` there.
 
 ---
 

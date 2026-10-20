@@ -682,6 +682,206 @@ fn parse_version(text: &str) -> std::result::Result<aida_core::Requirement, Stri
     Ok(req)
 }
 
+/// One git invocation in the store repository; `Err` carries git's stderr.
+// trace:BUG-2179 | ai:claude
+fn store_git(
+    store_root: &Path,
+    args: &[&str],
+    stdin: Option<&[u8]>,
+) -> std::result::Result<Vec<u8>, String> {
+    use std::io::Write;
+    let mut cmd = aida_core::git_ops::host_git_command(store_root);
+    cmd.args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .stdin(if stdin.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        });
+    let mut child = cmd.spawn().map_err(|e| format!("git failed to run: {e}"))?;
+    if let Some(input) = stdin {
+        // A writer thread, so a large reply cannot deadlock against the input.
+        let mut pipe = child.stdin.take().ok_or("git stdin unavailable")?;
+        let input = input.to_vec();
+        let writer = std::thread::spawn(move || pipe.write_all(&input));
+        let out = child
+            .wait_with_output()
+            .map_err(|e| format!("git failed: {e}"))?;
+        writer
+            .join()
+            .map_err(|_| "git stdin writer panicked".to_string())?
+            .map_err(|e| format!("cannot write to git: {e}"))?;
+        return git_output(out);
+    }
+    git_output(
+        child
+            .wait_with_output()
+            .map_err(|e| format!("git failed: {e}"))?,
+    )
+}
+
+fn git_output(out: std::process::Output) -> std::result::Result<Vec<u8>, String> {
+    if out.status.success() {
+        Ok(out.stdout)
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+/// BUG-2179: the store history the mandate exclusion check reads, gathered in
+/// a bounded number of git invocations however many specs a PR traces: one
+/// `git log --all` walk over every spec's object path, one `git cat-file
+/// --batch` for every stored version, and (only when some ID has no current
+/// record) one `-G` walk for the aliases. Strictness is the per-spec walks':
+/// every ref (`--all`), every version that added or changed the object,
+/// and fail-closed per spec when a version cannot be read.
+// trace:BUG-2179 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct StoreHistoryBatch {
+    /// Upper-cased spec ID → every stored version, each expanded by its
+    /// recorded field changes; `Err` when one of its versions is unreadable.
+    versions: std::collections::BTreeMap<
+        String,
+        std::result::Result<Vec<aida_core::Requirement>, String>,
+    >,
+}
+
+impl StoreHistoryBatch {
+    /// Every stored version of `spec_id` (`Ok(empty)` when no ref ever held it).
+    pub(crate) fn versions(
+        &self,
+        spec_id: &str,
+    ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
+        self.versions
+            .get(&spec_id.to_ascii_uppercase())
+            .cloned()
+            .unwrap_or_else(|| Err(format!("{spec_id} was not part of the history read")))
+    }
+
+    /// Read every version of each of `spec_ids`. `Err` when the store history
+    /// cannot be walked at all.
+    pub(crate) fn read(
+        store_root: &Path,
+        spec_ids: &[String],
+    ) -> std::result::Result<Self, String> {
+        let mut batch = Self::default();
+        let mut paths: Vec<(String, String)> = Vec::new();
+        for id in spec_ids {
+            let key = id.to_ascii_uppercase();
+            if batch.versions.contains_key(&key) {
+                continue;
+            }
+            match aida_core::object_store::relative_object_path(id) {
+                Ok(rel) => {
+                    batch.versions.insert(key.clone(), Ok(Vec::new()));
+                    paths.push((key, rel));
+                }
+                Err(e) => {
+                    batch
+                        .versions
+                        .insert(key, Err(format!("no object path for {id}: {e}")));
+                }
+            }
+        }
+        if paths.is_empty() {
+            return Ok(batch);
+        }
+        // Deletions carry no body to read; every other touching commit does.
+        // The walk is limited by each path's top directory, not by every path:
+        // git checks each pathspec against every commit, so a PR tracing ~100
+        // specs took ~50 s over a ~50k-commit store, while one directory
+        // pathspec takes seconds whatever the spec count. The names it lists
+        // are filtered to the wanted paths below.
+        let mut tops: Vec<&str> = paths
+            .iter()
+            .map(|(_, rel)| rel.split_once('/').map_or(rel.as_str(), |(top, _)| top))
+            .collect();
+        tops.sort_unstable();
+        tops.dedup();
+        let mut args: Vec<&str> = vec![
+            "log",
+            "--all",
+            "--format=%x00%H",
+            "--diff-filter=ACMRT",
+            "--name-only",
+            "--",
+        ];
+        args.extend(tops);
+        let log = store_git(store_root, &args, None)?;
+        let by_path: std::collections::BTreeMap<&str, &str> = paths
+            .iter()
+            .map(|(key, rel)| (rel.as_str(), key.as_str()))
+            .collect();
+        // `<sha>:<path>` per version, in log order (newest first).
+        let mut wanted: Vec<(String, String)> = Vec::new();
+        for record in String::from_utf8_lossy(&log).split('\0').skip(1) {
+            let mut lines = record.lines().map(str::trim).filter(|l| !l.is_empty());
+            let Some(sha) = lines.next() else { continue };
+            for file in lines {
+                if let Some(key) = by_path.get(file) {
+                    wanted.push((key.to_string(), format!("{sha}:{file}")));
+                }
+            }
+        }
+        if wanted.is_empty() {
+            return Ok(batch);
+        }
+        let input: String = wanted.iter().map(|(_, obj)| format!("{obj}\n")).collect();
+        let bodies = store_git(store_root, &["cat-file", "--batch"], Some(input.as_bytes()))?;
+        let mut rest: &[u8] = &bodies;
+        for (key, obj) in &wanted {
+            let (body, tail) = next_batch_object(rest)
+                .map_err(|e| format!("cannot read {obj} from the store: {e}"))?;
+            rest = tail;
+            let Some(Ok(versions)) = batch.versions.get_mut(key) else {
+                continue;
+            };
+            let spec = obj.split_once(':').map_or(obj.as_str(), |(sha, _)| sha);
+            let parsed = body
+                .ok_or_else(|| format!("cannot read {key} at {spec}: missing object"))
+                .and_then(|text| {
+                    parse_version(&String::from_utf8_lossy(text))
+                        .map_err(|e| format!("{key} at {spec}: {e}"))
+                });
+            match parsed {
+                Ok(req) => {
+                    versions.extend(field_change_versions(&req));
+                    versions.push(req);
+                }
+                Err(e) => {
+                    batch.versions.insert(key.clone(), Err(e));
+                }
+            }
+        }
+        Ok(batch)
+    }
+}
+
+/// One `git cat-file --batch` reply: `(Some(body), rest)` for a found object,
+/// `(None, rest)` for a missing one.
+// trace:BUG-2179 | ai:claude
+fn next_batch_object(out: &[u8]) -> std::result::Result<(Option<&[u8]>, &[u8]), String> {
+    let nl = out
+        .iter()
+        .position(|&b| b == b'\n')
+        .ok_or("truncated git cat-file reply")?;
+    let header = String::from_utf8_lossy(&out[..nl]);
+    let rest = &out[nl + 1..];
+    if header.ends_with(" missing") || header.ends_with(" ambiguous") {
+        return Ok((None, rest));
+    }
+    let size: usize = header
+        .rsplit(' ')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| format!("unexpected git cat-file header {header:?}"))?;
+    if rest.len() < size + 1 {
+        return Err("truncated git cat-file body".into());
+    }
+    Ok((Some(&rest[..size]), &rest[size + 1..]))
+}
+
 /// STORY-1698 / TASK-1800: every version of `spec_id` in the store's git
 /// history (all refs, so a rewritten local branch still shows what the remote
 /// saw), each expanded by its recorded field changes. `Ok(empty)` when the
@@ -693,101 +893,103 @@ pub(crate) fn store_history_versions_optional(
     store_root: &Path,
     spec_id: &str,
 ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
-    let rel = aida_core::object_store::relative_object_path(spec_id)
-        .map_err(|e| format!("no object path for {spec_id}: {e}"))?;
-    let git = |args: &[&str]| {
-        aida_core::git_ops::host_git_command(store_root)
-            .args(args)
-            .output()
-            .map_err(|e| format!("git failed to run: {e}"))
-            .and_then(|out| {
-                if out.status.success() {
-                    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-                } else {
-                    Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-                }
-            })
-    };
-    // Deletions carry no body to read; every other touching commit does.
-    let log = git(&[
-        "log",
-        "--all",
-        "--format=%H",
-        "--diff-filter=ACMRT",
-        "--",
-        &rel,
-    ])?;
-    let shas: Vec<&str> = log
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .collect();
-    if shas.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    for sha in shas {
-        let text = git(&["show", &format!("{sha}:{rel}")])
-            .map_err(|e| format!("cannot read {spec_id} at {sha}: {e}"))?;
-        let req = parse_version(&text).map_err(|e| format!("{spec_id} at {sha}: {e}"))?;
-        out.extend(field_change_versions(&req));
-        out.push(req);
-    }
-    Ok(out)
+    StoreHistoryBatch::read(store_root, &[spec_id.to_string()])?.versions(spec_id)
 }
 
-/// TASK-1800: the stored object IDs whose YAML carried `id` as its `spec_id`
-/// or `agreed_id` in any version on any ref, other than `id` itself. This is
-/// how a DELETED spec named by its agreed_id (stored under a different
-/// spec_id path) is still found and judged. `Err` when the history cannot be
-/// searched; the caller refuses rather than treating the ID as dangling.
+/// TASK-1800 / BUG-2179: for each of `ids`, the stored object IDs whose YAML
+/// carried it as its `spec_id` or `agreed_id` in any version on any ref, other
+/// than the ID itself. This is how a DELETED spec named by its agreed_id
+/// (stored under a different spec_id path) is still found and judged. One
+/// `-G` walk serves every ID; each matching added or removed line is
+/// attributed to the ID it names. `Err` when an ID is not searchable or the
+/// history cannot be searched; the caller refuses rather than treating an ID
+/// as dangling.
 // trace:TASK-1800 | ai:claude
-pub(crate) fn store_history_alias_ids(
+// trace:BUG-2179 | ai:claude
+pub(crate) fn store_history_alias_map(
     store_root: &Path,
-    id: &str,
-) -> std::result::Result<Vec<String>, String> {
-    if id.is_empty()
-        || !id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
-        return Err(format!("cannot search store history for {id:?}"));
+    ids: &[String],
+) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    let mut found: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for id in ids {
+        if id.is_empty()
+            || !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(format!("cannot search store history for {id:?}"));
+        }
+        found.insert(id.to_ascii_uppercase(), Vec::new());
     }
-    let pattern = format!("^(spec_id|agreed_id): *['\"]?{id}['\"]? *$");
-    let out = aida_core::git_ops::host_git_command(store_root)
-        .args([
+    if found.is_empty() {
+        return Ok(found);
+    }
+    let alternation = found.keys().cloned().collect::<Vec<_>>().join("|");
+    let pattern = format!("^(spec_id|agreed_id): *['\"]?({alternation})['\"]? *$");
+    let line_re = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(true)
+        .build()
+        .map_err(|e| format!("cannot search store history: {e}"))?;
+    let out = store_git(
+        store_root,
+        &[
             "log",
             "--all",
             "--format=",
-            "--name-only",
+            "-p",
+            "--unified=0",
+            "--no-color",
+            "--no-ext-diff",
             "--regexp-ignore-case",
             &format!("-G{pattern}"),
             "--",
             "objects/",
-        ])
-        .output()
-        .map_err(|e| format!("git failed to run: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "cannot search store history for {id}: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    let mut ids: Vec<String> = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
-        let Some(stem) = Path::new(line.trim())
+        ],
+        None,
+    )
+    .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
+    let mut file: Option<String> = None;
+    for line in String::from_utf8_lossy(&out).lines() {
+        if let Some(paths) = line.strip_prefix("diff --git ") {
+            file = paths.rsplit_once(" b/").map(|(_, b)| b.to_string());
+            continue;
+        }
+        if line.starts_with("+++ ") || line.starts_with("--- ") {
+            continue;
+        }
+        let Some(body) = line.strip_prefix('+').or_else(|| line.strip_prefix('-')) else {
+            continue;
+        };
+        let (Some(caps), Some(path)) = (line_re.captures(body), file.as_deref()) else {
+            continue;
+        };
+        let Some(stem) = Path::new(path)
             .file_name()
             .and_then(|n| n.to_str())
             .and_then(|n| n.strip_suffix(".yaml"))
         else {
             continue;
         };
+        let id = caps[2].to_ascii_uppercase();
         let stem = stem.to_ascii_uppercase();
-        if !stem.eq_ignore_ascii_case(id) && !ids.contains(&stem) {
-            ids.push(stem);
+        if let Some(aliases) = found.get_mut(&id) {
+            if stem != id && !aliases.contains(&stem) {
+                aliases.push(stem);
+            }
         }
     }
-    Ok(ids)
+    Ok(found)
+}
+
+/// TASK-1800: [`store_history_alias_map`] for one ID.
+// trace:TASK-1800 | ai:claude
+#[cfg(test)]
+pub(crate) fn store_history_alias_ids(
+    store_root: &Path,
+    id: &str,
+) -> std::result::Result<Vec<String>, String> {
+    let mut map = store_history_alias_map(store_root, &[id.to_string()])?;
+    Ok(map.remove(&id.to_ascii_uppercase()).unwrap_or_default())
 }
 
 /// STORY-1698: every version of `spec_id` in the store's git history (all

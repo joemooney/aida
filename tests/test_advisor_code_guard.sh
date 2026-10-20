@@ -6,7 +6,9 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
-cargo build -p aida-cli --quiet || exit 1
+# CI's gates and contracts lanes already built the workspace binary.
+# trace:TASK-1979 | ai:claude
+[ "${AIDA_CI_PREBUILT_CLI:-}" = 1 ] || cargo build -p aida-cli --quiet || exit 1
 TARGET_DIR=$(cargo metadata --no-deps --format-version 1 \
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')
 export PATH="$TARGET_DIR/debug:$PATH"

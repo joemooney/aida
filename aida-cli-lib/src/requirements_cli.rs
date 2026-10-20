@@ -3082,158 +3082,175 @@ fn run_add(
                             // the FileDispenser pattern (TASK-331). The in-loop
                             // collision-skip stays; the lock is the real fix.
                             // trace:BUG-474 | ai:claude
-                            aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
-                                if let Ok(mut registry) =
-                                    aida_core::BlockRegistry::load(&blocks_path)
-                                {
-                                    match registry
-                                        .find_active_block_or_global(&node_id, &type_prefix)
+                            // TASK-1930 (A1): acquire store_write_lock BEFORE blocks.lock
+                            // (dispense_lock) so lock ordering is always
+                            // store_write_lock -> dispense_lock across all writers and
+                            // `git_ops::add(store_path, &["registry/blocks.yaml"])`
+                            // runs under the store write lock.
+                            // trace:TASK-1930 | ai:agy
+                            aida_core::db::with_store_write_lock(store_path, || {
+                                aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
+                                    if let Ok(mut registry) =
+                                        aida_core::BlockRegistry::load(&blocks_path)
                                     {
-                                        None => {
-                                            // No block for this type. Under `blocks-only`
-                                            // this is fatal — the project requires every
-                                            // id come from an allocated block. Otherwise
-                                            // fall through to a node-aware id silently.
-                                            if id_policy.requires_block() {
+                                        match registry
+                                            .find_active_block_or_global(&node_id, &type_prefix)
+                                        {
+                                            None => {
+                                                // No block for this type. Under `blocks-only`
+                                                // this is fatal — the project requires every
+                                                // id come from an allocated block. Otherwise
+                                                // fall through to a node-aware id silently.
+                                                if id_policy.requires_block() {
+                                                    anyhow::bail!(
+                                                        "id_format policy is `blocks-only` but node {} has no \
+                                                     {} block. Run `aida db block claim --type {} --size 100` \
+                                                     to allocate one (requires network).",
+                                                        node_id,
+                                                        type_prefix,
+                                                        type_prefix
+                                                    );
+                                                }
+                                                // TASK-36: if the only thing missing is an
+                                                // *active* block (exhausted blocks exist for
+                                                // this type), the user just rolled off the
+                                                // last short id and we're silently switching
+                                                // to the node-aware format. Surface that with
+                                                // the highest issued short id and a pointer
+                                                // to merge-gate. trace:TASK-36 | ai:claude
+                                                let prefix_upper = type_prefix.to_uppercase();
+                                                let last_short = registry
+                                                    .blocks
+                                                    .iter()
+                                                    .filter(|b| {
+                                                        b.type_prefix.to_uppercase() == prefix_upper
+                                                    })
+                                                    .map(|b| b.range_end)
+                                                    .max();
+                                                if let Some(last) = last_short {
+                                                    eprintln!(
+                                                        "{} {} agreed-id block exhausted (last short id: {}-{}).",
+                                                        crate::glyph(crate::glyphs::Glyph::Warning)
+                                                            .yellow()
+                                                            .bold(),
+                                                        prefix_upper,
+                                                        prefix_upper,
+                                                        last
+                                                    );
+                                                    eprintln!(
+                                                        "  {} Falling back to node-aware ids ({}-NODE-NN). Run \
+                                                         `aida db block claim --type {} --size 100` to allocate \
+                                                         a fresh block.",
+                                                        "→".dimmed(),
+                                                        prefix_upper,
+                                                        prefix_upper
+                                                    );
+                                                }
+                                            }
+                                            Some(idx) if registry.blocks[idx].is_exhausted() => {
                                                 anyhow::bail!(
-                                                "id_format policy is `blocks-only` but node {} has no \
-                                             {} block. Run `aida db block claim --type {} --size 100` \
-                                             to allocate one (requires network).",
-                                                node_id,
-                                                type_prefix,
-                                                type_prefix
-                                            );
+                                                    "Agreed ID block for {} exhausted on node {}. \
+                                                     Run `aida db block claim --type {}` to allocate a new block (requires network).",
+                                                    type_prefix,
+                                                    node_id,
+                                                    type_prefix
+                                                );
                                             }
-                                            // TASK-36: if the only thing missing is an
-                                            // *active* block (exhausted blocks exist for
-                                            // this type), the user just rolled off the
-                                            // last short id and we're silently switching
-                                            // to the node-aware format. Surface that with
-                                            // the highest issued short id and a pointer
-                                            // to merge-gate. trace:TASK-36 | ai:claude
-                                            let prefix_upper = type_prefix.to_uppercase();
-                                            let last_short = registry
-                                                .blocks
-                                                .iter()
-                                                .filter(|b| {
-                                                    b.type_prefix.to_uppercase() == prefix_upper
-                                                })
-                                                .map(|b| b.range_end)
-                                                .max();
-                                            if let Some(last) = last_short {
-                                                eprintln!(
-                                            "{} {} agreed-id block exhausted (last short id: {}-{}).",
-                                            crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                                            prefix_upper,
-                                            prefix_upper,
-                                            last
-                                        );
-                                                eprintln!(
-                                            "  {} Falling back to node-aware ids ({}-NODE-NN). Run \
-                                             `aida db block claim --type {} --size 100` to allocate \
-                                             a fresh block.",
-                                            "→".dimmed(),
-                                            prefix_upper,
-                                            prefix_upper
-                                        );
-                                            }
-                                        }
-                                        Some(idx) if registry.blocks[idx].is_exhausted() => {
-                                            anyhow::bail!(
-                                        "Agreed ID block for {} exhausted on node {}. \
-                                         Run `aida db block claim --type {}` to allocate a new block (requires network).",
-                                        type_prefix, node_id, type_prefix
-                                    );
-                                        }
-                                        Some(_) => {
-                                            // BUG-31: dispense in a loop, skipping any
-                                            // candidate id that's already taken in the
-                                            // store. Existing reqs (e.g. older sessions
-                                            // before this block was claimed, retired-
-                                            // legacy-id migrations, imports) can occupy
-                                            // ids inside our block range. Block.next is
-                                            // monotonic so we just keep advancing until
-                                            // we land on a free slot or exhaust.
-                                            let mut dispensed: Option<(String, bool)> = None;
-                                            let mut skipped: Vec<String> = Vec::new();
-                                            while let Some((candidate, is_low)) =
-                                                registry.dispense(&node_id, &type_prefix)
-                                            {
-                                                let taken = backend
-                                                    .get_requirement_by_spec_id(&candidate)
-                                                    .map(|opt| opt.is_some())
-                                                    .unwrap_or(false);
-                                                if !taken {
-                                                    dispensed = Some((candidate, is_low));
-                                                    break;
-                                                }
-                                                skipped.push(candidate);
-                                            }
-                                            if !skipped.is_empty() {
-                                                eprintln!(
-                                                "{} skipped {} already-taken id(s) in {} block: {}",
-                                                "Note:".dimmed(),
-                                                skipped.len(),
-                                                type_prefix,
-                                                skipped.join(", ")
-                                            );
-                                            }
-                                            if let Some((agreed_id, _is_low_per_block)) = dispensed
-                                            {
-                                                // BUG-115: warn on the aggregate remaining
-                                                // across all of this node's non-exhausted
-                                                // blocks for the type. The pre-fix per-
-                                                // block check fired on every `aida add`
-                                                // when the lowest-numbered block was near
-                                                // empty, even though a higher block with
-                                                // full capacity had already been claimed.
-                                                // trace:BUG-115 | ai:claude
-                                                if registry.aggregate_is_low(&node_id, &type_prefix)
+                                            Some(_) => {
+                                                // BUG-31: dispense in a loop, skipping any
+                                                // candidate id that's already taken in the
+                                                // store. Existing reqs (e.g. older sessions
+                                                // before this block was claimed, retired-
+                                                // legacy-id migrations, imports) can occupy
+                                                // ids inside our block range. Block.next is
+                                                // monotonic so we just keep advancing until
+                                                // we land on a free slot or exhaust.
+                                                let mut dispensed: Option<(String, bool)> = None;
+                                                let mut skipped: Vec<String> = Vec::new();
+                                                while let Some((candidate, is_low)) =
+                                                    registry.dispense(&node_id, &type_prefix)
                                                 {
-                                                    let aggregate = registry.aggregate_remaining(
-                                                        &node_id,
-                                                        &type_prefix,
-                                                    );
-                                                    let active = registry
-                                                        .active_block_count(&node_id, &type_prefix);
-                                                    let span = if active == 1 {
-                                                        "in 1 block".to_string()
-                                                    } else {
-                                                        format!("across {} blocks", active)
-                                                    };
-                                                    eprintln!(
-                                                "{} {} block running low ({} remaining {}). Run `aida db block claim --type {}` soon.",
-                                                "WARNING:".yellow().bold(),
-                                                type_prefix,
-                                                aggregate,
-                                                span,
-                                                type_prefix
-                                            );
+                                                    let taken = backend
+                                                        .get_requirement_by_spec_id(&candidate)
+                                                        .map(|opt| opt.is_some())
+                                                        .unwrap_or(false);
+                                                    if !taken {
+                                                        dispensed = Some((candidate, is_low));
+                                                        break;
+                                                    }
+                                                    skipped.push(candidate);
                                                 }
-                                                // Persist the updated next pointer
-                                                if let Err(e) = registry.save(&blocks_path) {
+                                                if !skipped.is_empty() {
                                                     eprintln!(
-                                                        "Warning: could not save blocks.yaml: {}",
-                                                        e
+                                                        "{} skipped {} already-taken id(s) in {} block: {}",
+                                                        "Note:".dimmed(),
+                                                        skipped.len(),
+                                                        type_prefix,
+                                                        skipped.join(", ")
                                                     );
-                                                } else if !aida_core::git_ops::store_commit_deferred_to_host(
-                                                    store_path,
-                                                ) {
-                                                    // Commit the pointer advance to the store
-                                                    let _ = aida_core::git_ops::add(
+                                                }
+                                                if let Some((agreed_id, _is_low_per_block)) =
+                                                    dispensed
+                                                {
+                                                    // BUG-115: warn on the aggregate remaining
+                                                    // across all of this node's non-exhausted
+                                                    // blocks for the type. The pre-fix per-
+                                                    // block check fired on every `aida add`
+                                                    // when the lowest-numbered block was near
+                                                    // empty, even though a higher block with
+                                                    // full capacity had already been claimed.
+                                                    // trace:BUG-115 | ai:claude
+                                                    if registry
+                                                        .aggregate_is_low(&node_id, &type_prefix)
+                                                    {
+                                                        let aggregate = registry
+                                                            .aggregate_remaining(
+                                                                &node_id,
+                                                                &type_prefix,
+                                                            );
+                                                        let active = registry.active_block_count(
+                                                            &node_id,
+                                                            &type_prefix,
+                                                        );
+                                                        let span = if active == 1 {
+                                                            "in 1 block".to_string()
+                                                        } else {
+                                                            format!("across {} blocks", active)
+                                                        };
+                                                        eprintln!(
+                                                            "{} {} block running low ({} remaining {}). Run `aida db block claim --type {}` soon.",
+                                                            "WARNING:".yellow().bold(),
+                                                            type_prefix,
+                                                            aggregate,
+                                                            span,
+                                                            type_prefix
+                                                        );
+                                                    }
+                                                    // Persist the updated next pointer
+                                                    if let Err(e) = registry.save(&blocks_path) {
+                                                        eprintln!(
+                                                            "Warning: could not save blocks.yaml: {}",
+                                                            e
+                                                        );
+                                                    } else if !aida_core::git_ops::store_commit_deferred_to_host(
                                                         store_path,
-                                                        &["registry/blocks.yaml"],
-                                                    );
+                                                    ) {
+                                                        // Commit the pointer advance to the store
+                                                        let _ = aida_core::git_ops::add(
+                                                            store_path,
+                                                            &["registry/blocks.yaml"],
+                                                        );
+                                                    }
+                                                    req.agreed_id = Some(agreed_id.clone());
+                                                    // Use the agreed ID as the spec_id so it is immediately
+                                                    // visible as the primary identifier.
+                                                    req.spec_id = Some(agreed_id);
                                                 }
-                                                req.agreed_id = Some(agreed_id.clone());
-                                                // Use the agreed ID as the spec_id so it is immediately
-                                                // visible as the primary identifier.
-                                                req.spec_id = Some(agreed_id);
                                             }
                                         }
                                     }
-                                }
-                                Ok(())
+                                    Ok(())
+                                })
                             })?;
                         }
                     }
@@ -4685,7 +4702,7 @@ fn run_list(
                     // `--no-focus` escape. The header below makes the scoping LOUD so a
                     // focused subset is never mistaken for the whole project (the
                     // kubectl-namespace footgun).
-                    let mut focus_banner: Option<String> = None;
+                    let mut active_focus = None;
                     if parent.is_none() && !*all && !*no_focus {
                         if let Some(focus_ref) = find_project_root()
                             .ok()
@@ -4693,19 +4710,8 @@ fn run_list(
                         {
                             match backend.get_requirement_by_spec_id(&focus_ref)? {
                                 Some(focus_req) => {
-                                    let total_pre_focus = reqs.len();
                                     let subtree_ids = backend.descendant_ids(&focus_req.id)?;
-                                    reqs.retain(|r| subtree_ids.contains(&r.id));
-                                    focus_banner = Some(
-                                        crate::focus::focus_header(
-                                            &focus_req.display_id(),
-                                            reqs.len(),
-                                            total_pre_focus,
-                                        )
-                                        .cyan()
-                                        .bold()
-                                        .to_string(),
-                                    );
+                                    active_focus = Some((focus_req.display_id(), subtree_ids));
                                 }
                                 None => {
                                     // A focus pointing at a now-missing spec must not
@@ -4720,6 +4726,19 @@ fn run_list(
                             }
                         }
                     }
+
+                    // Keep hidden-row footers scoped to focus while computing
+                    // the widened count through all the same non-focus lenses.
+                    // trace:BUG-2190 | ai:codex
+                    let scoped_len = |rows: &[aida_core::RequirementSummary]| {
+                        rows.iter()
+                            .filter(|r| {
+                                active_focus
+                                    .as_ref()
+                                    .is_none_or(|(_, ids)| ids.contains(&r.id))
+                            })
+                            .count()
+                    };
 
                     // Hide META reqs (AI prompt customization seeded by init) from
                     // the default view — they're plumbing, not user-authored work.
@@ -4743,11 +4762,13 @@ fn run_list(
                     // the vision/term/principle rows that pass would also drop.
                     // Item 9: the FAQ listing hides superseded FAQs unless `--all`.
                     // trace:STORY-1642 | ai:claude
-                    let knowledge_hidden = crate::knowledge_list::hide_knowledge_rows(
+                    let before_knowledge_hidden = scoped_len(&reqs);
+                    crate::knowledge_list::hide_knowledge_rows(
                         &mut reqs,
                         *include_knowledge,
                         r#type.as_deref(),
                     );
+                    let knowledge_hidden = before_knowledge_hidden - scoped_len(&reqs);
                     crate::knowledge_list::hide_superseded_faqs(&mut reqs, r#type.as_deref(), *all);
 
                     // TASK-773: `aida list` / `aida list open` is a WORK view, so
@@ -4789,12 +4810,14 @@ fn run_list(
                     // exactly the view the advisor requested.
                     let explicitly_asked_for_machine_tag =
                         effective_tags.iter().any(|tag| tag == "auto-drafted");
-                    let machine_drafts_hidden = crate::apply_machine_draft_lens(
+                    let before_machine_drafts_hidden = scoped_len(&reqs);
+                    crate::apply_machine_draft_lens(
                         &mut reqs,
                         exact_draft_view,
                         *machine_drafts,
                         explicitly_asked_for_machine_tag,
                     );
+                    let machine_drafts_hidden = before_machine_drafts_hidden - scoped_len(&reqs);
 
                     // BUG-781: a decision spec (an ADR) sitting at `Approved` is
                     // ACCEPTED — that class's TERMINAL state — so it belongs with the
@@ -4823,11 +4846,14 @@ fn run_list(
                         *archived,
                         *deferred,
                     );
-                    let accepted_decisions_hidden = crate::hide_accepted_decisions(
+                    let before_accepted_decisions_hidden = scoped_len(&reqs);
+                    crate::hide_accepted_decisions(
                         &mut reqs,
                         open_work_lens,
                         user_asked_for_decision_type,
                     );
+                    let accepted_decisions_hidden =
+                        before_accepted_decisions_hidden - scoped_len(&reqs);
 
                     // TASK-900: cap the result at the first N rows AFTER the sort
                     // (list_summaries already ordered by --sort; default is
@@ -4860,6 +4886,19 @@ fn run_list(
                     if let Some(want) = driver.as_deref() {
                         crate::driver_view::retain_by_driver(&mut reqs, &list_drivers, want)?;
                     }
+                    // Focus count follows every other filter and precedes the
+                    // row limit, so it equals the view --no-focus would reveal.
+                    // trace:BUG-2190 | ai:codex
+                    let mut focus_banner = None;
+                    if let Some((label, ids)) = &active_focus {
+                        let widened_count = reqs.len();
+                        reqs.retain(|r| ids.contains(&r.id));
+                        focus_banner = Some(format!(
+                            "{}; {} matching specs hidden by focus; run `aida focus clear` to clear",
+                            crate::focus::focus_header(label, reqs.len(), widened_count),
+                            widened_count - reqs.len(),
+                        ).cyan().bold().to_string());
+                    }
                     let total_after_filters = reqs.len();
                     let agent_cap = crate::resolve_agent_list_limit(
                         std::env::var(crate::AGENT_LIST_LIMIT_ENV).ok().as_deref(),
@@ -4888,6 +4927,18 @@ fn run_list(
                         "note: truncated: true, total: {total_after_filters} — showing first {} by {sort_key}; `--limit 0` for all",
                         reqs.len()
                     );
+                    }
+
+                    // Disclose scope before every renderer's early return.
+                    // trace:BUG-2190 | ai:codex
+                    if let Some(banner) = &focus_banner {
+                        if effective_json || *short {
+                            eprintln!("{banner}");
+                        } else if agent_output_mode() && !*tree {
+                            println!("note: {banner}");
+                        } else {
+                            println!("{banner}");
+                        }
                     }
 
                     // TASK-743: --short emits one bare canonical spec ID per line —
@@ -5431,14 +5482,6 @@ fn run_list(
                             println!("{block}");
                         }
                         return crate::command_registry::returned(Ok(()));
-                    }
-
-                    // STORY-706: print the loud focus header above the human output
-                    // (table or --tree). Placed after the `--short` / `--json` early
-                    // returns so those machine surfaces stay header-free.
-                    //
-                    if let Some(banner) = &focus_banner {
-                        println!("{banner}");
                     }
 
                     // TASK-970: in AGENT MODE, when the default cap trimmed the table,
