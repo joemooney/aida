@@ -2459,14 +2459,15 @@ pub(crate) fn agent_new_with_config(
     // to InProgress before printing — the opposite of a dry preview.
     // trace:BUG-408 | ai:claude
     if context.show {
-        return print_dry_launch_context(&project_root, role, spec, &config, name);
+        return print_dry_launch_context_at(&project_root, role, spec, &config, name, cwd);
     }
     // TASK-1467: `--show-prompt` is a narrower dry preview than `--no-exec` —
     // just the initial prompt that would be sent, explicit or generated.
     // Same dry plan, same "no side effects" contract, checked before
     // `--no-exec` so `--show-prompt --no-exec` degrades to the narrower ask.
     if show_prompt {
-        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        let plan =
+            prepare_agent_launch_dry_at(&project_root, role, spec, config.agent_type, name, cwd)?;
         config.default_args.extend(agent_seed_session_args(
             config.agent_type,
             plan.native_session_id.as_deref(),
@@ -2475,7 +2476,8 @@ pub(crate) fn agent_new_with_config(
         return print_agent_show_prompt(&prompt, &prompt_args);
     }
     if noexec {
-        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        let plan =
+            prepare_agent_launch_dry_at(&project_root, role, spec, config.agent_type, name, cwd)?;
         config.default_args.extend(agent_seed_session_args(
             config.agent_type,
             plan.native_session_id.as_deref(),
@@ -2494,7 +2496,20 @@ pub(crate) fn agent_new_with_config(
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
     // trace:BUG-2002 | ai:codex
-    preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+    let existing_owner =
+        preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+    // Refuse delegation before allocating a lease or worktree. An ambient
+    // role is no substitute for a validated parent grant.
+    // trace:BUG-2188 | ai:codex
+    let expected_role = role
+        .as_deref()
+        .or_else(|| {
+            existing_owner
+                .as_ref()
+                .and_then(|lease| lease.role.as_deref())
+        })
+        .or_else(|| spec.as_deref().map(agent_new_scope_role));
+    preflight_agent_new_delegation(&project_root, expected_role)?;
 
     // Validate before any real agent launch even when --verbose is absent;
     // preview mode validates in its renderer above. Resolve the binary BEFORE
@@ -2540,7 +2555,7 @@ pub(crate) fn agent_new_with_config(
         &project_root,
         role.as_deref(),
         spec.as_deref(),
-        &project_root,
+        cwd.unwrap_or(&project_root),
     );
     // trace:BUG-1697 | ai:claude
     if resume.duplicate_check && early_role_instance == RoleInstanceKind::Driver {
@@ -2548,10 +2563,10 @@ pub(crate) fn agent_new_with_config(
             &project_root,
             role.as_deref(),
             spec.as_deref(),
-            &project_root,
+            cwd.unwrap_or(&project_root),
         )?;
     }
-    let plan = prepare_agent_launch_with_cwd(
+    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -2561,6 +2576,9 @@ pub(crate) fn agent_new_with_config(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
+    // An adopted lease belongs to earlier work and is never rolled back.
+    // trace:BUG-2188 | ai:codex
+
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2636,7 +2654,7 @@ pub(crate) fn agent_new_with_config(
         );
     }
 
-    run_tracked_agent(
+    run_tracked_agent_after_spawn(
         &binary,
         &config,
         &plan,
@@ -2645,6 +2663,11 @@ pub(crate) fn agent_new_with_config(
         description,
         title,
         verbose,
+        || {
+            if let Some(receipt) = setup_receipt.as_mut() {
+                receipt.disarm();
+            }
+        },
     )
 }
 
@@ -2721,12 +2744,13 @@ pub(crate) fn agent_new_bg_dispatch(
     // to InProgress before printing — the opposite of a dry preview.
     // trace:BUG-408 | ai:claude
     if context.show {
-        return print_dry_launch_context(&project_root, role, spec, &config, name);
+        return print_dry_launch_context_at(&project_root, role, spec, &config, name, cwd);
     }
     // TASK-1467: see the foreground path's comment — same narrower-preview-first
     // ordering and no-side-effects contract for the `--bg` dispatch.
     if show_prompt {
-        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        let plan =
+            prepare_agent_launch_dry_at(&project_root, role, spec, config.agent_type, name, cwd)?;
         config.default_args.extend(agent_seed_session_args(
             config.agent_type,
             plan.native_session_id.as_deref(),
@@ -2735,7 +2759,8 @@ pub(crate) fn agent_new_bg_dispatch(
         return print_agent_show_prompt(&prompt, &prompt_args);
     }
     if noexec {
-        let plan = prepare_agent_launch_dry(&project_root, role, spec, config.agent_type, name)?;
+        let plan =
+            prepare_agent_launch_dry_at(&project_root, role, spec, config.agent_type, name, cwd)?;
         config.default_args.extend(agent_seed_session_args(
             config.agent_type,
             plan.native_session_id.as_deref(),
@@ -2754,7 +2779,20 @@ pub(crate) fn agent_new_bg_dispatch(
 
     // Check ownership before any bypass/resume prompt; previews above remain pure.
     // trace:BUG-2002 | ai:codex
-    preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+    let existing_owner =
+        preflight_agent_launch_lease(&project_root, role.as_deref(), spec.as_deref(), cwd)?;
+    // Refuse delegation before allocating a lease or worktree. An ambient
+    // role is no substitute for a validated parent grant.
+    // trace:BUG-2188 | ai:codex
+    let expected_role = role
+        .as_deref()
+        .or_else(|| {
+            existing_owner
+                .as_ref()
+                .and_then(|lease| lease.role.as_deref())
+        })
+        .or_else(|| spec.as_deref().map(agent_new_scope_role));
+    preflight_agent_new_delegation(&project_root, expected_role)?;
 
     // Validate before the detached/background launch too, and before the
     // consent gate for the same fail-fast reason. trace:TASK-1499 | ai:codex
@@ -2795,10 +2833,10 @@ pub(crate) fn agent_new_bg_dispatch(
             &project_root,
             role.as_deref(),
             spec.as_deref(),
-            &project_root,
+            cwd.unwrap_or(&project_root),
         )?;
     }
-    let plan = prepare_agent_launch_with_cwd(
+    let (plan, mut setup_receipt) = prepare_agent_launch_attempt(
         &project_root,
         role,
         spec,
@@ -2808,6 +2846,9 @@ pub(crate) fn agent_new_bg_dispatch(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
+    // An adopted lease belongs to earlier work and is never rolled back.
+    // trace:BUG-2188 | ai:codex
+
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2870,6 +2911,7 @@ pub(crate) fn agent_new_bg_dispatch(
         launch_context.as_ref(),
     )?;
 
+    let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     let output = command
         .output_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
@@ -2897,6 +2939,11 @@ pub(crate) fn agent_new_bg_dispatch(
             "`claude --bg` exited with status {}",
             output.status.code().unwrap_or(-1)
         );
+    }
+    // trace:BUG-2188 | ai:codex
+    grant_rollback.disarm();
+    if let Some(receipt) = setup_receipt.as_mut() {
+        receipt.disarm();
     }
     // Mirror claude's own output so the operator sees the helper
     // commands (`claude attach <id>`, `claude logs <id>`, etc.) without
@@ -3277,6 +3324,64 @@ pub(crate) fn dispatch_lease_brief_conflict<'a>(
     }
 }
 
+// Only a grant explicitly placed on a constructed child command is owned;
+// the parent's ambient grant is never read or revoked here.
+// trace:BUG-2188 | ai:codex
+struct IssuedLaunchGrant(Option<String>);
+impl IssuedLaunchGrant {
+    fn from_command(command: &std::process::Command) -> Self {
+        Self(command.get_envs().find_map(|(key, value)| {
+            (key == std::ffi::OsStr::new(seat_authority::GRANT_ENV))
+                .then_some(value)
+                .flatten()
+                .and_then(|value| value.to_str())
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        }))
+    }
+    fn disarm(&mut self) {
+        self.0 = None;
+    }
+}
+impl Drop for IssuedLaunchGrant {
+    fn drop(&mut self) {
+        if let Some(id) = &self.0 {
+            if let Err(error) = seat_authority::revoke_by_id(id) {
+                eprintln!("could not revoke failed child launch grant: {error:#}");
+            }
+        }
+    }
+}
+
+// Match session_start's scope default without accepting ambient role labels.
+// trace:BUG-2188 | ai:codex
+fn agent_new_scope_role(scope: &str) -> &'static str {
+    if parse_review_scope(scope).is_some() {
+        "reviewer"
+    } else {
+        "implementer"
+    }
+}
+
+// Agent-new has always required delegated grants for seated children. Keep
+// that policy, and give scrubbed launchers the actual terminal recovery.
+// trace:BUG-2188 | ai:codex
+fn preflight_agent_new_delegation(
+    project_root: &std::path::Path,
+    role: Option<&str>,
+) -> Result<()> {
+    if let Some(role) = role {
+        let seat = canonical_role_name(role);
+        seat_authority::validate_child_delegation(project_root, &seat).map_err(|cause| {
+            anyhow::anyhow!(
+                "cannot launch child seat `{seat}`: {cause:#}. From a human terminal in {}, run `eval \"$(aida role enter advisor --delegate-seat {seat})\"`, then retry the original `aida agent new` command in that same shell with its AIDA_SESSION_GRANT intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
+                project_root.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
 /// An explicit owning cwd is read-only re-entry, never a claim or forced takeover.
 /// Both launch paths call this before prompts, and plan creation checks it again.
 // trace:BUG-2002 | ai:codex
@@ -3408,6 +3513,62 @@ fn prepare_agent_launch_with_cwd(
     // BUG-2169: the seat runs contained, so its tree may be a private clone.
     contained_seat: bool,
 ) -> Result<AgentLaunchPlan> {
+    prepare_agent_launch_attempt(
+        project_root,
+        role,
+        spec,
+        agent_type,
+        custom_name,
+        explicit_cwd,
+        contained_seat,
+    )
+    .map(|(plan, mut receipt)| {
+        if let Some(receipt) = receipt.as_mut() {
+            receipt.disarm();
+        }
+        plan
+    })
+}
+
+// trace:BUG-2188 BUG-2168 | ai:codex
+fn prepare_agent_launch_attempt(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    custom_name: Option<String>,
+    explicit_cwd: Option<&std::path::Path>,
+    contained_seat: bool,
+) -> Result<(
+    AgentLaunchPlan,
+    Option<crate::session_start::SessionStartReceipt>,
+)> {
+    // trace:BUG-2168 | ai:codex
+    let requested_cwd = explicit_cwd
+        .map(|path| -> Result<std::path::PathBuf> {
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                std::env::current_dir()?.join(path)
+            };
+            if spec.is_none() {
+                let path = path
+                    .canonicalize()
+                    .with_context(|| format!("cannot use explicit --cwd {}", path.display()))?;
+                anyhow::ensure!(
+                    path.is_dir(),
+                    "explicit --cwd {} is not a directory",
+                    path.display()
+                );
+                ensure_agent_launch_cwd_not_git_metadata(&path)?;
+                Ok(path)
+            } else {
+                Ok(path)
+            }
+        })
+        .transpose()?;
+    let launch_cwd = requested_cwd.as_deref().unwrap_or(project_root);
+
     // Persona launches never turn an optional `--spec` into ownership. They
     // stay in the project checkout and carry no lease/worktree.
     // trace:TASK-1261 | ai:codex
@@ -3422,17 +3583,20 @@ fn prepare_agent_launch_with_cwd(
             custom_name.as_deref(),
         )?;
         ensure_agent_launch_cwd_not_git_metadata(project_root)?;
-        return Ok(AgentLaunchPlan {
-            project_root: project_root.to_path_buf(),
-            launch_cwd: project_root.to_path_buf(),
-            role,
-            role_instance: RoleInstanceKind::Driver,
-            current_spec: None,
-            name,
-            lease_id: None,
-            native_session_id: agent_native_session_id_for_new(agent_type),
-            resumed_from: None,
-        });
+        return Ok((
+            AgentLaunchPlan {
+                project_root: project_root.to_path_buf(),
+                launch_cwd: launch_cwd.to_path_buf(),
+                role,
+                role_instance: RoleInstanceKind::Driver,
+                current_spec: None,
+                name,
+                lease_id: None,
+                native_session_id: agent_native_session_id_for_new(agent_type),
+                resumed_from: None,
+            },
+            None,
+        ));
     }
     match spec {
         Some(spec) => {
@@ -3477,31 +3641,46 @@ fn prepare_agent_launch_with_cwd(
                     custom_name.as_deref(),
                 )?;
                 ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
-                return Ok(AgentLaunchPlan {
-                    project_root: project_root.to_path_buf(),
-                    launch_cwd: lease.worktree_path,
-                    role: plan_role,
-                    role_instance: RoleInstanceKind::Driver,
-                    current_spec: Some(spec),
-                    name,
-                    lease_id: Some(lease.id),
-                    native_session_id: agent_native_session_id_for_new(agent_type),
-                    resumed_from: None,
-                });
+                return Ok((
+                    AgentLaunchPlan {
+                        project_root: project_root.to_path_buf(),
+                        launch_cwd: lease.worktree_path,
+                        role: plan_role,
+                        role_instance: RoleInstanceKind::Driver,
+                        current_spec: Some(spec),
+                        name,
+                        lease_id: Some(lease.id),
+                        native_session_id: agent_native_session_id_for_new(agent_type),
+                        resumed_from: None,
+                    },
+                    None,
+                ));
             }
 
+            // Validate the requested name before creating resources.
+            // trace:BUG-2188 | ai:codex
+            let prepared_name = agent_registry::generate_or_validate_name(
+                project_root,
+                agent_type,
+                role.as_deref().or(Some(agent_new_scope_role(&spec))),
+                custom_name.as_deref(),
+            )?;
+            let requested_path = requested_cwd
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned());
             let previous_cwd = std::env::current_dir()?;
             std::env::set_current_dir(project_root)
                 .with_context(|| format!("failed to cd to {}", project_root.display()))?;
             // BUG-1918: `agent new` claims FOR the agent it launches.
             // trace:BUG-1918 | ai:claude
             let start_result = review_authority::as_launcher(|| {
-                session_start(
+                crate::session_start::session_start_with_receipt(
                     &spec,
                     /* branch */ None,
                     /* base */ None,
                     /* reuse_branch */ false,
-                    /* explicit_path */ None,
+                    /* explicit_path */
+                    requested_path.as_deref(),
                     /* forge_override */ None,
                     /* branch_style */ "auto",
                     /* launch_claude */ false,
@@ -3519,55 +3698,61 @@ fn prepare_agent_launch_with_cwd(
                     // STORY-714: config-driven (no per-command flag on this path
                     // yet) — [worktree_pool] enabled decides.
                     /* use_pool */
-                    None,
+                    requested_cwd.as_ref().map(|_| false),
                     /* self_claim */
                     false,
                     /* review_coexistence */ None,
                     // trace:BUG-2169 | ai:claude
                     contained_seat,
+                    true,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);
             restore_result
                 .with_context(|| format!("failed to restore cwd to {}", previous_cwd.display()))?;
-            start_result.with_context(|| {
-                format!(
-                    "failed to create session worktree for `{}`; run `aida session leases` \
-                     to inspect conflicting sessions",
-                    spec
-                )
-            })?;
+            let receipt = start_result.map_err(|cause| anyhow::anyhow!(
+                "failed to create session worktree for `{spec}` under {}{}: {cause:#}. Inspect `aida session leases --all` and `git worktree list`; re-enter the recorded owning worktree with `aida agent new {agent_type} --spec {spec} --cwd <owning-worktree> --no-resume`, or fix the reported git/path error before retrying.",
+                project_root.display(), requested_cwd.as_ref().map(|path| format!(" (requested --cwd {})", path.display())).unwrap_or_default()
+            ))?;
 
-            let lease = list_leases(project_root)
+            // Setup may have re-entered a lease created during prompts.
+            // Revalidate ownership rather than treating it as our allocation.
+            // trace:BUG-2188 | ai:codex
+            if !receipt.owns_setup() {
+                preflight_agent_launch_lease(
+                    project_root,
+                    role.as_deref(),
+                    Some(&spec),
+                    explicit_cwd,
+                )?;
+            }
+            let lease_id = receipt
+                .lease_id
+                .as_deref()
+                .context("session setup returned no lease identity")?;
+            let lease = list_leases_strict(project_root, &[&spec])
+                .map_err(anyhow::Error::msg)?
                 .into_iter()
-                .filter(|lease| lease.scope.eq_ignore_ascii_case(&spec))
-                .max_by_key(|lease| lease.started_at)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "session_start completed but no lease for `{}` is visible",
-                        spec
-                    )
-                })?;
+                .find(|lease| lease.id == lease_id)
+                .context("session setup receipt's exact lease is no longer visible")?;
             let plan_role = lease.role.clone().or(role.clone());
-            let name = agent_registry::generate_or_validate_name(
-                project_root,
-                agent_type,
-                plan_role.as_deref(),
-                custom_name.as_deref(),
-            )?;
+            let name = prepared_name;
             let lease_id = Some(lease.id.clone());
             ensure_agent_launch_cwd_not_git_metadata(&lease.worktree_path)?;
-            Ok(AgentLaunchPlan {
-                project_root: project_root.to_path_buf(),
-                launch_cwd: lease.worktree_path,
-                role: plan_role,
-                role_instance: RoleInstanceKind::Driver,
-                current_spec: Some(spec),
-                name,
-                lease_id,
-                native_session_id: agent_native_session_id_for_new(agent_type),
-                resumed_from: None,
-            })
+            Ok((
+                AgentLaunchPlan {
+                    project_root: project_root.to_path_buf(),
+                    launch_cwd: lease.worktree_path,
+                    role: plan_role,
+                    role_instance: RoleInstanceKind::Driver,
+                    current_spec: Some(spec),
+                    name,
+                    lease_id,
+                    native_session_id: agent_native_session_id_for_new(agent_type),
+                    resumed_from: None,
+                },
+                Some(receipt),
+            ))
         }
         None => {
             let plan_role = role.clone();
@@ -3575,7 +3760,7 @@ fn prepare_agent_launch_with_cwd(
                 project_root,
                 plan_role.as_deref(),
                 None,
-                project_root,
+                launch_cwd,
             );
             let name = agent_registry::generate_or_validate_name(
                 project_root,
@@ -3584,17 +3769,20 @@ fn prepare_agent_launch_with_cwd(
                 custom_name.as_deref(),
             )?;
             ensure_agent_launch_cwd_not_git_metadata(project_root)?;
-            Ok(AgentLaunchPlan {
-                project_root: project_root.to_path_buf(),
-                launch_cwd: project_root.to_path_buf(),
-                role: plan_role,
-                role_instance,
-                current_spec: None,
-                name,
-                lease_id: None,
-                native_session_id: agent_native_session_id_for_new(agent_type),
-                resumed_from: None,
-            })
+            Ok((
+                AgentLaunchPlan {
+                    project_root: project_root.to_path_buf(),
+                    launch_cwd: launch_cwd.to_path_buf(),
+                    role: plan_role,
+                    role_instance,
+                    current_spec: None,
+                    name,
+                    lease_id: None,
+                    native_session_id: agent_native_session_id_for_new(agent_type),
+                    resumed_from: None,
+                },
+                None,
+            ))
         }
     }
 }
@@ -3952,6 +4140,39 @@ pub(crate) fn prepare_agent_launch_dry(
     })
 }
 
+// trace:BUG-2168 | ai:codex
+fn prepare_agent_launch_dry_at(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    agent_type: &str,
+    name: Option<String>,
+    cwd: Option<&std::path::Path>,
+) -> Result<AgentLaunchPlan> {
+    let mut plan = prepare_agent_launch_dry(project_root, role, spec, agent_type, name)?;
+    if let Some(cwd) = cwd {
+        let cwd = if cwd.is_absolute() {
+            cwd.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(cwd)
+        };
+        if plan.current_spec.is_none() {
+            plan.launch_cwd = cwd
+                .canonicalize()
+                .with_context(|| format!("cannot use explicit --cwd {}", cwd.display()))?;
+            anyhow::ensure!(
+                plan.launch_cwd.is_dir(),
+                "explicit --cwd {} is not a directory",
+                plan.launch_cwd.display()
+            );
+        } else {
+            plan.launch_cwd = cwd;
+        }
+        ensure_agent_launch_cwd_not_git_metadata(&plan.launch_cwd)?;
+    }
+    Ok(plan)
+}
+
 /// BUG-408: shared `--show-context` preview for both the foreground and `--bg`
 /// launch paths. Builds a dry plan, renders the launch-context snapshot, and
 /// prints a preview banner + the body. No session is started, no worktree or
@@ -3963,7 +4184,18 @@ pub(crate) fn print_dry_launch_context(
     config: &AgentLaunchConfig,
     name: Option<String>,
 ) -> Result<()> {
-    let plan = prepare_agent_launch_dry(project_root, role, spec, config.agent_type, name)?;
+    print_dry_launch_context_at(project_root, role, spec, config, name, None)
+}
+// trace:BUG-2168 | ai:codex
+fn print_dry_launch_context_at(
+    project_root: &std::path::Path,
+    role: Option<String>,
+    spec: Option<String>,
+    config: &AgentLaunchConfig,
+    name: Option<String>,
+    cwd: Option<&std::path::Path>,
+) -> Result<()> {
+    let plan = prepare_agent_launch_dry_at(project_root, role, spec, config.agent_type, name, cwd)?;
     let token = std::env::var("AIDA_AGENT_REGISTRY_TOKEN")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -4889,18 +5121,6 @@ pub(crate) fn build_agent_new_bg_command(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, false)?,
     );
-    if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
-            &plan.project_root,
-            &canonical_role_name(role),
-            &plan.name,
-        )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
-    } else {
-        command.env_remove("AIDA_SESSION_ROLE");
-    }
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
@@ -4928,6 +5148,18 @@ pub(crate) fn build_agent_new_bg_command(
     // trace:BUG-1918 | ai:claude
     if let Some(lease_id) = &plan.lease_id {
         review_authority::bind_worker_env(&mut command, lease_id);
+    }
+    if let Some(role) = &plan.role {
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
     }
     Ok(command)
 }
@@ -5065,6 +5297,33 @@ pub(crate) fn run_tracked_agent(
     title: bool,
     verbose: bool,
 ) -> Result<()> {
+    run_tracked_agent_after_spawn(
+        binary,
+        config,
+        plan,
+        launch_context,
+        prompt_args,
+        description,
+        title,
+        verbose,
+        || {},
+    )
+}
+
+// trace:BUG-2188 | ai:codex
+// why: preserves the existing launch flags while handing ownership over at spawn.
+#[allow(clippy::too_many_arguments)]
+fn run_tracked_agent_after_spawn(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+    launch_context: Option<&AgentLaunchContext>,
+    prompt_args: &[String],
+    description: Option<String>,
+    title: bool,
+    verbose: bool,
+    on_spawn: impl FnOnce(),
+) -> Result<()> {
     // TASK-864: route the INTERACTIVE foreground launch through the same os_wrap
     // (bwrap) boundary the headless paths use. When `[contained] os_wrap` is on
     // (or the TASK-876 `AIDA_OS_WRAP` per-host override is set) and the agent is
@@ -5095,18 +5354,6 @@ pub(crate) fn run_tracked_agent(
         &mut command,
         harness_version_probe_program_and_args(binary, config, plan, true)?,
     );
-    if let Some(role) = &plan.role {
-        let grant = seat_authority::issue_child(
-            &plan.project_root,
-            &canonical_role_name(role),
-            &plan.name,
-        )?;
-        command
-            .env("AIDA_SESSION_ROLE", role)
-            .env(seat_authority::GRANT_ENV, grant.id);
-    } else {
-        command.env_remove("AIDA_SESSION_ROLE");
-    }
     command.env("AIDA_ROLE_INSTANCE", plan.role_instance.as_str());
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
@@ -5142,9 +5389,26 @@ pub(crate) fn run_tracked_agent(
         review_authority::bind_worker_env(&mut command, lease_id);
     }
 
+    if let Some(role) = &plan.role {
+        let grant = seat_authority::issue_child(
+            &plan.project_root,
+            &canonical_role_name(role),
+            &plan.name,
+        )?;
+        command
+            .env("AIDA_SESSION_ROLE", role)
+            .env(seat_authority::GRANT_ENV, grant.id);
+    } else {
+        command.env_remove("AIDA_SESSION_ROLE");
+    }
+    let mut grant_rollback = IssuedLaunchGrant::from_command(&command);
     let mut child = command
         .spawn_retrying_etxtbsy()
         .with_context(|| format!("failed to spawn {}", binary.display()))?;
+    // Once spawned, the child owns its work even if registry/wait fails.
+    // trace:BUG-2188 | ai:codex
+    grant_rollback.disarm();
+    on_spawn();
     let child_pid = child.id();
     // BUG-1918: this launcher made the claim; record the worker it spawned.
     // trace:BUG-1918 | ai:claude

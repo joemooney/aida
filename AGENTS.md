@@ -1,3 +1,10 @@
+Agent-new setup retains invocation receipts through actual child spawn (or
+background-dispatch acceptance). Fresh worktrees publish atomically without
+replacement; rollback validates `.git` identity and compare-deletes only newly
+created branch refs and exact shared claim IDs. Adopted resources and changed
+identities are retained with recovery commands. See OVERVIEW.md.
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
 `Build (ubuntu-latest)` remains the required check. CLI halves use committed
 main-run timings; each shard keeps its timing budget and root hygiene check.

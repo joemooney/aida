@@ -129,6 +129,23 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **Don't reach for it when** — you want the full lifecycle driven for you (CI, review, merge) — that's `aida queue work --auto-complete`, not `agent new`. And `pause` does **not** stop a process — it's a *status marker* for dispatch logic; use `aida agent stop` to actually terminate one.
 
+**Cwd and failed setup.** An explicit `--cwd` is used for the child and the
+preview. With `--spec`, an inactive lease for that exact directory and role is
+re-entered; `--force` does not authorize taking over live work. A fresh explicit
+path bypasses pooling. Worktree errors name the requested path, underlying
+cause and recovery commands. A refused launch rolls back this attempt's
+allocations; existing leases and directories are preserved, and cleanup refuses
+a tree with live users. A failed spawn revokes only its newly issued grant.
+
+For AIDA delegation, keep the advisor shell's validated parent grant and clear
+`AIDA_SESSION_PURPOSE`; the launcher issues the child's own grant. If the grant
+was scrubbed, enter the advisor role in a human terminal with
+`eval "$(aida role enter advisor --delegate-seat implementer)"`, then retry the
+original launch in that shell. Direct vendor/relay launches still scrub the
+advisor grant. An ambient `AIDA_SESSION_ROLE=implementer` alone does not authorize
+a delegated launch.
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.
 - `new claude --spec <ID>` — creates a scoped worktree + lease *before* launch, so the agent starts already isolated on its spec. An ownership conflict is checked before bypass/resume prompts. To re-enter an inactive same-role lease, pass `--cwd` with its exact owning worktree; the existing session identity is retained. Live agents, branch/role mismatches, and reasoned holds refuse re-entry. Inspect with `aida session leases --all`; do not end the session just to redispatch it. <!-- trace:BUG-2002 | ai:codex -->
@@ -291,3 +308,14 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+
+Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
+materialize at a private staging path and publish to the requested absent path
+only after checkout succeeds. Even a failing post-checkout hook triggers cleanup.
+Cleanup verifies the worktree's `.git` pointer and deletes a newly created branch
+only while its ref still equals the recorded start commit. Pre-existing paths,
+branches, adopted leases, and changed identities are retained with recovery
+instructions. Shared claims carry optional invocation IDs; rollback compares the
+exact acquired claim under the store lock and publishes outside that lock.
+Legacy claims remain readable and are never adopted as rollback authority.
+<!-- trace:BUG-2188 | ai:codex -->

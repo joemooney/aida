@@ -462,3 +462,608 @@ fn agent_new_foreground_and_background_reenter_with_explicit_owning_cwd() {
         assert_eq!(leases[0].started_at, lease.started_at);
     }
 }
+
+// trace:BUG-2168 | ai:codex
+#[test]
+fn bug2168_explicit_cwd_without_spec_is_the_actual_launch_directory() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+    let plan = prepare_agent_launch_with_cwd(
+        tmp.path(),
+        None,
+        None,
+        "claude",
+        Some("cwd-test".into()),
+        Some(&lease.worktree_path),
+        false,
+    )
+    .unwrap();
+    assert_eq!(plan.launch_cwd, lease.worktree_path.canonicalize().unwrap());
+    assert!(plan.lease_id.is_none());
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_scrubbed_delegation_refuses_before_any_setup() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("implementer"));
+    let before = std::fs::read(lease_path(tmp.path(), &lease.id)).unwrap();
+    let error = preflight_agent_new_delegation(tmp.path(), Some("implementer"))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("no valid parent seat grant"), "{error}");
+    assert!(
+        error.contains("aida role enter advisor --delegate-seat implementer"),
+        "{error}"
+    );
+    assert!(error.contains("same shell"), "{error}");
+    assert_eq!(
+        std::fs::read(lease_path(tmp.path(), &lease.id)).unwrap(),
+        before
+    );
+}
+
+// trace:BUG-2188 BUG-2168 | ai:codex
+fn receipt_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("project");
+    let tree = tmp.path().join("requested-worker");
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[worktree_pool]\nenabled = true\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["init", "-q", "-b", "main"],
+        vec!["config", "user.name", "launch fixture"],
+        vec!["config", "user.email", "launch@example.test"],
+        vec!["commit", "-q", "--allow-empty", "-m", "init"],
+    ] {
+        assert!(std::process::Command::new("/usr/bin/git")
+            .current_dir(&root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    (tmp, root, tree)
+}
+
+// trace:BUG-2188 BUG-2168 | ai:codex
+#[test]
+fn bug2188_fresh_receipt_owns_exact_lease_and_rolls_back_requested_tree() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("receipt-test".into()),
+        Some(&tree),
+        false,
+    )
+    .unwrap();
+    assert_eq!(plan.launch_cwd, tree);
+    let receipt = receipt.unwrap();
+    assert_eq!(receipt.lease_id, plan.lease_id);
+    assert!(lease_path(&root, plan.lease_id.as_deref().unwrap()).exists());
+    assert!(tree.exists());
+    drop(receipt); // simulate a subsequent launch-context/spawn refusal
+    assert!(!tree.exists());
+    assert!(!lease_path(&root, plan.lease_id.as_deref().unwrap()).exists());
+    assert!(!branch_exists_anywhere(&root, "launch-fixture"));
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_prelease_failure_removes_materialized_tree_and_names_cause() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    crate::seat_clone::failpoint::fail_before_lease(true);
+    let result = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("receipt-test".into()),
+        Some(&tree),
+        false,
+    );
+    crate::seat_clone::failpoint::fail_before_lease(false);
+    let error = result.err().expect("injected setup failure").to_string();
+    assert!(
+        error.contains("injected failure before the lease write"),
+        "{error}"
+    );
+    assert!(error.contains(&tree.display().to_string()), "{error}");
+    assert!(!tree.exists());
+    assert!(list_leases(&root).is_empty());
+    assert!(!branch_exists_anywhere(&root, "launch-fixture"));
+}
+
+// trace:BUG-2188 BUG-2168 | ai:codex
+#[test]
+fn bug2188_adopted_receipt_never_deletes_an_existing_lease() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("implementer"));
+    let original = std::fs::read(lease_path(tmp.path(), &lease.id)).unwrap();
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        tmp.path(),
+        Some("implementer".into()),
+        Some("BUG-2002".into()),
+        "claude",
+        Some("adopt-test".into()),
+        Some(&lease.worktree_path),
+        false,
+    )
+    .unwrap();
+    drop(receipt);
+    assert_eq!(plan.lease_id.as_deref(), Some(lease.id.as_str()));
+    assert!(lease.worktree_path.exists());
+    assert_eq!(
+        std::fs::read(lease_path(tmp.path(), &lease.id)).unwrap(),
+        original
+    );
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_failed_command_revokes_only_its_issued_grant() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    let _env =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&root, "advisor", &["implementer"]);
+    let parent = seat_authority::current_grant(&root).unwrap().id;
+    let child =
+        seat_authority::issue_child(&root, "implementer", crate::test_env::HERMETIC_TEST_USER)
+            .unwrap();
+    let mut command = std::process::Command::new("/missing/agent");
+    command.env(seat_authority::GRANT_ENV, &child.id);
+    let guard = IssuedLaunchGrant::from_command(&command);
+    assert!(command.spawn().is_err());
+    drop(guard);
+    assert!(
+        !seat_authority::revoke_by_id(&child.id).unwrap(),
+        "already revoked"
+    );
+    assert_eq!(seat_authority::current_grant(&root).unwrap().id, parent);
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_pool_cleanup_keeps_the_lease_when_a_live_process_holds_the_tree() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("pool-receipt-test".into()),
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(aida_core::worktree_pool::is_pool_worktree(
+        &root,
+        &plan.launch_cwd
+    ));
+    let mut holder = std::process::Command::new("/bin/sleep")
+        .arg("60")
+        .current_dir(&plan.launch_cwd)
+        .spawn()
+        .unwrap();
+    drop(receipt);
+    assert!(lease_path(&root, plan.lease_id.as_deref().unwrap()).exists());
+    assert!(aida_core::worktree_pool::read_state(&root)
+        .unwrap()
+        .entries
+        .iter()
+        .any(|entry| entry.path == plan.launch_cwd && entry.leased));
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+    aida_core::worktree_pool::return_to_pool(&root, &plan.launch_cwd).unwrap();
+    assert!(remove_session_lease_record_only(
+        &root,
+        plan.lease_id.as_deref().unwrap()
+    ));
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_private_clone_cleanup_removes_the_clone_pin_and_lease() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[contained]\nseat_tree = \"clone\"\n",
+    )
+    .unwrap();
+    assert!(std::process::Command::new("/usr/bin/git")
+        .current_dir(&root)
+        .args(["remote", "add", "origin"])
+        .arg(&root)
+        .status()
+        .unwrap()
+        .success());
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let tree = root.parent().unwrap().join(format!(
+        "{}receipt-fixture",
+        crate::seat_clone::CLONE_DIR_PREFIX
+    ));
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("clone-receipt-test".into()),
+        Some(&tree),
+        true,
+    )
+    .unwrap();
+    let pin = crate::seat_clone::pin_ref(&tree).unwrap();
+    let exists = || {
+        std::process::Command::new("/usr/bin/git")
+            .current_dir(&root)
+            .args(["show-ref", "--verify", "--quiet", &pin])
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(tree.join(".git").is_dir());
+    assert!(exists());
+    drop(receipt);
+    assert!(!tree.exists());
+    assert!(!exists());
+    assert!(!lease_path(&root, plan.lease_id.as_deref().unwrap()).exists());
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_post_checkout_partial_materialization_rolls_back() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    crate::test_exec::write_executable(
+        &root.join(".git/hooks/post-checkout"),
+        "#!/bin/sh\necho injected-post-checkout-failure >&2\nexit 73\n",
+    );
+    let result = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("partial-test".into()),
+        Some(&tree),
+        false,
+    );
+    let error = result.err().expect("post-checkout must refuse").to_string();
+    assert!(error.contains("injected-post-checkout-failure"), "{error}");
+    assert!(!tree.exists());
+    assert!(!branch_exists_anywhere(&root, "launch-fixture"));
+    assert!(list_leases(&root).is_empty());
+    assert!(
+        !std::fs::read_dir(root.parent().unwrap()).unwrap().any(|p| p
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("aida-launch-"))
+    );
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_preexisting_path_and_branch_survive_failed_setup() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    std::fs::create_dir(&tree).unwrap();
+    std::fs::write(tree.join("keep"), "existing path").unwrap();
+    assert!(std::process::Command::new("/usr/bin/git")
+        .current_dir(&root)
+        .args(["branch", "launch-fixture"])
+        .status()
+        .unwrap()
+        .success());
+    let before = std::process::Command::new("/usr/bin/git")
+        .current_dir(&root)
+        .args(["rev-parse", "launch-fixture"])
+        .output()
+        .unwrap()
+        .stdout;
+    let result = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("existing-test".into()),
+        Some(&tree),
+        false,
+    );
+    assert!(result.is_err());
+    assert_eq!(
+        std::fs::read_to_string(tree.join("keep")).unwrap(),
+        "existing path"
+    );
+    assert_eq!(
+        std::process::Command::new("/usr/bin/git")
+            .current_dir(&root)
+            .args(["rev-parse", "launch-fixture"])
+            .output()
+            .unwrap()
+            .stdout,
+        before
+    );
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_changed_worktree_identity_is_kept() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("identity-test".into()),
+        Some(&tree),
+        false,
+    )
+    .unwrap();
+    let marker = std::fs::read(tree.join(".git")).unwrap();
+    std::fs::write(tree.join(".git"), "gitdir: /changed/identity\n").unwrap();
+    drop(receipt);
+    assert!(tree.exists());
+    assert!(lease_path(&root, plan.lease_id.as_deref().unwrap()).exists());
+    std::fs::write(tree.join(".git"), marker).unwrap();
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_changed_branch_identity_survives_cleanup() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let (_plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("branch-test".into()),
+        Some(&tree),
+        false,
+    )
+    .unwrap();
+    assert!(std::process::Command::new("/usr/bin/git")
+        .current_dir(&tree)
+        .args([
+            "-c",
+            "user.name=fixture",
+            "-c",
+            "user.email=fixture@test",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "successor"
+        ])
+        .status()
+        .unwrap()
+        .success());
+    drop(receipt);
+    assert!(branch_exists_anywhere(&root, "launch-fixture"));
+}
+
+// Exercise actual entrypoints, including issuance after setup and the
+// foreground spawn / background dispatcher refusal edges.
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for background in [false, true] {
+        let (_tmp, root, _tree) = receipt_project();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_BUILD_PROFILE", None),
+                ("AIDA_BIN", None),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+            ],
+        );
+        let parent = seat_authority::current_grant(&root).unwrap().id;
+        let script = root.join("fail-child");
+        crate::test_exec::write_executable(
+            &script,
+            if background {
+                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fixture-version; exit 0; fi\necho dispatcher-refused >&2\nexit 73\n"
+            } else {
+                "#!/aida-fixture-no-such-interpreter\n"
+            },
+        );
+        let config = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: Box::leak(script.to_string_lossy().into_owned().into_boxed_str()),
+            default_args: vec![],
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let launch = if background {
+            agent_new_bg_dispatch
+        } else {
+            agent_new_with_config
+        };
+        let previous_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&root).unwrap();
+        let result = launch(
+            config,
+            Some("implementer".into()),
+            Some("launch-fixture".into()),
+            false,
+            None,
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(Some("fixture".into()), false),
+            AgentResumeOptions::new(false, None, false, false),
+            AgentDefaultFlagOptions::new(false, vec![], None),
+            Some("failed-launch-worker".into()),
+            None,
+            false,
+        );
+        std::env::set_current_dir(previous_cwd).unwrap();
+        let error = result.unwrap_err().to_string();
+        assert!(
+            error.contains(if background {
+                "exited with status 73"
+            } else {
+                "failed to spawn"
+            }),
+            "{error}"
+        );
+        let pool = aida_core::worktree_pool::read_state(&root).unwrap();
+        assert!(pool.entries.iter().all(|entry| !entry.leased));
+        assert!(!branch_exists_anywhere(&root, "launch-fixture"));
+        assert!(std::fs::read_dir(root.parent().unwrap())
+            .unwrap()
+            .all(|entry| {
+                let path = entry.unwrap().path();
+                path == root || pool.entries.iter().any(|entry| entry.path == path)
+            }));
+        assert!(list_leases(&root).is_empty());
+        let children = std::fs::read_dir(seat_authority::grant_dir().unwrap())
+            .unwrap()
+            .map(|entry| {
+                serde_json::from_slice::<seat_authority::SeatGrant>(
+                    &std::fs::read(entry.unwrap().path()).unwrap(),
+                )
+                .unwrap()
+            })
+            .filter(|g| g.parent_grant_id.as_deref() == Some(&parent))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            children.len(),
+            1,
+            "production path must have issued a child grant"
+        );
+        assert!(children[0].revoked_at.is_some());
+        assert_eq!(seat_authority::current_grant(&root).unwrap().id, parent);
+    }
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_checkout_created_destination_is_never_nested_or_removed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    crate::test_exec::write_executable(
+        &root.join(".git/hooks/post-checkout"),
+        &format!(
+            "#!/bin/sh\nmkdir -p '{}'\nprintf kept > '{}/keep'\n",
+            tree.display(),
+            tree.display()
+        ),
+    );
+    let result = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("publication-test".into()),
+        Some(&tree),
+        false,
+    );
+    let error = result
+        .err()
+        .expect("concurrent destination must refuse publication")
+        .to_string();
+    assert!(error.contains("without replacing"), "{error}");
+    assert_eq!(std::fs::read_to_string(tree.join("keep")).unwrap(), "kept");
+    assert_eq!(std::fs::read_dir(&tree).unwrap().count(), 1);
+    assert!(!branch_exists_anywhere(&root, "launch-fixture"));
+    assert!(list_leases(&root).is_empty());
+}
+
+// trace:BUG-2188 | ai:codex
+#[test]
+fn bug2188_pool_hook_commit_keeps_original_branch_receipt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    crate::test_exec::write_executable(&root.join(".git/hooks/post-checkout"), "#!/bin/sh\nif /usr/bin/git symbolic-ref --quiet HEAD >/dev/null; then /usr/bin/git -c user.name=fixture -c user.email=fixture@test commit -q --allow-empty -m hook-created-work; fi\n");
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("pool-identity-test".into()),
+        None,
+        false,
+    )
+    .unwrap();
+    let branch = current_branch_at(&plan.launch_cwd).unwrap();
+    let before = std::process::Command::new("/usr/bin/git")
+        .current_dir(&root)
+        .args(["rev-parse", &branch])
+        .output()
+        .unwrap()
+        .stdout;
+    drop(receipt);
+    assert!(
+        branch_exists_anywhere(&root, &branch),
+        "hook changed branch must survive rollback"
+    );
+    assert_eq!(
+        std::process::Command::new("/usr/bin/git")
+            .current_dir(&root)
+            .args(["rev-parse", &branch])
+            .output()
+            .unwrap()
+            .stdout,
+        before
+    );
+}
