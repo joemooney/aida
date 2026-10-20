@@ -180,26 +180,16 @@ mod bug_2192_lease_scan_tests {
         let plain = main.path().join("aida-seat-plain");
         let escaped = main.path().join("aida-seat-escaped");
         let write = |name: &str, body: String| std::fs::write(sessions.join(name), body).unwrap();
-        write(
-            "a.toml",
-            format!(
-                "tree_kind = \"clone\"\nworktree_path = \"{}\"\n",
-                plain.display()
-            ),
-        );
-        write(
-            "b.toml",
-            format!(
-                "tree_kind = \"\\u0063lone\"\nworktree_path = \"{}\"\n",
-                escaped.display()
-            ),
-        );
+        // Quote each path through `toml` so a Windows backslash is escaped.
+        let lease = |kind: &str, path: &std::path::Path| {
+            let path = toml::Value::String(path.display().to_string());
+            format!("tree_kind = {kind}\nworktree_path = {path}\n")
+        };
+        write("a.toml", lease("\"clone\"", &plain));
+        write("b.toml", lease("\"\\u0063lone\"", &escaped));
         write(
             "c.toml",
-            format!(
-                "tree_kind = \"worktree\"\nworktree_path = \"{}\"\n",
-                main.path().join("aida-wt").display()
-            ),
+            lease("\"worktree\"", &main.path().join("aida-wt")),
         );
         write("c.activity.toml", "last = 1\n".to_string());
 
