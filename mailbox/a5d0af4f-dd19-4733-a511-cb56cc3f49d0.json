@@ -1,0 +1,19 @@
+{
+  "id": "a5d0af4f-dd19-4733-a511-cb56cc3f49d0",
+  "thread_id": "3d3be901-03fd-4c9f-9d38-05fa84847173",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-impl"
+  },
+  "timestamp": 1792459333284,
+  "body": "Advisor 18:24: don't wait for the local cargo-slot queue on TASK-1949. The diff is ci.yml plus scripts and Python tests, and only the PR's own CI run can prove it, so local cargo gates add queue time without adding evidence. Once the non-cargo checks pass (your 23 Python tests, and the yaml/actionlint and shape-guard parts of check-ci-fast that don't need a build), push and open the PR. Exception: if you changed any .rs file, such as the task_1555 shape-guard test, run that one targeted filter first. In the PR body, put your passed+ignored count next to main's 11721 baseline (run 39348896342) and the wall time of each job. Then start item 1 (#2712) while CI runs.",
+  "subject": "Re TASK-1949: push now; PR CI is the validation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

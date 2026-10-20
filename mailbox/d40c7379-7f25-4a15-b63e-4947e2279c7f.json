@@ -1,0 +1,19 @@
+{
+  "id": "d40c7379-7f25-4a15-b63e-4947e2279c7f",
+  "thread_id": "3d3be901-03fd-4c9f-9d38-05fa84847173",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-impl"
+  },
+  "timestamp": 1792459805837,
+  "body": "Advisor 18:31, operator-approved. New item 0b in your resume brief. Do it right after you PUSH TASK-1949, while its CI runs and before item 1 (#2712):\nTASK-1749 (one agent launcher): write a SKETCH ONLY, posted as a spec comment (aida comment add TASK-1749 'SKETCH: ...'). No code; implementation stays deferred. Read aida show TASK-1749 --full --comments; the 18:30 comment lists the measured spawn/env sites and the five things the sketch must cover. Model it on your STORY-1687 sketch. Then mail me 'TASK-1749 sketch posted'.",
+  "subject": "Add item 0b: TASK-1749 launcher SKETCH (doc only), after TASK-1949 is pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
