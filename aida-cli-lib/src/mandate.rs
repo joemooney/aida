@@ -788,6 +788,17 @@ impl StoreHistoryBatch {
             return Ok(batch);
         }
         // Deletions carry no body to read; every other touching commit does.
+        // The walk is limited by each path's top directory, not by every path:
+        // git checks each pathspec against every commit, so a PR tracing ~100
+        // specs took ~50 s over a ~50k-commit store, while one directory
+        // pathspec takes seconds whatever the spec count. The names it lists
+        // are filtered to the wanted paths below.
+        let mut tops: Vec<&str> = paths
+            .iter()
+            .map(|(_, rel)| rel.split_once('/').map_or(rel.as_str(), |(top, _)| top))
+            .collect();
+        tops.sort_unstable();
+        tops.dedup();
         let mut args: Vec<&str> = vec![
             "log",
             "--all",
@@ -796,7 +807,7 @@ impl StoreHistoryBatch {
             "--name-only",
             "--",
         ];
-        args.extend(paths.iter().map(|(_, rel)| rel.as_str()));
+        args.extend(tops);
         let log = store_git(store_root, &args, None)?;
         let by_path: std::collections::BTreeMap<&str, &str> = paths
             .iter()

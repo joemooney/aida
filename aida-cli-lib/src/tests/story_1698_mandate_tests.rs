@@ -2163,5 +2163,13 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
     let walks = calls.lines().filter(|l| l.contains(" log ")).count();
     // One history walk and one object read for 40 specs, plus one alias walk.
     assert_eq!(walks, 2, "{calls}");
+    // The history walk is limited by the objects directory, not by one
+    // pathspec per spec (git checks every pathspec against every commit).
+    assert!(
+        calls
+            .lines()
+            .any(|l| l.contains(" log ") && l.ends_with("--name-only -- objects")),
+        "{calls}"
+    );
     assert_eq!(calls.lines().count(), 3, "{calls}");
 }
