@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-20T01:25:13.427947521Z
+modified_at: 2026-10-20T07:19:30.339362572Z
 req_type: Task
 relationships:
 - rel_type:
@@ -53,6 +53,11 @@ comments:
   content: Resumed assigned final-round PR2712 rework in existing codex/task-1801 worktree refresh-2712, lease01a156e2e57b. Merged current main. archived_recordings now anchors archive enumeration including empty directories and routes every JSON file through read_verdict_body, refusing linked/nonregular entries rather than feeding shorter release history. Added RetainedHistory hardlink and populated/empty symlink regressions; documented no-replace fallback nlink2 refusal window. Fresh author checker found no actionable issue; Cargo validation queued, no approval or ship claim.
   created_at: 2026-10-20T01:25:13.427947521Z
   modified_at: 2026-10-20T01:25:13.427947521Z
+- id: 01a1582d-f923-7d33-b2e0-524e0c561322
+  author: joe
+  content: Commit 419579e7c4 references this requirement
+  created_at: 2026-10-20T07:19:30.339362572Z
+  modified_at: 2026-10-20T07:19:30.339362572Z
 history:
 - id: 01a1485a-e1b6-7b12-9d59-d3a2ba1fafd8
   author: aida-session-start
