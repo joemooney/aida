@@ -1,0 +1,26 @@
+id: 01a15784-6e2c-7ca0-a064-f78a372d7a8b
+spec_id: TASK-1981
+agreed_id: TASK-1981
+title: 'TASK-1930 follow-ups: rollback edge cases, exact-SHA publication paths, CAS test gaps, drain the 3 new AIDA_TEST_* store seams'
+description: |-
+  Non-blocking findings from the PR-2756 round-2 review (eea970fc24), deferred by advisor ruling 2026-10-19 21:12; the round-3 scope was narrowed to 4 blockers.
+  1. rollback_commit_if_head_matches (git_ops.rs ~2367): when HEAD != expected it rebases the peer's commits with --onto, and a non-conflict rebase failure (dirty tree, hook refusal) silently returns Ok(false). Make it fail loudly.
+  2. Exact-SHA publication: upgrade_release.rs handle_dev_release (~1888-1903) and init_cmd.rs handle_init_distributed_sibling (~5676) still call git_ops::push(branch) after releasing the lock. Switch them to push_exact_outcome under the lock.
+  3. Test gaps: add a barrier and error-preservation test for write_batch_cas_opts, plus an add-vs-sync barrier test for run_add's agreed-id dispense (the dispenser path A1 names). Also cover hijack_node, unregister_node and set_node_*.
+  4. Seams: PR-2756 added AIDA_TEST_STORE_LOCK_CONTENDED_FILE (store_lock.rs) and AIDA_TEST_TEAM_WRITER_CHILD_DONE/_STORE (team.rs), test-only env reads in production code. Drain them with TASK-1751's injected context when it un-defers. Until then, don't add more.
+  Full findings are in .aida/review-verdicts/PR-2756.json.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:14:19.180648731Z
+modified_at: 2026-10-20T04:14:19.180648731Z
+req_type: Task
+filed_at:
+  code_sha: 3c7e184d14f171218ad70453efee47cd99730122
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
