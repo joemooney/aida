@@ -1,0 +1,27 @@
+id: 01a15855-231c-71a0-b17d-ed40af6ce96e
+spec_id: TASK-1995
+agreed_id: TASK-1995
+title: 'BUG-1993 tests: guard test exercises unchanged code; bounded resolver only tested with expired deadline'
+description: |
+  In PR-2747, slow_symbolic_ref_does_not_fail_open_pr_open_spec_attribution (trace.rs show_forge_budget_tests) exercises ensure_pr_open_spec_attribution, which the PR does not change, and the test passes on main. bounded_default_branch_timeout_is_distinct_from_no_default_branch only checks an already-expired deadline. Add a test where a slow git call mid-resolution yields Err(DefaultBranchResolveTimedOut). The shared 1 s LINKAGE_SHIPPED_CHECK_TIMEOUT (resolve + is-ancestor) should also be re-measured.
+
+  Raised in review of PR-2747: https://github.com/joemooney/aida/pull/2747#issuecomment-6286331573
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T08:02:16.988720216Z
+modified_at: 2026-10-20T08:02:16.988720216Z
+req_type: Task
+tags:
+- from-review:PR-2747
+- severity:minor
+- tests
+filed_at:
+  code_sha: 23a02f2f927c9adc4f6c2654e99dd850e27ed448
+  branch: pr-2747
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 419579e7c4
+  vendor: claude
+  session: 01a1584f4c1c
