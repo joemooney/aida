@@ -240,7 +240,7 @@ pub fn set_allowed_seats_cas(
     for attempt in 0..MAX_RETRIES {
         // trace:TASK-1930 | ai:agy
         let committed_sha =
-            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<String> {
+            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
                 // Step 1: pull latest (skip first attempt / solo).
                 if attempt > 0 && !local_only {
                     git_ops::pull_rebase(store_root, "origin", &branch)?;
@@ -258,13 +258,20 @@ pub fn set_allowed_seats_cas(
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
                 std::fs::write(&registry_path, content)?;
 
-                // Step 3: stage + commit.
+                // Step 3: stage + commit. On a no-op commit (Ok(false)), return
+                // None without capturing head_sha so we never push or arm the
+                // rollback against another writer's commit.
                 git_ops::add(store_root, &["registry/team.toml"])?;
                 let msg = format!("chore(registry): set team seats for {}", user_id);
-                git_ops::commit(store_root, &msg)?;
-                git_ops::head_sha(store_root)
+                if !git_ops::commit(store_root, &msg)? {
+                    return Ok(None);
+                }
+                Ok(Some(git_ops::head_sha(store_root)?))
             })
             .map_err(io_err)?;
+        let Some(committed_sha) = committed_sha else {
+            return Ok(());
+        };
 
         // Step 4: push (or stop here when solo).
         if local_only {
@@ -1294,5 +1301,76 @@ ttl_secs = 1800
         );
         assert!(done_file.exists());
         assert_eq!(TeamRoster::load(&store).role_for("alice"), Some("advisor"));
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_set_allowed_seats_cas_noop_write_does_not_capture_sha_or_push_or_rollback() {
+        use crate::git_ops;
+
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let clone_a = dir.path().join("clone_a");
+        let clone_b = dir.path().join("clone_b");
+
+        std::process::Command::new("git")
+            .args(["init", "--bare", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+
+        git_ops::init(&clone_a).unwrap();
+        git_ops::configure_user(&clone_a, "Test", "test@example.com").unwrap();
+        std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
+        git_ops::add(&clone_a, &["README.md"]).unwrap();
+        git_ops::commit(&clone_a, "seed").unwrap();
+        let branch = git_ops::current_branch(&clone_a).unwrap();
+        std::process::Command::new("git")
+            .current_dir(&clone_a)
+            .args(["remote", "add", "origin", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(git_ops::push(&clone_a, "origin", &branch).unwrap());
+
+        std::process::Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                &branch,
+                hub.to_str().unwrap(),
+                clone_b.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        git_ops::configure_user(&clone_b, "Peer", "peer@example.com").unwrap();
+
+        // 1. First write commits and pushes `alice = ["advisor"]`.
+        set_allowed_seats_cas(&clone_a, "alice", &["advisor".to_string()]).unwrap();
+        git_ops::pull_rebase(&clone_b, "origin", &branch).unwrap();
+
+        // 2. Advance `origin` from clone_b so any push from clone_a would be rejected,
+        // and create an unpushed local peer commit on clone_a.
+        std::fs::write(clone_b.join("remote.txt"), "remote\n").unwrap();
+        git_ops::add(&clone_b, &["remote.txt"]).unwrap();
+        git_ops::commit(&clone_b, "remote advance").unwrap();
+        assert!(git_ops::push(&clone_b, "origin", &branch).unwrap());
+
+        std::fs::write(clone_a.join("unpushed_peer.txt"), "precious\n").unwrap();
+        git_ops::add(&clone_a, &["unpushed_peer.txt"]).unwrap();
+        git_ops::commit(&clone_a, "local unpushed peer commit").unwrap();
+        let peer_sha = git_ops::head_sha(&clone_a).unwrap();
+
+        // 3. Second write with the identical value produces Ok(false) ("nothing to commit")
+        // and MUST return early without capturing `peer_sha`, without pushing, and
+        // without rolling back `unpushed_peer.txt`.
+        set_allowed_seats_cas(&clone_a, "alice", &["advisor".to_string()]).unwrap();
+        assert_eq!(
+            git_ops::head_sha(&clone_a).unwrap(),
+            peer_sha,
+            "no-op set_allowed_seats_cas must not capture or roll back an unpushed peer commit"
+        );
+        assert!(
+            clone_a.join("unpushed_peer.txt").exists(),
+            "unpushed peer file must survive a no-op set_allowed_seats_cas"
+        );
     }
 }

@@ -4831,50 +4831,61 @@ pub fn set_node_identity_field(
 
     for attempt in 0..MAX_CAS_RETRIES {
         // trace:TASK-1930 | ai:agy
-        let committed_sha = crate::db::with_store_write_lock(aida_repo, || -> Result<String> {
-            // Step 1: pull latest (skip first attempt / solo).
-            if attempt > 0 && !local_only {
-                if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                    anyhow::bail!(
-                        "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
-                        attempt,
-                        e
-                    );
+        let committed_sha = crate::db::with_store_write_lock(
+            aida_repo,
+            || -> Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                        anyhow::bail!(
+                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            attempt,
+                            e
+                        );
+                    }
                 }
-            }
 
-            // Step 2: load → find the entry (error if absent) → set the field.
-            let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-            let entry = registry
-                .nodes
-                .iter_mut()
-                .find(|n| n.id.as_str() == id)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Node id {} is not in the shared registry (registry/nodes.toml) — \
-                         nothing to update. Run `aida node list` to see registered nodes.",
-                        id
-                    )
-                })?;
-            match field {
-                NodeIdentityField::Owner => entry.user = Some(value.to_string()),
-                NodeIdentityField::Name => entry.name = Some(value.to_string()),
-            }
-            registry.save(&registry_path)?;
+                // Step 2: load → find the entry (error if absent) → set the field.
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                let entry = registry
+                    .nodes
+                    .iter_mut()
+                    .find(|n| n.id.as_str() == id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Node id {} is not in the shared registry (registry/nodes.toml) — \
+                             nothing to update. Run `aida node list` to see registered nodes.",
+                            id
+                        )
+                    })?;
+                match field {
+                    NodeIdentityField::Owner => entry.user = Some(value.to_string()),
+                    NodeIdentityField::Name => entry.name = Some(value.to_string()),
+                }
+                registry.save(&registry_path)?;
 
-            // Step 3: stage + commit.
-            add(aida_repo, &["registry/nodes.toml"])?;
-            let field_label = match field {
-                NodeIdentityField::Owner => "owner",
-                NodeIdentityField::Name => "name",
-            };
-            let msg = format!(
-                "chore(registry): set node {} {} = {}",
-                id, field_label, value
-            );
-            commit(aida_repo, &msg)?;
-            head_sha(aida_repo)
-        })?;
+                // Step 3: stage + commit. On a no-op commit (Ok(false)), return
+                // None without capturing head_sha so we never push or arm the
+                // rollback against another writer's commit.
+                add(aida_repo, &["registry/nodes.toml"])?;
+                let field_label = match field {
+                    NodeIdentityField::Owner => "owner",
+                    NodeIdentityField::Name => "name",
+                };
+                let msg = format!(
+                    "chore(registry): set node {} {} = {}",
+                    id, field_label, value
+                );
+                if !commit(aida_repo, &msg)? {
+                    return Ok(None);
+                }
+                Ok(Some(head_sha(aida_repo)?))
+            },
+        )?;
+        let Some(committed_sha) = committed_sha else {
+            apply_local(id)?;
+            return Ok(());
+        };
 
         // Step 4: push (or stop here when solo).
         if local_only {
@@ -10764,8 +10775,7 @@ mod tests {
             );
         }
 
-        // 2. Barrier test: register_node_with_explicit_id, rename_node, and
-        // squash_orphan_to_snapshot block on store_write_lock until released.
+        // 2. Barrier test: register_node_full blocks on store_write_lock until released.
         let initial_head = head_sha(&repo).unwrap();
         let (locked_tx, locked_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -10798,14 +10808,14 @@ mod tests {
         while crate::db::store_write_lock_contended_for(&repo) == 0 {
             assert!(
                 wait_start.elapsed() < Duration::from_secs(10),
-                "timed out waiting for register_node_with_explicit_id to contend on store_write_lock"
+                "timed out waiting for register_node_full to contend on store_write_lock"
             );
             std::thread::sleep(Duration::from_millis(5));
         }
 
         assert!(
             done_rx.try_recv().is_err(),
-            "register_node_with_explicit_id must not complete while store_write_lock is held"
+            "register_node_full must not complete while store_write_lock is held"
         );
         assert_eq!(
             head_sha(&repo).unwrap(),
@@ -10820,5 +10830,82 @@ mod tests {
             "n77"
         );
         writer.join().unwrap();
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_set_node_identity_field_noop_write_does_not_capture_sha_or_push_or_rollback() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let clone_a = dir.path().join("clone_a");
+        let clone_b = dir.path().join("clone_b");
+
+        std::process::Command::new("git")
+            .args(["init", "--bare", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+
+        init(&clone_a).unwrap();
+        configure_user(&clone_a, "Test", "test@example.com").unwrap();
+        std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
+        add(&clone_a, &["README.md"]).unwrap();
+        commit(&clone_a, "seed").unwrap();
+        let branch = current_branch(&clone_a).unwrap();
+        std::process::Command::new("git")
+            .current_dir(&clone_a)
+            .args(["remote", "add", "origin", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(push(&clone_a, "origin", &branch).unwrap());
+
+        std::process::Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                &branch,
+                hub.to_str().unwrap(),
+                clone_b.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        configure_user(&clone_b, "Peer", "peer@example.com").unwrap();
+
+        // 1. Register node "n1" and set its owner field to "alice".
+        register_node_full(
+            &clone_a,
+            Some("n1".to_string()),
+            1000,
+            "devbox",
+            Some("t@example.com".to_string()),
+        )
+        .unwrap();
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        pull_rebase(&clone_b, "origin", &branch).unwrap();
+
+        // 2. Advance `origin` from clone_b so any push from clone_a would be rejected,
+        // and create an unpushed local peer commit on clone_a.
+        std::fs::write(clone_b.join("remote.txt"), "remote\n").unwrap();
+        add(&clone_b, &["remote.txt"]).unwrap();
+        commit(&clone_b, "remote advance").unwrap();
+        assert!(push(&clone_b, "origin", &branch).unwrap());
+
+        std::fs::write(clone_a.join("unpushed_peer.txt"), "precious\n").unwrap();
+        add(&clone_a, &["unpushed_peer.txt"]).unwrap();
+        commit(&clone_a, "local unpushed peer commit").unwrap();
+        let peer_sha = head_sha(&clone_a).unwrap();
+
+        // 3. Second write with the identical value produces Ok(false) ("nothing to commit")
+        // and MUST return early without capturing `peer_sha`, without pushing, and
+        // without rolling back `unpushed_peer.txt`.
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        assert_eq!(
+            head_sha(&clone_a).unwrap(),
+            peer_sha,
+            "no-op set_node_identity_field must not capture or roll back an unpushed peer commit"
+        );
+        assert!(
+            clone_a.join("unpushed_peer.txt").exists(),
+            "unpushed peer file must survive a no-op set_node_identity_field"
+        );
     }
 }

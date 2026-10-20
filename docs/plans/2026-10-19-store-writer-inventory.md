@@ -1,123 +1,86 @@
-# Store Writer Inventory (`TASK-1930` — `TASK-1332` Slice 1)
+# Store Writer Inventory (`TASK-1930` — Slice 1 of `TASK-1332`)
 
 <!-- trace:TASK-1930 | ai:agy -->
 
-## 1. Scope & Lock Hierarchy (`A1` Decision)
+## Overview & Lock Hierarchy
 
-Every mutation of a live `.aida-store` checkout (working tree, index, `HEAD`, or `registry/blocks.yaml`) must serialize local readers/writers and respect a single global lock order so concurrent processes cannot interleave `git add` / `git commit` / `git pull --rebase` or deadlock across advisory lock files.
+All mutations to the git-canonical requirements store (`<store>/objects/`, `<store>/metadata.yaml`, `<store>/oplog.yaml`, `<store>/registry/`, `<store>/claims/`, `<store>/locks/`, `<store>/schedule/`, `<store>/mailbox/`, `<store>/timing/`, and `<store>/regen/trials/`) serialize through the store write lock at `<store>/.aida/store-write.lock` (`STORE_WRITE_LOCK_FILE` in `aida-core/src/db/store_lock.rs:34`, acquired by `acquire` at `aida-core/src/db/store_lock.rs:135` and `with_store_write_lock` at `aida-core/src/db/store_lock.rs:252`).
 
-### Advisory Locks in `.aida-store`
+### Canonical Lock Order (Binding Ruling A1)
 
-1. **Store Write Lock (`store.lock`)**:
-   - Path: `<store>/.aida/store.lock` (via `aida_core::db::with_store_write_lock`)
-   - Protects: All `.aida-store` working-tree writes, git index staging (`git add`), commits (`git commit`), local rollbacks (`rollback_commit_if_head_matches`), and store rebases/merges (`pull_rebase`, `pull_rebase_auto_merge`, `merge_union_auto`, `fast_forward_store`).
-   - Entry invariant: Calls `git_ops::ensure_store_write_safe(store_root)` after acquiring the flock (refusing mid-rebase, mid-merge, cherry-pick, or detached `HEAD` states).
-   - Exit invariant: Network `push_exact` / `push` is **never** called while holding `store_write_lock` (`push_exact_outcome` enforces `!crate::db::any_store_write_lock_held()`).
+When a store writer touches both the store repository and the shared ID block registry (`<store>/registry/blocks.yaml`, guarded by `<store>/registry/blocks.lock` via `BlockRegistry::with_dispense_lock` at `aida-core/src/node.rs:880`), the mandatory lock acquisition order is:
 
-2. **Agreed-ID Block Dispense Lock (`blocks.lock`)**:
-   - Path: `<store>/registry/blocks.lock` (via `aida_core::BlockRegistry::with_dispense_lock`)
-   - Protects: Read-modify-write of `<store>/registry/blocks.yaml`.
+1. **Outer**: `with_store_write_lock` (`<store>/.aida/store-write.lock`, `aida-core/src/db/store_lock.rs:252`)
+2. **Inner**: `BlockRegistry::with_dispense_lock` (`<store>/registry/blocks.lock`, `aida-core/src/node.rs:880`)
 
-### Binding Lock Order (`A1`)
-
-- **Always acquire `store_write_lock` BEFORE `blocks.lock` (`store.lock -> blocks.lock`).**
-- **Never acquire `blocks.lock -> store.lock`.**
-- **Never perform network I/O (`pull_rebase`, `push_exact`) while holding `blocks.lock`.**
+Runtime enforcement in `store_lock::acquire` (`aida-core/src/db/store_lock.rs:135`) checks `crate::node::dispense_lock_held()` (`aida-core/src/node.rs:825`) and refuses any non-reentrant `store-write.lock` acquisition while `blocks.lock` is already held on the current thread. Network `git fetch` / `pull_rebase` / `push_exact` operations never run while holding `blocks.lock`, and `push_exact_outcome` (`aida-core/src/git_ops.rs:1279`) asserts `!any_store_write_lock_held()` so network pushes always run outside `store-write.lock`.
 
 ---
 
-## 2. Store Writer Classification Across `aida-core` and `aida-cli-lib`
+## Inventory Matrix of Store Writers
 
-### Category A: Already Protected (`TASK-1717` and Prior Slices)
+### Category A — Protected Prior to `TASK-1930` (`BUG-1612`, `BUG-1677`, `TASK-1717`, `BUG-2162`)
 
-| Crate / File | Function / Entrypoint | Lines | Protection Mechanism |
+| Crate / File | Function (`file:line`) | Store Artifacts Mutated | Lock & CAS Mechanism | Status |
+|---|---|---|---|---|
+| `aida-core/src/db/git_backend.rs` | `lock_store` (`aida-core/src/db/git_backend.rs:1538`), `lock_queue_write` (`aida-core/src/db/git_backend.rs:1576`), `save_reporting` (`aida-core/src/db/git_backend.rs:1601`), `save_reporting_with_origin` (`aida-core/src/db/git_backend.rs:1605`), `save_imported` (`aida-core/src/db/git_backend.rs:2305`), `update_spec_atomically` (`aida-core/src/db/git_backend.rs:1936`), `update_spec_atomically_with_subject` (`aida-core/src/db/git_backend.rs:1953`), `update_atomically_tracked` (`aida-core/src/db/git_backend.rs:2054`), `update_atomically` (`aida-core/src/db/git_backend.rs:2326`), `add_requirement` (`aida-core/src/db/git_backend.rs:2432`), `update_requirement` (`aida-core/src/db/git_backend.rs:2380`), `delete_requirement` (`aida-core/src/db/git_backend.rs:2401`), `bulk_update` (`aida-core/src/db/git_backend.rs:1373`), `bulk_update_atomically` (`aida-core/src/db/git_backend.rs:1427`) | `objects/**/*.yaml`, `metadata.yaml`, `oplog.yaml`, `registry/blocks.yaml` | `store_lock::acquire` (`store-write.lock`) outer -> `with_dispense_lock` (`blocks.lock`) inner | Protected (`BUG-1612`, `TASK-1717`) |
+| `aida-core/src/db/git_backend.rs` | `queue_add` (`aida-core/src/db/git_backend.rs:2553`), `queue_remove` (`aida-core/src/db/git_backend.rs:2601`), `queue_remove_for_role` (`aida-core/src/db/git_backend.rs:2610`), `queue_reorder` (`aida-core/src/db/git_backend.rs:2653`), `queue_clear` (`aida-core/src/db/git_backend.rs:2691`), `queue_remove_many` (`aida-core/src/db/git_backend.rs:2756`), `queue_remove_many_if` (`aida-core/src/db/git_backend.rs:2803`), `queue_remove_for_role_if` (`aida-core/src/db/git_backend.rs:2822`) | `registry/queues/<user>.yaml`, `oplog.yaml` | `lock_queue_write` -> `store_lock::acquire` (`store-write.lock`) | Protected (`BUG-1677`) |
+| `aida-core/src/db/cached_git_backend.rs` | `bulk_update` (`aida-core/src/db/cached_git_backend.rs:1487`), `bulk_update_atomically` (`aida-core/src/db/cached_git_backend.rs:1531`), `update_spec_atomically_with_subject` (`aida-core/src/db/cached_git_backend.rs:1581`), `save_imported` (`aida-core/src/db/cached_git_backend.rs:1661`), `update_atomically` (`aida-core/src/db/cached_git_backend.rs:1671`), `update_spec_atomically` (`aida-core/src/db/cached_git_backend.rs:1712`), `add_requirement` (`aida-core/src/db/cached_git_backend.rs:1758`), `update_requirement` (`aida-core/src/db/cached_git_backend.rs:1780`), `delete_requirement` (`aida-core/src/db/cached_git_backend.rs:1823`), `queue_add` (`aida-core/src/db/cached_git_backend.rs:1877`), `queue_remove` (`aida-core/src/db/cached_git_backend.rs:1881`), `queue_remove_for_role` (`aida-core/src/db/cached_git_backend.rs:1886`), `queue_reorder` (`aida-core/src/db/cached_git_backend.rs:1896`), `queue_clear` (`aida-core/src/db/cached_git_backend.rs:1900`), `queue_remove_many` (`aida-core/src/db/cached_git_backend.rs:1905`), `queue_remove_many_if` (`aida-core/src/db/cached_git_backend.rs:1910`), `queue_remove_for_role_if` (`aida-core/src/db/cached_git_backend.rs:1920`) | `objects/**/*.yaml`, `metadata.yaml`, `oplog.yaml`, `registry/queues/*.yaml`, plus SQLite cache | Outer `inner.lock_store()` (`store-write.lock`) held across inner `GitBackend` write + cache upsert | Protected (`BUG-1612`, `BUG-1951`) |
+| `aida-core/src/git_ops.rs` & `aida-core/src/git_ops/evidence.rs` | `with_sync_lock` (`aida-core/src/git_ops/evidence.rs:50`), `pull_rebase` (`aida-core/src/git_ops.rs:1385`), `pull_rebase_auto_merge` (`aida-core/src/git_ops.rs:1450`), `commit_pending_store_changes_on_host` (`aida-core/src/git_ops.rs:1741`), `merge_union_auto` (`aida-core/src/git_ops.rs:2044`), `fast_forward_store` (`aida-core/src/git_ops.rs:2062`), `merge_gate` (`aida-core/src/git_ops.rs:5976`), `merge_gate_locked` (`aida-core/src/git_ops.rs:5980`), `sync_objects` (`aida-core/src/git_ops.rs:6182`) | Store git index/HEAD, 3-way conflict merges, hypothesis evidence locks, agreed-ID assignments | `with_store_write_lock` (`store-write.lock`), `push_exact` outside lock | Protected (`TASK-1717`, `BUG-2162`, `BUG-2140`) |
+| `aida-cli-lib/src/store_sync.rs` | `pull_store_before_id_allocation` (`aida-cli-lib/src/store_sync.rs:1080`), `push_store_after_id_allocation` (`aida-cli-lib/src/store_sync.rs:1204`), `maybe_sync_pull` (`aida-cli-lib/src/store_sync.rs:1627`) | Store git index/HEAD during ID allocation pre-pull, post-allocation push/rebase, and auto-pull | `with_store_write_lock` around local commit/pull/rebase; `push_exact_outcome` outside lock | Protected (`TASK-1717`) |
+| `aida-cli-lib/src/store_push_pull.rs` | `auto_push_store_best_effort` (`aida-cli-lib/src/store_push_pull.rs:550`), `digest_mailbox_to_canonical` (`aida-cli-lib/src/store_push_pull.rs:625`), `handle_push_command` (`aida-cli-lib/src/store_push_pull.rs:1240`), `pull_store_leg_locked` (`aida-cli-lib/src/store_push_pull.rs:2317`), `handle_pull_command` (`aida-cli-lib/src/store_push_pull.rs:2428`) | Store git index/HEAD, `mailbox/` digest commits, `aida push` / `aida pull` store legs | `with_store_write_lock` around local stage/commit/pull/merge_gate; `push_exact` outside lock | Protected (`TASK-1717`) |
+| `aida-cli-lib/src/db_cmd.rs` & `aida-cli-lib/src/git_backend_cmd.rs` | `handle_db_command` (`aida-cli-lib/src/db_cmd.rs:25`), `run_db` (`aida-cli-lib/src/db_cmd.rs:428`), `db_sync_local_window` (`aida-cli-lib/src/git_backend_cmd.rs:1201`), `handle_git_backend_command` (`aida-cli-lib/src/git_backend_cmd.rs:1321`) | Store git index/HEAD during `aida db sync` and `aida db merge-gate` | `with_store_write_lock` around `db_sync_local_window` and retry `pull_rebase`; `push_exact` outside lock | Protected (`TASK-1717`) |
+| `aida-cli-lib/src/remote_create.rs` | `handle_remote_reconcile` (`aida-cli-lib/src/remote_create.rs:2383`), `merge_and_validate` (`aida-cli-lib/src/remote_create.rs:2707`) | Multi-hub union merges on `aida-store` | `with_store_write_lock` around `merge_and_validate`; `push_exact` outside lock | Protected (`TASK-1717`, `BUG-2162`) |
+| `aida-cli-lib/src/mailbox_store.rs` | `digest_local_to_canonical` (`aida-cli-lib/src/mailbox_store.rs:124`), `digest_snapshot_to_canonical` (`aida-cli-lib/src/mailbox_store.rs:137`), `write_snapshot_locked` (`aida-cli-lib/src/mailbox_store.rs:141`) | `mailbox/<id>.json` and `.deleted` markers | `with_store_write_lock` | Protected (`TASK-1717`) |
+| `aida-cli-lib/src/timing_record.rs` | `publish_to_store` (`aida-cli-lib/src/timing_record.rs:125`), `commit_record` (`aida-cli-lib/src/timing_record.rs:164`) | `timing/<spec_id>.json` | `with_store_write_lock` | Protected (`BUG-2178`) |
+| `aida-cli-lib/src/child_store_commit.rs` | `commit_child_store_writes` (`aida-cli-lib/src/child_store_commit.rs:29`), `commit_store_writes_since` (`aida-cli-lib/src/child_store_commit.rs:49`) | `objects/`, `registry/`, `oplog.yaml` written by contained child | `with_store_write_lock` | Protected (`BUG-2180`) |
+| `aida-cli-lib/src/regen/score.rs` | `persist` (`aida-cli-lib/src/regen/score.rs:816`) | `regen/trials/<id>.json` | `with_store_write_lock` | Protected (`TASK-1730`) |
+
+---
+
+### Category B — Store Writers Newly Wrapped in `TASK-1930`
+
+| Crate / File | Function (`file:line`) | Store Artifacts Mutated | Lock & CAS Mechanism | Status |
+|---|---|---|---|---|
+| `aida-core/src/git_ops.rs` | `rollback_commit_if_head_matches` (`aida-core/src/git_ops.rs:2367`) | Store git `HEAD` / working tree on CAS push rejection | `with_store_write_lock`; resets `--hard <sha>~1` if `HEAD == expected_sha`, or `rebase --onto <sha>~1 <sha>` if a peer committed on top | Added in `TASK-1930` |
+| `aida-core/src/git_ops.rs` | `squash_orphan_to_snapshot` (`aida-core/src/git_ops.rs:4149`, called by `store_compact_squash` at `aida-cli-lib/src/store_cmd.rs:141`) | Store backup ref + root snapshot commit (`reset --soft`) | `with_store_write_lock` around backup ref creation, `commit-tree`, and `reset --soft` | Wrapped in `TASK-1930` |
+| `aida-core/src/git_ops.rs` | `suggest_free_node_id` (`aida-core/src/git_ops.rs:4406`), `register_node` (`aida-core/src/git_ops.rs:4240`), `register_node_with_email` (`aida-core/src/git_ops.rs:4371`), `register_node_full` (`aida-core/src/git_ops.rs:4463`), `register_node_full_identity` (`aida-core/src/git_ops.rs:4483`), `register_node_remote_only` (`aida-core/src/git_ops.rs:4689`), `set_node_identity_field` (`aida-core/src/git_ops.rs:4801`), `hijack_node` (`aida-core/src/git_ops.rs:4946`), `unregister_node` (`aida-core/src/git_ops.rs:5123`) | `registry/nodes.toml` | `with_store_write_lock` around `pull_rebase` + load/modify/save + `add` + `commit`; early `Ok(None)` on no-op commit in `set_node_identity_field` and `unregister_node`; `push_exact` outside lock with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-core/src/team.rs` | `set_role_cas` (`aida-core/src/team.rs:217`), `set_allowed_seats_cas` (`aida-core/src/team.rs:223`), `allow_seat_cas` (`aida-core/src/team.rs:300`), `disallow_seat_cas` (`aida-core/src/team.rs:306`), `update_seats_cas` (`aida-core/src/team.rs:310`), `unset_role_cas` (`aida-core/src/team.rs:396`) | `registry/team.toml` | `with_store_write_lock` around `pull_rebase` + load/modify/save + `add` + `commit`; early `Ok(None)` on no-op commit; `push_exact` outside lock with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-core/src/alias.rs` | `link_cas` (`aida-core/src/alias.rs:219`) | `registry/aliases.toml` | `with_store_write_lock` around `pull_rebase` + load/link/save + `add` + `commit`; early `Ok(None)` when already linked; `push_exact` outside lock with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/coordination.rs` | `acquire_claim` (`aida-cli-lib/src/coordination.rs:700`), `release_claim` (`aida-cli-lib/src/coordination.rs:901`), `release_stale_foreign_claim` (`aida-cli-lib/src/coordination.rs:976`), `acquire_lock_claim` (`aida-cli-lib/src/coordination.rs:1168`), `heartbeat_lock_claim` (`aida-cli-lib/src/coordination.rs:1412`), `release_lock_claim` (`aida-cli-lib/src/coordination.rs:1460`) | `claims/<scope>.yaml`, `locks/<kind>.yaml` | `with_store_write_lock` around `pull_rebase` + inspect/write/remove + `add` + `commit`; fail-closed `Err` propagation on lock/unsafe-store/write/commit failures in `acquire_claim` and `acquire_lock_claim`; `push_exact` outside lock with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/schedule_ledger.rs` | `write_cas_opts` (`aida-cli-lib/src/schedule_ledger.rs:340`), `write_batch_cas_opts` (`aida-cli-lib/src/schedule_ledger.rs:500`) | `schedule/<job>.yaml` | `with_store_write_lock` around `pull_rebase_auto_merge` + mutate/write + `add` + `commit`; original in-lock error preserved with unsafe-store diagnostics; `push_exact` outside lock with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/db_block.rs` | `handle_block_command` (`aida-cli-lib/src/db_block.rs:229`), `auto_allocate_block_inner` (`aida-cli-lib/src/db_block.rs:862`), `claim_first_block` (`aida-cli-lib/src/db_block.rs:1251`), `rollback_unpushed_claim` (`aida-cli-lib/src/db_block.rs:1354`) | `registry/blocks.yaml` | `with_store_write_lock` (outer) -> `BlockRegistry::with_dispense_lock` (inner, A1); network `pull_rebase` inside `with_store_write_lock` before `with_dispense_lock`; `push_exact` outside both locks with `rollback_commit_if_head_matches` | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/requirements_cli.rs` | `run_add` (`aida-cli-lib/src/requirements_cli.rs:2589`, agreed-ID dispense block at `:3091`) | `registry/blocks.yaml`, `objects/**/*.yaml` | `with_store_write_lock` (outer) -> `BlockRegistry::with_dispense_lock` (inner, A1) | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/doctor_cmd.rs` | `doctor_verify_relationships` (`aida-cli-lib/src/doctor_cmd.rs:12740`), `doctor_repair_dangling_relationships_in_store` (`aida-cli-lib/src/doctor_cmd.rs:12845`), `doctor_repair_stale_blocks` (`aida-cli-lib/src/doctor_cmd.rs:13236`), `doctor_tombstone_stale_blocks_in_store` (`aida-cli-lib/src/doctor_cmd.rs:13321`), `doctor_migrate_counter_scope` (`aida-cli-lib/src/doctor_cmd.rs:13925`), `doctor_migrate_counter_scope_in_store` (`aida-cli-lib/src/doctor_cmd.rs:14079`) | `objects/**/*.yaml`, `registry/blocks.yaml`, `.aida/config.toml` | `with_store_write_lock` (outer) -> `BlockRegistry::with_dispense_lock` (inner where `blocks.yaml` is mutated); re-loads and re-validates store state inside lock after interactive confirmation | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/init_cmd.rs` | `handle_init_distributed_sibling` (`aida-cli-lib/src/init_cmd.rs:5387`, retry `pull_rebase` at `:5671`) | Store git index/HEAD during sibling store init push retry | `with_store_write_lock` around retry `pull_rebase` on existing sibling store | Wrapped in `TASK-1930` |
+| `aida-cli-lib/src/upgrade_release.rs` | `handle_dev_release` (`aida-cli-lib/src/upgrade_release.rs:1724`, store pull/commit/retry at `:1763`, `:1876`, `:1899`) | `objects/`, `registry/`, `metadata.yaml` during dev release sync | `with_store_write_lock` around `pull_rebase` and `add_all` + `commit` | Wrapped in `TASK-1930` |
+
+---
+
+### Category C — Private-Init / Fresh-Directory Store Creation (Single-Owner Bootstrap)
+
+These functions initialize a brand-new store directory before any concurrent worktree or peer process attaches to it:
+
+| Crate / File | Function (`file:line`) | Store Artifacts Created | Why Uncontended at Bootstrap |
 |---|---|---|---|
-| `aida-core/src/db/git_backend.rs` | `GitBackend::save` / `save_locked` / `update_atomically` / `save_Streaming` | `580–880`, `1350–2510`, `3040–3060` | Acquires `with_store_write_lock(&self.root, ...)` around object writes, `oplog.yaml`, `metadata.yaml`, `registry/blocks.yaml`, and `git add` / `git commit`. |
-| `aida-core/src/db/cached_git_backend.rs` | `CachedGitBackend::save` / `update_atomically` | delegates to `GitBackend` | Protected via `GitBackend::with_store_write_lock`. |
-| `aida-core/src/git_ops.rs` | `pull_rebase`, `pull_rebase_auto_merge`, `merge_union_auto`, `fast_forward_store` | `1744`, `2366`, `4405` | Acquires `with_store_write_lock` (reentrant when caller already holds it), checks hypothesis evidence refusals before modifying refs. |
-| `aida-core/src/git_ops.rs` | `merge_gate` / `merge_gate_locked` | `5958–6120` | Acquires `with_store_write_lock(store_path, \|\| merge_gate_locked(store_path))`. |
-| `aida-cli-lib/src/db_cmd.rs` & `git_backend_cmd.rs` | `DbCommand::Sync` (`db_sync_local_window`) | `db_cmd.rs:563–650`, `git_backend_cmd.rs:1201–1306` | Runs `db_sync_local_window` under `with_store_write_lock`, captures `sha`, and runs `push_exact` outside the lock with locked `pull_rebase` retry. |
-| `aida-cli-lib/src/store_push_pull.rs` | `commit_and_push_store`, `publish_mailbox_digest`, `push_store_leg`, `pull_store_leg` (`pull_store_leg_locked`) | `559–645`, `1592–1640`, `2317–2385`, `2790` | Acquires `with_store_write_lock` for local stage/commit/rebase windows and pushes outside the lock via `push_exact`. |
-| `aida-cli-lib/src/store_sync.rs` | `sync_store_before_pickup`, `push_store_with_retry`, `pull_store_quiet` | `1110–1265`, `1640–1660` | Acquires `with_store_write_lock` around stage/commit and `pull_rebase`, then runs `push_exact_outcome` outside the lock. |
-| `aida-cli-lib/src/mailbox_store.rs` | `write_snapshot` (`write_snapshot_locked`) | `138` | Acquires `with_store_write_lock(store_root, \|\| write_snapshot_locked(store_root, local))`. |
-| `aida-cli-lib/src/timing_record.rs` | `record_timing_in_store` | `141–195` | Acquires `with_store_write_lock(store_root, ...)` around `timing/` JSONL append, `git_ops::add_all`, and `git_ops::commit_paths`. |
-| `aida-cli-lib/src/regen/score.rs` | `commit_trial_record` | `817–838` | Acquires `with_store_write_lock(store, ...)` around `regen/trials/` write, `git_ops::add_all`, and `git_ops::commit_paths`. |
-| `aida-cli-lib/src/child_store_commit.rs` | `commit_store_writes_since` (`commit_child_store_writes`) | `49–90` | Acquires `with_store_write_lock(store, ...)` (`BUG-2180`) around staging and committing deferred contained-session store writes. |
-| `aida-cli-lib/src/remote_create.rs` | `reconcile_store_branch` | `2574–2660` | Acquires `with_store_write_lock(&store_dir, ...)` around `merge_union_auto` and publishes with `push_exact` outside the lock. |
+| `aida-core/src/workspace.rs` | `init_workspace` (`aida-core/src/workspace.rs:147`) | Fresh `<workspace>/<store>/metadata.yaml`, `objects/.gitkeep`, `.gitignore` | Creates a brand-new workspace store directory before any repo is attached |
+| `aida-cli-lib/src/init_cmd.rs` | `handle_init_distributed_worktree` (`aida-cli-lib/src/init_cmd.rs:4270`), `handle_init_post_clone` (`aida-cli-lib/src/init_cmd.rs:5085`), `handle_init_distributed_sibling` (`aida-cli-lib/src/init_cmd.rs:5387`) | Fresh `.aida-store` orphan worktree or sibling store seed commit (`metadata.yaml`, `objects/.gitkeep`, `registry/`) | Runs once during initial store bootstrap; post-init `claim_first_block` (`aida-cli-lib/src/db_block.rs:1251`) and the retry `pull_rebase` (`aida-core/src/git_ops.rs:1385`) at `aida-cli-lib/src/init_cmd.rs:5671` run under `with_store_write_lock` |
+| `aida-cli-lib/src/sandbox_cmd.rs` | `sandbox_create` (`aida-cli-lib/src/sandbox_cmd.rs:223`), `sandbox_seed` (`aida-cli-lib/src/sandbox_cmd.rs:347`) | Isolated sandbox store under `/tmp/aida-sandbox-*` | Private temporary sandbox directory; `sandbox_seed` writes via `GitBackend::save_imported` (`aida-core/src/db/git_backend.rs:2305`) |
 
 ---
 
-### Category B: Newly Wrapped in `TASK-1930`
+### Category D — Follow-Up Store Writers (`TASK-1975` & `TASK-1332` Slice 2)
 
-| Crate / File | Function / Entrypoint | Lines | `TASK-1930` Protection & Error Semantics |
+| Crate / File | Function (`file:line`) | Store Touch Pattern | Follow-Up Scope |
 |---|---|---|---|
-| `aida-cli-lib/src/coordination.rs` | `acquire_claim`, `release_claim`, `mark_claim_merged`, `acquire_lock_claim`, `release_lock_claim`, `reap_stale_lock_claims` | `737–855`, `921–958`, `990–1025`, `1204–1325`, `1419–1456`, `1476–1508` | Each retry attempt wraps `refresh_store` + read/decide + file write/remove + `git add` + `git commit` + `head_sha` in `with_store_write_lock`, then calls `push_exact` outside the lock. On `Ok(false)` rejection, rolls back via `rollback_commit_if_head_matches` (which acquires `with_store_write_lock`) before retrying. **Fail-closed**: lock timeout, unsafe store (`ensure_store_write_safe`), file write error, `git add` error, and `git commit` error propagate as `Err`; only network `refresh_store` and network `push_exact` transport errors map to `Unavailable`. |
-| `aida-cli-lib/src/schedule_ledger.rs` | `write_cas_opts`, `write_batch_cas_opts` | `371–440`, `542–606` | Each retry attempt wraps `pull_rebase_auto_merge` (when `attempt > 0`), fresh ledger load/merge (`reapply_delta`), `save`, `git add`, `git commit`, and `head_sha` in `with_store_write_lock`, then calls `push_exact` outside the lock with `rollback_commit_if_head_matches` on push rejection. |
-| `aida-core/src/team.rs` | `register_member_cas`, `set_allowed_seats_cas`, `retire_seat_cas` | `240–285`, `320–378`, `400–445` | Each retry attempt wraps `pull_rebase` (when `attempt > 0`), `TeamRegistry::load`, mutation, `save`, `git add`, `git commit`, and `head_sha` in `with_store_write_lock`, then calls `push_exact` outside the lock with `rollback_commit_if_head_matches` on rejection. |
-| `aida-core/src/alias.rs` | `link_cas` | `233–278` | Each retry attempt wraps `pull_rebase` (when `attempt > 0`), `AliasRegistry::load`, `link`, `save`, `git add`, `git commit`, and `head_sha` in `with_store_write_lock`, then calls `push_exact` outside the lock with `rollback_commit_if_head_matches` on rejection. |
-| `aida-core/src/git_ops.rs` | `register_node_full`, `register_node_with_explicit_id`, `register_node_auto_next`, `ensure_node_identity`, `rename_node`, `retire_legacy_numeric_node`, `commit_pending_store_changes_on_host`, `squash_orphan_to_snapshot` | `4144–4200`, `4505–5140`, `6165–6205` | Wraps `registry/nodes.toml` load/modify/save + `git add` + `git commit` + `head_sha` (and `squash_orphan_to_snapshot` history squash) in `with_store_write_lock` and publishes outside the lock via `push_exact` with `rollback_commit_if_head_matches` on rejection. |
-| `aida-cli-lib/src/init_cmd.rs` | `create_or_clone_distributed_store` (existing-remote push-race retry) | `5463–5475` | Wraps the retry `git_ops::pull_rebase(&store_dir, "origin", &branch)` in `with_store_write_lock` before re-pushing. |
-| `aida-cli-lib/src/upgrade_release.rs` | `sync_store_during_upgrade` | `1763–1766`, `1876–1908` | Wraps `pull_rebase` and `git add` / `git commit` in `with_store_write_lock`, keeping `git push` outside the lock. |
-| `aida-cli-lib/src/db_block.rs` | `handle_block_command` (`BlockCommand::Claim`), `auto_allocate_block_inner`, `claim_first_block`, `rollback_unpushed_claim` | `245–306`, `888–968`, `1248–1375` | Enforces `A1` lock order (`with_store_write_lock` -> `BlockRegistry::with_dispense_lock`), runs `pull_unless_refused` under `store_write_lock` **before** taking `blocks.lock`, and runs `push_exact` outside both locks. |
-| `aida-cli-lib/src/requirements_cli.rs` | `run_add` (agreed-ID dispense from `registry/blocks.yaml`) | `3085–3245` | Enforces `A1` lock order (`with_store_write_lock` -> `BlockRegistry::with_dispense_lock`) around `BlockRegistry::load`, `dispense`, `save`, and `git_ops::add(store_path, &["registry/blocks.yaml"])`. |
-| `aida-cli-lib/src/doctor_cmd.rs` | `doctor_verify_relationships`, `doctor_repair_stale_blocks`, `doctor_migrate_counter_scope` | `12835–12885`, `13290–13325`, `14010–14065` | Keeps read-only diagnosis and interactive `[y/N]` prompt outside the lock, then acquires `with_store_write_lock` (and `with_dispense_lock` inside it for the two block writers), **re-loads and re-validates** canonical objects / `blocks.yaml` / `nodes.toml` from disk inside the lock, writes, stages, and commits. |
+| `aida-cli-lib/src/burndown_run.rs` | `park_wave_pr` (`aida-cli-lib/src/burndown_run.rs:1313`), `file_integration_wait_finding` (`aida-cli-lib/src/burndown_run.rs:1358`) | Calls `CachedGitBackend::update_atomically` (`store-write.lock` held), then runs a redundant post-save `object_store::write_object` (`:1398`) outside the lock | Remove redundant post-`update_atomically` `write_object` call |
+| `aida-cli-lib/src/findings_gate.rs` | `handle_findings_add` (`aida-cli-lib/src/findings_gate.rs:1198`), `promote_finding_to_gate` (`aida-cli-lib/src/findings_gate.rs:1527`), `file_reviewer_verdict_unavailable_finding` (`aida-cli-lib/src/findings_gate.rs:1820`), `file_agent_gate_warning_finding` (`aida-cli-lib/src/findings_gate.rs:1865`) | Calls `CachedGitBackend::update_atomically` (`store-write.lock` held), then runs a post-save `object_store::write_object` (`:1323`, `:1676`, `:1858`, `:1913`) outside the lock | Fold provenance/object persistence into the locked backend write |
+| `aida-cli-lib/src/doc_cmd.rs` | `handle_doc_command` (`aida-cli-lib/src/doc_cmd.rs:28`) | Calls `storage.update_atomically` (`store-write.lock` held), then runs a post-save `object_store::write_object` (`:119`) outside the lock | Fold into the locked backend write |
+| `aida-cli-lib/src/doctor_cmd.rs` | `doctor_scrub_collisions` (`aida-cli-lib/src/doctor_cmd.rs:13362`), `doctor_fsck` (`aida-cli-lib/src/doctor_cmd.rs:13527`) | Interactive repair flows delegating to `GitBackend::save` / `merge_gate` | Tracked for end-to-end interactive confirmation set intersection (`TASK-1975`) |
+| `aida-core/src/git_ops.rs`, `aida-cli-lib/src/init_cmd.rs`, `aida-cli-lib/src/upgrade_release.rs` | `rollback_commit_if_head_matches` (`aida-core/src/git_ops.rs:2367`), `handle_init_distributed_sibling` (`aida-cli-lib/src/init_cmd.rs:5387`), `handle_dev_release` (`aida-cli-lib/src/upgrade_release.rs:1724`) | Non-conflict rebase failure surfacing in `rollback_commit_if_head_matches` and `push_exact` publication in `handle_init_distributed_sibling` / `handle_dev_release` | Filed by advisor as `TASK-1975` |
 
 ---
 
-### Category C: Private-Init / Scratch-Only (Unlocked by Design — Unpublished Directory)
+### Category E — Read-Only Store Consumers (No Store Lock Required)
 
-These paths initialize a brand-new, private directory that has not yet been exposed to concurrent sessions or published to a shared store path:
-
-| Crate / File | Function / Entrypoint | Lines | Notes |
-|---|---|---|---|
-| `aida-cli-lib/src/init_cmd.rs` | `init_distributed_store`, `create_or_clone_distributed_store` (initial seed) | `4400–4444`, `5422–5456` | Seeds `metadata.yaml`, `objects/.gitkeep`, `.gitignore`, and initial commit in a brand-new store directory. Once published/cloned, the push-race retry at `:5470` uses `with_store_write_lock`. |
-| `aida-core/src/workspace.rs` | `init_workspace` | `210–231` | Initializes a fresh workspace store directory. |
-| `aida-cli-lib/src/sandbox_cmd.rs` | `init_sandbox` | `263–270` | Initializes an isolated scratch sandbox store. |
-| `aida-cli-lib/src/db_cmd.rs` | `DbCommand::ExportGit` | `852–880` | Exports into a caller-specified target output directory. |
-
----
-
-### Category D: Read-Only / Fetch-Only (`FETCH_HEAD` or Private Ref Only)
-
-These paths inspect the store or fetch remote refs into an invocation-private ref without mutating the store working tree, index, or `HEAD`:
-
-| Crate / File | Function / Entrypoint | Lines | Notes |
-|---|---|---|---|
-| `aida-core/src/git_ops.rs` | `fetch_branch_to_private_ref`, `is_remote_reachable`, `resolve_store_hooks_dir` | `384–435`, `1660–1730` | Read-only git queries or private-ref fetches (`refs/aida-fetch/...`). |
-| `aida-cli-lib/src/coordination.rs` | `list_claims`, `live_foreign_lock_claim` | `865–905`, `1340–1390` | Best-effort `fetch_branch_to_private_ref` / `refresh_store` read path; does not write or commit to the store. |
-| `aida-cli-lib/src/doctor_cmd.rs` | `doctor_scrub_collisions`, `doctor_fsck`, `doctor_contradictions`, `doctor_check_store_free_light` | `1093`, `13326`, `13491`, `14123` | Read-only store audits. |
-| `aida-cli-lib/src/db_block.rs` | `handle_db_check_collisions`, `BlockCommand::List`, `BlockCommand::Status` | `20–118`, `325–530` | Read-only audits and listings of `objects/` and `registry/blocks.yaml`. |
-
----
-
-### Category E: Named Follow-Ups Remaining on Parent `TASK-1332` (Items 2–5)
-
-These paths were identified during the inventory and remain on parent `TASK-1332`:
-
-| Crate / File | Function / Entrypoint | Lines | Finding & Follow-Up Scope on `TASK-1332` |
-|---|---|---|---|
-| `aida-cli-lib/src/doc_cmd.rs` | `handle_doc_command` (`DocCommand::Add`) | `111–120` | Calls `backend.update_atomically(...)` (which writes the object under `with_store_write_lock`) and then redundantly calls `object_store::write_object(&store_path.join("objects"), &written)` outside the lock at line `119`. Remove redundant unlocked `write_object` or fold into the atomic update closure. |
-| `aida-cli-lib/src/findings_gate.rs` | `file_finding`, `promote_finding`, `recur_finding` | `1314–1324`, `1665–1677`, `1848–1859`, `1903–1914` | Same pattern as `doc_cmd.rs`: calls `backend.update_atomically(...)` followed by an unlocked `object_store::write_object(&store_path.join("objects"), &written)`. |
-| `aida-cli-lib/src/burndown_run.rs` | `file_integration_wait_parked_finding` | `1389–1399` | Same pattern as `doc_cmd.rs`: calls `backend.update_atomically(...)` followed by an unlocked `object_store::write_object(&store_path.join("objects"), &written)`. |
-| `aida-cli-lib/src/lib_part2.rs` | `handle_retire_legacy_ids` (`aida db retire-legacy-ids`) | `15–90` | Calls `let store = backend.load()?;` outside the lock (`:22`), mutates in memory, and calls `backend.save(&mutable)?` (`:80`). Should re-read inside `with_store_write_lock` / `update_atomically` so concurrent spec edits between preview and save are not clobbered. |
-| `aida-cli-lib/src/doctor_cmd.rs` | `doctor_heal` spec/queue mutation paths | `7389` | Uses `storage.load()` + `storage.save(&store)?`; follow up in `TASK-1332` to ensure heal re-reads under `with_store_write_lock` before writing. |
-| `aida-core/src/git_ops.rs` & `aida-cli-lib/src/store_cmd.rs` | `opportunistic_store_gc`, `gc_aggressive` (`store_compact`) | `git_ops.rs:4019–4113`, `store_cmd.rs:85–134` | Runs `git gc --auto` / `git gc --aggressive` on the store object database outside `with_store_write_lock`; tracked under `TASK-1332` item 4 (competing GC/cache residuals). |
-
----
-
-## 3. Reconciliation Against Advisor's 2026-10-12 Ruling (`TASK-1332` / `TASK-1-225`)
-
-| 2026-10-12 Ruling Item | Sub-Item | Disposition in `TASK-1930` vs Parent `TASK-1332` |
-|---|---|---|
-| **(1) Unlocked shared-store writers** | `coordination.rs` `pull_rebase` (claim/lock-claim acquire, release, heartbeat/reap) | **Resolved in `TASK-1930`** (`coordination.rs:737–1508`), with fail-closed error propagation for local/lock errors. |
-| **(1) Unlocked shared-store writers** | `schedule_ledger.rs` `pull_rebase_auto_merge` (`write_cas_opts`, `write_batch_cas_opts`) | **Resolved in `TASK-1930`** (`schedule_ledger.rs:371–606`), preserving original errors on unsafe store state. |
-| **(1) Unlocked shared-store writers** | `aida-core` `team.rs` roster CAS rebases (`register_member_cas`, `set_allowed_seats_cas`, `retire_seat_cas`) | **Resolved in `TASK-1930`** (`aida-core/src/team.rs:240–445`). |
-| **(1) Unlocked shared-store writers** | `aida-core` `alias.rs` `link_cas` | **Resolved in `TASK-1930`** (`aida-core/src/alias.rs:233–278`). |
-| **(1) Unlocked shared-store writers** | `init_cmd.rs` existing-store retry (`create_or_clone_distributed_store`) | **Resolved in `TASK-1930`** (`aida-cli-lib/src/init_cmd.rs:5470`). |
-| **(1) Unlocked shared-store writers** | `git_ops.rs` node registration / identity / hijack / rename / retire | **Resolved in `TASK-1930`** (`aida-core/src/git_ops.rs:4505–5140`). |
-| **(1) Unlocked shared-store writers** | Doctor & compaction maintenance writers | **Direct `.aida-store` writers (`doctor_verify_relationships`, `doctor_repair_stale_blocks`, `doctor_migrate_counter_scope`, `squash_orphan_to_snapshot`) wrapped and re-validated inside lock in `TASK-1930`**; remaining `storage.save`-based maintenance paths (`handle_retire_legacy_ids`, `doctor_heal`, redundant `write_object` after `update_atomically` in `doc_cmd.rs`/`findings_gate.rs`/`burndown_run.rs`) inventoried in Category E above for `TASK-1332`. |
-| **(2) A1 dispenser ordering** | `store_write_lock` before `blocks.lock` + barrier/order tests | **Enforced in `TASK-1930`** across `db_block.rs`, `requirements_cli.rs`, `doctor_cmd.rs`, and runtime guard in `aida-core/src/db/store_lock.rs` (`dispense_lock_held()`). Full parent `TASK-1332` closure remains open per operator ruling. |
-| **(3) Conditional-push writers & A2 owner-join** | `BUG-1808` A2 common owner join | **Stays on `TASK-1332` / `BUG-1808`** per operator ruling (option b). |
-| **(4) A4 residuals** | Private-ref `FETCH_HEAD`, rebase-abort/competing cache/GC review | **Stays on `TASK-1332`** per operator ruling (option b). |
-| **(5) `TASK-1333` dependency** | Contained/hook profile dependency | **Stays on `TASK-1332` / `TASK-1333`** per operator ruling (option b). |
-
+Read-only store consumers (`GitBackend::load` at `aida-core/src/db/git_backend.rs:2285`, `CachedGitBackend` snapshot readers, `TeamRoster::load`, `NodeRegistry::load`, `BlockRegistry::load`, `read_canonical_messages` at `aida-cli-lib/src/mailbox_store.rs:113`, `load_published` at `aida-cli-lib/src/timing_record.rs:292`, `read_committed_trials` at `aida-cli-lib/src/regen/score.rs:972`, `doctor_contradictions` at `aida-cli-lib/src/doctor_cmd.rs:14206`) only read committed or atomic-write files (`crate::write_atomic`) and never mutate the store worktree or git index.
