@@ -17,12 +17,18 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:02.280632663Z
-modified_at: 2026-10-20T04:18:32.276054727Z
+modified_at: 2026-10-20T17:32:49.553391535Z
 req_type: Bug
 tags:
 - headless
 - review
 - verdict
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a15a5f-2275-7a30-8486-4863425356bc
+  created_at: 2026-10-20T17:32:49.553387891Z
+  created_by: joe
 comments:
 - id: 01a15788-4ad4-7b50-a7c1-3dd9e2b9b36b
   author: mcp
@@ -45,6 +51,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15a5f-846d-7c02-a873-2e496f14609e
+  author: joe
+  timestamp: 2026-10-20T17:32:51.693879498Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
