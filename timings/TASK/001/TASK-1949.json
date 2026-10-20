@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1949",
+  "publishes": [
+    {
+      "at": "2026-10-20T04:44:03.245965717Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:39:27.458731443Z",
+      "spec": "TASK-1949",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T01:11:29.895923526Z",
+      "spec": "TASK-1949",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-20T01:23:06.809052884Z",
+      "spec": "TASK-1949",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1949",
+        "branch": "codex/task-1949",
+        "first_seen": "2026-10-20T01:23:06.800371729+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T04:42:41.254943217Z",
+      "spec": "TASK-1949",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T04:43:02.997904178Z",
+      "spec": "TASK-1949",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2762
+      }
+    },
+    {
+      "ts": "2026-10-20T04:44:02.344212277Z",
+      "spec": "TASK-1949",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1ad2024f9dd843b1896c67976d23a683a434bd7a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
