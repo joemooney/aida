@@ -49,10 +49,10 @@ fn lease(id: &str, scope: &str, pid: &Pid, started_at: DateTime<Utc>) -> Session
         started_at,
         hostname: "h".into(),
         role: Some("implementer".into()),
-        creator_pid: Some(pid.0),
-        creator_pid_start_time: pid.1.clone(),
-        active_pid: None,
-        active_pid_start_time: None,
+        creator_pid: None,
+        creator_pid_start_time: None,
+        active_pid: Some(pid.0),
+        active_pid_start_time: pid.1.clone(),
         cargo_target_dir: None,
         parent_project_root: None,
         pr_head_sha: None,
@@ -189,6 +189,26 @@ fn gh_pr(
         "statusCheckRollup": [check],
         "title": format!("[AI:codex] fix: change {number} (TASK-{number})")
     })
+}
+
+/// A PR at `head` whose Build check went green at `green_at` and whose
+/// `merge-hold-gate` check fails, as it does while the hold label is on.
+fn gh_pr_held(number: u64, head: &str, green_at: DateTime<Utc>) -> serde_json::Value {
+    let mut pr = gh_pr(number, head, Some(green_at), false);
+    pr["statusCheckRollup"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!({
+            "__typename": "CheckRun",
+            "completedAt": rfc(green_at - Duration::minutes(5)),
+            "conclusion": "FAILURE",
+            "detailsUrl": "https://github.com/joemooney/aida/actions/runs/2/job/2",
+            "name": "merge-hold-gate",
+            "startedAt": rfc(green_at - Duration::minutes(6)),
+            "status": "COMPLETED",
+            "workflowName": "merge-hold-gate"
+        }));
+    pr
 }
 
 fn prs_json(prs: Vec<serde_json::Value>) -> String {
@@ -366,6 +386,8 @@ fn unpicked_ready_pr_and_its_negatives() {
     review.review_verb = true;
     review.claim_verb = false;
     review.worktree_path = PathBuf::new();
+    review.creator_pid = Some(std::process::id());
+    review.creator_pid_start_time = live_pid().1;
     review.pr_head_sha = Some(HEAD_B.into());
     write_lease(root, &review);
     record_verdict(root, "TASK-2703", head_c);
@@ -789,6 +811,193 @@ fn routing_is_one_wake_per_finding_on_registered_seats() {
     scan_and_route_at(root, later + Duration::minutes(10), true, &prs);
     assert!(!seat_ledger_due(root, "advisor") && !seat_ledger_due(root, "reviewer"));
     assert_eq!(fired_events(root).len(), 2);
+}
+
+// Round 2 (major): a rework push past a reviewer refusal waits on re-review.
+// The hold's own merge-hold-gate check is red at every head while the label
+// is on, so it is no readiness signal there. A PR still at the refused head,
+// or with the gate red and no refusal on record, is not ready.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn rework_push_past_a_refusal_is_ready_for_re_review() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let head_c = "c3d4e5f60718293a4b5c6d7e8f901234567890ab";
+    for (pr, refused_at) in [(2740, HEAD_A), (2741, head_c)] {
+        crate::merge_hold::write_typed_hold(
+            root,
+            &crate::merge_hold::typed_hold(
+                pr,
+                crate::merge_hold::HoldReasonKind::Rework,
+                "CHANGES REQUESTED",
+                Some(refused_at.into()),
+            ),
+        )
+        .unwrap();
+    }
+    let green = now - Duration::minutes(40);
+    let feed = prs_json(vec![
+        gh_pr_held(2740, HEAD_B, green),
+        gh_pr_held(2741, head_c, green),
+        gh_pr_held(2742, "e5f60718293a4b5c6d7e8f901234567890abcdef", green),
+    ]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    let found = findings_at(root, now, &prs);
+    assert_eq!(
+        ids(&found),
+        ["lane-liveness:unpicked-ready-pr:PR-2740@b2c3d4e5"]
+    );
+    assert_eq!(found[0].route, Route::Seat("reviewer"));
+}
+
+// Round 2: orphaned-work uses the canonical lease state. A session judged
+// live keeps its lease even when the shell that created it is gone; a live
+// creator shell does not keep a lease whose session is gone.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn orphaned_work_follows_canonical_lease_state_not_the_creator_shell() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let hour_ago = now - Duration::hours(1);
+    let worktree = root.join("wt-live");
+    std::fs::create_dir_all(&worktree).unwrap();
+
+    let mut live_session = lease("live", "TASK-95", &live_pid(), hour_ago);
+    live_session.worktree_path = worktree;
+    let dead_shell = dead_pid();
+    live_session.creator_pid = Some(dead_shell.0);
+    live_session.creator_pid_start_time = dead_shell.1;
+    write_lease(root, &live_session);
+
+    let mut gone = lease("gone", "TASK-96", &dead_pid(), hour_ago);
+    gone.active_pid = None;
+    gone.active_pid_start_time = None;
+    gone.creator_pid = Some(std::process::id());
+    gone.creator_pid_start_time = live_pid().1;
+    write_lease(root, &gone);
+
+    assert_eq!(
+        ids(&findings_at(root, now, &no_prs)),
+        ["lane-liveness:orphaned-work:gone"]
+    );
+}
+
+// Round 2: a dead driver's open work is only the spec work it stranded. A
+// review lease under its label and a lease whose own session is still live
+// are not; the live one is not orphaned, and a dead lease the driver did not
+// strand still reports on its own.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn dead_driver_counts_only_stranded_spec_leases() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let dead = dead_pid();
+    let hour_ago = now - Duration::hours(1);
+    register_driver(root, "advisor-drive", &dead, None, None);
+    for (id, scope, pid) in [
+        ("stranded", "TASK-90", &dead),
+        ("child", "TASK-91", &live_pid()),
+        ("review", "PR-2750", &dead),
+    ] {
+        let mut l = lease(id, scope, pid, hour_ago);
+        l.driver = Some("agent:advisor-drive".into());
+        write_lease(root, &l);
+    }
+    let found = findings_at(root, now, &no_prs);
+    assert_eq!(ids(&found), ["lane-liveness:dead-lane:agent:advisor-drive"]);
+    assert!(
+        found[0].summary.contains("[TASK-90]"),
+        "{}",
+        found[0].summary
+    );
+
+    // A dead driver whose only labelled lease is live strands nothing.
+    std::fs::remove_file(lease_path(root, "stranded")).unwrap();
+    assert!(findings_at(root, now, &no_prs).is_empty());
+}
+
+// Round 2: a route that fails is not recorded, so the next tick retries it.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn failed_route_is_retried_next_tick() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    write_lease(
+        root,
+        &lease("or3", "TASK-97", &dead_pid(), now - Duration::hours(1)),
+    );
+    // The schedule store cannot be written: a file stands where its dir goes.
+    let store = root.join(".aida-store");
+    std::fs::write(&store, "not a directory").unwrap();
+    scan_and_route_at(root, now, true, &no_prs);
+    assert!(fired_events(root).is_empty());
+    assert!(!load_routed(root).contains_key("lane-liveness:orphaned-work:or3"));
+
+    std::fs::remove_file(&store).unwrap();
+    scan_and_route_at(root, now + Duration::minutes(10), true, &no_prs);
+    assert!(seat_ledger_due(root, "advisor"));
+    assert_eq!(fired_events(root), ["lane-liveness-advisor"]);
+    assert!(load_routed(root).contains_key("lane-liveness:orphaned-work:or3"));
+}
+
+// Round 2: a tick whose forge read failed keeps the review-pickup ids it
+// could not re-check, so the next good read does not re-wake the reviewer.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn forge_failure_tick_keeps_review_pickup_dedupe() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let feed = prs_json(vec![gh_pr(
+        2760,
+        HEAD_A,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let good = move |_: &Path| Ok(feed.clone());
+    let down = |_: &Path| Err("`gh pr list` timed out after 20s or failed to start".to_string());
+    let id = "lane-liveness:unpicked-ready-pr:PR-2760@a1b2c3d4";
+
+    scan_and_route_at(root, now, true, &good);
+    let store = root.join(".aida-store");
+    schedule_ledger::write_cas(&store, &route_job_name("reviewer"), |l| l.due_since = None)
+        .unwrap();
+    scan_and_route_at(root, now + Duration::minutes(10), true, &down);
+    assert!(
+        load_routed(root).contains_key(id),
+        "kept through the outage"
+    );
+    scan_and_route_at(root, now + Duration::minutes(20), true, &good);
+    assert_eq!(fired_events(root), ["lane-liveness-reviewer"]);
+    assert!(
+        !seat_ledger_due(root, "reviewer"),
+        "the same PR is not re-woken"
+    );
+}
+
+// Fork (A) end to end in the templates: the sketch author mails the request,
+// and the signing advisor answers in that thread, which is the reply that
+// clears the gate (see `unanswered_advisor_request_and_its_negatives`).
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn orchestrate_templates_send_and_answer_the_sketch_request() {
+    for body in [
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../aida-core/templates/skills/aida-orchestrate.md"
+        )),
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../aida-core/templates/skills-portable/aida-orchestrate.md"
+        )),
+    ] {
+        assert!(body.contains("aida mailbox send --to advisor --intent request"));
+        assert!(body.contains("aida mailbox send --to <sender> --in-reply-to <request-id>"));
+    }
 }
 
 // Every route target is a registered agent role, and every route has a job.

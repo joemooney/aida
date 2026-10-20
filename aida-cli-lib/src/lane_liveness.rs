@@ -14,8 +14,8 @@
 //! 3. **Gate waits**: a human-only merge hold (`.aida/merge-holds/PR-<n>`)
 //!    older than the gate budget, and a request mailed to the advisor with no
 //!    reply in its thread.
-//! 4. **Orphaned work**: a spec lease held by a dead process with no pushed
-//!    progress.
+//! 4. **Orphaned work**: a spec lease with no live session (the canonical
+//!    lease state) and no pushed progress.
 //!
 //! Each finding routes once: a seat finding becomes a `lane-liveness-<seat>`
 //! due job for a registered agent role, and a human-only hold becomes an
@@ -49,6 +49,11 @@ pub(crate) const DEFAULT_ORPHANED_WORK_MINS: i64 = 30;
 pub(crate) const DEFAULT_MAX_AGE_HOURS: i64 = 24;
 /// Bound on the `gh pr list` call; a slower forge skips the review-pickup check.
 const GH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+/// Finding-id prefix of the review-pickup check, whose ids survive a tick
+/// on which the forge read failed.
+const UNPICKED_READY_PR_PREFIX: &str = "lane-liveness:unpicked-ready-pr:";
+/// The CI check that fails at every head while a PR carries a merge hold.
+const MERGE_HOLD_GATE_CHECK: &str = "merge-hold-gate";
 /// Bound on the operator notify command.
 const NOTIFY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -234,13 +239,13 @@ pub(crate) struct AdvisorRequestFact {
     pub sent_at: DateTime<Utc>,
 }
 
-/// A spec lease whose holding process is dead.
+/// A spec lease with no live session behind it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OrphanedLeaseFact {
     pub lease_id: String,
     pub spec_id: String,
     pub owner: String,
-    pub pid: u32,
+    pub pid: Option<u32>,
     pub last_progress_at: DateTime<Utc>,
 }
 
@@ -393,7 +398,7 @@ pub(crate) fn evaluate_snapshot(
         if wait > policy.review_pickup_mins {
             findings.push(LaneLivenessFinding {
                 id: format!(
-                    "{CATEGORY}:unpicked-ready-pr:PR-{}@{}",
+                    "{UNPICKED_READY_PR_PREFIX}PR-{}@{}",
                     pr.number,
                     short_sha(&pr.head_sha)
                 ),
@@ -474,11 +479,13 @@ pub(crate) fn evaluate_snapshot(
                 kind: FindingKind::OrphanedWork,
                 route: Route::Seat("advisor"),
                 summary: format!(
-                    "spec `{}` lease `{}` (owner `{}`, pid {}) is held by a dead process with no pushed progress for {stale}m (threshold {}m)",
+                    "spec `{}` lease `{}` (owner `{}`, {}) has no live session and no pushed progress for {stale}m (threshold {}m)",
                     lease.spec_id,
                     lease.lease_id,
                     lease.owner,
-                    lease.pid,
+                    lease
+                        .pid
+                        .map_or_else(|| "no pid".to_string(), |p| format!("last pid {p}")),
                     policy.orphaned_work_mins,
                 ),
                 action: format!(
@@ -528,11 +535,18 @@ pub(crate) fn route_findings(
     }
 
     let previous = load_routed(project_root);
-    let current: BTreeMap<String, DateTime<Utc>> = findings
-        .iter()
-        .map(|f| (f.id.clone(), previous.get(&f.id).copied().unwrap_or(now)))
-        .collect();
     let is_new = |f: &LaneLivenessFinding| !previous.contains_key(&f.id);
+    // Only a route that succeeded is recorded, so a failed one retries next
+    // tick. Review-pickup ids the forge could not re-check this tick are
+    // carried forward, not forgotten and re-woken on the next good read.
+    let mut routed: BTreeMap<String, DateTime<Utc>> = previous
+        .iter()
+        .filter(|(id, _)| {
+            findings.iter().any(|f| &f.id == *id)
+                || (snapshot.forge_error.is_some() && id.starts_with(UNPICKED_READY_PR_PREFIX))
+        })
+        .map(|(id, at)| (id.clone(), *at))
+        .collect();
 
     let store_root = crate::detect_distributed_store_from(project_root)
         .unwrap_or_else(|| project_root.join(".aida-store"));
@@ -574,6 +588,9 @@ pub(crate) fn route_findings(
             eprintln!("warning: could not write schedule ledger for '{job_name}': {err}");
             continue;
         }
+        for f in seat_findings {
+            routed.entry(f.id.clone()).or_insert(now);
+        }
         if !already_due {
             events::emit(
                 project_root,
@@ -600,23 +617,32 @@ pub(crate) fn route_findings(
             .map(|f| format!("{}\n  -> {}", f.summary, f.action))
             .collect::<Vec<_>>()
             .join("\n");
-        if let Err(err) = crate::notify::send_direct_bounded(
+        match crate::notify::send_direct_bounded(
             project_root,
             OPERATOR_GATE_NOTIFY_RULE,
             &title,
             &message,
             Some(NOTIFY_TIMEOUT),
         ) {
-            eprintln!("warning: lane-liveness operator notification failed: {err:#}");
+            // A rate-limited (suppressed) notice was not delivered; retry it.
+            Ok(outcome) if outcome.suppressed == 0 => {
+                for f in &human {
+                    routed.entry(f.id.clone()).or_insert(now);
+                }
+            }
+            Ok(_) => {}
+            Err(err) => {
+                eprintln!("warning: lane-liveness operator notification failed: {err:#}");
+            }
         }
     }
 
-    if current != previous {
+    if routed != previous {
         let path = routed_path(project_root);
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
-        if let Ok(body) = serde_json::to_string_pretty(&current) {
+        if let Ok(body) = serde_json::to_string_pretty(&routed) {
             let _ = aida_core::write_atomic(&path, body.as_bytes());
         }
     }
@@ -817,11 +843,27 @@ pub(crate) fn load_snapshot(
 
     load_headless_lanes(project_root, &leases, now, policy, &mut snapshot);
     load_drain_lane(project_root, &leases, now, policy, &mut snapshot);
-    load_driver_lanes(project_root, &leases, now, policy, &mut snapshot);
+    // One live-session probe per tick, shared by every lease-liveness read.
+    let mut live_sessions = None;
+    load_driver_lanes(
+        project_root,
+        &leases,
+        now,
+        policy,
+        &mut live_sessions,
+        &mut snapshot,
+    );
     load_open_prs(project_root, &leases, now, policy, prs, &mut snapshot);
     load_human_holds(project_root, &mut snapshot);
     load_advisor_requests(project_root, &mut snapshot);
-    load_orphaned_leases(project_root, &leases, now, &mut snapshot);
+    load_orphaned_leases(
+        project_root,
+        &leases,
+        now,
+        policy,
+        &mut live_sessions,
+        &mut snapshot,
+    );
 
     // Work on a finished, rejected or superseded spec is not stranded.
     let scopes: Vec<String> = snapshot
@@ -975,6 +1017,7 @@ fn load_driver_lanes(
     leases: &[crate::leases::SessionLease],
     now: DateTime<Utc>,
     policy: &LaneLivenessPolicy,
+    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
     snapshot: &mut LaneLivenessSnapshot,
 ) {
     let records = aida_core::driver_registry::read_all(&crate::driver_view::driver_registry_root(
@@ -982,15 +1025,21 @@ fn load_driver_lanes(
     ));
     for rec in records {
         let label = rec.label();
+        let process_alive = rec.is_live(now);
+        // A review is not the driver's work. Once the driver is dead, a lease
+        // whose own session is still live only inherited the label: that
+        // work is not stranded, and orphaned-work judges it on its own.
         let held: Vec<&crate::leases::SessionLease> = leases
             .iter()
             .filter(|l| l.driver.as_deref().map(str::trim) == Some(label.as_str()))
-            .filter(|l| !l.scope.trim().is_empty())
+            .filter(|l| !l.scope.trim().is_empty() && crate::parse_review_scope(&l.scope).is_none())
+            .filter(|l| {
+                process_alive || !crate::driver_view::lease_is_live_lazy(l, live_sessions, now)
+            })
             .collect();
         if held.is_empty() {
             continue;
         }
-        let process_alive = rec.is_live(now);
         let handoff_path = rec.handoff.as_deref().map(PathBuf::from);
         // Only a TTL'd heartbeat or a handoff file is a progress signal; a
         // pid-only record has none, so it is never judged stale.
@@ -1107,11 +1156,16 @@ fn fetch_open_prs_from_gh(project_root: &Path) -> Result<String, String> {
 
 /// When every check in a head's `statusCheckRollup` passed, the time the last
 /// one finished. `None` while any check is pending or failing, or when the
-/// head has no checks at all (no readiness signal).
-fn rollup_green_at(rollup: &[serde_json::Value]) -> Option<DateTime<Utc>> {
+/// head has no checks at all (no readiness signal). With `skip_hold_gate`,
+/// the `merge-hold-gate` check, red at every head while a hold's label is on
+/// the PR, is left out.
+fn rollup_green_at(rollup: &[serde_json::Value], skip_hold_gate: bool) -> Option<DateTime<Utc>> {
     let mut latest: Option<DateTime<Utc>> = None;
     for check in rollup {
         let field = |k: &str| check.get(k).and_then(|v| v.as_str()).unwrap_or("");
+        if skip_hold_gate && field("name") == MERGE_HOLD_GATE_CHECK {
+            continue;
+        }
         let (green, finished) = if field("__typename") == "StatusContext" {
             (
                 field("state") == "SUCCESS",
@@ -1188,8 +1242,18 @@ fn load_open_prs(
         {
             continue;
         }
-        let checks_green_at = rollup_green_at(&pr.status_check_rollup);
         let head = pr.head_ref_oid.as_str();
+        // A rework push past a reviewer refusal's head awaits re-review; the
+        // hold's own gate check stays red until that review, so it is not a
+        // readiness signal there.
+        let reworked_past_refusal = crate::merge_hold::read_hold_record(project_root, pr.number)
+            .is_some_and(|h| {
+                h.is_refusal()
+                    && h.target_head_sha
+                        .as_deref()
+                        .is_some_and(|t| !crate::review_verdict::same_reviewed_sha(t, head))
+            });
+        let checks_green_at = rollup_green_at(&pr.status_check_rollup, reworked_past_refusal);
         let scope = format!("PR-{}", pr.number);
         let review_lease = leases.iter().any(|l| {
             l.scope.eq_ignore_ascii_case(&scope)
@@ -1315,6 +1379,8 @@ fn load_orphaned_leases(
     project_root: &Path,
     leases: &[crate::leases::SessionLease],
     now: DateTime<Utc>,
+    policy: &LaneLivenessPolicy,
+    live_sessions: &mut Option<Vec<crate::process_probe::LiveSession>>,
     snapshot: &mut LaneLivenessSnapshot,
 ) {
     let live_drivers = aida_core::driver_registry::live_drivers(
@@ -1338,12 +1404,14 @@ fn load_orphaned_leases(
         {
             continue;
         }
-        let (pid, pid_start) = match (lease.active_pid, lease.creator_pid) {
-            (Some(pid), _) => (pid, lease.active_pid_start_time.as_deref()),
-            (None, Some(pid)) => (pid, lease.creator_pid_start_time.as_deref()),
-            (None, None) => continue,
-        };
-        if aida_core::liveness::process_identity_is_alive(pid, pid_start) {
+        // The canonical lease state: a worktree session is judged by the
+        // live-session matrix, never by the short-lived shell that created it.
+        if crate::driver_view::lease_is_live_lazy(lease, live_sessions, now) {
+            continue;
+        }
+        // Past the age window with its worktree gone, the lease is out of
+        // scope; skip the git probes rather than run them on every old file.
+        if !lease.worktree_path.exists() && now - lease.started_at > policy.max_age() {
             continue;
         }
         let last_progress_at = pushed_branch_progress_ts(&lease.worktree_path, &lease.branch)
@@ -1353,7 +1421,7 @@ fn load_orphaned_leases(
             lease_id: lease.id.clone(),
             spec_id: scope.to_string(),
             owner: lease.owner.clone(),
-            pid,
+            pid: lease.active_pid.or(lease.creator_pid),
             last_progress_at,
         });
     }

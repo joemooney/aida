@@ -232,8 +232,12 @@ advisor signoff before any code is written.
 2. A **different** advisor session verifies the sketch's claims against the
    code, answers the open questions, and posts either
    `ADVISOR SIGNOFF: APPROVED` (with binding amendments) or
-   `CHANGES REQUESTED`. Launch it as a new session (a different vendor is
+   `CHANGES REQUESTED`. It also answers the sketch-ready request in its own
+   thread, `aida mailbox send --to <sender> --in-reply-to <request-id> "<verdict>"`;
+   the reply is what clears the lane-liveness advisor gate, and a spec
+   comment alone does not. Launch it as a new session (a different vendor is
    better), never the sketch author and never yourself.
+   <!-- trace:STORY-1688 | ai:claude -->
 3. The spec is implemented **as amended**; the advisor's text wins. If the
    advisor splits it into slices, build slice 1, file the rest as child tasks,
    and tag the parent `closure:pending`.
