@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-20T22:23:46.999963076Z
+modified_at: 2026-10-20T22:23:57.428746953Z
 req_type: Task
 tags:
 - contained
@@ -164,6 +164,12 @@ comments:
   content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2005 — is_linked_worktree_gitdir trusts a ''worktrees'' parent dir without commondir (BUG-2012)'
   created_at: 2026-10-20T22:23:46.999963076Z
   modified_at: 2026-10-20T22:23:46.999963076Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b6a-05f4-73a1-af79-1c6dc3b9a95a
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2006 — Main-checkout .git deny misses a .git symlink to a gitfile (BUG-2012)'
+  created_at: 2026-10-20T22:23:57.428746953Z
+  modified_at: 2026-10-20T22:23:57.428746953Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
