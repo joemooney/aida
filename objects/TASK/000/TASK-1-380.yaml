@@ -1,0 +1,29 @@
+id: 01a15809-0e2d-72a2-b3f9-6b4c002c834c
+spec_id: TASK-1-380
+title: 'non-blocking (tracked TASK-1986): the before/after median-of-3 rebuild measurem…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1985, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking (tracked TASK-1986): the before/after median-of-3 rebuild measurement in TASK-1985 is not in this PR. The (TASK-1985) trailer will complete the spec at merge, so the measurement must land on TASK-1986.
+
+  PR: #2765
+  Reviewed sha: fc873a2944d138f1898790c48e89aaab0d15100e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T06:39:10.893761271Z
+modified_at: 2026-10-20T06:39:10.893761271Z
+req_type: Task
+tags:
+- carried-from:TASK-1985
+- finding-hash:e79b62e6
+- from-review:PR-2765
+- kind:carried-forward
+filed_at:
+  code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 857e2ef848
+  vendor: claude
