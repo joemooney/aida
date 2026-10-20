@@ -3,16 +3,25 @@ spec_id: TASK-1970
 agreed_id: TASK-1970
 title: Test-fixture cwd hygiene and cwd-scanner fn-reset fix (BUG-2118 investigation, PR-2744)
 description: 'Owns PR-2744 so that merging it does not auto-complete BUG-2118, which stays open and unreproduced. Scope: the cwd-scanner fn-item reset fix in test_env.rs, run_path_isolated_test on set_current_dir tests, the fixture_git cwd/GIT_CONFIG_GLOBAL hygiene and the investigation note. Relates to BUG-2118.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T00:48:22.397656290Z
-modified_at: 2026-10-20T00:48:22.397656290Z
+modified_at: 2026-10-20T00:48:43.732767505Z
 req_type: Task
 tags:
 - bug-2118
 - tests
+history:
+- id: 01a156c8-34d4-79d2-b7bf-9956643cf650
+  author: joe
+  timestamp: 2026-10-20T00:48:43.732764784Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
   branch: main
