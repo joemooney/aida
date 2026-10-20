@@ -150,9 +150,33 @@ jobs:
         # crates, instead of stopping at the first (BUG-1021).
         # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
         # must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude
+        # The tee'd log feeds the per-binary timings and budget gate below
+        # (pipefail keeps cargo's exit status). trace:STORY-1853 | ai:claude
         env:
           AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
-        run: cargo test --workspace --no-fail-fast < /dev/null
+        run: cargo test --workspace --no-fail-fast < /dev/null 2>&1 | tee target/test-run.log
+
+      # Per-binary test timings (job summary + artifact) and the slow-test
+      # budget: a binary over 10 s needs an entry in scripts/test-time-budget.toml,
+      # and a budgeted binary may not exceed it. Runs after a red test step too,
+      # so a failing run still reports its timings. trace:STORY-1853 | ai:claude
+      - name: Test time budget
+        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' }}
+        run: >-
+          python3 scripts/test-timings.py target/test-run.log
+          --budget scripts/test-time-budget.toml
+          --json target/test-timings.json
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test timings
+        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-timings-${{ matrix.os }}
+          path: |
+            target/test-timings.json
+            target/test-run.log
+          if-no-files-found: warn
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
       # exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex
@@ -185,6 +209,11 @@ jobs:
       # trace:TASK-1780 | ai:claude
       - name: test-touched planner tests
         run: python3 -m unittest tests/test_test_touched.py
+
+      # Test-timing parser, budget gate and local test-profile reshape: pure
+      # Python, no cargo. trace:STORY-1853 | ai:claude
+      - name: STORY-1853 test-speed tooling tests
+        run: python3 -m unittest tests/test_story_1853_test_speed.py
 
       # STORY-612: the LIVE OS-wrap confinement gate. The `os_wrap` bwrap wrapper
       # is a security boundary, so a real bubblewrap run must prove write-inside-OK
@@ -249,6 +278,11 @@ jobs:
       - name: Run git-guardrails parse test
         if: steps.changes.outputs.full_ci == 'true'
         run: bash tests/test_git_guardrails_parse.sh
+
+      # STORY-1854: warn-only cargo time-budget PreToolUse hook patterns.
+      # Shell only, so it runs on every PR. trace:STORY-1854 | ai:claude
+      - name: Run cargo-timeout hook test
+        run: bash tests/test_cargo_timeout_guard.sh
 
       # trace:STORY-1648 | ai:claude
       # Primary-checkout drift line in the session-context hook: clean,

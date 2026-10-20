@@ -52,6 +52,7 @@
 "TUI seam guard" = "fast"
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
+"STORY-1853 test-speed tooling tests" = "fast"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
@@ -63,6 +64,8 @@
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
+# trace:STORY-1854 | ai:claude
+"Run cargo-timeout hook test" = "fast"
 "Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
 "Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"
@@ -130,3 +133,5 @@
 "Report diff trace coverage (report-only)" = "report-only by its own name"
 "Validate commit SPEC-ID references (trace gate)" = "fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate"
 "Doc-intent gate (surface changes mark doc-impact)" = "same `.aida-store` fetch-and-fast-forward as the trace gate above"
+# trace:STORY-1853 | ai:claude
+"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py target/test-run.log` still prints local timings"
