@@ -317,8 +317,6 @@ fn run_focus(
                         backend,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -336,8 +334,6 @@ fn run_focus(
                      --centralized mode has no per-worktree focus context."
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida focus` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

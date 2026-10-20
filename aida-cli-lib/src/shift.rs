@@ -3851,8 +3851,6 @@ fn run_shift(
                         shift_cmd, backend, store_path,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -3869,8 +3867,6 @@ fn run_shift(
                      Run `aida init` (defaults to distributed) first."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida shift` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

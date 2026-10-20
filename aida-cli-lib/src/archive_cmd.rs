@@ -796,8 +796,6 @@ fn run_archive(
                         store_path,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -815,8 +813,6 @@ fn run_archive(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida archive` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -870,8 +866,6 @@ fn run_unarchive(
                     // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
                     self::handle_unarchive_command(id, backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -889,8 +883,6 @@ fn run_unarchive(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida unarchive` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
