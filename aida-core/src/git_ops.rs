@@ -1286,6 +1286,11 @@ pub fn push_exact_outcome(
         !crate::db::any_store_write_lock_held(),
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
     );
+    // trace:TASK-1930 | ai:agy
+    anyhow::ensure!(
+        !sha.trim().is_empty(),
+        "push_exact requires a non-empty commit SHA"
+    );
     reject_option_like("branch", branch)?;
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
@@ -4146,52 +4151,55 @@ pub fn squash_orphan_to_snapshot(
     message: &str,
     backup_ref: &str,
 ) -> Result<SquashOutcome> {
-    let head = git(repo, &["rev-parse", "HEAD"])?;
-    if !head.success {
-        anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
-    }
-    let old_head = head.stdout.clone();
+    // trace:TASK-1930 | ai:agy
+    crate::db::with_store_write_lock(repo, || {
+        let head = git(repo, &["rev-parse", "HEAD"])?;
+        if !head.success {
+            anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
+        }
+        let old_head = head.stdout.clone();
 
-    // ── Guard: create + verify the backup BEFORE any rewrite ──
-    let backup = git(repo, &["branch", backup_ref, &old_head])?;
-    if !backup.success {
-        anyhow::bail!(
-            "refusing to squash: could not create backup ref '{}' ({}) — \
-             no history was rewritten",
-            backup_ref,
-            backup.stderr
-        );
-    }
-    let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
-    if !verify.success || verify.stdout != old_head {
-        anyhow::bail!(
-            "refusing to squash: backup ref '{}' did not record HEAD — \
-             no history was rewritten",
-            backup_ref
-        );
-    }
+        // ── Guard: create + verify the backup BEFORE any rewrite ──
+        let backup = git(repo, &["branch", backup_ref, &old_head])?;
+        if !backup.success {
+            anyhow::bail!(
+                "refusing to squash: could not create backup ref '{}' ({}) — \
+                 no history was rewritten",
+                backup_ref,
+                backup.stderr
+            );
+        }
+        let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
+        if !verify.success || verify.stdout != old_head {
+            anyhow::bail!(
+                "refusing to squash: backup ref '{}' did not record HEAD — \
+                 no history was rewritten",
+                backup_ref
+            );
+        }
 
-    // ── Build a fresh root commit carrying the current tree ──
-    let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
-    if !tree.success {
-        anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
-    }
-    let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
-    if !snapshot.success {
-        anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
-    }
-    let snapshot_sha = snapshot.stdout.clone();
+        // ── Build a fresh root commit carrying the current tree ──
+        let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
+        if !tree.success {
+            anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
+        }
+        let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
+        if !snapshot.success {
+            anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
+        }
+        let snapshot_sha = snapshot.stdout.clone();
 
-    // Move the checked-out branch to the snapshot, keeping tree + index intact.
-    let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
-    if !reset.success {
-        anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
-    }
+        // Move the checked-out branch to the snapshot, keeping tree + index intact.
+        let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
+        if !reset.success {
+            anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
+        }
 
-    Ok(SquashOutcome {
-        backup_ref: backup_ref.to_string(),
-        old_head,
-        snapshot_sha,
+        Ok(SquashOutcome {
+            backup_ref: backup_ref.to_string(),
+            old_head,
+            snapshot_sha,
+        })
     })
 }
 
@@ -10723,5 +10731,94 @@ mod tests {
             !log.contains("writer a retry"),
             "rejected commit must not remain in history: {log}"
         );
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_push_exact_refuses_empty_sha_and_node_writers_wait_for_store_write_lock() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&bare, &["init", "--bare", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        assert!(push(&repo, "origin", "aida-store").unwrap());
+
+        // 1. push_exact and push_exact_outcome refuse an empty/whitespace SHA
+        // so `:refs/heads/<branch>` can never delete a remote branch.
+        for empty in ["", "   "] {
+            let err = push_exact(&repo, "origin", empty, "aida-store").unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("push_exact requires a non-empty commit SHA"),
+                "expected empty-SHA refusal, got: {err:#}"
+            );
+        }
+
+        // 2. Barrier test: register_node_with_explicit_id, rename_node, and
+        // squash_orphan_to_snapshot block on store_write_lock until released.
+        let initial_head = head_sha(&repo).unwrap();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let repo_holder = repo.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&repo_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let repo_writer = repo.clone();
+        let writer = std::thread::spawn(move || {
+            let assigned = register_node_full(
+                &repo_writer,
+                Some("n77".to_string()),
+                1000,
+                "devbox",
+                Some("t@example.com".to_string()),
+            )
+            .unwrap();
+            done_tx.send(assigned).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while crate::db::store_write_lock_contended_for(&repo) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for register_node_with_explicit_id to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "register_node_with_explicit_id must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            head_sha(&repo).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            "n77"
+        );
+        writer.join().unwrap();
     }
 }

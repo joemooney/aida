@@ -1215,7 +1215,7 @@ ttl_secs = 1800
     #[test]
     fn task_1930_team_cas_writers_wait_for_store_write_lock_across_processes() {
         use crate::git_ops;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
 
         if let Ok(store_env) = std::env::var("AIDA_TEST_TEAM_WRITER_CHILD_STORE") {
             let store = std::path::PathBuf::from(store_env);
@@ -1231,7 +1231,13 @@ ttl_secs = 1800
         let store = dir.path().join("store");
         git_ops::init(&store).unwrap();
         git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+        std::fs::write(store.join("README.md"), "seed\n").unwrap();
+        git_ops::add(&store, &["README.md"]).unwrap();
+        git_ops::commit(&store, "seed").unwrap();
+        let initial_head = git_ops::head_sha(&store).unwrap();
+
         let done_file = dir.path().join("child.done");
+        let contended_file = dir.path().join("child.contended");
 
         let (locked_tx, locked_rx) = std::sync::mpsc::channel();
         let (release_tx, release_rx) = std::sync::mpsc::channel();
@@ -1254,13 +1260,29 @@ ttl_secs = 1800
             ])
             .env("AIDA_TEST_TEAM_WRITER_CHILD_STORE", &store)
             .env("AIDA_TEST_TEAM_WRITER_CHILD_DONE", &done_file)
+            .env("AIDA_TEST_STORE_LOCK_CONTENDED_FILE", &contended_file)
             .spawn()
             .unwrap();
 
-        std::thread::sleep(Duration::from_millis(120));
+        // Wait deterministically until the child process has entered
+        // `with_store_write_lock` and observed `EWOULDBLOCK` on `store-write.lock`.
+        let wait_start = Instant::now();
+        while !contended_file.exists() {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(15),
+                "timed out waiting for child process to contend on store-write.lock"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
         assert!(
             !done_file.exists(),
             "child process running set_allowed_seats_cas must block on cross-process flock while parent holds with_store_write_lock"
+        );
+        assert_eq!(
+            git_ops::head_sha(&store).unwrap(),
+            initial_head,
+            "store HEAD must not advance while parent holds with_store_write_lock"
         );
 
         release_tx.send(()).unwrap();

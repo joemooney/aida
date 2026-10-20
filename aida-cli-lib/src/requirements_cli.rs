@@ -3082,13 +3082,14 @@ fn run_add(
                             // the FileDispenser pattern (TASK-331). The in-loop
                             // collision-skip stays; the lock is the real fix.
                             // trace:BUG-474 | ai:claude
-                            // TASK-1930: acquire store_write_lock inside dispense_lock so
-                            // lock ordering is always dispense_lock -> store_write_lock
-                            // and `git_ops::add(store_path, &["registry/blocks.yaml"])`
+                            // TASK-1930 (A1): acquire store_write_lock BEFORE blocks.lock
+                            // (dispense_lock) so lock ordering is always
+                            // store_write_lock -> dispense_lock across all writers and
+                            // `git_ops::add(store_path, &["registry/blocks.yaml"])`
                             // runs under the store write lock.
                             // trace:TASK-1930 | ai:agy
-                            aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
-                                aida_core::db::with_store_write_lock(store_path, || {
+                            aida_core::db::with_store_write_lock(store_path, || {
+                                aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || {
                                     if let Ok(mut registry) =
                                         aida_core::BlockRegistry::load(&blocks_path)
                                     {

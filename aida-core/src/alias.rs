@@ -412,4 +412,69 @@ mod tests {
         // Resolve still works (degrades to case-fold).
         assert_eq!(reg.resolve("Joe"), "joe");
     }
+
+    // trace:TASK-1930 | ai:agy
+    #[cfg(feature = "native")]
+    #[test]
+    fn task_1930_alias_link_cas_waits_for_store_write_lock_barrier() {
+        use crate::git_ops;
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("store");
+        git_ops::init(&store).unwrap();
+        git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+        std::fs::write(store.join("README.md"), "seed\n").unwrap();
+        git_ops::add(&store, &["README.md"]).unwrap();
+        git_ops::commit(&store, "seed").unwrap();
+        let initial_head = git_ops::head_sha(&store).unwrap();
+
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let store_holder = store.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&store_holder, || -> anyhow::Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let store_writer = store.clone();
+        let writer = std::thread::spawn(move || {
+            let changed = link_cas(&store_writer, "joe", "joe.mooney@gmail.com").unwrap();
+            done_tx.send(changed).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while crate::db::store_write_lock_contended_for(&store) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for link_cas to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "link_cas must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            git_ops::head_sha(&store).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert!(done_rx.recv_timeout(Duration::from_secs(10)).unwrap());
+        writer.join().unwrap();
+        assert_eq!(
+            AliasRegistry::load(&store).resolve("joe.mooney@gmail.com"),
+            "joe"
+        );
+    }
 }

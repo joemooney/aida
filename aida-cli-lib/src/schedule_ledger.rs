@@ -376,10 +376,6 @@ pub(crate) fn write_cas_opts(
         }
         let step =
             match aida_core::db::with_store_write_lock(store_root, || -> Result<StepOutcome> {
-                if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
-                    eprintln!("  schedule ledger for '{job}' not written this tick: {err}");
-                    return Ok(StepOutcome::Return(false));
-                }
                 if attempt > 0 && !local_only {
                     git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
                 }
@@ -409,10 +405,9 @@ pub(crate) fn write_cas_opts(
                 Ok(step) => step,
                 Err(err) => {
                     if let Err(unsafe_err) = git_ops::ensure_store_write_safe(store_root) {
-                        eprintln!(
-                            "  schedule ledger for '{job}' not written this tick: {unsafe_err}"
-                        );
-                        return Ok(false);
+                        return Err(err.context(format!(
+                            "schedule ledger for '{job}' left store unsafe: {unsafe_err}"
+                        )));
                     }
                     return Err(err);
                 }
@@ -548,10 +543,6 @@ pub(crate) fn write_batch_cas_opts(
         let step = match aida_core::db::with_store_write_lock(
             store_root,
             || -> Result<BatchStepOutcome> {
-                if let Err(err) = git_ops::ensure_store_write_safe(store_root) {
-                    eprintln!("  schedule ledgers not written this tick: {err}");
-                    return Ok(BatchStepOutcome::Return(0));
-                }
                 if attempt > 0 && !local_only {
                     git_ops::pull_rebase_auto_merge(store_root, "origin", &branch)?;
                 }
@@ -581,8 +572,9 @@ pub(crate) fn write_batch_cas_opts(
             Ok(step) => step,
             Err(err) => {
                 if let Err(unsafe_err) = git_ops::ensure_store_write_safe(store_root) {
-                    eprintln!("  schedule ledgers not written this tick: {unsafe_err}");
-                    return Ok(0);
+                    return Err(
+                        err.context(format!("schedule ledgers left store unsafe: {unsafe_err}"))
+                    );
                 }
                 return Err(err);
             }
@@ -897,5 +889,90 @@ mod tests {
         stale_next.note = base.note.clone();
         let merged = reapply_delta(Some(&base), &stale_next, Some(&fresh));
         assert_eq!(merged.note.as_deref(), Some("done by advisor"));
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_schedule_ledger_cas_and_batch_wait_for_store_write_lock_and_preserve_errors() {
+        use std::time::{Duration, Instant};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("store");
+        std::fs::create_dir_all(&root).unwrap();
+        aida_core::git_ops::init(&root).unwrap();
+        aida_core::git_ops::configure_user(&root, "Test", "test@example.com").unwrap();
+        std::fs::write(root.join("README.md"), "seed\n").unwrap();
+        aida_core::git_ops::add(&root, &["README.md"]).unwrap();
+        aida_core::git_ops::commit(&root, "seed").unwrap();
+        let initial_head = aida_core::git_ops::head_sha(&root).unwrap();
+
+        // 1. Barrier test: write_cas_opts blocks on store_write_lock until released.
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let root_holder = root.clone();
+        let holder = std::thread::spawn(move || {
+            aida_core::db::with_store_write_lock(&root_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let root_writer = root.clone();
+        let writer = std::thread::spawn(move || {
+            let wrote = write_cas_opts(&root_writer, "mailbox-triage", false, |l| {
+                l.result = Some("ok".into());
+                l.last_run = Some(at(5, 0));
+            })
+            .unwrap();
+            done_tx.send(wrote).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&root) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for write_cas_opts to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "write_cas_opts must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            aida_core::git_ops::head_sha(&root).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert!(done_rx.recv_timeout(Duration::from_secs(10)).unwrap());
+        writer.join().unwrap();
+
+        // 2. When an in-lock step fails AND leaves the store unsafe (simulated by
+        // creating rebase-merge inside the mutate callback and making git add fail),
+        // write_cas_opts and write_batch_cas_opts preserve the original error instead
+        // of masking it as Ok(false) / Ok(0).
+        let index_path = root.join(".git").join("index");
+        let index_bak = root.join(".git").join("index.bak");
+        std::fs::rename(&index_path, &index_bak).unwrap();
+        std::fs::create_dir_all(&index_path).unwrap();
+        let err = write_cas_opts(&root, "session-reap", false, |l| {
+            std::fs::create_dir_all(root.join(".git").join("rebase-merge")).unwrap();
+            l.result = Some("failed:1".into());
+            l.last_run = Some(at(6, 0));
+        })
+        .unwrap_err();
+        let rendered = format!("{err:#}");
+        assert!(
+            rendered.contains("left store unsafe") && rendered.contains("git add failed"),
+            "expected preserved original error with unsafe context, got: {rendered}"
+        );
     }
 }
