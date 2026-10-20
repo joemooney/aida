@@ -49,6 +49,11 @@ default_limit = 10
 "task_1527_refresh_worker:tests/task_1527_refresh_worker.rs" = 15  # max measured 6.8s, median 6.4s over 8 runs, 7 tests
 "task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 8.2s, median 7.8s over 8 runs, 4 tests
 
+# Real reviewer setup plus recorder/authority-negative subprocesses measured
+# 16.84s on the loaded agent profile; allow fixture/setup headroom in CI.
+# trace:BUG-2187 | ai:codex
+"bug_2187_reviewer_record_identity:tests/bug_2187_reviewer_record_identity.rs" = 30
+
 # Per-lane budgets for a binary split across lanes; test-timings.py --lane
 # applies them over [budget]. Each lib half's time on PR-2769 runs 39383875258,
 # 39396053306 and 39398646423, recomputed for the halves these weights produce
@@ -59,11 +64,6 @@ default_limit = 10
 
 [lane_budget.lib-1]
 "aida_cli_lib:src/lib.rs" = 340  # max 223.7s (runs: 156.4, 213.5, 223.7s), ~5128 tests
-
-# Real reviewer setup plus recorder/authority-negative subprocesses measured
-# 16.84s on the loaded agent profile; allow fixture/setup headroom in CI.
-# trace:BUG-2187 | ai:codex
-"bug_2187_reviewer_record_identity:tests/bug_2187_reviewer_record_identity.rs" = 30
 
 # Deterministic CLI half-split weights, measured on main 128a5bb6eb,
 # CI run 39348896342. Independent of the enforcement limits above.
