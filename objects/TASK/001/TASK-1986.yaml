@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:59:33.046241065Z
-modified_at: 2026-10-20T08:23:28.648369577Z
+modified_at: 2026-10-20T10:35:59.006276823Z
 req_type: Task
 tags:
 - from-review:PR-2765
@@ -21,6 +21,13 @@ relationships:
   target_id: 01a15809-0e2d-72a2-b3f9-6b4c002c834c
   created_at: 2026-10-20T08:23:28.648356979Z
   created_by: joe
+comments:
+- id: 01a158e1-da9e-72a2-85fd-54025fbfd50e
+  author: joe
+  content: 'Advisor measurement 2026-10-20 03:35, main 0ec... (post-#2765), worktree measure-1985. Edit: append a comment line to aida-cli-lib/src/lib.rs, then cargo build --profile agent -p aida-cli. Incremental (profile default): 16.2 / 33.8 / 25.1 s, median 25.1 s (load 7-9). CARGO_INCREMENTAL=0: 159.1 / 153.8 / 172.0 s, median 159.1 s (load 6-9). Result: 6.3x faster small-edit rebuilds. sccache was unavailable (direct rustc) in both arms.'
+  created_at: 2026-10-20T10:35:59.006276823Z
+  modified_at: 2026-10-20T10:35:59.006276823Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15868-905a-7200-a028-546ffd88dc75
   author: joe
