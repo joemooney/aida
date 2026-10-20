@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-20T08:01:35.876394554Z
+modified_at: 2026-10-20T08:22:44.902291811Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -27,6 +27,10 @@ relationships:
     custom: implemented-by
   target_id: 01a150ce-4c30-7a43-8df0-7a0ba858f654
   created_at: 2026-10-18T20:58:09.506532324Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a15855-231c-71a0-b17d-ed40af6ce96e
+  created_at: 2026-10-20T08:22:44.902278531Z
   created_by: joe
 comments:
 - id: 01a13674-e6c8-7301-a928-1e5f83dd6122
@@ -237,6 +241,11 @@ history:
   author: joe
   timestamp: 2026-10-20T08:01:36.332142956Z
   session_id: 01a1584f4c1c
+  changes: []
+- id: 01a15867-e720-73c0-9253-eaab946ab51d
+  author: joe
+  timestamp: 2026-10-20T08:22:46.816972568Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
 execution_mode: drain
 filed_at:
