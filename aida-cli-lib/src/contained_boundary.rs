@@ -191,9 +191,10 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// itself) directly from `write_roots` even when `store_write_paths` is empty.
 ///
 /// Linked worktrees (whose `gitdir:` target has a `commondir` file or lives
-/// under `worktrees/<name>`), `BUG-2169` seat clones, and non-checkout
-/// directories (no `.git`, or a nested `.git` outside the checkout root) are
-/// not main checkouts, so their paths stay allowed.
+/// under `worktrees/<name>`) and non-checkout directories (no `.git`, or a
+/// nested `.git` outside the checkout root) are not main checkouts, so their
+/// paths stay allowed. No seat-clone name or marker exempts a main checkout's
+/// real `.git`: those markers are writable by the contained session.
 // trace:BUG-2012 | ai:antigravity
 pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut denied = Vec::new();
@@ -203,9 +204,6 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
         }
     };
     for root in write_roots {
-        if aida_core::seat_clone_detect::seat_clone_root(root).is_some() {
-            continue;
-        }
         let git_entry = root.join(".git");
         let Ok(meta) = std::fs::symlink_metadata(&git_entry) else {
             continue;

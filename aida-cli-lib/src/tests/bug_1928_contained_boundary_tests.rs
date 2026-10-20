@@ -748,6 +748,56 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
 
 // trace:BUG-2012 | ai:antigravity
 #[test]
+fn main_checkout_git_denied_even_with_seat_clone_marker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+
+    // A main checkout that a contained session has dressed up as a seat clone:
+    // `aida-seat-*` name AND the marker file. Both are writable by the session,
+    // so neither may exempt the real `.git`.
+    let marked = parent.join("aida-seat-forged");
+    std::fs::create_dir_all(marked.join(".git/hooks")).unwrap();
+    std::fs::create_dir_all(marked.join("src")).unwrap();
+    let marker = marked.join(aida_core::seat_clone_detect::MARKER_RELATIVE);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "forged = true\n").unwrap();
+    assert!(
+        aida_core::seat_clone_detect::seat_clone_root(&marked).is_some(),
+        "fixture must look like a seat clone"
+    );
+
+    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&marked));
+    assert!(
+        denied.contains(&marked.join(".git")),
+        "main checkout .git must be denied whatever the seat-clone marker says: {denied:?}"
+    );
+    assert!(
+        crate::session::main_git_deny_paths(&marked).contains(&marked.join(".git")),
+        "main_git_deny_paths must include the marked checkout's .git"
+    );
+
+    let settings = settings_for(&marked);
+    let pre_commit = marked.join(".git/hooks/pre-commit");
+    let git_config = marked.join(".git/config");
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&settings, tool, &marked.join("src/lib.rs"), &marked, &home),
+            "{tool} inside src/ must remain allowed: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &pre_commit, &marked, &home),
+            "{tool} on marked checkout .git/hooks/pre-commit must be denied: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &git_config, &marked, &home),
+            "{tool} on marked checkout .git/config must be denied: {settings}"
+        );
+    }
+}
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
 fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
     let (_tmp, parent, worktree) = pool_fixture();
     std::fs::create_dir_all(worktree.join(".aida-store")).unwrap();
