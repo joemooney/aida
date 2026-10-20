@@ -13213,6 +13213,15 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
+    // Watch context only restricts an ordinary attested launch; it cannot
+    // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
+    let watch_prompt;
+    let prompt = if crate::review_watch::reviewer_launch_context(project_root, pr)? {
+        watch_prompt = format!("{prompt}\n\nReview-watch policy: do not run Cargo or local test/build commands. Inspect source and existing CI evidence; record the ordinary attested verdict. Never merge or update the branch.");
+        watch_prompt.as_str()
+    } else {
+        prompt
+    };
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);

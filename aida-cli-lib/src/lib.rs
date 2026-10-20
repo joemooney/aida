@@ -187,6 +187,8 @@ mod remote_cmd;
 mod requirements_cli;
 mod review_cmd;
 mod review_gates;
+// trace:TASK-1993 | ai:codex
+mod review_watch;
 mod role;
 mod runaway_seats;
 mod scaffold_init;
