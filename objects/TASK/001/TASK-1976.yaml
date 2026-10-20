@@ -1,0 +1,32 @@
+id: 01a1577a-fd43-7f11-b266-7c80829c35d4
+spec_id: TASK-1976
+agreed_id: TASK-1976
+title: 'TASK-1752 grant-env guard: env-read detector misses split, aliased and vars() reads'
+description: |
+  `is_env_read` in aida-cli-lib/src/tests/task_1752_grant_env_guard_tests.rs:164-167 flags a read only when `env::var(`/`env::var_os(` and `GRANT_ENV` sit on the SAME line. These do not trip it:
+  - a rustfmt-split call: `std::env::var(\n    crate::seat_authority::GRANT_ENV,\n)` (rustfmt splits this once the line passes 100 columns)
+  - an alias: `use crate::seat_authority::GRANT_ENV as G; std::env::var(G)`, or `let k = seat_authority::GRANT_ENV; std::env::var(k)`
+  - iteration: `std::env::vars().find(|(k, _)| k == GRANT_ENV)`
+  The literal ban (`AIDA_SESSION_GRANT` named outside seat_authority.rs) is robust. Only the "reads GRANT_ENV directly" half is heuristic. Why it matters: TASK-1752 exists so that a third grant validator can't appear unnoticed, and a split read is the likeliest way one would. Suggested fix: match over the whitespace-normalised file text (join the production lines, collapse whitespace), and/or ban `GRANT_ENV` outside `.env(`/`.env_remove(`/`EnvVarsGuard` contexts. Add a self-test fixture for the split form.
+
+  Raised in review of PR-2763: https://github.com/joemooney/aida/pull/2763
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:04:00.451710493Z
+modified_at: 2026-10-20T04:04:00.451710493Z
+req_type: Task
+tags:
+- from-review:PR-2763
+- guard
+- seat-authority
+- severity:minor
+filed_at:
+  code_sha: dc521b2acf8609e4c0f0f0f1fafbd1f92c460416
+  branch: pr-2763
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a15759e546
