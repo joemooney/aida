@@ -54,6 +54,12 @@ default_limit = 10
 # trace:BUG-2187 | ai:codex
 "bug_2187_reviewer_record_identity:tests/bug_2187_reviewer_record_identity.rs" = 30
 
+# Focus/status disclosure fixture: full original matrix measured 51.13s on
+# the loaded local agent profile; the reduced renderer/status matrix keeps
+# each axis covered separately. CI/debug budget includes headroom for setup.
+# trace:BUG-2190 | ai:codex
+"bug_2190_list_focus_disclosure:tests/bug_2190_list_focus_disclosure.rs" = 80
+
 # Per-lane budgets for a binary split across lanes; test-timings.py --lane
 # applies them over [budget]. Each lib half's time on PR-2769 runs 39383875258,
 # 39396053306 and 39398646423, recomputed for the halves these weights produce
