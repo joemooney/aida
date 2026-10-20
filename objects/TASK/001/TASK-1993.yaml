@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T07:23:12.251645147Z
-modified_at: 2026-10-20T07:52:13.397388139Z
+modified_at: 2026-10-20T07:52:17.478700298Z
 req_type: Task
 tags:
 - dispatch
@@ -28,6 +28,13 @@ relationships:
 - rel_type: Child
   target_id: 01a154c5-609a-7d51-9126-d7d4345597dd
   created_at: 2026-10-20T07:23:23.774922454Z
+comments:
+- id: 01a1584b-fd46-7f11-86d2-ff86c9b5c75a
+  author: joe
+  content: 'Advisor 2026-10-20 00:55: promoted to Approved under the TASK-1945 sketch signoff (S1 = discovery + ordinary attested dispatch + state/locks + stale-overlap notice; no signals or process termination; ship-ready uses the TASK-1960/1968 carry-over; no automatic update-branch).'
+  created_at: 2026-10-20T07:52:17.478700298Z
+  modified_at: 2026-10-20T07:52:17.478700298Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15831-932b-7d62-817b-31414de69032
   author: ai:codex:joe
