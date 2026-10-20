@@ -151,6 +151,10 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
 
     trace:TASK-1763 | ai:claude
     """
+    # The workflow's matrix selector covers four disjoint lanes. Compile their
+    # workspace union through the very same planner. trace:TASK-1949 | ai:codex
+    if source_command.strip() == 'python3 scripts/ci-test-shards.py --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log':
+        return "python3 scripts/ci-test-shards.py --compile --profile agent"
     try:
         argv = shlex.split(source_command.strip())
     except ValueError as err:
@@ -185,6 +189,10 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
 
 def local_test_command(command: str) -> str:
     """CI's step body with every `cargo test` moved to the local test profile."""
+    # Resolve the CI-only matrix context to all lanes for explicit local full
+    # runs; the compile tier uses --compile instead. trace:TASK-1949 | ai:codex
+    if command.startswith('python3 scripts/ci-test-shards.py --shard '):
+        return command.replace('"${{ matrix.shard }}"', 'all --profile agent')
     return CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
 
 

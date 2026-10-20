@@ -282,19 +282,16 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
         .expect("CI's `Run tests` step must have a run body")
         .trim()
         .to_string();
-    let run_tests = match run_tests.rsplit_once(" 2>&1 | tee ") {
-        Some((head, log)) if !log.contains(' ') => head.to_string(),
-        _ => run_tests,
-    };
-    assert!(
-        run_tests.starts_with("cargo test ")
-            && !run_tests.contains('\n')
-            && !["|", "&&", ";", "--profile"]
-                .iter()
-                .any(|bad| run_tests.contains(bad)),
-        "CI's `Run tests` is `{run_tests}`, a shape derive_compile_command in \
-         scripts/check-ci-gates.py does not reshape; update both together"
+    // Four matrix lanes share one planner; its compile mode covers their
+    // workspace union without executing tests. trace:TASK-1949 | ai:codex
+    assert_eq!(
+        run_tests,
+        r#"python3 scripts/ci-test-shards.py --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log"#,
+        "update the compile derivation when the CI test planner changes"
     );
+    let planner = std::fs::read_to_string(root.join("scripts/ci-test-shards.py"))
+        .expect("CI shard planner must exist");
+    assert!(planner.contains("['cargo', 'test', '--workspace', '--no-run']"));
 
     let makefile = std::fs::read_to_string(root.join("Makefile")).expect("Makefile readable");
     assert!(
