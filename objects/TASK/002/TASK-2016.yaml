@@ -1,0 +1,26 @@
+id: 01a15a92-598f-7c80-b015-f1827e14f58b
+spec_id: TASK-2016
+agreed_id: TASK-2016
+title: Move BUG-2174 trace comment next to the 'Where change notes go' section in aida_md.rs
+description: |
+  aida-core/src/scaffolding/aida_md.rs:202: the trace:BUG-2174 comment sits above the '### Agent surface' push_str, about 85 lines before the '## Where change notes go' text it describes (around line 288). Move it next to the section, or say which section it refers to.
+
+  Raised in review of PR-2783: https://github.com/joemooney/aida/pull/2783
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:28:23.055974002Z
+modified_at: 2026-10-20T18:28:23.055974002Z
+req_type: Task
+tags:
+- from-review:PR-2783
+- severity:cosmetic
+filed_at:
+  code_sha: 1a4434b4adda869a708ec5cbaa3d9ccdfeb097be
+  branch: pr-2783
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 01a15a8a51ed

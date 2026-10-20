@@ -1,0 +1,27 @@
+id: 01a15a92-4851-74b3-872e-7f2cd9ca315d
+spec_id: TASK-2015
+agreed_id: TASK-2015
+title: Claude sessions in the AIDA repo never see the 'Where change notes go' rule
+description: |
+  PR-2783 (BUG-2174) puts the rule in generate_aida_md, which feeds .claude/AIDA.md and the AGENTS.md autogen block. In the AIDA repo itself .claude/AIDA.md is neither tracked nor present, and CLAUDE.md doesn't carry the rule or point at AGENTS.md. So Claude sessions here never get it, while the operator's global ~/.claude/CLAUDE.md asks them to keep OVERVIEW.md updated. Consider a one-line rule or pointer in CLAUDE.md, within aida-core/templates/context-budget.toml.
+
+  Raised in review of PR-2783: https://github.com/joemooney/aida/pull/2783
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:28:18.641779788Z
+modified_at: 2026-10-20T18:28:18.641779788Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2783
+- severity:minor
+filed_at:
+  code_sha: 1a4434b4adda869a708ec5cbaa3d9ccdfeb097be
+  branch: pr-2783
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 01a15a8a51ed
