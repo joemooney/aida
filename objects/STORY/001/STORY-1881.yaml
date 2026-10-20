@@ -1,0 +1,35 @@
+id: 01a15a86-67e7-7e43-a1b5-c2c3b371e196
+spec_id: STORY-1881
+agreed_id: STORY-1881
+title: 'Review PR-2782: [AI:codex] fix(launch): roll back owned setup and honor explicit cwd (BUG-2188 BUG-2168)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `codex/bug-2188`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2782>
+  - Branch: `codex/bug-2188` → `main`
+
+  ## Covers
+
+  - BUG-2188
+  - BUG-2168
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2782` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:15:20.295252094Z
+modified_at: 2026-10-20T18:15:20.295252094Z
+req_type: Story
+filed_at:
+  code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
