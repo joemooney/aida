@@ -1,10 +1,54 @@
-//! Informational Claude tool-hook notices; no graph/cache/storage handle.
+//! Informational Claude, Codex, and Antigravity tool-hook notices; no graph/cache/storage handle.
 // trace:BUG-2014 | ai:codex
+// trace:TASK-1744 | ai:antigravity
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NoticeClient {
+    Claude,
+    Codex,
+    Antigravity,
+}
+
+impl NoticeClient {
+    pub(crate) fn parse(raw: &str) -> Result<Self> {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "" | "claude" | "claude-code" => Ok(Self::Claude),
+            "codex" | "codex-cli" => Ok(Self::Codex),
+            "agy" | "antigravity" | "antigravity-cli" => Ok(Self::Antigravity),
+            other => anyhow::bail!(
+                "unsupported expiry-notice client `{other}` (expected claude, codex, or agy)"
+            ),
+        }
+    }
+
+    pub(crate) fn render(self, message: Option<String>) -> Option<serde_json::Value> {
+        match (self, message) {
+            (Self::Claude | Self::Codex, Some(message)) => Some(serde_json::json!({
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": message
+                }
+            })),
+            (Self::Claude | Self::Codex, None) => None,
+            // Antigravity CLI 1.4.2 PreInvocation hook contract (documented in
+            // `~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md`,
+            // sections "2. `PostToolUse` Contract" and "4. `PreInvocation` Contract"):
+            // `injectSteps` injects an ephemeral message before the model call,
+            // and `{}` is an explicit no-op JSON object on stdout.
+            (Self::Antigravity, Some(message)) => Some(serde_json::json!({
+                "injectSteps": [
+                    { "ephemeralMessage": message }
+                ]
+            })),
+            (Self::Antigravity, None) => Some(serde_json::json!({})),
+        }
+    }
+}
 
 #[derive(Default, Serialize, Deserialize)]
 struct Ledger {
@@ -86,18 +130,29 @@ fn notice(root: &Path, now: DateTime<Utc>) -> Result<Option<String>> {
     ))
 }
 
-pub(crate) fn handle() -> Result<()> {
+pub(crate) fn handle(raw_client: &str) -> Result<()> {
+    let client = match NoticeClient::parse(raw_client) {
+        Ok(client) => client,
+        Err(error) => {
+            eprintln!("Expiry notice unavailable: {error:#}");
+            return Ok(());
+        }
+    };
     let root = crate::find_project_root().unwrap_or_else(|_| ".".into());
     match notice(&root, Utc::now()) {
-        Ok(Some(message)) => println!(
-            "{}",
-            serde_json::json!({
-                "hookSpecificOutput": { "hookEventName": "PreToolUse", "additionalContext": message }
-            })
-        ),
-        Ok(None) => {}
-        // No stdout on ledger failure, no refusal or permission decision.
-        Err(error) => eprintln!("Expiry notice unavailable: {error:#}"),
+        Ok(message) => {
+            if let Some(payload) = client.render(message) {
+                println!("{payload}");
+            }
+        }
+        // No permission decision or refusal on ledger failure; Antigravity still
+        // receives an empty JSON object so its hook parser stays fail-open.
+        Err(error) => {
+            eprintln!("Expiry notice unavailable: {error:#}");
+            if let Some(payload) = client.render(None) {
+                println!("{payload}");
+            }
+        }
     }
     Ok(())
 }
