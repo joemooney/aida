@@ -6,17 +6,26 @@ description: |
   scripts/ci-test-shards.py lib_test_seconds(): `start = next(... int(m[2]) > 1000)` has no default. Passing a non-lib lane log, an untimestamped log (not `gh run view --log`), or a truncated log produces a StopIteration traceback rather than a message that names the file and says what was expected. Developer tool only; cosmetic.
 
   Raised in review of PR-2769: https://github.com/joemooney/aida/pull/2769
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:46:18.284253188Z
-modified_at: 2026-10-20T09:46:18.284253188Z
+modified_at: 2026-10-20T10:56:01.128370191Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-2769
 - severity:cosmetic
+history:
+- id: 01a158f4-3268-7661-8237-0e1d516cea2b
+  author: joe
+  timestamp: 2026-10-20T10:56:01.128366941Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 76205c358d1ff7a9fe34031495942af5cdb8010a
   branch: pr-2769
