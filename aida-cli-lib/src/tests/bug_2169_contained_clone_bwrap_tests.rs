@@ -519,6 +519,96 @@ mod linux {
         let denied =
             crate::contained_boundary::contained_main_checkout_git_deny_paths(&[fx.main.clone()]);
         assert!(denied.contains(&fx.main.join(".git")), "{denied:?}");
+
+        // A FORGED MAIN: the seat builds a repository in a directory it can
+        // write (its own cargo target dir), points its marker and alternates
+        // at it and plants a `clone` lease there. main_for accepts it, since
+        // every file it reads is the seat's, but no host process resolved that
+        // main, so nothing is granted from it.
+        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("real clone");
+        let target = recorded.cargo_target_dir.clone().expect("target dir");
+        let fake = target.join("fake-main");
+        std::fs::create_dir_all(&fake).unwrap();
+        git_ok(&fake, &["init", "-q"]);
+        let marker_path = clone.join(crate::seat_clone::MARKER_RELATIVE);
+        let marker = std::fs::read_to_string(&marker_path).unwrap();
+        let forged_marker = marker.replace(
+            &format!(
+                "main = {}",
+                aida_core::toml_quote::toml_string(&fx.main.display().to_string())
+            ),
+            &format!(
+                "main = {}",
+                aida_core::toml_quote::toml_string(&fake.display().to_string())
+            ),
+        );
+        assert_ne!(forged_marker, marker, "the marker names main: {marker}");
+        std::fs::write(&marker_path, forged_marker).unwrap();
+        let alternates = clone.join(".git/objects/info/alternates");
+        let real_alternates = std::fs::read_to_string(&alternates).unwrap();
+        std::fs::write(
+            &alternates,
+            format!("{}\n", fake.join(".git/objects").display()),
+        )
+        .unwrap();
+        let elsewhere = fx
+            .root
+            .join("elsewhere/worktrees")
+            .join(clone.file_name().unwrap());
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let forged_lease = crate::lease_path(&fake, "b2169f0e9ed2");
+        std::fs::create_dir_all(forged_lease.parent().unwrap()).unwrap();
+        std::fs::write(
+            forged_lease,
+            format!(
+                "id = \"b2169f0e9ed2\"\nscope = \"BUG-2169\"\nslug = \"x\"\nowner = \"t\"\n\
+                 worktree_path = {}\nbranch = \"x\"\nstarted_at = \"2026-10-20T00:00:00Z\"\n\
+                 hostname = \"h\"\ntree_kind = \"clone\"\ncargo_target_dir = {}\n",
+                aida_core::toml_quote::toml_string(&clone.display().to_string()),
+                aida_core::toml_quote::toml_string(&elsewhere.display().to_string())
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::seat_clone::main_for(&clone),
+            crate::seat_clone::MainFor::Verified(fake.canonicalize().unwrap()),
+            "the forgery satisfies every seat-writable check"
+        );
+        assert!(
+            crate::seat_clone::host_recorded_clone(&clone).is_none(),
+            "a forged main is never host-recorded"
+        );
+        let settings = settings_for(&fx.main, &clone);
+        assert!(
+            !entries(&settings, "allowWrite").contains(&elsewhere),
+            "{settings}"
+        );
+        assert!(
+            !crate::session::os_wrap_rw_paths(&clone).contains(&elsewhere),
+            "os_wrap binds nothing from the forged lease"
+        );
+        std::fs::write(&marker_path, &marker).unwrap();
+        std::fs::write(&alternates, real_alternates).unwrap();
+        assert!(crate::seat_clone::host_recorded_clone(&clone).is_some());
+
+        // A target dir that is a symlink grants nothing, nor does a lease that
+        // records any other path for it.
+        std::fs::remove_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &target).unwrap();
+        let recorded = crate::seat_clone::host_recorded_clone(&clone).expect("still a clone");
+        assert_eq!(
+            recorded.cargo_target_dir, None,
+            "a symlinked target dir is refused"
+        );
+        let settings = settings_for(&fx.main, &clone);
+        assert!(
+            !entries(&settings, "allowWrite").contains(&target),
+            "{settings}"
+        );
+        assert!(
+            !entries(&settings, "allowWrite").contains(&elsewhere),
+            "{settings}"
+        );
     }
 
     /// Pre-existing defect (sketch §1, signoff condition 2): `agent new`

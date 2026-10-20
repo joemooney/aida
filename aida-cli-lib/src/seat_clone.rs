@@ -582,11 +582,15 @@ pub(crate) struct HostRecordedClone {
 ///
 /// The trust comes from the `clone` lease in `<main>/.aida/sessions`, which
 /// the host writes and which sits outside every root a contained seat may
-/// write. The marker and alternates the seat can rewrite only point at which
-/// main to read; [`main_for`] still needs that main's lease to name exactly
-/// this root. On top of that, `root` must be the clone root itself (not a
+/// write. The main itself must be one THIS host process resolved
+/// ([`aida_core::seat_clone_detect::is_host_main`]): [`main_for`] reads main
+/// from the seat-writable marker, so without that anchor a seat could point
+/// its marker at a forged "main" in a directory it can write and plant a
+/// lease there. On top of that, `root` must be the clone root itself (not a
 /// directory inside one), be named `aida-seat-*`, and neither contain the
-/// main checkout nor sit inside it.
+/// main checkout nor sit inside it. The cargo target directory is accepted
+/// only at exactly `<main>/target/worktrees/<clone dir>`, as a real
+/// directory, never a symlink.
 // trace:BUG-2169 | ai:claude
 pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
     let root = root.canonicalize().ok()?;
@@ -603,6 +607,9 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
     let MainFor::Verified(main) = main_for(&root) else {
         return None;
     };
+    if !aida_core::seat_clone_detect::is_host_main(&main) {
+        return None;
+    }
     if main.starts_with(&root) || root.starts_with(&main) {
         return None;
     }
@@ -610,14 +617,14 @@ pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
         lease.tree_kind == TreeKind::Clone
             && lease.worktree_path.canonicalize().is_ok_and(|p| p == root)
     })?;
-    // The target directory is the seat's alone: `<…>/worktrees/<clone dir>`.
+    // The target directory is the seat's alone, at the one place the host
+    // puts it, and a real directory (a symlink there would grant its target).
+    let expected = main
+        .join("target")
+        .join("worktrees")
+        .join(root.file_name()?);
     let cargo_target_dir = lease.cargo_target_dir.filter(|dir| {
-        dir.is_absolute()
-            && dir.file_name() == root.file_name()
-            && dir
-                .parent()
-                .and_then(Path::file_name)
-                .is_some_and(|n| n == "worktrees")
+        *dir == expected && std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_dir())
     });
     Some(HostRecordedClone {
         root,

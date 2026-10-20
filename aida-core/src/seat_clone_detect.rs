@@ -84,6 +84,18 @@ fn host_mains() -> Vec<PathBuf> {
     mains
 }
 
+/// Whether `main` is a main checkout THIS host process resolved itself:
+/// one recorded by [`note_host_main`] (host `git worktree list` on a path
+/// that is not a seat clone) or the git root of this process's cwd. Never
+/// derived from a seat clone's marker, which the seat can rewrite.
+// trace:BUG-2169 | ai:claude
+pub fn is_host_main(main: &Path) -> bool {
+    let Ok(main) = main.canonicalize() else {
+        return false;
+    };
+    host_mains().iter().any(|m| *m == main)
+}
+
 /// The trees of `main`'s `clone` session leases, read from the host-side
 /// `<main>/.aida/sessions/*.toml` (never from a clone). FIFO-safe.
 // trace:BUG-2169 | ai:claude
