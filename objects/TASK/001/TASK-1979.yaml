@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:09.676386991Z
-modified_at: 2026-10-20T06:14:19.952021071Z
+modified_at: 2026-10-20T06:20:05.695311405Z
 req_type: Task
 tags:
 - ci
@@ -44,6 +44,12 @@ comments:
   content: 'Flipped Draft → Done: a trailered commit (76e5dca) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
   created_at: 2026-10-20T06:05:55.877326413Z
   modified_at: 2026-10-20T06:05:55.877326413Z
+- id: 01a157f7-94bf-7773-a3c8-c44fe529cb18
+  author: joe
+  content: 'Advisor 2026-10-19 23:25: REOPENED. Only the aida_core budget recalibration shipped (76e5dcacba). The squash subject got an extra ''(TASK-1979)'' appended after ''(Refs TASK-1979)'', which auto-completed this spec. Still open: (1) split the aida-cli-lib unit-test lane (lib was 11m11s of the 11m21s wall time); (2) save rust-cache from the test lanes too, not only gates; (3) the shard-union guard (ex-TASK-1978); (4) the check-ci-list label (ex-TASK-1980); (5) recalibrate every per-binary budget against the post-S6 lanes (median of 3 main runs).'
+  created_at: 2026-10-20T06:20:05.695311405Z
+  modified_at: 2026-10-20T06:20:05.695311405Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a157a5-04aa-7932-814b-b790be101737
   author: joe
