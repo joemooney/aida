@@ -38,7 +38,8 @@ jobs:
         # trace:TASK-1723 | ai:claude
         os: [ubuntu-latest]
         # trace:TASK-1949 | ai:codex
-        shard: [lib, cli-0, cli-1, rest, gates, contracts]
+        # lib-0/lib-1 split aida-cli-lib's unit tests by module. trace:TASK-1979 | ai:claude
+        shard: [lib-0, lib-1, cli-0, cli-1, rest, gates, contracts]
 
     steps:
       - uses: actions/checkout@v5
@@ -114,11 +115,15 @@ jobs:
           sudo apt-get install -y zsh
           zsh --version
 
+      # The test lanes compile test binaries and dev-deps that gates never
+      # builds, so each lane group (lib, cli, rest) saves its own cache;
+      # gates and contracts keep the shared one. trace:TASK-1979 | ai:claude
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile
-          save-if: ${{ matrix.shard == 'gates' }}
+          key: ${{ (startsWith(matrix.shard, 'lib-') && 'lib') || (startsWith(matrix.shard, 'cli-') && 'cli') || (matrix.shard == 'rest' && 'rest') || '' }}
+          save-if: ${{ matrix.shard != 'contracts' }}
 
       # Check the feature-disabled stubs separately: a workspace build can
       # unify the TUI feature back in and hide errors in those branches.
@@ -151,7 +156,7 @@ jobs:
       # bin, in the same dev profile and cache as the tests.
       # trace:TASK-1949 | ai:claude
       - name: Build aida binary for lib unit tests
-        if: ${{ matrix.shard == 'lib' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo build -p aida-cli --bin aida
 
       # Marker enumeration makes the external-prose inventory a generated,
@@ -259,8 +264,10 @@ jobs:
       # gate is flipped and the full suite runs by default.
       # trace:TASK-451 | ai:claude
       # trace:TASK-453 | ai:claude
+      # Runs in gates: contracts was the next-longest lane once lib split.
+      # trace:TASK-1979 | ai:claude
       - name: Run MCP stdio compatibility tests
-        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_mcp_stdio.sh
 
       # trace:STORY-1477 | ai:codex

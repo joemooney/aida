@@ -1,6 +1,6 @@
-CI fan-out keeps libtest: CLI-library units, two deterministic CLI-integration
-halves, remaining workspace tests/doctests, and two gate lanes run on six
-parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
+CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
+run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
 lanes succeed. Test timing budgets remain per binary, and each test lane checks
 for untracked root entries. See [CI fan-out](docs/testing/ci-test-shards.md).
 <!-- trace:TASK-1949 | ai:codex -->

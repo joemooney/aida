@@ -1,14 +1,23 @@
 # CI test lanes
 
 <!-- trace:TASK-1949 | ai:codex -->
+<!-- trace:TASK-1979 | ai:claude -->
 
-The `build` matrix runs six Ubuntu lanes with the same `ci-dev-profile`
-Rust dependency cache. The gates lane saves the cache; other lanes restore it.
+The `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
+dependency cache. Gates and contracts share the base cache, which gates saves.
+Each test-lane group (`lib`, `cli`, `rest`) saves and restores its own keyed
+cache, because the test lanes compile test binaries and dev-dependencies that
+gates never builds.
 `build-result` retains the required `Build (ubuntu-latest)` check and runs even
 when a lane fails or is cancelled. It succeeds only when the whole matrix does.
 The separate merge-hold workflow is unchanged.
 
-- `lib`: `aida-cli-lib` library unit tests.
+- `lib-0` and `lib-1`: `aida-cli-lib` library unit tests, which form one test
+  binary. Each lane lists the binary's tests and runs half of the top-level
+  modules as libtest name filters. Filters match substrings, so modules whose
+  `<module>::` filter also matches another module's tests share a half.
+  Groups are balanced by test count, largest first. A lane fails if the halves
+  overlap or leave a listed test out.
 - `cli-0` and `cli-1`: Cargo metadata supplies every CLI integration target.
   Targets sort by decreasing measured main-run duration, then name, and alternate
   between halves. `scripts/test-time-budget.toml` records those measurements in
@@ -24,6 +33,11 @@ The separate merge-hold workflow is unchanged.
   Both gate lanes build the workspace. The baseline's non-suite steps total
   1,001 seconds, so splitting tests while leaving a serial gate lane would
   exceed the 12-minute target.
+
+Before running anything, every test lane checks the shard union: the planned
+commands must select every target `cargo test --workspace` runs (each
+test-enabled lib, bin, integration, example, or bench target, and each
+doctest). A target that no lane selects fails the lane and is named.
 
 Docs-only changes skip the test execution and expensive gates; the existing
 unconditional documentation guards still execute in their respective gate lanes. Every test
