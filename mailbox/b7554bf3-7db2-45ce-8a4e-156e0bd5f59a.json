@@ -1,0 +1,19 @@
+{
+  "id": "b7554bf3-7db2-45ce-8a4e-156e0bd5f59a",
+  "thread_id": "b7554bf3-7db2-45ce-8a4e-156e0bd5f59a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792506613493,
+  "body": "6bd0d98c4d.\n(1) Deletions: a porcelain=v2 -z baseline (entry fields plus content hash) is captured before the launch and replaces the mtime filter. Deletes, new files and re-writes to already-dirty files are committed; untouched older dirt stays the host's.\n(2) Rename/copy: both the destination and the source are committed. A path gone from the worktree is staged with git rm --cached --ignore-unmatch.\n(3) Error exits: ChildStoreCommit is armed before the launch in run_standalone_reviewer and RealPhaseDriver::run_reviewer/run_implementer, and commits on drop, so an Err after the child ran still commits.\n(4) Wiring tests drive the real run_standalone_reviewer (AIDA_AGENT_CMD mock) and RealPhaseDriver::run_reviewer (fake aida). The child deletes a lease and adds an object, the launcher takes its no-verdict Err exit, and the test asserts one launcher commit with D and A. Removing the arm from either launcher fails its test.\nGates: check-ci-fast 32/32, test-touched 222/0, check-ci-compile ok. 0 behind main.\nGap: the implementer path has no wiring test, because its BUG-2140 sweep masks a removed call; noted in the PR.",
+  "subject": "PR-2777 ready (BUG-2185)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
