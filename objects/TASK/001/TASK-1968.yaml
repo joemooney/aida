@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T19:47:50.636653217Z
-modified_at: 2026-10-19T19:49:14.279880797Z
+modified_at: 2026-10-20T05:04:02.120396950Z
 req_type: Task
 tags:
 - review
@@ -36,6 +36,13 @@ relationships:
   target_id: 01a155b0-3617-7301-9ee2-0bb6cec2af5e
   created_at: 2026-10-19T19:49:14.279876151Z
   created_by: joe
+comments:
+- id: 01a157b1-f248-7fa2-b732-21529879a717
+  author: joe
+  content: 'Advisor 2026-10-19 22:08, fold-in: the review-authorship ledger append races. aida-cli-lib/src/review_authority.rs:686-690 opens with append(true), then calls writeln!(f, "{line}") on an unbuffered File. writeln! can issue two write(2) calls (the body, then the newline), so two concurrent appenders interleave as A-body B-body nl nl. That''s exactly what was seen: line 52 of .aida/review-authorship.jsonl held two records joined as ''}{'', followed by a blank line (2026-10-16, two BUG-2169 leases), and every aida pr ship since then has warned ''malformed line skipped''. Fix: let buf = format!("{line}\n"); f.write_all(buf.as_bytes()), a single write that is atomic under O_APPEND below PIPE_BUF. Add a regression test with N threads appending concurrently, asserting every line parses. The local file was repaired 2026-10-19 (142 records; backup in ~/ai/aida-attic).'
+  created_at: 2026-10-20T05:04:02.120396950Z
+  modified_at: 2026-10-20T05:04:02.120396950Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a155b4-f5df-7221-afe8-d11f01d0d368
   author: joe
