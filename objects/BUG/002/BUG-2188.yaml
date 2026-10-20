@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T04:24:32.117731123Z
+modified_at: 2026-10-20T06:11:04.864563774Z
 req_type: Bug
 tags:
 - agents
@@ -34,6 +34,19 @@ comments:
   content: 'Concrete partial-materialization reproduction in an isolated temp Git repo: a post-checkout hook exiting73 makes git worktree add -b partial <tree> main exit73 with stderr ''Preparing worktree (new branch partial); injected-post-checkout-failure'', while the tree, its .git file and refs/heads/partial all remain. Success-only allocation tracking is insufficient. The queued BUG2188 test build was intentionally canceled before acquiring a Cargo slot (0 runtime per cargo ps) while this ownership design is awaiting advisor ruling; this is not a test failure or pass. Template sync and diff checks completed. No push/PR and no claim of complete AC2.'
   created_at: 2026-10-20T04:24:32.117721355Z
   modified_at: 2026-10-20T04:24:32.117721355Z
+- id: 01a157ef-5420-77e0-9adf-847fca364560
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-19 23:14 (on mail 1c72f6e2, transactional ownership). Choose transactional materialization + EXACT conditional rollback. Don't separate the shared-claim scope now; that's an architecture change, out of scope for a reliability bug.
+    1. Pre-state receipt BEFORE each step: before git worktree add, record (under the existing setup receipt) whether path P and branch B were ABSENT. Only resources this invocation found absent are rollback-eligible. Pre-existing or adopted resources are never deleted, on any path.
+    2. Failure means any nonzero exit, not just 'no tree': git worktree add can exit nonzero AFTER materializing (the post-checkout hook repro), so rollback must inspect the actual post-state, not trust the exit code.
+    3. Rollback checks identity before removing anything: the tree only if P's .git file points to the gitdir this invocation created; the branch only if refs/heads/B still resolves to the start commit we created it at (git update-ref -d B <expected-sha>, compare-and-delete). Anything that doesn't match is left in place and reported with exact recovery commands.
+    4. Claims: release only by compare-and-delete on the lease/claim id THIS invocation acquired. Never release a claim we adopted, or one whose id changed (a successor). No unconditional shared-claim release (you were right to remove it).
+    5. Tests: the post-checkout-hook partial materialization is rolled back; a pre-existing path/branch survives a failed add; a successor claim survives our cleanup; and rollback of a resource whose identity changed is refused and reported.
+    Proceed: no further sketch needed. One PR with BUG-2168, strict review.
+  created_at: 2026-10-20T06:11:04.864563774Z
+  modified_at: 2026-10-20T06:11:04.864563774Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154ba-bb6b-7813-a614-dcecb1f228a8
   author: joe
