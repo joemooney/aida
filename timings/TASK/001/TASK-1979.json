@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1979",
+  "publishes": [
+    {
+      "at": "2026-10-20T06:14:22.972321018Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-20T06:05:21.230010912Z",
+      "spec": "TASK-1979",
+      "seat": "integrator",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T06:14:22.717217176Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "76e5dcacba46ce3306059f045245c9ee1a2adb83",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
