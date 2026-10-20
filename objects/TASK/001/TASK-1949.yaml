@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:39:09.353084265Z
-modified_at: 2026-10-20T01:25:12.635451973Z
+modified_at: 2026-10-20T02:05:14.147311756Z
 req_type: Task
 tags:
 - ci
@@ -32,6 +32,11 @@ comments:
   content: Implementation committed as 515c0944eb with main merged at 3617ffee71 in /home/joe/ai/aida-task-1949. Five CI matrix lanes retain exact Build aggregate; measured CLI target split 34/34; rest preserves original core feature union; both store guards reject parent checkout discovery; shard root hygiene and per-lane timing artifacts remain. 23 Python tests pass. Three author-check rounds caught/fixed core feature coverage and incomplete-suite tally classification; no independent approval. Main run39348896342 at128a5bb6eb baseline11721 passed+ignored across85 binaries,34m29s job/17m45s tests. Mandatory local fast/targeted/compile checks pending behind host Cargo slots; no push or CI acceptance claim yet.
   created_at: 2026-10-20T01:25:12.635451973Z
   modified_at: 2026-10-20T01:25:12.635451973Z
+- id: 01a1570e-4023-7460-a455-9d224b07b0b3
+  author: ai:codex:joe
+  content: 'Measured baseline non-suite steps from main run39348896342 total1001s (16m41s), so a single serial gates lane cannot meet12min. Final layout now has six parallel lanes: four test lanes plus guards/build checks and CLI contracts. Both gate lanes build workspace; only guards saves shared cache. Committed d5c57393fc after main merge3617ffee71. Python23 regressions/classification60/docs-scheduling8 pass; prior targeted Rust4 and fast32 pass, final workflow fast rerun queued. Compile-all-tests is actively running under the ordinary limiter at supported top priority; no full runtime suite or bypass. PR/CI acceptance still pending.'
+  created_at: 2026-10-20T02:05:14.147311756Z
+  modified_at: 2026-10-20T02:05:14.147311756Z
 history:
 - id: 01a154d1-4c98-7b90-86e7-2a418c6e8657
   author: joe
