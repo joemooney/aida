@@ -10817,6 +10817,9 @@ mod tests {
         run_git(&repo, &["init", "-q", "-b", "aida-store"]);
         run_git(&repo, &["config", "user.email", "t@example.com"]);
         run_git(&repo, &["config", "user.name", "t"]);
+        // This case requires dirty-tree refusal rather than the operator's
+        // optional auto-stash behavior. trace:TASK-1981 | ai:codex
+        run_git(&repo, &["config", "rebase.autoStash", "false"]);
         std::fs::write(repo.join("seed"), "seed\n").unwrap();
         run_git(&repo, &["add", "seed"]);
         run_git(&repo, &["commit", "-q", "-m", "seed"]);
