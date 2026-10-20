@@ -3,12 +3,12 @@ spec_id: TASK-1930
 agreed_id: TASK-1930
 title: 'TASK-1332 slice 1: store writer inventory'
 description: 'Slice 1 of TASK-1332, which is item 1 of the 2026-10-12 advisor ruling''s five missing items: inventory every store writer path and whether it holds the existing writer lock across sync pre-commit and rebase. Implemented on branch agy/task-1332. Commits trailer THIS spec, not TASK-1332, so that merging does not auto-complete the parent. Items 2-5 stay on TASK-1332 as open scope.'
-status: Draft
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T01:19:40.941818039Z
-modified_at: 2026-10-20T05:48:02.459163072Z
+modified_at: 2026-10-20T12:57:39.445020229Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -19,6 +19,13 @@ relationships:
   target_id: 01a15756-46f0-7c61-8ead-d7faad7c37b6
   created_at: 2026-10-20T03:24:18.918052099Z
   created_by: joe
+comments:
+- id: 01a15963-8f75-7c50-8130-5ee21b304ab6
+  author: aida-auto-bump
+  content: 'Flipped Draft → Done: a trailered commit (b488fcc) referencing this spec is already on the default branch, though it skipped the intermediate approval states. Confirm it, then move to Completed.'
+  created_at: 2026-10-20T12:57:39.445018648Z
+  modified_at: 2026-10-20T12:57:39.445018648Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a151be-5f4b-7052-92db-05a2f159172f
   author: joe
@@ -45,6 +52,14 @@ history:
   timestamp: 2026-10-20T05:48:02.952955063Z
   session_id: 01a157d0ccaf
   changes: []
+- id: 01a15963-8f75-7c50-8130-5ede14bcd6b9
+  author: aida-auto-bump
+  timestamp: 2026-10-20T12:57:39.445017739Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Done
 filed_at:
   code_sha: 4ac9efab327e10def5d7d2d127bcaeb22c219d54
   branch: main
