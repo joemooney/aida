@@ -7,12 +7,12 @@ description: |-
 
   AC ace25510 verified: bug_1982_main_git_denied_whatever_the_store_grant, bug_1982_symlinked_checkout_denies_every_main_git_spelling, bug_1982_unexpressible_main_git_deny_refuses_the_launch (local run: 9 passed)
   Reviewed sha: bc8bdd901deb2e2a0fd34589a9f6f20cc2507ae6
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T20:42:25.064147232Z
-modified_at: 2026-10-20T10:58:28.392598505Z
+modified_at: 2026-10-20T10:58:30.796103551Z
 req_type: Task
 tags:
 - carried-from:BUG-1982
@@ -31,6 +31,14 @@ history:
   author: joe
   timestamp: 2026-10-20T00:39:26.469756039Z
   changes: []
+- id: 01a158f6-7b0c-7292-b795-938c6857adfe
+  author: joe
+  timestamp: 2026-10-20T10:58:30.796101077Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
   branch: main
@@ -39,3 +47,6 @@ filed_at:
   aida_build_sha: dd4b6ed730
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T10:58:30.796089578Z
