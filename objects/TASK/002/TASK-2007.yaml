@@ -1,0 +1,27 @@
+id: 01a159af-052c-71a0-b49e-45999bdf0071
+spec_id: TASK-2007
+agreed_id: TASK-2007
+title: Add BUG-2012 main-checkout denies to sandbox denyWrite as well as permissions.deny
+description: |
+  session.rs contained_settings_json_with_boundary (3135-3167) appends the main-checkout deny paths only after the sandbox filesystem object is built, so they reach permissions.deny only. BUG-1982's extra_deny writes both layers explicitly; do the same here instead of relying on Claude Code's implicit merge.
+
+  Raised in review of PR-2748: https://github.com/joemooney/aida/pull/2748#issuecomment-6293042943
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T14:20:04.780664128Z
+modified_at: 2026-10-20T14:20:04.780664128Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2748
+- severity:cosmetic
+filed_at:
+  code_sha: 111462ca0b91e1e728da282a2a6392772149a5b1
+  branch: pr-2748
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 01a159a6d27d

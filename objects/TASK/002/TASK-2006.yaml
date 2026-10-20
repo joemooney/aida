@@ -1,0 +1,27 @@
+id: 01a159ae-ed61-7ff1-9974-aae8cc9f0cf6
+spec_id: TASK-2006
+agreed_id: TASK-2006
+title: Main-checkout .git deny misses a .git symlink to a gitfile (BUG-2012)
+description: |
+  contained_main_checkout_git_deny_paths: when <root>/.git is a symlink to a gitfile, symlink_metadata reports a symlink, so neither the dir branch nor the meta.is_file branch fires and nothing is denied. Use git_entry.is_file().
+
+  Raised in review of PR-2748: https://github.com/joemooney/aida/pull/2748#issuecomment-6293042943
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T14:19:58.689297883Z
+modified_at: 2026-10-20T14:19:58.689297883Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2748
+- severity:minor
+filed_at:
+  code_sha: 111462ca0b91e1e728da282a2a6392772149a5b1
+  branch: pr-2748
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 01a159a6d27d

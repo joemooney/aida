@@ -1,0 +1,27 @@
+id: 01a159ae-d5ca-7383-8161-df402a95098a
+spec_id: TASK-2005
+agreed_id: TASK-2005
+title: is_linked_worktree_gitdir trusts a 'worktrees' parent dir without commondir (BUG-2012)
+description: |
+  contained_boundary.rs is_linked_worktree_gitdir returns true whenever the gitdir's parent directory is named 'worktrees', even without commondir, so a main checkout whose separate gitdir lives at <x>/worktrees/<name> gets no .git deny. Real linked gitdirs always have commondir; require it.
+
+  Raised in review of PR-2748: https://github.com/joemooney/aida/pull/2748#issuecomment-6293042943
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T14:19:52.650663484Z
+modified_at: 2026-10-20T14:19:52.650663484Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2748
+- severity:minor
+filed_at:
+  code_sha: 111462ca0b91e1e728da282a2a6392772149a5b1
+  branch: pr-2748
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 01a159a6d27d
