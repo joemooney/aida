@@ -11,13 +11,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:56:58.012592387Z
-modified_at: 2026-10-19T09:56:58.012592387Z
+modified_at: 2026-10-20T17:52:35.705543246Z
 req_type: Task
 tags:
 - contained
 - from-review:PR-2752
 - security
 - severity:minor
+comments:
+- id: 01a15a71-9579-7642-ac7e-4f71573b77aa
+  author: joe
+  content: 'Advisor 10:53: covered by #2748 (BUG-2012, merged 09:17). main_git_deny_paths (session.rs:2869-2881) now resolves a gitfile''s gitdir target via worktree_gitdir_path and denies both <main>/.git and the target, with a --separate-git-dir test. Completing.'
+  created_at: 2026-10-20T17:52:35.705543246Z
+  modified_at: 2026-10-20T17:52:35.705543246Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
