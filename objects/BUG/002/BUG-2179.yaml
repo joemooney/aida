@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T11:38:34.345770381Z
+modified_at: 2026-10-20T11:38:52.798779370Z
 req_type: Bug
 comments:
 - id: 01a150ab-804e-7563-b3ff-4dbebed13b88
@@ -22,6 +22,12 @@ comments:
   created_at: 2026-10-18T20:19:39.214593602Z
   modified_at: 2026-10-18T20:19:39.214593602Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a1591b-6ffe-7980-878b-54c3f00e6999
+  author: joe
+  content: 'Advisor 04:40: promoted to Approved for the overnight lane (one PR together with BUG-2184; scope in the overnight brief item 2).'
+  created_at: 2026-10-20T11:38:52.798779370Z
+  modified_at: 2026-10-20T11:38:52.798779370Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591b-27e9-7df0-84ee-7d6c0f6045b1
   author: joe
