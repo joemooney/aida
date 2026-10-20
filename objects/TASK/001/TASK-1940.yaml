@@ -16,12 +16,12 @@ description: |-
   6. Delete scripts/story-1728/*.py (one-shot migration tools).
   7. Remove the ~154 `#[allow(unreachable_patterns)] _ =>` dead arms and irrefutable let-else on the single-variant Command.
   8. Make the spec-ID leak scan recursive over clap types outside *_args.rs; fix the stale doc at aida-tui/src/cmd_palette.rs:77.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:06:34.604763727Z
-modified_at: 2026-10-19T19:50:14.009952358Z
+modified_at: 2026-10-20T01:13:11.591071399Z
 req_type: Task
 tags:
 - cli
@@ -74,6 +74,14 @@ history:
   timestamp: 2026-10-19T19:50:15.327998895Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a156de-9aa7-7613-99c2-8b4285c15567
+  author: aida-session-start
+  timestamp: 2026-10-20T01:13:11.591070791Z
+  session_id: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
