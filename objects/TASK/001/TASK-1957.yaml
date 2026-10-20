@@ -3,12 +3,12 @@ spec_id: TASK-1957
 agreed_id: TASK-1957
 title: 'STORY-1853 slice S2: cargo-nextest (shadow job, then gating swap; per-test budgets enforce AC4)'
 description: 'Approved sketch: STORY-1853 comment 4 (2026-10-19 00:40). PR 1 adds nextest as a NON-GATING shadow. Run it as its own parallel CI job after S6 fan-out (TASK-1949) lands, so it adds no wall time. It must record pass/fail parity and passed+ignored >= 11,683 for 3 main runs. PR 2 makes nextest gating, using nextest --partition across the S6 test shards in place of the binary half-split, and moves S1 budgets to per-test keys from JUnit (this closes STORY-1853 AC4). Use a serial test-group, with comments, for tests that guard external resources. No retries in the ci profile. Pin the nextest install. Precondition for local use: aida-host''s bin/cargo slot wrapper gates the ''nextest'' subcommand (aida-host STORY-100 lane). Until then agents must not run cargo nextest locally.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:28.623567193Z
-modified_at: 2026-10-20T05:02:03.943738892Z
+modified_at: 2026-10-20T05:12:42.057968243Z
 req_type: Task
 tags:
 - ci
@@ -52,6 +52,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a157b9-e149-7f01-85ec-c9391ad3f77a
+  author: aida-orchestrator
+  timestamp: 2026-10-20T05:12:42.057989349Z
+  session_id: 01a157b1c5e9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -60,3 +68,11 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Shadow nextest lane is correct, non-gating, pinned, and green on all 4 lanes with no added wall time (run 39372369638). But the (TASK-1957) trailer would auto-complete the whole task while PR-2 scope is still open, and the totals parser undercounts exec failures.
+  recovery_hint: address the review findings, move TASK-1957 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T05:12:42.057968243Z
