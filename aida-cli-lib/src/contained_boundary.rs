@@ -183,6 +183,92 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
     denied
 }
 
+/// BUG-2012: when a contained session's write root is a main checkout (where
+/// `<root>/.git` is either a real directory or a main-checkout `.git` gitfile
+/// pointing at its `gitdir:` target), `//<root>/**` would otherwise cover the
+/// main checkout's `.git/hooks/*` and `.git/config`. Deny only the main
+/// checkout's real `.git` (directory or gitfile target, plus the `.git` file
+/// itself) directly from `write_roots` even when `store_write_paths` is empty.
+///
+/// Linked worktrees (whose `gitdir:` target has a `commondir` file or lives
+/// under `worktrees/<name>`) and non-checkout directories (no `.git`, or a
+/// nested `.git` outside the checkout root) are not main checkouts, so their
+/// paths stay allowed. No seat-clone name or marker exempts a main checkout's
+/// real `.git`: those markers are writable by the contained session.
+// trace:BUG-2012 | ai:antigravity
+pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
+    let mut denied = Vec::new();
+    let mut push_unique = |p: PathBuf| {
+        if !denied.contains(&p) {
+            denied.push(p);
+        }
+    };
+    for root in write_roots {
+        let git_entry = root.join(".git");
+        let Ok(meta) = std::fs::symlink_metadata(&git_entry) else {
+            continue;
+        };
+        if meta.is_dir() || git_entry.is_dir() {
+            if git_entry.join("commondir").exists() {
+                continue;
+            }
+            push_unique(git_entry.clone());
+            if let Ok(canon) = std::fs::canonicalize(&git_entry) {
+                push_unique(canon);
+            }
+        } else if meta.is_file() {
+            let Some(raw_target) = aida_core::git_ops::worktree_gitdir_path(root) else {
+                continue;
+            };
+            let target = normalize_lexical(&raw_target);
+            if is_linked_worktree_gitdir(&target) {
+                continue;
+            }
+            push_unique(git_entry.clone());
+            if let Ok(canon_entry) = std::fs::canonicalize(&git_entry) {
+                push_unique(canon_entry);
+            }
+            push_unique(target.clone());
+            if let Ok(canon_target) = std::fs::canonicalize(&target) {
+                push_unique(canon_target);
+            }
+        }
+    }
+    denied
+}
+
+/// Normalize `.` and `..` components lexically so a relative `gitdir:` target
+/// joined onto a write root can be expressed by [`root_rule_path`].
+// trace:BUG-2012 | ai:antigravity
+pub(crate) fn normalize_lexical(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// Whether `gitdir` (the target of a `.git` file) is a linked worktree's own
+/// gitdir (`commondir` present or `<common>/worktrees/<name>`) rather than a
+/// main checkout's `--separate-git-dir` target.
+// trace:BUG-2012 | ai:antigravity
+pub(crate) fn is_linked_worktree_gitdir(gitdir: &Path) -> bool {
+    if gitdir.join("commondir").exists() {
+        return true;
+    }
+    let normalized = std::fs::canonicalize(gitdir).unwrap_or_else(|_| normalize_lexical(gitdir));
+    normalized
+        .parent()
+        .and_then(|p| p.file_name())
+        .is_some_and(|name| name == "worktrees")
+}
+
 /// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from
 /// [`sandbox_allow_write_entries`] and `denyWrite` for each allowed store's
 /// `.git` pointer ([`contained_store_deny_write_paths`]). A store directory

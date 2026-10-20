@@ -5282,6 +5282,10 @@ fn run_config(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-2189 | ai:claude
+    if matches!(args.inner, ConfigCommand::Format { .. }) {
+        crate::command_registry::refuse_global_format(ctx, "config format")?;
+    }
     match &ctx.store {
         None => {
             // `aida config menu` is a navigable TUI view over the resolved config
