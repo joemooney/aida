@@ -1,0 +1,11 @@
+{
+  "aida-grant-expiry-notice": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || { printf '{}\\n'; exit 0; }; h=\"$top/.agents/hooks/aida-grant-expiry-notice.sh\"; [ -x \"$h\" ] || { printf '{}\\n'; exit 0; }; \"$h\" --client agy",
+        "timeout": 2
+      }
+    ]
+  }
+}

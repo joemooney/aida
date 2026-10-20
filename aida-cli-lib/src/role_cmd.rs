@@ -23,8 +23,9 @@ pub(crate) use role_cmd_args::*;
 pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     // The hook path must not initialize storage or statusline/cache context.
     // trace:BUG-2014 | ai:codex
-    if matches!(cmd, RoleCommand::ExpiryNotice) {
-        return crate::grant_expiry_notice::handle();
+    // trace:TASK-1744 | ai:antigravity
+    if let RoleCommand::ExpiryNotice { client } = cmd {
+        return crate::grant_expiry_notice::handle(client);
     }
     let project_root = statusline_project_root();
     match cmd {
@@ -58,7 +59,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             warn_within,
             refuse_within,
         } => handle_role_expiry(warn_within, refuse_within.as_deref()),
-        RoleCommand::ExpiryNotice => unreachable!("notice dispatches before role setup"),
+        RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
