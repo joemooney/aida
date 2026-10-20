@@ -2422,8 +2422,34 @@ pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Resul
                 return Ok(false);
             }
             if rebase_in_progress(repo) {
-                let _ = git(repo, &["rebase", "--abort"]);
-                return Ok(false);
+                // Rebase state also survives signing and other replay failures.
+                // Only unmerged index entries establish a merge conflict.
+                // trace:TASK-1981 | ai:codex
+                let conflicts = git(repo, &["ls-files", "--unmerged"]).with_context(|| {
+                    format!(
+                        "checking conflicts after failed rollback: {}",
+                        rebased.stderr
+                    )
+                })?;
+                let aborted = git(repo, &["rebase", "--abort"])
+                    .with_context(|| format!("aborting failed rollback: {}", rebased.stderr))?;
+                if !aborted.success {
+                    anyhow::bail!(
+                        "rollback rebase failed: {}; abort also failed: {}",
+                        rebased.stderr,
+                        aborted.stderr
+                    );
+                }
+                if !conflicts.success {
+                    anyhow::bail!(
+                        "rollback rebase failed: {}; conflict check failed: {}",
+                        rebased.stderr,
+                        conflicts.stderr
+                    );
+                }
+                if !conflicts.stdout.is_empty() {
+                    return Ok(false);
+                }
             }
             anyhow::bail!(
                 "git rebase --onto {parent} {expected_sha} failed without conflict while rolling back {expected_sha}: {}",
@@ -10810,6 +10836,47 @@ mod tests {
             "dirty\n"
         );
         assert!(!rebase_in_progress(&repo));
+    }
+
+    // A failed signer leaves rebase state without unmerged entries: it must
+    // abort and report failure, not masquerade as a conflict.
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_rollback_reports_non_conflict_replay_failure_and_aborts() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        for name in ["seed", "writer", "peer"] {
+            std::fs::write(repo.join(name), name).unwrap();
+            run_git(&repo, &["add", name]);
+            run_git(
+                &repo,
+                &["-c", "commit.gpgSign=false", "commit", "-q", "-m", name],
+            );
+        }
+        let peer = head_sha(&repo).unwrap();
+        let writer = run_git(&repo, &["rev-parse", "HEAD~1"]);
+        run_git(&repo, &["config", "commit.gpgSign", "true"]);
+        run_git(&repo, &["config", "gpg.format", "openpgp"]);
+        run_git(&repo, &["config", "gpg.program", "/bin/false"]);
+        let err = rollback_commit_if_head_matches(&repo, &writer).unwrap_err();
+        assert!(
+            err.to_string().contains("failed without conflict"),
+            "{err:#}"
+        );
+        assert!(
+            err.to_string().contains("failed to write commit object"),
+            "{err:#}"
+        );
+        assert_eq!(head_sha(&repo).unwrap(), peer);
+        assert!(!rebase_in_progress(&repo));
+        assert!(repo.join("peer").exists());
+        assert!(repo.join("writer").exists());
+        assert!(git(&repo, &["ls-files", "--unmerged"])
+            .unwrap()
+            .stdout
+            .is_empty());
     }
 
     // trace:TASK-1981 | ai:codex
