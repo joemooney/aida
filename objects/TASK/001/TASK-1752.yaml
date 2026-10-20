@@ -17,12 +17,12 @@ description: |-
 
   ## Effort
   Small-medium; it follows the one-launcher task's LaunchContext.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:30.122948646Z
-modified_at: 2026-10-20T03:23:49.363404579Z
+modified_at: 2026-10-20T04:07:15.047641956Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -70,6 +70,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1577d-f502-7530-b191-e3f8f9b9f5ce
+  author: aida-auto-bump
+  timestamp: 2026-10-20T04:07:14.946122903Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1577d-f567-7412-9a58-9ac4b733bb8b
+  timestamp: 2026-10-20T04:07:15.047632424Z
+  agent: aida
+  commit_sha: 3c7e184d14f171218ad70453efee47cd99730122
+  summary: 'All TASK-1752 acceptance met: grant env reads routed via seat_authority::current_grant_id, output byte-identical, guard bans the literal outside seat_authority.rs with one exact-line exemption; CI green at dc521b2. Two non-blocking guard-robustness findings filed.'
+  review_verdict: approved
 execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
@@ -79,3 +94,7 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T04:07:14.946117571Z
+  completion_sha: 3c7e184d14f171218ad70453efee47cd99730122
