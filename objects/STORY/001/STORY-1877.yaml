@@ -1,0 +1,20 @@
+id: 01a159f3-4fdb-78b2-a56a-be03c2fdaf1b
+spec_id: STORY-1877
+agreed_id: STORY-1877
+title: 'Review PR-2778: close writer lock gaps (Refs TASK-1981)'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T15:34:40.347967965Z
+modified_at: 2026-10-20T15:34:40.347967965Z
+req_type: Story
+filed_at:
+  code_sha: b6ba2576d523b971b547ecc03d9190fd0db78b8c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
