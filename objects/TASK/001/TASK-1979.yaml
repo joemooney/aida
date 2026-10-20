@@ -6,12 +6,12 @@ description: |
   On PR-2762 run 39366328696, CI (lib) took 11m11s of an 11m21s wall time. rust-cache save-if is gates-only (ci.yml), and the gates lane never compiles the test lanes' test binaries or aida-cli dev-deps, so the test lanes restore a cache that lacks those. Split the aida-cli-lib unit tests (as the advisor noted) and/or let a test lane save the cache.
 
   Raised in review of PR-2762: https://github.com/joemooney/aida/pull/2762
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:09.676386991Z
-modified_at: 2026-10-20T07:14:21.089187465Z
+modified_at: 2026-10-20T07:14:27.203430815Z
 req_type: Task
 tags:
 - ci
@@ -100,6 +100,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a15829-5903-7521-8dca-61092ab5338a
+  author: aida-lease-take
+  timestamp: 2026-10-20T07:14:27.203426408Z
+  session_id: 922261ed-530a-4e6c-afda-50941530bad0
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 processing_record:
 - id: 01a157f2-4e30-7620-952b-9aea5354ba32
   timestamp: 2026-10-20T06:14:19.952019198Z
