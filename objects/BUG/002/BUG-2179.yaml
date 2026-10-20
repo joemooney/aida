@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T11:39:25.241844719Z
+modified_at: 2026-10-20T14:23:22.121061411Z
 req_type: Bug
 comments:
 - id: 01a150ab-804e-7563-b3ff-4dbebed13b88
@@ -28,6 +28,12 @@ comments:
   created_at: 2026-10-20T11:38:52.798779370Z
   modified_at: 2026-10-20T11:38:52.798779370Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a159b2-0809-7a51-982d-18b5bba0f00a
+  author: joe
+  content: 'Measurement for PR #2776 (head 08e6fa3b05): PR #2773''s 108 traced specs (from collect_pr), live store (77,780 commits, 5,355 refs), 1,897 versions, exact replay of each version''s git commands, interleaved, 3 runs. Before (per-spec git log --all + git show): 321.1s (load 24.4), 291.3s (36.6), 238.7s (6.7), median 291.3s. After (one git log --all --name-only + one cat-file --batch): 72.9s (32.5), 48.2s (28.5), 47.4s (12.7), median 48.2s. About 6x. The <30s warm target is NOT met here: the batched walk is CPU-bound tree diffing over the store''s 67,627 commits (~38s); --no-renames and Bloom-filter commit-graphs don''t change that at git 2.43.'
+  created_at: 2026-10-20T14:23:22.121061411Z
+  modified_at: 2026-10-20T14:23:22.121061411Z
+  session_id: 922261ed-530a-4e6c-afda-50941530bad0
 history:
 - id: 01a1591b-27e9-7df0-84ee-7d6c0f6045b1
   author: joe
