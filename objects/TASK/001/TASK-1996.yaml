@@ -6,17 +6,26 @@ description: |
   scripts/test-time-budget.toml [lane_budget.lib-0] = 350 and [lane_budget.lib-1] = 340 are x1.5 of *estimated* half times (re-splitting the per-test times of PR-2769 runs 39383875258/39396053306/39398646423 with the final weights). The only run that actually executed the final weights, 39400373284, measured lib-0 at 256.0s (test-timings step). x1.5 of that is 384s, so the stated rule ("slowest measured time x1.5") is not met. Headroom is ~37%, not 50%. A slow runner could fail `Test time budget` on an unrelated PR. Fix: re-derive both lane budgets from >=3 observed post-merge main runs of lib-0/lib-1, including 39400373284 and 39401762354.
 
   Raised in review of PR-2769: https://github.com/joemooney/aida/pull/2769
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:46:12.917020042Z
-modified_at: 2026-10-20T09:46:12.917020042Z
+modified_at: 2026-10-20T10:55:51.271142241Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-2769
 - severity:minor
+history:
+- id: 01a158f4-0be7-7cc3-a7cd-7e5b93956581
+  author: joe
+  timestamp: 2026-10-20T10:55:51.271131381Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 76205c358d1ff7a9fe34031495942af5cdb8010a
   branch: pr-2769
