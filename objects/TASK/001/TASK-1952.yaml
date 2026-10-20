@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-20T22:24:09.159825067Z
+modified_at: 2026-10-20T23:06:37.012609126Z
 req_type: Task
 tags:
 - contained
@@ -176,6 +176,12 @@ comments:
   content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2007 — Add BUG-2012 main-checkout denies to sandbox denyWrite as well as permissions.deny'
   created_at: 2026-10-20T22:24:09.159825067Z
   modified_at: 2026-10-20T22:24:09.159825067Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b91-1454-7ca0-88f9-706622b84134
+  author: joe
+  content: 'Folded in (advisor 16:08, from the #2787 r2 non-blocking finding): aida session resume (session.rs:5653 exec_resume_command → exec_claude_resume) scopes os_wrap and --settings to the process cwd (contained_session_cwd), while ResumeTarget.worktree is main. A contained resume of a clone seat launched from the main checkout is bounded to main, not the seat''s worktree. Scope it to the resume target''s worktree.'
+  created_at: 2026-10-20T23:06:37.012609126Z
+  modified_at: 2026-10-20T23:06:37.012609126Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
