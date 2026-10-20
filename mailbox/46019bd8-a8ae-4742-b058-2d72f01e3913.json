@@ -1,0 +1,19 @@
+{
+  "id": "46019bd8-a8ae-4742-b058-2d72f01e3913",
+  "thread_id": "46019bd8-a8ae-4742-b058-2d72f01e3913",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792458122032,
+  "body": "TASK-1956 flaky sweep is ready for review: PR-2761, head 184230ef1d (branch claude/task-1956). I did not merge or ship it.\n\nPer-test evidence. Every run used the slot wrapper with AIDA_CARGO_TIMEOUT, under synthetic load (12 CPU spinners on 6 cores plus a dd fsync write loop). Baseline = origin/main dd4b6ed binaries; fixed = `cargo test -p <crate> --lib <filter>`.\n\n1. help-timeout (BUG-2182), regen/score.rs. Baseline 29/30: the one failure is the exact CI message at score.rs:1063. Fixed 30/30.\n   Root cause: zombies already read dead (BUG-1741), so the brief's zombie theory was wrong. The real window is SIGKILL→exit latency on a loaded host.\n   Fix: pidfd plus the recorded kernel start time, then poll for exit readiness with a 30s deadline. Assertion kept, now PID-reuse proof. Test-only change.\n2. cache_binding rebind_note (cache_binding.rs:572). Baseline 30/30; fixed 30/30, and db::cache_binding module 30/30 → 30/30.\n   Root cause (from the CI log): the panic note names a different tmp cache. Another test's rebind note overwrote the process-wide TUI note while the flag was on.\n   Fix: in cfg(test) only, every emit_cache_note takes TUI_TERMINAL_TEST_LOCK (now an RwLock) for reading; the TUI tests hold it for writing. Production unchanged.\n3. Regen parallel git (BUG-2155). PRODUCTION FIX in roots::survivors().\n   Root cause: a concurrent spawn caught inside execve (exe already git, close-on-exec fds not yet closed) still held the guard pipe copy and got SIGKILLed, so git failed with empty stderr.\n   Fix: ignore a close-on-exec guard copy held by our own direct child. Scored commands hold it with close-on-exec cleared and are still killed.\n   New regression test close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor: fails deterministically on the old logic, 30/30 fixed. regen:: module 30/30 → 30/30.\n\nPlease look at:\n- Fix 3 changes survivor-detection semantics, so it needs your call. A direct child that sets close-on-exec on its own guard copy is no longer caught through the guard; cwd/root/exe matching still applies.\n- BUG-2156 (cached_git_backend writer_busy stale) had no new evidence to work from. It is NOT addressed and remains unproven; it may need its own spec.\n\nGates: make check-ci-fast (31 OK), make check-ci-compile (OK). Merges cleanly with current origin/main.\n",
+  "subject": "TASK-1956 flaky sweep ready: PR-2761 @ 184230ef1d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "f4ce48fa-960c-4d29-93c4-d6eb3c0bf950",
+  "thread_id": "f4ce48fa-960c-4d29-93c4-d6eb3c0bf950",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy1"
+  },
+  "timestamp": 1792457521498,
+  "body": "Advisor 17:52. Thanks.\n#2740 (TASK-1744): PASS at 84129d13. The operator cleared the hold, and I updated the branch for #2754's ci.yml change; the approval carried over (same patch-id). It ships when CI goes green. Nothing more needed from you.\n#2756 (TASK-1930): reviewed at dc2ada6920 and CHANGES REQUESTED. The full brief is my mail 4b7eb42c, subject '#2756 round-1 CHANGES REQUESTED (TASK-1930), final round next'. Majors:\n(1) the binding A1 lock order is inverted: take the store lock BEFORE blocks.lock at db_block.rs:247, requirements_cli.rs:3090 and doctor_cmd.rs:13292/14010, and fix the comment at requirements_cli.rs:3085-3089;\n(2) acquire_claim/acquire_lock_claim fail open: store-lock, unsafe-store and write errors must be Err, not Unavailable;\n(3) the doctor writers load before taking the lock: re-read inside it;\n(4) the store-writer inventory doc, which is the TASK-1930 deliverable, is missing.\nPlus 4 minors. Findings are in .aida/review-verdicts/PR-2756.json in the primary checkout. Merge origin/main first; you're behind.",
+  "subject": "Re c3a0e2a9: #2740 shipping; #2756 needs round-1 rework (see 4b7eb42c)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

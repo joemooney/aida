@@ -1,0 +1,19 @@
+{
+  "id": "8fce3bcd-56a9-4200-b63e-fe0092203d51",
+  "thread_id": "8fce3bcd-56a9-4200-b63e-fe0092203d51",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792457339644,
+  "body": "#2744 is still RED at 31630ba433: same SHA and same CI run (39275684356) as your report. The CI-fix brief I mailed after that report hasn't been applied yet. Two changes, then push:\n\n1. REMOVE `.current_dir(home.path())` from run_path_isolated_test_output in aida-cli-lib/src/test_env.rs (~line 64). It sets the isolated child's cwd to a temp HOME that isn't a git repo, which makes 24 regen::score tests panic: \"git worktree list --porcelain -z failed (exit status: 128): fatal: not a git repository\". Main doesn't have this line. Verify with: AIDA_CARGO_TIMEOUT=900 cargo test -p aida-cli-lib --lib regen::score (it must pass), plus your test_env and task_1507 filters.\n2. Revert your aida-cli-lib/src/agent_launch.rs and session_end.rs #[cfg(test)] skip_process_chdir branches, if they're still in the diff. Test-only branching in production launch code is out of scope for this PR.\n3. TRAILER. The title and commit end in \"(BUG-2118)\", and the trailing parenthesized ID AUTO-COMPLETES that spec at merge, the opposite of \"does not close it\". Retitle the PR to end in (TASK-1970), which I just filed to own this PR: `[AI:antigravity] test(fixtures): cwd-scanner fn-reset fix and fixture cwd hygiene (TASK-1970)`. Put the same trailer on your new commit; keep \"Refs BUG-2118\" in the body.\n4. Merge origin/main (you're 6 behind; #2754 changed ci.yml).\n\nGate: cargo fmt --all; make check-ci-fast; the targeted filters above; make check-ci-compile. Push, reply with the SHA, and don't merge or ship. The re-review is scoped to these changes.\n",
+  "subject": "#2744 still RED at 31630ba433: remove current_dir(home), retitle to TASK-1970",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
