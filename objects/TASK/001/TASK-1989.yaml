@@ -1,0 +1,28 @@
+id: 01a157be-ef18-74a2-86af-314bd16d7409
+spec_id: TASK-1989
+agreed_id: TASK-1989
+title: 'Contained boundary: deny a linked worktree''s own .git pointer file to Edit/Write tools'
+description: |
+  contained_main_checkout_git_deny_paths (aida-cli-lib/src/contained_boundary.rs:192) skips roots whose .git is a file (linked worktrees), so the worktree's own `.git` gitdir pointer stays writable under Edit(//<root>/**). If a contained session rewrites the pointer to an in-worktree gitdir that has hooks or core.hooksPath set, the operator's next git command in that worktree runs those hooks outside the sandbox. This is the same escape class BUG-2012 closes for main checkouts. A fix could be an exact-path deny of <root>/.git (the file only) for every write root.
+
+  Raised in review of PR-2748: https://github.com/joemooney/aida/pull/2748
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T05:18:13.272527080Z
+modified_at: 2026-10-20T05:18:13.272527080Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2748
+- sandbox
+- severity:minor
+filed_at:
+  code_sha: 90f0c63303a7661faf68f3b44cf07bd180d8b083
+  branch: pr-2748
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a157b5f748
