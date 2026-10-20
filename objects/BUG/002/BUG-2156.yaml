@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T19:04:49.227492330Z
-modified_at: 2026-10-19T16:10:38.094148973Z
+modified_at: 2026-10-20T03:52:19.987232196Z
 req_type: Bug
 tags:
 - from-implementer:STORY-1674
@@ -30,6 +30,12 @@ comments:
   created_at: 2026-10-19T16:10:33.077555732Z
   modified_at: 2026-10-19T16:10:33.077555732Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15770-4d13-7b60-9f25-c3d3480081aa
+  author: joe
+  content: Root-caused and fixed in PR-2761 (ccbdb17913). RefreshLock::drop closed its fd without LOCK_UN, so a child that a sibling test thread forked while read 1 held the refresh flock kept it held until exec. Read 2 then lost try_acquire (refresh_lock_contended), waited, and handed off stale. Drop now unlocks explicitly. The inverted real-fork test a_forked_child_does_not_hold_the_lock_past_its_guard fails on the old drop. The writer-busy test pins a 10s read budget against the ancestor_check_failed branch, and its failure message now prints the branch counters.
+  created_at: 2026-10-20T03:52:19.987232196Z
+  modified_at: 2026-10-20T03:52:19.987232196Z
+  session_id: 245775c6-1650-4d69-88ab-45d552c7a910
 history:
 - id: 01a154ed-d6f9-7122-83e6-e4e00af2b651
   author: joe
