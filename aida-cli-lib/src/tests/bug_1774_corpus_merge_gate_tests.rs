@@ -186,8 +186,10 @@ fn enforce_refuses_and_arms_the_marker_from_the_gates_own_predicate() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     write_artifact(root, "PR-7", &body("request-changes", HEAD, None));
-    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], || Some(HEAD.to_string()))
-        .expect_err("a refusal at the head must refuse the merge");
+    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
+        Some(HEAD.to_string())
+    })
+    .expect_err("a refusal at the head must refuse the merge");
     assert!(err.to_string().contains("request-changes"), "{err:#}");
     let record = merge_hold::read_hold_record(root, 7).expect("the marker mirror must be armed");
     assert_eq!(record.reason_kind, merge_hold::HoldReasonKind::Rework);
@@ -216,8 +218,10 @@ fn the_arm_does_not_displace_a_recusal_hold() {
         ));
     merge_hold::write_typed_hold(root, &recusal).unwrap();
     write_artifact(root, "PR-7", &body("request-changes", HEAD, None));
-    merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], || Some(HEAD.to_string()))
-        .expect_err("still refused");
+    merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
+        Some(HEAD.to_string())
+    })
+    .expect_err("still refused");
     let record = merge_hold::read_hold_record(root, 7).expect("marker present");
     assert_eq!(
         record.reason_kind,
@@ -237,8 +241,10 @@ fn an_unreadable_artifact_fails_the_merge_closed() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     std::fs::create_dir_all(root.join(".aida/review-verdicts/PR-7.json")).unwrap();
-    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], || Some(HEAD.to_string()))
-        .expect_err("an unreadable artifact must fail closed");
+    let err = merge_hold::enforce_corpus_gate_before_merge(root, 7, &[], Some("main"), || {
+        Some(HEAD.to_string())
+    })
+    .expect_err("an unreadable artifact must fail closed");
     assert!(err.to_string().contains("could not be read"), "{err:#}");
 }
 
@@ -248,7 +254,7 @@ fn an_unreadable_artifact_fails_the_merge_closed() {
 fn no_artifacts_skips_head_resolution_entirely() {
     let dir = tempfile::tempdir().unwrap();
     let resolved = std::cell::Cell::new(false);
-    merge_hold::enforce_corpus_gate_before_merge(dir.path(), 7, &[], || {
+    merge_hold::enforce_corpus_gate_before_merge(dir.path(), 7, &[], Some("main"), || {
         resolved.set(true);
         Some(HEAD.to_string())
     })
@@ -263,9 +269,13 @@ fn a_refusal_for_an_unrelated_spec_does_not_gate_this_pr() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     write_artifact(root, "BUG-999", &body("request-changes", HEAD, None));
-    merge_hold::enforce_corpus_gate_before_merge(root, 7, &["BUG-9".to_string()], || {
-        Some(HEAD.to_string())
-    })
+    merge_hold::enforce_corpus_gate_before_merge(
+        root,
+        7,
+        &["BUG-9".to_string()],
+        Some("main"),
+        || Some(HEAD.to_string()),
+    )
     .expect("an unrelated spec's refusal is not this PR's hold");
 }
 

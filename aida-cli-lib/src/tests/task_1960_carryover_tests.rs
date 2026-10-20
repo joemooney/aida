@@ -679,3 +679,130 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
     assert!(err.contains("did not carry over"), "{err}");
     assert!(err.contains("changes of its own"), "{err}");
 }
+
+// ── TASK-1968: the verdict-corpus merge gate honours the same carry-over ────
+
+/// Record a corpus verdict for `key` at `sha` under `repo`. Written after
+/// every commit the test makes, so `commit`'s `add -A` never ships it.
+fn record_corpus_verdict(repo: &Path, key: &str, verdict: &str, sha: &str) {
+    let path = crate::review_verdict::verdict_path(repo, key);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        path,
+        format!(r#"{{"verdict":"{verdict}","reviewed_sha":"{sha}","recorded_by":"reviewer-a"}}"#),
+    )
+    .unwrap();
+}
+
+fn corpus_gate(repo: &Path, ids: &[String], base: &str, head: &str) -> anyhow::Result<()> {
+    crate::merge_hold::enforce_corpus_gate_before_merge(repo, PR, ids, Some(base), || {
+        Some(head.to_string())
+    })
+}
+
+// Approve at A, merge the base cleanly to B: the corpus gate clears at B,
+// records nothing (the approval gate does), and the pure gate with no prover
+// still refuses B exactly as before.
+// trace:TASK-1968 | ai:claude
+#[test]
+fn corpus_gate_clears_a_clean_base_merge_of_the_approved_head() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    corpus_gate(repo, &[], "main", &h).expect("a clean base merge carries the approval over");
+    assert!(
+        read_record(repo, PR, &h).is_none(),
+        "the corpus gate proves quietly"
+    );
+
+    let bodies = crate::merge_hold::corpus_gate_bodies(&[repo], PR, &[]).unwrap();
+    assert!(matches!(
+        crate::merge_hold::corpus_merge_gate(PR, &bodies, Some(&h)),
+        crate::merge_hold::CorpusMergeGate::Refuse { .. }
+    ));
+}
+
+// An edited merge, and a changed own diff (a commit behind a clean merge),
+// still refuse, naming why the approval did not carry over.
+// trace:TASK-1968 | ai:claude
+#[test]
+fn corpus_gate_refuses_an_edited_merge_or_a_changed_own_diff() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let evil = evil_merge(repo, &approved);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    let text = format!("{:#}", corpus_gate(repo, &[], "main", &evil).unwrap_err());
+    assert!(text.contains("did not carry over"), "{text}");
+    assert!(text.contains("changes of its own"), "{text}");
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    set_line(repo, "a.txt", 25, "a line 25 — never reviewed");
+    commit(repo, "pr: unreviewed");
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    let text = format!("{:#}", corpus_gate(repo, &[], "main", &h).unwrap_err());
+    assert!(text.contains("did not carry over"), "{text}");
+    assert!(text.contains("is not a merge"), "{text}");
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["checkout", "--quiet", "main"]);
+    set_line(repo, "a.txt", 7, "a line 7 — main edit near the PR hunk");
+    commit(repo, "main: near the hunk");
+    publish_main(repo);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    let text = format!("{:#}", corpus_gate(repo, &[], "main", &h).unwrap_err());
+    assert!(text.contains("own diff changed"), "{text}");
+}
+
+// A standing refusal anywhere in the corpus is never carried past, a
+// refusal is never itself carried over, and a PR that does not target the
+// remote's default branch does not carry over.
+// trace:TASK-1968 | ai:claude
+#[test]
+fn corpus_gate_never_carries_a_refusal_or_an_unprotected_base() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let ids = vec!["BUG-9".to_string()];
+
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    record_corpus_verdict(repo, "BUG-9", "request-changes", &approved);
+    let text = format!("{:#}", corpus_gate(repo, &ids, "main", &h).unwrap_err());
+    assert!(!text.contains("approval carried"), "{text}");
+
+    std::fs::remove_file(crate::review_verdict::verdict_path(
+        repo,
+        &format!("PR-{PR}"),
+    ))
+    .unwrap();
+    assert!(
+        corpus_gate(repo, &ids, "main", &h).is_err(),
+        "a refusal never carries over"
+    );
+
+    std::fs::remove_file(crate::review_verdict::verdict_path(repo, "BUG-9")).unwrap();
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    let text = format!("{:#}", corpus_gate(repo, &[], "release", &h).unwrap_err());
+    assert!(
+        text.contains("not the repository's default branch"),
+        "{text}"
+    );
+}
+
+// TASK-1965: the merge-time base refusals read as one sentence, without the
+// run of spaces a lost line continuation left mid-sentence.
+// trace:TASK-1968 | ai:claude
+#[test]
+fn proven_base_refusals_have_no_whitespace_gap() {
+    for text in [
+        proven_base_refusal(PR, "main", Some("x")).unwrap(),
+        proven_base_refusal(PR, "main", None).unwrap(),
+    ] {
+        assert!(!text.contains("  "), "{text:?}");
+    }
+}

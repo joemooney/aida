@@ -36,6 +36,26 @@ info "Building aida..."
 cd "$PROJECT_ROOT"
 cargo build -p aida-cli --quiet 2>/dev/null || cargo build -p aida-cli
 
+# Every aida below runs from a scratch directory, never the checkout: with
+# cwd inside this repository, even `aida --file <store>` resolves the
+# repository's own project and can leave a plain `.aida-store/` at its root,
+# which CI's trace gate then mistakes for the attached store worktree
+# (`git -C .aida-store` resolves to the parent repository).
+# trace:TASK-1959 | ai:claude
+CHECKOUT_HAD_STORE=0
+if [ -e "$PROJECT_ROOT/.aida-store" ] || [ -L "$PROJECT_ROOT/.aida-store" ]; then
+    CHECKOUT_HAD_STORE=1
+    # CI's checkout never has a store at this point (the trace gate attaches
+    # one later), so one here was written by an earlier test step. Name it
+    # now, while the culprit is still a few steps back.
+    if [ -n "${CI:-}" ]; then
+        ls -la "$PROJECT_ROOT/.aida-store" || true
+        git worktree list || true
+        fail "an earlier CI step left .aida-store in the checkout at $PROJECT_ROOT"
+    fi
+fi
+cd "$TEST_DIR"
+
 echo ""
 echo "=== AIDA Distributed Mode Integration Tests ==="
 echo "Test directory: $TEST_DIR"
@@ -196,7 +216,7 @@ fi
 [ ! -s "$PROJ_DIR/.aida-store/.aida/store-write.lock" ] || fail "BUG-1612: store lock file is not empty"
 pass "BUG-1612: init + add + sync never stage the store write lock"
 
-cd "$PROJECT_ROOT"
+cd "$TEST_DIR"
 
 # ============================================================================
 # Test: sibling-store multi-repo (BUG-608 true sibling / BUG-610 no data loss /
@@ -244,6 +264,10 @@ DUPES=$( cd "$WS/repo-a" && "$AIDA" list 2>/dev/null | grep -oE 'TASK-[0-9A-Za-z
 pass "STORY-674: shared dispenser allocates collision-free across repos"
 
 cd "$PROJECT_ROOT"
+if [ "$CHECKOUT_HAD_STORE" = 0 ] && { [ -e .aida-store ] || [ -L .aida-store ]; }; then
+    fail "a test wrote .aida-store into the checkout at $PROJECT_ROOT"
+fi
+pass "the checkout was left without a stray .aida-store"
 
 # ============================================================================
 # Summary
