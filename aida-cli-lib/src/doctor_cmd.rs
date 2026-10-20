@@ -17,6 +17,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -5523,6 +5524,8 @@ fn heal_doctor_stale_remote_branch(
             "origin",
             &finding.id,
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status()
         .with_context(|| format!("deleting remote branch origin/{}", finding.id))?;
     Ok(DoctorHealResult {

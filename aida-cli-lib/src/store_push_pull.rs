@@ -74,8 +74,9 @@ pub(crate) fn refresh_remote_branch_state(
     }
     let deadline = std::time::Instant::now() + timeout;
     let refspec = format!("+refs/heads/{branch}:refs/remotes/origin/{branch}");
-    match run_git_with_timeout(
+    match run_remote_git_with_timeout(
         project_root,
+        "origin",
         &["fetch", "--quiet", "--no-tags", "origin", &refspec],
         timeout,
     ) {
@@ -88,8 +89,9 @@ pub(crate) fn refresh_remote_branch_state(
                 ));
             }
             let head_ref = format!("refs/heads/{branch}");
-            match run_git_with_timeout(
+            match run_remote_git_with_timeout(
                 project_root,
+                "origin",
                 &["ls-remote", "--exit-code", "--heads", "origin", &head_ref],
                 remaining,
             ) {
@@ -511,8 +513,12 @@ pub(crate) fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
     }
 }
 
-pub(crate) fn run_git_with_timeout(
+/// Every caller contacts `remote`, so its stored credentials stay out of
+/// argv.
+// trace:BUG-2181 | ai:claude
+pub(crate) fn run_remote_git_with_timeout(
     cwd: &std::path::Path,
+    remote: &str,
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<std::process::ExitStatus> {
@@ -521,7 +527,7 @@ pub(crate) fn run_git_with_timeout(
     // hardened builder, since `cwd` is the store for the push-plan fetch and
     // the auto-push.
     // trace:BUG-1626 trace:BUG-1929 | ai:claude
-    let mut child = aida_core::git_ops::host_git_command(cwd)
+    let mut child = aida_core::git_ops::host_remote_git_command(cwd, remote)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null())
@@ -588,8 +594,9 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
         return;
     }
     let refspec = format!("{sha}:refs/heads/{branch}");
-    match run_git_with_timeout(
+    match run_remote_git_with_timeout(
         store_path,
+        "origin",
         &["push", "origin", &refspec],
         std::time::Duration::from_secs(5),
     ) {
@@ -1481,7 +1488,8 @@ pub(crate) fn handle_push_command(
                 None
             } else {
                 Some(
-                    aida_core::git_ops::host_git_command(&project_root)
+                    // trace:BUG-2181 | ai:claude
+                    aida_core::git_ops::host_remote_git_command(&project_root, "origin")
                         .args(["push", "origin", &branch])
                         .status(),
                 )
@@ -2525,7 +2533,8 @@ pub(crate) fn handle_pull_command(
                 // pull.rebase config (which can fail with "Cannot rebase onto
                 // multiple branches"). Do fetch + merge instead.
                 // trace:BUG-1780 | ai:codex
-                let _ = aida_core::git_ops::host_git_command(&project_root)
+                // trace:BUG-2181 | ai:claude
+                let _ = aida_core::git_ops::host_remote_git_command(&project_root, "origin")
                     .args(["fetch", "origin", &branch])
                     .status();
                 let res = aida_core::git_ops::host_git_command(&project_root)
@@ -3325,7 +3334,8 @@ pub(crate) fn cascade_rebase_stacked_branches(
         // rebase target is the freshly-merged tip, not a stale ref.
         // Best-effort — offline / fetch failure still tries the rebase
         // against whatever cached ref we have.
-        let _ = aida_core::git_ops::host_git_command(&lease.worktree_path)
+        // trace:BUG-2181 | ai:claude
+        let _ = aida_core::git_ops::host_remote_git_command(&lease.worktree_path, "origin")
             .args([
                 "fetch",
                 git_arg_guard::END_OF_OPTIONS,
@@ -3562,8 +3572,8 @@ pub(crate) fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) ->
     // The branch can be a forge-reported PR head a fork author named, so
     // refuse a dash-led one and end options before it. trace:BUG-1622 | ai:claude
     git_arg_guard::reject_option_like("branch", branch)?;
-    // trace:BUG-1929 | ai:claude
-    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    // trace:BUG-1929 trace:BUG-2181 | ai:claude
+    let mut cmd = aida_core::git_ops::host_remote_git_command(repo, "origin");
     cmd.args([
         "fetch",
         "--prune",
