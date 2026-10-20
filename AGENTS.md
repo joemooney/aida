@@ -1,5 +1,5 @@
-Store GC, compaction and doctor heal writers use the existing store writer
-lock; explicit auto-GC finishes under that lock. Legacy ID retirement reloads
+Store config, compaction history rewrites and doctor heals use the existing
+store writer lock. GC runs outside that lock using Git’s own maintenance locks. Legacy ID retirement reloads
 through `update_atomically`, and doc/finding filing uses its atomic persistence
 without a second object write. Interactive doctor repairs keep the confirmed
 set; counter migration refuses newly active unconfirmed blocks. See the

@@ -4087,32 +4087,18 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
 /// Best-effort: failures are swallowed.
 // trace:TASK-1033 | ai:claude
 pub fn gc_auto(repo: &Path) -> bool {
-    // Explicit maintenance must override transaction_git_config's gc.auto=0,
-    // and finish before the lock is released (never detach). Reading the local
-    // value avoids seeing the transaction's command-line override instead of
-    // the threshold persisted by configure_store_gc_auto.
+    // Maintenance uses Git's own locks and must not occupy AIDA's writer
+    // window. Do not override gc.auto or gc.autoDetach: Git must honour all
+    // configured scopes, including a global gc.auto=0.
     // trace:TASK-1981 | ai:codex
-    crate::db::with_store_write_lock(repo, || {
-        let configured = git(repo, &["config", "--local", "--get", "gc.auto"])?;
-        let threshold = if configured.success {
-            configured.stdout
-        } else {
-            "6700".into()
-        };
-        Ok(git(
-            repo,
-            &[
-                "-c",
-                &format!("gc.auto={threshold}"),
-                "-c",
-                "gc.autoDetach=false",
-                "gc",
-                "--auto",
-            ],
-        )?
-        .success)
-    })
-    .unwrap_or(false)
+    if crate::db::any_store_write_lock_held()
+        || resolve_store_gc_auto(std::env::var("AIDA_STORE_GC_AUTO").ok().as_deref()).is_none()
+    {
+        return false;
+    }
+    git(repo, &["gc", "--auto"])
+        .map(|out| out.success)
+        .unwrap_or(false)
 }
 
 /// Opportunistic store maintenance for a sync chokepoint (`aida pull`,
@@ -4132,22 +4118,22 @@ pub fn gc_auto(repo: &Path) -> bool {
 /// `off`/`0` disables).
 // trace:STORY-733 | ai:claude
 pub fn opportunistic_store_gc(repo: &Path) {
-    // trace:TASK-1981 | ai:agy
-    let _ = crate::db::with_store_write_lock(repo, || {
-        apply_store_gc_auto_from_env(repo);
-        let _ = gc_auto(repo);
-        // STORY-733: the occasional aggressive consolidation. Self-throttling +
-        // best-effort — a failed aggressive repack must never break the sync.
-        let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
-        if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
-            if let Some(counts) = count_objects(repo) {
-                if counts.packs >= threshold as usize {
-                    let _ = gc_aggressive(repo);
-                }
+    // Only the config write takes AIDA's lock. Potentially long repacks run
+    // after it is released; an already-locked caller defers maintenance.
+    // trace:TASK-1981 | ai:codex
+    if crate::db::any_store_write_lock_held() {
+        return;
+    }
+    apply_store_gc_auto_from_env(repo);
+    let _ = gc_auto(repo);
+    let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
+    if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
+        if let Some(counts) = count_objects(repo) {
+            if counts.packs >= threshold as usize {
+                let _ = gc_aggressive(repo);
             }
         }
-        Ok(())
-    });
+    }
 }
 
 /// The pack-count high-water mark at which AIDA's opportunistic store
@@ -4228,8 +4214,12 @@ pub fn count_objects(repo: &Path) -> Option<StoreObjectCounts> {
 /// is unaffected. Returns the [`GitResult`] (caller decides how loud to be).
 // trace:STORY-733 | ai:claude
 pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
-    // trace:TASK-1981 | ai:agy
-    crate::db::with_store_write_lock(repo, || git(repo, &["gc", "--aggressive"]))
+    // trace:TASK-1981 | ai:codex
+    anyhow::ensure!(
+        !crate::db::any_store_write_lock_held(),
+        "store GC must run outside the store writer transaction"
+    );
+    git(repo, &["gc", "--aggressive"])
 }
 
 /// Outcome of squashing the orphan store branch to a single snapshot commit.
@@ -10884,58 +10874,78 @@ mod tests {
 
     // trace:TASK-1981 | ai:codex
     #[test]
-    fn task_1981_explicit_auto_gc_runs_under_transaction_without_detaching() {
+    fn task_1981_gc_runs_without_waiting_for_store_writer() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path().join("store");
-        let before = seed_multi_pack_store(&repo, 4);
-        assert!(before.packs > 1);
-        assert!(configure_store_gc_auto(&repo, 500));
+        seed_multi_pack_store(&repo, 4);
+        run_git(&repo, &["config", "gc.autoDetach", "false"]);
+        run_git(&repo, &["config", "gc.auto", "500"]);
         run_git(&repo, &["config", "gc.autoPackLimit", "1"]);
-        assert!(gc_auto(&repo));
-        assert!(count_objects(&repo).unwrap().packs < before.packs,
-            "explicit auto-gc must run despite the transaction's gc.auto=0 and complete before return");
-        assert_eq!(
-            git(&repo, &["config", "gc.autoDetach"]).unwrap().stdout,
-            "true",
-            "per-command override must not alter persisted detach policy"
-        );
-    }
-
-    // trace:TASK-1981 | ai:codex
-    #[test]
-    fn task_1981_gc_waits_for_store_writer_lock() {
-        use std::time::{Duration, Instant};
-        let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("store");
-        std::fs::create_dir_all(&repo).unwrap();
-        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
-        let before = crate::db::store_write_lock_contended_for(&repo);
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut child = None;
         crate::db::with_store_write_lock(&repo, || {
+            assert!(!gc_auto(&repo), "locked caller must defer auto GC");
+            assert!(
+                gc_aggressive(&repo).is_err(),
+                "locked caller must refuse GC"
+            );
             let contender = repo.clone();
-            child = Some(std::thread::spawn(move || {
-                tx.send(gc_aggressive(&contender)).unwrap()
-            }));
-            let start = Instant::now();
-            while crate::db::store_write_lock_contended_for(&repo) == before {
-                assert!(
-                    start.elapsed() < Duration::from_secs(10),
-                    "gc never contended"
-                );
-                assert!(rx.try_recv().is_err(), "gc escaped the writer lock");
-                std::thread::sleep(Duration::from_millis(5));
-            }
+            let (tx, rx) = std::sync::mpsc::channel();
+            let child = std::thread::spawn(move || {
+                tx.send(gc_auto(&contender)).unwrap();
+            });
+            assert!(rx.recv_timeout(Duration::from_secs(30)).unwrap());
+            child.join().unwrap();
+            assert_eq!(count_objects(&repo).unwrap().packs, 1);
             Ok(())
         })
         .unwrap();
+    }
+
+    // Run config mutations in an exact-test child so unrelated libtest threads
+    // cannot observe a temporary global config or AIDA override.
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_auto_gc_respects_global_zero_and_off_override() {
+        const TEST: &str =
+            "git_ops::tests::task_1981_auto_gc_respects_global_zero_and_off_override";
+        if std::env::var("AIDA_TEST_GC_CONFIG_CHILD").as_deref() != Ok(TEST) {
+            let status = Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST, "--nocapture"])
+                .env("AIDA_TEST_GC_CONFIG_CHILD", TEST)
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let global = dir.path().join("global.gitconfig");
+        std::fs::write(&global, "[gc]\n    auto = 0\n").unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("GIT_CONFIG_GLOBAL", global.to_str().unwrap()),
+            ("GIT_CONFIG_NOSYSTEM", "1"),
+            ("AIDA_STORE_GC_AUTO", "off"),
+        ]);
+        let repo = dir.path().join("store");
+        let before = seed_multi_pack_store(&repo, 4);
+        assert!(before.packs > 1, "fixture must have packs to collect");
+        run_git(&repo, &["config", "gc.autoDetach", "false"]);
+        run_git(&repo, &["config", "gc.autoPackLimit", "1"]);
+        run_git(&repo, &["config", "--unset", "gc.auto"]);
         assert!(
-            rx.recv_timeout(Duration::from_secs(30))
-                .unwrap()
+            !git(&repo, &["config", "--local", "--get", "gc.auto"])
                 .unwrap()
                 .success
         );
-        child.unwrap().join().unwrap();
+        assert!(!gc_auto(&repo), "off must skip explicit maintenance");
+        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
+        // Unset AIDA's override; Git's global zero still disables collection.
+        std::env::remove_var("AIDA_STORE_GC_AUTO");
+        assert!(gc_auto(&repo));
+        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
+        // The off override must also win over an existing nonzero local policy.
+        std::env::set_var("AIDA_STORE_GC_AUTO", "off");
+        run_git(&repo, &["config", "gc.auto", "500"]);
+        assert!(!gc_auto(&repo));
+        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
     }
 
     // trace:TASK-1930 | ai:agy

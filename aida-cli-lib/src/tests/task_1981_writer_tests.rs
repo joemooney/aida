@@ -156,3 +156,145 @@ fn task_1981_counter_migration_refuses_unconfirmed_active_blocks_before_writing(
     assert_eq!(std::fs::read(&path).unwrap(), old_blocks);
     assert_eq!(std::fs::read(&config).unwrap(), old_config);
 }
+
+// Observe real contention before changing the fixture. Without the outer heal
+// lock this catches the backend save lock too; the peer write below then proves
+// the heal reloads after acquiring, rather than saving its stale preview.
+// trace:TASK-1981 | ai:codex
+#[test]
+fn task_1981_parent_tag_heal_waits_and_reloads_peer_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(&store_path).unwrap();
+    let storage = Storage::new(&store_path);
+    let mut store = aida_core::RequirementsStore::default();
+    let mut req = Requirement::new("original".into(), "".into());
+    req.spec_id = Some("TASK-1".into());
+    req.tags.insert("parent:EPIC-OLD".into());
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    let before = aida_core::db::store_write_lock_contended_for(&store_path);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut child = None;
+    aida_core::db::with_store_write_lock(&store_path, || {
+        let root = root.clone();
+        child = Some(std::thread::spawn(move || {
+            let finding = DoctorFinding {
+                category: "parent-tag-drift".into(),
+                id: "TASK-1".into(),
+                summary: "stale parent tag".into(),
+                action: "heal".into(),
+                safe_heal: true,
+            };
+            tx.send(heal_doctor_parent_tag_drift(&root, &finding))
+                .unwrap();
+        }));
+        let start = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&store_path) == before {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "heal never contended"
+            );
+            assert!(rx.try_recv().is_err(), "heal escaped lock");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let mut peer = storage.load()?;
+        let mut parent = Requirement::new("new parent".into(), "".into());
+        parent.spec_id = Some("EPIC-2".into());
+        let source = peer.get_requirement_by_spec_id("TASK-1").unwrap().id;
+        let req = peer.get_requirement_by_id_mut(&source).unwrap();
+        req.title = "peer updated".into();
+        req.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: parent.id,
+            created_at: None,
+            created_by: None,
+        });
+        peer.requirements.push(parent);
+        storage.save(&peer)?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(20))
+            .unwrap()
+            .unwrap()
+            .status,
+        "healed"
+    );
+    child.unwrap().join().unwrap();
+    let saved = storage.load().unwrap();
+    let req = saved.get_requirement_by_spec_id("TASK-1").unwrap();
+    assert_eq!(req.title, "peer updated");
+    assert!(req.tags.contains("parent:EPIC-2"));
+    assert!(!req.tags.contains("parent:EPIC-OLD"));
+}
+
+// trace:TASK-1981 | ai:codex
+#[test]
+fn task_1981_orphan_queue_heal_waits_and_rechecks_removal() {
+    let _env = crate::test_env::env_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(&store_path).unwrap();
+    let storage = Storage::new(&store_path);
+    storage
+        .save(&aida_core::RequirementsStore::default())
+        .unwrap();
+    let user = current_user_id(None);
+    let orphan = uuid::Uuid::new_v4();
+    storage
+        .queue_add(aida_core::models::QueueEntry {
+            user_id: user.clone(),
+            requirement_id: orphan,
+            position: 1,
+            added_by: user.clone(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: Some("reviewer".into()),
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        })
+        .unwrap();
+    let before = aida_core::db::store_write_lock_contended_for(&store_path);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut child = None;
+    aida_core::db::with_store_write_lock(&store_path, || {
+        let root = root.clone();
+        child = Some(std::thread::spawn(move || {
+            let finding = DoctorFinding {
+                category: "orphan-queue-entries".into(),
+                id: orphan.to_string(),
+                summary: "orphan".into(),
+                action: "remove".into(),
+                safe_heal: true,
+            };
+            tx.send(heal_doctor_orphan_queue_entry(&root, &finding))
+                .unwrap();
+        }));
+        let start = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&store_path) == before {
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "heal never contended"
+            );
+            assert!(rx.try_recv().is_err(), "heal escaped lock");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        storage.queue_remove(&user, &orphan)?;
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(
+        rx.recv_timeout(Duration::from_secs(20))
+            .unwrap()
+            .unwrap()
+            .status,
+        "skipped"
+    );
+    child.unwrap().join().unwrap();
+    assert!(storage.queue_list(&user, false).unwrap().is_empty());
+}

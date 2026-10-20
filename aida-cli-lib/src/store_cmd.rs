@@ -92,13 +92,20 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
         );
     }
 
+    store_compact_at(&store_path, squash, yes)
+}
+
+// Path-explicit entry keeps the maintenance boundary testable without cwd changes.
+// trace:TASK-1981 | ai:codex
+fn store_compact_at(store_path: &std::path::Path, squash: bool, yes: bool) -> Result<()> {
     if squash {
-        return store_compact_squash(&store_path, yes);
+        return store_compact_squash(store_path, yes);
     }
 
     // ── Safe path: aggressive repack ──
-    // trace:TASK-1981 | ai:agy
-    let (before, after) = aida_core::db::with_store_write_lock(&store_path, || -> Result<_> {
+    // Git serializes repacks itself; no AIDA writer lock during GC.
+    // trace:TASK-1981 | ai:codex
+    let (before, after) = (|| -> Result<_> {
         let before = aida_core::git_ops::count_objects(&store_path);
         if let Some(b) = before {
             println!(
@@ -115,7 +122,7 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
         }
         let after = aida_core::git_ops::count_objects(&store_path);
         Ok((before, after))
-    })?;
+    })()?;
     match (before, after) {
         (Some(b), Some(a)) => println!(
             "{} {} -> {} packs, {} -> {} loose objects",
@@ -222,11 +229,12 @@ fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
         let outcome =
             aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
 
-        // Reclaim the now-unreferenced object space (the old commits are still held
-        // by the backup ref, so this won't drop them until that ref is deleted).
-        let _ = aida_core::git_ops::gc_aggressive(store_path);
         Ok(outcome)
     })?;
+    // History rewriting is serialized above; Git's own GC locks protect the
+    // potentially long repack after AIDA's writer lock has been released.
+    // trace:TASK-1981 | ai:codex
+    let _ = aida_core::git_ops::gc_aggressive(store_path);
 
     println!(
         "{} squashed to snapshot {}",
@@ -535,3 +543,7 @@ pub(crate) static STORE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_store),
     };
+
+#[cfg(test)]
+#[path = "tests/task_1981_compact_tests.rs"]
+mod task_1981_compact_tests;
