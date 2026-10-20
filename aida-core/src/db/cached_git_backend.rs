@@ -4276,8 +4276,9 @@ mod tests {
     // detached worker (`deferred` in tests, where the spawn is refused) with
     // no write attempt — the `write_attempt == None` flake:
     // - `refresh_lock_contended`: a `fork` on a sibling test thread while this
-    //   reader held the refresh flock leaves a child holding it until `exec`
-    //   (see `acquire_past_fork_window`), so the next read loses the lock.
+    //   reader held the refresh flock left a child holding it until `exec`
+    //   (see `acquire_past_fork_window`), so the next read lost the lock; the
+    //   guard's drop now unlocks explicitly (BUG-2156).
     // - `ancestor_check_failed`: the winner's ancestry check runs under the
     //   read budget and can time out on a loaded host. The budget is pinned
     //   well above any plausible `git merge-base` time so this is not
@@ -4376,6 +4377,18 @@ mod tests {
     }
 
     // trace:TASK-1526 | ai:codex
+    //
+    // BUG-2156: the second read served stale (no incremental) under full-suite
+    // load. Two branches hand that read off with no write attempt:
+    // - `refresh_lock_contended`: a sibling test thread forked while the first
+    //   read held the refresh flock, and the guard's bare close left the lock
+    //   held by the child's copy until its exec. Fixed in `RefreshLock`'s
+    //   drop, which now unlocks explicitly.
+    // - `ancestor_check_failed`: the default 1.5 s read budget bounds the
+    //   `git merge-base` ancestry check, which a loaded host can exceed. The
+    //   budget is pinned well above that here, as BUG-1965 does.
+    // Either one is named in the failure message rather than inferred.
+    // trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
     #[test]
     fn writer_busy_next_reader_retries_incremental_after_lock_release() {
         use super::super::cache_refresh::*;
@@ -4386,16 +4399,19 @@ mod tests {
         holder.execute_batch("BEGIN IMMEDIATE").unwrap();
         {
             let s = CacheReadScope::new();
+            s.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
             backend.list_summaries(&ListFilter::default()).unwrap();
             assert_eq!(s.metadata()["refreshing"], "writer_busy");
         }
         holder.execute_batch("ROLLBACK").unwrap();
         let s = CacheReadScope::new();
+        s.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
         test_counts();
         backend.list_summaries(&ListFilter::default()).unwrap();
-        assert_eq!(s.metadata()["stale"], false);
+        let counts = test_counts();
+        assert_eq!(s.metadata()["stale"], false, "{counts:?} {}", s.metadata());
         assert_eq!(backend.cache().source_head_sha().unwrap(), Some(to));
-        assert_eq!(test_counts().get("incremental"), Some(&1));
+        assert_eq!(counts.get("incremental"), Some(&1), "{counts:?}");
     }
 
     // trace:TASK-1526 | ai:codex

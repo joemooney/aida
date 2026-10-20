@@ -1928,8 +1928,6 @@ fn run_gitlab(
                 GitlabArgs { inner: gitlab_cmd } => {
                     self::handle_gitlab_command(gitlab_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida gitlab` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2004,8 +2002,6 @@ fn run_github(
                 GithubArgs { inner: github_cmd } => {
                     self::handle_github_command(github_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida github` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2075,8 +2071,6 @@ fn run_jira(
                 JiraArgs { inner: jira_cmd } => {
                     self::handle_jira_command(jira_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida jira` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

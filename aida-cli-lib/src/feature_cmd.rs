@@ -269,8 +269,6 @@ fn run_feature(
                 FeatureArgs { inner: feature_cmd } => {
                     self::handle_feature_command(feature_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida feature` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

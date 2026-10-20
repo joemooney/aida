@@ -2747,8 +2747,6 @@ fn run_questions(
                 QuestionsArgs { cmd } => {
                     handle_questions_command(cmd.as_ref(), backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2768,8 +2766,6 @@ fn run_questions(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida questions` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2833,8 +2829,6 @@ fn run_research(
                 } => {
                     handle_research_command(backend, store_path, id, *dry_run, artifact_dir)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2854,8 +2848,6 @@ fn run_research(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida research` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

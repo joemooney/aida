@@ -551,8 +551,6 @@ fn run_rebase(
                         branch.as_deref(),
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -568,8 +566,6 @@ fn run_rebase(
                      the deprecated centralized backend with `aida db export-git`)."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rebase` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

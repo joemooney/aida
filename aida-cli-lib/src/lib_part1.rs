@@ -1731,10 +1731,9 @@ pub(crate) fn run() -> Result<()> {
     // Registered store-less commands dispatch here, where the legacy
     // `_bg-fetch` / `away` / `home` arms they replaced ran.
     // trace:STORY-1728 | ai:claude
-    if let Command::Registered(invocation) = &cli.command {
-        if invocation.run_early(&cli.globals)? == crate::command_registry::Flow::Return {
-            return Ok(());
-        }
+    let Command::Registered(invocation) = &cli.command;
+    if invocation.run_early(&cli.globals)? == crate::command_registry::Flow::Return {
+        return Ok(());
     }
 
     // Determine which requirements file to use
