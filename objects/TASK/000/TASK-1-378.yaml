@@ -1,0 +1,28 @@
+id: 01a157a0-47af-7d92-9a9b-aebfd4eb007e
+spec_id: TASK-1-378
+title: 'cosmetic: make check-ci-list still labels Run tests ''(local: cargo test --profi…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1949, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: make check-ci-list still labels Run tests '(local: cargo test --profile agent)' (scripts/check-ci-gates.py:441) though local_test_command now yields 'ci-test-shards.py --shard all --profile agent'.
+  Reviewed sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T04:44:44.335962999Z
+modified_at: 2026-10-20T04:44:44.335962999Z
+req_type: Task
+tags:
+- carried-from:TASK-1949
+- finding-hash:2825bd91
+- from-review:TASK-1949
+- kind:carried-forward
+filed_at:
+  code_sha: 1ad2024f9dd843b1896c67976d23a683a434bd7a
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
