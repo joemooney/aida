@@ -17,12 +17,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T03:52:47.031310171Z
+modified_at: 2026-10-20T04:18:13.895239884Z
 req_type: Bug
 tags:
 - agents
 - launcher
 - worktree
+comments:
+- id: 01a15788-0307-7ca2-a79f-95c590721c9b
+  author: mcp
+  content: 'Resumed authorized combo BUG-2188/2168 in codex/bug-2188, lease01a15770a205. Draft local fixes and tests exist; no commit/PR. Author-check round2 found exact rollback-ownership gaps: nonzero git worktree add can leave partial resources (post-checkout hook), and coordination acquire/release cannot distinguish invocation ownership from existing/successor same-clone claims. New unconditional shared-claim release removed from draft cleanup to avoid deleting another claim. Advisor notified via mailbox1c72f6e2 with requested ruling on transactional materialization + exact conditional claim rollback versus separating shared-claim scope. Other implemented draft parts: cwd/previews and pool override, useful causal errors, delegated-grant preflight/recovery, exact setup receipt/local cleanup, holder/clone guards, failed child grant revocation, standing-order correction. Targeted tests queued; no pass claim. Architecture/shared-lease semantics await advisor ruling before proceeding further.'
+  created_at: 2026-10-20T04:18:13.895191096Z
+  modified_at: 2026-10-20T04:18:13.895191096Z
 history:
 - id: 01a154ba-bb6b-7813-a614-dcecb1f228a8
   author: joe
