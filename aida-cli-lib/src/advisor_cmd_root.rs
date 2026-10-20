@@ -814,8 +814,6 @@ fn run_advisor(
                         ),
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -835,8 +833,6 @@ fn run_advisor(
                     // trace:STORY-360 trace:STORY-262 trace:STORY-618 | ai:claude
                     unreachable!("Command::Advisor dispatched before legacy storage init");
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida advisor` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

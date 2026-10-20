@@ -341,8 +341,6 @@ fn run_state_snapshot(
                 } => {
                     handle_state_snapshot_command(backend, store_path, spec, tests, fmt, *json)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -361,8 +359,6 @@ fn run_state_snapshot(
                      the deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida state-snapshot` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

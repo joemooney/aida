@@ -2133,8 +2133,6 @@ fn run_scaffold(
                     let storage = Storage::new(store_path);
                     self::handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2149,8 +2147,6 @@ fn run_scaffold(
                 } => {
                     self::handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida scaffold` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

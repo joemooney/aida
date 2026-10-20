@@ -824,8 +824,6 @@ fn run_terminal(
                 TerminalArgs { inner: cmd } => {
                     handle_terminal_command(cmd)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida terminal` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
