@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:57:07.069855639Z
-modified_at: 2026-10-20T11:38:55.824516212Z
+modified_at: 2026-10-20T14:23:26.666805009Z
 req_type: Bug
 comments:
 - id: 01a1591b-7bd0-7ab3-8443-05122e5604dd
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-10-20T11:38:55.824516212Z
   modified_at: 2026-10-20T11:38:55.824516212Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a159b2-19ca-7d72-9229-d05905c537de
+  author: joe
+  content: 'PR #2776: the mandate scan''s time is now subtracted from the --wait deadline (pr_cmd::ship_ci_budget), and wait_for_ship_ci polls at least once before any deadline check, so an exhausted budget reports CI''s real state (green ships, red refuses, pending names the checks). The scan itself is ~6x faster (BUG-2179: median 291s -> 48s on 108 traced specs).'
+  created_at: 2026-10-20T14:23:26.666805009Z
+  modified_at: 2026-10-20T14:23:26.666805009Z
+  session_id: 922261ed-530a-4e6c-afda-50941530bad0
 history:
 - id: 01a1591b-3b0b-7c42-992f-58ac2dbdb87f
   author: joe
