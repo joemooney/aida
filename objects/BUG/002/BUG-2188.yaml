@@ -17,12 +17,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T06:58:52.113026371Z
+modified_at: 2026-10-20T18:15:47.642525612Z
 req_type: Bug
 tags:
 - agents
 - launcher
 - worktree
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a15a86-67e7-7e43-a1b5-c2c3b371e196
+  created_at: 2026-10-20T18:15:47.642522097Z
+  created_by: joe
 comments:
 - id: 01a15788-0307-7ca2-a79f-95c590721c9b
   author: mcp
@@ -68,6 +74,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15a86-d8e5-7df2-bb1f-9a0d7fac8ac1
+  author: joe
+  timestamp: 2026-10-20T18:15:49.221401343Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
