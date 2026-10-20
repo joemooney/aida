@@ -398,6 +398,11 @@ pub(crate) fn command_output_with_timeout_detail(
     });
     let start = std::time::Instant::now();
     let mut killed = false;
+    // BUG-1993: back off from 1 ms to 20 ms. A flat 20 ms poll added up to
+    // 20 ms to every short bounded call (most git probes finish in ~10 ms),
+    // which `aida show` pays several times per run.
+    // trace:BUG-1993 | ai:claude
+    let mut poll = std::time::Duration::from_millis(1);
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break Some(status),
@@ -410,7 +415,8 @@ pub(crate) fn command_output_with_timeout_detail(
                     let _ = child.wait();
                     break None;
                 }
-                std::thread::sleep(std::time::Duration::from_millis(20));
+                std::thread::sleep(poll);
+                poll = (poll * 2).min(std::time::Duration::from_millis(20));
             }
             // BUG-1288 fix-up: a `try_wait` error leaves the child un-reaped
             // exactly like the timeout branch above — kill and wait it here
