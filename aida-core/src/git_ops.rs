@@ -1308,6 +1308,11 @@ pub fn push_exact_outcome(
         !crate::db::any_store_write_lock_held(),
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
     );
+    // trace:TASK-1930 | ai:agy
+    anyhow::ensure!(
+        !sha.trim().is_empty(),
+        "push_exact requires a non-empty commit SHA"
+    );
     reject_option_like("branch", branch)?;
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
@@ -2378,6 +2383,37 @@ pub fn first_parent_sha(repo: &Path, sha: &str) -> Option<String> {
     let rev = format!("{sha}^1");
     let result = git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
     (result.success && !result.stdout.is_empty()).then_some(result.stdout)
+}
+
+/// Roll back a store writer's local commit `expected_sha` after its push was
+/// rejected, under the store write lock.
+///
+/// If `HEAD` is still `expected_sha`, resets `--hard` to `<expected_sha>~1`.
+/// If another local writer committed on top of `expected_sha` while this caller
+/// was pushing unlocked (`HEAD != expected_sha`), drops `expected_sha` via
+/// `git rebase --onto <expected_sha>~1 <expected_sha>` so the peer's commit is
+/// preserved rather than erased by a blind `reset --hard HEAD~1`. If that
+/// rebase conflicts, aborts it and leaves `HEAD` untouched.
+// trace:TASK-1930 | ai:agy
+pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Result<bool> {
+    if expected_sha.is_empty() {
+        return Ok(false);
+    }
+    crate::db::with_store_write_lock(repo, || {
+        let current = head_sha(repo)?;
+        let parent = format!("{expected_sha}~1");
+        if current == expected_sha {
+            let out = git(repo, &["reset", "--hard", &parent])?;
+            return Ok(out.success);
+        }
+        if is_ancestor(repo, expected_sha, &current).unwrap_or(false) {
+            let rebased = git(repo, &["rebase", "--onto", &parent, expected_sha])?;
+            if !rebased.success && rebase_in_progress(repo) {
+                let _ = git(repo, &["rebase", "--abort"]);
+            }
+        }
+        Ok(false)
+    })
 }
 
 /// The kind of change a diff reports for a single object file. Renames are
@@ -4156,52 +4192,55 @@ pub fn squash_orphan_to_snapshot(
     message: &str,
     backup_ref: &str,
 ) -> Result<SquashOutcome> {
-    let head = git(repo, &["rev-parse", "HEAD"])?;
-    if !head.success {
-        anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
-    }
-    let old_head = head.stdout.clone();
+    // trace:TASK-1930 | ai:agy
+    crate::db::with_store_write_lock(repo, || {
+        let head = git(repo, &["rev-parse", "HEAD"])?;
+        if !head.success {
+            anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
+        }
+        let old_head = head.stdout.clone();
 
-    // ── Guard: create + verify the backup BEFORE any rewrite ──
-    let backup = git(repo, &["branch", backup_ref, &old_head])?;
-    if !backup.success {
-        anyhow::bail!(
-            "refusing to squash: could not create backup ref '{}' ({}) — \
-             no history was rewritten",
-            backup_ref,
-            backup.stderr
-        );
-    }
-    let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
-    if !verify.success || verify.stdout != old_head {
-        anyhow::bail!(
-            "refusing to squash: backup ref '{}' did not record HEAD — \
-             no history was rewritten",
-            backup_ref
-        );
-    }
+        // ── Guard: create + verify the backup BEFORE any rewrite ──
+        let backup = git(repo, &["branch", backup_ref, &old_head])?;
+        if !backup.success {
+            anyhow::bail!(
+                "refusing to squash: could not create backup ref '{}' ({}) — \
+                 no history was rewritten",
+                backup_ref,
+                backup.stderr
+            );
+        }
+        let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
+        if !verify.success || verify.stdout != old_head {
+            anyhow::bail!(
+                "refusing to squash: backup ref '{}' did not record HEAD — \
+                 no history was rewritten",
+                backup_ref
+            );
+        }
 
-    // ── Build a fresh root commit carrying the current tree ──
-    let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
-    if !tree.success {
-        anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
-    }
-    let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
-    if !snapshot.success {
-        anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
-    }
-    let snapshot_sha = snapshot.stdout.clone();
+        // ── Build a fresh root commit carrying the current tree ──
+        let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
+        if !tree.success {
+            anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
+        }
+        let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
+        if !snapshot.success {
+            anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
+        }
+        let snapshot_sha = snapshot.stdout.clone();
 
-    // Move the checked-out branch to the snapshot, keeping tree + index intact.
-    let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
-    if !reset.success {
-        anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
-    }
+        // Move the checked-out branch to the snapshot, keeping tree + index intact.
+        let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
+        if !reset.success {
+            anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
+        }
 
-    Ok(SquashOutcome {
-        backup_ref: backup_ref.to_string(),
-        old_head,
-        snapshot_sha,
+        Ok(SquashOutcome {
+            backup_ref: backup_ref.to_string(),
+            old_head,
+            snapshot_sha,
+        })
     })
 }
 
@@ -4412,33 +4451,35 @@ pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdP
     let registry_path = registry_dir.join("nodes.toml");
     let blocks_path = registry_dir.join("blocks.yaml");
 
-    if let Ok(branch) = current_branch(aida_repo) {
-        let _ = pull_rebase(aida_repo, "origin", &branch);
-    }
-
-    let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-    let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
-        BlockRegistry::load(&blocks_path)
-            .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
-            .unwrap_or_default()
-    } else {
-        std::collections::HashSet::new()
-    };
-
-    let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
-
-    if !in_use(requested) {
-        return Ok(NodeIdProbe::Free);
-    }
-    for n in 2..u32::MAX {
-        let candidate = format!("{}{}", requested, n);
-        if !in_use(&candidate) {
-            return Ok(NodeIdProbe::Taken {
-                suggested: candidate,
-            });
+    crate::db::with_store_write_lock(aida_repo, || {
+        if let Ok(branch) = current_branch(aida_repo) {
+            let _ = pull_rebase(aida_repo, "origin", &branch);
         }
-    }
-    anyhow::bail!("could not find a free suffix for node id '{}'", requested)
+
+        let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
+            BlockRegistry::load(&blocks_path)
+                .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
+                .unwrap_or_default()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
+
+        if !in_use(requested) {
+            return Ok(NodeIdProbe::Free);
+        }
+        for n in 2..u32::MAX {
+            let candidate = format!("{}{}", requested, n);
+            if !in_use(&candidate) {
+                return Ok(NodeIdProbe::Taken {
+                    suggested: candidate,
+                });
+            }
+        }
+        anyhow::bail!("could not find a free suffix for node id '{}'", requested)
+    })
 }
 
 /// Result of [`suggest_free_node_id`]. trace:STORY-42 | ai:claude
@@ -4513,91 +4554,99 @@ pub fn register_node_full_identity(
     let local_only = !has_remote(aida_repo, "origin");
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: Pull latest (skip on first attempt if no remote)
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
-                anyhow::bail!(
-                    "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
-                    attempt, e
-                );
-            }
-        }
-
-        // Step 2: Load registry and pick the id to claim. A node id is
-        // "in use" if it appears in nodes.toml OR if it owns any entry in
-        // blocks.yaml — the latter catches legacy clones that operated
-        // with implicit (pre-EPIC-1-052) node ids and never registered.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
-            BlockRegistry::load(&blocks_path)
-                .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
-                .unwrap_or_default()
-        } else {
-            std::collections::HashSet::new()
-        };
-        let id_in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
-
-        let node_id: String = match requested_id.clone() {
-            Some(id) => {
-                if id_in_use(&id) {
-                    anyhow::bail!(
-                        "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
-                         pick a different id",
-                        id
+        // trace:TASK-1930 | ai:agy
+        let (node_id, node_name, committed_sha) = crate::db::with_store_write_lock(
+            aida_repo,
+            || -> Result<(String, String, String)> {
+                // Step 1: Pull latest (skip on first attempt if no remote)
+                if attempt > 0 && !local_only {
+                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                        eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+                        anyhow::bail!(
+                        "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
+                        attempt, e
                     );
+                    }
                 }
-                id
-            }
-            None => {
-                // Walk numeric next-id space, skipping any id that's
-                // already implied by blocks.yaml (legacy clones).
-                let mut next = registry.next_node_id();
-                while blocks_in_use.contains(&next) {
-                    let n: u32 = next.parse().unwrap_or(0);
-                    next = (n + 1).to_string();
-                }
-                next
-            }
-        };
 
-        // Step 3: Register the node, capturing clone_path for hijack-mark-
-        // in-place support (STORY-43). The clone path is the parent of the
-        // .aida-store worktree (i.e., the project root). trace:STORY-41
-        let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
-        // STORY-652: compute the friendly name once so both nodes.toml and the
-        // local node.toml agree. Owner string prefers the threaded `user`,
-        // falling back to the email local-part / integer for the name slug.
-        let owner_for_name = identity.user.clone().unwrap_or_else(|| {
-            email
-                .as_deref()
-                .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
-                .unwrap_or_else(|| user_id.to_string())
-        });
-        let node_name = identity
-            .name
-            .clone()
-            .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| default_node_name(hostname, &owner_for_name, &node_id));
-        registry.register_specific_full_named(
-            node_id.clone(),
-            user_id,
-            hostname.to_string(),
-            email.clone(),
-            clone_path,
-            Some(node_name.clone()),
-            identity.user.clone(),
-        );
-        registry.save(&registry_path)?;
+                // Step 2: Load registry and pick the id to claim. A node id is
+                // "in use" if it appears in nodes.toml OR if it owns any entry in
+                // blocks.yaml — the latter catches legacy clones that operated
+                // with implicit (pre-EPIC-1-052) node ids and never registered.
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
+                    BlockRegistry::load(&blocks_path)
+                        .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
+                        .unwrap_or_default()
+                } else {
+                    std::collections::HashSet::new()
+                };
+                let id_in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
 
-        // Step 4: Stage, commit, push
-        add(aida_repo, &["registry/nodes.toml"])?;
+                let node_id: String = match requested_id.clone() {
+                    Some(id) => {
+                        if id_in_use(&id) {
+                            anyhow::bail!(
+                                "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
+                             pick a different id",
+                                id
+                            );
+                        }
+                        id
+                    }
+                    None => {
+                        // Walk numeric next-id space, skipping any id that's
+                        // already implied by blocks.yaml (legacy clones).
+                        let mut next = registry.next_node_id();
+                        while blocks_in_use.contains(&next) {
+                            let n: u32 = next.parse().unwrap_or(0);
+                            next = (n + 1).to_string();
+                        }
+                        next
+                    }
+                };
 
-        let msg = format!(
-            "chore(registry): register node {} for user {} ({})",
-            node_id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+                // Step 3: Register the node, capturing clone_path for hijack-mark-
+                // in-place support (STORY-43). The clone path is the parent of the
+                // .aida-store worktree (i.e., the project root). trace:STORY-41
+                let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
+                // STORY-652: compute the friendly name once so both nodes.toml and the
+                // local node.toml agree. Owner string prefers the threaded `user`,
+                // falling back to the email local-part / integer for the name slug.
+                let owner_for_name = identity.user.clone().unwrap_or_else(|| {
+                    email
+                        .as_deref()
+                        .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
+                        .unwrap_or_else(|| user_id.to_string())
+                });
+                let node_name = identity
+                    .name
+                    .clone()
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or_else(|| default_node_name(hostname, &owner_for_name, &node_id));
+                registry.register_specific_full_named(
+                    node_id.clone(),
+                    user_id,
+                    hostname.to_string(),
+                    email.clone(),
+                    clone_path,
+                    Some(node_name.clone()),
+                    identity.user.clone(),
+                );
+                registry.save(&registry_path)?;
+
+                // Step 4: Stage, commit
+                add(aida_repo, &["registry/nodes.toml"])?;
+
+                let msg = format!(
+                    "chore(registry): register node {} for user {} ({})",
+                    node_id, user_id, hostname
+                );
+                commit(aida_repo, &msg)?;
+                let sha = head_sha(aida_repo)?;
+                Ok((node_id, node_name, sha))
+            },
+        )?;
 
         // Step 5: Push — if rejected, pull and retry. When there's no
         // origin remote (solo first clone), skip the push entirely:
@@ -4618,7 +4667,7 @@ pub fn register_node_full_identity(
             config.save(&node_config_path)?;
             return Ok(node_id);
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 // Success! Save local node config
                 let config = NodeConfig {
@@ -4646,9 +4695,7 @@ pub fn register_node_full_identity(
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4698,48 +4745,52 @@ pub fn register_node_remote_only(
     let local_only = !has_remote(aida_repo, "origin");
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: Pull latest (skip on first attempt if no remote)
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+        // trace:TASK-1930 | ai:agy
+        let committed_sha = crate::db::with_store_write_lock(aida_repo, || -> Result<String> {
+            // Step 1: Pull latest (skip on first attempt if no remote)
+            if attempt > 0 && !local_only {
+                if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+                    anyhow::bail!(
+                        "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                        attempt, e
+                    );
+                }
+            }
+
+            // Step 2: Load registry and verify the requested id isn't already in
+            // nodes.toml. A block-only id (legacy clone with blocks but no
+            // registry entry) is the legitimate backfill *target*, so unlike the
+            // normal acquire path we do NOT treat block ownership as a collision.
+            let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            if registry.is_registered(&id) {
                 anyhow::bail!(
-                    "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
-                    attempt, e
+                    "Node id {} is already in registry/nodes.toml — nothing to backfill",
+                    id
                 );
             }
-        }
 
-        // Step 2: Load registry and verify the requested id isn't already in
-        // nodes.toml. A block-only id (legacy clone with blocks but no
-        // registry entry) is the legitimate backfill *target*, so unlike the
-        // normal acquire path we do NOT treat block ownership as a collision.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        if registry.is_registered(&id) {
-            anyhow::bail!(
-                "Node id {} is already in registry/nodes.toml — nothing to backfill",
-                id
+            // Step 3: Register the entry. clone_path is None: we don't know the
+            // legacy clone's path from here, and recording the local clone's path
+            // would be wrong (the entry isn't about this clone).
+            registry.register_specific_full(
+                id.clone(),
+                user_id,
+                hostname.to_string(),
+                Some(email.clone()),
+                None,
             );
-        }
+            registry.save(&registry_path)?;
 
-        // Step 3: Register the entry. clone_path is None: we don't know the
-        // legacy clone's path from here, and recording the local clone's path
-        // would be wrong (the entry isn't about this clone).
-        registry.register_specific_full(
-            id.clone(),
-            user_id,
-            hostname.to_string(),
-            Some(email.clone()),
-            None,
-        );
-        registry.save(&registry_path)?;
-
-        // Step 4: Stage, commit
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let msg = format!(
-            "chore(registry): backfill node {} for user {} ({}) [remote-only]",
-            id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+            // Step 4: Stage, commit
+            add(aida_repo, &["registry/nodes.toml"])?;
+            let msg = format!(
+                "chore(registry): backfill node {} for user {} ({}) [remote-only]",
+                id, user_id, hostname
+            );
+            commit(aida_repo, &msg)?;
+            head_sha(aida_repo)
+        })?;
 
         // Step 5: Push (skip when there's no remote — the commit lives on the
         // local orphan branch and uploads on the next `aida push`). Crucially,
@@ -4748,12 +4799,10 @@ pub fn register_node_remote_only(
         if local_only {
             return Ok(id);
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(id),
             Ok(false) => {
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Remote-only node backfill: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4822,54 +4871,69 @@ pub fn set_node_identity_field(
     };
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                anyhow::bail!(
-                    "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
-                    attempt,
-                    e
+        // trace:TASK-1930 | ai:agy
+        let committed_sha = crate::db::with_store_write_lock(
+            aida_repo,
+            || -> Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                        anyhow::bail!(
+                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            attempt,
+                            e
+                        );
+                    }
+                }
+
+                // Step 2: load → find the entry (error if absent) → set the field.
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                let entry = registry
+                    .nodes
+                    .iter_mut()
+                    .find(|n| n.id.as_str() == id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Node id {} is not in the shared registry (registry/nodes.toml) — \
+                             nothing to update. Run `aida node list` to see registered nodes.",
+                            id
+                        )
+                    })?;
+                match field {
+                    NodeIdentityField::Owner => entry.user = Some(value.to_string()),
+                    NodeIdentityField::Name => entry.name = Some(value.to_string()),
+                }
+                registry.save(&registry_path)?;
+
+                // Step 3: stage + commit. On a no-op commit (Ok(false)), return
+                // None without capturing head_sha so we never push or arm the
+                // rollback against another writer's commit.
+                add(aida_repo, &["registry/nodes.toml"])?;
+                let field_label = match field {
+                    NodeIdentityField::Owner => "owner",
+                    NodeIdentityField::Name => "name",
+                };
+                let msg = format!(
+                    "chore(registry): set node {} {} = {}",
+                    id, field_label, value
                 );
-            }
-        }
-
-        // Step 2: load → find the entry (error if absent) → set the field.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let entry = registry
-            .nodes
-            .iter_mut()
-            .find(|n| n.id.as_str() == id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Node id {} is not in the shared registry (registry/nodes.toml) — \
-                     nothing to update. Run `aida node list` to see registered nodes.",
-                    id
-                )
-            })?;
-        match field {
-            NodeIdentityField::Owner => entry.user = Some(value.to_string()),
-            NodeIdentityField::Name => entry.name = Some(value.to_string()),
-        }
-        registry.save(&registry_path)?;
-
-        // Step 3: stage + commit.
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let field_label = match field {
-            NodeIdentityField::Owner => "owner",
-            NodeIdentityField::Name => "name",
+                if !commit(aida_repo, &msg)? {
+                    return Ok(None);
+                }
+                Ok(Some(head_sha(aida_repo)?))
+            },
+        )?;
+        let Some(committed_sha) = committed_sha else {
+            apply_local(id)?;
+            return Ok(());
         };
-        let msg = format!(
-            "chore(registry): set node {} {} = {}",
-            id, field_label, value
-        );
-        commit(aida_repo, &msg)?;
 
         // Step 4: push (or stop here when solo).
         if local_only {
             apply_local(id)?;
             return Ok(());
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 apply_local(id)?;
                 return Ok(());
@@ -4877,9 +4941,7 @@ pub fn set_node_identity_field(
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly. trace:BUG-1-069
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Node identity update: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4936,111 +4998,121 @@ pub fn hijack_node(
     let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
 
     for attempt in 0..MAX_CAS_RETRIES {
-        if attempt > 0 {
-            pull_rebase(aida_repo, "origin", &branch)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let (outcome, recomputed_name, recomputed_user, committed_sha) =
+            crate::db::with_store_write_lock(
+                aida_repo,
+                || -> Result<(HijackOutcome, String, Option<String>, String)> {
+                    if attempt > 0 {
+                        pull_rebase(aida_repo, "origin", &branch)?;
+                    }
 
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let entry_idx = registry
-            .nodes
-            .iter()
-            .position(|n| n.id == target_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Node id '{}' is not registered — nothing to hijack",
-                    target_id
-                )
-            })?;
+                    let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                    let entry_idx = registry
+                        .nodes
+                        .iter()
+                        .position(|n| n.id == target_id)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Node id '{}' is not registered — nothing to hijack",
+                                target_id
+                            )
+                        })?;
 
-        // Decide reachability before mutating the registry. "Reachable"
-        // means same hostname, the clone_path is recorded and exists on
-        // disk, and email matches (proxy for same user). When email is
-        // None on either side, fall back to hostname+path.
-        let old_entry = registry.nodes[entry_idx].clone();
-        let same_host = old_entry.hostname == hostname;
-        let same_user = match (old_entry.email.as_deref(), email.as_deref()) {
-            (Some(a), Some(b)) => a == b,
-            _ => true,
-        };
-        let path_exists = old_entry
-            .clone_path
-            .as_ref()
-            .map(|p| p.exists() && *p != aida_repo.parent().unwrap_or(p))
-            .unwrap_or(false);
-
-        let outcome = if same_host && same_user && path_exists {
-            // Reachable — write HIJACKED.toml in the old clone.
-            let old_clone = old_entry.clone_path.clone().unwrap();
-            let marker = HijackMarker {
-                node_id: target_id.to_string(),
-                new_owner_hostname: hostname.to_string(),
-                new_owner_email: email.clone(),
-                new_owner_clone_path: clone_path.clone(),
-                hijacked_at: chrono::Utc::now(),
-            };
-            let marker_path = HijackMarker::path_in_store(&old_clone.join(".aida-store"));
-            // Best-effort: if the old store path doesn't exist (the clone
-            // was deleted but its parent dir lingered), fall through to
-            // Reattributed instead of failing the whole hijack.
-            if marker_path.parent().map(|p| p.exists()).unwrap_or(false)
-                || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
-            {
-                marker.save(&marker_path)?;
-                HijackOutcome::MarkedInPlace { marker_path }
-            } else {
-                HijackOutcome::Reattributed {
-                    reason: format!(
-                        "old clone path {} no longer has a writable .aida-store/.aida/",
-                        old_clone.display()
-                    ),
-                }
-            }
-        } else {
-            let reason = if !same_host {
-                format!(
-                    "old clone was on different host ({} vs {})",
-                    old_entry.hostname, hostname
-                )
-            } else if !same_user {
-                "old clone was owned by a different user".to_string()
-            } else if old_entry.clone_path.is_none() {
-                "old clone path was not recorded (pre-EPIC-9 entry)".to_string()
-            } else {
-                format!(
-                    "old clone path {} no longer exists",
-                    old_entry
+                    // Decide reachability before mutating the registry. "Reachable"
+                    // means same hostname, the clone_path is recorded and exists on
+                    // disk, and email matches (proxy for same user). When email is
+                    // None on either side, fall back to hostname+path.
+                    let old_entry = registry.nodes[entry_idx].clone();
+                    let same_host = old_entry.hostname == hostname;
+                    let same_user = match (old_entry.email.as_deref(), email.as_deref()) {
+                        (Some(a), Some(b)) => a == b,
+                        _ => true,
+                    };
+                    let path_exists = old_entry
                         .clone_path
                         .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default()
-                )
-            };
-            HijackOutcome::Reattributed { reason }
-        };
+                        .map(|p| p.exists() && *p != aida_repo.parent().unwrap_or(p))
+                        .unwrap_or(false);
 
-        // Update the registry entry to point at this clone.
-        let entry = &mut registry.nodes[entry_idx];
-        entry.hostname = hostname.to_string();
-        entry.email = email.clone();
-        entry.clone_path = clone_path.clone();
-        entry.registered = chrono::Utc::now();
-        // STORY-652: the node now belongs to a new clone — recompute the
-        // friendly name from the new host/owner so the roster reflects the
-        // new owner rather than the prior clone's name. trace:STORY-652
-        let recomputed_name = entry.display_name();
-        entry.name = Some(recomputed_name.clone());
-        let recomputed_user = entry.user.clone();
-        registry.save(&registry_path)?;
+                    let outcome = if same_host && same_user && path_exists {
+                        // Reachable — write HIJACKED.toml in the old clone.
+                        let old_clone = old_entry.clone_path.clone().unwrap();
+                        let marker = HijackMarker {
+                            node_id: target_id.to_string(),
+                            new_owner_hostname: hostname.to_string(),
+                            new_owner_email: email.clone(),
+                            new_owner_clone_path: clone_path.clone(),
+                            hijacked_at: chrono::Utc::now(),
+                        };
+                        let marker_path =
+                            HijackMarker::path_in_store(&old_clone.join(".aida-store"));
+                        // Best-effort: if the old store path doesn't exist (the clone
+                        // was deleted but its parent dir lingered), fall through to
+                        // Reattributed instead of failing the whole hijack.
+                        if marker_path.parent().map(|p| p.exists()).unwrap_or(false)
+                            || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
+                        {
+                            marker.save(&marker_path)?;
+                            HijackOutcome::MarkedInPlace { marker_path }
+                        } else {
+                            HijackOutcome::Reattributed {
+                                reason: format!(
+                                    "old clone path {} no longer has a writable .aida-store/.aida/",
+                                    old_clone.display()
+                                ),
+                            }
+                        }
+                    } else {
+                        let reason = if !same_host {
+                            format!(
+                                "old clone was on different host ({} vs {})",
+                                old_entry.hostname, hostname
+                            )
+                        } else if !same_user {
+                            "old clone was owned by a different user".to_string()
+                        } else if old_entry.clone_path.is_none() {
+                            "old clone path was not recorded (pre-EPIC-9 entry)".to_string()
+                        } else {
+                            format!(
+                                "old clone path {} no longer exists",
+                                old_entry
+                                    .clone_path
+                                    .as_ref()
+                                    .map(|p| p.display().to_string())
+                                    .unwrap_or_default()
+                            )
+                        };
+                        HijackOutcome::Reattributed { reason }
+                    };
 
-        // Stage + commit + push.
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let msg = format!(
-            "chore(registry): hijack node {} for user {} ({})",
-            target_id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+                    // Update the registry entry to point at this clone.
+                    let entry = &mut registry.nodes[entry_idx];
+                    entry.hostname = hostname.to_string();
+                    entry.email = email.clone();
+                    entry.clone_path = clone_path.clone();
+                    entry.registered = chrono::Utc::now();
+                    // STORY-652: the node now belongs to a new clone — recompute the
+                    // friendly name from the new host/owner so the roster reflects the
+                    // new owner rather than the prior clone's name. trace:STORY-652
+                    let recomputed_name = entry.display_name();
+                    entry.name = Some(recomputed_name.clone());
+                    let recomputed_user = entry.user.clone();
+                    registry.save(&registry_path)?;
 
-        match push(aida_repo, "origin", &branch) {
+                    // Stage + commit.
+                    add(aida_repo, &["registry/nodes.toml"])?;
+                    let msg = format!(
+                        "chore(registry): hijack node {} for user {} ({})",
+                        target_id, user_id, hostname
+                    );
+                    commit(aida_repo, &msg)?;
+                    let sha = head_sha(aida_repo)?;
+                    Ok((outcome, recomputed_name, recomputed_user, sha))
+                },
+            )?;
+
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 // Save local NodeConfig so this clone now claims the id.
                 let config = NodeConfig {
@@ -5068,9 +5140,7 @@ pub fn hijack_node(
                 if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
                     let _ = std::fs::remove_file(marker_path);
                 }
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 continue;
             }
             Err(e) => anyhow::bail!("Hijack push failed: {}", e),
@@ -5098,22 +5168,30 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
     let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
     for attempt in 0..MAX_CAS_RETRIES {
-        if attempt > 0 {
-            pull_rebase(aida_repo, "origin", &branch)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(aida_repo, || -> Result<Option<String>> {
+                if attempt > 0 {
+                    pull_rebase(aida_repo, "origin", &branch)?;
+                }
 
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        if !registry.remove(node_id) {
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                if !registry.remove(node_id) {
+                    return Ok(None);
+                }
+                registry.save(&registry_path)?;
+                add(aida_repo, &["registry/nodes.toml"])?;
+                commit(
+                    aida_repo,
+                    &format!("chore(registry): unregister node {}", node_id),
+                )?;
+                Ok(Some(head_sha(aida_repo)?))
+            })?;
+        let Some(committed_sha) = committed_sha else {
             return Ok(false);
-        }
-        registry.save(&registry_path)?;
-        add(aida_repo, &["registry/nodes.toml"])?;
-        commit(
-            aida_repo,
-            &format!("chore(registry): unregister node {}", node_id),
-        )?;
+        };
 
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
                 // Same soft-reset dance as register_node_full so the next
@@ -5123,9 +5201,7 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 continue;
             }
             Err(e) => anyhow::bail!("Node unregister failed: {}", e),
@@ -10651,5 +10727,226 @@ mod tests {
         }
         let err = push_exact(&repo, "origin", &next, "main").unwrap_err();
         assert!(err.to_string().starts_with("git push failed:"), "{err:#}");
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_rollback_commit_if_head_matches_preserves_intervening_peer_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        let seed_sha = head_sha(&repo).unwrap();
+
+        // Writer A commits and captures its SHA before unlocking to push.
+        std::fs::write(repo.join("writer_a.txt"), "from writer a\n").unwrap();
+        run_git(&repo, &["add", "writer_a.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "writer a"]);
+        let writer_a_sha = head_sha(&repo).unwrap();
+
+        // Direct rollback when HEAD still equals writer_a_sha resets to seed.
+        assert!(rollback_commit_if_head_matches(&repo, &writer_a_sha).unwrap());
+        assert_eq!(head_sha(&repo).unwrap(), seed_sha);
+        assert!(!repo.join("writer_a.txt").exists());
+
+        // Now simulate a peer commit landing on HEAD while Writer A was pushing unlocked.
+        std::fs::write(repo.join("writer_a.txt"), "from writer a\n").unwrap();
+        run_git(&repo, &["add", "writer_a.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "writer a retry"]);
+        let writer_a_retry_sha = head_sha(&repo).unwrap();
+
+        std::fs::write(repo.join("peer_b.txt"), "from peer b\n").unwrap();
+        run_git(&repo, &["add", "peer_b.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "peer b"]);
+
+        // Rolling back writer_a_retry_sha must NOT erase peer_b.txt!
+        assert!(!rollback_commit_if_head_matches(&repo, &writer_a_retry_sha).unwrap());
+        assert!(
+            repo.join("peer_b.txt").exists(),
+            "intervening peer commit must be preserved"
+        );
+        assert!(
+            !repo.join("writer_a.txt").exists(),
+            "rejected writer_a commit should be dropped by rebase --onto"
+        );
+        let log = run_git(&repo, &["log", "--oneline"]);
+        assert!(
+            log.contains("peer b"),
+            "peer commit must remain in history: {log}"
+        );
+        assert!(
+            !log.contains("writer a retry"),
+            "rejected commit must not remain in history: {log}"
+        );
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_push_exact_refuses_empty_sha_and_node_writers_wait_for_store_write_lock() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&bare, &["init", "--bare", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        assert!(push(&repo, "origin", "aida-store").unwrap());
+
+        // 1. push_exact and push_exact_outcome refuse an empty/whitespace SHA
+        // so `:refs/heads/<branch>` can never delete a remote branch.
+        for empty in ["", "   "] {
+            let err = push_exact(&repo, "origin", empty, "aida-store").unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("push_exact requires a non-empty commit SHA"),
+                "expected empty-SHA refusal, got: {err:#}"
+            );
+        }
+
+        // 2. Barrier test: register_node_full blocks on store_write_lock until released.
+        let initial_head = head_sha(&repo).unwrap();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let repo_holder = repo.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&repo_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let repo_writer = repo.clone();
+        let writer = std::thread::spawn(move || {
+            let assigned = register_node_full(
+                &repo_writer,
+                Some("n77".to_string()),
+                1000,
+                "devbox",
+                Some("t@example.com".to_string()),
+            )
+            .unwrap();
+            done_tx.send(assigned).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while crate::db::store_write_lock_contended_for(&repo) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for register_node_full to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "register_node_full must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            head_sha(&repo).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            "n77"
+        );
+        writer.join().unwrap();
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_set_node_identity_field_noop_write_does_not_capture_sha_or_push_or_rollback() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let clone_a = dir.path().join("clone_a");
+        let clone_b = dir.path().join("clone_b");
+
+        std::process::Command::new("git")
+            .args(["init", "--bare", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+
+        init(&clone_a).unwrap();
+        configure_user(&clone_a, "Test", "test@example.com").unwrap();
+        std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
+        add(&clone_a, &["README.md"]).unwrap();
+        commit(&clone_a, "seed").unwrap();
+        let branch = current_branch(&clone_a).unwrap();
+        std::process::Command::new("git")
+            .current_dir(&clone_a)
+            .args(["remote", "add", "origin", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(push(&clone_a, "origin", &branch).unwrap());
+
+        std::process::Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                &branch,
+                hub.to_str().unwrap(),
+                clone_b.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        configure_user(&clone_b, "Peer", "peer@example.com").unwrap();
+
+        // 1. Register node "n1" and set its owner field to "alice".
+        register_node_full(
+            &clone_a,
+            Some("n1".to_string()),
+            1000,
+            "devbox",
+            Some("t@example.com".to_string()),
+        )
+        .unwrap();
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        pull_rebase(&clone_b, "origin", &branch).unwrap();
+
+        // 2. Advance `origin` from clone_b so any push from clone_a would be rejected,
+        // and create an unpushed local peer commit on clone_a.
+        std::fs::write(clone_b.join("remote.txt"), "remote\n").unwrap();
+        add(&clone_b, &["remote.txt"]).unwrap();
+        commit(&clone_b, "remote advance").unwrap();
+        assert!(push(&clone_b, "origin", &branch).unwrap());
+
+        std::fs::write(clone_a.join("unpushed_peer.txt"), "precious\n").unwrap();
+        add(&clone_a, &["unpushed_peer.txt"]).unwrap();
+        commit(&clone_a, "local unpushed peer commit").unwrap();
+        let peer_sha = head_sha(&clone_a).unwrap();
+
+        // 3. Second write with the identical value produces Ok(false) ("nothing to commit")
+        // and MUST return early without capturing `peer_sha`, without pushing, and
+        // without rolling back `unpushed_peer.txt`.
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        assert_eq!(
+            head_sha(&clone_a).unwrap(),
+            peer_sha,
+            "no-op set_node_identity_field must not capture or roll back an unpushed peer commit"
+        );
+        assert!(
+            clone_a.join("unpushed_peer.txt").exists(),
+            "unpushed peer file must survive a no-op set_node_identity_field"
+        );
     }
 }

@@ -79,9 +79,12 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
+# TASK-1930: doctor_migrate_counter_scope probes existence of .aida/config.toml
+# before the preview, and doctor_migrate_counter_scope_in_store re-reads/writes
+# [id_format] counter_scope = "global" under store_write_lock -> blocks.lock.
 [readers."aida-cli-lib/src/doctor_cmd.rs"]
-channels = ["worktree", "write"]
-sites = 1
+channels = ["worktree", "write", "probe"]
+sites = 2
 
 [readers."aida-cli-lib/src/doctor_root.rs"]
 channels = ["worktree"]
