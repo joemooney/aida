@@ -83,9 +83,14 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             .arg(crate::seat_clone_detect::host_git_refusal(&clone_root));
         return refused;
     }
+    // BUG-2192: resolve the store hooks directory once per command. The pin
+    // below and the refusal check both need it; resolving it twice ran an
+    // extra `git rev-parse` and re-verified the hooks on every store git call.
+    // trace:BUG-2192 | ai:claude
+    let store_hooks = is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd));
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
-        .args(host_git_hardening(cwd))
+        .args(host_git_hardening_with(cwd, store_hooks.as_ref()))
         .args(transaction_git_config());
     // Every commit an aida build makes in a store tree carries the store
     // write marker, whatever the caller: the shipped hooks key their
@@ -107,9 +112,14 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             "GIT_ATTR_SOURCE",
             "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
         );
-        let refusal = crate::store_hooks::ensure_attr_source(cwd)
-            .err()
-            .or_else(|| resolve_store_hooks_dir(cwd).err());
+        let refusal =
+            crate::store_hooks::ensure_attr_source(cwd)
+                .err()
+                .or_else(|| match store_hooks {
+                    Some(Err(err)) => Some(err),
+                    Some(Ok(_)) => None,
+                    None => resolve_store_hooks_dir(cwd).err(),
+                });
         if let Some(err) = refusal {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
@@ -289,6 +299,16 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 ///   Store writes refuse when the host profile cannot be verified.
 // trace:BUG-1929 | ai:claude
 pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
+    host_git_hardening_with(cwd, None)
+}
+
+/// [`host_git_hardening`] given the store's already-resolved hooks directory
+/// (`None` resolves it here).
+// trace:BUG-2192 | ai:claude
+fn host_git_hardening_with(
+    cwd: &Path,
+    store_hooks: Option<&Result<Option<PathBuf>>>,
+) -> Vec<String> {
     let mut args = vec!["-c".to_string(), "core.fsmonitor=false".to_string()];
     if !is_store_tree(cwd) {
         // trace:BUG-1985 | ai:claude
@@ -308,9 +328,18 @@ pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
         args.push("-c".to_string());
         args.push(setting.to_string());
     }
-    let hooks = resolve_store_hooks_dir(cwd)
+    let resolved;
+    let store_hooks = match store_hooks {
+        Some(hooks) => hooks,
+        None => {
+            resolved = resolve_store_hooks_dir(cwd);
+            &resolved
+        }
+    };
+    let hooks = store_hooks
+        .as_ref()
         .ok()
-        .flatten()
+        .and_then(|dir| dir.as_deref())
         .and_then(|dir| dir.to_str().map(str::to_string))
         .unwrap_or_else(|| NO_HOOKS_DIR.to_string());
     #[cfg(test)]
