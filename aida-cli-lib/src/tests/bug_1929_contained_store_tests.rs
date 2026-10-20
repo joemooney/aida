@@ -283,7 +283,7 @@ fn unexpressible_main_emits_no_entries() {
 /// The settings JSON a contained launch gets for `write_roots`, parsed.
 // trace:BUG-1929 | ai:claude
 fn launch_settings(write_roots: &[PathBuf]) -> (String, serde_json::Value) {
-    let flags = crate::session::claude_contained_flags_for_roots(write_roots);
+    let flags = crate::session::claude_contained_flags_for_roots(write_roots).unwrap();
     let json = flags[3].clone();
     let settings = serde_json::from_str(&json).unwrap();
     (json, settings)
@@ -1431,7 +1431,7 @@ fn task_1775_contained_marker_written_before_git_version_check() {
     for fake in ["git version 2.39.5", "not a version"] {
         let _ = std::fs::remove_file(&marker);
         aida_core::git_ops::with_host_git_version(fake, || {
-            let json = crate::session::claude_contained_settings_json(&[main.clone()]);
+            let json = crate::session::claude_contained_settings_json(&[main.clone()]).unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert!(
                 !allow_write(&settings)

@@ -593,7 +593,7 @@ pub(crate) fn handle_burndown_run(
                 ceiling_key,
                 &ceiling_value,
                 contained,
-            )
+            )?
             .status()
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -1409,7 +1409,8 @@ pub(crate) fn file_integration_wait_finding(
 /// drain's permission posture or control flow. The prompt stays the trailing
 /// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
 pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
-    burndown_verbose_claude_args_with_containment(prompt, mode, false)
+    // Uncontained: no contained settings are built, so nothing can refuse.
+    burndown_verbose_claude_args_with_containment(prompt, mode, false).unwrap_or_default()
 }
 
 // trace:TASK-804 trace:BUG-2171 | ai:antigravity
@@ -1417,7 +1418,7 @@ pub(crate) fn burndown_verbose_claude_args_with_containment(
     prompt: &str,
     mode: &str,
     contained: bool,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
@@ -1428,10 +1429,10 @@ pub(crate) fn burndown_verbose_claude_args_with_containment(
         "--include-partial-messages".to_string(),
     ];
     if contained {
-        args.extend(crate::session::claude_contained_flags());
+        args.extend(crate::session::claude_contained_flags()?);
     }
     args.push(prompt.to_string());
-    args
+    Ok(args)
 }
 
 /// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
@@ -2064,7 +2065,7 @@ pub(crate) fn run_burndown_verbose(
         ceiling_key,
         &ceiling_value,
         contained,
-    )
+    )?
     .stdout(std::process::Stdio::from(log))
     .status()
     .map_err(|e| {
@@ -2092,14 +2093,14 @@ pub(crate) fn build_burndown_quiet_command(
     ceiling_key: &str,
     ceiling_value: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     cmd.arg("-p")
         .arg(current_prompt)
         .arg("--permission-mode")
         .arg(mode);
     if contained {
-        cmd.args(crate::session::claude_contained_flags());
+        cmd.args(crate::session::claude_contained_flags()?);
     }
     cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .env(ceiling_key, ceiling_value);
@@ -2109,7 +2110,7 @@ pub(crate) fn build_burndown_quiet_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 // trace:BUG-2124 | ai:antigravity
@@ -2122,11 +2123,11 @@ pub(crate) fn build_burndown_verbose_command(
     ceiling_key: &str,
     ceiling_value: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     cmd.args(burndown_verbose_claude_args_with_containment(
         prompt, mode, contained,
-    ))
+    )?)
     .env("AIDA_BURNDOWN_LOCK_HELD", "1")
     .env(ceiling_key, ceiling_value);
     crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", child_grant_id);
@@ -2135,7 +2136,7 @@ pub(crate) fn build_burndown_verbose_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 /// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store
