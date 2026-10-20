@@ -1,0 +1,30 @@
+id: 01a15892-0103-7c70-b41c-514ed284bd86
+spec_id: BUG-2191
+agreed_id: BUG-2191
+title: Test git fixtures race git>=2.54 detached auto-maintenance (repack -d prunes fanout dirs mid-write)
+description: |-
+  Found by BUG-2118, which showed the mechanism for the history fixture. Since git 2.54 (CI runs 2.55), every commit or merge runs 'maintenance run --auto --detach' with the geometric strategy. Two loose objects in objects/17 trigger a background 'repack -d', which prunes loose objects and rmdirs the emptied .git/objects/<xx> fanout dirs while the test's next git call writes an object. Failure text: 'unable to create temporary file: No such file or directory'. About 215 test source files under aida-cli-lib/aida-core/aida-cli/aida-server run git commit without '-c maintenance.auto=false -c gc.auto=0'. Production already guards this under the store write lock (aida_core::git_ops::transaction_git_config).
+
+  ## Acceptance
+  - Every test-fixture git invocation suppresses auto-maintenance, either per command or through one workspace-wide mechanism (e.g. GIT_CONFIG_COUNT in the test environment). Picking the mechanism needs an advisor sketch signoff because it is cross-cutting.
+  - A guard or regression test fails if a new fixture runs git commit with auto-maintenance enabled.
+  - The reproduction recipe in docs/testing/bug-2118-history-fixture-object-write.md (git 2.55 + LD_PRELOAD mkdir widening) shows no failure for a representative sample of converted fixtures.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T09:08:45.955661905Z
+modified_at: 2026-10-20T09:08:45.955661905Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+- from-implementer:BUG-2118
+filed_at:
+  code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
+  branch: claude/bug-2118
+  dirty: true
+  aida_version: 0.15.0
+  aida_build_sha: 419579e7c4
+  vendor: claude
+  session: 8eb7f358-17d3-47ea-9584-5285a9a5eab8
