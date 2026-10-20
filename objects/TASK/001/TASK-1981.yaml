@@ -9,12 +9,12 @@ description: |-
   3. Test gaps: add a barrier and error-preservation test for write_batch_cas_opts, plus an add-vs-sync barrier test for run_add's agreed-id dispense (the dispenser path A1 names). Also cover hijack_node, unregister_node and set_node_*.
   4. Seams: PR-2756 added AIDA_TEST_STORE_LOCK_CONTENDED_FILE (store_lock.rs) and AIDA_TEST_TEAM_WRITER_CHILD_DONE/_STORE (team.rs), test-only env reads in production code. Drain them with TASK-1751's injected context when it un-defers. Until then, don't add more.
   Full findings are in .aida/review-verdicts/PR-2756.json.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T15:33:39.612374223Z
+modified_at: 2026-10-20T15:44:52.357484584Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -70,6 +70,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a159fc-a685-7f30-a045-8de614420bd5
+  author: aida-orchestrator
+  timestamp: 2026-10-20T15:44:52.357506947Z
+  session_id: 01a159f552ed
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 3c7e184d14f171218ad70453efee47cd99730122
   branch: main
@@ -78,3 +86,11 @@ filed_at:
   aida_build_sha: f801433bcd
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Slice-1 code matches the in-scope TASK-1981 items, but required CI is red: CI (cli-0) Run tests failed at 92a697a7c6 while main at merge-base b6ba2576d5 is green; plus 3 minor non-blocking gaps.'
+  recovery_hint: address the review findings, move TASK-1981 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T15:44:52.357484584Z
