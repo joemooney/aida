@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T01:41:53.769753357Z
-modified_at: 2026-10-20T01:41:53.769753357Z
+modified_at: 2026-10-20T10:58:48.142518476Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2744
 - severity:cosmetic
+comments:
+- id: 01a158f6-bece-78f0-b917-1374fda64fa1
+  author: joe
+  content: 'Advisor 2026-10-20 04:00: rejected as moot. PR-2744 merged as a single squashed commit whose subject and diff are what landed, so editing a merged PR''s description changes nothing.'
+  created_at: 2026-10-20T10:58:48.142518476Z
+  modified_at: 2026-10-20T10:58:48.142518476Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: c440a8e980f866f8c2d8883881e9c2733267968a
   branch: pr-2744
