@@ -1,0 +1,34 @@
+id: 01a15a3d-2ee0-7290-8f52-7dabd706194b
+spec_id: STORY-1879
+agreed_id: STORY-1879
+title: 'Review PR-2780: [AI:codex] fix(list): disclose matches hidden by persistent focus (BUG-2190)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `codex/bug-2190`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2780>
+  - Branch: `codex/bug-2190` → `main`
+
+  ## Covers
+
+  - BUG-2190
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2780` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T16:55:21.568117762Z
+modified_at: 2026-10-20T16:55:21.568117762Z
+req_type: Story
+filed_at:
+  code_sha: 1456ad35b0a1fb175e6a53c0a774396bd04e3c6a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
