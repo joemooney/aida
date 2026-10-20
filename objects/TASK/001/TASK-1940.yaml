@@ -16,12 +16,12 @@ description: |-
   6. Delete scripts/story-1728/*.py (one-shot migration tools).
   7. Remove the ~154 `#[allow(unreachable_patterns)] _ =>` dead arms and irrefutable let-else on the single-variant Command.
   8. Make the spec-ID leak scan recursive over clap types outside *_args.rs; fix the stale doc at aida-tui/src/cmd_palette.rs:77.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:06:34.604763727Z
-modified_at: 2026-10-20T04:18:58.817729041Z
+modified_at: 2026-10-20T05:12:24.106862013Z
 req_type: Task
 tags:
 - cli
@@ -107,6 +107,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a157b9-9b25-7d72-b851-af1ac462990d
+  author: aida-auto-bump
+  timestamp: 2026-10-20T05:12:24.101714453Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a157b9-9b2a-7611-9a2c-a0901fb526f8
+  timestamp: 2026-10-20T05:12:24.106853093Z
+  agent: aida
+  commit_sha: 880d7667bc566fe9eb9c0f8d05e6d8c8636f8ab5
+  summary: 'Rework sufficiency (advisor): the reviewer at b2d95ccd6a verified every TASK-1940 item (4-8) and TASK-1633/1634/1635, and the PR''s own tests passed. The sole blocker was a red PR CI inherited from main 9be73d9a8f (main was red there; 857e2ef848 fixed it). After update-branch, run 39369075589 at 77f517a9de was GREEN. This head is a further update-branch onto S6 with an identical patch-id (no code change). D1-D3 guard-gap minors are non-blocking and filed as a follow-up.'
+  review_verdict: approved
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
@@ -115,11 +130,7 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All TASK-1940 items (1-3 via #2751 4f613e2edd; 4-8 here) and TASK-1633/1634/1635 verified, and the PR''s own tests pass locally. PR CI (run 39364604302, Build/Run tests) is red at b2d95ccd6a. The base main 9be73d9a8f was also red; 857e2ef848 (TASK-1970) took main green and this branch lacks it. Merge origin/main, get CI green, and fix D1-D3 in the same round.'
-  recovery_hint: address the review findings, move TASK-1940 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T04:18:58.817729041Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T05:12:24.101709492Z
+  completion_sha: 880d7667bc566fe9eb9c0f8d05e6d8c8636f8ab5
