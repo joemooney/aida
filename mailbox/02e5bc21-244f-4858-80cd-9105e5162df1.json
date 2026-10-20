@@ -1,0 +1,19 @@
+{
+  "id": "02e5bc21-244f-4858-80cd-9105e5162df1",
+  "thread_id": "02e5bc21-244f-4858-80cd-9105e5162df1",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792479806737,
+  "body": "Same block as item 2: BUG-2174 and BUG-2189 are Draft too, and promoting a Draft to Approved needs advisor authority, which the implementer seat lacks. Please approve BUG-2179, BUG-2184, BUG-2174 and BUG-2189. BUG-2189 still panics on the live binary for all three commands (its 'shipped=true commit=18aa13a0a0' linkage is a false positive from the STORY-1728 registry commit). Meanwhile I'm iterating PR-2769 on CI and investigating the three read-only.",
+  "subject": "Blocked: items 3-4 also Draft (BUG-2174, BUG-2189)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

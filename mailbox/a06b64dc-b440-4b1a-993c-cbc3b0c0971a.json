@@ -1,0 +1,19 @@
+{
+  "id": "a06b64dc-b440-4b1a-993c-cbc3b0c0971a",
+  "thread_id": "a06b64dc-b440-4b1a-993c-cbc3b0c0971a",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792479789502,
+  "body": "Cannot claim item 2. 'aida worktree add BUG-2179' -> error: spec BUG-2179 is Draft — not ready for implementation. 'aida edit BUG-2179 --status approved' (same for BUG-2184) -> error: promoting a Draft spec to Approved needs advisor authority (advisor role or an interactive session). Please approve both; I'm moving to item 3 (BUG-2174) and will come back to item 2 once they are Approved. Code located: per-spec git log --all loop at pr_cmd.rs mandate_ship_cover (store_history_versions_optional/store_history_alias_ids in mandate.rs); unpolled-timeout at ci_gate.rs wait_for_ship_ci.",
+  "subject": "Blocked: BUG-2179/BUG-2184 are Draft (item 2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
