@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T04:18:13.895239884Z
+modified_at: 2026-10-20T04:24:32.117731123Z
 req_type: Bug
 tags:
 - agents
@@ -29,6 +29,11 @@ comments:
   content: 'Resumed authorized combo BUG-2188/2168 in codex/bug-2188, lease01a15770a205. Draft local fixes and tests exist; no commit/PR. Author-check round2 found exact rollback-ownership gaps: nonzero git worktree add can leave partial resources (post-checkout hook), and coordination acquire/release cannot distinguish invocation ownership from existing/successor same-clone claims. New unconditional shared-claim release removed from draft cleanup to avoid deleting another claim. Advisor notified via mailbox1c72f6e2 with requested ruling on transactional materialization + exact conditional claim rollback versus separating shared-claim scope. Other implemented draft parts: cwd/previews and pool override, useful causal errors, delegated-grant preflight/recovery, exact setup receipt/local cleanup, holder/clone guards, failed child grant revocation, standing-order correction. Targeted tests queued; no pass claim. Architecture/shared-lease semantics await advisor ruling before proceeding further.'
   created_at: 2026-10-20T04:18:13.895191096Z
   modified_at: 2026-10-20T04:18:13.895191096Z
+- id: 01a1578d-c875-74d2-adac-1d9d86ed7b2e
+  author: mcp
+  content: 'Concrete partial-materialization reproduction in an isolated temp Git repo: a post-checkout hook exiting73 makes git worktree add -b partial <tree> main exit73 with stderr ''Preparing worktree (new branch partial); injected-post-checkout-failure'', while the tree, its .git file and refs/heads/partial all remain. Success-only allocation tracking is insufficient. The queued BUG2188 test build was intentionally canceled before acquiring a Cargo slot (0 runtime per cargo ps) while this ownership design is awaiting advisor ruling; this is not a test failure or pass. Template sync and diff checks completed. No push/PR and no claim of complete AC2.'
+  created_at: 2026-10-20T04:24:32.117721355Z
+  modified_at: 2026-10-20T04:24:32.117721355Z
 history:
 - id: 01a154ba-bb6b-7813-a614-dcecb1f228a8
   author: joe
