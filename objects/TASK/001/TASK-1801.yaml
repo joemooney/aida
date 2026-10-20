@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:01:26.088698762Z
-modified_at: 2026-10-20T08:23:14.007938411Z
+modified_at: 2026-10-20T16:13:44.460074668Z
 req_type: Task
 relationships:
 - rel_type:
@@ -100,6 +100,11 @@ history:
   timestamp: 2026-10-20T08:23:15.352441690Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15a17-16de-7412-8104-f3b0e7051cbd
+  author: joe
+  timestamp: 2026-10-20T16:13:45.054525285Z
+  session_id: 01a15a0eb474
+  changes: []
 filed_at:
   code_sha: 30e4171bed78120cf272e1eef52649921f028294
   branch: main
@@ -112,7 +117,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'AC(1),(2),(3a),(3b),(3d),(4) verified; AC(3c) incomplete at head: archived_recordings (from main BUG-2186) still reads verdict archives by path, feeding rework auto-release'
+  detail: Readers are correctly anchored (AC1-AC5 met for reads, CI green), but the record/archive writers treat a present-but-refused verdict as empty and overwrite it, silently dropping retained refusal history.
   recovery_hint: address the review findings, move TASK-1801 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-19T19:42:13.256712850Z
+  shelved_at: 2026-10-20T16:13:44.460074668Z
