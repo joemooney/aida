@@ -86,22 +86,37 @@ class ShardsTest(unittest.TestCase):
     def test_nextest_runner_keeps_selection_and_leaves_doctests_on_cargo_test(self):
         packages = [dict(name='aida-cli', targets=[target('one'), target('two')]),
                     dict(name='aida-cli-lib', targets=[target('lib', 'lib')])]
+        docs = 0
         for shard in shards.SHARDS:
             for command in shards.commands(shard, packages, {}):
+                self.assertEqual(shards.for_runner(command, 'cargo'), [command])
                 rewritten = shards.for_runner(command, 'nextest', 'agent')
                 if '--doc' in command:
-                    self.assertEqual(rewritten, command + ['--profile', 'agent'])
+                    self.assertEqual(rewritten, [command + ['--profile', 'agent']])
+                    docs += 1
                     continue
-                self.assertEqual(rewritten[:6], ['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', 'ci'])
-                self.assertEqual(rewritten[8:], command[3:] + ['--cargo-profile', 'agent'])
-                self.assertEqual(shards.for_runner(command, 'cargo'), command)
+                nextest = rewritten[0]
+                self.assertEqual(nextest[:6], ['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', 'ci'])
+                self.assertEqual(nextest[8:], command[3:] + ['--cargo-profile', 'agent'])
+                if '--workspace' in command:
+                    # Its packages' doctests ran under cargo test; they still must.
+                    self.assertEqual(rewritten[1], command[:3] + ['--doc'] + command[3:] + ['--profile', 'agent'])
+                    docs += 1
+                else:
+                    self.assertEqual(len(rewritten), 1)
+        self.assertEqual(docs, 2)
 
     def test_totals_count_libtest_and_nextest_logs_alike(self):
-        log = ['test result: ok. 5 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.0s',
+        log = ['     Running unittests src/lib.rs (target/debug/deps/x-0123)',
+               # A test that re-runs its own binary as a child prints the child's result first.
+               'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.0s',
+               'test result: ok. 5 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.0s',
+               '   Doc-tests x',
+               'test result: ok. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
                '\x1b[32;1m     Summary\x1b[0m [  12.345s] 126 tests run: 120 passed (3 slow), 2 failed, '
                '1 timed out, 4 skipped',
                '     Summary [   1.0s] 8/10 tests run: 8 passed, 0 skipped']
-        self.assertEqual(shards.totals(log), dict(passed=133, failed=3, ignored=6))
+        self.assertEqual(shards.totals(log), dict(passed=134, failed=4, ignored=6))
 
     def test_nextest_shadow_job_is_parallel_and_non_gating(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())

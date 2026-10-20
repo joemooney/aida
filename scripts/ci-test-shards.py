@@ -26,6 +26,8 @@ import tomllib
 SHARDS = ('lib', 'cli-0', 'cli-1', 'rest')
 NEXTEST_PROFILE = 'ci'
 ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
+TARGET_FILTERS = {'--lib', '--bins', '--bin', '--test', '--tests', '--doc'}
+LIBTEST_HEADER_RE = re.compile(r'^\s*(?:Running \S|Doc-tests \S)')
 LIBTEST_RE = re.compile(r'test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored;')
 # `Summary [  12.3s] 120 tests run: 118 passed, 2 failed, 3 skipped`; a cancelled
 # run prints `118/120 tests run`. Without filters, skipped means #[ignore].
@@ -67,29 +69,47 @@ def commands(shard, packages, budgets):
 
 
 def for_runner(command, runner, cargo_profile=None):
-    """A libtest selection, rewritten for the runner; doctests stay on cargo test."""
-    if runner == 'nextest' and '--doc' not in command:
-        assert command[:3] == ['cargo', 'test', '--no-fail-fast'], command
-        command = ['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', NEXTEST_PROFILE,
-                   '--no-tests', 'warn'] + command[3:]  # cargo test accepts an empty selection too
-        profile_flag = '--cargo-profile'  # nextest's own --profile is the .config/nextest.toml one.
-    else:
-        profile_flag = '--profile'
-    return command + ([profile_flag, cargo_profile] if cargo_profile else [])
+    """A libtest selection as the runner's commands; doctests stay on cargo test.
+
+    A selection with no target filter (`--lib`, `--bins`, `--test`) runs its
+    packages' doctests too under cargo test, so under nextest it keeps a
+    `cargo test --doc` companion for them.
+    """
+    cargo = command + (['--profile', cargo_profile] if cargo_profile else [])
+    if runner != 'nextest' or '--doc' in command:
+        return [cargo]
+    assert command[:3] == ['cargo', 'test', '--no-fail-fast'], command
+    # nextest's own --profile is the .config/nextest.toml one; cargo test
+    # accepts an empty selection, so nextest must too.
+    nextest = (['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', NEXTEST_PROFILE,
+                '--no-tests', 'warn'] + command[3:] +
+               (['--cargo-profile', cargo_profile] if cargo_profile else []))
+    if TARGET_FILTERS.isdisjoint(command):
+        return [nextest, cargo[:3] + ['--doc'] + cargo[3:]]
+    return [nextest]
 
 
 def totals(lines):
-    """Passed/failed/ignored summed over libtest results and nextest summaries."""
+    """Passed/failed/ignored over libtest results and nextest summaries.
+
+    A libtest binary counts its LAST result line: tests that re-run their own
+    binary as a child (with a filter) print the child's result line first.
+    """
     result = dict(passed=0, failed=0, ignored=0)
+    sections, section = {}, 0
     for line in lines:
         line = ANSI_RE.sub('', line)
-        if match := LIBTEST_RE.search(line):
-            for key, value in zip(('passed', 'failed', 'ignored'), match.groups()):
-                result[key] += int(value)
+        if LIBTEST_HEADER_RE.search(line):
+            section += 1
+        elif match := LIBTEST_RE.search(line):
+            sections[section] = [int(value) for value in match.groups()]
         elif match := NEXTEST_RE.search(line):
             for count, kind in NEXTEST_PART_RE.findall(match.group(1)):
                 key = {'skipped': 'ignored', 'timed out': 'failed'}.get(kind, kind)
                 result[key] += int(count)
+    for counts in sections.values():
+        for key, value in zip(('passed', 'failed', 'ignored'), counts):
+            result[key] += value
     return result
 
 
@@ -138,12 +158,12 @@ def main(argv=None):
         budgets = tomllib.load(handle)['shard_seconds']
     status = 0
     for shard in SHARDS if args.shard == 'all' else [args.shard]:
-        for command in commands(shard, packages, budgets):
-            command = for_runner(command, args.runner, args.profile)
-            print('+ ' + ' '.join(command), flush=True)
-            code = subprocess.call(command, cwd=root)
-            if code:
-                status = 1  # --no-fail-fast also spans separate cargo invocations.
+        for selection in commands(shard, packages, budgets):
+            for command in for_runner(selection, args.runner, args.profile):
+                print('+ ' + ' '.join(command), flush=True)
+                code = subprocess.call(command, cwd=root)
+                if code:
+                    status = 1  # --no-fail-fast also spans separate cargo invocations.
     return status
 
 
