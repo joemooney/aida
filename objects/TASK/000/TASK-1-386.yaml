@@ -7,12 +7,12 @@ description: |-
 
   cosmetic: focus banner (requirements_cli.rs:4897) prints '1 matching specs hidden by focus' with no singular form
   Reviewed sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T17:07:36.838882013Z
-modified_at: 2026-10-20T22:22:24.879344363Z
+modified_at: 2026-10-20T22:22:28.305300351Z
 req_type: Task
 tags:
 - carried-from:BUG-2190
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-10-20T18:29:40.882032022Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15b68-a9d1-7b80-8a26-cc9b9d05cb17
+  author: joe
+  timestamp: 2026-10-20T22:22:28.305297836Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
