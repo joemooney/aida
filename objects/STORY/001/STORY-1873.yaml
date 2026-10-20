@@ -1,0 +1,34 @@
+id: 01a158ce-beaf-7121-90b4-f2ca67cb237f
+spec_id: STORY-1873
+agreed_id: STORY-1873
+title: 'Review PR-2773: [AI:claude] fix(cli): resolve local --format collisions with the global flag (BUG-2189)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/bug-2189`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2773>
+  - Branch: `claude/bug-2189` → `main`
+
+  ## Covers
+
+  - BUG-2189
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2773` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T10:15:06.671171375Z
+modified_at: 2026-10-20T10:15:06.671171375Z
+req_type: Story
+filed_at:
+  code_sha: 9da063dc15ddfec1108ee626296a811969ef1f09
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 419579e7c4
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
