@@ -3,12 +3,12 @@ spec_id: BUG-2180
 agreed_id: BUG-2180
 title: Reviewer request-changes shelve leaves spec writes uncommitted in the store
 description: 'The ''aida queue work PR-N --role reviewer --no-human'' request-changes path shelves each covered spec (status to NeedsAttention, plus failure_reason phase=reviewer, kind=verdict:request-changes, written by aida-orchestrator) and leaves the YAML modified but uncommitted in .aida-store. Observed 2026-10-18 at 14:25 MST: the PR-2746 review (session 01a150de7ea8) left TASK-1526.yaml and TASK-1739.yaml dirty, and the reviewer process had exited. Impact: mandate_traces store_snapshot fails closed (''mandate exclusion store has uncommitted evidence''), so every mandate-covered aida pr ship refuses (PR-2732) until someone commits by hand. Same class as BUG-2178 (timing record), on a different write path. Fix: commit the shelve under the store write lock in the same operation, as BUG-2178 did. Test: run a reviewer request-changes, then assert .aida-store git status is clean. Related: BUG-2179.'
-status: Done
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T21:30:11.862994119Z
-modified_at: 2026-10-19T20:05:46.391638068Z
+modified_at: 2026-10-20T01:32:55.282718137Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -49,6 +49,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a156f0-aa54-7143-af2a-f25c917d46c7
+  author: aida-auto-bump
+  timestamp: 2026-10-20T01:32:55.252218936Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a156f0-aa72-77e0-b69c-4f87b6367caa
+  timestamp: 2026-10-20T01:32:55.282705611Z
+  agent: aida
+  commit_sha: 414324970f43c76410e28fc496e8b94eb13db9af
+  summary: 'Carry-over of the attested PASS at 7a87d51a1b: head 044138f942 is a merge of origin/main only; the PR''s own patch-id (git patch-id --stable over merge-base..head) is identical (cfdf2822b7) before and after. Advisor carry-over per the STORY-1690 S1 ruling.'
+  review_verdict: approved
 filed_at:
   code_sha: 5297b075ba4a2254894bee52e5e203f409ff0428
   branch: main
@@ -57,3 +72,7 @@ filed_at:
   aida_build_sha: 555237eca9
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T01:32:55.252203414Z
+  completion_sha: 414324970f43c76410e28fc496e8b94eb13db9af
