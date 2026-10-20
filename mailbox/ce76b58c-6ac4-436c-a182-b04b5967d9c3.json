@@ -1,0 +1,19 @@
+{
+  "id": "ce76b58c-6ac4-436c-a182-b04b5967d9c3",
+  "thread_id": "ce76b58c-6ac4-436c-a182-b04b5967d9c3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792468454324,
+  "body": "ccbdb17913 (TASK-1956), round 2, all four items:\n1 [blocking] BUG-2156 root-caused and fixed (stays superseded). RefreshLock::drop closed without LOCK_UN, so a sibling thread's pre-exec child kept the flock, read 2 lost it and served stale. Drop now unlocks. The inverted real-fork regression test fails on the old drop. The test also pins its read budget (ancestor-timeout branch) and prints branch counters on failure.\n2 [minor] survivors() exempts a cloexec guard copy only for a scorer child in the scorer's pgid or its own (a mid-exec spawn). A CLONE_PARENT sibling inherits the scored command's pgid and is counted. New sibling test fails on the parent-only rule.\n3 [minor] Missing python3 eprints an explicit SKIP (both python tests).\n4 [cosmetic] as_tui_test_emitter restores the prior value through a drop guard (panic-safe).\nGates: check-ci-fast 32/32, check-ci-compile OK, clippy -D warnings clean, roots 9/9, cache modules 91/91. Aside: bug_1644_worktree_reader_serves_snapshot_behind_main_writer failed once under module-parallel load (elapsed<1s timing assert) and passes alone. It is unrelated, possibly worth filing.",
+  "subject": "PR-2761 rework pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

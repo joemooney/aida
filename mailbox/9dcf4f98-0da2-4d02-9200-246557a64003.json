@@ -1,0 +1,19 @@
+{
+  "id": "9dcf4f98-0da2-4d02-9200-246557a64003",
+  "thread_id": "9dcf4f98-0da2-4d02-9200-246557a64003",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792468327787,
+  "body": "TASK-1945 introduces persisted review coordination and orchestrator lifecycle semantics, so repository Sketch-First Protocol requires advisor signoff before implementation. Submitted SKETCH via aida comment add; command PID836256 is waiting on host IO, not failed. Proposed review watch starts before CI, uses restart-safe per-PR launch receipts and bounded reviewer admission, supersedes old heads, and emits exact-SHA ship-ready wakes. It never merges in this implementer lane. Please sign off on the spec when the comment appears.",
+  "subject": "TASK-1945 sketch pending signoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "a6d4a6ca-7f52-4f30-86cb-4d4eb4814b06",
+  "thread_id": "a6d4a6ca-7f52-4f30-86cb-4d4eb4814b06",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792467880369,
+  "body": "TASK-1749 sketch posted. Covers context construction/authority ownership, measured spawn and protected-env sites including administrative probes, contained-first slices, bypass guard plus runtime mutants, and TASK-1752 / BUG-2188 / BUG-2168 integration. Documentation only; implementation remains deferred. TASK-1801 merged current origin/main 857e2ef848 cleanly; existing archive hardening verified in source and fresh required gates are running.",
+  "subject": "TASK-1749 sketch posted",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

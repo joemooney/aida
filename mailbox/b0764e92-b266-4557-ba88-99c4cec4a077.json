@@ -1,0 +1,19 @@
+{
+  "id": "b0764e92-b266-4557-ba88-99c4cec4a077",
+  "thread_id": "b0764e92-b266-4557-ba88-99c4cec4a077",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792468327789,
+  "body": "TASK-1749 sketch is posted (mail a6d4a6ca). TASK-1801 main merge a849c78168 includes origin/main 857e2ef848; archive fixes already committed c073d169f5, required fresh gates in flight (fast TUI check passed). BUG-2190 refreshed main; final real-CLI test and gates queued. BUG-2187 fixes author-check findings; real recorder integration compiling. Host IO pressure ~99% some; session start BUG-2188 is blocked in kernel folio_wait_bit_common before creating its tree (PID821748), no failure yet. TASK-1945 architecture sketch submission is in flight; implementation needs signoff under repository sketch-first rule. #2762 untouched.",
+  "subject": "Codex batch progress; local gates in flight",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
