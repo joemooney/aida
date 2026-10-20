@@ -299,7 +299,7 @@ commands, arbitrary field paths, saved filters, or MCP save/remove operations.
 **Don't reach for it when** — you want activity or shipped-work narrative (that's `digest`), or live orientation (`status`). `report` is about the project's integration shape, not its timeline.
 
 **Key options (rationale only).**
-- `--format markdown|html` + `--output` — it's a document generator, so the natural knobs are format and where-to-write. HTML for a browsable artifact, markdown to paste into docs.
+- `--report-format markdown|html` (`-f`) + `--output` — it's a document generator, so the natural knobs are format and where-to-write. HTML for a browsable artifact, markdown to paste into docs.
 - `--include-scaffold` — fold the scaffolding-status check into the report rather than reporting integration alone. Reach for it when the report is meant to answer "is this project fully set up?"
 
 **Gotchas.** `report` is a parent command with subcommands — bare `aida report` prints the subcommand list, not a report. You want `aida report ai-integration`.
