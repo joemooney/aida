@@ -10900,30 +10900,47 @@ mod tests {
         .unwrap();
     }
 
-    // Run config mutations in an exact-test child so unrelated libtest threads
-    // cannot observe a temporary global config or AIDA override.
+    // Each config phase runs in an exact-test child with Command-scoped env,
+    // so the parent and unrelated libtest threads never mutate their env.
     // trace:TASK-1981 | ai:codex
     #[test]
     fn task_1981_auto_gc_respects_global_zero_and_off_override() {
         const TEST: &str =
             "git_ops::tests::task_1981_auto_gc_respects_global_zero_and_off_override";
-        if std::env::var("AIDA_TEST_GC_CONFIG_CHILD").as_deref() != Ok(TEST) {
-            let status = Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", TEST, "--nocapture"])
-                .env("AIDA_TEST_GC_CONFIG_CHILD", TEST)
-                .status()
-                .unwrap();
-            assert!(status.success());
+        let phase = std::env::var("AIDA_TEST_GC_CONFIG_CHILD").ok();
+        if phase.is_none() {
+            let dir = tempfile::tempdir().unwrap();
+            let global = dir.path().join("global.gitconfig");
+            std::fs::write(&global, "[gc]\n    auto = 0\n").unwrap();
+            for phase in ["off-unset", "global-zero", "off-local"] {
+                let mut command = Command::new(std::env::current_exe().unwrap());
+                command
+                    .args(["--exact", TEST, "--nocapture"])
+                    .env("AIDA_TEST_GC_CONFIG_CHILD", phase)
+                    .env("GIT_CONFIG_GLOBAL", &global)
+                    .env("GIT_CONFIG_NOSYSTEM", "1")
+                    .env_remove("AIDA_STORE_GC_AUTO");
+                if phase != "global-zero" {
+                    command.env("AIDA_STORE_GC_AUTO", "off");
+                }
+                let output = command.output().unwrap();
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(output.status.success(), "{phase}: {stdout}\n{stderr}");
+                assert!(
+                    stdout.lines().any(|line| line == "running 1 test")
+                        && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+                    "{phase}: child must run exactly one passing test: {stdout}\n{stderr}"
+                );
+            }
             return;
         }
+        let phase = phase.unwrap();
+        assert!(matches!(
+            phase.as_str(),
+            "off-unset" | "global-zero" | "off-local"
+        ));
         let dir = tempfile::tempdir().unwrap();
-        let global = dir.path().join("global.gitconfig");
-        std::fs::write(&global, "[gc]\n    auto = 0\n").unwrap();
-        let _env = crate::test_env::EnvVarsGuard::set(&[
-            ("GIT_CONFIG_GLOBAL", global.to_str().unwrap()),
-            ("GIT_CONFIG_NOSYSTEM", "1"),
-            ("AIDA_STORE_GC_AUTO", "off"),
-        ]);
         let repo = dir.path().join("store");
         let before = seed_multi_pack_store(&repo, 4);
         assert!(before.packs > 1, "fixture must have packs to collect");
@@ -10935,16 +10952,16 @@ mod tests {
                 .unwrap()
                 .success
         );
-        assert!(!gc_auto(&repo), "off must skip explicit maintenance");
-        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
-        // Unset AIDA's override; Git's global zero still disables collection.
-        std::env::remove_var("AIDA_STORE_GC_AUTO");
-        assert!(gc_auto(&repo));
-        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
-        // The off override must also win over an existing nonzero local policy.
-        std::env::set_var("AIDA_STORE_GC_AUTO", "off");
-        run_git(&repo, &["config", "gc.auto", "500"]);
-        assert!(!gc_auto(&repo));
+        if phase == "off-local" {
+            // Off must also win over an existing nonzero local policy.
+            run_git(&repo, &["config", "gc.auto", "500"]);
+        }
+        if phase == "global-zero" {
+            // No AIDA override: Git's global zero still disables collection.
+            assert!(gc_auto(&repo));
+        } else {
+            assert!(!gc_auto(&repo), "off must skip explicit maintenance");
+        }
         assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
     }
 

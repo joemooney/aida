@@ -105,7 +105,7 @@ fn store_compact_at(store_path: &std::path::Path, squash: bool, yes: bool) -> Re
     // ── Safe path: aggressive repack ──
     // Git serializes repacks itself; no AIDA writer lock during GC.
     // trace:TASK-1981 | ai:codex
-    let (before, after) = (|| -> Result<_> {
+    let (before, after) = {
         let before = aida_core::git_ops::count_objects(&store_path);
         if let Some(b) = before {
             println!(
@@ -121,8 +121,8 @@ fn store_compact_at(store_path: &std::path::Path, squash: bool, yes: bool) -> Re
             anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
         }
         let after = aida_core::git_ops::count_objects(&store_path);
-        Ok((before, after))
-    })()?;
+        (before, after)
+    };
     match (before, after) {
         (Some(b), Some(a)) => println!(
             "{} {} -> {} packs, {} -> {} loose objects",
