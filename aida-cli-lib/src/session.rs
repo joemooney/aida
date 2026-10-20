@@ -5669,16 +5669,20 @@ pub(crate) fn build_claude_resume_exec_command(
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
     use std::process::Command;
-    let mut cmd = Command::new("claude");
-    if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant);
-    }
-    cmd.args(["--resume", id]);
+    let mut args = vec!["--resume".to_string(), id.to_string()];
     if let Some(m) = permission_mode {
-        cmd.args(["--permission-mode", m]);
+        args.extend(["--permission-mode".to_string(), m.to_string()]);
     }
     if contained {
-        cmd.args(claude_contained_flags()?);
+        args.extend(claude_contained_flags()?);
+    }
+    // BUG-2169 S2: a contained interactive resume runs inside os_wrap too.
+    // trace:BUG-2169 | ai:claude
+    let (program, args) = interactive_claude_program_and_args(contained, args)?;
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant);
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");

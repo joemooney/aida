@@ -2742,6 +2742,11 @@ pub(crate) fn agent_new_bg_dispatch(
     // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
     refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
+    // BUG-2169 S2: refuse a contained `--bg` under os_wrap before any preview
+    // or side effect: no claim, lease, clone or pin is made for a launch that
+    // cannot run. `build_agent_new_bg_command` re-checks the planned tree.
+    // trace:BUG-2169 | ai:claude
+    refuse_bg_under_os_wrap(&config, &project_root)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
     // launch lands on the native posture (no `--permission-mode` in the argv).

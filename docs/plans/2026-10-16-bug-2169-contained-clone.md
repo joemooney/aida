@@ -421,9 +421,9 @@ slices S1-S4. Most of the change is turning silent-skip paths into explicit clon
   clone, never `<main>/.git`.
 - **Pre-existing defects.** `agent new` rescopes `--settings` to `plan.launch_cwd`
   (`rescope_contained_settings`), so the boundary is no longer the launcher's git root. The
-  interactive `claude` launch goes through `os_wrapped_program_and_args`. `--bg` cannot be wrapped,
+  interactive `claude` launch and the interactive resume go through `os_wrapped_program_and_args`. `--bg` cannot be wrapped,
   because `claude --bg` hands the session to Claude Code's background daemon, which the dispatcher
-  never parents, so a contained `--bg` launch under os_wrap is refused.
+  never parents, so a contained `--bg` launch under os_wrap is refused before any claim, lease, clone or pin.
 - **Harness.** `tests/bug_2169_contained_clone_bwrap_tests.rs` covers T1, T2 (update-ref and
   pack-refs variants), T3, T4, T5/T5b and T8, plus a cargo build. Each runs against both the
   modelled Claude Code sandbox and the os_wrap argv. The attack tests also run against the frozen
