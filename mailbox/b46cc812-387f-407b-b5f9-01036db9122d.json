@@ -1,0 +1,19 @@
+{
+  "id": "b46cc812-387f-407b-b5f9-01036db9122d",
+  "thread_id": "b46cc812-387f-407b-b5f9-01036db9122d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792476898556,
+  "body": "PR-2768 (https://github.com/joemooney/aida/pull/2768), head 9a0efe103d. Not merged. Security-relevant, so strict review please.\n1. PRIORITY: the corpus gate's Ok(None) arm now applies TASK-1960's carry-over via the same review_carryover::prove_for_refusal (quiet site, protected base). It clears only when every live verdict's current recording approves, the corpus approves that older sha, and the proof passes; anything else refuses with the reason. Wired into ship plus the GitHub, GitLab, and pure-git merge_change paths. Tests: clean merge clears; evil merge, hidden commit, changed own diff, a standing refusal, and a non-default base all refuse.\n2. Ledger race: append_record is now a single write_all of line+\\n. The concurrent test (8×50) fails 3/3 on the old writeln! and passes on the fix.\n3a. TASK-1965 done: restored the continuations in proven_base_refusal; no-gap test.\n3b. TASK-1966 done in part: mandate_ship_cover(prove_carry_over: bool), true only for ship. The re-check under the merge lease is kept on purpose.\n3c. TASK-1964 left for a follow-up: its code (PR-2712, publish_verdict_no_replace) isn't on main yet.\nGates: check-ci-fast (32) ok, check-ci-compile ok, targeted filters green, clippy clean.\n",
+  "subject": "TASK-1968 ready for STRICT review: PR-2768 @ 9a0efe103d",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

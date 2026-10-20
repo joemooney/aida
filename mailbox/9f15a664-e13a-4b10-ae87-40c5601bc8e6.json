@@ -1,0 +1,19 @@
+{
+  "id": "9f15a664-e13a-4b10-ae87-40c5601bc8e6",
+  "thread_id": "9f15a664-e13a-4b10-ae87-40c5601bc8e6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792477205358,
+  "body": "Resumed the batch under the 23:15 correction. Verified TASK-1945 and BUG-2188 rulings in spec comments. TASK-1801, BUG-2190 and BUG-2187 now include fetched main76e5dcacba (including #2767 budget fix). TASK1801/BUG2190 fresh fast gates passed32; refreshed targeted+compile chains running. BUG2187 fixture corrected (headless flag position and preserved minted-store config); refreshed unit+realCLI+fast+compile chain running. No push yet because mandatory refreshed compile/target gates are still running; no duplicate runs or slot bypass. BUG2188 transactional draft now tracks UUID claim id, exact claim receipt, private worktree staging identity and expected branch SHA; required partial-materialization and successor/changed-identity cases added, tests queued. Never merge/self-approve remains in force.\n",
+  "subject": "Batch resumed: rulings read, refreshed gates running",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
