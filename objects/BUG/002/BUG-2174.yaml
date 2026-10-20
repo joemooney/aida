@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T07:54:28.323605219Z
-modified_at: 2026-10-20T11:38:43.447717921Z
+modified_at: 2026-10-20T11:38:48.338109377Z
 req_type: Bug
 comments:
 - id: 01a158e3-0630-7c72-9560-c406000ae999
@@ -17,6 +17,12 @@ comments:
   created_at: 2026-10-20T10:37:15.696442550Z
   modified_at: 2026-10-20T10:37:15.696442550Z
   session_id: 922261ed-530a-4e6c-afda-50941530bad0
+- id: 01a1591b-5e92-7e73-8642-00d841511be5
+  author: joe
+  content: 'ADVISOR SIGNOFF 2026-10-20 04:40 on the 03:40 sketch: (a) APPROVED. Put the rule in the generated AIDA block (template master aida-core/src/scaffolding/codex_md.rs, then make sync-templates and check-templates), and mirror it in the Claude-side template so both vendors get it. (b) REJECTED: merge=union on markdown silently interleaves real concurrent edits, e.g. two architecture changes to the same section, with no conflict to flag it. A silent wrong merge is worse than a visible conflict. (c) DEFERRED: don''t move the historical blocks now; it would conflict with every open PR. Operator note: the root cause is ~/.codex/AGENTS.md''s ''recent major updates'' instruction; the operator should edit it (outside the repo).'
+  created_at: 2026-10-20T11:38:48.338109377Z
+  modified_at: 2026-10-20T11:38:48.338109377Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591b-4b77-70d3-817d-10d95ec24c3f
   author: joe
