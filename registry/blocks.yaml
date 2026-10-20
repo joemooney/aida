@@ -885,7 +885,7 @@ blocks:
   type_prefix: TASK
   range_start: 1915
   range_end: 2014
-  next: 1997
+  next: 1998
   allocated_at: 2026-10-16T14:10:13.616819543Z
 - node_id: '1'
   owner: redacted@node.invalid
@@ -893,7 +893,7 @@ blocks:
   type_prefix: STORY
   range_start: 1841
   range_end: 1940
-  next: 1871
+  next: 1872
   allocated_at: 2026-10-17T10:55:05.529654332Z
 - node_id: '1'
   owner: redacted@node.invalid
