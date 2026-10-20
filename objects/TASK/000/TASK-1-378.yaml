@@ -7,12 +7,12 @@ description: |-
 
   cosmetic: make check-ci-list still labels Run tests '(local: cargo test --profile agent)' (scripts/check-ci-gates.py:441) though local_test_command now yields 'ci-test-shards.py --shard all --profile agent'.
   Reviewed sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T04:44:44.335962999Z
-modified_at: 2026-10-20T04:44:44.335962999Z
+modified_at: 2026-10-20T10:54:25.477995708Z
 req_type: Task
 tags:
 - carried-from:TASK-1949
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-20T05:12:04.726475833Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a158f2-bcc5-7340-b0a4-4061bd171b26
+  author: joe
+  timestamp: 2026-10-20T10:54:25.477986090Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1ad2024f9dd843b1896c67976d23a683a434bd7a
   branch: main
