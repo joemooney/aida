@@ -743,7 +743,7 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
 
     // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
     // since it inspects open PRs via gh and session leases via git).
-    // trace:STORY-1688 | ai:antigravity
+    // trace:STORY-1688 | ai:claude
     if opts.category.is_some()
         && doctor_category_selected(opts.category.as_deref(), crate::lane_liveness::CATEGORY)?
     {
@@ -1124,10 +1124,11 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
         }
-        // trace:STORY-1688 | ai:antigravity
+        // Only the scheduled tick routes; findings it routed are not a job
+        // failure, so the tick's command passes no --fail-on-findings.
+        // trace:STORY-1688 | ai:claude
         crate::lane_liveness::CATEGORY => {
-            let route = fail_on_findings
-                && std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+            let route = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
             DoctorReport::from_findings(crate::lane_liveness::scan_and_route(&project_root, route))
         }
         _ => unreachable!("only store-free categories dispatch here"),

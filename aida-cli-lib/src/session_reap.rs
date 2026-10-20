@@ -365,6 +365,22 @@ pub(crate) fn finished_scopes(
     project_root: &std::path::Path,
     scopes: &[String],
 ) -> HashSet<String> {
+    scopes_with_status(project_root, scopes, |status| {
+        matches!(
+            status,
+            RequirementStatus::Done | RequirementStatus::Completed
+        )
+    })
+}
+
+/// [`finished_scopes`] for any status predicate: the upper-cased scopes whose
+/// stored spec object has a status `keep` accepts, in ONE store open.
+// trace:STORY-1688 | ai:claude
+pub(crate) fn scopes_with_status(
+    project_root: &std::path::Path,
+    scopes: &[String],
+    keep: impl Fn(&RequirementStatus) -> bool,
+) -> HashSet<String> {
     let mut out = HashSet::new();
     let Some(store_path) = detect_distributed_store_from(project_root) else {
         return out;
@@ -385,10 +401,7 @@ pub(crate) fn finished_scopes(
             continue;
         }
         if let Ok(Some(req)) = backend.get_requirement_by_spec_id(scope) {
-            if matches!(
-                req.status,
-                RequirementStatus::Done | RequirementStatus::Completed
-            ) {
+            if keep(&req.status) {
                 out.insert(scope.to_ascii_uppercase());
             }
         }

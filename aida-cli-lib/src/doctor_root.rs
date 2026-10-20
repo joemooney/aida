@@ -1619,8 +1619,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "relay-stall",
     ),
-    // STORY-1688: lane liveness (dead lanes, stale logs, unpicked FACTORY READY
-    // PRs, stale gate waits, and orphaned work leases).
+    // STORY-1688: lane liveness (dead lanes, stale logs, green PRs with no
+    // review at their head, stale gate waits, and orphaned work leases).
     // trace:STORY-1688 | ai:antigravity
     (
         &[
