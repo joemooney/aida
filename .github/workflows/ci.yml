@@ -712,6 +712,111 @@ jobs:
           RESULT: ${{ needs.build.result }}
         run: test "$RESULT" = success
 
+  # STORY-1853 S2, shadow period: run the cargo-test lanes' shard set again
+  # under cargo-nextest (.config/nextest.toml `ci` profile, per-test slow and
+  # kill budget) and report pass/ignore totals for comparison with the
+  # cargo-test lanes. NON-GATING: build-result does not need this job, so no
+  # outcome of it blocks a merge. Only the test step continues on error: a
+  # nextest test failure shows as a warning and in the job summary, while a
+  # setup, totals or upload step failure (or the timeout) still turns this
+  # job's own check red. A later PR swaps it in.
+  # trace:TASK-1957 | ai:claude
+  nextest-shadow:
+    name: Nextest shadow (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash --noprofile --norc -e -o pipefail {0}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lib-0, lib-1, cli-0, cli-1, rest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Detect full-CI changes
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          predicate-quantifier: some-with-excludes
+          filters: |
+            full_ci:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+              - '!LICENSE'
+              - '!.gitignore'
+
+      - name: Install Rust toolchain
+        if: steps.changes.outputs.full_ci == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Pin stable toolchain & verify cargo
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          mkdir -p target
+          rustup default stable
+          cargo --version | grep -q '^cargo '
+
+      - name: Install Linux dependencies
+        if: steps.changes.outputs.full_ci == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep zsh
+
+      # Pinned action commit (v2.87.22) and nextest version: a prebuilt
+      # binary, no `cargo install`. trace:TASK-1957 | ai:claude
+      - name: Install cargo-nextest
+        if: steps.changes.outputs.full_ci == 'true'
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
+
+      # Restore the matching cargo-test lane's cache; only those lanes save it.
+      - name: Cache Rust dependencies
+        if: steps.changes.outputs.full_ci == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-dev-profile${{ (startsWith(matrix.shard, 'lib-') && '-lib') || (startsWith(matrix.shard, 'cli-') && '-cli') || (matrix.shard == 'rest' && '-rest') || '' }}
+          save-if: false
+
+      - name: Build aida binary for lib unit tests
+        if: ${{ startsWith(matrix.shard, 'lib-') && steps.changes.outputs.full_ci == 'true' }}
+        run: cargo build -p aida-cli --bin aida
+
+      - name: Run tests under nextest
+        id: nextest
+        if: steps.changes.outputs.full_ci == 'true'
+        continue-on-error: true
+        env:
+          AIDA_REQUIRE_ZSH: '1'
+        run: python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/nextest-run.log
+
+      - name: Nextest totals
+        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' }}
+        env:
+          OUTCOME: ${{ steps.nextest.outcome }}
+        run: |
+          python3 scripts/ci-test-shards.py --totals target/nextest-run.log --summary "$GITHUB_STEP_SUMMARY"
+          echo "Nextest step outcome: $OUTCOME" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$OUTCOME" != success ]; then
+            echo "::warning::nextest shadow (${{ matrix.shard }}) did not pass: $OUTCOME (non-gating)"
+          fi
+
+      # One JUnit report per nextest invocation (the rest shard runs up to
+      # three); the shard script renames each before the next run.
+      - name: Upload nextest report
+        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: nextest-shadow-${{ matrix.shard }}
+          path: |
+            target/nextest/ci/junit-*.xml
+            target/nextest-run.log
+          if-no-files-found: warn
+
   # Create release artifacts for tags
   release:
     name: Release (${{ matrix.os }})
