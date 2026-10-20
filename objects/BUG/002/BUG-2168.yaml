@@ -3,12 +3,12 @@ spec_id: BUG-2168
 agreed_id: BUG-2168
 title: aida agent new --bg --cwd <worktree> without --spec dispatches into the primary checkout instead of the given cwd
 description: 'Seen 2026-10-16 01:18 twice: ''aida agent new claude --bg --role implementer --cwd /home/joe/ai/aida-story-1699 --name fix-story-1699 --prompt-file F'' (also when run with that dir as the shell cwd) prints ''dispatching claude ... in /home/joe/ai/aida''. The Claude sandbox then makes the intended worktree and .git read-only, so the seat cannot commit there (first attempt blocked for that reason). With --spec the pool worktree is used. Expected: an explicit --cwd is honoured (or refused with a reason). Related: with --spec X --force --cwd D, dispatch refuses ''already owned by session <lease> (worktree: D)'' even though D is the very worktree requested; adopting the dormant lease for that worktree would be the useful behaviour.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:17:29.126764215Z
-modified_at: 2026-10-20T18:15:56.533072498Z
+modified_at: 2026-10-20T18:16:10.077088763Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -30,6 +30,14 @@ history:
   timestamp: 2026-10-20T18:15:58.895615267Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15a87-2a5d-7101-88ae-9e60014eab96
+  author: aida-pr-open
+  timestamp: 2026-10-20T18:16:10.077085826Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
