@@ -13,7 +13,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T14:36:53.339653062Z
+modified_at: 2026-10-20T14:38:06.951994021Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-20T14:23:22.121061411Z
   modified_at: 2026-10-20T14:23:22.121061411Z
   session_id: 922261ed-530a-4e6c-afda-50941530bad0
+- id: 01a159bf-8867-7201-abb7-3010e71b4ec8
+  author: joe
+  content: 'Advisor 07:38 ruling on PR-2776 round 1 (AC3, <30s warm ship step 1): going from 10–40 min to about 48 s is the bug''s real fix. AC3 is AMENDED to: aida pr ship step 1 finishes in under 60 s warm on this repo, timed on the real command (median of 3, load average noted, with the PR''s built binary), NOT a replay of its git commands. Getting below 30 s is a follow-up spec, which I''ll file. Everything else in the round-1 findings stays blocking: tests for both branches of the bounded re-collection (changes once and proceeds; changes every time and refuses), plus the CheckRegistration::NotYet case for BUG-2184.'
+  created_at: 2026-10-20T14:38:06.951994021Z
+  modified_at: 2026-10-20T14:38:06.951994021Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591b-27e9-7df0-84ee-7d6c0f6045b1
   author: joe
