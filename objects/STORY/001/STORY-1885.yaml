@@ -1,0 +1,20 @@
+id: 01a15b8b-8b3f-7e93-8a35-c62ff09fde19
+spec_id: STORY-1885
+agreed_id: STORY-1885
+title: 'Review PR-2787: [AI:claude] feat(contained): sandbox boundary for seat clones, slice 2 (Refs BUG-2169)'
+description: 'Independent review of PR #2787 (BUG-2169 S2).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T23:00:34.239537756Z
+modified_at: 2026-10-20T23:00:34.239537756Z
+req_type: Story
+filed_at:
+  code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
