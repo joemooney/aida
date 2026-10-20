@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T18:20:13.880079609Z
-modified_at: 2026-10-20T09:09:10.631747786Z
+modified_at: 2026-10-20T09:47:05.332702437Z
 req_type: Bug
 tags:
 - from-implementer:BUG-1994
@@ -17,6 +17,11 @@ relationships:
     custom: implemented-by
   target_id: 01a150cc-44eb-7502-9b6e-cda8265f1425
   created_at: 2026-10-18T20:55:47.960828289Z
+  created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a158b4-5cc7-78f0-9caa-11d7fd8763cb
+  created_at: 2026-10-20T09:47:05.332699453Z
   created_by: joe
 comments:
 - id: 01a154b7-27ed-70b2-bf4b-f3cbd84f40a7
@@ -66,6 +71,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a158b5-1d93-7670-ba6b-cf41a4f47bb5
+  author: joe
+  timestamp: 2026-10-20T09:47:07.027189805Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 66d923f1483cbadebff41d7d89030a94f8146798
   branch: bug-1994-work
