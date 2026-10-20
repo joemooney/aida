@@ -1,4 +1,4 @@
 [members]
-bug-1618-hermetic-test-user = ["implementer"]
+bug-1618-hermetic-test-user = ["implementer", "advisor"]
 joe = ["advisor", "implementer", "integrator", "product", "reviewer"]
 "joe.mooney" = ["advisor", "implementer"]
