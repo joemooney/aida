@@ -23,7 +23,9 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
         let cached = aida_core::CachedGitBackend::open(&contender, &cache).unwrap();
         ready_tx.send(()).unwrap();
         go_rx.recv_timeout(Duration::from_secs(10)).unwrap();
-        done_tx.send(handle_retire_legacy_ids(&cached, &contender, false)).unwrap();
+        done_tx
+            .send(handle_retire_legacy_ids(&cached, &contender, false))
+            .unwrap();
     });
     ready_rx.recv_timeout(Duration::from_secs(10)).unwrap();
     let before = aida_core::db::store_write_lock_contended_for(&store);
@@ -31,7 +33,10 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
         go_tx.send(()).unwrap();
         let start = Instant::now();
         while aida_core::db::store_write_lock_contended_for(&store) == before {
-            assert!(start.elapsed() < Duration::from_secs(10), "retirement never contended");
+            assert!(
+                start.elapsed() < Duration::from_secs(10),
+                "retirement never contended"
+            );
             assert!(done_rx.try_recv().is_err(), "retirement escaped lock");
             std::thread::sleep(Duration::from_millis(5));
         }
@@ -39,8 +44,12 @@ fn task_1981_retirement_waits_and_preserves_concurrent_edit() {
             store.requirements[0].title = "concurrent edit".into();
         })?;
         Ok(())
-    }).unwrap();
-    done_rx.recv_timeout(Duration::from_secs(20)).unwrap().unwrap();
+    })
+    .unwrap();
+    done_rx
+        .recv_timeout(Duration::from_secs(20))
+        .unwrap()
+        .unwrap();
     child.join().unwrap();
     let saved = backend.load().unwrap();
     assert_eq!(saved.requirements.len(), 1);
