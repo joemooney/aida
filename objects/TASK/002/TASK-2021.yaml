@@ -1,0 +1,29 @@
+id: 01a15b3a-3b77-7313-a3a3-37320dd97611
+spec_id: TASK-2021
+agreed_id: TASK-2021
+title: Register resumed headless children as lanes for lane-liveness
+description: |
+  ## Problem
+  STORY-1688 registers a headless child as a lane (`.aida/lanes/headless-<lease>.json`) from `run_vendor_headless_child`, so a child that exits while its spec lease is still held is reported as a dead lane on the next lane-liveness tick. The resume path, `spawn_claude_headless_resume_granted` (session.rs), spawns a headless child too, but its parameters carry no lease id. A resumed drain child that exits with its work still held is therefore only caught by the orphaned-work check, which reports it as a dead-process lease rather than a dead lane.
+
+  ## Proposal
+  Thread the resumed session's lease id into `spawn_claude_headless_resume_granted` (its callers know the spec being resumed) and call `lane_liveness::register_headless_lane_for_child` / `finish_headless_lane_for_child` around the child, the same way `run_vendor_headless_child` does.
+
+  ## Acceptance
+  1. A resumed headless child that exits (any status) while its lease is held leaves a headless lane record and gives a `dead-lane` finding on the next tick.
+  2. A resumed child that released its lease leaves no record.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T21:31:45.399075033Z
+modified_at: 2026-10-20T21:31:45.399075033Z
+req_type: Task
+filed_at:
+  code_sha: cb782c925504496e41a460f2958a40ab5b01a54e
+  branch: agy2/story-1688
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 87261c6a-6813-4b97-bc03-12790e5c543e
