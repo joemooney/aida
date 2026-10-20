@@ -705,3 +705,201 @@ mod tests {
         );
     }
 }
+
+/// Mark one or more requirements as archived (hidden from default
+/// views but preserved in graph traversals and the audit trail).
+///
+/// Archive is a view-level flag distinct from status — a freshly
+/// Completed spec stays visible until archived. Use `--older-than`
+/// for bulk sweeps over closed work; the default csv targets
+/// completed and rejected statuses.
+// trace:STORY-441 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "archive")]
+pub(crate) struct ArchiveArgs {
+    /// SPEC-ID to archive (mutually exclusive with --older-than).
+    pub id: Option<String>,
+
+    /// Bulk-archive every spec last touched before this point: a
+    /// relative duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO
+    /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+    /// (`2026-05-01T10:00`, local time), or RFC3339. Pairs with
+    /// `--status`.
+    // trace:TASK-1509 | ai:claude
+    // trace:STORY-441 | ai:claude
+    #[clap(long, value_name = "DURATION", conflicts_with = "id")]
+    pub older_than: Option<String>,
+
+    /// Restrict the --older-than sweep to specs with one of these
+    /// statuses (comma-separated). Default: completed,rejected.
+    // trace:STORY-441 | ai:claude
+    #[clap(long, value_name = "CSV", requires = "older_than")]
+    pub status: Option<String>,
+
+    /// Print the sweep plan without writing — pairs with --older-than.
+    // trace:STORY-441 | ai:claude
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Skip the confirmation guard when archiving a non-terminal
+    /// (Draft/Approved/Planned/InProgress) or queued spec, and allow
+    /// the --older-than sweep to include non-terminal statuses. Archive
+    /// is for the closed long-tail; this opts past that safety rail.
+    // trace:BUG-492 | ai:claude
+    #[clap(long)]
+    pub force: bool,
+
+    /// List each archived id during an --older-than sweep (instead of
+    /// just the throttled progress tick + completion line).
+    // trace:BUG-497 | ai:claude
+    #[clap(long, requires = "older_than")]
+    pub verbose: bool,
+}
+
+fn run_archive(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ArchiveArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ArchiveArgs {
+                    id,
+                    older_than,
+                    status,
+                    dry_run,
+                    force,
+                    verbose,
+                } => {
+                    // STORY-441: archive a single spec OR bulk-sweep over closed
+                    // work matching the duration + status filter. trace:STORY-441
+                    // BUG-492: `force` opts past the non-terminal/queued guard.
+                    self::handle_archive_command(
+                        id.as_deref(),
+                        older_than.as_deref(),
+                        status.as_deref(),
+                        *dry_run,
+                        *force,
+                        *verbose,
+                        backend,
+                        store_path,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ArchiveArgs { .. } => {
+                    // STORY-441: archive uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida archive/unarchive requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ARCHIVE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "archive",
+        help_after: "load",
+        command: <ArchiveArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: true,
+        },
+        run: crate::command_registry::Handler::Store(run_archive),
+    };
+
+/// Inverse of `aida archive` — clears the archive flag on a spec so
+/// it reappears in default `aida list` / `aida history` views.
+// trace:STORY-441 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "unarchive")]
+pub(crate) struct UnarchiveArgs {
+    /// SPEC-ID or UUID to unarchive.
+    pub id: String,
+}
+
+fn run_unarchive(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <UnarchiveArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                UnarchiveArgs { id } => {
+                    // STORY-441: inverse of `aida archive`. trace:STORY-441 | ai:claude
+                    self::handle_unarchive_command(id, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                UnarchiveArgs { .. } => {
+                    // STORY-441: archive uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida archive/unarchive requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static UNARCHIVE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "unarchive",
+        help_after: "archive",
+        command: <UnarchiveArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: true,
+        },
+        run: crate::command_registry::Handler::Store(run_unarchive),
+    };

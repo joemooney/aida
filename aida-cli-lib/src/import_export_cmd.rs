@@ -23,13 +23,13 @@ pub(crate) fn handle_export_command(
     let store = storage.load()?;
 
     // The default format is `mapping`, but the documented export -> import
-    // round-trip needs `--format tree`. Passing `--id` while leaving the
+    // round-trip needs `--export-format tree`. Passing `--id` while leaving the
     // format at its default is almost always "I meant a tree export" — warn
     // rather than silently emit the wrong shape. trace:TASK-778
     if id.is_some() && format != "tree" {
         eprintln!(
-            "{}: --id is set but --format is `{}`. The export -> import \
-             round-trip needs `--format tree`; --id is ignored for `{}`.",
+            "{}: --id is set but --export-format is `{}`. The export -> import \
+             round-trip needs `--export-format tree`; --id is ignored for `{}`.",
             "Note".yellow(),
             format,
             format
@@ -163,3 +163,160 @@ pub(crate) fn handle_import_command(
 
     Ok(())
 }
+
+/// Export requirements to different formats
+#[derive(clap::Parser, Debug)]
+#[clap(name = "export")]
+#[clap(hide = true)]
+pub(crate) struct ExportArgs {
+    /// Export format: mapping, json, spec, impl, tree. The default is
+    /// `mapping`; the export -> import round-trip needs `--export-format tree`.
+    // trace:TASK-778
+    // Not `--format`: that is the global output-format flag (OutputFormat),
+    // and a same-named local arg made clap panic at parse time.
+    // trace:BUG-2189 | ai:claude
+    #[clap(
+        id = "export_format",
+        long = "export-format",
+        short = 'f',
+        value_name = "FORMAT",
+        default_value = "mapping"
+    )]
+    pub format: String,
+
+    /// Output file path
+    #[clap(long, short = 'o')]
+    pub output: Option<std::path::PathBuf>,
+
+    /// Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement and all descendants
+    #[clap(long)]
+    pub id: Option<String>,
+}
+
+fn run_export(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ExportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-2189 | ai:claude
+    crate::command_registry::refuse_global_format(ctx, "export")?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ExportArgs { format, output, id } => {
+                    self::handle_export_command(
+                        &storage,
+                        format,
+                        output.as_deref(),
+                        id.as_deref(),
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static EXPORT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "export",
+        help_after: "regen",
+        command: <ExportArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_export),
+    };
+
+/// Import requirements from a tree JSON file
+#[derive(clap::Parser, Debug)]
+#[clap(name = "import")]
+#[clap(hide = true)]
+pub(crate) struct ImportArgs {
+    /// Path to the tree JSON file to import
+    pub file: std::path::PathBuf,
+
+    /// Parent requirement ID (UUID or SPEC-ID) to attach imported tree under
+    #[clap(long)]
+    pub parent: Option<String>,
+
+    /// Conflict strategy: skip, rename, replace (default: skip)
+    #[clap(long, default_value = "skip")]
+    pub on_conflict: String,
+}
+
+fn run_import(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ImportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ImportArgs {
+                    file,
+                    parent,
+                    on_conflict,
+                } => {
+                    self::handle_import_command(&storage, file, parent.as_deref(), on_conflict)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static IMPORT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "import",
+        help_after: "export",
+        command: <ImportArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_import),
+    };

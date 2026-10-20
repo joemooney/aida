@@ -75,23 +75,35 @@ def fetch_runs(pages: int) -> list[dict]:
     return runs
 
 
-def classify(run: dict) -> tuple[str, int | None]:
-    """Return (outcome, build_job_id) for one run.
-
-    Outcomes: `pass` / `fail` when the suite actually ran, `docs-only` when the
-    `Run tests` step was skipped, `no-build-job` when the matrix produced none.
-    """
+# trace:TASK-1949 | ai:codex
+def classify(run: dict) -> tuple[str, list[int]]:
+    """Classify the actual test steps across old single-job and new shard runs."""
     jobs = gh_json(f"repos/{REPO}/actions/runs/{run['id']}/jobs")["jobs"]
-    build = next((j for j in jobs if j["name"].startswith(BUILD_JOB_PREFIX)), None)
-    if build is None:
-        return "no-build-job", None
-    steps = {s["name"]: s["conclusion"] for s in build["steps"]}
-    outcome = steps.get(TEST_STEP)
-    if outcome is None:
-        return "no-test-step", build["id"]
-    if outcome == "skipped":
-        return "docs-only", build["id"]
-    return ("pass" if outcome == "success" else "fail"), build["id"]
+    builds = [j for j in jobs if j["name"].startswith((BUILD_JOB_PREFIX, "CI ("))]
+    if not builds:
+        return "no-build-job", []
+    # The lib lane split in two (TASK-1979); older runs keep the single lane.
+    # trace:TASK-1979 | ai:claude
+    lib = ('lib-0', 'lib-1') if any(j['name'] == 'CI (lib-0)' for j in builds) else ('lib',)
+    expected = {f"CI ({lane})" for lane in (*lib, 'cli-0', 'cli-1', 'rest')}
+    sharded = any(j['name'].startswith('CI (') for j in builds)
+    # Matrix gate lanes also have a skipped Run tests step. They are not test
+    # shards and must not turn every complete test suite into "incomplete".
+    tests = [(j, next((s["conclusion"] for s in j["steps"] if s["name"] == TEST_STEP), None))
+             for j in builds if not sharded or j['name'] in expected]
+    tests = [(j, result) for j, result in tests if result is not None]
+    if not tests:
+        return "no-test-step", []
+    ran = [(j, result) for j, result in tests if result != "skipped"]
+    complete = not sharded or {j['name'] for j, _ in tests} == expected
+    if not ran:
+        return ("docs-only" if complete else "incomplete"), []
+    failed = [j["id"] for j, result in ran if result != "success"]
+    if failed:
+        return "fail", failed
+    if not complete or len(ran) != len(tests):
+        return "incomplete", []
+    return "pass", []
 
 
 def failing_tests(job_id: int) -> tuple[list[str], list[tuple[int, int]]]:
@@ -138,11 +150,14 @@ def main() -> int:
     outcomes: Counter[str] = Counter()
     failures = []
     for run in window:
-        outcome, job_id = classify(run)
+        outcome, job_ids = classify(run)
         outcomes[outcome] += 1
         if outcome != "fail":
             continue
-        names, counts = failing_tests(job_id)
+        # Count a test only once per workflow run, even across failed lanes.
+        evidence = [failing_tests(job_id) for job_id in job_ids]
+        names = sorted({name for names, _ in evidence for name in names})
+        counts = [count for _, rows in evidence for count in rows]
         for name in names:
             tally[name] += 1
             runs_by_test[name].append(str(run["id"]))
@@ -167,6 +182,7 @@ def main() -> int:
             "docs-only-short-circuit": outcomes["docs-only"],
             "no-build-job": outcomes["no-build-job"],
             "no-test-step": outcomes["no-test-step"],
+            "incomplete-test-lanes": outcomes["incomplete"],
         },
         "denominator": ran,
         "failures": outcomes["fail"],

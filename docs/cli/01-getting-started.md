@@ -81,6 +81,14 @@ The commands you touch on day one and then every day after: `init` once, then `a
 
 **Chains with** — you `list` to find an ID, then `show` it, `edit` it, or `queue work` it.
 
+**Focused views.** A persisted focus also scopes bare and status-filtered listings.
+The focus note names the scope, the number of matching specs hidden, and
+`aida focus clear` plus `--no-focus` / `--all` escape hatches, even
+when the focused result is empty. Human and TOON output show the note on stdout;
+JSON and `--short` send it to stderr so their stdout remains machine-readable.
+An empty focused subtree does not mean the project has no open work.
+<!-- trace:BUG-2190 | ai:codex -->
+
 **Personal-view shortcuts.** `aida mylist` is a discoverable alias for `aida list me` — the specs you own or are assigned (resolved from your shell identity). It forwards any further flags, so `aida mylist --status open` works exactly like `aida list me --status open`. Its companion `aida myqueue` is an alias for `aida queue list`, which is already scoped to your shell identity. Both are listed in `aida alias`. Note these shortcuts do **not** change what plain `aida list` shows — `aida list` still shows the whole open set, not just yours.
 
 ---

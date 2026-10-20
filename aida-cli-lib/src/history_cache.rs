@@ -63,10 +63,12 @@ pub(crate) const HISTORY_SCHEMA_VERSION: u32 = 6;
 /// v4: edges diff as a multiset, so a changed duplicate is counted.
 /// v5: `Added` records the status the spec was filed at, so the status
 /// flow can show a creation as `(new) → <status>`; v4 rows lack it.
+/// v6: `StatusChange` records `authority` from commit trailers (`TASK-1737`).
 // trace:TASK-1507 | ai:claude
 // trace:BUG-1631 | ai:claude
 // trace:STORY-1650 | ai:claude
-pub(crate) const HISTORY_DECODER_VERSION: u32 = 5;
+// trace:TASK-1737 | ai:antigravity
+pub(crate) const HISTORY_DECODER_VERSION: u32 = 6;
 
 /// Default cap on inline indexing work per query, in milliseconds.
 const DEFAULT_INDEX_BUDGET_MS: u64 = 1500;
@@ -632,6 +634,7 @@ struct RawCommit {
     commit_ts: i64,
     author_iso: String,
     git_author: String,
+    authority: Option<history::EventAuthority>,
     subject: String,
     changes: Vec<RawChange>,
 }
@@ -668,6 +671,10 @@ fn parse_raw_line(line: &str) -> Option<RawChange> {
 }
 
 fn parse_header(line: &str) -> Option<RawCommit> {
+    // The trailer block follows the subject behind a `\x1d` group separator,
+    // so a tab inside a trailer value cannot shift into the subject column.
+    // trace:TASK-1737 | ai:claude
+    let (line, trailers) = line.split_once('\x1d').unwrap_or((line, ""));
     let mut parts = line.splitn(6, '\t');
     let sha = parts.next()?.to_string();
     let parents = parts
@@ -680,12 +687,14 @@ fn parse_header(line: &str) -> Option<RawCommit> {
     let author_iso = parts.next()?.to_string();
     let git_author = parts.next()?.to_string();
     let subject = parts.next().unwrap_or("").to_string();
+    let authority = history::parse_authority_trailers(trailers);
     Some(RawCommit {
         sha,
         parents,
         commit_ts,
         author_iso,
         git_author,
+        authority,
         subject,
         changes: Vec::new(),
     })
@@ -721,7 +730,7 @@ impl LogStream {
             "--diff-merges=cc",
             "--root",
             "--no-color",
-            "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%s",
+            "--format=%x1e%H%x09%P%x09%ct%x09%aI%x09%ae%x09%s%x1d%(trailers:key=Aida-Authority,key=Aida-Seat,key=Aida-Grant,only,unfold,separator=%x1f)",
         ])
         .args(extra)
         .stdout(Stdio::piped())
@@ -870,6 +879,7 @@ fn decode_commit(raw: &RawCommit, blobs: &mut BlobReader) -> Result<DecodedCommi
         sha: raw.sha.clone(),
         iso_timestamp: raw.author_iso.clone(),
         git_author: raw.git_author.clone(),
+        authority: raw.authority.clone(),
     };
     let mut touches = Vec::new();
     let mut events = Vec::new();
@@ -927,7 +937,7 @@ fn insert_commit(conn: &Connection, seq: i64, raw: &RawCommit, dec: &DecodedComm
     )?;
     for (ordinal, (path, e)) in dec.events.iter().enumerate() {
         let (from, to) = match &e.kind {
-            EventKind::StatusChange { from, to } => (Some(from.as_str()), Some(to.as_str())),
+            EventKind::StatusChange { from, to, .. } => (Some(from.as_str()), Some(to.as_str())),
             _ => (None, None),
         };
         ev.execute(params![

@@ -22,11 +22,14 @@ fn creates_gitignore_with_both_blocks() {
         "{}",
         content
     );
+    // trace:TASK-1744 | ai:antigravity
+    assert!(content.contains(".agents/hooks/"), "{}", content);
+    assert!(content.contains(".agents/hooks.json"), "{}", content);
 }
 
 /// Existing .gitignore that already covers all AIDA blocks (store,
 /// runtime, project-manifest allow-line, CLAUDE.local.md,
-/// rules/aida-specs/, docs/plans/_draft/, settings.local.json) → no write,
+/// rules/aida-specs/, docs/plans/_draft/, settings.local.json, .agents/hooks/, .agents/hooks.json) → no write,
 /// returns Ok(false). The third block (CLAUDE.local.md) was added in commit
 /// bf50e7c0 for TASK-572. The fourth (.claude/rules/aida-specs/) by SPIKE-31.
 /// The fifth (docs/plans/_draft/) by TASK-383. The sixth
@@ -35,17 +38,17 @@ fn creates_gitignore_with_both_blocks() {
 /// runtime block, because that block is only written when `.aida/*` is
 /// absent, so an already-initialized project would never receive it.
 // trace:BUG-73 trace:TASK-572 trace:SPIKE-31 trace:TASK-383 trace:BUG-484
-// trace:STORY-781 | ai:claude
+// trace:STORY-781 trace:TASK-1744 | ai:claude
 #[test]
 fn idempotent_when_both_blocks_present() {
     let tmp = TempDir::new().unwrap();
     let path = tmp.path().join(".gitignore");
-    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n!.aida/discipline/\n!.aida/discipline/**\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n";
+    let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n!.aida/discipline/\n!.aida/discipline/**\n!.aida/project.toml\nCLAUDE.local.md\n.claude/rules/aida-specs/\ndocs/plans/_draft/\n.claude/settings.local.json\n.agents/hooks/\n.agents/hooks.json\n";
     std::fs::write(&path, original).unwrap();
     let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
     assert!(
         !updated,
-        "all seven blocks already present → expected no append"
+        "all eight blocks already present → expected no append"
     );
     let content = std::fs::read_to_string(&path).unwrap();
     assert_eq!(content, original);

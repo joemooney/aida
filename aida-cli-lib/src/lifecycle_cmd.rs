@@ -323,3 +323,99 @@ mod bug1555_tests {
         ));
     }
 }
+
+/// Spec-state lifecycle tooling. Today (generate-only): `aida lifecycle
+/// --diagram` prints a Mermaid state diagram generated from the single
+/// declared transition model in `aida-core`, so the picture can't drift
+/// from the code. `--check` pins the committed diagram in
+/// `docs/lifecycle.md` against the generated one and exits non-zero on
+/// drift (pre-commit-hook-able); with `--write` it inserts/refreshes the
+/// committed block instead. Phase 1 is purely additive — no guard
+/// enforcement, no empirical diffing.
+// trace:TASK-737 | ai:claude
+// trace:TASK-852 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "lifecycle")]
+#[clap(hide = true)]
+pub(crate) struct LifecycleArgs {
+    /// Emit the Mermaid `stateDiagram-v2` generated from the declared
+    /// transition model.
+    #[clap(long)]
+    pub diagram: bool,
+
+    /// Compare the generated diagram against the committed mermaid block
+    /// in `docs/lifecycle.md` (or `--doc <FILE>`). Exits non-zero on
+    /// drift. Pair with `--write` to fix drift in place.
+    #[clap(long)]
+    pub check: bool,
+
+    /// Insert or refresh the committed mermaid block in the doc with the
+    /// generated diagram. Use with `--check` to auto-fix drift.
+    #[clap(long)]
+    pub write: bool,
+
+    /// The doc whose first mermaid block is the pinned diagram. Defaults
+    /// to `docs/lifecycle.md` under the project root.
+    #[clap(long, value_name = "FILE")]
+    pub doc: Option<String>,
+
+    /// Reconstruct the OBSERVED state machine by walking the `history:`
+    /// arrays in the spec store — every recorded status flip becomes one
+    /// observed transition, tallied with counts. On its own, prints the
+    /// observed transitions; pair with `--diff` to compare against the
+    /// declared model.
+    // trace:TASK-742 | ai:claude
+    #[clap(long)]
+    pub empirical: bool,
+
+    /// Diff the declared model against the observed one: report observed
+    /// transitions the declared model never authorized (undocumented
+    /// flips) and declared transitions never observed (dead edges). Exits
+    /// non-zero when any undocumented flip is found, so it is CI-gate-able.
+    /// Implies `--empirical`.
+    // trace:TASK-742 | ai:claude
+    #[clap(long)]
+    pub diff: bool,
+}
+
+// `aida lifecycle` (Phase 1, generate-only) is self-contained: it renders a
+// Mermaid diagram from the declared transition model in aida-core and
+// optionally pins it against `docs/lifecycle.md`. No storage handle, no LLM,
+// no behavior change to any other command. trace:TASK-737 | ai:claude
+fn run_lifecycle(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <LifecycleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let LifecycleArgs {
+        diagram,
+        check,
+        write,
+        doc,
+        empirical,
+        diff,
+    } = &args;
+    return self::handle_lifecycle_command(
+        *diagram,
+        *check,
+        *write,
+        doc.as_deref(),
+        *empirical,
+        *diff,
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static LIFECYCLE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "lifecycle",
+        help_after: "verify",
+        command: <LifecycleArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_lifecycle),
+    };

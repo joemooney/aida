@@ -238,40 +238,51 @@ pub fn set_allowed_seats_cas(
     let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
 
     for attempt in 0..MAX_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                }
 
-        // Step 2: load → migrate any stray integer keys to the person key →
-        // merge our edit → save. The migration self-heals the STORY-653 bug
-        // (roles written under the cryptic integer user_id) opportunistically on
-        // the next role write. trace:STORY-653
-        let mut roster = TeamRoster::load(store_root);
-        let nodes = load_node_roster(store_root);
-        roster.migrate_integer_keys(&nodes);
-        let roster = roster.with_seats(user_id, seats.to_vec());
-        let content = toml::to_string_pretty(&roster)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        std::fs::write(&registry_path, content)?;
+                // Step 2: load → migrate any stray integer keys to the person key →
+                // merge our edit → save. The migration self-heals the STORY-653 bug
+                // (roles written under the cryptic integer user_id) opportunistically on
+                // the next role write. trace:STORY-653
+                let mut roster = TeamRoster::load(store_root);
+                let nodes = load_node_roster(store_root);
+                roster.migrate_integer_keys(&nodes);
+                let roster = roster.with_seats(user_id, seats.to_vec());
+                let content = toml::to_string_pretty(&roster)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                std::fs::write(&registry_path, content)?;
 
-        // Step 3: stage + commit.
-        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
-        let msg = format!("chore(registry): set team seats for {}", user_id);
-        git_ops::commit(store_root, &msg).map_err(io_err)?;
+                // Step 3: stage + commit. On a no-op commit (Ok(false)), return
+                // None without capturing head_sha so we never push or arm the
+                // rollback against another writer's commit.
+                git_ops::add(store_root, &["registry/team.toml"])?;
+                let msg = format!("chore(registry): set team seats for {}", user_id);
+                if !git_ops::commit(store_root, &msg)? {
+                    return Ok(None);
+                }
+                Ok(Some(git_ops::head_sha(store_root)?))
+            })
+            .map_err(io_err)?;
+        let Some(committed_sha) = committed_sha else {
+            return Ok(());
+        };
 
         // Step 4: push (or stop here when solo).
         if local_only {
             return Ok(());
         }
-        match git_ops::push(store_root, "origin", &branch) {
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(()),
             Ok(false) => {
                 // Push rejected — someone else wrote first. Discard our stale
                 // commit + tree so the next pull --rebase applies cleanly.
-                let _ = crate::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 continue;
             }
             Err(e) => return Err(io_err(e)),
@@ -314,50 +325,57 @@ fn update_seats_cas(
     let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
 
     for attempt in 0..MAX_RETRIES {
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
-        }
-        let mut roster = TeamRoster::load(store_root);
-        let nodes = load_node_roster(store_root);
-        roster.migrate_integer_keys(&nodes);
-        let mut seats = roster.seats_for(user_id).unwrap_or_default();
-        let changed = if allow {
-            if seats.iter().any(|existing| existing == seat) {
-                false
-            } else {
-                seats.push(seat.to_string());
-                seats.sort();
-                true
-            }
-        } else {
-            let before = seats.len();
-            seats.retain(|existing| existing != seat);
-            seats.len() != before
-        };
-        if !changed {
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                }
+                let mut roster = TeamRoster::load(store_root);
+                let nodes = load_node_roster(store_root);
+                roster.migrate_integer_keys(&nodes);
+                let mut seats = roster.seats_for(user_id).unwrap_or_default();
+                let changed = if allow {
+                    if seats.iter().any(|existing| existing == seat) {
+                        false
+                    } else {
+                        seats.push(seat.to_string());
+                        seats.sort();
+                        true
+                    }
+                } else {
+                    let before = seats.len();
+                    seats.retain(|existing| existing != seat);
+                    seats.len() != before
+                };
+                if !changed {
+                    return Ok(None);
+                }
+                if seats.is_empty() {
+                    roster.members.remove(user_id);
+                } else {
+                    roster = roster.with_seats(user_id, seats);
+                }
+                let content = toml::to_string_pretty(&roster)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                std::fs::write(&registry_path, content)?;
+                git_ops::add(store_root, &["registry/team.toml"])?;
+                let verb = if allow { "allow" } else { "disallow" };
+                let msg = format!("chore(registry): {} {} for {}", verb, seat, user_id);
+                git_ops::commit(store_root, &msg)?;
+                Ok(Some(git_ops::head_sha(store_root)?))
+            })
+            .map_err(io_err)?;
+        let Some(committed_sha) = committed_sha else {
             return Ok(false);
-        }
-        if seats.is_empty() {
-            roster.members.remove(user_id);
-        } else {
-            roster = roster.with_seats(user_id, seats);
-        }
-        let content = toml::to_string_pretty(&roster)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        std::fs::write(&registry_path, content)?;
-        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
-        let verb = if allow { "allow" } else { "disallow" };
-        let msg = format!("chore(registry): {} {} for {}", verb, seat, user_id);
-        git_ops::commit(store_root, &msg).map_err(io_err)?;
+        };
         if local_only {
             return Ok(true);
         }
-        match git_ops::push(store_root, "origin", &branch) {
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
-                let _ = crate::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
             }
             Err(e) => return Err(io_err(e)),
         }
@@ -386,40 +404,47 @@ pub fn unset_role_cas(store_root: &Path, user_id: &str) -> std::io::Result<bool>
     let io_err = |e: anyhow::Error| std::io::Error::other(e.to_string());
 
     for attempt in 0..MAX_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            git_ops::pull_rebase(store_root, "origin", &branch).map_err(io_err)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(store_root, || -> anyhow::Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    git_ops::pull_rebase(store_root, "origin", &branch)?;
+                }
 
-        // Step 2: load → remove the key. No-op (and no commit) if absent.
-        let mut roster = TeamRoster::load(store_root);
-        if roster.members.remove(user_id).is_none() {
+                // Step 2: load → remove the key. No-op (and no commit) if absent.
+                let mut roster = TeamRoster::load(store_root);
+                if roster.members.remove(user_id).is_none() {
+                    return Ok(None);
+                }
+                let content = toml::to_string_pretty(&roster)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                if let Some(parent) = registry_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&registry_path, content)?;
+
+                // Step 3: stage + commit.
+                git_ops::add(store_root, &["registry/team.toml"])?;
+                let msg = format!("chore(registry): unset team role for {}", user_id);
+                git_ops::commit(store_root, &msg)?;
+                Ok(Some(git_ops::head_sha(store_root)?))
+            })
+            .map_err(io_err)?;
+        let Some(committed_sha) = committed_sha else {
             return Ok(false);
-        }
-        let content = toml::to_string_pretty(&roster)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        if let Some(parent) = registry_path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&registry_path, content)?;
-
-        // Step 3: stage + commit.
-        git_ops::add(store_root, &["registry/team.toml"]).map_err(io_err)?;
-        let msg = format!("chore(registry): unset team role for {}", user_id);
-        git_ops::commit(store_root, &msg).map_err(io_err)?;
+        };
 
         // Step 4: push (or stop here when solo).
         if local_only {
             return Ok(true);
         }
-        match git_ops::push(store_root, "origin", &branch) {
+        match git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly.
-                let _ = crate::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 continue;
             }
             Err(e) => return Err(io_err(e)),
@@ -1191,5 +1216,161 @@ ttl_secs = 1800
 
         assert!(unset_role_cas(store, "alice").unwrap());
         assert!(TeamRoster::load(store).members.is_empty());
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_team_cas_writers_wait_for_store_write_lock_across_processes() {
+        use crate::git_ops;
+        use std::time::{Duration, Instant};
+
+        if let Ok(store_env) = std::env::var("AIDA_TEST_TEAM_WRITER_CHILD_STORE") {
+            let store = std::path::PathBuf::from(store_env);
+            let done_file = std::path::PathBuf::from(
+                std::env::var("AIDA_TEST_TEAM_WRITER_CHILD_DONE").unwrap(),
+            );
+            set_allowed_seats_cas(&store, "alice", &["advisor".to_string()]).unwrap();
+            std::fs::write(done_file, "done").unwrap();
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().join("store");
+        git_ops::init(&store).unwrap();
+        git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+        std::fs::write(store.join("README.md"), "seed\n").unwrap();
+        git_ops::add(&store, &["README.md"]).unwrap();
+        git_ops::commit(&store, "seed").unwrap();
+        let initial_head = git_ops::head_sha(&store).unwrap();
+
+        let done_file = dir.path().join("child.done");
+        let contended_file = dir.path().join("child.contended");
+
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let store_for_holder = store.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&store_for_holder, || -> anyhow::Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "team::tests::task_1930_team_cas_writers_wait_for_store_write_lock_across_processes",
+                "--nocapture",
+            ])
+            .env("AIDA_TEST_TEAM_WRITER_CHILD_STORE", &store)
+            .env("AIDA_TEST_TEAM_WRITER_CHILD_DONE", &done_file)
+            .env("AIDA_TEST_STORE_LOCK_CONTENDED_FILE", &contended_file)
+            .spawn()
+            .unwrap();
+
+        // Wait deterministically until the child process has entered
+        // `with_store_write_lock` and observed `EWOULDBLOCK` on `store-write.lock`.
+        let wait_start = Instant::now();
+        while !contended_file.exists() {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(15),
+                "timed out waiting for child process to contend on store-write.lock"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+
+        assert!(
+            !done_file.exists(),
+            "child process running set_allowed_seats_cas must block on cross-process flock while parent holds with_store_write_lock"
+        );
+        assert_eq!(
+            git_ops::head_sha(&store).unwrap(),
+            initial_head,
+            "store HEAD must not advance while parent holds with_store_write_lock"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        let status = child.wait().unwrap();
+        assert!(
+            status.success(),
+            "child writer process must succeed once lock is released"
+        );
+        assert!(done_file.exists());
+        assert_eq!(TeamRoster::load(&store).role_for("alice"), Some("advisor"));
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_set_allowed_seats_cas_noop_write_does_not_capture_sha_or_push_or_rollback() {
+        use crate::git_ops;
+
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let clone_a = dir.path().join("clone_a");
+        let clone_b = dir.path().join("clone_b");
+
+        std::process::Command::new("git")
+            .args(["init", "--bare", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+
+        git_ops::init(&clone_a).unwrap();
+        git_ops::configure_user(&clone_a, "Test", "test@example.com").unwrap();
+        std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
+        git_ops::add(&clone_a, &["README.md"]).unwrap();
+        git_ops::commit(&clone_a, "seed").unwrap();
+        let branch = git_ops::current_branch(&clone_a).unwrap();
+        std::process::Command::new("git")
+            .current_dir(&clone_a)
+            .args(["remote", "add", "origin", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(git_ops::push(&clone_a, "origin", &branch).unwrap());
+
+        std::process::Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                &branch,
+                hub.to_str().unwrap(),
+                clone_b.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        git_ops::configure_user(&clone_b, "Peer", "peer@example.com").unwrap();
+
+        // 1. First write commits and pushes `alice = ["advisor"]`.
+        set_allowed_seats_cas(&clone_a, "alice", &["advisor".to_string()]).unwrap();
+        git_ops::pull_rebase(&clone_b, "origin", &branch).unwrap();
+
+        // 2. Advance `origin` from clone_b so any push from clone_a would be rejected,
+        // and create an unpushed local peer commit on clone_a.
+        std::fs::write(clone_b.join("remote.txt"), "remote\n").unwrap();
+        git_ops::add(&clone_b, &["remote.txt"]).unwrap();
+        git_ops::commit(&clone_b, "remote advance").unwrap();
+        assert!(git_ops::push(&clone_b, "origin", &branch).unwrap());
+
+        std::fs::write(clone_a.join("unpushed_peer.txt"), "precious\n").unwrap();
+        git_ops::add(&clone_a, &["unpushed_peer.txt"]).unwrap();
+        git_ops::commit(&clone_a, "local unpushed peer commit").unwrap();
+        let peer_sha = git_ops::head_sha(&clone_a).unwrap();
+
+        // 3. Second write with the identical value produces Ok(false) ("nothing to commit")
+        // and MUST return early without capturing `peer_sha`, without pushing, and
+        // without rolling back `unpushed_peer.txt`.
+        set_allowed_seats_cas(&clone_a, "alice", &["advisor".to_string()]).unwrap();
+        assert_eq!(
+            git_ops::head_sha(&clone_a).unwrap(),
+            peer_sha,
+            "no-op set_allowed_seats_cas must not capture or roll back an unpushed peer commit"
+        );
+        assert!(
+            clone_a.join("unpushed_peer.txt").exists(),
+            "unpushed peer file must survive a no-op set_allowed_seats_cas"
+        );
     }
 }

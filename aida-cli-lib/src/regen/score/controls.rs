@@ -597,7 +597,6 @@ mod tests {
     }
     #[test]
     fn cli_requires_exactly_a_trial_directory_or_generated_control() {
-        use clap::Parser;
         let suffix = [
             "--corpus",
             "/corpus",
@@ -614,7 +613,7 @@ mod tests {
             vec!["/trial"],
         ] {
             let argv: Vec<_> = [vec!["aida", "regen", "score"], middle, suffix.to_vec()].concat();
-            assert!(crate::cli::Cli::try_parse_from(argv).is_ok());
+            assert!(crate::command_registry::try_parse_from(argv).is_ok());
         }
         for middle in [
             vec![],
@@ -622,7 +621,7 @@ mod tests {
             vec!["/caller", "--control", "reference"],
         ] {
             let argv: Vec<_> = [vec!["aida", "regen", "score"], middle, suffix.to_vec()].concat();
-            assert!(crate::cli::Cli::try_parse_from(argv).is_err());
+            assert!(crate::command_registry::try_parse_from(argv).is_err());
         }
     }
     #[test]

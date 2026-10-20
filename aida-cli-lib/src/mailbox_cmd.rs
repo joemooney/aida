@@ -18,6 +18,11 @@ use anyhow::Result;
 use colored::Colorize;
 use std::io::Read;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mailbox_cmd_args.rs"]
+pub(crate) mod mailbox_cmd_args;
+pub(crate) use mailbox_cmd_args::*;
+
 use crate::cli::MailboxCommand;
 use crate::*;
 
@@ -135,15 +140,24 @@ pub(crate) fn handle_mailbox_command(
             let recipient = if *broadcast {
                 Recipient::Broadcast
             } else if let Some(agent) = to {
+                let agent = agent.trim();
                 // BUG-2132: a junk id (flag, number, spec ID, line ref) opens a
                 // mailbox nobody reads; refuse it instead of warning.
-                // trace:BUG-2132 | ai:claude
+                // trace:BUG-2132 trace:TASK-1766 | ai:claude
                 if let Some(why) = aida_core::mailbox::recipient_id_rejection(agent) {
                     anyhow::bail!(
                         "send refused: --to {why}.\n  Pass an agent id or seat name (e.g. advisor, antigravity-implementer-1), or --broadcast."
                     );
                 }
-                Recipient::Agent(agent.clone())
+                // trace:TASK-1766 | ai:claude — deliver a known identity under
+                // its stored spelling, exactly as an `@mention` of it is.
+                let known = crate::known_mailbox_recipients(store_root);
+                Recipient::Agent(
+                    known
+                        .get(&agent.to_lowercase())
+                        .cloned()
+                        .unwrap_or_else(|| agent.to_string()),
+                )
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
@@ -724,7 +738,23 @@ pub(crate) fn handle_mailbox_command(
                 ),
             }
         }
-        MailboxCommand::Gc { older_than, agent } => {
+        MailboxCommand::Gc {
+            older_than,
+            agent,
+            phantoms,
+        } => {
+            if *phantoms {
+                // trace:TASK-1766 | ai:claude — explicit, reported cleanup.
+                let report = archive_phantom_inboxes(store_root)?;
+                for line in &report.lines {
+                    println!("{line}");
+                }
+                println!(
+                    "Archived {} phantom-recipient message(s); re-addressed {}.",
+                    report.archived, report.readdressed
+                );
+                return Ok(());
+            }
             archive_mailbox_older_than(project_root, store_root, agent.as_deref(), older_than)
         }
         MailboxCommand::Thread { thread_id } => {
@@ -828,6 +858,78 @@ fn read_send_body(
             "choose exactly one mailbox body source; valid forms: `aida mailbox send <BODY>`, `aida mailbox send --body-file <PATH>`, or `aida mailbox send --stdin`"
         ),
     }
+}
+
+/// What `aida mailbox gc --phantoms` did: counts plus one line per message.
+// trace:TASK-1766 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct PhantomGcReport {
+    pub archived: usize,
+    pub readdressed: usize,
+    pub lines: Vec<String>,
+}
+
+/// Archive live mail addressed to a phantom recipient — a junk shape `--to`
+/// refuses, a commit SHA, or an `@mention` notice for a handle that is no known
+/// person, role or agent. A recipient that is only whitespace-padded around a
+/// known id is re-addressed to that id (archive + a copy) rather than lost.
+// trace:TASK-1766 | ai:antigravity
+// trace:TASK-1766 | ai:claude
+pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
+    use aida_core::mailbox::{merge_dedup, Message, Recipient};
+    use anyhow::Context as _;
+
+    let project_root = store_root.parent().unwrap_or(store_root);
+    let local = mailbox_store::read_local_messages(project_root)?;
+    let canonical = mailbox_store::read_canonical_messages(store_root)?;
+    let merged = merge_dedup(&local, &canonical);
+    let known = crate::known_mailbox_recipients(store_root);
+
+    let mut report = PhantomGcReport::default();
+    for msg in merged {
+        if msg.deleted || msg.archived {
+            continue;
+        }
+        let Recipient::Agent(ref r) = msg.to else {
+            continue;
+        };
+        let trimmed = r.trim();
+        let padded_known = (r != trimmed)
+            .then(|| known.get(&trimmed.to_lowercase()))
+            .flatten()
+            .cloned();
+        let is_phantom = r != trimmed
+            || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
+            || aida_core::mailbox::looks_like_hex_sha(trimmed)
+            || (msg.body.starts_with("You were mentioned on ")
+                && !known.contains_key(&trimmed.to_lowercase()));
+        if !is_phantom {
+            continue;
+        }
+        if let Some(target) = &padded_known {
+            let copy = Message {
+                id: format!("{}-readdressed", msg.id),
+                to: Recipient::Agent(target.clone()),
+                ..msg.clone()
+            };
+            mailbox_store::write_message(project_root, &copy)?;
+            report.readdressed += 1;
+            report
+                .lines
+                .push(format!("re-addressed {} '{r}' -> '{target}'", msg.id));
+        } else {
+            report.archived += 1;
+            report.lines.push(format!("archived {} to '{r}'", msg.id));
+        }
+        let id = msg.id.clone();
+        let marker = Message {
+            archived: true,
+            ..msg
+        };
+        mailbox_store::write_message_marker(project_root, &marker)
+            .with_context(|| format!("archiving phantom-recipient message {id}"))?;
+    }
+    Ok(report)
 }
 
 // trace:TASK-1211 | ai:codex
@@ -1081,9 +1183,12 @@ mod tests {
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_read_cli_accepts_a_message_prefix() {
-        let cli = Cli::try_parse_from(["aida", "mailbox", "read", "0fa629d6"]).unwrap();
-        match cli.command {
-            Command::Mailbox(MailboxCommand::Read { message_id }) => {
+        let cli = crate::command_registry::try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
+            .unwrap();
+        match cli.command.registered::<crate::mailbox_cmd::MailboxArgs>() {
+            crate::mailbox_cmd::MailboxArgs {
+                inner: MailboxCommand::Read { message_id },
+            } => {
                 assert_eq!(message_id, "0fa629d6")
             }
             other => panic!("expected mailbox read, got {other:?}"),
@@ -1371,7 +1476,7 @@ mod tests {
     // trace:TASK-1250 | ai:codex
     #[test]
     fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
-        let from_file = Cli::try_parse_from([
+        let from_file = crate::command_registry::try_parse_from([
             "aida",
             "mailbox",
             "send",
@@ -1383,13 +1488,19 @@ mod tests {
             "Review requested",
         ])
         .unwrap();
-        match from_file.command {
-            Command::Mailbox(MailboxCommand::Send {
-                body,
-                body_file,
-                subject,
-                ..
-            }) => {
+        match from_file
+            .command
+            .registered::<crate::mailbox_cmd::MailboxArgs>()
+        {
+            crate::mailbox_cmd::MailboxArgs {
+                inner:
+                    MailboxCommand::Send {
+                        body,
+                        body_file,
+                        subject,
+                        ..
+                    },
+            } => {
                 assert!(body.is_none());
                 assert_eq!(body_file.unwrap(), std::path::PathBuf::from("mail.txt"));
                 assert_eq!(subject.as_deref(), Some("Review requested"));
@@ -1397,10 +1508,21 @@ mod tests {
             other => panic!("expected mailbox send, got {other:?}"),
         }
 
-        let from_stdin =
-            Cli::try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"]).unwrap();
-        match from_stdin.command {
-            Command::Mailbox(MailboxCommand::Send { body, stdin, .. }) => {
+        let from_stdin = crate::command_registry::try_parse_from([
+            "aida",
+            "mailbox",
+            "send",
+            "--broadcast",
+            "--stdin",
+        ])
+        .unwrap();
+        match from_stdin
+            .command
+            .registered::<crate::mailbox_cmd::MailboxArgs>()
+        {
+            crate::mailbox_cmd::MailboxArgs {
+                inner: MailboxCommand::Send { body, stdin, .. },
+            } => {
                 assert!(body.is_none());
                 assert!(stdin);
             }
@@ -1875,5 +1997,223 @@ mod tests {
             .find(|m| m.body == "no-role")
             .unwrap();
         assert_eq!(sent.from_role, None);
+    }
+
+    /// A store whose team roster lists the human `Joe` (stored spelling).
+    // trace:TASK-1766 | ai:claude
+    fn store_with_person_joe() -> (tempfile::TempDir, std::path::PathBuf) {
+        let project = tempfile::tempdir().unwrap();
+        let store = project.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(
+            store.join("registry").join("team.toml"),
+            "[members]\nJoe = [\"advisor\"]\n",
+        )
+        .unwrap();
+        (project, store)
+    }
+
+    // trace:TASK-1766 | ai:antigravity
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn send_trims_recipient_whitespace_and_archive_phantom_inboxes_cleans_all_20_shapes() {
+        let (project, store) = store_with_person_joe();
+
+        handle_mailbox_command(&plain_send("  advisor  "), &store).unwrap();
+        let sent = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert_eq!(
+            sent[0].to,
+            aida_core::mailbox::Recipient::Agent("advisor".into()),
+            "recipient whitespace must be trimmed before storing"
+        );
+
+        let phantoms = [
+            "110",
+            "2",
+            "4211",
+            "AIDA_AGENT_NAME",
+            "CODEX_CI_GIT_URL",
+            "L4425",
+            "PR-219",
+            "PR-220",
+            "STORY-752",
+            "TASK-605",
+            "TASK-810",
+            "TYPE",
+            "YES",
+            "--body-file",
+            "--from",
+            "--intent",
+            "--to",
+            "6e5727ce3c",
+            "advisor ",
+            "joe ",
+        ];
+        for (idx, phantom) in phantoms.iter().enumerate() {
+            let mut m = message(&format!("phantom-{idx}"), &format!("thread-{idx}"));
+            m.to = aida_core::mailbox::Recipient::Agent((*phantom).to_string());
+            m.body = format!("You were mentioned on TASK-1 by joe (@{phantom}):\n\n  hi");
+            mailbox_store::write_message(project.path(), &m).unwrap();
+        }
+
+        // A padded real recipient is re-addressed to the trimmed, stored id;
+        // every other shape is archived.
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!(report.archived, phantoms.len() - 2);
+        assert_eq!(report.readdressed, 2);
+        assert_eq!(report.lines.len(), phantoms.len(), "{:?}", report.lines);
+
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        let watermarks = mailbox_store::read_all_watermarks(project.path()).unwrap();
+        let summaries = aida_core::mailbox::agent_summaries(&merged, &watermarks);
+        let mut agents: Vec<&str> = summaries.iter().map(|s| s.agent.as_str()).collect();
+        agents.sort_unstable();
+        assert_eq!(
+            agents,
+            vec!["Joe", "advisor"],
+            "phantom recipients are archived; padded real ones are re-addressed"
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("Joe", &merged, None).len(),
+            1,
+            "the 'joe ' message must reach Joe's inbox"
+        );
+
+        // Idempotent: a second pass finds nothing left to touch.
+        let again = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!((again.archived, again.readdressed), (0, 0));
+    }
+
+    // F1: a human's existing mention mail is never archived as a phantom.
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn archive_phantom_inboxes_keeps_mention_mail_for_roster_people() {
+        let (project, store) = store_with_person_joe();
+        let mut m = message("mention-joe", "thread-joe");
+        m.to = aida_core::mailbox::Recipient::Agent("joe".into());
+        m.body = "You were mentioned on TASK-1 by alice: @joe please look".into();
+        mailbox_store::write_message(project.path(), &m).unwrap();
+
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!((report.archived, report.readdressed), (0, 0));
+        let local = mailbox_store::read_local_messages(project.path()).unwrap();
+        assert!(local.iter().all(|m| !m.archived));
+    }
+
+    // F2: `--to` delivers a known identity under its stored spelling, the same
+    // spelling an `@mention` of it is delivered under.
+    // trace:TASK-1766 | ai:claude
+    #[test]
+    fn send_to_known_identity_uses_stored_spelling() {
+        let (project, store) = store_with_person_joe();
+        handle_mailbox_command(&plain_send("JOE"), &store).unwrap();
+        handle_mailbox_command(&plain_send("ADVISOR"), &store).unwrap();
+        handle_mailbox_command(&plain_send("NewAgent"), &store).unwrap();
+        let mut to: Vec<_> = mailbox_store::read_local_messages(project.path())
+            .unwrap()
+            .into_iter()
+            .map(|m| m.to)
+            .collect();
+        to.sort_by_key(|r| format!("{r:?}"));
+        assert_eq!(
+            to,
+            vec![
+                aida_core::mailbox::Recipient::Agent("Joe".into()),
+                aida_core::mailbox::Recipient::Agent("NewAgent".into()),
+                aida_core::mailbox::Recipient::Agent("advisor".into()),
+            ]
+        );
+    }
+}
+
+/// Inter-agent mailbox: peer↔peer messaging (send / inbox / thread).
+// trace:STORY-493 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mailbox")]
+pub(crate) struct MailboxArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::MailboxCommand,
+}
+
+fn run_mailbox(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                MailboxArgs { inner: mailbox_cmd } => {
+                    // trace:STORY-493 | ai:claude — local layer only; git-canonical
+                    // digest is a later slice. Needs only the project root.
+                    return crate::command_registry::returned(self::handle_mailbox_command(
+                        mailbox_cmd,
+                        store_path,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                MailboxArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida mailbox commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MAILBOX: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "mailbox",
+        help_after: "sandbox",
+        command: <MailboxArgs as clap::CommandFactory>::command,
+        policy: mailbox_cli_policy,
+        run: crate::command_registry::Handler::Store(run_mailbox),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn mailbox_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::MailboxCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(
+            inner,
+            Some(MailboxCommand::Inbox { .. } | MailboxCommand::Thread { .. })
+        ) {
+            SA::Read
+        } else {
+            SA::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

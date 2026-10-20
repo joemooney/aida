@@ -194,3 +194,50 @@ fn store_root(repo: &Path) -> PathBuf {
     }
     repo.join(".aida-store")
 }
+
+/// Fails a binary-driving test that writes into the checkout running it.
+///
+/// A spawned `aida` whose cwd or store resolution escapes its fixture lands
+/// in the checkout: a stray plain `.aida-store/` at the workspace root makes
+/// `git -C .aida-store` resolve to the parent repository (CI's trace gate
+/// then resets the checkout to the store branch). Note whether the root has a
+/// `.aida-store` when the test starts and assert on drop that none appeared,
+/// so an attached store in a developer checkout is left alone. Only that one
+/// name is watched: other root files (gate logs, editor droppings) come and
+/// go under concurrent tooling and would make the guard flaky.
+// trace:TASK-1959 | ai:claude
+#[allow(dead_code)]
+pub struct CheckoutGuard {
+    root: PathBuf,
+    had_store: bool,
+}
+
+#[allow(dead_code, clippy::new_without_default)]
+impl CheckoutGuard {
+    pub fn new() -> Self {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("the crate directory sits inside the workspace root")
+            .to_path_buf();
+        let had_store = Self::has_store(&root);
+        Self { root, had_store }
+    }
+
+    fn has_store(root: &Path) -> bool {
+        root.join(".aida-store").symlink_metadata().is_ok()
+    }
+}
+
+impl Drop for CheckoutGuard {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
+        assert!(
+            self.had_store || !Self::has_store(&self.root),
+            "the test created .aida-store in the checkout at {}; every spawned \
+             aida needs an absolute fixture cwd and HOME",
+            self.root.display()
+        );
+    }
+}

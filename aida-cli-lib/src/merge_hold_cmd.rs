@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "merge_hold_cmd_args.rs"]
+pub(crate) mod merge_hold_cmd_args;
+pub(crate) use merge_hold_cmd_args::*;
+
 pub(crate) fn slugify(s: &str) -> String {
     let lower = s.to_lowercase();
     let mut out = String::with_capacity(lower.len());
@@ -1129,3 +1134,87 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
         }
     }
 }
+
+/// Show active branch merge-leases: who is merging to which target branch
+/// right now, with holder host / pid / age. Read-only; reads
+/// `.aida/merge-locks/`. The serialization primitive that stops two mergers
+/// racing to the same branch.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "merge-lock")]
+pub(crate) struct MergeLockArgs {
+    /// Machine-readable JSON output.
+    #[clap(long)]
+    pub json: bool,
+}
+
+// `aida merge-lock` shows active branch merge-leases (STORY-1171). Read-only
+// (reads `.aida/merge-locks/`), needs no store handle — dispatch early like
+// `aida ps`. trace:STORY-1171 | ai:claude
+fn run_merge_lock(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <MergeLockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let MergeLockArgs { json } = &args;
+    return handle_merge_lock_status(*json);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "merge-lock",
+        help_after: "ps",
+        command: <MergeLockArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_merge_lock),
+    };
+
+/// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
+///
+/// A hold marker keeps a PR held for human/advisor review — it fails the
+/// merge-hold-gate required check so the PR cannot be auto-merged. AIDA
+/// merge paths (`aida pr ship`, the autonomous drain) clear the marker
+/// automatically when they merge; this is the manual surface for the case
+/// they cannot see — a PR merged directly (a raw `gh pr merge`) leaves a
+/// phantom marker behind. `list` shows every marker and flags the ones
+/// whose PR has already merged as stale; `clear` removes them.
+// trace:TASK-161 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "merge-hold")]
+pub(crate) struct MergeHoldArgs {
+    #[clap(subcommand)]
+    pub action: crate::cli::MergeHoldAction,
+}
+
+// `aida merge-hold list|clear` inspects/clears supervised merge-hold markers.
+// Read/writes only `.aida/merge-holds/` (+ a best-effort `gh` label/merged
+// probe), needs no store handle — dispatch early like `aida merge-lock`.
+// trace:TASK-161 | ai:claude
+fn run_merge_hold(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <MergeHoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let MergeHoldArgs { action } = &args;
+    return handle_merge_hold(action);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "merge-hold",
+        help_after: "merge-lock",
+        command: <MergeHoldArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_merge_hold),
+    };

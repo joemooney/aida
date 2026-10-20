@@ -540,6 +540,7 @@ mod tests {
         let r = row(EventKind::StatusChange {
             from: "Draft".into(),
             to: "Approved".into(),
+            authority: None,
         });
         for f in ["title", "priority", "comment"] {
             assert!(value(&r, f).is_null());
@@ -749,19 +750,42 @@ mod tests {
             vec!["--force"],
             vec!["--save-as-template", "x"],
         ] {
-            assert!(Cli::try_parse_from([vec!["aida", "history"], args].concat()).is_err());
+            assert!(crate::command_registry::try_parse_from(
+                [vec!["aida", "history"], args].concat()
+            )
+            .is_err());
         }
-        let c = Cli::try_parse_from(["aida", "history", "events", "--fields", "id,date,event"])
-            .unwrap();
+        let c = crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "events",
+            "--fields",
+            "id,date,event",
+        ])
+        .unwrap();
         assert!(matches!(
-            c.command,
-            Command::History {
+            c.command.registered::<crate::history::HistoryArgs>(),
+            crate::history::HistoryArgs {
                 fields: Some(_),
                 cmd: Some(HistoryCommand::Events { .. }),
                 ..
             }
         ));
-        assert!(Cli::try_parse_from(["aida", "history", "templates", "rm", "user:mine"]).is_ok());
-        assert!(Cli::try_parse_from(["aida", "history", "TASK-1", "--template", "{id}"]).is_ok());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "templates",
+            "rm",
+            "user:mine"
+        ])
+        .is_ok());
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "history",
+            "TASK-1",
+            "--template",
+            "{id}"
+        ])
+        .is_ok());
     }
 }

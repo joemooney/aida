@@ -1538,7 +1538,7 @@ pub(crate) fn markers_from_touches(
                         kind: StoreMarkerKind::Filed { status: filed },
                     });
                 }
-                crate::history::EventKind::StatusChange { from, to } => {
+                crate::history::EventKind::StatusChange { from, to, .. } => {
                     markers.push(StoreMarker {
                         at,
                         sha: commit.sha.clone(),

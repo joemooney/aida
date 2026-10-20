@@ -43,6 +43,7 @@ mod agent_registry;
 mod agent_registry_root;
 mod aida_bin;
 mod alias;
+mod approvals_cmd;
 mod archive_cmd;
 mod assign_cmd;
 mod auto_complete;
@@ -72,6 +73,7 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod command_registry;
 mod comment_cmd;
 mod commit;
 mod compete;
@@ -99,6 +101,7 @@ mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
 // Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
+mod derisk_cmd;
 mod drain_next_n;
 mod driver_cmd;
 mod driver_view;
@@ -182,7 +185,9 @@ mod queue_misc;
 mod lane_liveness;
 mod rel_cards;
 mod relay_stall;
+mod remote_cmd;
 mod requirements_cli;
+mod review_cmd;
 mod review_gates;
 mod role;
 mod runaway_seats;
@@ -190,6 +195,7 @@ mod scaffold_init;
 mod session_end;
 mod session_misc;
 mod session_start;
+mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 mod status_awaiting;
@@ -391,6 +397,8 @@ mod human_cmd;
 mod metrics_cycle_time;
 // trace:STORY-1480 | ai:claude — per-spec timing records published to the store.
 mod timing_record;
+// trace:BUG-2180 | ai:claude — commit a contained child session's store writes.
+mod child_store_commit;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;
@@ -493,6 +501,8 @@ mod review_marker;
 mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
+// trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
+mod review_carryover;
 mod role_cmd;
 // trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;

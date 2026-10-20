@@ -41,11 +41,17 @@ crate-root consumers are left to CI. Filters are substring matches; pass extra f
 with `--filter`. Whole-tree source-scanning guard tests (ones that walk
 `src/` at run time) are not reached by module filters; CI runs them.
 
-Usage: scripts/test-touched.py [--print] [--base REF] [--profile P] [--filter F]...
+Usage: scripts/test-touched.py [--print] [--base REF] [--profile P] [--filter F]... [--allow-full]
 `make test-touched` runs it; `make test-touched ARGS=--print` only prints.
 
+A heavy package (aida-cli-lib, ~9,200 unit tests in one binary) never widens
+to its whole unit suite: with named module filters the script runs only those,
+with a note; with none it refuses (exit 5) and says to name modules with
+`--filter`. `--allow-full` (or TEST_TOUCHED_ALLOW_FULL=1) lifts the cap.
+
 Exit codes: 0 green or nothing to test, 2 cannot diff, 3 a suspect filter
-matched 0 tests, 4 an untargetable change, otherwise cargo's exit code. Under
+matched 0 tests, 4 an untargetable change, 5 a heavy package would run its
+whole unit suite, otherwise cargo's exit code. Under
 `make test-touched`, make itself reports any nonzero exit as `Error 3`/`Error
 4` and exits 2.
 
@@ -106,11 +112,18 @@ class Plan:
     # the subset added only as consumers of a generated symbol (dropped if untested)
     consumer: dict[str, set[str]] = field(default_factory=dict)
     untargetable: list[str] = field(default_factory=list)
+    # heavy package -> why its whole unit suite would have run (refused)
+    too_wide: dict[str, list[str]] = field(default_factory=dict)
 
 
 LIB_KINDS = ("lib", "rlib", "proc-macro", "cdylib", "staticlib", "dylib")
 ROOT_CONFIG_FILES = ("Cargo.toml", "Cargo.lock")
 UNTARGETABLE_MSG = "cannot target; run make check-ci-compile and rely on CI"
+# Packages whose unfiltered unit suite is CI-sized (aida-cli-lib: ~9,200 tests
+# in one binary). A targeted gate that widens to one of them silently becomes
+# the full suite, so the plan narrows or refuses instead. trace:STORY-1853 | ai:claude
+HEAVY_LIBS = frozenset({"aida-cli-lib"})
+TOO_WIDE_EXIT = 5
 
 PATH_MOD_RE = re.compile(
     r'^#\[path\s*=\s*"([^"]+)"\]\s*(?:#\[[^\]]*\]\s*)*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;',
@@ -298,7 +311,7 @@ def is_root_config(f: str) -> bool:
 
 
 def plan(changed: list[str], packages: list[Package], profile: str, extra: list[str],
-         idx: SourceIndex | None = None) -> Plan:
+         idx: SourceIndex | None = None, allow_full: bool = False) -> Plan:
     idx = idx or SourceIndex()
     unit_all: set[str] = set()
     filters: dict[str, set[str]] = {}
@@ -309,8 +322,11 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
     untargetable: list[str] = []
     other = 0
 
+    widened: dict[str, list[str]] = {}  # package -> why it runs unfiltered
+
     def unfiltered(pkg_name: str, why: str) -> None:
         unit_all.add(pkg_name)
+        widened.setdefault(pkg_name, []).append(why)
         notes.append(why)
 
     # (pkg, filter) -> [suspect, consumer-only]
@@ -323,7 +339,7 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         elif mod is None:
             unfiltered(pkg.name, f"{f}: module path not resolvable; {pkg.name} unit tests run unfiltered")
         elif not mod:
-            unit_all.add(pkg.name)
+            unfiltered(pkg.name, f"{f}: crate root; {pkg.name} unit tests run unfiltered")
         else:
             flt = "::".join(mod)
             filters.setdefault(pkg.name, set()).add(flt)
@@ -383,7 +399,7 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
             integ.setdefault(pkg.name, set()).add(pkg.tests[f])
             continue
         if f in pkg.roots:
-            unit_all.add(pkg.name)
+            unfiltered(pkg.name, f"{f}: crate root; {pkg.name} unit tests run unfiltered")
             continue
         if inner.startswith("tests/"):
             all_integ.add(pkg.name)
@@ -392,6 +408,22 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
             add_module(f, pkg)
             continue
         notes.append(f"{f}: example or bench; no targeted test")
+    # Cap the widening of a heavy package (STORY-1853): with named modules,
+    # run just those and leave the rest to CI; with none, refuse. A caller
+    # `--filter` already narrows the run, and `--allow-full` opts in.
+    # trace:STORY-1853 | ai:claude
+    too_wide: dict[str, list[str]] = {}
+    if not allow_full and not extra:
+        for name in sorted(unit_all & HEAVY_LIBS):
+            unit_all.discard(name)
+            if filters.get(name):
+                notes.append(
+                    f"{name}: its whole unit suite is CI's job; running only the named module filters "
+                    f"({', '.join(sorted(filters[name]))}). Dropped widening: "
+                    + "; ".join(dict.fromkeys(widened.get(name, [])))
+                )
+            else:
+                too_wide[name] = list(dict.fromkeys(widened.get(name, [])))
     notes = list(dict.fromkeys(notes))
     if other:
         notes.append(f"{other} non-Rust file(s) changed: no targeted test (make check-ci-fast and CI cover them)")
@@ -427,7 +459,7 @@ def plan(changed: list[str], packages: list[Package], profile: str, extra: list[
         for t in sorted(integ[name]):
             cmd += ["--test", t]
         cmds.append(cmd)
-    return Plan(cmds, notes, derived, suspect, consumer, untargetable)
+    return Plan(cmds, notes, derived, suspect, consumer, untargetable, too_wide)
 
 
 def unmatched_filters(filters: set[str] | list[str], test_names: list[str]) -> list[str]:
@@ -441,11 +473,23 @@ def parse_test_list(output: str) -> list[str]:
 
 def execute(p: Plan, extra: list[str], dry: bool,
             run: Callable[[list[str]], int],
-            list_tests: Callable[[list[str]], tuple[int, str]]) -> int:
+            list_tests: Callable[[list[str]], tuple[int, str]],
+            allow_full: bool = False) -> int:
     """Run the plan; refuse untargetable changes and filters matching 0 tests."""
     if p.untargetable:
         print(f"test-touched: {', '.join(p.untargetable)} changed: {UNTARGETABLE_MSG}", file=sys.stderr)
         return 4
+    if p.too_wide:
+        for name, why in sorted(p.too_wide.items()):
+            print(
+                f"test-touched: refusing to run {name}'s whole unit suite (CI's job, not a pre-push gate). "
+                f"Widened by: {'; '.join(why) or 'an unfiltered mapping'}. Name the modules you changed: "
+                f'make test-touched ARGS="--filter <module>" (repeatable), or '
+                f"cargo test --profile agent -p {name} --lib -- <module>. "
+                f'Only the operator, one run at a time, passes ARGS="--allow-full".',
+                file=sys.stderr,
+            )
+        return TOO_WIDE_EXIT
     for cmd in p.commands:
         print("+ " + " ".join(f"'{c}'" if c == "*" else c for c in cmd), flush=True)
         if dry:
@@ -473,7 +517,18 @@ def execute(p: Plan, extra: list[str], dry: bool,
                 return 3
             consumers = [f for f in dead if f in p.consumer.get(pkg, set())]
             untested = [f for f in dead if f not in consumers]
-            if untested:
+            dropped = list(consumers)
+            if consumers:
+                print(f"test-touched: consumer module(s) {', '.join(consumers)} have no unit tests; dropped",
+                      file=sys.stderr)
+            if untested and pkg in HEAVY_LIBS and not allow_full:
+                # Never widen a heavy package to its whole unit suite here either:
+                # drop the untested filters and leave the rest to CI.
+                # trace:STORY-1853 | ai:claude
+                print(f"test-touched: {', '.join(untested)} has no unit tests of its own in {pkg}; "
+                      "dropped rather than running its whole unit suite (CI covers it)", file=sys.stderr)
+                dropped += untested
+            elif untested:
                 print(
                     f"test-touched: {', '.join(untested)} has no unit tests of its own; "
                     f"running {pkg}'s unit tests unfiltered instead",
@@ -481,10 +536,9 @@ def execute(p: Plan, extra: list[str], dry: bool,
                 )
                 cmd = head + (["--"] + list(extra) if extra else [])
                 print("+ " + " ".join(cmd), flush=True)
-            elif consumers:
-                print(f"test-touched: consumer module(s) {', '.join(consumers)} have no unit tests; dropped",
-                      file=sys.stderr)
-                live = [f for f in cmd[cmd.index("--") + 1:] if f not in consumers]
+                dropped = []
+            if dropped:
+                live = [f for f in cmd[cmd.index("--") + 1:] if f not in dropped]
                 if not live:
                     continue
                 cmd = head + ["--"] + live
@@ -512,12 +566,20 @@ def changed_files(root: str, base_ref: str) -> list[str]:
     return sorted(n for n in names if n)
 
 
+def env_flag(name: str) -> bool:
+    """True only for 1/true/yes, so TEST_TOUCHED_ALLOW_FULL=0 keeps the cap."""
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Targeted tests for the files changed vs a base ref.")
     ap.add_argument("--base", default=os.environ.get("TEST_TOUCHED_BASE", "origin/main"))
     ap.add_argument("--profile", default=os.environ.get("TEST_TOUCHED_PROFILE", "agent"))
     ap.add_argument("--filter", action="append", default=[], help="extra libtest filter (repeatable)")
     ap.add_argument("--print", action="store_true", help="print the commands; run nothing")
+    ap.add_argument("--allow-full", action="store_true",
+                    default=env_flag("TEST_TOUCHED_ALLOW_FULL"),
+                    help=f"let a heavy package ({', '.join(sorted(HEAVY_LIBS))}) run its whole unit suite")
     a = ap.parse_args(argv)
     try:
         root = git(os.getcwd(), "rev-parse", "--show-toplevel").strip()
@@ -533,7 +595,7 @@ def main(argv: list[str]) -> int:
         cwd=root, check=True, capture_output=True, text=True,
     ).stdout
     packages = load_packages(json.loads(meta))
-    p = plan(changed, packages, a.profile, a.filter, build_index(root, packages))
+    p = plan(changed, packages, a.profile, a.filter, build_index(root, packages), a.allow_full)
     for n in p.notes:
         print(f"test-touched: {n}", file=sys.stderr)
     if not p.commands and not p.untargetable:
@@ -547,7 +609,7 @@ def main(argv: list[str]) -> int:
         r = subprocess.run(cmd, cwd=root, stdout=subprocess.PIPE, text=True)
         return r.returncode, r.stdout
 
-    return execute(p, a.filter, a.print, run, list_tests)
+    return execute(p, a.filter, a.print, run, list_tests, a.allow_full)
 
 
 if __name__ == "__main__":

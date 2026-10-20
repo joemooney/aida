@@ -215,6 +215,69 @@ pub fn transition_guard(from: State, to: State) -> GuardKind {
     }
 }
 
+/// Whether a status transition `from -> to` records authority trailers on the
+/// store commit (`TASK-1737`): any transition whose [`transition_guard`] is
+/// [`GuardKind::RequiresAdvisorAuthority`] (such as `Draft -> Approved`).
+// trace:TASK-1737 | ai:antigravity
+pub fn status_advance_records_authority_trailers(
+    from: &crate::models::RequirementStatus,
+    to: &crate::models::RequirementStatus,
+) -> bool {
+    let from_state = State::from_status(from);
+    let to_state = State::from_status(to);
+    if from_state == to_state {
+        return false;
+    }
+    transition_guard(from_state, to_state) == GuardKind::RequiresAdvisorAuthority
+}
+
+/// Authority evidence recorded as git trailers on store commits that perform
+/// an advisor-gated status advance (`TASK-1737`).
+// trace:TASK-1737 | ai:antigravity
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitAuthority {
+    /// Authorized via a validated seat grant (`Aida-Authority: grant`,
+    /// `Aida-Seat: <seat>`, `Aida-Grant: <8-char prefix>`).
+    Grant { seat: String, grant_prefix: String },
+    /// Authorized via `OrchestratorContext::Orchestrated`
+    /// (`Aida-Authority: orchestrator`).
+    Orchestrator,
+}
+
+impl CommitAuthority {
+    /// Format the git trailer block to append to a store commit message.
+    // trace:TASK-1737 | ai:antigravity
+    pub fn format_trailers(&self) -> String {
+        match self {
+            CommitAuthority::Grant { seat, grant_prefix } => {
+                format!("\n\nAida-Authority: grant\nAida-Seat: {seat}\nAida-Grant: {grant_prefix}")
+            }
+            CommitAuthority::Orchestrator => "\n\nAida-Authority: orchestrator".to_string(),
+        }
+    }
+}
+
+pub type CommitAuthorityResolver = fn(&std::path::Path) -> Option<CommitAuthority>;
+
+static COMMIT_AUTHORITY_RESOLVER: std::sync::OnceLock<CommitAuthorityResolver> =
+    std::sync::OnceLock::new();
+
+/// Register the CLI's full grant/orchestrator authority resolver once.
+// trace:TASK-1737 | ai:antigravity
+pub fn register_commit_authority_resolver(resolver: CommitAuthorityResolver) {
+    let _ = COMMIT_AUTHORITY_RESOLVER.set(resolver);
+}
+
+/// Resolve the active authority for a store commit rooted at `store_root`.
+/// Returns `None` when no CLI authority resolver is registered so `aida-core`
+/// never carries a second authority validator.
+// trace:TASK-1737 | ai:antigravity
+pub fn resolve_commit_authority(store_root: &std::path::Path) -> Option<CommitAuthority> {
+    COMMIT_AUTHORITY_RESOLVER
+        .get()
+        .and_then(|resolver| resolver(store_root))
+}
+
 /// Phase 2c (TASK-740): the merge auto-bump expressed as the model's GitEvent
 /// guard. A commit referencing the spec landing on the default branch is
 /// authoritative evidence the work shipped — the 🟢 [`TriggerKind::Git`]

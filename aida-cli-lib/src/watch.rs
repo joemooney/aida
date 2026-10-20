@@ -1096,3 +1096,109 @@ mod tests {
         assert_eq!(pos, 0);
     }
 }
+
+/// Stream the drain event feed and wake on actionable verbs only.
+///
+/// Follows `.aida/events.jsonl` like `tail -f`, classifies each event in
+/// cheap code, and prints ONE wake line only when something actionable
+/// happens (CI terminal, a PR shipped/merged, a punt, a shelve, an
+/// escalation, the drain finished) — staying silent on the benign majority
+/// (phase churn, run bookkeeping). Intended to back the harness `Monitor`
+/// tool so a supervising session burns nothing while nothing is happening.
+/// If the drain's orchestrator process has died, prints one
+/// `WAKE drain-crashed` line and exits so a follower never blocks forever.
+///
+/// Follow mode starts at end-of-file (`tail -f` semantics) — only events
+/// appended after it started are emitted. Use `--once` to classify the
+/// existing backlog and exit, or `--backlog` to replay then follow.
+// trace:TASK-990 | ai:claude
+// trace:TASK-146 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "watch")]
+pub(crate) struct WatchArgs {
+    /// Emit wake lines for actionable events (the default behavior — this
+    /// flag makes it explicit for the `Monitor`-tool invocation).
+    #[clap(long)]
+    pub emit_wakes: bool,
+
+    /// Also surface the benign (non-actionable) events as an indented debug
+    /// feed, not just the wake lines.
+    #[clap(long)]
+    pub all: bool,
+
+    /// Emit each event as its original JSON object. Requires --all; this is
+    /// the stable read-only follow feed for monitor consumers.
+    // trace:STORY-1352 | ai:codex
+    #[clap(long, requires = "all", conflicts_with = "verbose")]
+    pub json: bool,
+
+    /// Live-debugging feed: implies --all, and stamps every line with the
+    /// event's local wall-clock time plus the run correlation id, then
+    /// appends the event's raw payload. For a human watching a drain — the
+    /// default (wake-lines-only) feed is what a machine consumer wants.
+    // trace:TASK-994 | ai:claude
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
+
+    /// Drain the current backlog, classify it, and exit instead of
+    /// following the stream (cron / test mode).
+    #[clap(long)]
+    pub once: bool,
+
+    /// Replay the whole historical backlog before following, instead of
+    /// starting at end-of-file. Off by default: a fresh follower wakes
+    /// only on events appended after it started (`tail -f` semantics).
+    // trace:TASK-146 | ai:claude
+    #[clap(long)]
+    pub backlog: bool,
+}
+
+// `aida watch` is a read-only consumer of the slice-1 `.aida/events.jsonl`
+// stream (STORY-712): it tails the file, classifies each event in cheap
+// code, and wakes only on actionable verbs. It touches no store/backend, so
+// dispatch early like `aida ps`. trace:TASK-990 | ai:claude
+fn run_watch(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <WatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let WatchArgs {
+        emit_wakes: _,
+        all,
+        json,
+        verbose,
+        once,
+        backlog,
+    } = &args;
+    let project_root =
+        find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+    return self::handle_watch(
+        &project_root,
+        &watch::WatchOpts {
+            all: *all,
+            // trace:BUG-1289 | ai:claude
+            json: *json || output_format_is_json(),
+            // trace:TASK-994 | ai:claude
+            verbose: *verbose,
+            once: *once,
+            backlog: *backlog,
+        },
+    )
+    .and_then(|()| notify::passive_check(&project_root));
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WATCH: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "watch",
+        help_after: "integrate",
+        command: <WatchArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_watch),
+    };
