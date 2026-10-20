@@ -14,8 +14,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T04:14:19.180648731Z
+modified_at: 2026-10-20T05:49:12.402928376Z
 req_type: Task
+comments:
+- id: 01a157db-4d52-7061-925f-32195db64374
+  author: joe
+  content: 'Advisor 2026-10-19 22:50: PR-2756 round 3 (b30be519cf), carried here as non-blocking: test gaps still open. There''s no lock/barrier test for the run_add add-vs-sync A1 path (requirements_cli.rs ~3091), or for the hijack_node, unregister_node, register_node_remote_only, init retry and dev-release wraps. (write_batch_cas_opts is now covered.) Also: any store writers that the completed inventory lists as KNOWN GAPS (still unlocked, e.g. handle_retire_legacy_ids, lib_part2.rs:15/22) belong in this task''s scope.'
+  created_at: 2026-10-20T05:49:12.402928376Z
+  modified_at: 2026-10-20T05:49:12.402928376Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 3c7e184d14f171218ad70453efee47cd99730122
   branch: main
