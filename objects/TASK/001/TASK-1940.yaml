@@ -21,7 +21,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:06:34.604763727Z
-modified_at: 2026-10-20T01:13:11.591071399Z
+modified_at: 2026-10-20T03:16:01.067779693Z
 req_type: Task
 tags:
 - cli
@@ -45,6 +45,13 @@ relationships:
   target_id: 01a154ea-81ed-7e70-8b31-6f7fa1a55f10
   created_at: 2026-10-19T19:50:14.009947034Z
   created_by: joe
+comments:
+- id: 01a1574f-0dab-79f2-b70f-035ec30c420c
+  author: joe
+  content: Commit 9be73d9a8f references this requirement
+  created_at: 2026-10-20T03:16:01.067779693Z
+  modified_at: 2026-10-20T03:16:01.067779693Z
+  session_id: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
 history:
 - id: 01a1536a-8f93-7aa3-9f81-721cf4a453ed
   author: joe
