@@ -729,7 +729,10 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
         let _ = std::fs::remove_dir_all(main_checkout.join("nested"));
     }
 
-    // 5. NEGATIVE: an outside-git `os_wrap` root refuses.
+    // 5. NEGATIVE: an outside-git `os_wrap` root refuses. Hold the env lock
+    // with `AIDA_OS_WRAP` unset: a parallel test pinning it to `0` would turn
+    // os_wrap off and skip the refusal. trace:BUG-2169 | ai:claude
+    let _os_wrap = crate::test_env::EnvVarGuard::unset("AIDA_OS_WRAP");
     std::fs::create_dir_all(non_checkout.join(".aida")).unwrap();
     std::fs::write(
         non_checkout.join(".aida/config.toml"),
