@@ -11,11 +11,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-10-20T20:08:51.552079826Z
+modified_at: 2026-10-20T22:24:53.582631064Z
 req_type: Task
 tags:
 - from-review:PR-2785
 - severity:minor
+comments:
+- id: 01a15b6a-e14e-78b2-8830-3e689d1eb3c6
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2023 — test-timings stall waiver is fail-open for multi-test and unbudgeted regressions'
+  created_at: 2026-10-20T22:24:53.582631064Z
+  modified_at: 2026-10-20T22:24:53.582631064Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
   branch: pr-2785
