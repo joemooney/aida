@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T18:20:13.880079609Z
-modified_at: 2026-10-19T15:10:51.885448450Z
+modified_at: 2026-10-20T09:09:10.631747786Z
 req_type: Bug
 tags:
 - from-implementer:BUG-1994
@@ -24,6 +24,19 @@ comments:
   content: 'PR #2744 re-scoped to working-directory test hygiene and cwd-scanner fn-reset fix (Refs BUG-2118, does not close it). BUG-2118 remains open and unreproduced: git -C /abs succeeds even when the caller cwd is removed, and the underlying mechanism of the CI run 38123466347 ENOENT in start_loose_object_common has not been reproduced.'
   created_at: 2026-10-19T15:10:51.885448450Z
   modified_at: 2026-10-19T15:10:51.885448450Z
+- id: 01a15892-6167-7812-9772-4d209117c272
+  author: joe
+  content: |-
+    MECHANISM (reproduced): detached git auto-maintenance raced the fixture's own object writes.
+    - CI run 38123466347 used git 2.55.0 (checkout step 'git version 2.55.0'). Since git 2.54 the default maintenance strategy is geometric (RelNotes/2.54.0). Every commit or merge runs 'git maintenance run --auto --quiet --detach' (run-command.c prepare_auto_maintenance), which daemonizes while the fixture's git returns.
+    - The geometric-repack auto condition is too_many_loose_objects(100) = entries in objects/17 * 256 > 256, so two loose objects trigger it. That is deterministic for this fixture: its dates and contents are fixed.
+    - 'repack -d -l --cruft' deletes the packed loose objects and rmdirs the emptied .git/objects/<xx> fanout dirs. The fixture's next write goes through create_tmpfile(): mkstemp gets ENOENT, git runs mkdir(<xx>), the prune removes the dir again, and the retried mkstemp gets ENOENT. Git reports 'unable to create temporary file: No such file or directory', then 'failed to write commit object'. Git 2.43, the local default, uses the gc strategy with threshold 6700, so local traces never saw it.
+    RAW EVIDENCE: (1) trace2 at git 2.55, fixture without the guard: the detached 'repack -d' started by 'commit side2: add STORY-4' ran 13.882-13.934, overlapping the fixture's rev-parse, checkout and 'merge --no-ff side2' (13.918-13.937, which writes a commit object). (2) strace -f: fixture commit pid 76051 exit_group at 05.991950. Its daemonized repack pid 76115 ran rmdir(.git/objects/0e)=0 ... 49 fanout dirs at 06.115-06.122, after the fixture's git had returned. (3) The panic shows dir_exists=true and objects_exists=true: only a fanout dir vanished, which matches CI where earlier commits succeeded.
+    REPRODUCTION: an LD_PRELOAD shim sleeps 300ms after a successful mkdir(objects/<xx>), widening git's own mkdir->mkstemp window with no logic change. Under git 2.55, the fixture without '-c maintenance.auto=false -c gc.auto=0' (as on 36c906f453) FAILED 5/5 with 'unable to create temporary file'. The guarded fixture passed 5/5. Git 2.43 with no guard passed 20/20 (no trigger).
+    FIX: #2560's NO_AUTO_MAINTENANCE guard is the actual fix (it landed as hardening). This PR names it, documents why, and adds the permanent regression fixture_git_never_starts_auto_maintenance: eager foreground maintenance config, an unguarded control that must pack, and build_merged must pack nothing. Dropping the guard fails it on git 2.43 (11 packs) and 2.55 (3 packs). Recipe in docs/testing/bug-2118-history-fixture-object-write.md. Workspace-wide exposure (~215 unguarded test files) is split to BUG-2191.
+  created_at: 2026-10-20T09:09:10.631747786Z
+  modified_at: 2026-10-20T09:09:10.631747786Z
+  session_id: 8eb7f358-17d3-47ea-9584-5285a9a5eab8
 history:
 - id: 01a14039-fa30-75f2-a174-7c28c074b509
   author: joe
