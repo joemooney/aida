@@ -5,6 +5,10 @@
     {
       "at": "2026-10-20T06:14:22.972321018Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-10-20T12:40:09.803373610Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -23,6 +27,70 @@
       "kind": {
         "event": "SpecCompleted",
         "commit": "76e5dcacba46ce3306059f045245c9ee1a2adb83",
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-10-20T06:20:21.411614414Z",
+      "spec": "TASK-1979",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T06:27:22.428296003Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-20T07:14:24.632389952Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T09:35:55.004322108Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1979",
+        "branch": "task-1979-work",
+        "first_seen": "2026-10-20T09:35:54.994484153+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T12:39:26.486302489Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T12:39:40.924863876Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2769
+      }
+    },
+    {
+      "ts": "2026-10-20T12:40:09.402148918Z",
+      "spec": "TASK-1979",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "fe70a874c6dee801991780f6ceccf8e9aeb3c124",
         "closed_by": "auto-bump"
       }
     }
