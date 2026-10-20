@@ -7,12 +7,12 @@ description: |
   2. aida-cli-lib/src/init_cmd.rs:1: `use aida_core::git_ops::RemoteCredentialsExt as _;` sits above the module's header comment, not with the other imports.
 
   Raised in review of PR-2774: https://github.com/joemooney/aida/pull/2774
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T12:21:38.516835187Z
-modified_at: 2026-10-20T22:23:08.493322134Z
+modified_at: 2026-10-20T22:23:11.319703763Z
 req_type: Task
 tags:
 - docs
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-20T22:23:08.493322134Z
   modified_at: 2026-10-20T22:23:08.493322134Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15b69-51d7-7a20-966a-dcd4c65d796f
+  author: joe
+  timestamp: 2026-10-20T22:23:11.319700748Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a2003ad02c7230f631171b2d3f1bbe6d1a81bf57
   branch: pr-2774
