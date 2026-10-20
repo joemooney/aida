@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T19:47:50.636653217Z
-modified_at: 2026-10-20T05:04:02.120396950Z
+modified_at: 2026-10-20T05:05:28.512175925Z
 req_type: Task
 tags:
 - review
@@ -42,6 +42,12 @@ comments:
   content: 'Advisor 2026-10-19 22:08, fold-in: the review-authorship ledger append races. aida-cli-lib/src/review_authority.rs:686-690 opens with append(true), then calls writeln!(f, "{line}") on an unbuffered File. writeln! can issue two write(2) calls (the body, then the newline), so two concurrent appenders interleave as A-body B-body nl nl. That''s exactly what was seen: line 52 of .aida/review-authorship.jsonl held two records joined as ''}{'', followed by a blank line (2026-10-16, two BUG-2169 leases), and every aida pr ship since then has warned ''malformed line skipped''. Fix: let buf = format!("{line}\n"); f.write_all(buf.as_bytes()), a single write that is atomic under O_APPEND below PIPE_BUF. Add a regression test with N threads appending concurrently, asserting every line parses. The local file was repaired 2026-10-19 (142 records; backup in ~/ai/aida-attic).'
   created_at: 2026-10-20T05:04:02.120396950Z
   modified_at: 2026-10-20T05:04:02.120396950Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a157b3-43c0-7902-804b-e8a8b74682d9
+  author: joe
+  content: 'Advisor 2026-10-19 22:12, fold-in, PRIORITY item: TASK-1960''s carry-over is only HALF wired. aida pr ship applies it in the approval-head gate (pr_cmd.rs ~1648, review_carryover::carry_over_for_refusal), but the verdict-corpus merge gate in merge_hold.rs ~2935 (CorpusMergeGate, Ok(None) arm: ''recorded review verdicts do not approve its current head ... a head move alone does not lift a recorded refusal'') never consults the carry-over. Repro: PR-2765 was approved at 187896cd54; then gh pr update-branch produced the clean merge 08c998fd3e (parents 187896cd54 + main 1ad2024f9d), with the PR''s own patch-id unchanged. aida pr ship 2765 refused at the corpus gate, and no ''did not carry over'' reason was printed, so the carry-over path never ran. Fix: in the corpus gate''s Ok(None) arm, apply the same review_carryover proof (an approval at an ancestor head plus only clean base merges plus an identical own diff) before refusing. Add a regression test: approve, update-branch, then ship passes both gates. Until this lands, every update-branch needs a fresh review or a manual record.'
+  created_at: 2026-10-20T05:05:28.512175925Z
+  modified_at: 2026-10-20T05:05:28.512175925Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a155b4-f5df-7221-afe8-d11f01d0d368
