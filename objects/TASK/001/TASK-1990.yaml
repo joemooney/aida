@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T06:39:22.945895091Z
-modified_at: 2026-10-20T08:23:10.962464548Z
+modified_at: 2026-10-20T08:23:19.507598801Z
 req_type: Task
 tags:
 - from-review:PR-2768
@@ -24,6 +24,13 @@ relationships:
   target_id: 01a14729-d448-78c2-93b9-ec1505dbe2a3
   created_at: 2026-10-20T08:23:10.962460986Z
   created_by: joe
+comments:
+- id: 01a15868-66d3-7603-a0a0-426c2713726e
+  author: joe
+  content: 'Advisor 2026-10-20 01:25: folded into TASK-1801 (the codex #2712 final round documents the link_then_unlink nlink=2 window).'
+  created_at: 2026-10-20T08:23:19.507598801Z
+  modified_at: 2026-10-20T08:23:19.507598801Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15868-36c8-7a81-8d7f-29d5d7286202
   author: joe
