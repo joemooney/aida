@@ -877,3 +877,27 @@ fn bug_2140_deferral_notice_and_host_commit_and_oplog_coherence() {
     );
     assert!(!commit_pending_store_changes_on_host(&store).unwrap());
 }
+
+// One store git command resolves the store hooks directory once: the
+// `core.hooksPath` pin and the refusal check share the result. Resolving it
+// twice spawned an extra `git rev-parse` on every store git call.
+// trace:BUG-2192 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2192_host_git_command_resolves_store_hooks_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    let resolves = |cwd: &Path| {
+        STORE_HOOKS_RESOLVES.with(|n| n.set(0));
+        let cmd = host_git_command(cwd);
+        (STORE_HOOKS_RESOLVES.with(std::cell::Cell::get), cmd)
+    };
+    let (n, mut cmd) = resolves(&store);
+    assert_eq!(n, 1, "one store git command must resolve the hooks once");
+    assert!(cmd.args(["status", "--short"]).status().unwrap().success());
+    assert_eq!(
+        resolves(&main).0,
+        0,
+        "a host tree never resolves store hooks"
+    );
+}

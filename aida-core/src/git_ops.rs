@@ -378,6 +378,12 @@ fn host_git_hardening_with(
 #[cfg(test)]
 thread_local! { static DROP_STORE_HOOK_PIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
+// Test-only counter of `resolve_store_hooks_dir` calls on this thread, so a
+// test can pin how many resolutions one `host_git_command` makes.
+// trace:BUG-2192 | ai:claude
+#[cfg(test)]
+thread_local! { static STORE_HOOKS_RESOLVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+
 /// Refuse launching (or enabling) contained mode when host git is older than
 /// 2.40 or its version cannot be parsed (BUG-2131).
 // trace:BUG-2131 | ai:claude
@@ -433,6 +439,8 @@ pub const NO_HOOKS_DIR: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
 /// stores use their denied .git subtree; other writable-store locations refuse.
 // trace:BUG-1929 | ai:codex
 pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
+    #[cfg(test)]
+    STORE_HOOKS_RESOLVES.with(|n| n.set(n.get() + 1));
     // Read-only lookups `host_git_command` itself depends on, so they cannot
     // be built with it: `rev-parse`, `config --get` and `worktree list` run
     // no hook, fsmonitor, filter or remote helper.
