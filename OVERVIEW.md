@@ -581,8 +581,10 @@ descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
 the group and records an output-limit failure without child diagnostics. The
 best-effort survivor probe runs after a successful installation; installer
 failure paths (including timeout) return before that probe, so escaped
-descendants on those paths are not detected by it.
-<!-- trace:TASK-1791 | ai:codex -->
+descendants on those paths are not detected by it. A completeness `--help`
+probe that times out marks its component incomplete with the reason
+`--help timed out`; the trial still runs the oracle and keeps its record.
+<!-- trace:TASK-1791 | ai:codex trace:TASK-1791 | ai:claude -->
 
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
