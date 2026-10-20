@@ -3,12 +3,12 @@ spec_id: BUG-2181
 agreed_id: BUG-2181
 title: Remote calls outside the mirror path still put an operator-embedded HTTP token in git-remote-http argv
 description: 'Follow-up from the PR #2736 round-2 review (BUG-2119). BUG-2119 routes the mirror/hub remote calls in remote_create.rs and gitlab_project_create.rs through configure_git_remote_credentials. Other host remote calls still hand git-remote-http the stored origin URL, so an operator-embedded oauth2:<token>@ on origin still shows up in ps / /proc/<pid>/cmdline. Sites: store_push_pull.rs:79/93/593/1485/2529 (fetch, ls-remote, push origin), store_sync.rs:1157 (git_ops::remote_branch_head_sha origin), plus the ls-remote calls in doctor_cmd.rs, pr_cmd.rs, pr_lookup.rs, session_start.rs and phase_driver.rs. Fix: route these through configure_git_remote_credentials, or move the helper into aida_core::git_ops so every host remote call gets it.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:06:36.673317847Z
-modified_at: 2026-10-20T12:11:03.142716256Z
+modified_at: 2026-10-20T12:23:09.614092508Z
 req_type: Bug
 tags:
 - forge
@@ -72,6 +72,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15943-fa07-78d3-8241-0dd847930ab5
+  author: aida-auto-bump
+  timestamp: 2026-10-20T12:23:09.575077330Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15943-fa2e-78d0-98c5-9e0e403a44da
+  timestamp: 2026-10-20T12:23:09.614079826Z
+  agent: aida
+  commit_sha: e2addf298918b61c4f9f02f34863669f50d8ffd3
+  summary: 'Credential gate moved into aida_core::git_ops::remote_credentials; every spec-named host remote site (store_push_pull fetch/ls-remote/push, store_sync remote_branch_head_sha, doctor, pr_cmd, pr_lookup, session_start, phase_driver) plus extras routed; argv seam test + live-control test; GitLab fallback a pure move; CI green, CLEAN. Non-blocking: argv tests cover ~half the routed sites; two cosmetic nits.'
+  review_verdict: approved
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
@@ -80,3 +95,7 @@ filed_at:
   aida_build_sha: befc5a2e23
   vendor: claude
   session: 5381fff7-5e31-4278-9d6b-3302c4dba1c2
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T12:23:09.575071643Z
+  completion_sha: e2addf298918b61c4f9f02f34863669f50d8ffd3
