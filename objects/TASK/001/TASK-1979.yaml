@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:09.676386991Z
-modified_at: 2026-10-20T10:56:05.788460631Z
+modified_at: 2026-10-20T10:58:02.147326798Z
 req_type: Task
 tags:
 - ci
@@ -69,6 +69,18 @@ comments:
   content: 'Advisor 2026-10-19 23:25: REOPENED. Only the aida_core budget recalibration shipped (76e5dcacba). The squash subject got an extra ''(TASK-1979)'' appended after ''(Refs TASK-1979)'', which auto-completed this spec. Still open: (1) split the aida-cli-lib unit-test lane (lib was 11m11s of the 11m21s wall time); (2) save rust-cache from the test lanes too, not only gates; (3) the shard-union guard (ex-TASK-1978); (4) the check-ci-list label (ex-TASK-1980); (5) recalibrate every per-binary budget against the post-S6 lanes (median of 3 main runs).'
   created_at: 2026-10-20T06:20:05.695311405Z
   modified_at: 2026-10-20T06:20:05.695311405Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a158f6-0b23-7e60-8d44-2bf2cd40d782
+  author: joe
+  content: |
+    Advisor 2026-10-20 03:58: folded in as superseded (open-list cleanup). These items are now this spec's scope:
+    - TASK-1647: minor: no guard that the shard union equals cargo test --workspace's target set…
+    - TASK-1645: cosmetic: make check-ci-list still labels Run tests '(local: cargo test --profi…
+    - TASK-1648: minor: AC1 headroom is thin — CI (lib) lane is 11m11s of an 11m21s run; rust-ca…
+    - TASK-1996: lib-half lane budgets omit the one observed final-weight run (lib-0 256s x1.5 = 384 > 350)
+    - TASK-1997: ci-test-shards.py --lib-weights crashes with bare StopIteration on a log with no >1000-test run
+  created_at: 2026-10-20T10:58:02.147326798Z
+  modified_at: 2026-10-20T10:58:02.147326798Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a157a5-04aa-7932-814b-b790be101737
