@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-20T22:24:19.420386947Z
+modified_at: 2026-10-20T22:24:32.222301616Z
 req_type: Task
 tags:
 - launch
@@ -130,6 +130,12 @@ comments:
   content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2014 — Assert the exact-test child ran one test in task_1981_auto_gc_respects_global_zero_and_off_override'
   created_at: 2026-10-20T22:24:19.420386947Z
   modified_at: 2026-10-20T22:24:19.420386947Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b6a-8dde-7963-9eee-57cbedda06fa
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2017 — test_git helper leaks one git template tempdir per test process'
+  created_at: 2026-10-20T22:24:32.222301616Z
+  modified_at: 2026-10-20T22:24:32.222301616Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
