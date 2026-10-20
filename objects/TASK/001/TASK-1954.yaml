@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-20T22:22:21.567004475Z
+modified_at: 2026-10-20T22:22:32.743376541Z
 req_type: Task
 tags:
 - cli
@@ -211,6 +211,12 @@ comments:
   content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-1654 — cosmetic: focus banner (requirements_cli.rs:4897) prints ''1 matching specs hidd…'
   created_at: 2026-10-20T22:22:21.567004475Z
   modified_at: 2026-10-20T22:22:21.567004475Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b68-bb27-76c3-8f50-7a8457a01d99
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2011 — aida list: compute driver map over focused rows only'
+  created_at: 2026-10-20T22:22:32.743376541Z
+  modified_at: 2026-10-20T22:22:32.743376541Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
