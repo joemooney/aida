@@ -250,8 +250,6 @@ fn run_mcp(
                     // trace:STORY-361 | ai:claude
                     return crate::command_registry::returned(handle_mcp_command(mcp_cmd));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -265,8 +263,6 @@ fn run_mcp(
                     // STORY-361: management commands for the MCP coordination surface.
                     handle_mcp_command(mcp_cmd)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida mcp` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

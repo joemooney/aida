@@ -938,20 +938,37 @@ mod tests {
     // `SPEC_ID_PATTERN` verbatim. (This comment uses `//`, not `///`, so it
     // isn't itself scanned.)
     // The clap surface spans `cli.rs`, each command's `<module>_args.rs`, and
-    // the registered `*Args` structs in command modules (STORY-1728), so the
-    // guard scans exactly those doc comments. trace:STORY-1728 | ai:claude
+    // the clap-derived types anywhere else below `src/` (STORY-1728), so the
+    // guard scans `cli.rs` and `*_args.rs` whole and, in every other non-test
+    // source file, the doc comments above and inside each clap derive.
+    // trace:STORY-1728 | ai:claude
     #[test]
     fn source_doc_comments_carry_no_spec_id_provenance() {
+        fn sources(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            let mut entries: Vec<_> = std::fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .collect();
+            entries.sort();
+            for path in entries {
+                let name = path.file_name().unwrap().to_string_lossy().to_string();
+                if path.is_dir() {
+                    if name != "tests" {
+                        sources(&path, out);
+                    }
+                } else if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
+                    out.push(path);
+                }
+            }
+        }
+        const CLAP_DERIVES: &[&str] = &["Parser", "Args", "Subcommand", "ValueEnum"];
         let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut paths = Vec::new();
+        sources(&src_dir, &mut paths);
         let mut surface: Vec<(String, usize, String)> = Vec::new();
-        let mut names: Vec<String> = std::fs::read_dir(&src_dir)
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
-            .filter(|n| n.ends_with(".rs"))
-            .collect();
-        names.sort();
-        for name in names {
-            let text = std::fs::read_to_string(src_dir.join(&name)).unwrap();
+        for path in paths {
+            let name = path.strip_prefix(&src_dir).unwrap().display().to_string();
+            let text = std::fs::read_to_string(&path).unwrap();
             let lines: Vec<&str> = text.lines().collect();
             if name == "cli.rs" || name.ends_with("_args.rs") {
                 for (i, l) in lines.iter().enumerate() {
@@ -959,19 +976,32 @@ mod tests {
                 }
                 continue;
             }
-            if !text.contains("crate::command_registry::CommandReg") {
-                continue;
-            }
             for (i, l) in lines.iter().enumerate() {
-                if !l.starts_with("#[derive(clap::Parser") {
+                let trimmed = l.trim_start();
+                if !trimmed.starts_with("#[derive(") {
                     continue;
                 }
+                let derive = trimmed.split(")]").next().unwrap_or_default();
+                let is_clap = derive
+                    .trim_start_matches("#[derive(")
+                    .split(',')
+                    .map(|d| d.trim().trim_start_matches("clap::"))
+                    .any(|d| CLAP_DERIVES.contains(&d));
+                if !is_clap {
+                    continue;
+                }
+                let indent = &l[..l.len() - trimmed.len()];
                 let mut start = i;
                 while start > 0 && lines[start - 1].trim_start().starts_with("//") {
                     start -= 1;
                 }
+                let close = format!("{indent}}}");
                 let mut end = i;
-                while end < lines.len() && lines[end] != "}" && !lines[end].ends_with("{}") {
+                while end < lines.len()
+                    && lines[end] != close
+                    && !lines[end].ends_with("{}")
+                    && !(end > i && lines[end].starts_with(indent) && lines[end].ends_with(';'))
+                {
                     end += 1;
                 }
                 for k in start..=end.min(lines.len() - 1) {
@@ -1475,6 +1505,7 @@ mod tests {
                         HumanCommand::Review { .. } => "review",
                         // trace:STORY-768 | ai:claude — audit-pass trigger.
                         HumanCommand::Audit { .. } => "audit",
+                        _ => "another verb",
                     };
                     assert_eq!(got, want);
                 }
