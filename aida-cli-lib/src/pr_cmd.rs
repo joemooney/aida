@@ -1813,6 +1813,18 @@ pub(crate) fn merge_approval_inputs(
     (candidates, policy)
 }
 
+/// BUG-2184: what is left of `--wait SECS` for the CI wait: the time since the
+/// wait started, less the mandate scan's own time.
+// trace:BUG-2184 | ai:claude
+pub(crate) fn ship_ci_budget(
+    secs: u64,
+    since_wait_started: std::time::Duration,
+    scan_spent: std::time::Duration,
+) -> std::time::Duration {
+    std::time::Duration::from_secs(secs)
+        .saturating_sub(since_wait_started.saturating_sub(scan_spent))
+}
+
 // STORY-1700 (C1): the mandate ship cover lives in `mandate_ship.rs`.
 // trace:STORY-1700 | ai:claude
 pub(crate) use crate::mandate_ship::{
@@ -2692,7 +2704,12 @@ pub(crate) fn pr_ship_with_method(
             true,
         )
     };
+    // BUG-2184: the mandate scan has its own cost and must not eat the --wait
+    // budget meant for CI: its time is taken back out of the CI deadline.
+    // trace:BUG-2184 | ai:claude
+    let scan_started = std::time::Instant::now();
     let mut mandate_cover = mandate_cover_now();
+    let scan_spent = scan_started.elapsed();
     let mandate_refusal_note =
         |cover: &std::result::Result<MandateCover, crate::mandate::MandateRefusal>| match cover {
             Err(r) if *r != crate::mandate::MandateRefusal::NoMandate => {
@@ -2926,9 +2943,7 @@ pub(crate) fn pr_ship_with_method(
             &watch_change,
             hold_present,
             label_only_hold,
-            wait.map(|secs| {
-                std::time::Duration::from_secs(secs).saturating_sub(wait_started.elapsed())
-            }),
+            wait.map(|secs| ship_ci_budget(secs, wait_started.elapsed(), scan_spent)),
             std::time::Duration::from_secs(15),
         );
         if let Err(error) = &ci_result {
