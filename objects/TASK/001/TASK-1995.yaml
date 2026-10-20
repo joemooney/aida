@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T08:02:16.988720216Z
-modified_at: 2026-10-20T08:22:40.061928124Z
+modified_at: 2026-10-20T08:22:50.588029705Z
 req_type: Task
 tags:
 - from-review:PR-2747
@@ -22,6 +22,13 @@ relationships:
   target_id: 01a130fa-86cc-7933-8301-b80b6ea230ef
   created_at: 2026-10-20T08:22:40.061924718Z
   created_by: joe
+comments:
+- id: 01a15867-f5dc-7452-81d1-e1301a87e5a4
+  author: joe
+  content: 'Advisor 2026-10-20 01:25: folded into BUG-1993 (item 5 of the fix-bug-1993 brief).'
+  created_at: 2026-10-20T08:22:50.588029705Z
+  modified_at: 2026-10-20T08:22:50.588029705Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15867-ba7a-7cf3-9c02-c5719bd6a89a
   author: joe
