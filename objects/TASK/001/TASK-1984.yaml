@@ -1,0 +1,27 @@
+id: 01a15789-274f-7bd0-8d88-1f2dd648cb8d
+spec_id: TASK-1984
+agreed_id: TASK-1984
+title: Spec-ID leak scan skips rustfmt-wrapped clap derives
+description: |
+  source_doc_comments_carry_no_spec_id_provenance (aida-cli-lib/src/cli.rs:979-991) only parses single-line #[derive(...)]; multi-line derives such as effort_calibration.rs:21 and complexity_calibration.rs:36 (clap::ValueEnum) are not scanned. Join lines until ')]' as command_clap_types does.
+
+  Raised in review of PR-2764: https://github.com/joemooney/aida/pull/2764
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:19:28.719943253Z
+modified_at: 2026-10-20T04:19:28.719943253Z
+req_type: Task
+tags:
+- from-review:PR-2764
+- severity:minor
+- story-1728
+filed_at:
+  code_sha: 3c7e184d14f171218ad70453efee47cd99730122
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a1575f6d1e

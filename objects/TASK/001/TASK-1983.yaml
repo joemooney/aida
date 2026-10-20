@@ -1,0 +1,27 @@
+id: 01a15789-1829-7391-86cf-ed3804740aca
+spec_id: TASK-1983
+agreed_id: TASK-1983
+title: Hot-file guard misses non-glob imports of command enum variants
+description: |
+  Only 'use Foo::*' is refused; 'use FooCommand::{A, B};', 'use FooCommand::{self, *};' and 'use FooCommand::A as X;' bring bare verbs into a hot file that slip every check in adding_a_flag_to_a_command_cannot_require_a_hot_file_edit (story_1728_command_registry_tests.rs:911-935).
+
+  Raised in review of PR-2764: https://github.com/joemooney/aida/pull/2764
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:19:24.841254024Z
+modified_at: 2026-10-20T04:19:24.841254024Z
+req_type: Task
+tags:
+- from-review:PR-2764
+- severity:minor
+- story-1728
+filed_at:
+  code_sha: 3c7e184d14f171218ad70453efee47cd99730122
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a1575f6d1e

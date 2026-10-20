@@ -16,12 +16,12 @@ description: |-
   6. Delete scripts/story-1728/*.py (one-shot migration tools).
   7. Remove the ~154 `#[allow(unreachable_patterns)] _ =>` dead arms and irrefutable let-else on the single-variant Command.
   8. Make the spec-ID leak scan recursive over clap types outside *_args.rs; fix the stale doc at aida-tui/src/cmd_palette.rs:77.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:06:34.604763727Z
-modified_at: 2026-10-20T03:32:08.575621916Z
+modified_at: 2026-10-20T04:18:58.817729041Z
 req_type: Task
 tags:
 - cli
@@ -99,6 +99,14 @@ history:
   timestamp: 2026-10-20T03:32:09.731920479Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15788-b281-7fd3-90f1-1e0be73c4c13
+  author: aida-orchestrator
+  timestamp: 2026-10-20T04:18:58.817746836Z
+  session_id: 01a1575f6d1e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
@@ -107,3 +115,11 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'All TASK-1940 items (1-3 via #2751 4f613e2edd; 4-8 here) and TASK-1633/1634/1635 verified, and the PR''s own tests pass locally. PR CI (run 39364604302, Build/Run tests) is red at b2d95ccd6a. The base main 9be73d9a8f was also red; 857e2ef848 (TASK-1970) took main green and this branch lacks it. Merge origin/main, get CI green, and fix D1-D3 in the same round.'
+  recovery_hint: address the review findings, move TASK-1940 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T04:18:58.817729041Z
