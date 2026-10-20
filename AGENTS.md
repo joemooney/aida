@@ -1,4 +1,4 @@
-CI runs four test lanes and the existing gates in parallel; the aggregate
+CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
 `Build (ubuntu-latest)` remains the required check. CLI halves use committed
 main-run timings; each shard keeps its timing budget and root hygiene check.
 See [CI fan-out](docs/testing/ci-test-shards.md).

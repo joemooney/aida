@@ -82,14 +82,16 @@ def classify(run: dict) -> tuple[str, list[int]]:
     builds = [j for j in jobs if j["name"].startswith((BUILD_JOB_PREFIX, "CI ("))]
     if not builds:
         return "no-build-job", []
+    expected = {f"CI ({lane})" for lane in ('lib', 'cli-0', 'cli-1', 'rest')}
+    sharded = any(j['name'].startswith('CI (') for j in builds)
+    # Matrix gate lanes also have a skipped Run tests step. They are not test
+    # shards and must not turn every complete test suite into "incomplete".
     tests = [(j, next((s["conclusion"] for s in j["steps"] if s["name"] == TEST_STEP), None))
-             for j in builds]
+             for j in builds if not sharded or j['name'] in expected]
     tests = [(j, result) for j, result in tests if result is not None]
     if not tests:
         return "no-test-step", []
     ran = [(j, result) for j, result in tests if result != "skipped"]
-    expected = {f"CI ({lane})" for lane in ('lib', 'cli-0', 'cli-1', 'rest')}
-    sharded = any(j['name'].startswith('CI (') for j in builds)
     complete = not sharded or {j['name'] for j, _ in tests} == expected
     if not ran:
         return ("docs-only" if complete else "incomplete"), []

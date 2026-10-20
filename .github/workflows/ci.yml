@@ -38,7 +38,7 @@ jobs:
         # trace:TASK-1723 | ai:claude
         os: [ubuntu-latest]
         # trace:TASK-1949 | ai:codex
-        shard: [lib, cli-0, cli-1, rest, gates]
+        shard: [lib, cli-0, cli-1, rest, gates, contracts]
 
     steps:
       - uses: actions/checkout@v5
@@ -128,7 +128,7 @@ jobs:
         run: cargo check -p aida-cli --no-default-features
 
       - name: Build all packages
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ (matrix.shard == 'gates' || matrix.shard == 'contracts') && (steps.changes.outputs.full_ci == 'true') }}
         # TASK-1204: compile the PR drain path once in the dev profile. The
         # MCP stdio and bwrap gates already exercise dev-profile artifacts, and
         # the later binary gates below now use target/debug too.
@@ -149,7 +149,7 @@ jobs:
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
       - name: Run tests
-        if: ${{ matrix.shard != 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         # --no-fail-fast: one run reports every failing test binary across
         # crates, instead of stopping at the first (BUG-1021).
         # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
@@ -162,7 +162,7 @@ jobs:
 
       # trace:TASK-1949 | ai:codex
       - name: Test shard root hygiene
-        if: ${{ !cancelled() && matrix.shard != 'gates' && steps.changes.outputs.full_ci == 'true' }}
+        if: ${{ !cancelled() && matrix.shard != 'gates' && matrix.shard != 'contracts' && steps.changes.outputs.full_ci == 'true' }}
         run: python3 scripts/ci-test-shards.py --check-root
 
       # Per-binary test timings (job summary + artifact) and the slow-test
@@ -170,7 +170,7 @@ jobs:
       # and a budgeted binary may not exceed it. Runs after a red test step too,
       # so a failing run still reports its timings. trace:STORY-1853 | ai:claude
       - name: Test time budget
-        if: ${{ matrix.shard != 'gates' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
+        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: >-
           python3 scripts/test-timings.py target/test-run.log
           --budget scripts/test-time-budget.toml
@@ -178,7 +178,7 @@ jobs:
           --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test timings
-        if: ${{ matrix.shard != 'gates' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
+        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         uses: actions/upload-artifact@v5
         with:
           name: test-timings-${{ matrix.shard }}
@@ -252,24 +252,24 @@ jobs:
       # trace:TASK-451 | ai:claude
       # trace:TASK-453 | ai:claude
       - name: Run MCP stdio compatibility tests
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_mcp_stdio.sh
 
       # trace:STORY-1477 | ai:codex
       - name: Run history template CLI/config/MCP contract tests
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_history_templates.sh
 
       # trace:BUG-1801 | ai:codex
       - name: Run single-spec show latency regression
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: python3 tests/test_show_latency.py --aida target/debug/aida
 
       # Doc-vs-MCP consistency gate — every tool + argument documented in
       # docs/agents/cross-agent-onboarding.md must appear in `tools/list`.
       # trace:TASK-452 | ai:claude
       - name: Run MCP doc-consistency test
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_mcp_doc_consistency.sh
 
       # BUG-1693: the merge-hold gate is the server-side half of the
@@ -284,7 +284,7 @@ jobs:
 
       # STORY-670: advisor-code-guard PreToolUse hook decision matrix.
       - name: Run advisor-code-guard hook test
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_advisor_code_guard.sh
 
       # BUG-1751: portable JSON parsing in the git guardrails PreToolUse hook.
@@ -329,17 +329,17 @@ jobs:
       # BUG-1796: exercise both skipped pull legs through the real CLI in a
       # fresh project with no origin remote. trace:BUG-1796 | ai:codex
       - name: Run no-origin pull warning fixture
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_bug_1796_no_origin_pull_warnings.sh
 
       - name: Run normal two-remote pull byte identical fixture
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_bug_1796_normal_two_remote_pull_byte_identical.sh
 
       # STORY-684: vendor-agnostic advisor-no-code-write gate at the commit
       # boundary (the substrate counterpart to the Claude-only hook above).
       - name: Run advisor-code-gate substrate test
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_advisor_code_gate.sh
 
       # TASK-144: pre-commit ///-provenance gate must excuse PURE MOVES
@@ -379,7 +379,7 @@ jobs:
       # BUG-608 / BUG-610 / STORY-674: distributed + sibling-store multi-repo
       # integration (true sibling, refuse-not-wipe, --attach join, collision-free).
       - name: Run distributed / sibling-store integration tests
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash tests/test_distributed.sh
 
       # BUG-1640: real-~/.aida guard self-test (volatile role churn passes,
@@ -490,7 +490,7 @@ jobs:
       # covers that path, keeping this guard live on docs-only PRs too.
       # trace:TASK-1447 | ai:claude
       - name: Minimal aida-cli build for docs-only guards
-        if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci != 'true') }}
+        if: ${{ matrix.shard == 'contracts' && (steps.changes.outputs.full_ci != 'true') }}
         # aida-cli-lib defaults exclude the `remote`/postgres features, so
         # this needs neither protoc nor libgtk/libssl (no "Install Linux
         # dependencies" step) — building just the `aida` binary crate is far
@@ -499,7 +499,7 @@ jobs:
         run: cargo build -p aida-cli
 
       - name: CLI-manual drift-guard (every command documented)
-        if: matrix.shard == 'gates'
+        if: matrix.shard == 'contracts'
         run: |
           export PATH="$PWD/target/debug:$PATH"
           python3 docs/cli/verify-manual.py
@@ -519,7 +519,7 @@ jobs:
       # above covers the target/debug/aida binary this guard's AIDA_BIN
       # default points at. trace:TASK-1447 | ai:claude
       - name: Monitor contract drift guard
-        if: matrix.shard == 'gates'
+        if: matrix.shard == 'contracts'
         run: |
           BASE="origin/${{ github.base_ref }}"
           python3 docs/monitor-contract-fixtures/verify.py "$BASE"
@@ -530,7 +530,7 @@ jobs:
       # NOT gated on full_ci: the "Minimal aida-cli build" step above covers
       # the target/debug/aida binary on docs-only PRs. trace:BUG-1922 | ai:claude
       - name: Template command lint
-        if: matrix.shard == 'gates'
+        if: matrix.shard == 'contracts'
         run: |
           export AIDA_BIN="$PWD/target/debug/aida"
           python3 scripts/check-template-commands.py
@@ -550,7 +550,7 @@ jobs:
       # docs-only PRs, and a docs-only PR is exactly where a hand edit lands.
       # trace:BUG-1950 | ai:claude
       - name: Book glossary drift guard
-        if: matrix.shard == 'gates'
+        if: matrix.shard == 'contracts'
         run: |
           AIDA_BIN="$PWD/target/debug/aida" bash docs/cli/generate-glossary.sh --check
 

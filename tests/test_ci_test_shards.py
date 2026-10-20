@@ -66,7 +66,7 @@ class ShardsTest(unittest.TestCase):
     def test_workflow_aggregate_fails_unless_all_lanes_succeed(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         build = workflow['jobs']['build']
-        self.assertEqual(build['strategy']['matrix']['shard'], [*shards.SHARDS, 'gates'])
+        self.assertEqual(build['strategy']['matrix']['shard'], [*shards.SHARDS, 'gates', 'contracts'])
         self.assertFalse(build['strategy']['fail-fast'])
         aggregate = workflow['jobs']['build-result']
         self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
@@ -146,7 +146,7 @@ class TallyTest(unittest.TestCase):
             ([job('Build (ubuntu-latest)', None), job('CI (lib)', 'success'), job('CI (rest)', 'failure', 2)], ('fail', [2])),
             ([job('Build (ubuntu-latest)', None)] + [job(f'CI ({lane})', 'skipped') for lane in shards.SHARDS], ('docs-only', [])),
             ([job('CI (lib)', 'success'), job('CI (rest)', 'skipped', 2)], ('incomplete', [])),
-            ([job(f'CI ({lane})', 'success') for lane in shards.SHARDS], ('pass', [])),
+            ([job(f'CI ({lane})', 'success') for lane in shards.SHARDS] + [job('CI (gates)', 'skipped'), job('CI (contracts)', 'skipped')], ('pass', [])),
             ([job('CI (lib)', 'failure'), job('CI (rest)', 'failure', 2)], ('fail', [1, 2])),
         ]
         for jobs, expected in cases:
