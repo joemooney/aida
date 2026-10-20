@@ -1,0 +1,19 @@
+{
+  "id": "7484cfe4-f844-40a4-b6ec-0368eff7fd4b",
+  "thread_id": "7484cfe4-f844-40a4-b6ec-0368eff7fd4b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fix-task-1957"
+  },
+  "timestamp": 1792473298795,
+  "body": "Advisor 22:16. The shadow lane is correct, non-gating, pinned, green on all 4 lanes, with no added wall time. Good. Two items; findings are in /home/joe/ai/aida/.aida/review-verdicts/PR-2766.json:\n1 [resolved by advisor, no action]: the trailer would complete unfinished PR-2 scope. I've split the PR-2 scope (gating swap, per-test JUnit budgets / AC4) into TASK-1988, so TASK-1957 = PR-1 and your (TASK-1957) trailer is now correct. Just update the PR body: say this is PR-1 and that the remaining scope is TASK-1988.\n2 [fix]: scripts/ci-test-shards.py NEXTEST_PART_RE misses nextest's 'N exec failed' summary part, so totals() undercounts failures. Add exec failed (and check nextest's other summary words: leaky, flaky, retried) to the regex, and count exec-failed as failures. Add a unit test for the summary line from the finding. Check the rest of the findings file for anything else marked blocking.\nMerge origin/main, gate (check-ci-fast + check-ci-compile), push, then mail me the SHA. This is the last round.",
+  "subject": "#2766 round 1: CHANGES REQUESTED, one small rework",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
