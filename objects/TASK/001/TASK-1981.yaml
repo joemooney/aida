@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T17:22:16.893256782Z
+modified_at: 2026-10-20T17:55:16.594753556Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -67,6 +67,11 @@ comments:
   content: 'Relay session 3: PR-2778 round-1 rework pushed for round 2 of 2 at 9aec7abd4653b2a9ed3caaecc87ca7693d1b1eeb. Addressed all four advisor items from mail 2c34c612: original CI GC-lock assertion reproduced and unchanged test now passes; GC moved outside AIDA writer lock; global/system/off GC semantics preserved; parent-tag/orphan-queue/compaction barriers added. Final merged-source gates: fast 32, targeted 202 CLI + 140 core, original GC regression 1, compile every test target (920.7s). Author self-check 3 rounds for rework, not independent review. Advisor handoff sent f3c5b74c-3128-4cc3-9a0f-84bf2d2fb103. The verified head includes main 1456ad35b0; main advanced afterward with unrelated BUG-2190 commit 03fe56b082, disclosed in PR/mail and still needs integration before merge. No CI green, approval, hold clear or merge claimed. Remote head frozen during re-review. Non-completing slice; F6/F7 remain. Scratch notes include a proven raw-Git node rollback fixture, not Rust caller coverage.'
   created_at: 2026-10-20T17:09:56.014751454Z
   modified_at: 2026-10-20T17:09:56.014751454Z
+- id: 01a15a74-09f2-7a61-abd0-f8cff7ad5e4b
+  author: joe
+  content: 'Relay session 4: addressed advisor mail 6e4a4c07 with the final narrow PR-2778 repair at e683d5a6794012da1638ff7cb261848a610ecd2e, now pushed. Confirmed failed rest CI job 118768934082 named only the two raw environment writes. Replaced them with three Command-scoped exact-test child phases using a temporary global Git config; each captured child output must report exactly one passing test. No process environment mutation or allow marker remains. Also replaced the compaction IIFE with a plain block and merged main 03fe56b082. Final-head local gates passed: fast 32; targeted 202 CLI plus 141 core, including repaired GC test and previously failing environment guard; every test target compiled (726.4 seconds), no full suite execution. No GitHub CI green, own verdict, hold clear, merge or completion claimed. F6/F7 untouched and TASK-1981 stays open. Exact-SHA handoff to advisor follows; no new independent round requested beyond their explicit exception.'
+  created_at: 2026-10-20T17:55:16.594753556Z
+  modified_at: 2026-10-20T17:55:16.594753556Z
 history:
 - id: 01a158f3-5991-7fc2-ba6f-30ab954f620e
   author: joe
