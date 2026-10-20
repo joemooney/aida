@@ -68,7 +68,7 @@ fn task_1981_compact_squash_waits_and_includes_peer_commit() {
         &[
             "for-each-ref",
             "--format=%(objectname)",
-            "refs/heads/aida-store-pre-squash-",
+            "refs/heads/aida-store-pre-squash-*",
         ],
     );
     assert_eq!(backup, peer_head);
