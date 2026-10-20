@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:19:31.715610724Z
-modified_at: 2026-10-20T14:18:39.850322738Z
+modified_at: 2026-10-20T14:20:59.601802638Z
 req_type: Bug
 tags:
 - contained
@@ -41,6 +41,12 @@ comments:
   content: 'SKETCH (BUG-2012): Option chosen — narrow the main-checkout .git deny rule in contained_main_checkout_git_deny_paths (and main_git_deny_paths) to only a main checkout''s real .git directory or its main-checkout gitfile target (--separate-git-dir). Specifically: (1) BUG-2169 seat clones (aida-seat-*) are skipped so contained seats retain write access to their own clone''s .git; (2) write roots without an existing .git entry at launch (non-checkout directories or linked-worktree gitdirs) emit no .git deny; (3) a .git directory without a commondir file denies <root>/.git (plus canonical); (4) a .git file whose gitdir: target has commondir or lives under worktrees/<name> is recognized as a linked worktree and skipped so the worktree''s own gitdir stays allowed, whereas a main-checkout gitfile denies both <root>/.git and its normalized/canonical gitdir target.'
   created_at: 2026-10-20T12:57:29.394070377Z
   modified_at: 2026-10-20T12:57:29.394070377Z
+- id: 01a159af-db51-7f32-b91a-46776fb7c10e
+  author: joe
+  content: 'Advisor 07:22 ruling on PR-2748 round 2 (111462ca0b): BUG-2001 passes; BUG-2012 is PARTIAL. The main-checkout .git deny works and the linked-worktree breakage is fixed, but the new seat-clone exemption trusts a marker file the contained session can write, which fails open. Ruling: ONE final round, scoped to REMOVING that exemption. The deny applies to the main checkout''s real .git whatever markers say. If a seat clone genuinely needs its own .git writable, that belongs to BUG-2169 with a trust anchor the session cannot write (for example, a host-side registry outside every granted root). Add tests for both branches: main-checkout .git denied, even with the marker present; a linked worktree''s gitdir is allowed. Nothing else changes.'
+  created_at: 2026-10-20T14:20:59.601802638Z
+  modified_at: 2026-10-20T14:20:59.601802638Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150cf-6efa-71e0-8d6d-e6f6eb1991f5
   author: joe
