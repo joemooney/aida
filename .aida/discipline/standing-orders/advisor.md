@@ -23,7 +23,9 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    cargo. STANDARD runs targeted `cargo test -p <crate> <filter>` plus
    `make check-ci-compile`. STRICT or heft>=7 adds the area's integration
    binaries. The full suite runs only in CI and a nightly job, never per PR
-   locally.
+   locally. Briefs say so: they never order `make check-ci`, `make check`,
+   `cargo test --workspace` or an unfiltered `--lib`, and never set
+   `AIDA_CARGO_NO_SLOT` (see `rework-brief-craft.md` step 6).
 8. When launching another agent or relay from the advisor seat, scrub the
    seat env: `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE
    AIDA_SESSION_ROLE=implementer ...`. Otherwise the child inherits the

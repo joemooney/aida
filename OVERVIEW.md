@@ -377,6 +377,28 @@ Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
+A contained session has no write access to the main git directory. Launch
+settings deny all of `<main>/.git` in both the sandbox (`denyWrite`) and the
+direct tool rules, whether or not the store write paths are granted, under
+every spelling of the path (as given and canonical, so a symlinked checkout is
+covered). When some spelling cannot be written as an exact rule (it holds a
+character such as `( [ ! {`), the contained launch is refused with an error
+naming the path: no settings are built and no session starts, because Claude
+Code's own sandbox would otherwise leave `<main>/.git` writable to a
+linked-worktree session. That
+covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`, which would
+otherwise let a session point host git at a git directory it controls. It also
+covers the shared config, hooks, refs and objects. Claude Code itself denies
+writes to a worktree's own `.git` pointer. While these denies are in place,
+Claude Code (verified on 2.1.302) leaves no writable path under `<main>/.git`.
+This is conditional: it holds only for sessions launched with AIDA's contained
+settings on a Claude Code whose sandbox applies `denyWrite` over its own grants.
+As a consequence, a contained session in a linked worktree cannot commit,
+because its index and objects live under the denied directory. A contained seat
+commits in its own private clone instead (BUG-2169). Real-sandbox and unit
+evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
+<!-- trace:BUG-1982 | ai:claude -->
+
 Host git over a code tree a contained session may have written (a linked
 worktree, or any tree of a repository a contained session was launched
 against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and

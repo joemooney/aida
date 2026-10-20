@@ -2841,3 +2841,114 @@ fn task_1458_drain_merge_with_a_stale_approval_never_calls_gh_merge() {
     assert_eq!(failure.kind, FailureKind::StaleApproval);
     assert_eq!(t1458_merge_argv(&calls), None, "no merge attempted");
 }
+
+/// BUG-2180: a contained reviewer's request-changes shelve cannot commit
+/// (the sandbox denies the store's git directory), so it was left for the
+/// host — and the launcher that waited on the reviewer never committed it,
+/// leaving the spec YAML dirty until the mandate's fail-closed store snapshot
+/// refused every ship. The launcher now commits the child's store writes.
+/// Unix-only: containment is emulated by making the store's git directory
+/// read-only for the reviewer's write.
+// trace:BUG-2180 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let work = tmp.path().join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    std::fs::create_dir_all(work.join(".aida")).unwrap();
+    std::fs::write(
+        work.join(".aida").join("config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let store_root = work.join(".aida-store");
+    std::fs::create_dir_all(&store_root).unwrap();
+    git(&store_root, &["init", "-q", "-b", "aida-store"]);
+    git(
+        &store_root,
+        &["config", "user.email", "aida@example.invalid"],
+    );
+    git(&store_root, &["config", "user.name", "AIDA Test"]);
+    // The production store ignores its per-clone `.aida/` state.
+    write_commit(&store_root, ".gitignore", ".aida/\n", "fixture");
+    let mut req = Requirement::new("reviewed".to_string(), String::new());
+    req.spec_id = Some("TASK-9".to_string());
+    req.status = RequirementStatus::InProgress;
+    let mut store = RequirementsStore::default();
+    store.requirements.push(req);
+    aida_core::GitBackend::new(&store_root)
+        .unwrap()
+        .save(&store)
+        .unwrap();
+    let porcelain = || {
+        git(
+            &store_root,
+            &["status", "--porcelain", "--untracked-files=all"],
+        )
+    };
+    assert_eq!(porcelain(), "", "fixture store starts clean");
+    let head_before = git(&store_root, &["rev-parse", "HEAD"]);
+
+    let launched_at = crate::queue_cmd::reviewer_spawn_instant(&work);
+    // The contained reviewer: store files writable, git history not.
+    let git_dirs = [store_root.join(".git"), store_root.join(".git/objects")];
+    let host_modes: Vec<_> = git_dirs
+        .iter()
+        .map(|dir| std::fs::metadata(dir).unwrap().permissions())
+        .collect();
+    for dir in &git_dirs {
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    }
+    let mut d = driver(&work, "TASK-9");
+    let failure = PhaseFailure::of(
+        FailureKind::VerdictRequestChanges,
+        "reviewer requested changes",
+    );
+    let shelved = d.shelve_on_failure("TASK-9", Phase::Reviewer, &failure, "fix the findings");
+    for (dir, mode) in git_dirs.iter().zip(host_modes) {
+        std::fs::set_permissions(dir, mode).unwrap();
+    }
+    shelved.unwrap().expect("an InProgress spec shelves");
+    assert_eq!(
+        git(&store_root, &["rev-parse", "HEAD"]),
+        head_before,
+        "the contained shelve cannot commit"
+    );
+    assert!(
+        porcelain().contains("TASK-9.yaml"),
+        "the shelve is written and left for the host: {}",
+        porcelain()
+    );
+    assert!(crate::mandate_traces::store_snapshot(&store_root).is_err());
+
+    // The host launcher, after the reviewer exits.
+    let committed =
+        crate::child_store_commit::commit_child_store_writes(&work, launched_at, "reviewer");
+    assert!(
+        committed.iter().any(|p| p.ends_with("TASK-9.yaml")),
+        "the shelved spec is committed: {committed:?}"
+    );
+    assert_eq!(
+        porcelain(),
+        "",
+        "reviewer request-changes left the store dirty"
+    );
+    assert!(crate::mandate_traces::store_snapshot(&store_root).is_ok());
+    let reloaded = aida_core::GitBackend::new(&store_root)
+        .unwrap()
+        .load()
+        .unwrap();
+    let spec = reloaded
+        .requirements
+        .iter()
+        .find(|r| r.spec_id.as_deref() == Some("TASK-9"))
+        .unwrap();
+    assert_eq!(spec.status, RequirementStatus::NeedsAttention);
+    assert_eq!(spec.failure_reason.as_ref().unwrap().phase, "reviewer");
+}

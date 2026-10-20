@@ -485,3 +485,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/bug_1929_contained_store_tests.rs"]
 mod store_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_1982_main_git_metadata_tests.rs"]
+mod main_git_tests;

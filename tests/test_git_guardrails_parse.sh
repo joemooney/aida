@@ -55,6 +55,21 @@ assert_exit "unterminated quote in a non-git command is allowed" 0 "$(run '{"too
 assert_exit "unterminated non-git heredoc is allowed" 0 "$(run '{"tool_input":{"command":"cat <<EOF\nhello"}}')"
 assert_exit "unterminated quote in python3 -c is allowed" 0 "$(run '{"tool_input":{"command":"python3 -c \"print(1)"}}')"
 assert_exit "unterminated quote with rm -rf .git fails closed" 2 "$(run '{"tool_input":{"command":"rm -rf .git \"oops"}}')"
+
+# Agents may not bypass the cargo-slot limiter; mentions and unsets are fine.
+# trace:STORY-1853 | ai:claude
+assert_exit "AIDA_CARGO_NO_SLOT=1 prefix is blocked" 2 "$(run '{"tool_input":{"command":"AIDA_CARGO_NO_SLOT=1 cargo test --workspace"}}')"
+assert_exit "exported AIDA_CARGO_NO_SLOT is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT=1 && make check"}}')"
+assert_exit "env AIDA_CARGO_NO_SLOT=\"1\" is blocked" 2 "$(run '{"tool_input":{"command":"cd x && env AIDA_CARGO_NO_SLOT=\"1\" cargo build"}}')"
+assert_stderr "the NO_SLOT block names the limiter" "cargo build-slot limiter" "$(run_stderr '{"tool_input":{"command":"AIDA_CARGO_NO_SLOT=1 cargo test"}}')"
+assert_exit "unsetting AIDA_CARGO_NO_SLOT is allowed" 0 "$(run '{"tool_input":{"command":"env -u AIDA_CARGO_NO_SLOT cargo test -p aida-core x; unset AIDA_CARGO_NO_SLOT"}}')"
+assert_exit "bash -c wrapping AIDA_CARGO_NO_SLOT=1 is blocked" 2 "$(run '{"tool_input":{"command":"timeout 3000 bash -c \"AIDA_CARGO_NO_SLOT=1 make check\""}}')"
+assert_exit "sh -c wrapping AIDA_CARGO_NO_SLOT=1 is blocked" 2 "$(run '{"tool_input":{"command":"sh -c '"'"'AIDA_CARGO_NO_SLOT=1 cargo test'"'"'"}}')"
+assert_exit "AIDA_CARGO_NO_SLOT+=1 is blocked" 2 "$(run '{"tool_input":{"command":"AIDA_CARGO_NO_SLOT+=1; export AIDA_CARGO_NO_SLOT; make check"}}')"
+assert_exit "a bare export AIDA_CARGO_NO_SLOT=1 is blocked" 2 "$(run '{"tool_input":{"command":"export AIDA_CARGO_NO_SLOT=1"}}')"
+assert_exit "env -u AIDA_CARGO_NO_SLOT alone is allowed" 0 "$(run '{"tool_input":{"command":"env -u AIDA_CARGO_NO_SLOT make check-ci-fast"}}')"
+assert_exit "a heredoc spelling out AIDA_CARGO_NO_SLOT=1 is blocked (raw scan)" 2 "$(run '{"tool_input":{"command":"aida mailbox send --to advisor --stdin <<EOF\nfix-2725 ran with AIDA_CARGO_NO_SLOT=1\nEOF"}}')"
+assert_exit "a similarly named variable is allowed" 0 "$(run '{"tool_input":{"command":"MY_AIDA_CARGO_NO_SLOT=1 true"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
 echo "GIT GUARDRAILS PARSE: all checks passed"
