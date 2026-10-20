@@ -424,6 +424,16 @@ pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
 }
 
+/// The raw grant handle this process exports, when it is set and non-blank,
+/// UNVALIDATED. Only for callers that compare the handle or look its record up
+/// themselves; every authority decision goes through [`grant_check`].
+// trace:TASK-1752 | ai:claude
+pub(crate) fn current_grant_id() -> Option<String> {
+    std::env::var(GRANT_ENV)
+        .ok()
+        .filter(|id| !id.trim().is_empty())
+}
+
 /// What a display surface (the statusline) should show as the session's
 /// role. The `AIDA_SESSION_ROLE` label is only a display/routing hint, so a
 /// label naming a seat the session holds no valid grant for must read as
@@ -1844,3 +1854,8 @@ mod bug_2011_grant_expiry_verdict_tests;
 #[cfg(test)]
 #[path = "tests/task_1787_grant_ttl_tests.rs"]
 mod task_1787_grant_ttl_tests;
+
+// trace:TASK-1752 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1752_grant_env_guard_tests.rs"]
+mod task_1752_grant_env_guard_tests;
