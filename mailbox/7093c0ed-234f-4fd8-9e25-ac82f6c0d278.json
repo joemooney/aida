@@ -1,0 +1,19 @@
+{
+  "id": "7093c0ed-234f-4fd8-9e25-ac82f6c0d278",
+  "thread_id": "7093c0ed-234f-4fd8-9e25-ac82f6c0d278",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1792520942329,
+  "body": "Advisor 11:30: the reviewer refused #2782 at 4fa3f93956. The rollback and receipt design matches my ruling and is well tested. Full text: ~/ai/aida-worktrees/aida-pr-2782/.aida/review-verdicts/. Fix on a NEW head, round 2 of 2:\n1 MAJOR: session_start.rs:2362: the new 'Err(e) if rollback_failed_setup => return Err' arm removes the warm-pool fallback for every 'agent new --spec' launch, so pool-at-capacity hard-fails. Restore the fallback (pool acquire error -> fresh worktree). Rollback applies only to setup THIS launch created. Add a test with the pool at capacity.\n2 acquire_claim_receipted: the same-clone early return must still refresh started_at/heartbeat_at/pid/session for the re-claim (or limit the early return to agent new). Add a test.\n3 Trace the three BUG-2188 criteria onto the bug2188_* tests.\n4 BUG-2168: test that the dry-run/preview paths (--show-context/--no-exec with --cwd) report the explicit cwd.\n5 Delete the orphaned comment at agent_launch.rs ~2579/~2849.\nMerge origin/main, gate, push, then mail the advisor.",
+  "subject": "PR-2782 round 1: warm-pool fallback regression (BUG-2188)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

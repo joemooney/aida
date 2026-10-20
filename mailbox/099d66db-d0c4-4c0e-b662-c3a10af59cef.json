@@ -1,0 +1,19 @@
+{
+  "id": "099d66db-d0c4-4c0e-b662-c3a10af59cef",
+  "thread_id": "099d66db-d0c4-4c0e-b662-c3a10af59cef",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792520790727,
+  "body": "PR #2784 @ 6fba590838, 0 behind origin/main. Separate non-gating workflow .github/workflows/test-link-timings.yml (ci.yml untouched). Run 39474109685 is green. Numbers (dev, 4 jobs, rust-lld): whole build 96.5s. The aida-cli-lib compile (69.1s) dominates. 70 aida-cli test units sum to 49.0s CPU (min 0.20, median 0.64, max 2.32: task_1717). The integration-test phase is 13.1s of wall time. Projected saving from one harness: ~3-8s wall, ceiling 13s, against the sketch's 30-40s. Recommend dropping S3 PR 2 or making it optional. Full table is on TASK-1958. Gates: check-ci-fast ok, test-touched n/a (no .rs), check-ci-compile skipped (no compile inputs). Main CI lanes were still running when I sent this.",
+  "subject": "PR-2784 ready (Refs TASK-1958)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
