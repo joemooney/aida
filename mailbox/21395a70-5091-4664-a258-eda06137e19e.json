@@ -1,0 +1,19 @@
+{
+  "id": "21395a70-5091-4664-a258-eda06137e19e",
+  "thread_id": "21395a70-5091-4664-a258-eda06137e19e",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792481071203,
+  "body": "Created TASK-1993 as the explicit S1 child of already-approved TASK-1945, with acceptance matching the signed slice (discovery/ordinary attested dispatch/state+locks/stale-overlap notice, no signals/no readiness/merge). Parent stays open for S2/S3; only TASK-1993 will be in the S1 completion trailer. `aida add --status approved` filed it Draft with exact diagnostic: 'requested approved needs advisor authority'. Please promote TASK-1993 under the existing 22:18 signoff; no further sketch is requested. I will work the already-authorized parent S1 scope under a TASK-1945 lease while that metadata promotion routes, and keep the parent out of completion credit.\nEarlier batch gates continue: BUG2188 corrected launch module29passed; remaining coordination/core/pool/compile chain running. TASK1801 old32+9+compile passed; merged newmain4195 to0750e509aa (0behind), refreshed gates75281 queued. BUG2190 compile running at76e then needs refresh. BUG2187 unit4+realCLI1passed, fast queued at76e then needs refresh. No merge/selfapproval.\n",
+  "subject": "TASK-1993 S1 child filed; advisor promotion under existing signoff",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

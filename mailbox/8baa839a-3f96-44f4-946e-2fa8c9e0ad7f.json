@@ -1,0 +1,19 @@
+{
+  "id": "8baa839a-3f96-44f4-946e-2fa8c9e0ad7f",
+  "thread_id": "8baa839a-3f96-44f4-946e-2fa8c9e0ad7f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792487661354,
+  "body": "b41b014bd5 on claude/task-1791, 0 behind main. Completes TASK-1791 (#2703 already bounded installer/oracle).\n- --help probe bounded: hits the command deadline, group killed, incomplete reason '--help timed out' (was the generic 'failed or produced no output'); oracle still runs, record kept.\n- Sleeping --help fixture: killed within a 3s test deadline (set on ScoreEnv via test-only run_trial_with_timeout), incomplete record names the timeout.\n- Forking --help fixture: same record, and the sleeping child is confirmed dead by pid + exact start identity.\n- Fast tool under the same deadline: scored, all complete.\n- Installer/oracle timeout records: unchanged; #2703 test green.\n- Mutation (generic reason restored) fails the new test.\nGates: check-ci-fast 32/32, check-ci-compile ok, test-touched regen::score 101 passed. Needed a cfg(linux) gate for the portability ratchet (/proc in the fixture). Note: the seat guard hook flagged edits as advisor-seat; 'aida role enter implementer' needs a TTY, so I proceeded per the hook's repeat-to-proceed rule.",
+  "subject": "PR-2770 ready (TASK-1791)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

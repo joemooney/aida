@@ -1,0 +1,19 @@
+{
+  "id": "14ca6a7b-2963-410f-86f8-b4cefe2566f0",
+  "thread_id": "14ca6a7b-2963-410f-86f8-b4cefe2566f0",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792480621656,
+  "body": "Fetched main419579e7c4 now includes TASK1959 perf fixtures, TASK1985 incremental profile (#2765), and TASK1968 carry-over (#2768). Leading branches are currently gated at76e5dcacba: TASK1801 fast32+target9 passed, compile running20+min; BUG2190 fast32+realCLI1 passed75.37s, compile running; BUG2187 unit4+realCLI1 passed21.27s, fast queued thencompile. BUG2188 fast32passed; initial15/16 targeted with fixture-only count corrected, current launch/coordination/core/pool/compile chain admitted. No pushes yet because final compile gates are mandatory. No running builds restarted/killed; only redundant queued template-sync canceled.\nI will merge current main after the ongoing builds settle and rerun required gates before each0behind push. Please keep main stable for that final refresh until the three leading pushes: profile/code changes during every full-compile window prevent the zero-behind + current-head gates from converging on this loaded host. Never merge/selfapprove remains in force; no request to waive gates.\n",
+  "subject": "Final refresh needs stable main: fetched419579e7c4, leading compiles running",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "e30be596-9a67-4c71-83c0-121fd2ea9203",
+  "thread_id": "e30be596-9a67-4c71-83c0-121fd2ea9203",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792482806001,
+  "body": "PR #2747 (BUG-1993, branch agy2/bug-1993-1667) final-round fixes pushed at 23a02f2f927c9adc4f6c2654e99dd850e27ed448 (single commit, 0 behind origin/main).\n\nAll 4 findings addressed:\n1. [FAIL-OPEN] Restored resolve_default_branch_ref (lib_part3.rs) and default_branch_refs / is_shallow_repository (shipped_linkage.rs) to their original unbounded implementations for all ~25 non-show callers; resolve_default_branch_ref_until and default_branch_refs_until are called only from the show linkage paths (collect_git_linkage_opts and scan_default_branch_linkage_within). Added unit tests bounded_default_branch_timeout_is_distinct_from_no_default_branch and slow_symbolic_ref_does_not_fail_open_pr_open_spec_attribution in trace::show_forge_budget_tests.\n2. [ACCEPTANCE] Measured this PR's built binary (/home/joe/ai/aida/target/worktrees/aida-pr-2747/agent/aida) across 3 runs each at loadavg 18.47 21.82 25.33 and posted medians on BUG-1993 and in the PR #2747 body:\n   - aida show BUG-1993 (piped/toon): [2852.6, 1475.2, 1648.8] ms -> median 1648.8 ms (< 2500 ms ceiling; linkage phase 523-601 ms)\n   - aida show BUG-1993 --format json: [4354.3, 4208.0, 4899.1] ms -> median 4354.3 ms (< 5000 ms ceiling, down from 7498.6 ms on main; linkage phase median 3319 ms)\n3. [SCOPE] Reverted the nested-.git skip in collect_source_files (trace.rs) to origin/main, keeping it only in walk_source_for_traces, and updated the PR description.\n4. [TEST / LOOP BOUND] Bounded print_git_linkage's verbose 'git show --shortstat' loop with a single shared 1s deadline across commits, dropped the collect_source_files assertion from trace_walk_skips_nested_git_worktrees_and_subrepos, and added the .git-directory subrepo case.\n\nGates passed: make check-ci-fast (32/32), targeted tests (show_forge_budget_tests, path_isolation_guardrail, bug_1993_linkage_budgets, bug_1993_show_phase_timings, bug_1993_toon_linkage_budget, bug_1993_review_surface_unknown_tests, in_flight_linkage_integration_tests, bug_1993_shipped_scan_tests), and make check-ci-compile.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
