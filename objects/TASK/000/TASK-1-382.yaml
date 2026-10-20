@@ -1,0 +1,29 @@
+id: 01a15809-35e3-7fe0-a0db-462e235278db
+spec_id: TASK-1-382
+title: 'non-blocking: with incremental on, sccache reports workspace crates under --pro…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1985, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  non-blocking: with incremental on, sccache reports workspace crates under --profile agent as 'cannot cache: incremental'. aida-cli-lib therefore no longer gets cross-worktree sccache hits; only third-party deps stay cached. TASK-1986's measurement should include a fresh-worktree cold build, not only an edit-rebuild.
+
+  PR: #2765
+  Reviewed sha: fc873a2944d138f1898790c48e89aaab0d15100e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T06:39:21.059578591Z
+modified_at: 2026-10-20T06:39:21.059578591Z
+req_type: Task
+tags:
+- carried-from:TASK-1985
+- finding-hash:f19f99c5
+- from-review:PR-2765
+- kind:carried-forward
+filed_at:
+  code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 857e2ef848
+  vendor: claude
