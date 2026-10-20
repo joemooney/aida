@@ -11,12 +11,12 @@ description: |
   Not blocking: the round-3 green runs (39494894926 attempts 1 and 2) had zero stall warnings, so the calibration alone made the gate green.
 
   Raised in review of PR-2785: https://github.com/joemooney/aida/pull/2785
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:56:42.362157745Z
-modified_at: 2026-10-20T22:24:57.669674673Z
+modified_at: 2026-10-20T22:25:00.959962294Z
 req_type: Task
 tags:
 - ci
@@ -30,6 +30,15 @@ comments:
   created_at: 2026-10-20T22:24:57.669674673Z
   modified_at: 2026-10-20T22:24:57.669674673Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15b6a-fe1f-70a3-b92e-909852e076b1
+  author: joe
+  timestamp: 2026-10-20T22:25:00.959959438Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: b60ea1beb2ccab227613e36a6b2239aca63cbd10
   branch: pr-2785
