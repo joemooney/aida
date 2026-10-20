@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:00.530832724Z
-modified_at: 2026-10-20T04:05:00.530832724Z
+modified_at: 2026-10-20T04:49:35.534667060Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-2762
 - severity:minor
+comments:
+- id: 01a157a4-b92e-7f31-b8a7-70e7b8413c85
+  author: joe
+  content: 'Advisor triage 2026-10-19: SUPERSEDED by TASK-1979. Folded into the TASK-1979 S6 follow-up sweep (advisor 2026-10-19 21:50)'
+  created_at: 2026-10-20T04:49:35.534667060Z
+  modified_at: 2026-10-20T04:49:35.534667060Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
   branch: pr-2762
