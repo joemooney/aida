@@ -594,6 +594,13 @@ fn clone_invocations(log: &str, clone: &Path) -> Vec<(bool, String)> {
                 i += 2;
                 continue;
             }
+            // `-c <key=value>` (test fixtures and store transactions pass
+            // these first) takes a value that is not the subcommand.
+            // trace:BUG-2191 | ai:claude
+            if (arg == "-c" || arg == "--config-env") && i + 1 < args.len() {
+                i += 2;
+                continue;
+            }
             for flag in ["--git-dir=", "--work-tree="] {
                 if let Some(p) = arg.strip_prefix(flag) {
                     dirs.push(cwd.join(p));

@@ -25,9 +25,13 @@ ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "scripts/git-maintenance-baseline.txt"
 CRATES = ["aida-core", "aida-cli-lib", "aida-cli", "aida-server", "aida-tui"]
 
-# Subcommands that start auto-maintenance (git's run_auto_maintenance callers)
-# plus commit-tree, which writes objects a running repack can race.
-WRITE_CLASS = ("commit", "commit-tree", "merge", "am", "rebase", "cherry-pick", "revert", "pull", "fetch")
+# Subcommands that start auto-maintenance in the local repository (commit,
+# merge, am, rebase, cherry-pick, revert, pull, fetch), commit-tree (writes
+# objects a running repack can race) and push: the remote's receive-pack runs
+# auto-maintenance under the remote's own config, which the client's -c pair
+# never reaches. test_git covers that through init.templateDir: every repo it
+# creates, bare remotes included, has maintenance off in its config.
+WRITE_CLASS = ("commit", "commit-tree", "merge", "am", "rebase", "cherry-pick", "revert", "pull", "fetch", "push")
 GUARD_TEXT = ("maintenance.auto=false", "NO_AUTO_MAINTENANCE", "test_git::")
 # Cheap raw-text filter: a file can only hold a site if it names a write-class
 # subcommand as a literal or after `git`.
@@ -298,6 +302,7 @@ def write_baseline(found: dict[str, list[str]]) -> None:
 
 
 class GitMaintenanceRatchetTests(unittest.TestCase):
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_unguarded_write_class_git_sites_only_go_down(self):
         baseline = read_baseline()
         found = scan()
@@ -324,6 +329,7 @@ class GitMaintenanceRatchetTests(unittest.TestCase):
         masked, strings = mask(source)
         return file_sites(Path(ROOT / name), source, masked, strings)
 
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_detects_direct_wrapped_and_shell_sites(self):
         source = '''
 fn git(dir: &Path, args: &[&str]) { Command::new("git").current_dir(dir).args(args).status().unwrap(); }
@@ -344,6 +350,7 @@ fn t() {
 '''
         self.assertEqual(["4: git commit", "7: git merge", "9: sh git commit"], self.sites(source))
 
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_guard_helper_and_inline_guard_are_accepted(self):
         source = '''
 fn git(dir: &Path, args: &[&str]) { crate::test_git::git_command().current_dir(dir).args(args).status().unwrap(); }
@@ -356,6 +363,7 @@ fn t() {
 '''
         self.assertEqual([], self.sites(source))
 
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_guard_reaches_callers_transitively_but_not_namesakes(self):
         source = '''
 const NO_AUTO_MAINTENANCE: [&str; 4] = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
@@ -372,6 +380,7 @@ fn t() { git(dir, &["commit", "-m", "x"]); }
 '''
         self.assertEqual(["3: git commit"], self.sites(other))
 
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_closures_follow_the_same_guard_rule(self):
         source = '''
 fn a() {
@@ -387,6 +396,7 @@ fn b() {
         guarded = source.replace('Command::new("git")', "crate::test_git::git_command()")
         self.assertEqual([], self.sites(guarded))
 
+    # trace:BUG-2191.ac7c1671 | ai:claude
     def test_only_cfg_test_items_count_in_production_files(self):
         source = '''
 fn prod() { Command::new("git").args(["commit"]).status(); }
