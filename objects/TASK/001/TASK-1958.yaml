@@ -3,12 +3,12 @@ spec_id: TASK-1958
 agreed_id: TASK-1958
 title: 'STORY-1853 slice S3: one integration-test harness (aida-cli/tests/it/main.rs)'
 description: 'Approved sketch: STORY-1853 comment 4. PR 1 is measurement only: a cargo build --tests --timings artifact for one CI run, to size the per-binary link cost. PR 2 is the move: aida-cli/tests/*.rs become modules under tests/it/main.rs, with autotests=false and one [[test]] it. Keep the module names greppable. test-touched maps tests/it/<mod>.rs to ''--test it -- <mod>::''; budget keys follow. Sequence: after S2 PR 2. Coverage: passed+ignored count unchanged.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:42.914143023Z
-modified_at: 2026-10-20T18:39:12.265570916Z
+modified_at: 2026-10-20T18:39:47.189813233Z
 req_type: Task
 tags:
 - ci
@@ -68,6 +68,20 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15a9c-c9ef-7032-8e30-3cf5e69f2170
+  author: aida-auto-bump
+  timestamp: 2026-10-20T18:39:47.183292266Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15a9c-c9f5-7d82-bbbf-37452e0fa98c
+  timestamp: 2026-10-20T18:39:47.189810439Z
+  agent: aida
+  commit_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
+  summary: Completed via merge 6657ffff
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -76,3 +90,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T18:39:47.183287278Z
+  completion_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
