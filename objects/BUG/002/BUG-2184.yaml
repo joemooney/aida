@@ -3,13 +3,22 @@ spec_id: BUG-2184
 agreed_id: BUG-2184
 title: 'pr ship: the slow mandate scan uses up the --wait budget, then the CI wait times out without polling and reports ''checks have not registered'''
 description: 'Observed 2026-10-18 on PR-2749, twice. ''aida pr ship 2749 --wait 900'' spends more than 15 min in step 1 (the mandate trace scan, BUG-2179). At step 2 (ci_gate.rs wait_for_ship_ci) the timeout check at the top of the loop fires before the first forge.checks_registered call: the log has no ''CI pending for'' lines. It returns ''CI wait timed out for PR-2749 — still pending: checks have not registered'', the initial placeholder string. Meanwhile gh pr checks 2749 shows every check passed (Build pass, merge-hold-gate pass). Two defects: (1) the CI-wait budget is shared with, or eaten by, pre-CI steps, so --wait has to cover the mandate scan; (2) on a zero or exhausted budget the wait should poll at least once before declaring a timeout, and should never report the unpolled placeholder as the pending reason. Fix: give the CI wait its own deadline starting at step 2, poll at least once, and make the timeout message say ''never polled'' when it wasn''t. Workaround: --wait 3600. Related: BUG-2179.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:57:07.069855639Z
-modified_at: 2026-10-18T23:57:07.069855639Z
+modified_at: 2026-10-20T11:38:39.243327570Z
 req_type: Bug
+history:
+- id: 01a1591b-3b0b-7c42-992f-58ac2dbdb87f
+  author: joe
+  timestamp: 2026-10-20T11:38:39.243324510Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
