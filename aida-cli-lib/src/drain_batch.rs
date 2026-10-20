@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 // Child-process batch pipelining preserves the existing per-spec engine while
 // passing the in-process outcome back to the parent scheduler.
@@ -1444,6 +1445,8 @@ pub(crate) fn open_cluster_pr(
         .arg("-C")
         .arg(project_root)
         .args(["push", "-u", "origin", branch])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status()
         .context("could not invoke `git push`")?;
     if !push.success() {

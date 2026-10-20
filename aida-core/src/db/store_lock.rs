@@ -38,6 +38,31 @@ thread_local! {
     static HELD: RefCell<HashMap<PathBuf, usize>> = RefCell::new(HashMap::new());
 }
 
+/// Process-wide count of `try_lock_exclusive` contention events (`EWOULDBLOCK`)
+/// on the store write lock. Used by barrier-based concurrency tests to wait
+/// deterministically until a contender is actively blocked on `store-write.lock`.
+// trace:TASK-1930 | ai:agy
+static CONTENDED_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static CONTENDED_BY_STORE: std::sync::Mutex<Option<HashMap<PathBuf, usize>>> =
+    std::sync::Mutex::new(None);
+
+/// Number of store-write-lock contention events observed in this process.
+// trace:TASK-1930 | ai:agy
+pub fn store_write_lock_contended_count() -> usize {
+    CONTENDED_COUNT.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Number of store-write-lock contention events observed specifically for `root`.
+// trace:TASK-1930 | ai:agy
+pub fn store_write_lock_contended_for(root: &Path) -> usize {
+    let key = lock_key(root);
+    let guard = CONTENDED_BY_STORE.lock().unwrap_or_else(|p| p.into_inner());
+    guard
+        .as_ref()
+        .and_then(|m| m.get(&key).copied())
+        .unwrap_or(0)
+}
+
 /// RAII guard for the store write lock. Dropping it releases one level of the
 /// per-thread hold; the file lock is released when the outermost guard drops.
 #[must_use = "the store write lock is released when the guard is dropped"]
@@ -122,6 +147,15 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
     if reentrant {
         return Ok(StoreWriteGuard { key, file: None });
     }
+    // trace:TASK-1930 | ai:agy — enforce A1 lock order: never acquire
+    // store_write_lock while already holding blocks.lock on this thread.
+    if crate::node::dispense_lock_held() {
+        anyhow::bail!(
+            "A1 lock-order violation: refusing to acquire store write lock {} while already \
+             holding blocks.lock; acquire with_store_write_lock before BlockRegistry::with_dispense_lock",
+            root.display()
+        );
+    }
 
     let dir = root.join(".aida");
     std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
@@ -137,11 +171,27 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
 
     let start = Instant::now();
     let limit = timeout();
+    let mut recorded_contention = false;
     loop {
         use fs2::FileExt;
         match file.try_lock_exclusive() {
             Ok(()) => break,
             Err(e) if crate::file_lock::is_lock_contended(&e) => {
+                if !recorded_contention {
+                    recorded_contention = true;
+                    CONTENDED_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    {
+                        let mut map = CONTENDED_BY_STORE.lock().unwrap_or_else(|p| p.into_inner());
+                        *map.get_or_insert_with(HashMap::new)
+                            .entry(key.clone())
+                            .or_insert(0) += 1;
+                    }
+                    if let Some(signal_path) =
+                        std::env::var_os("AIDA_TEST_STORE_LOCK_CONTENDED_FILE")
+                    {
+                        let _ = std::fs::write(signal_path, "contended");
+                    }
+                }
                 if start.elapsed() >= limit {
                     anyhow::bail!(
                         "Timed out after {}s waiting for the store write lock {}. \
@@ -447,5 +497,43 @@ mod tests {
         assert!(!ran);
         assert!(err.to_string().contains("rebase in progress"), "{err:#}");
         assert!(!store_write_lock_held(root), "released on refusal");
+    }
+
+    // trace:TASK-1930 | ai:agy — A1 lock-order enforcement: acquiring
+    // store_write_lock while already holding blocks.lock (without having
+    // acquired store_write_lock first) is refused as an A1 violation, while
+    // store_write_lock -> blocks.lock (including re-entrant store_write_lock
+    // inside) succeeds.
+    #[test]
+    fn task_1930_a1_refuses_store_write_lock_inside_dispense_lock_and_allows_store_then_dispense() {
+        use std::process::Command;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        assert!(Command::new("git")
+            .current_dir(root)
+            .args(["init", "-q", "-b", "main"])
+            .status()
+            .unwrap()
+            .success());
+        let blocks_path = root.join("registry").join("blocks.yaml");
+
+        // Inverted order (blocks.lock -> store_write_lock) MUST be refused.
+        let inverted_err = crate::BlockRegistry::with_dispense_lock(&blocks_path, || {
+            with_store_write_lock(root, || Ok(()))
+        })
+        .unwrap_err();
+        assert!(
+            inverted_err.to_string().contains("A1 lock-order violation"),
+            "expected A1 lock-order refusal, got: {inverted_err:#}"
+        );
+
+        // Canonical order (store_write_lock -> blocks.lock, plus re-entrant
+        // store_write_lock inside) MUST succeed.
+        with_store_write_lock(root, || {
+            crate::BlockRegistry::with_dispense_lock(&blocks_path, || {
+                with_store_write_lock(root, || Ok(()))
+            })
+        })
+        .unwrap();
     }
 }

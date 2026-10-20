@@ -384,7 +384,7 @@ Default META prompts seeded by `aida init`: META-002 (Evaluate), META-003 (Find 
 Export requirement hierarchies for sharing between projects:
 
 ```bash
-aida export --format tree --id FOLDER-001 -o templates.json
+aida export --export-format tree --id FOLDER-001 -o templates.json
 aida import templates.json
 aida import templates.json --parent FOLDER-002 --on-conflict skip
 ```
