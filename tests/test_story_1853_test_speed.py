@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Unit tests for the STORY-1853 test-speed tooling (no cargo).
 
-- scripts/test-timings.py: per-binary timings out of a `cargo test` log, and
-  the slow-test budget gate;
+- scripts/test-timings.py: per-test timings out of nextest JUnit reports,
+  per-binary timings out of a `cargo test` log, and the slow-test budget gate;
 - scripts/check-ci-gates.py: a local `make check-ci` runs CI's `cargo test`
   on the agent profile, and the compile gate still derives from the teed
   `Run tests` step.
@@ -131,32 +131,19 @@ class BudgetTest(unittest.TestCase):
         self.assertEqual(len(v), 1)
         self.assertIn("slow: 21.0s is over its budget of 20s", v[0])
 
-    def test_budgeted_binary_that_did_not_run_is_a_note(self):
-        v, notes = tt.check(self.rows(a=1.0), tt.Budget(10, {"gone": 20}))
-        self.assertEqual(v, [])
-        self.assertEqual(notes, ["gone: budgeted but did not run in this log"])
-
     def test_committed_budget_file_loads(self):
         b = tt.load_budget(str(REPO / "scripts/test-time-budget.toml"))
         self.assertEqual(b.default_limit, 10)
         self.assertTrue(all(v > b.default_limit for v in b.entries.values()))
-        # The lib unit binary runs as two halves, each with its own budget.
-        # trace:TASK-1979 | ai:claude
-        self.assertNotIn("aida_cli_lib:src/lib.rs", b.entries)
-        halves = [tt.load_budget(str(REPO / "scripts/test-time-budget.toml"), lane).entries
-                  for lane in ("lib-0", "lib-1")]
-        for half in halves:
-            self.assertGreater(half["aida_cli_lib:src/lib.rs"], b.default_limit)
-            self.assertEqual({k: v for k, v in half.items() if k != "aida_cli_lib:src/lib.rs"}, b.entries)
+        # Per-test keys (STORY-1853 AC4): `<nextest binary id> <test name>`.
+        # trace:TASK-1988 | ai:claude
+        self.assertTrue(all(k.startswith("doctests:") or " " in k for k in b.entries), b.entries)
 
-    def test_lane_budget_overrides_only_its_lane(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = pathlib.Path(d) / "budget.toml"
-            path.write_text('default_limit = 10\n[budget]\n"a" = 20\n'
-                            '[lane_budget.lib-0]\n"a" = 30\n"lib" = 40\n')
-            self.assertEqual(tt.load_budget(str(path)).entries, {"a": 20})
-            self.assertEqual(tt.load_budget(str(path), "lib-0").entries, {"a": 30, "lib": 40})
-            self.assertEqual(tt.load_budget(str(path), "cli-0").entries, {"a": 20})
+    def test_note_only_for_a_budgeted_test_whose_binary_ran(self):
+        b = tt.Budget(10, {"bin-a gone": 20, "bin-b other_lane": 20})
+        v, notes = tt.check([tt.Binary("bin-a kept", 1, 0, 0, 1.0)], b)
+        self.assertEqual(v, [])
+        self.assertEqual(notes, ["bin-a gone: budgeted but did not run in this log"])
 
     def test_main_exit_codes_and_outputs(self):
         with tempfile.TemporaryDirectory() as d:
@@ -173,6 +160,60 @@ class BudgetTest(unittest.TestCase):
             (p / "budget.toml").write_text("default_limit = 10\n")
             self.assertEqual(tt.main([str(p / "log"), "--budget", str(p / "budget.toml")]), 1)
             self.assertEqual(tt.main([str(p / "empty")]), 2)
+
+
+
+JUNIT = """<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="nextest-run" tests="3" failures="1" errors="0">
+  <testsuite name="aida-cli::journey" tests="2" failures="1">
+    <testcase name="slow_one" classname="aida-cli::journey" time="12.500"/>
+    <testcase name="broken" classname="aida-cli::journey" time="0.200"><failure type="test failure"/></testcase>
+  </testsuite>
+  <testsuite name="aida-cli-lib" tests="1">
+    <testcase name="cli::tests::fast" classname="aida-cli-lib" time="0.010"/>
+  </testsuite>
+</testsuites>
+"""
+
+
+class JunitTest(unittest.TestCase):
+    """trace:TASK-1988 | ai:claude"""
+
+    def test_rows_are_per_test_with_failures(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "junit-cli-0-0.xml"
+            path.write_text(JUNIT)
+            rows = tt.parse_junit(str(path))
+        self.assertEqual([(r.key, r.passed, r.failed, r.seconds) for r in rows], [
+            ("aida-cli::journey slow_one", 1, 0, 12.5),
+            ("aida-cli::journey broken", 0, 1, 0.2),
+            ("aida-cli-lib cli::tests::fast", 1, 0, 0.01),
+        ])
+
+    def test_main_budgets_junit_rows_and_keeps_only_doctests_from_the_log(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = pathlib.Path(d)
+            (p / "junit.xml").write_text(JUNIT)
+            # A nextest step log: the doctest run is cargo test's, and a
+            # child's libtest lines in captured output are not a binary.
+            (p / "log").write_text("\n".join([
+                "+ cargo nextest run --no-fail-fast --profile ci -p aida-cli",
+                HDR + "tests/x.rs (target/debug/deps/x-ff)", "running 1 test", result(1, "50.00"),
+                "+ cargo test --no-fail-fast --doc -p aida-cli-lib",
+                "   Doc-tests aida_cli_lib", "running 2 tests", result(2, "0.30"),
+            ]) + "\n")
+            (p / "budget.toml").write_text('default_limit = 10\n[budget]\n"aida-cli::journey slow_one" = 15\n')
+            args = [str(p / "log"), "--junit", str(p / "junit.xml"), str(p / "missing.xml"),
+                    "--json", str(p / "t.json"), "--budget", str(p / "budget.toml")]
+            self.assertEqual(tt.main(args), 0)
+            keys = [r["key"] for r in __import__("json").loads((p / "t.json").read_text())["rows"]]
+            self.assertEqual(sorted(keys), sorted([
+                "doctests:aida_cli_lib", "aida-cli::journey slow_one",
+                "aida-cli::journey broken", "aida-cli-lib cli::tests::fast"]))
+            (p / "budget.toml").write_text("default_limit = 10\n")
+            self.assertEqual(tt.main(args), 1)
+            (p / "bad.xml").write_text("<testsuites>")
+            self.assertEqual(tt.main([str(p / "log"), "--junit", str(p / "bad.xml")]), 2)
 
 
 class CheckCiProfileTest(unittest.TestCase):
