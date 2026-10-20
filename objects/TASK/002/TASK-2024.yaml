@@ -1,0 +1,28 @@
+id: 01a15b63-a45c-77f3-acf9-650746033e22
+spec_id: TASK-2024
+agreed_id: TASK-2024
+title: BUG-2169 bwrap harness builds the os_wrap argv without os_wrapped_program_and_args
+description: |
+  aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs:313 (os_wrap_argv) builds the os_wrap layer from bwrap_confinement_args_inner + os_wrap_rw_paths + os_wrap_seat_env_args directly, not through session::os_wrapped_program_and_args. For a seat clone, the production root resolution (find_project_root_from), the managed_domains_only managed-settings bind, and the argv ordering (session.rs:3583-3623) are therefore never exercised by the live attacks. Build the argv through the real function; its bwrap preflight already passes in the CI live gate.
+
+  Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6303011113
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T22:16:59.228646183Z
+modified_at: 2026-10-20T22:16:59.228646183Z
+req_type: Task
+tags:
+- bwrap
+- from-review:PR-2787
+- severity:minor
+- test
+filed_at:
+  code_sha: 6aba8c7a6b09a04570a3dd5929e8a299a3ab9224
+  branch: pr-2787
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b5f2873
