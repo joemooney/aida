@@ -395,6 +395,8 @@ mod human_cmd;
 mod metrics_cycle_time;
 // trace:STORY-1480 | ai:claude — per-spec timing records published to the store.
 mod timing_record;
+// trace:BUG-2180 | ai:claude — commit a contained child session's store writes.
+mod child_store_commit;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;
@@ -497,6 +499,8 @@ mod review_marker;
 mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
+// trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
+mod review_carryover;
 mod role_cmd;
 // trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;

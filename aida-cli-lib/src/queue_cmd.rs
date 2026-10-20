@@ -10647,8 +10647,12 @@ pub(crate) fn rework_findings_block_for_spec(
 /// the env var `exec_claude_headless` puts on the child via `.env(...)`.
 /// trace:BUG-225 | ai:claude
 pub(crate) fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
-    let argv = session::claude_headless_args_with_posture(prompt, session_id, contained);
-    format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
+    // BUG-1982: a refused contained launch shows the refusal, not a command.
+    // trace:BUG-1982 | ai:claude
+    match session::claude_headless_args_with_posture(prompt, session_id, contained) {
+        Ok(argv) => format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv)),
+        Err(err) => format!("{err:#}"),
+    }
 }
 
 // BUG-913: deferred queue-work launch instructions must reflect the resolved
@@ -10669,9 +10673,11 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            let argv =
-                session::headless_vendor_args(vendor, prompt, session_id, contained, model, None);
-            format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv))
+            match session::headless_vendor_args(vendor, prompt, session_id, contained, model, None)
+            {
+                Ok(argv) => format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv)),
+                Err(err) => format!("{err:#}"),
+            }
         }
     }
 }
@@ -10689,14 +10695,18 @@ pub(crate) fn deferred_interactive_launch_hint(
 ) -> String {
     match vendor {
         session::HeadlessVendor::Claude => {
-            let mut args = session::claude_session_args(
+            let mut args = match session::claude_session_args(
                 permission_mode,
                 None,
                 Some(prompt),
                 None,
                 contained,
                 model,
-            );
+            ) {
+                Ok(args) => args,
+                // trace:BUG-1982 | ai:claude
+                Err(err) => return format!("{err:#}"),
+            };
             if contained && !args.iter().any(|arg| arg == "--permission-mode") {
                 args.splice(
                     0..0,
@@ -11035,7 +11045,7 @@ pub(crate) fn build_queue_work_claude_command(
     session_id: &str,
     model: Option<&str>,
     grant_id: Option<&str>,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     session::build_claude_exec_command(
         posture.permission_mode.as_deref(),
         name,
@@ -13397,6 +13407,12 @@ pub(crate) fn run_standalone_reviewer(
     // recorded verdict is. Best-effort; the current file is left as written.
     // trace:TASK-1460 | ai:claude
     let _ = crate::review_verdict::adopt_direct_write(verdict_path);
+
+    // BUG-2180: a contained reviewer's request-changes shelve (and any other
+    // store write it made) is left uncommitted for its host — this launcher.
+    // Commit it now, or the mandate's fail-closed store snapshot refuses
+    // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
+    crate::child_store_commit::commit_child_store_writes(project_root, launched_at, "reviewer");
 
     let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))

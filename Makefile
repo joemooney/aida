@@ -249,8 +249,14 @@ db-list-status: cli ## List requirements grouped by status
 # TEST & QUALITY TARGETS
 #==============================================================================
 
-test: ## Run all tests
-	cargo test --workspace
+# Local full runs use the agent profile: automatic cache seeding builds it, so
+# a debug-profile run recompiles the workspace cold in each worktree and then
+# executes unoptimized tests. Debug-profile test runs are CI's.
+# `make test TEST_PROFILE=dev` opts back in. trace:STORY-1853 | ai:claude
+TEST_PROFILE ?= agent
+
+test: ## Run all tests (agent profile; the full suite is CI's job, not a pre-push gate)
+	cargo test --workspace --profile $(TEST_PROFILE)
 
 # The STANDARD tier's local tests: targeted `cargo test --profile agent` runs
 # for the Rust files changed vs origin/main (module filters, touched
@@ -260,17 +266,17 @@ test: ## Run all tests
 test-touched: ## Targeted tests for the Rust files changed vs origin/main (agent profile)
 	@python3 scripts/test-touched.py $(ARGS)
 
-test-unit: ## Run unit tests only
-	cargo test --workspace --lib
+test-unit: ## Run unit tests only (agent profile)
+	cargo test --workspace --lib --profile $(TEST_PROFILE)
 
-test-integration: ## Run integration tests only
-	cargo test --workspace --test '*'
+test-integration: ## Run integration tests only (agent profile)
+	cargo test --workspace --test '*' --profile $(TEST_PROFILE)
 
-test-cli: ## Run CLI tests
-	cargo test -p aida-cli -p aida-cli-lib
+test-cli: ## Run CLI tests (agent profile)
+	cargo test -p aida-cli -p aida-cli-lib --profile $(TEST_PROFILE)
 
-test-core: ## Run core library tests
-	cargo test -p aida-core
+test-core: ## Run core library tests (agent profile)
+	cargo test -p aida-core --profile $(TEST_PROFILE)
 
 fmt: ## Format code with rustfmt
 	cargo fmt --all

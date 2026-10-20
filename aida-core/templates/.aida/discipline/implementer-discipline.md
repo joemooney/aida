@@ -289,6 +289,21 @@ timeout. The orchestrator seat was being starved by its own fleet.
   out from CI. Whole-tree source-scanning guard tests are not reached by module filters, so
   a change that adds a source file or a pattern such a guard counts relies on CI's run (or
   name the guard with `make test-touched ARGS="--filter <guard>"`). CI is the gate.
+- `make test-touched` never widens to the whole `aida-cli-lib --lib` suite (~9,200 tests).
+  When a crate-root, build-script or unresolvable change would widen it, the script runs only
+  the named module filters, or exits 5 and asks for `ARGS="--filter <module>"`. Do not answer
+  that by running the whole lib suite yourself. merge-2750 and split-2731 both hit the old
+  silent widening on 2026-10-18.
+- Never set `AIDA_CARGO_NO_SLOT`. It bypasses the host's cargo build-slot limiter, so your
+  run competes with two slotted builds on six cores (fix-2725's `make check` took 1h20m). The
+  `aida-git-guardrails.sh` hook blocks it; only the operator bypasses the queue.
+- Any local cargo test run that is not targeted uses `--profile agent`. Automatic cache seeding
+  builds the agent profile, so a debug-profile run recompiles the workspace cold in your
+  worktree and then executes unoptimized tests.
+- Run cargo commands that can exceed ~10 min in the background. Never wrap cargo in
+  `timeout N`: time spent queued for a build slot counts against it, so a queued run times
+  out, is retried, and deepens the queue. After a timeout or kill, check `cargo ps` before
+  retrying.
 
 **Why NOT `CARGO_BUILD_JOBS=1`** (Joe suggested it 2026-09-27): with 2 slots that is only
 2 of 6 cores compiling, idling 4, and each build gets ~3x slower. Throughput collapses.
