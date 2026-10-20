@@ -1,0 +1,29 @@
+id: 01a15809-218e-7b82-8a93-9d1d7d5b2ba0
+spec_id: TASK-1-381
+title: 'cosmetic (tracked TASK-1987): the Cargo.toml:83 comment says ''CI exports CARGO_…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1985, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (tracked TASK-1987): the Cargo.toml:83 comment says 'CI exports CARGO_INCREMENTAL=0'. Swatinem/rust-cache sets it, and CI never builds --profile agent.
+
+  PR: #2765
+  Reviewed sha: fc873a2944d138f1898790c48e89aaab0d15100e
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T06:39:15.854797685Z
+modified_at: 2026-10-20T06:39:15.854797685Z
+req_type: Task
+tags:
+- carried-from:TASK-1985
+- finding-hash:3ca4682d
+- from-review:PR-2765
+- kind:carried-forward
+filed_at:
+  code_sha: 474735dd24e4de4529fe5f9ffe42eacfe035952c
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 857e2ef848
+  vendor: claude
