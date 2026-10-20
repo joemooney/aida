@@ -1962,8 +1962,6 @@ fn run_status(
                         backend,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -1995,8 +1993,6 @@ fn run_status(
                 } => {
                     handle_status_command(*no_dev_context, None, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida status` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

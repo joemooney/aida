@@ -3784,8 +3784,6 @@ fn run_push(
                         *no_notice,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -3801,8 +3799,6 @@ fn run_push(
                      the deprecated centralized backend with `aida db export-git`)."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida push` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -3878,8 +3874,6 @@ fn run_fetch(
                         *quiet,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -3895,8 +3889,6 @@ fn run_fetch(
                      the deprecated centralized backend with `aida db export-git`)."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida fetch` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -4020,8 +4012,6 @@ fn run_pull(
                         *auto,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -4037,8 +4027,6 @@ fn run_pull(
                      the deprecated centralized backend with `aida db export-git`)."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida pull` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

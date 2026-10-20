@@ -1304,8 +1304,6 @@ fn run_identity(
                         }
                     });
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -1324,8 +1322,6 @@ fn run_identity(
                      --centralized mode has no shared registry."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida identity` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

@@ -4457,8 +4457,6 @@ fn run_fasttrack(
                         ),
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -4477,8 +4475,6 @@ fn run_fasttrack(
                      --centralized mode, use `aida add \"<title>\" --status approved`."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida fasttrack` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

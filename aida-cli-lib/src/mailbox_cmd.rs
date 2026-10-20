@@ -2164,8 +2164,6 @@ fn run_mailbox(
                         store_path,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2181,8 +2179,6 @@ fn run_mailbox(
                      Run `aida init` (defaults to distributed) first."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida mailbox` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

@@ -494,8 +494,6 @@ fn run_graph(
                         &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -565,8 +563,6 @@ fn run_graph(
                         &store, id, blocked_by, blocks, tree, impact, follow, *depth, *json,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida graph` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

@@ -362,8 +362,6 @@ fn run_field_study(
                         cmd,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -378,8 +376,6 @@ fn run_field_study(
                     // over the git log; opt-in, local-only.
                     self::handle_field_study_command(cmd)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida field-study` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
