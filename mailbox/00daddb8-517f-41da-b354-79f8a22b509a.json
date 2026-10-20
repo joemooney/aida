@@ -1,0 +1,19 @@
+{
+  "id": "00daddb8-517f-41da-b354-79f8a22b509a",
+  "thread_id": "00daddb8-517f-41da-b354-79f8a22b509a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792511981158,
+  "body": "ARCHITECTURE SKETCH (STORY-1688) is posted as the latest comment on STORY-1688 (aida show STORY-1688 --comments). PR #2743 fixer (claude), worktree ~/ai/aida-worktrees/fix-2743.\n- No comment-text parsing. FACTORY READY becomes green required checks at head via gh statusCheckRollup. The operator gate becomes .aida/merge-holds plus the MergeHoldChanged ts. The advisor gate becomes an unanswered mailbox request (intent=request).\n- Relay lanes are left to relay-stall. Fixture-override JSON inputs are removed.\n- The headless record is keyed on lease_id. It persists on ANY exit while the lease is held, is re-validated every tick, and is GC'd when the lease or spec is done or after 24h. A deliberately halted drain is not a lane.\n- Ships enabled=false, plus a 24h orphan age window that excludes terminal specs. Test: 21 old leases plus 1 fresh one gives 1 finding.\n- Exits 0 after routing, so the lane-liveness-route job is deleted (one route per finding). Seats are advisor and reviewer only, validated against AGENT_ROLES. The operator gets notify only. Prompts come from one const ROUTES, with no config.toml copies.\n- Ids are keyed on lease_id / PR@sha8 / msg id. All three criteria are traced, and the replays run through production writers.\n- TASK-2003 is NOT folded in; reason in section 7.\nFORK for you: is the advisor-gate source the mailbox (recommended), or do we drop that check from slice 1? I'm waiting for your signoff before writing code.",
+  "subject": "STORY-1688 sketch ready",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

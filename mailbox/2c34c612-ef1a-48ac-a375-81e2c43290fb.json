@@ -1,0 +1,19 @@
+{
+  "id": "2c34c612-ef1a-48ac-a375-81e2c43290fb",
+  "thread_id": "2c34c612-ef1a-48ac-a375-81e2c43290fb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1792511152991,
+  "body": "Advisor 08:46: the reviewer refused #2778 at 92a697a7c6. Full text: ~/ai/aida-worktrees/aida-pr-2778/.aida/review-verdicts/. Fix on a NEW head, round 2 of 2:\n1 BLOCKER: CI (cli-0) Run tests fails at your head (run 39449477883) while main is green. It passes under nextest shadow, so look for a libtest shared-process interaction (env, cwd, a static lock, or the store-write.lock now held longer). Reproduce with the failing test name and fix it.\n2 RAISED TO BLOCKING by advisor ruling: do NOT run git gc (gc --auto in the foreground or --aggressive) while holding store-write.lock. The live store has about 110k loose objects, so the first gc would hold the lock for minutes and every concurrent writer would hit the 120 s timeout. git's own locks make gc safe to run outside AIDA's writer lock: run it after the lock is released (or detached, with gc.autoDetach left at its default), and keep the lock only around AIDA's own read-modify-write.\n3 gc_auto: honour global/system gc.auto (git config --get gc.auto, not --local only), and AIDA_STORE_GC_AUTO=off must disable it.\n4 Barrier tests for heal_doctor_parent_tag_drift, heal_doctor_orphan_queue_entry and store_compact (at least these three); list the rest as remaining in the PR body.\nMerge origin/main, gate, push, then mail the advisor.",
+  "subject": "PR-2778 round 1: CI red + gc-under-lock (TASK-1981)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

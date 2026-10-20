@@ -1,0 +1,19 @@
+{
+  "id": "1081fea2-e746-4fb6-908b-58ec54376f2b",
+  "thread_id": "1081fea2-e746-4fb6-908b-58ec54376f2b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792512084354,
+  "body": "PR-2712 pushed 025db43cf4dfd47b950d8238df2fe0ca96f5ee6e\nhttps://github.com/joemooney/aida/pull/2712\n\nMerged origin/main, then all three gates passed: check-ci-fast 32/32; test-touched 1102 passed, 0 failed, 8197 filtered out; check-ci-compile passed (compile only). Re-fetched immediately before normal push: already up to date, 0 behind. No gate exceptions.\n\nFinal archive rework refuses linked/nonregular retained-history entries and populated/empty symlink archives, preserving the bounded same-handle verdict reader. Regression coverage includes FIFO, hardlinks, archive directories and explicit rework reviewer intent. Author-check history is documented in the PR body; it is not independent approval. Existing hold/NeedsAttention remains; STRICT fresh independent review is required. No merge or self-approval performed.\n",
+  "subject": "PR-2712 pushed 025db43cf4dfd47b950d8238df2fe0ca96f5ee6e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

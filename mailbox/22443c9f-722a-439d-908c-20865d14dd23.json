@@ -1,0 +1,19 @@
+{
+  "id": "22443c9f-722a-439d-908c-20865d14dd23",
+  "thread_id": "22443c9f-722a-439d-908c-20865d14dd23",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792510861099,
+  "body": "PR-2779 ready (BUG-2191): 42eb7a5972 on claude/bug-2191, 0 behind main.\n- Helper (signoff 1): aida_core::git_ops::NO_AUTO_MAINTENANCE (production transaction_git_config now returns it); test_git::git_command() in aida-core + aida-cli-lib (cfg(test)) and aida-cli/tests/support/test_git.rs via #[path]. No global GIT_CONFIG_* env. Arg-pinning unit test per crate.\n- Ratchet (signoff 2): tests/test_git_maintenance_ratchet.py, CI gate \"Test git auto-maintenance ratchet\" (fast tier, so in check-ci-fast). Counts unguarded write-class git sites (commit/commit-tree/merge/am/rebase/cherry-pick/revert/pull/fetch) in test code: direct, via local fn/closure wrappers (scope-resolved, guard propagates transitively), and in shell-script strings. Per-file baseline in scripts/git-maintenance-baseline.txt may only go down; 6 self-tests.\n- Migration (signoff 3): 687 -> 46 sites. 397 mechanical Command::new(\"git\") -> helper in 182 files (test code only) plus 10 inline script guards. The only flaked file (task_1507 history fixture) was already guarded and keeps its unguarded control; the last 60 failed CI runs show no other \"unable to create temporary file\". The rest (mostly production helpers under test) drain via the ratchet.\n- Repro (signoff 4): git 2.55.0 built from source + BUG-2118 LD_PRELOAD shim on migrated auto_bump_done_tests: guarded 5/5 pass; guard removed 1/5 fails with \"unable to create temporary file\". Recorded in the docs/testing note.\nGates: check-ci-fast 33/33, check-ci-compile ok after merging main, targeted tests 591 + 360 + 75 passed.\nFLAG: my first push 24fd1272ea was squashed onto a moved main and reverted faf1f33a7f (v0.16.0 release) + 12d4692052 (TASK-1957). Fixed by c282e804ea without force-push; net diff vs main is only BUG-2191 (Cargo.toml still 0.16.0). Please squash-merge.\n",
+  "subject": "PR-2779 ready (BUG-2191)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

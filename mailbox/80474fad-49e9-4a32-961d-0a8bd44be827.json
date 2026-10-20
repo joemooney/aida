@@ -1,0 +1,19 @@
+{
+  "id": "80474fad-49e9-4a32-961d-0a8bd44be827",
+  "thread_id": "80474fad-49e9-4a32-961d-0a8bd44be827",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792511022858,
+  "body": "Pushed 788c623109 (merge 80c8c8f12e of origin/main fe70a874c6 + test follow-up). Conflict files: cli.rs, lib_part1.rs (took main: STORY-1728 removed the legacy enum), mandate.rs, pr_cmd.rs, story_1697_attested_release_tests.rs, story_1698_mandate_tests.rs. Adaptations (file:line in PR body under 'Merge-up adaptations'): (1) mandate --drive/--exclude-supervised/--line moved verbatim to mandate_args.rs; (2) FleetAction -> new mandate_drive_args.rs, registered as mandate_drive::FLEET (Early, mandate's policy, help_after mandate), re-exported from cli.rs; (3) main's TASK-1960/1968 carry-over (prove_carry_over param, ShipCheck::carry_over, mandate_carry_over) ported into mandate_ship.rs, re-exported from pr_cmd; (4) ShipCheck keeps both sides' fields; tests add carry_over: None; (5) drive test parses via command_registry::try_parse_from; golden help snapshot re-recorded (diff = fleet + mandate flags only). Gates: check-ci-fast ok, check-ci-compile ok, test-touched aida-cli-lib 1701/1701; one aida-core timing flake (bug_1644 cached_git_backend, untouched) passed 3/3 alone. FYI: fleet renders last in root help due to main's help_order anchor-chain behaviour, not fixed here. main has since moved 5 commits; they merge cleanly. Not merged, not self-approved; needs your re-verdict at the new head.",
+  "subject": "PR-2725 merged up (STORY-1700)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

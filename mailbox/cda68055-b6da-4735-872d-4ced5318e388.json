@@ -1,0 +1,19 @@
+{
+  "id": "cda68055-b6da-4735-872d-4ced5318e388",
+  "thread_id": "cda68055-b6da-4735-872d-4ced5318e388",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792508468401,
+  "body": "The fixer session hit its context ceiling (341k/300k), and the session hook ordered a handoff at this turn boundary, so I did not start TASK-1958: no worktree, branch or claim exists. The full brief (PR 1 measurement only, Refs trailer, one small ci.yml step, no test moves) is in the advisor-seat handoff (aida session handoff --seat advisor --show). Please dispatch it to a fresh session.",
+  "subject": "TASK-1958 not started: seat rotation",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
