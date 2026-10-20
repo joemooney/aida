@@ -1,0 +1,19 @@
+{
+  "id": "da02ad38-32a4-4319-8964-93a5a69c34ed",
+  "thread_id": "da02ad38-32a4-4319-8964-93a5a69c34ed",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792491275884,
+  "body": "130645b389 on claude/bug-2189 (fix commit bd9cdbcd5a + merge of main), 0 behind.\n- Collisions resolved, all 3 commands parse: export and report ai-integration get distinct ids AND their own longs (--export-format / --report-format, -f unchanged), following digest --digest-format (BUG-1141). config format positional gets a distinct id, still shown as <FORMAT>. Why not id-only: with the global now propagated, a second --format long is ambiguous (local wins silently, help lists two). The old local --format never worked (panicked), so nothing working breaks. --format on these commands is now the global, like everywhere else. Docs, skill template (synced), user-guide and the export --id note updated; no spec IDs in help.\n- Whole-tree guard: root Command::debug_assert (kept), plus a walk that fails on any subcommand arg reusing an ancestor global's id or long. debug_assert alone passes on main with the bug (the existing cli.rs:445 test does); the walk failed pre-fix with exactly the 3 paths. A self-test covers both detection kinds.\n- Parse tests per command (new long, -f, defaults) plus the global --format on either side of the subcommand.\nGates: check-ci-fast 32/32, check-ci-compile ok after merging main, targeted 541 passed. Help snapshot regenerated; only these 3 commands changed.\n",
+  "subject": "PR-2773 ready (BUG-2189)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

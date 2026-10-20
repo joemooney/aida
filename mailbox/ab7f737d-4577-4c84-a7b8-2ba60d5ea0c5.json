@@ -1,0 +1,19 @@
+{
+  "id": "ab7f737d-4577-4c84-a7b8-2ba60d5ea0c5",
+  "thread_id": "ab7f737d-4577-4c84-a7b8-2ba60d5ea0c5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792491027383,
+  "body": "42481f97c7 (0 behind main; check-ci-fast + test-touched + check-ci-compile green).\n1 main_worktree_root_from identical to main; resolve_default_branch_ref unchanged; show-only _until returns a distinct Timeout, rendered as unknown (kept #2635's explicit unknown token, not line omission). Caller list in the PR body: only show/linkage callers get a deadline.\n2 One SHOW_LINKAGE_DEADLINE (4 s) shared across log+trace, shipped check (1 s cap; measured combined ~0.2 s worst), branch scan, worktree probe, forge lookups, --shortstat loop, drift hint. TOON scan uses 3 s inside it.\n3 Nested-.git skip in trace.rs reverted with its test.\n4 AC1 bisect 97453570d6..95f15a20d4: no regression (335 vs 355 / 431.5 vs 450.5 ms). Main is 2.1x slower than 95f15a20d4: 242 commits, filed BUG-2192.\n5 Weak tests replaced by 4 slow-git shim tests, mutation-checked.\nExtra: bounded-command poll backs off 1 to 20 ms (was a flat 20 ms).\nMedians, 3 runs each: load 6.5 piped main 494.6 / PR 537.1 (pre poll fix); load 5.3 piped 910.8 / 993.6; json 3360.0/3302.1 and 4126.1/3794.2. Phase check: linkage is level with main (266-317 vs 271-342 ms); the piped gap is host noise.",
+  "subject": "PR-2772 ready (BUG-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
