@@ -7,12 +7,12 @@ description: |-
 
   minor (non-blocking, test-coverage): scoped_len (requirements_cli.rs:4733) keeps the knowledge, machine-draft and accepted-decision hidden-row footers local to the focus, but no test runs those footers with a nonzero count under an active focus
   Reviewed sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T17:07:33.802089898Z
-modified_at: 2026-10-20T18:52:33.223875263Z
+modified_at: 2026-10-20T18:52:40.636601303Z
 req_type: Task
 tags:
 - carried-from:BUG-2190
@@ -32,6 +32,14 @@ history:
   timestamp: 2026-10-20T18:29:40.794398633Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15aa8-973c-7633-a7b0-adec42021415
+  author: joe
+  timestamp: 2026-10-20T18:52:40.636598989Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
