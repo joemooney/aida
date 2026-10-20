@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:09.676386991Z
-modified_at: 2026-10-20T04:50:14.282542688Z
+modified_at: 2026-10-20T05:17:04.864804631Z
 req_type: Task
 tags:
 - ci
@@ -32,6 +32,12 @@ comments:
   content: 'Advisor 2026-10-19 21:50, sweep: this spec now also owns TASK-1978 (a guard that the shard union equals cargo test --workspace''s target set; scripts/ci-test-shards.py hardcodes the target list) and TASK-1980 (check-ci-list mislabels the Run tests local command, scripts/check-ci-gates.py:441). Do all three in one PR. Priority order: split the lib lane for headroom (11m11s of 11m21s), the shard-union guard, then the label.'
   created_at: 2026-10-20T04:49:30.036382492Z
   modified_at: 2026-10-20T04:49:30.036382492Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a157bd-e3e0-79b2-82e6-5afa6ff82353
+  author: joe
+  content: 'Advisor 2026-10-19 22:20, fold-in: per-binary budgets need RECALIBRATING for the S6 lane layout. PR-2765 run 39372831537''s ''rest'' lane failed test-timings: aida_core:src/lib.rs took 86.9s against a budget of 80 (''max measured 52.1s'' was taken under the old single-job layout). The PR''s change (profile.agent) can''t affect CI timings. Re-derive scripts/test-time-budget.toml from at least 3 post-S6 main runs per lane (max x 1.5, as before), and record the measurement runs in the PR.'
+  created_at: 2026-10-20T05:17:04.864804631Z
+  modified_at: 2026-10-20T05:17:04.864804631Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a157a5-04aa-7932-814b-b790be101737
