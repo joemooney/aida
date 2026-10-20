@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/requirements_cli.rs:4897 prints "1 matching specs hidden by focus". Use the singular for a count of one. The bug_2190 test asserts on this substring, so update it at the same time.
 
   Raised in review of PR-2780: https://github.com/joemooney/aida/pull/2780
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T17:05:52.239860558Z
-modified_at: 2026-10-20T22:22:58.274103895Z
+modified_at: 2026-10-20T22:23:02.167667401Z
 req_type: Task
 tags:
 - from-review:PR-2780
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-20T22:22:58.274103895Z
   modified_at: 2026-10-20T22:22:58.274103895Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15b69-2e17-70a3-81ec-a2486b5081db
+  author: joe
+  timestamp: 2026-10-20T22:23:02.167664421Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
   branch: pr-2780
