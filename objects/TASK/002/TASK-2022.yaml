@@ -1,0 +1,26 @@
+id: 01a15b3f-a545-7bc2-b03e-219f4e235f4c
+spec_id: TASK-2022
+agreed_id: TASK-2022
+title: Pin single store-hooks resolution per host_git_command with a test
+description: |
+  PR-2786 (BUG-2192) made host_git_command resolve the store hooks directory once and share it between the core.hooksPath pin and the refusal check (aida-core/src/git_ops.rs:108-144). That cut show's git spawns from 40 to 32. No test pins it, so a later refactor could bring back the double rev-parse + establish without anyone noticing. Add a test that counts resolutions per host_git_command, or asserts that the pinned hooks dir and the checked dir come from the same resolution.
+
+  Raised in review of PR-2786: https://github.com/joemooney/aida/pull/2786#issuecomment-6302084451
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T21:37:40.165475401Z
+modified_at: 2026-10-20T21:37:40.165475401Z
+req_type: Task
+tags:
+- from-review:PR-2786
+- severity:minor
+filed_at:
+  code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b3e001e

@@ -14,12 +14,12 @@ description: |
   ## Acceptance
   - Bisect 95f15a20d4..main on piped `aida show <ID>`, timed interleaved under equal load, and name the commit or commits that doubled the cost.
   - Fix the commit(s) found, or show piped show within its 1000 ms budget at load < 8, with the measurements posted.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:38:39.133926548Z
-modified_at: 2026-10-20T21:28:14.473594810Z
+modified_at: 2026-10-20T21:37:16.354104445Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -70,6 +70,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15b3f-4842-75c1-8734-1ad7356a26a6
+  author: aida-orchestrator
+  timestamp: 2026-10-20T21:37:16.354123701Z
+  session_id: 01a15b3e001e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 28cefc9db50094124223e7cf6c216cd64b67ab05
   branch: claude/bug-1993
@@ -78,3 +86,11 @@ filed_at:
   aida_build_sha: 419579e7c4
   vendor: claude
   session: bdc37ec9-42ce-4216-93b7-c928e1221a32
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Code changes are correct and CI is green (14/14), but AC1 (bisect naming the regressing commit) was not run and AC2 was not shown at load < 8; the PR is a ~22% mitigation, not the root-cause fix.
+  recovery_hint: address the review findings, move BUG-2192 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T21:37:16.354104445Z
