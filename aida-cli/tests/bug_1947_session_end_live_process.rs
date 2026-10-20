@@ -9,6 +9,9 @@
 //! the user-visible refusal are all exercised.
 // trace:BUG-1947 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -27,7 +30,7 @@ fn hermetic(cmd: &mut Command) {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
+    let mut cmd = test_git::git_command();
     cmd.current_dir(repo).args(args);
     hermetic(&mut cmd);
     let status = cmd.status().expect("run git");
@@ -255,7 +258,7 @@ impl Session {
 
     /// The worktree's current branch (`HEAD` when detached).
     fn worktree_branch(&self) -> String {
-        let mut cmd = Command::new("git");
+        let mut cmd = test_git::git_command();
         cmd.current_dir(&self.worktree)
             .args(["rev-parse", "--abbrev-ref", "HEAD"]);
         hermetic(&mut cmd);

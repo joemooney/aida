@@ -99,6 +99,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude
 "Verify pure-move slice stack fixtures" = "fast"
 "Sccache tmpdir detection fixtures" = "fast"  # trace:BUG-2135 | ai:antigravity
 "Run clippy" = "full"

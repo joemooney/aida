@@ -1270,7 +1270,7 @@ mod containment_tests {
         let root = tmp.path().join("repo");
         std::fs::create_dir(&root).unwrap();
         let git = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)

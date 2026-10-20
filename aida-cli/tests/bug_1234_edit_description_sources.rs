@@ -2,6 +2,9 @@
 //! Black-box acceptance coverage for safe `aida edit` description sources.
 // trace:BUG-1234 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use aida_core::Storage;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -15,7 +18,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()

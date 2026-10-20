@@ -16,6 +16,9 @@
 //!
 //! trace:TASK-1717 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 mod support;
 
 use std::path::{Path, PathBuf};
@@ -50,7 +53,7 @@ fn git_env(cmd: &mut Command) -> &mut Command {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = git_env(Command::new("git").current_dir(dir).args(args))
+    let out = git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git");
     assert!(
@@ -63,7 +66,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn git_try(dir: &Path, args: &[&str]) -> Output {
-    git_env(Command::new("git").current_dir(dir).args(args))
+    git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git")
 }

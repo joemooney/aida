@@ -6454,7 +6454,7 @@ mod pr_ship_environment_tests {
     }
 
     fn git(repo: &std::path::Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(repo)
             .args(args)
             .output()
@@ -7706,7 +7706,7 @@ mod story_1663_rebase_ship_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let run_git = |args: &[&str]| {
-            let status = std::process::Command::new("git")
+            let status = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .status()
@@ -7737,7 +7737,7 @@ mod story_1663_rebase_ship_tests {
         run_git(&["add", "README.md"]);
         run_git(&["commit", "-m", "feat(ship): slice one (STORY-1663)"]);
         let slice_sha = String::from_utf8(
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .current_dir(root)
                 .args(["rev-parse", "HEAD"])
                 .output()
@@ -7850,7 +7850,7 @@ mod story_1663_rebase_ship_tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let run_git = |args: &[&str]| {
-            let status = std::process::Command::new("git")
+            let status = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .status()

@@ -36,7 +36,7 @@ fn names_the_supplied_branch() {
 #[test]
 fn no_origin_main_is_silent() {
     fn git(repo: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(args)
@@ -67,7 +67,7 @@ fn no_origin_main_is_silent() {
 #[test]
 fn counts_behind_against_origin_main() {
     fn git(repo: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(args)

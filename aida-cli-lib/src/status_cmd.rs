@@ -1257,7 +1257,7 @@ mod story_976_absence_tests {
     use tempfile::tempdir;
 
     fn git(dir: &std::path::Path, args: &[&str]) {
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)
@@ -1284,7 +1284,7 @@ mod story_976_absence_tests {
         git(store, &["config", "user.email", "test@example.com"]);
         git(store, &["config", "user.name", "Test User"]);
         git(store, &["add", "."]);
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("-C")
             .arg(store)
             .args(["commit", "-q", "-m", &format!("add {spec} — {title}")])

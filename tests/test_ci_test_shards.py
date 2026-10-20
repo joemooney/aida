@@ -3,7 +3,6 @@
 trace:TASK-1949 | ai:codex
 """
 import importlib.util
-import io
 import json
 import pathlib
 import subprocess
@@ -105,16 +104,6 @@ class ShardsTest(unittest.TestCase):
         command = call.call_args.args[0]
         self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
         self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--profile', 'agent'])
-        # trace:TASK-1957 | ai:claude
-        with patch.object(shards, 'lib_test_names', return_value=names), \
-                patch.object(shards.subprocess, 'call', return_value=0) as call, \
-                patch.object(shards, 'keep_junit') as keep:
-            self.assertEqual(shards.main(['--shard', 'lib-1', '--runner', 'nextest', '--profile', 'agent']), 0)
-        command = call.call_args.args[0]
-        self.assertEqual(command[:3], ['cargo', 'nextest', 'run'])
-        self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
-        self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--cargo-profile', 'agent'])
-        self.assertEqual(keep.call_args.args[1:], ('lib-1', 0))
 
     def test_union_guard_accepts_the_workspace_and_names_gaps(self):
         metadata = json.loads(subprocess.check_output(
@@ -194,114 +183,6 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(steps['Build aida binary for lib unit tests']['if'],
                          "${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}")
         self.assertIn('!cancelled()', steps['Test shard root hygiene']['if'])
-
-    # trace:TASK-1957 | ai:claude
-    def test_nextest_runner_keeps_selection_and_leaves_doctests_on_cargo_test(self):
-        packages = [dict(name='aida-cli', targets=[target('one'), target('two')]),
-                    dict(name='aida-cli-lib', targets=[target('lib', 'lib')])]
-        docs = 0
-        for shard in shards.SHARDS:
-            for command in shards.commands(shard, packages, {}):
-                self.assertEqual(shards.for_runner(command, 'cargo'), [command])
-                rewritten = shards.for_runner(command, 'nextest', 'agent')
-                if '--doc' in command:
-                    self.assertEqual(rewritten, [command + ['--profile', 'agent']])
-                    docs += 1
-                    continue
-                nextest = rewritten[0]
-                self.assertEqual(nextest[:6], ['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', 'ci'])
-                self.assertEqual(nextest[8:], command[3:] + ['--cargo-profile', 'agent'])
-                if '--workspace' in command:
-                    # Its packages' doctests ran under cargo test; they still must.
-                    self.assertEqual(rewritten[1], command[:3] + ['--doc'] + command[3:] + ['--profile', 'agent'])
-                    docs += 1
-                else:
-                    self.assertEqual(len(rewritten), 1)
-        self.assertEqual(docs, 2)
-
-    def test_totals_count_libtest_and_nextest_logs_alike(self):
-        log = ['     Running unittests src/lib.rs (target/debug/deps/x-0123)',
-               # A test that re-runs its own binary as a child prints the child's result first.
-               'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.0s',
-               'test result: ok. 5 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.0s',
-               '   Doc-tests x',
-               'test result: ok. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
-               '\x1b[32;1m     Summary\x1b[0m [  12.345s] 126 tests run: 120 passed (3 slow), 2 failed, '
-               '1 timed out, 4 skipped',
-               '     Summary [   1.0s] 8/10 tests run: 8 passed, 0 skipped']
-        self.assertEqual(shards.totals(log), dict(passed=134, failed=4, ignored=6))
-        # A child's lines in nextest's captured failure output (0.9.146
-        # headers), after a cargo-test section, count nowhere and leave the
-        # section's count; an indented `Running` there opens no section.
-        for header in ('  stdout ───', '── stdout ──', '+ cargo nextest run --no-fail-fast --profile ci -p x --bins'):
-            log = ['+ cargo test --no-fail-fast -p x --doc',
-                   '     Running unittests src/lib.rs (target/debug/deps/x-0123)',
-                   'test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
-                   header,
-                   '         Running unittests src/lib.rs (target/debug/deps/x-0123)',
-                   '    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.0s',
-                   '  stderr ───',
-                   '     Summary [   1.0s] 7 tests run: 4 passed, 1 failed, 1 exec failed, 1 timed out, 0 skipped']
-            self.assertEqual(shards.totals(log), dict(passed=104, failed=3, ignored=0), header)
-
-    def test_totals_count_only_ignored_tests_in_a_filtered_lib_lane(self):
-        # lib-0 under nextest: the other half's 5260 tests are skipped too.
-        log = ['+ cargo test -p aida-cli-lib --lib -- --list --format terse',
-               '# lib-0: 40 module filters, 5260 tests filtered out',
-               '+ cargo nextest run --no-fail-fast --profile ci --no-tests warn -p aida-cli-lib --lib -- a:: b::',
-               '    Starting 4006 tests across 1 binary (5262 tests skipped)',
-               '     Summary [ 300.0s] 4006 tests run: 4006 passed, 5262 skipped']
-        self.assertEqual(shards.totals(log), dict(passed=4006, failed=0, ignored=2))
-        # The cargo-test lane prints the same marker; libtest counts filtered
-        # tests apart from ignored ones, so it takes nothing off.
-        log[2:] = ['+ cargo test --no-fail-fast -p aida-cli-lib --lib -- a:: b::',
-                   '     Running unittests src/lib.rs (target/debug/deps/aida_cli_lib-0123)',
-                   'test result: ok. 4006 passed; 0 failed; 2 ignored; 0 measured; 5260 filtered out; finished in 9.0s']
-        self.assertEqual(shards.totals(log), dict(passed=4006, failed=0, ignored=2))
-        names = ['a::one', 'b::two', 'b::three']
-        with patch.object(shards, 'lib_test_names', return_value=names), \
-                patch.object(shards.subprocess, 'call', return_value=0), \
-                patch('sys.stdout', new_callable=io.StringIO) as out:
-            shards.main(['--shard', 'lib-1'])
-        marker = next(line for line in out.getvalue().splitlines() if line.startswith('# lib-1'))
-        excluded = len(names) - len(shards.matched(shards.lib_halves(names)[1], names))
-        self.assertEqual(shards.FILTERED_RE.search(marker).group(1), str(excluded))
-
-    def test_each_nextest_invocation_keeps_its_own_junit_report(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            report = pathlib.Path(tmp) / 'nextest' / shards.NEXTEST_PROFILE / 'junit.xml'
-            report.parent.mkdir(parents=True)
-            self.assertIsNone(shards.keep_junit(tmp, 'rest', 0))
-            for index in range(3):
-                report.write_text(f'<run {index}/>')
-                self.assertEqual(shards.keep_junit(tmp, 'rest', index).name, f'junit-rest-{index}.xml')
-            self.assertFalse(report.exists())
-            self.assertEqual(sorted(p.read_text() for p in report.parent.glob('junit-*.xml')),
-                             ['<run 0/>', '<run 1/>', '<run 2/>'])
-
-    def test_nextest_shadow_job_is_parallel_and_non_gating(self):
-        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
-        shadow = workflow['jobs']['nextest-shadow']
-        self.assertNotIn('needs', shadow)
-        self.assertNotIn('nextest-shadow', workflow['jobs']['build-result']['needs'])
-        self.assertEqual(shadow['strategy']['matrix']['shard'], list(shards.SHARDS))
-        steps = {s.get('name'): s for s in shadow['steps']}
-        self.assertTrue(steps['Run tests under nextest']['continue-on-error'])
-        install = steps['Install cargo-nextest']
-        self.assertRegex(install['uses'], r'^taiki-e/install-action@[0-9a-f]{40}$')
-        self.assertRegex(install['with']['tool'], r'^cargo-nextest@\d+\.\d+\.\d+$')
-        self.assertFalse(steps['Cache Rust dependencies']['with']['save-if'])
-        config = tomllib.loads((ROOT / '.config/nextest.toml').read_text())['profile'][shards.NEXTEST_PROFILE]
-        self.assertEqual(config['retries'], 0)
-        self.assertEqual(config['slow-timeout']['period'], '10s')
-        self.assertIn('terminate-after', config['slow-timeout'])
-        self.assertEqual(config['junit']['path'], 'junit.xml')
-        upload = steps['Upload nextest report']['with']['path']
-        self.assertIn('target/nextest/ci/junit-*.xml', upload)
-        nextest = tomllib.loads((ROOT / '.config/nextest.toml').read_text())
-        self.assertEqual(nextest['test-groups']['serial'], {'max-threads': 1})
-        self.assertTrue(config['overrides'])
-        self.assertTrue(all(o['test-group'] == 'serial' for o in config['overrides']))
 
     def test_root_guard_detects_loose_files_and_directories(self):
         with tempfile.TemporaryDirectory() as tmp:

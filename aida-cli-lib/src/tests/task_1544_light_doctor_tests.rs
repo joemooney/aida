@@ -97,7 +97,7 @@ fn performance_real_probe_reads_fixture_config_and_home() {
 fn remote_drift_real_probe_accepts_fixture_git_repository() {
     let root = bad_store();
     let git = |dir: &std::path::Path, args: &[&str]| {
-        let output = std::process::Command::new("git")
+        let output = crate::test_git::git_command()
             .args(args)
             .current_dir(dir)
             .env("HOME", root.path())

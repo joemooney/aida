@@ -78,7 +78,7 @@ fn bug_1818_phase2_binding_refuses_an_exact_head_mismatch_with_evidence() {
 }
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(root)
         .args(args)
         .output()
@@ -788,7 +788,7 @@ mkdir -p .aida/sessions .aida/headless-logs
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake work done"}]}}\n' > ".aida/headless-logs/${branch}-${session_id}.jsonl"
 printf 'implemented\n' > implemented.txt
 git add implemented.txt
-git commit -q -m "[AI:codex] test(orchestrator): fake implementation (TASK-1224)"
+git -c maintenance.auto=false -c gc.auto=0 commit -q -m "[AI:codex] test(orchestrator): fake implementation (TASK-1224)"
 git push -q -u origin HEAD:"$branch"
 lease_id="lease-task-1224"
 cat > ".aida/sessions/${lease_id}.toml" <<EOF
@@ -1820,7 +1820,7 @@ printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake wo
 git checkout -q -b "${AIDA_SWAP_BRANCH}"
 printf 'swapped\n' > swapped.txt
 git add swapped.txt
-git commit -q -m "[AI:codex] fix(other): unrelated fix (${AIDA_SWAP_SPEC})"
+git -c maintenance.auto=false -c gc.auto=0 commit -q -m "[AI:codex] fix(other): unrelated fix (${AIDA_SWAP_SPEC})"
 lease_id="lease-bug-1527"
 cat > ".aida/sessions/${lease_id}.toml" <<EOF
 id = "${lease_id}"
@@ -2510,7 +2510,7 @@ printf '{"type":"assistant","message":{"content":[{"type":"text","text":"fake wo
 git checkout -q -b "${AIDA_SWAP_BRANCH}"
 printf 'renamed\n' > renamed.txt
 git add renamed.txt
-git commit -q -m "chore: continue work under the renamed branch"
+git -c maintenance.auto=false -c gc.auto=0 commit -q -m "chore: continue work under the renamed branch"
 lease_id="lease-task-1457"
 cat > ".aida/sessions/${lease_id}.toml" <<EOF
 id = "${lease_id}"

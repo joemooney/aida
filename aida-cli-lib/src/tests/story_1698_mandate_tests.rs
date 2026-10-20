@@ -662,7 +662,7 @@ fn unreadable_history_is_refused_even_with_include_supervised() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args([
@@ -1341,7 +1341,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1568,7 +1568,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1745,7 +1745,7 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([

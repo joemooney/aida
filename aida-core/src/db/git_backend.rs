@@ -3693,7 +3693,7 @@ mod tests {
         // outside a git repo — so make the store a real repo, else there are
         // no commits to count. (This is the property under test.)
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3712,7 +3712,7 @@ mod tests {
         }
 
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -3765,7 +3765,7 @@ mod tests {
         let backend = GitBackend::new(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3791,7 +3791,7 @@ mod tests {
 
         let targets = vec![reqs[0].clone(), reqs[1].clone(), impostor];
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -4346,7 +4346,7 @@ mod tests {
         crate::git_ops::add(&root, &["metadata.yaml"]).unwrap();
         crate::git_ops::commit(&root, "seed").unwrap();
         let before = crate::git_ops::head_sha(&root).unwrap();
-        let detached = std::process::Command::new("git")
+        let detached = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["checkout", "--detach"])
@@ -4676,7 +4676,7 @@ mod tests {
             &["config", "user.email", "test@example.com"][..],
             &["config", "user.name", "Test"][..],
         ] {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -4693,7 +4693,7 @@ mod tests {
     }
 
     fn bug1612_head_files(root: &Path) -> Vec<String> {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args([
@@ -4964,7 +4964,7 @@ mod tests {
         // A no-op transaction writes and commits nothing.
         let head = |root: &Path| {
             String::from_utf8(
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .arg("-C")
                     .arg(root)
                     .args(["rev-parse", "HEAD"])
@@ -5180,7 +5180,7 @@ mod tests {
         );
 
         let git = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -5793,7 +5793,7 @@ mod tests {
     fn bug1641_spec_only_save_leaves_metadata_alone() {
         let (_dir, root, backend, _) = bug1612_git_store(2);
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -6222,7 +6222,7 @@ mod tests {
             &["config", "user.name", "t"],
             &["commit", "-q", "--allow-empty", "-m", "seed"],
         ] {
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .current_dir(&root)
                 .args(args)
                 .status()
@@ -6272,7 +6272,7 @@ mod tests {
             &["config", "user.email", "t@example.com"],
             &["config", "user.name", "t"],
         ] {
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .current_dir(&root)
                 .args(args)
                 .status()
@@ -6327,7 +6327,7 @@ mod tests {
         r1_edit.title = "Seed updated".into();
         backend.update_requirement(&r1_edit).unwrap();
 
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(&root)
             .args(["status", "--porcelain"])
             .output()

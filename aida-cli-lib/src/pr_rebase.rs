@@ -1232,7 +1232,7 @@ enforcement = "warn"
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let git = |args: &[&str]| -> std::process::Output {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -1492,7 +1492,7 @@ enforcement = "warn"
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let git = |args: &[&str]| -> std::process::Output {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)

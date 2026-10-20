@@ -123,9 +123,42 @@ the caller's cwd (`git -C /abs` still succeeds), inherited `GIT_DIR` /
 `36c906f453`), and early `TempDir` drop (`Fixture` owns it for the whole
 test).
 
-Other repository test fixtures that run bare `git commit` without this
-guard are exposed to the same race on git 2.54+. That is tracked as BUG-2191, a
-follow-up.
+Other repository test fixtures that ran bare `git commit` without this
+guard were exposed to the same race on git 2.54+ (BUG-2191).
+
+### All fixtures: `test_git` helper and ratchet (BUG-2191)
+
+<!-- trace:BUG-2191 | ai:claude -->
+
+The guard is now shared. `aida_core::git_ops::NO_AUTO_MAINTENANCE` holds the
+`-c` pair; production's `transaction_git_config` returns it under the store
+write lock. Test code spawns git through a per-crate helper that applies it:
+
+- `crate::test_git::git_command()` in aida-core and aida-cli-lib unit tests;
+- `test_git::git_command()` in aida-cli integration tests, after
+  `#[path = "support/test_git.rs"] mod test_git;`;
+- inline `git -c maintenance.auto=false -c gc.auto=0 <cmd>` in shell scripts.
+
+It is deliberately not a process-wide `GIT_CONFIG_COUNT` env: production adds
+its own `GIT_CONFIG_*` pairs, and many fixtures set `GIT_CONFIG_GLOBAL` for
+isolation.
+
+`tests/test_git_maintenance_ratchet.py` (CI gate "Test git auto-maintenance
+ratchet", in `make check-ci-fast`) counts test-source sites that run a
+write-class subcommand (commit, commit-tree, merge, am, rebase, cherry-pick,
+revert, pull, fetch) without the guard. The per-file counts in
+`scripts/git-maintenance-baseline.txt` may only go down. The remaining sites
+mostly commit through production helpers (`host_git_command`, regen's `git`)
+or a generic `run(dir, "git", ..)`.
+
+Reproduction on a migrated fixture (git 2.55.0 built from source, the
+`libwiden.so` wrapper above, `cargo test -p aida-cli-lib --lib
+auto_bump_done`, 97 tests, 5 runs each):
+
+| `test_git::git_command()` | result |
+|---|---|
+| with the `-c` pair | 5/5 passed |
+| `-c` pair removed (control) | 1/5 failed: `git ["commit", "--allow-empty", ...] failed: error: unable to create temporary file: No such file or directory` |
 
 ## General Test-Isolation Hygiene Landed in This PR (TASK-1970, Refs BUG-2118)
 
