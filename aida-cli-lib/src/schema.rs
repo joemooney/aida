@@ -1767,3 +1767,101 @@ mod tests {
         }
     }
 }
+
+/// Introspect the storable substrate: object catalog, Requirement fields,
+/// and the controlled-vocabulary tokens (status/type/priority/relationship)
+// trace:STORY-538 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "schema")]
+pub(crate) struct SchemaArgs {
+    /// Optional object to detail (any catalog object: requirement,
+    /// finding, punt, lease, brief, directive, comment, …). Omit for the
+    /// storable-object catalog.
+    // trace:BUG-542
+    pub object: Option<String>,
+
+    /// Dump every object's full field detail in one pass: the catalog
+    /// followed by each kind's field table, in catalog order.
+    // `conflicts_with = "object"` makes `--all <object>` a clear clap error
+    // — `--all` is the whole catalog, a positional is one object.
+    // trace:TASK-799 trace:TASK-775
+    #[clap(long, conflicts_with = "object")]
+    pub all: bool,
+
+    /// Add the explanatory layer: per-field semantics (example value,
+    /// who sets it, when/why) plus each object's lifecycle block. Pure
+    /// opt-in — the default output is unchanged.
+    // trace:STORY-630
+    #[clap(long, visible_alias = "details")]
+    pub explain: bool,
+
+    /// Emit machine-readable JSON instead of the human table.
+    #[clap(long)]
+    pub json: bool,
+}
+
+// `aida schema` is a pure reflection read — it touches no store, so
+// dispatch it before storage resolution (like `memories`/`dev`).
+// trace:STORY-538 | ai:claude
+fn run_schema(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <SchemaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let SchemaArgs {
+        object,
+        all,
+        explain,
+        json,
+    } = &args;
+    // `--all` is the whole-catalog dump; a positional `<object>` is a
+    // single-object request. The two are contradictory, so `--all` carries
+    // `conflicts_with = "object"` in the clap definition (cli.rs) — clap
+    // rejects the combination with a clear error before this dispatch runs,
+    // so no runtime guard is needed here. trace:TASK-775 | ai:claude
+    match object.as_deref().map(str::to_lowercase).as_deref() {
+        // `--all` (human) and no-arg `--json` are both a full dump: the
+        // catalog plus every object's reflection-derived field detail in
+        // catalog order. For JSON we always include the per-object fields
+        // (a no-arg `--json` was field-less before), so the machine surface
+        // is a true one-fetch full dump. trace:TASK-799 trace:TASK-775 | ai:claude
+        None if *all || *json => self::print_all(*json, *explain),
+        // `aida schema --explain` (no object) adds the lifecycle blocks to
+        // the catalog view. trace:STORY-630 | ai:claude
+        None if *explain => self::print_catalog(*json, true),
+        None => self::print_catalog(*json, false),
+        Some("requirement") | Some("requirements") | Some("req") => {
+            self::print_requirement(*json, *explain)
+        }
+        Some(other) if self::is_catalog_object(other) => {
+            // A catalog object other than Requirement — render its
+            // reflection-derived field table. STORY-538 shipped Requirement
+            // detail only; TASK-714 extended the reflection registry to
+            // every remaining kind. trace:STORY-538 trace:TASK-714
+            self::print_object(other, *json, *explain)
+        }
+        Some(other) => {
+            anyhow::bail!(
+                "unknown schema object `{other}` — run `aida schema` for the catalog, \
+                 or `aida schema requirement` for the Requirement detail"
+            );
+        }
+    }
+    return Ok(());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SCHEMA: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "schema",
+        help_after: "type",
+        command: <SchemaArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_schema),
+    };

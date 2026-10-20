@@ -73,8 +73,10 @@ const COMMON_ACTION_BOOST: i32 = 40;
 // ---------------------------------------------------------------------------
 
 /// Walk a clap [`Command`] tree and flatten every (transitive) subcommand into
-/// a [`CommandEntry`]. The caller passes the real CLI root —
-/// `aida_cli::Cli::command()` — so the surface never drifts from the binary.
+/// a [`CommandEntry`]. The caller passes the real CLI root, the command tree
+/// the binary parses with (`command_registry::built_command()` in
+/// `aida-cli-lib`, which includes every registered command), so the surface
+/// never drifts from the binary.
 ///
 /// `path` is the space-joined chain of subcommand names from (but not
 /// including) the root, e.g. the `work` subcommand of the `queue` subcommand of

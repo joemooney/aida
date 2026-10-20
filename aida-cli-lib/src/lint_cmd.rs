@@ -7,6 +7,11 @@
 
 use anyhow::Result;
 
+// trace:STORY-1728 | ai:claude
+#[path = "lint_cmd_args.rs"]
+pub(crate) mod lint_cmd_args;
+pub(crate) use lint_cmd_args::*;
+
 use crate::{find_project_root, load_store_for_lookup};
 
 /// `aida lint [<SPEC>|--scope feature|task|story] [--json]` — opt-in EARS-style
@@ -183,3 +188,79 @@ pub(crate) fn handle_lint_command(
         std::process::exit(1);
     }
 }
+
+/// Opt-in EARS-style quality lint for requirement text. AIDA stays a
+/// graph-first substrate (stable IDs, typed relationships, traces); this
+/// is an optional clarity lens, never a required schema. Scores a spec's
+/// description + acceptance criteria for vague triggers, missing expected
+/// behavior, conflicting constraints, and low-testability wording, and
+/// prints suggested rewrites as drafts only — it never edits a spec.
+/// Pass a SPEC-ID to lint one, or `--scope feature|task|story` to sweep
+/// every spec of that kind. Read-only and deterministic (no LLM call).
+/// `aida lint constants` instead lints source: numeric literals in
+/// traced Rust code that the owning spec never mentions.
+// trace:TASK-0417 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "lint")]
+#[clap(args_conflicts_with_subcommands = true)]
+pub(crate) struct LintArgs {
+    /// Source lints (`constants`). Omit to lint requirement text.
+    // trace:TASK-1785 | ai:claude
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::LintCommand>,
+
+    /// SPEC-ID to lint. Omit and pass `--scope` to sweep a group of
+    /// specs.
+    pub spec: Option<String>,
+
+    /// Lint every spec of this kind instead of a single SPEC-ID. One of
+    /// `feature`, `task`, or `story`. `feature` covers the requirement
+    /// types (functional / non-functional / system / user).
+    #[clap(long, value_name = "KIND", conflicts_with = "spec")]
+    pub scope: Option<String>,
+
+    /// Emit findings as JSON for agents / scripts.
+    #[clap(long)]
+    pub json: bool,
+}
+
+// `aida lint` self-loads the store via `load_store_for_lookup` and scores
+// requirement text with the EARS heuristics — read-only, no shared storage
+// handle, no LLM. trace:TASK-0417 | ai:claude
+fn run_lint(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <LintArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let LintArgs {
+        cmd,
+        spec,
+        scope,
+        json,
+    } = &args;
+    // trace:TASK-1785 | ai:claude
+    if let Some(crate::cli::LintCommand::Constants {
+        path,
+        json,
+        fail_on,
+    }) = cmd
+    {
+        return lint_constants::handle_lint_constants(path.as_deref(), *json, *fail_on);
+    }
+    return self::handle_lint_command(spec.as_deref(), scope.as_deref(), *json);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static LINT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "lint",
+    help_after: "history",
+    command: <LintArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_lint),
+};

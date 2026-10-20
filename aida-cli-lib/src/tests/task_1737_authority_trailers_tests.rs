@@ -100,9 +100,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
     let prefix = &grant_id[..8];
     {
         let _ambient = AmbientGuard::hermetic_with_grant(root, Some("advisor"), &grant_id);
-        use clap::Parser;
-        let cli =
-            crate::Cli::try_parse_from(["aida", "edit", "TASK-1", "--status", "approved"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "edit", "TASK-1", "--status", "approved",
+        ])
+        .unwrap();
         crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command).unwrap();
     }
     let msg1 = head_commit_message(&store);
@@ -222,9 +223,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
             crate::seat_authority::resolve_commit_authority(&store),
             None
         );
-        use clap::Parser;
-        let cli =
-            crate::Cli::try_parse_from(["aida", "edit", "TASK-4", "--status", "approved"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "edit", "TASK-4", "--status", "approved",
+        ])
+        .unwrap();
         assert!(
             crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command).is_err(),
             "roleless non-TTY edit must be refused"
@@ -255,9 +257,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
             crate::seat_authority::resolve_commit_authority(&store),
             None
         );
-        use clap::Parser;
-        let cli =
-            crate::Cli::try_parse_from(["aida", "edit", "TASK-5", "--status", "approved"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "edit", "TASK-5", "--status", "approved",
+        ])
+        .unwrap();
         assert!(
             crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command).is_err(),
             "reviewer grant must not satisfy advisor gate"
@@ -291,9 +294,10 @@ fn task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_
             crate::seat_authority::resolve_commit_authority(&store),
             None
         );
-        use clap::Parser;
-        let cli =
-            crate::Cli::try_parse_from(["aida", "edit", "TASK-6", "--status", "approved"]).unwrap();
+        let cli = crate::command_registry::try_parse_from([
+            "aida", "edit", "TASK-6", "--status", "approved",
+        ])
+        .unwrap();
         assert!(
             crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command).is_err(),
             "companion instance must not satisfy advisor gate"

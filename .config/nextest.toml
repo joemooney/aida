@@ -1,0 +1,56 @@
+# cargo-nextest configuration (STORY-1853 S2).
+#
+# CI runs the `ci` profile in the non-gating "Nextest shadow" lanes of
+# .github/workflows/ci.yml, over the same shard set as the cargo-test lanes
+# (scripts/ci-test-shards.py --runner nextest). Doctests stay on `cargo test`:
+# nextest does not run them.
+#
+# Agents must not run `cargo nextest` locally until the host cargo-slot wrapper
+# gates the `nextest` subcommand (STORY-1853 advisor signoff, 2026-10-19).
+# trace:TASK-1957 | ai:claude
+
+[profile.ci]
+# Report every failure in one run, as the cargo-test lanes do (BUG-1021).
+fail-fast = false
+# No retries: a retry hides a flaky test instead of reporting it.
+retries = 0
+test-threads = "num-cpus"
+# Per-test budget (STORY-1853 AC4). A test is reported SLOW at every 10 s
+# period, so the log names each test over the 10 s default_limit of
+# scripts/test-time-budget.toml. It is killed after 12 periods (120 s): no
+# single test measured on main comes near that (the slowest whole binary,
+# task_1717_store_writer_lock, takes 66 s for 43 tests), so the kill is a hang
+# guard, not a performance limit. The gating swap replaces the per-binary
+# budget file with per-test keys read from the JUnit report below.
+slow-timeout = { period = "10s", terminate-after = 12 }
+# Show the output of failing tests at the end of the run, where the log is read.
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "slow"
+final-status-level = "slow"
+
+[profile.ci.junit]
+# target/nextest/ci/junit.xml: per-test durations for the AC4 budget keys.
+# scripts/ci-test-shards.py renames it to junit-<shard>-<n>.xml after each
+# invocation, so a shard that runs several keeps every report.
+path = "junit.xml"
+
+# Tests that must not overlap with each other. cargo test runs one binary at a
+# time and serialises a binary's tests on in-process locks; nextest runs every
+# test in its own process, with tests from different binaries side by side, so
+# a lock that guards something outside the process no longer holds.
+#
+# Locks that guard only process state (environment variables, process-wide
+# statics: aida-core's TEST_ENV_LOCK, aida-cli-lib's test_env ENV_LOCK, the
+# sweep test hook, bug_1926's HOME/PATH lock) need no group: a test process
+# has its own environment and statics.
+[test-groups]
+serial = { max-threads = 1 }
+
+# task_1283_protocol_cli's TEST_LOCK keeps its real-binary runs one at a time:
+# they spawn `aida` against fixture stores and assert the awaiting-notice
+# wall-clock deadline (BUG-1239), which concurrent runs of the same suite
+# would eat into.
+[[profile.ci.overrides]]
+filter = 'package(aida-cli) & binary(task_1283_protocol_cli)'
+test-group = "serial"

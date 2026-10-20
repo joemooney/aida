@@ -7,7 +7,13 @@
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use std::path::Path;
+
+// trace:STORY-1728 | ai:claude
+#[path = "queue_cmd_args.rs"]
+pub(crate) mod queue_cmd_args;
+pub(crate) use queue_cmd_args::*;
 
 /// Collect commit and requirement-reference evidence introduced since the
 /// current branch diverged from the default branch. `None` means the range
@@ -10642,8 +10648,12 @@ pub(crate) fn rework_findings_block_for_spec(
 /// the env var `exec_claude_headless` puts on the child via `.env(...)`.
 /// trace:BUG-225 | ai:claude
 pub(crate) fn headless_launch_hint(prompt: &str, session_id: &str, contained: bool) -> String {
-    let argv = session::claude_headless_args_with_posture(prompt, session_id, contained);
-    format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv))
+    // BUG-1982: a refused contained launch shows the refusal, not a command.
+    // trace:BUG-1982 | ai:claude
+    match session::claude_headless_args_with_posture(prompt, session_id, contained) {
+        Ok(argv) => format!("AIDA_HEADLESS=1 claude {}", shell_join_display(&argv)),
+        Err(err) => format!("{err:#}"),
+    }
 }
 
 // BUG-913: deferred queue-work launch instructions must reflect the resolved
@@ -10664,9 +10674,11 @@ pub(crate) fn deferred_headless_launch_hint(
             format!("AIDA_HEADLESS=1 codex {}", shell_join_display(&argv))
         }
         session::HeadlessVendor::Agy => {
-            let argv =
-                session::headless_vendor_args(vendor, prompt, session_id, contained, model, None);
-            format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv))
+            match session::headless_vendor_args(vendor, prompt, session_id, contained, model, None)
+            {
+                Ok(argv) => format!("AIDA_HEADLESS=1 agy {}", shell_join_display(&argv)),
+                Err(err) => format!("{err:#}"),
+            }
         }
     }
 }
@@ -10684,14 +10696,18 @@ pub(crate) fn deferred_interactive_launch_hint(
 ) -> String {
     match vendor {
         session::HeadlessVendor::Claude => {
-            let mut args = session::claude_session_args(
+            let mut args = match session::claude_session_args(
                 permission_mode,
                 None,
                 Some(prompt),
                 None,
                 contained,
                 model,
-            );
+            ) {
+                Ok(args) => args,
+                // trace:BUG-1982 | ai:claude
+                Err(err) => return format!("{err:#}"),
+            };
             if contained && !args.iter().any(|arg| arg == "--permission-mode") {
                 args.splice(
                     0..0,
@@ -10785,7 +10801,8 @@ pub(crate) fn queue_work_issues_child_grant(no_launch: bool) -> bool {
 /// BUG-2139: whether this launch is a fresh headless pickup — the arm that
 /// execs the vendor through `session::exec_vendor_headless`. It is the one
 /// arm where a launcher that cannot delegate a BASELINE seat still launches,
-/// with the child at baseline authority (`AIDA_SESSION_GRANT=""`); every other
+/// with the child at baseline authority (an empty
+/// [`crate::seat_authority::GRANT_ENV`]); every other
 /// arm requires delegation.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn queue_work_is_fresh_headless(
@@ -10799,8 +10816,10 @@ pub(crate) fn queue_work_is_fresh_headless(
 /// BUG-2139: the one line a baseline headless launch prints.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
+    // trace:TASK-1752 | ai:claude
+    let grant_env = crate::seat_authority::GRANT_ENV;
     format!(
-        "headless `{seat}` child runs ungranted at baseline authority (AIDA_SESSION_GRANT=\"\"): \
+        "headless `{seat}` child runs ungranted at baseline authority ({grant_env}=\"\"): \
          the launcher cannot delegate `{seat}` ({cause})"
     )
 }
@@ -11030,7 +11049,7 @@ pub(crate) fn build_queue_work_claude_command(
     session_id: &str,
     model: Option<&str>,
     grant_id: Option<&str>,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     session::build_claude_exec_command(
         posture.permission_mode.as_deref(),
         name,
@@ -13198,9 +13217,8 @@ pub(crate) fn run_standalone_reviewer(
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
-    let launcher_grant = std::env::var(crate::seat_authority::GRANT_ENV)
-        .ok()
-        .filter(|s| !s.trim().is_empty());
+    // trace:TASK-1752 | ai:claude
+    let launcher_grant = crate::seat_authority::current_grant_id();
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
     // BUG-2149: every arm returns the id of the child reviewer grant it
@@ -13392,6 +13410,12 @@ pub(crate) fn run_standalone_reviewer(
     // recorded verdict is. Best-effort; the current file is left as written.
     // trace:TASK-1460 | ai:claude
     let _ = crate::review_verdict::adopt_direct_write(verdict_path);
+
+    // BUG-2180: a contained reviewer's request-changes shelve (and any other
+    // store write it made) is left uncommitted for its host — this launcher.
+    // Commit it now, or the mandate's fail-closed store snapshot refuses
+    // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
+    crate::child_store_commit::commit_child_store_writes(project_root, launched_at, "reviewer");
 
     let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
@@ -14447,6 +14471,8 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         .arg("-C")
         .arg(repo)
         .args(args)
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(repo, "origin")
         .status()?;
     Ok(status.success())
 }
@@ -16461,4 +16487,285 @@ pub(crate) fn evaluate_review_verdict_gate(
     );
     let gate = review_verdict::queue_done_verdict_gate(display_id, Some(&verdict), relation);
     (gate, Some(verdict))
+}
+
+/// Personal work queue commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "queue")]
+#[clap(hide = true)]
+pub(crate) struct QueueArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::QueueCommand,
+}
+
+fn run_queue(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                QueueArgs { inner: queue_cmd } => {
+                    // STORY-78: `aida queue list --sync` pulls before listing.
+                    // Done here at dispatch (not inside handle_queue_command) so
+                    // the helper has direct store_path access. Other queue
+                    // subcommands have no --sync. trace:STORY-78 | ai:claude
+                    if let QueueCommand::List { sync: true, .. } = queue_cmd {
+                        maybe_sync_pull(store_path)?;
+                    }
+                    // Reuse the legacy Storage handler — it works against any
+                    // DatabaseBackend via Storage trait shims, and our GitBackend
+                    // already implements queue_list/add/remove/reorder/clear.
+                    // Wrap our backend in a Storage façade pointing at the store path.
+                    let storage = Storage::new(store_path);
+                    handle_queue_command(queue_cmd, &storage, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                QueueArgs { inner: queue_cmd } => {
+                    handle_queue_command(queue_cmd, &storage, &requirements_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static QUEUE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "queue",
+        help_after: "grep",
+        command: <QueueArgs as clap::CommandFactory>::command,
+        policy: queue_cli_policy,
+        run: crate::command_registry::Handler::Store(run_queue),
+    };
+
+/// Top-level alias for `aida queue rework SPEC` — single verb for the
+/// recurring implementer → reviewer → fixup recovery sequence
+/// (status flip + queue add, with optional `--work` session launch).
+/// With no ID, triage the specs parked in Needs Attention one keystroke
+/// each (at a terminal; otherwise it prints the requeue commands).
+/// Mirrors `aida relations` → `aida rel list` discoverability pattern.
+/// See `aida queue rework --help` for the full flag set.
+// trace:TASK-218 trace:STORY-1429 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "rework")]
+pub(crate) struct ReworkArgs {
+    /// Requirement ID (UUID or SPEC-ID). Omit it to triage the parked
+    /// specs one keystroke each.
+    pub id: Option<String>,
+    /// Also launch a session for the spec.
+    #[clap(long)]
+    pub work: bool,
+    /// Override the routing role. Default: existing queue route,
+    /// falling back to implementer.
+    #[clap(long)]
+    pub r#for: Option<String>,
+    /// Re-queue at the tail instead of the default head position.
+    // trace:BUG-851 | ai:codex
+    #[clap(long)]
+    pub tail: bool,
+    /// Override the smart target status.
+    #[clap(long, value_name = "STATE")]
+    pub status: Option<String>,
+    /// Capture a comment on the spec at rework time.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, allow_hyphen_values = true)]
+    pub reason: Option<String>,
+    /// Chain `aida queue work --resume`.
+    #[clap(long)]
+    pub resume: bool,
+    /// Bypass terminal-status / already-in-progress guards.
+    #[clap(long)]
+    pub force: bool,
+    /// Pass `--steal` through to chained `aida queue work`.
+    #[clap(long)]
+    pub steal: bool,
+    /// Permission mode (only used with `--work`).
+    #[clap(long, value_name = "MODE")]
+    pub permission_mode: Option<String>,
+    /// Skip pre-pickup pull (only used with `--work`).
+    #[clap(long)]
+    pub no_pull: bool,
+    /// User ID (defaults to AIDA_USER or system user).
+    #[clap(long)]
+    pub user: Option<String>,
+}
+
+fn run_rework(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ReworkArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // TASK-218: top-level `aida rework SPEC` → forwards to the same
+                // handler as `aida queue rework SPEC`. trace:TASK-218 | ai:claude
+                ReworkArgs {
+                    id,
+                    work,
+                    r#for,
+                    tail,
+                    status,
+                    reason,
+                    resume,
+                    force,
+                    steal,
+                    permission_mode,
+                    no_pull,
+                    user,
+                } => {
+                    let storage = Storage::new(store_path);
+                    // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+                    self::handle_rework_entry(
+                        &storage,
+                        id.as_deref(),
+                        &self::ReworkFlags {
+                            work: *work,
+                            for_role: r#for.as_deref(),
+                            tail: *tail,
+                            status: status.as_deref(),
+                            reason: reason.as_deref(),
+                            resume: *resume,
+                            force: *force,
+                            steal: *steal,
+                            permission_mode: permission_mode.as_deref(),
+                            no_pull: *no_pull,
+                            user: user.as_deref(),
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // TASK-218: top-level alias in the legacy SQLite dispatch path —
+                // forwards to the same handler as `aida queue rework SPEC`.
+                // trace:TASK-218 | ai:claude
+                ReworkArgs {
+                    id,
+                    work,
+                    r#for,
+                    tail,
+                    status,
+                    reason,
+                    resume,
+                    force,
+                    steal,
+                    permission_mode,
+                    no_pull,
+                    user,
+                } => {
+                    // STORY-1429: an omitted ID opens the triage loop. trace:STORY-1429 | ai:claude
+                    self::handle_rework_entry(
+                        &storage,
+                        id.as_deref(),
+                        &self::ReworkFlags {
+                            work: *work,
+                            for_role: r#for.as_deref(),
+                            tail: *tail,
+                            status: status.as_deref(),
+                            reason: reason.as_deref(),
+                            resume: *resume,
+                            force: *force,
+                            steal: *steal,
+                            permission_mode: permission_mode.as_deref(),
+                            no_pull: *no_pull,
+                            user: user.as_deref(),
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static REWORK: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "rework",
+        help_after: "autopilot",
+        command: <ReworkArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_rework),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::QueueCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <QueueArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: if matches!(
+            inner,
+            Some(
+                QueueCommand::List { .. }
+                    | QueueCommand::Next { .. }
+                    | QueueCommand::Progress { .. }
+            )
+        ) {
+            SA::Read
+        } else {
+            SA::Queue
+        },
+        per_write_auto_push: matches!(
+            inner,
+            Some(
+                QueueCommand::Add { .. }
+                    | QueueCommand::Remove { .. }
+                    | QueueCommand::Move { .. }
+                    | QueueCommand::Clear { .. }
+                    | QueueCommand::Done { .. }
+                    | QueueCommand::Rework { .. }
+                    | QueueCommand::Prune { .. }
+                    | QueueCommand::Gc { .. }
+            )
+        ),
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    }
 }

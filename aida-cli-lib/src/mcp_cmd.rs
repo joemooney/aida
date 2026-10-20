@@ -6,6 +6,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mcp_cmd_args.rs"]
+pub(crate) mod mcp_cmd_args;
+pub(crate) use mcp_cmd_args::*;
+
 /// STORY-361: management commands for the MCP coordination surface.
 pub(crate) fn handle_mcp_command(cmd: &McpCommand) -> Result<()> {
     match cmd {
@@ -206,3 +211,74 @@ pub(crate) fn run_mcp_translate(
 
     Ok(())
 }
+
+/// MCP server management commands (register agents, list tool surface).
+///
+/// The AIDA MCP server's coordination tools are how non-Claude-Code
+/// agents (Codex, Cursor, …) participate in AIDA drains.
+/// `aida mcp register-agent` writes the AIDA server's entry into a
+/// project's `.mcp.json` so an MCP-speaking agent can connect.
+// trace:STORY-361 | ai:claude
+// trace:TASK-487 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mcp")]
+#[clap(hide = true)]
+pub(crate) struct McpArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::McpCommand,
+}
+
+fn run_mcp(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <McpArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                McpArgs { inner: mcp_cmd } => {
+                    // trace:STORY-361 | ai:claude
+                    return crate::command_registry::returned(handle_mcp_command(mcp_cmd));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                McpArgs { inner: mcp_cmd } => {
+                    // STORY-361: management commands for the MCP coordination surface.
+                    handle_mcp_command(mcp_cmd)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MCP: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "mcp",
+    help_after: "mcp-serve",
+    command: <McpArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_mcp),
+};

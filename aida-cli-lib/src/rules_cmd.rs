@@ -7,6 +7,11 @@
 
 use std::collections::HashSet;
 
+// trace:STORY-1728 | ai:claude
+#[path = "rules_cmd_args.rs"]
+pub(crate) mod rules_cmd_args;
+pub(crate) use rules_cmd_args::*;
+
 use anyhow::Result;
 use colored::Colorize;
 
@@ -115,3 +120,81 @@ pub(crate) fn handle_rules_command(
     }
     Ok(())
 }
+
+/// Sync Claude Code path-gated rules from the spec graph. For each
+/// active spec (In Progress or Done) with spec-id markers in the code,
+/// emit `.claude/rules/aida-specs/<SPEC-ID>.md` with a `paths:` glob
+/// matching the marked files. Claude Code's runtime loads the rule
+/// on-demand when the implementer reads or edits one of those files —
+/// so the spec's scope + acceptance land in context exactly when
+/// load-bearing.
+// trace:SPIKE-31 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "rules")]
+pub(crate) struct RulesArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::RulesCommand,
+}
+
+fn run_rules(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <RulesArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                RulesArgs { inner: rules_cmd } => {
+                    // trace:SPIKE-31 | ai:claude
+                    return crate::command_registry::returned(self::handle_rules_command(
+                        rules_cmd, backend,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                RulesArgs { inner: _ } => {
+                    // `aida rules` reads the cache projection — git-canonical only.
+                    // trace:SPIKE-31 | ai:claude
+                    anyhow::bail!(
+                        "aida rules requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static RULES: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "rules",
+        help_after: "docs",
+        command: <RulesArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_rules),
+    };

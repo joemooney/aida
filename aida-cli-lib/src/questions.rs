@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "questions_args.rs"]
+pub(crate) mod questions_args;
+pub(crate) use questions_args::*;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum QuestionSweepScope {
     Backlog,
@@ -1602,7 +1607,7 @@ pub(crate) fn questions_clarify(
         if contained {
             println!(
                 "  claude {} {prompt:?}",
-                crate::session::claude_contained_flags().join(" ")
+                crate::session::claude_contained_flags()?.join(" ")
             );
         } else {
             println!("  claude {prompt:?}");
@@ -1620,7 +1625,7 @@ pub(crate) fn questions_clarify(
             "→".green(),
             format!(
                 "claude {} {prompt:?}",
-                crate::session::claude_contained_flags().join(" ")
+                crate::session::claude_contained_flags()?.join(" ")
             )
             .dimmed()
         );
@@ -1643,7 +1648,7 @@ pub(crate) fn questions_clarify(
     let project_root = find_project_root()?;
     let child_grant =
         seat_authority::issue_child(&project_root, "advisor", &current_user_id(None))?;
-    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)
+    let status_code = build_questions_clarify_command(&prompt, &child_grant.id, contained)?
         .status()
         .map_err(|e| {
             anyhow::anyhow!(
@@ -1671,10 +1676,10 @@ pub(crate) fn build_questions_clarify_command(
     prompt: &str,
     child_grant_id: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     if contained {
-        cmd.args(crate::session::claude_contained_flags());
+        cmd.args(crate::session::claude_contained_flags()?);
     }
     cmd.arg(prompt)
         .env("AIDA_SESSION_ROLE", "advisor")
@@ -1685,7 +1690,7 @@ pub(crate) fn build_questions_clarify_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 /// `aida questions remedy <spec>` — the headless, bounded acceptance-authoring
@@ -2704,4 +2709,185 @@ pub(crate) fn bounded_text(text: &str, max: usize) -> String {
         end -= 1;
     }
     format!("{}…", &text[..end])
+}
+
+/// The async decision inbox — structured questions the advisor distilled
+/// from forks it couldn't resolve, which you answer OUTSIDE any agent
+/// (plain CLI, no LLM session). Bare `aida questions` lists the inbox and,
+/// at a TTY with pending items, offers to enter the answer loop;
+/// `aida questions list` is the pure read; `aida questions answer` records
+/// answers. The recorded answer is a pure data op — slice 1 records it,
+/// a later loop pass applies the chosen resolution.
+// trace:STORY-522 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "questions")]
+pub(crate) struct QuestionsArgs {
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::QuestionsCommand>,
+}
+
+fn run_questions(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <QuestionsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                QuestionsArgs { cmd } => {
+                    handle_questions_command(cmd.as_ref(), backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                QuestionsArgs { .. } => {
+                    // `aida questions` reads/writes the `decision_request` field on a
+                    // spec; the deprecated SQLite backend does not persist it.
+                    // trace:STORY-522 | ai:claude
+                    anyhow::bail!(
+                        "aida questions requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static QUESTIONS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "questions",
+        help_after: "findings",
+        command: <QuestionsArgs as clap::CommandFactory>::command,
+        policy: questions_cli_policy,
+        run: crate::command_registry::Handler::Store(run_questions),
+    };
+
+/// Dispatch a SPIKE to a headless research agent: it produces a
+/// source-grounded analysis (attached to the spike) plus a recommendation,
+/// and escalates any strategic decision to `aida questions` for you to
+/// answer. Propose-mode — the agent does the legwork; nothing is
+/// auto-applied. The agent-able counterpart to the implementer drain.
+// trace:STORY-568 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "research")]
+pub(crate) struct ResearchArgs {
+    /// The spike to research (SPEC-ID or UUID).
+    pub id: String,
+
+    /// Compose + show the research prompt, classification, and artifact
+    /// paths without spawning the agent or writing anything.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Directory for the dated analysis + decision-sidecar artifacts.
+    #[clap(long, default_value = "docs/research")]
+    pub artifact_dir: String,
+}
+
+fn run_research(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ResearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ResearchArgs {
+                    id,
+                    dry_run,
+                    artifact_dir,
+                } => {
+                    handle_research_command(backend, store_path, id, *dry_run, artifact_dir)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ResearchArgs { .. } => {
+                    // `aida research` attaches a comment + escalates a decision_request
+                    // on a spike; the deprecated SQLite backend persists neither.
+                    // trace:STORY-568 | ai:claude
+                    anyhow::bail!(
+                        "aida research requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static RESEARCH: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "research",
+        help_after: "decide",
+        command: <ResearchArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_research),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn questions_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::QuestionsCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <QuestionsArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let cmd = args.as_ref().and_then(|args| args.cmd.as_ref());
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Question,
+        per_write_auto_push: matches!(
+            cmd,
+            Some(
+                QuestionsCommand::Ask { .. }
+                    | QuestionsCommand::Answer { .. }
+                    | QuestionsCommand::Remedy { .. }
+            )
+        ),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
 }

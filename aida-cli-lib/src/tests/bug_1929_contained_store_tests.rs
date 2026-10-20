@@ -283,7 +283,7 @@ fn unexpressible_main_emits_no_entries() {
 /// The settings JSON a contained launch gets for `write_roots`, parsed.
 // trace:BUG-1929 | ai:claude
 fn launch_settings(write_roots: &[PathBuf]) -> (String, serde_json::Value) {
-    let flags = crate::session::claude_contained_flags_for_roots(write_roots);
+    let flags = crate::session::claude_contained_flags_for_roots(write_roots).unwrap();
     let json = flags[3].clone();
     let settings = serde_json::from_str(&json).unwrap();
     (json, settings)
@@ -989,6 +989,231 @@ fn bug_1929_store_git_guard() {
     );
 }
 
+/// The raw `Command::new("git")` sites in `src` (1-based lines) whose builder
+/// chain, up to its first `;` and at most 12 lines, runs `git status`, and that
+/// carry no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_raw_status_git(src: &str) -> Vec<usize> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let chain = lines[i..lines.len().min(i + 12)].join(" ");
+        let chain = chain.split(';').next().unwrap_or_default();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1985):"));
+        if chain.contains("\"status\"") && !justified {
+            found.push(i + 1);
+        }
+    }
+    found
+}
+
+/// A raw `Command::new("git")` wrapper in one source file: the builder takes
+/// its arguments from a variable (`.args(args)`), so a caller may pass
+/// `status`. A `let mut cmd = Command::new("git");` binding is followed into
+/// its next statement.
+// trace:BUG-1985 | ai:claude
+struct Bug1985Wrapper {
+    line: usize,
+    name: String,
+    public: bool,
+}
+
+/// The raw-git wrapper functions in `src` (see [`Bug1985Wrapper`]) that carry
+/// no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_raw_git_wrappers(src: &str) -> Vec<Bug1985Wrapper> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let bound =
+        regex::Regex::new(r#"let\s+mut\s+\w+\s*=\s*(std::process::)?Command::new\("git"\)\s*;"#)
+            .unwrap();
+    let args_var = regex::Regex::new(r"\.args\(\s*&?[a-z_][a-z0-9_]*\s*\)").unwrap();
+    let func = regex::Regex::new(r"\bfn\s+(\w+)\s*[<(]").unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let window = lines[i..lines.len().min(i + 12)].join(" ");
+        let statements = if bound.is_match(line) { 2 } else { 1 };
+        let chain: Vec<&str> = window.split(';').take(statements).collect();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1985):"));
+        if justified || !args_var.is_match(&chain.join(";")) {
+            continue;
+        }
+        let Some((name, public)) = lines[..=i].iter().rev().find_map(|l| {
+            func.captures(l)
+                .map(|c| (c[1].to_string(), l.trim_start().starts_with("pub")))
+        }) else {
+            continue;
+        };
+        found.push(Bug1985Wrapper {
+            line: i + 1,
+            name,
+            public,
+        });
+    }
+    found
+}
+
+/// True when `src` (non-test lines) calls `name(...)` with a `"status"`
+/// argument before the call's statement ends.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_calls_with_status(src: &str, name: &str) -> bool {
+    let call = regex::Regex::new(&format!(r"\b{name}\s*\(")).unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let text: String = lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !tests.contains(i))
+        .map(|(_, l)| *l)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let starts: Vec<usize> = call.find_iter(&text).map(|m| m.start()).collect();
+    starts.into_iter().any(|start| {
+        if text[..start].ends_with("fn ") {
+            return false;
+        }
+        let rest = &text[start..];
+        let end = rest.char_indices().nth(300).map_or(rest.len(), |(i, _)| i);
+        rest[..end]
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .contains("\"status\"")
+    })
+}
+
+/// The non-test `.rs` sources of `crate_src`, skipping `tests` directories,
+/// `*_tests.rs` and `tests.rs`, as (path, contents).
+// trace:BUG-1985 | ai:claude
+fn bug_1985_sources(crate_src: &Path) -> Vec<(PathBuf, String)> {
+    let mut sources = Vec::new();
+    let mut stack = vec![crate_src.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if path.is_dir() {
+                if name != "tests" {
+                    stack.push(path);
+                }
+                continue;
+            }
+            if name.ends_with(".rs") && !name.ends_with("_tests.rs") && name != "tests.rs" {
+                let src = std::fs::read_to_string(&path).unwrap();
+                sources.push((path, src));
+            }
+        }
+    }
+    sources
+}
+
+/// The wrapper offenders across one crate's `sources`: a raw-git wrapper
+/// called with `"status"` in its own file, or, when it is `pub`, in any
+/// file of the crate that defines no function of the same name.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_status_wrapper_offenders(sources: &[(PathBuf, String)]) -> Vec<(PathBuf, usize)> {
+    let mut offenders = Vec::new();
+    for (path, src) in sources {
+        for wrapper in bug_1985_raw_git_wrappers(src) {
+            let defines = regex::Regex::new(&format!(r"\bfn\s+{}\s*[<(]", wrapper.name)).unwrap();
+            let called = sources.iter().any(|(other, other_src)| {
+                (other == path || (wrapper.public && !defines.is_match(other_src)))
+                    && bug_1985_calls_with_status(other_src, &wrapper.name)
+            });
+            if called {
+                offenders.push((path.clone(), wrapper.line));
+            }
+        }
+    }
+    offenders
+}
+
+// BUG-1985 guard: every host `git status` starts at
+// `aida_core::git_ops::host_git_command`, which keeps it out of a planted
+// embedded repository in a tree a contained session may have written. Scans
+// the non-test source of aida-core and aida-cli-lib for a raw
+// `Command::new("git")` whose builder runs `status`, and for a raw-git
+// wrapper (`.args(args)`) that some caller runs `status` through.
+// trace:BUG-1985.acb27baf | ai:claude
+// trace:BUG-1985 | ai:claude
+#[test]
+fn bug_1985_host_status_guard() {
+    let sample = "fn a(wt: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \
+                  .arg(\"-C\")\n        .arg(wt)\n        .args([\"status\", \"--porcelain\"])\n        \
+                  .output();\n}\n\
+                  fn b(wt: &Path) {\n    // raw-git-ok(BUG-1985): fixture.\n    \
+                  let _ = Command::new(\"git\").arg(wt).args([\"status\"]).output();\n}\n\
+                  fn c(wt: &Path) { let _ = Command::new(\"git\").args([\"log\"]).output(); }\n\
+                  #[cfg(test)]\nmod t {\n    fn d(w: &Path) { Command::new(\"git\").args([\"status\"]); }\n}\n";
+    assert_eq!(bug_1985_raw_status_git(sample), vec![2]);
+
+    // The wrapper scanner: a private wrapper called with status in its own
+    // file, a pub one called from another file, a bound `let mut cmd` form,
+    // and a same-named private helper elsewhere that must not count.
+    let own = (
+        PathBuf::from("own.rs"),
+        "fn run_git(dir: &Path, args: &[&str]) {\n    let _ = Command::new(\"git\")\n        \
+         .arg(\"-C\")\n        .arg(dir)\n        .args(args)\n        .output();\n}\n\
+         fn probe(dir: &Path, args: &[&str]) {\n    let mut cmd = Command::new(\"git\");\n    \
+         cmd.arg(\"-C\").arg(dir).args(args);\n}\n\
+         fn f(d: &Path) { run_git(d, &[\"status\", \"--short\"]); probe(d, &[\"log\"]); }\n"
+            .to_string(),
+    );
+    let exported = (
+        PathBuf::from("exported.rs"),
+        "pub(crate) fn capture(dir: &Path, args: &[&str]) {\n    let _ = Command::new(\"git\")\n        \
+         .args(args)\n        .output();\n}\n"
+            .to_string(),
+    );
+    let caller = (
+        PathBuf::from("caller.rs"),
+        "fn g(d: &Path) { capture(d, &[\"status\"]); probe(d, &[\"status\"]); }\n".to_string(),
+    );
+    let offenders = bug_1985_status_wrapper_offenders(&[own, exported, caller]);
+    assert_eq!(
+        offenders,
+        vec![
+            (PathBuf::from("own.rs"), 2),
+            (PathBuf::from("exported.rs"), 2)
+        ]
+    );
+
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut offenders = Vec::new();
+    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
+        let sources = bug_1985_sources(&workspace.join(crate_src));
+        for (path, src) in &sources {
+            for line in bug_1985_raw_status_git(src) {
+                let rel = path.strip_prefix(workspace).unwrap_or(path);
+                offenders.push(format!("{}:{line}", rel.display()));
+            }
+        }
+        for (path, line) in bug_1985_status_wrapper_offenders(&sources) {
+            let rel = path.strip_prefix(workspace).unwrap_or(&path);
+            offenders.push(format!("{}:{line} (wrapper)", rel.display()));
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "raw `git status`; build it with `aida_core::git_ops::host_git_command` (or \
+         justify it with `// raw-git-ok(BUG-1985): <why>`): {offenders:?}"
+    );
+}
+
 /// Run git in `dir` with a fixed identity; panics on failure.
 fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
     let out = std::process::Command::new("git")
@@ -1206,7 +1431,7 @@ fn task_1775_contained_marker_written_before_git_version_check() {
     for fake in ["git version 2.39.5", "not a version"] {
         let _ = std::fs::remove_file(&marker);
         aida_core::git_ops::with_host_git_version(fake, || {
-            let json = crate::session::claude_contained_settings_json(&[main.clone()]);
+            let json = crate::session::claude_contained_settings_json(&[main.clone()]).unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert!(
                 !allow_write(&settings)

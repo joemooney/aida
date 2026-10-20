@@ -81,3 +81,79 @@ pub(crate) fn handle_decide_command(
         )
     }
 }
+
+/// Resolve a spec that needs a human — the natural entry point for the
+/// decision verbs under `aida questions`. Smart-routes: if the spec has a
+/// PENDING decision request (enumerated choices), this answers it
+/// interactively (like `aida questions answer <spec>`); otherwise the spec
+/// is under-specified, so this launches the interactive clarifier (like
+/// `aida questions clarify <spec>`). A thin alias — the logic lives in
+/// `aida questions`.
+// trace:TASK-779 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "decide")]
+pub(crate) struct DecideArgs {
+    /// The spec (SPEC-ID or UUID) to resolve.
+    pub spec: String,
+}
+
+fn run_decide(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DecideArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // trace:TASK-779 | ai:claude
+                DecideArgs { spec } => {
+                    self::handle_decide_command(backend, store_path, spec)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DecideArgs { .. } => {
+                    // `aida decide` routes to `aida questions answer`/`clarify`, both of
+                    // which need the git-canonical store. trace:TASK-779 | ai:claude
+                    anyhow::bail!(
+                        "aida decide requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DECIDE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "decide",
+        help_after: "questions",
+        command: <DecideArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_decide),
+    };

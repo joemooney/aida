@@ -2076,3 +2076,116 @@ mod tests {
             .contains("arm B unknown"));
     }
 }
+
+/// Probe whether a spec could be rebuilt from the store alone: a headless
+/// agent regenerates its tests from store context only, a second pass
+/// matches them against the real traced tests, divergences become harvest
+/// candidates. The score is a heuristic; the divergence report is the product.
+// trace:TASK-1248 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "reconstitute")]
+pub(crate) struct ReconstituteArgs {
+    /// Requirement ID (UUID or SPEC-ID) to probe.
+    pub spec: String,
+
+    /// Emit the report as JSON.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Print the probe briefs and exit without launching anything.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Confirm launching the headless agent runs when stdin is not a
+    /// terminal (unattended runs refuse without it).
+    // trace:STORY-1425 | ai:claude
+    #[clap(long)]
+    pub yes: bool,
+}
+
+fn run_reconstitute(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ReconstituteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ReconstituteArgs {
+                    spec,
+                    json,
+                    dry_run,
+                    yes,
+                } => {
+                    let store = backend.load()?;
+                    let project_root = find_project_root()?;
+                    self::handle_reconstitute_command(
+                        &project_root,
+                        &store,
+                        spec,
+                        self::ReconstituteOptions {
+                            json: *json,
+                            dry_run: *dry_run,
+                            yes: *yes,
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ReconstituteArgs {
+                    spec,
+                    json,
+                    dry_run,
+                    yes,
+                } => {
+                    let store = storage.load()?;
+                    let project_root = find_project_root()
+                        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+                    self::handle_reconstitute_command(
+                        &project_root,
+                        &store,
+                        spec,
+                        reconstitute::ReconstituteOptions {
+                            json: *json,
+                            dry_run: *dry_run,
+                            yes: *yes,
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static RECONSTITUTE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "reconstitute",
+        help_after: "harvest",
+        command: <ReconstituteArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_reconstitute),
+    };

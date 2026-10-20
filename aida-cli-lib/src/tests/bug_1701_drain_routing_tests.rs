@@ -161,7 +161,7 @@ fn force_bypasses_the_guard_entirely() {
 // trace:BUG-1701 | ai:claude
 fn agent_new_long_help() -> String {
     use clap::CommandFactory;
-    let mut cli = crate::cli::Cli::command();
+    let mut cli = crate::command_registry::built_command();
     let agent = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "agent")

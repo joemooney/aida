@@ -52,9 +52,11 @@ pub(crate) fn recent_files_for_branch(
 /// Ignored entries are excluded by default (no `--ignored=normal`), so
 /// `target/`, `.aida/cache.db`, etc. never appear here — only tracked-
 /// and-modified or untracked-but-not-ignored files. Returns an empty
-/// vec when the worktree is clean OR when `git status` itself fails
-/// (we treat an unparseable status as clean and let `git worktree
-/// remove --force` produce the authoritative error). trace:BUG-67 | ai:claude
+/// vec when the worktree is clean or no longer exists. A `git status`
+/// that fails over an existing tree is one `?? (...)` entry, so callers
+/// keep the tree.
+// trace:BUG-67 | ai:claude
+// trace:BUG-1985 | ai:claude
 pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
     // BUG-2169: never run host git in a contained seat's private clone. Report
     // it as dirty (one explanatory entry) so every caller keeps the tree
@@ -66,20 +68,20 @@ pub(crate) fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> 
             aida_core::seat_clone_detect::host_git_refusal(&clone_root)
         )];
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
-        .args(["status", "--porcelain"])
-        .output();
-    let Ok(out) = out else { return Vec::new() };
-    if !out.status.success() {
-        return Vec::new();
+    // BUG-1985: reap, doctor heal and gc remove a tree with force when this
+    // reads clean, so it must see uncommitted edits inside a submodule. The
+    // shared safety status keeps a tree holding a planted gitlink and never
+    // lets git recurse into a submodule; each validated one is inspected
+    // through its validated git directory (review round 2).
+    // F4: a refusal or a status that fails over an existing tree is one
+    // explanatory dirty entry, never "clean". A tree already gone has
+    // nothing to lose.
+    // trace:BUG-1985 | ai:claude
+    match aida_core::git_ops::worktree_status_porcelain_lines(worktree) {
+        Ok(lines) => lines,
+        Err(_) if !worktree.exists() => Vec::new(),
+        Err(err) => vec![format!("?? ({err:#})")],
     }
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|l| l.to_string())
-        .collect()
 }
 
 /// STORY-457: is this untracked path auto-flaggable as safe-to-remove? Editor
@@ -1037,9 +1039,8 @@ pub(crate) fn classify_untracked_age(
 }
 
 pub(crate) fn print_status_working_tree_section(root: &std::path::Path) {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(root)
         .args(["status", "--porcelain"])
         .output();
     let Ok(out) = out else { return };
@@ -1871,7 +1872,9 @@ pub(crate) fn lease_activity_timestamp(
 
 pub(crate) fn collect_branch_facts(project_root: &std::path::Path) -> Option<BranchFacts> {
     let name = current_branch_at(project_root)?;
-    let dirty = !working_tree_clean(project_root).unwrap_or(true);
+    // BUG-1985: a refused or failed status shows dirty, never clean.
+    // trace:BUG-1985 | ai:claude
+    let dirty = working_tree_clean(project_root) != Some(true);
     let (ahead_main, behind_main) = ahead_behind_vs_ref(project_root, &name, "origin/main")
         .or_else(|| ahead_behind_vs_ref(project_root, &name, "main"))
         .map(|(a, b)| (Some(a), Some(b)))
@@ -1896,9 +1899,8 @@ pub(crate) fn collect_branch_facts(project_root: &std::path::Path) -> Option<Bra
 }
 
 pub(crate) fn working_tree_clean(project_root: &std::path::Path) -> Option<bool> {
-    let o = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
+    // trace:BUG-1985 | ai:claude
+    let o = aida_core::git_ops::host_git_command(project_root)
         .args(["status", "--porcelain"])
         .output()
         .ok()?;

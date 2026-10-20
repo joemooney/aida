@@ -63,7 +63,7 @@ fn render_help_snapshot() -> String {
 
 // The surface depends on cargo features (`tui` adds `aida tui`); the golden
 // file is recorded with the default feature set CI tests.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 #[cfg_attr(
     not(feature = "tui"),
@@ -109,9 +109,9 @@ fn help_surface_matches_golden_snapshot() {
 /// Top-level commands still on the legacy `Command` enum. It may only go down:
 /// a new command registers in `command_registry::REGISTRY` instead, and each
 /// migration slice lowers this number in the same change.
-const LEGACY_TOP_LEVEL_COMMANDS: usize = 155;
+const LEGACY_TOP_LEVEL_COMMANDS: usize = 0;
 
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn legacy_command_enum_only_shrinks() {
     let count = Cli::command().get_subcommands().count();
@@ -128,7 +128,7 @@ fn legacy_command_enum_only_shrinks() {
     );
 }
 
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn registry_is_sorted_unique_and_self_consistent() {
     let names: Vec<&str> = REGISTRY.iter().map(|reg| reg.name).collect();
@@ -150,7 +150,7 @@ fn registry_is_sorted_unique_and_self_consistent() {
 
 // Every top-level name resolves to exactly one owner, so a command cannot be
 // both legacy and registered, and every registration's help anchor exists.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn every_top_level_name_has_exactly_one_owner() {
     let legacy: Vec<String> = Cli::command()
@@ -164,7 +164,7 @@ fn every_top_level_name_has_exactly_one_owner() {
             + REGISTRY.iter().filter(|reg| reg.name == name).count();
         assert_eq!(owners, 1, "`aida {name}` has {owners} owners");
     }
-    for reg in REGISTRY {
+    for reg in REGISTRY.iter().filter(|reg| !reg.help_after.is_empty()) {
         assert!(
             built
                 .get_subcommands()
@@ -174,11 +174,19 @@ fn every_top_level_name_has_exactly_one_owner() {
             reg.help_after
         );
     }
+    assert_eq!(
+        REGISTRY
+            .iter()
+            .filter(|reg| reg.help_after.is_empty())
+            .count(),
+        1,
+        "exactly one command comes first (`help_after: \"\"`)"
+    );
 }
 
 // Every registered command's policy answers for its bare invocation, so the
 // gates in `run()` never see an unclassified registered command.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn every_registered_command_parses_through_the_registry_path() {
     for (argv, name) in [
@@ -187,17 +195,25 @@ fn every_registered_command_parses_through_the_registry_path() {
         (vec!["aida", "_bg-fetch", "fixture-store"], "_bg-fetch"),
     ] {
         let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
-        let Command::Registered(invocation) = &cli.command else {
-            panic!("{argv:?} parsed as legacy {:?}", cli.command);
-        };
+        let Command::Registered(invocation) = &cli.command;
         assert_eq!(invocation.reg.name, name);
         let _ = invocation.policy();
     }
-    assert_eq!(REGISTRY.len(), 3, "add the new registration to this test");
+    // Every registration is reachable by name; `--help` short-circuits any
+    // required arguments.
+    for reg in REGISTRY {
+        let err = try_parse_from(["aida", reg.name, "--help"]).expect_err("help exits");
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::DisplayHelp,
+            "`aida {} --help`",
+            reg.name
+        );
+    }
 }
 
 // The presence verbs and the fetch worker keep their legacy policy answers.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn migrated_commands_keep_their_legacy_policy() {
     for argv in [
@@ -220,9 +236,7 @@ fn migrated_commands_keep_their_legacy_policy() {
 #[test]
 fn bg_fetch_handler_receives_its_positional() {
     let cli = try_parse_from(["aida", "_bg-fetch", "fixture-store"]).unwrap();
-    let Command::Registered(invocation) = &cli.command else {
-        panic!("expected registered");
-    };
+    let Command::Registered(invocation) = &cli.command;
     let args = <crate::session_misc_cmd::BgFetchArgs as FromArgMatches>::from_arg_matches(
         &invocation.matches,
     )
@@ -232,7 +246,7 @@ fn bg_fetch_handler_receives_its_positional() {
 }
 
 // Top-level options reach both dispatch paths, before or after the command.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn global_args_reach_registered_and_legacy_commands() {
     use crate::cli::OutputFormat;
@@ -248,7 +262,11 @@ fn global_args_reach_registered_and_legacy_commands() {
         );
     }
     let cli = try_parse_from(["aida", "-p", "demo", "--format", "json", "list"]).unwrap();
-    assert!(matches!(cli.command, Command::List { .. }));
+    assert!(matches!(
+        cli.command
+            .registered::<crate::requirements_cli::ListArgs>(),
+        crate::requirements_cli::ListArgs { .. }
+    ));
     assert!(matches!(cli.globals.format, Some(OutputFormat::Json)));
     assert_eq!(cli.globals.project.as_deref(), Some("demo"));
     let cli = try_parse_from(["aida", "--file", "r.yaml", "home"]).unwrap();
@@ -256,7 +274,7 @@ fn global_args_reach_registered_and_legacy_commands() {
 }
 
 // A migrated built-in still shadows an `aida-<name>` extension on PATH.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn registered_commands_shadow_path_extensions() {
     let names = crate::user_alias::real_subcommand_names();
@@ -284,7 +302,7 @@ fn registered_commands_shadow_path_extensions() {
 /// Production code reaches the clap tree only through this module, so no
 /// consumer can miss a registered command. Test modules may still use the
 /// derived `Cli` parser directly.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.aca82bf2 | ai:claude
 #[test]
 fn production_code_uses_only_the_built_command_tree() {
     const FORBIDDEN: &[&str] = &[
@@ -370,24 +388,317 @@ fn production_lines(text: &str) -> Vec<(usize, &str)> {
     out
 }
 
+// Commands whose read-only verbs stay open to guest stakeholders keep the
+// legacy per-verb answers once registered.
+// trace:STORY-1728.ac394c52 | ai:claude
+#[test]
+fn per_verb_stakeholder_policy_matches_the_legacy_table() {
+    use StakeholderAction::*;
+    for (argv, want) in [
+        (vec!["aida", "plan", "verify", "p.md"], Read),
+        (vec!["aida", "plan", "verify", "p.md", "--fix"], Write),
+        (vec!["aida", "plan", "helpers", "TASK-1"], Read),
+        (vec!["aida", "role", "list"], Read),
+        (vec!["aida", "role", "active"], Read),
+        (vec!["aida", "role", "enter", "advisor"], Role),
+        (vec!["aida", "session", "leases"], Read),
+        (vec!["aida", "session", "end"], Session),
+        (vec!["aida", "worker", "directives"], Read),
+        (vec!["aida", "worker", "gc"], Write),
+        (vec!["aida", "punts", "list"], Read),
+        (vec!["aida", "punts", "analyze"], Write),
+    ] {
+        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        assert_eq!(
+            crate::stakeholder_cli_action(&cli.command),
+            want,
+            "{argv:?}"
+        );
+    }
+    let cli = try_parse_from(["aida", "role", "list"]).unwrap();
+    assert!(crate::role::role_restore_prompt_should_skip(&cli.command));
+}
+
+thread_local! {
+    /// What each synthetic handler saw: `(handler, had_store)`.
+    static SEEN: std::cell::RefCell<Vec<(&'static str, bool)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn synthetic_reg(run: Handler) -> &'static CommandReg {
+    Box::leak(Box::new(CommandReg {
+        name: "synthetic",
+        help_after: "",
+        command: || clap::Command::new("synthetic"),
+        policy: |_| CmdPolicy {
+            stakeholder: StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run,
+    }))
+}
+
+fn synthetic_invocation(run: Handler) -> Invocation {
+    let reg = synthetic_reg(run);
+    Invocation {
+        reg,
+        matches: (reg.command)().get_matches_from(["synthetic"]),
+    }
+}
+
+// Advisor condition (a): an Early handler runs exactly once, at the early
+// point, with no store, and always finishes there; it can never reach a
+// storage dispatcher. A store-phase handler that defers at the early point
+// sees no store there and runs again only when a dispatcher hands it one.
+// trace:STORY-1728.ac394c52 | ai:claude
+#[test]
+fn early_handlers_run_without_a_store_and_continue_reaches_the_store_phase() {
+    let globals = try_parse_from(["aida", "status"]).unwrap().globals;
+    SEEN.with(|seen| seen.borrow_mut().clear());
+
+    let early = synthetic_invocation(Handler::Early(|_, ctx| {
+        SEEN.with(|seen| seen.borrow_mut().push(("early", ctx.store.is_some())));
+        Ok(())
+    }));
+    assert_eq!(early.run_early(&globals).unwrap(), Flow::Return);
+    let store_path = std::path::Path::new("fixture-store");
+    let reached_store = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let store = StoreCtx::Distributed {
+            store_path,
+            project_root_hint: None,
+        };
+        early.run_store(store, Some(&globals))
+    }));
+    assert!(
+        reached_store.is_err(),
+        "an Early handler must never run inside a storage dispatcher"
+    );
+    SEEN.with(|seen| assert_eq!(*seen.borrow(), vec![("early", false)]));
+
+    SEEN.with(|seen| seen.borrow_mut().clear());
+    let store = synthetic_invocation(Handler::Store(|_, ctx| {
+        SEEN.with(|seen| seen.borrow_mut().push(("store", ctx.store.is_some())));
+        Ok(if ctx.store.is_some() {
+            Flow::Return
+        } else {
+            Flow::Continue
+        })
+    }));
+    assert_eq!(store.run_early(&globals).unwrap(), Flow::Continue);
+    let ctx = StoreCtx::Distributed {
+        store_path,
+        project_root_hint: None,
+    };
+    assert_eq!(store.run_store(ctx, None).unwrap(), Flow::Return);
+    SEEN.with(|seen| {
+        assert_eq!(*seen.borrow(), vec![("store", false), ("store", true)]);
+    });
+}
+
+/// The body of `fn run()` in `lib_part1.rs`, up to its closing brace.
+fn run_fn_body() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib_part1.rs");
+    let text = std::fs::read_to_string(path).unwrap();
+    let start = text
+        .find("\npub(crate) fn run() -> Result<()> {")
+        .expect("lib_part1.rs defines run()");
+    let end = start + text[start..].find("\n}\n").expect("run() closes");
+    text[start..end].to_string()
+}
+
+// Advisor condition (a), dispatcher side: `run()` reaches the early dispatch
+// point before it resolves or opens any store, so no Early handler runs with
+// storage, the cache or the graph initialised; and each storage stage has
+// exactly one dispatch site, so a `Flow::Continue` from the early point is
+// served by one store dispatch (legacy or git-backend, with the distributed
+// pre-backend stage only a pass-through seam in front of the latter).
+// trace:STORY-1728.ac394c52 | ai:claude
+#[test]
+fn run_dispatches_early_handlers_before_any_store_is_opened() {
+    const STORE_INIT: &[&str] = &[
+        "requirements_path",
+        "Storage::new(",
+        "run_on_distributed_store(",
+        "handle_git_backend_command(",
+        "CachedGitBackend",
+        "find_project_root(",
+        "open_store",
+        "ensure_cache",
+    ];
+    let body = run_fn_body();
+    let early = body
+        .find("invocation.run_early(")
+        .expect("run() has the early dispatch point");
+    let prelude: Vec<&str> = body[..early]
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .filter(|line| STORE_INIT.iter().any(|pat| line.contains(pat)))
+        .collect();
+    assert!(
+        prelude.is_empty(),
+        "run() touches storage before the early dispatch point:\n{}",
+        prelude.join("\n")
+    );
+    assert_eq!(
+        body.matches("invocation.run_early(").count(),
+        1,
+        "run() has exactly one early dispatch point"
+    );
+
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut sites = Vec::new();
+    for path in production_sources(&src) {
+        let name = path.strip_prefix(&src).unwrap().display().to_string();
+        if name == "command_registry.rs" {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        for (_, line) in production_lines(&text) {
+            if line.contains("invocation.run_early(") && name != "lib_part1.rs" {
+                sites.push(format!("{name}: early"));
+            }
+            if line.contains("invocation.run_store(") {
+                sites.push(name.clone());
+            }
+        }
+    }
+    sites.sort();
+    assert_eq!(
+        sites,
+        ["git_backend_cmd.rs", "lib_part1.rs", "store_sync.rs"],
+        "one store dispatch per stage: git-backend, legacy, distributed"
+    );
+    let store_sync =
+        std::fs::read_to_string(src.join("store_sync.rs")).expect("store_sync.rs reads");
+    let seam = store_sync
+        .find("invocation.run_store(")
+        .expect("distributed dispatch site");
+    let tail = &store_sync[seam..];
+    let next_fn = tail.find("\n}\n").expect("run_on_distributed_store closes");
+    assert!(
+        tail[..next_fn].contains("handle_git_backend_command(store_path, command)"),
+        "a Continue at the distributed seam falls through to the git-backend dispatcher"
+    );
+}
+
+/// `is_write_command` on main before the registry (origin/main a27fe3fc76,
+/// status_awaiting.rs:1407, the base the policy fixture was captured at): the
+/// commands the team-identity guard refuses under a shared `default` identity
+/// when `AIDA_TEAM_REQUIRE_USER=1`. Every verb of these commands counted;
+/// every other command was a read.
+const MAIN_TEAM_IDENTITY_WRITES: &[&str] = &[
+    "add",
+    "archive",
+    "brief",
+    "comment",
+    "defer",
+    "do",
+    "edit",
+    "queue",
+    "session",
+    "unarchive",
+    "undefer",
+];
+
+// Advisor condition (c), two-seat 5(b) identity: `team_identity_write` comes
+// from each command's registration, and for every registered command and
+// every one of its verbs it equals main's `is_write_command`. Any divergence
+// changes which commands write under team identity, so it fails here.
+// trace:STORY-1728.ac394c52 | ai:claude
+#[test]
+fn team_identity_write_matches_mains_is_write_command_for_every_verb() {
+    let mut checked = 0;
+    let mut diverged = Vec::new();
+    for reg in REGISTRY {
+        let want = MAIN_TEAM_IDENTITY_WRITES.contains(&reg.name);
+        let mut paths = vec![Vec::new()];
+        collect_paths(&(reg.command)(), &[], &mut paths);
+        for path in paths {
+            let mut argv = vec![reg.name.to_string()];
+            argv.extend(path.iter().cloned());
+            // Required arguments are absent; policies answer for an
+            // unparseable invocation too (fail-closed).
+            let matches = (reg.command)()
+                .ignore_errors(true)
+                .try_get_matches_from(&argv)
+                .unwrap_or_else(|err| panic!("`aida {}`: {err}", argv.join(" ")));
+            checked += 1;
+            if (reg.policy)(&matches).team_identity_write != want {
+                diverged.push(format!("aida {} (main: {want})", argv.join(" ")));
+            }
+        }
+    }
+    assert!(
+        diverged.is_empty(),
+        "team_identity_write diverges from main's is_write_command:\n{}",
+        diverged.join("\n")
+    );
+    assert!(checked > REGISTRY.len(), "verbs were enumerated");
+    for name in MAIN_TEAM_IDENTITY_WRITES {
+        assert!(
+            lookup(name).is_some(),
+            "`{name}` is registered, so the parity above covered it"
+        );
+    }
+
+    // The guard itself reads the registry answer for real argv.
+    for (argv, want) in [
+        (vec!["aida", "queue", "list"], true),
+        (vec!["aida", "comment", "add", "TASK-1", "note"], true),
+        (vec!["aida", "edit", "TASK-1", "--status", "approved"], true),
+        (vec!["aida", "session", "leases"], true),
+        (vec!["aida", "show", "TASK-1"], false),
+        (vec!["aida", "rework", "TASK-1"], false),
+        (vec!["aida", "status"], false),
+        (vec!["aida", "team"], false),
+    ] {
+        let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
+        assert_eq!(
+            crate::status_awaiting::is_write_command(&cli.command),
+            want,
+            "{argv:?}"
+        );
+    }
+}
+
+// The team-identity guard's exemptions keep main's classification: `aida
+// team` and the machine-readable `aida status --json` stay silent.
+// trace:STORY-1728.ac394c52 | ai:claude
+#[test]
+fn team_identity_guard_exemptions_match_main() {
+    let team = parse_command(["aida", "team"]);
+    assert_eq!(team.name(), "team");
+    let status = parse_command(["aida", "status", "--json"]);
+    assert!(status
+        .args::<crate::status_cmd::StatusArgs>()
+        .is_some_and(|args| args.json));
+    let plain = parse_command(["aida", "status"]);
+    assert!(!plain
+        .args::<crate::status_cmd::StatusArgs>()
+        .is_some_and(|args| args.json));
+    assert!(team.args::<crate::status_cmd::StatusArgs>().is_none());
+}
+
 fn ordering_reg(name: &'static str, help_after: &'static str) -> &'static CommandReg {
     Box::leak(Box::new(CommandReg {
         name,
         help_after,
         command: || clap::Command::new("ordering"),
-        phase: Phase::PreStore,
         policy: |_| CmdPolicy {
             stakeholder: StakeholderAction::Read,
             per_write_auto_push: false,
             skip_role_restore_prompt: false,
+            team_identity_write: false,
         },
-        run: |_, _| Ok(()),
+        run: Handler::Store(|_, _| Ok(Flow::Return)),
     }))
 }
 
 // A help_after cycle among registered commands is rejected by name, never
 // appended silently at the end of help.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 fn help_after_cycle_is_rejected() {
     let a = ordering_reg("cyc-a", "cyc-b");
@@ -408,7 +719,7 @@ fn help_after_cycle_is_rejected() {
 
 // Entries sharing one anchor land right after it in name order, whatever the
 // input order, and chained anchors resolve across rounds.
-// trace:STORY-1728 | ai:claude
+// trace:STORY-1728.ac5ac281 | ai:claude
 #[test]
 fn shared_help_after_anchor_places_entries_in_name_order() {
     let alpha = ordering_reg("alpha", "list");
@@ -428,6 +739,13 @@ fn shared_help_after_anchor_places_entries_in_name_order() {
             regs.iter().map(|reg| reg.name).collect::<Vec<_>>()
         );
     }
+    // `help_after: ""` is the first command, and those siblings sort too.
+    let first = ordering_reg("first", "");
+    let front = ordering_reg("front", "");
+    assert_eq!(
+        help_order(&["add", "list"], &[front, alpha, first]).unwrap(),
+        vec!["first", "front", "add", "list", "alpha"]
+    );
     assert!(
         help_order(&built_legacy_names(), REGISTRY).is_ok(),
         "every real registration resolves"
@@ -439,4 +757,266 @@ fn built_legacy_names() -> Vec<&'static str> {
         .get_subcommands()
         .map(|sub| &*Box::leak(sub.get_name().to_string().into_boxed_str()))
         .collect()
+}
+
+/// The files criterion 4 keeps a new flag out of.
+fn is_hot_file(name: &str) -> bool {
+    matches!(
+        name,
+        "cli.rs"
+            | "lib.rs"
+            | "command_registry.rs"
+            | "git_backend_cmd.rs"
+            | "stakeholder_role.rs"
+            | "role.rs"
+    ) || (name.starts_with("lib_part") && name.ends_with(".rs"))
+}
+
+/// Every clap-derived type outside the hot files: `(name, is_enum)`.
+fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
+    let item = regex::Regex::new(r"^\s*pub(\([^)]*\))?\s+(enum|struct)\s+(\w+)").unwrap();
+    let mut out = Vec::new();
+    for path in production_sources(src) {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if path.parent() == Some(src) && is_hot_file(&name) {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = text.lines().collect();
+        let mut i = 0;
+        while i < lines.len() {
+            if lines[i].trim_start().starts_with("#[derive(") {
+                let mut derive = lines[i].to_string();
+                while !derive.contains(")]") && i + 1 < lines.len() {
+                    i += 1;
+                    derive.push_str(lines[i]);
+                }
+                let clap = ["Parser", "Args", "Subcommand"].iter().any(|d| {
+                    derive.contains(&format!("::{d}"))
+                        || derive.contains(&format!("({d}"))
+                        || derive.contains(&format!(" {d}"))
+                });
+                if clap {
+                    if let Some(caps) = lines[i + 1..].iter().find_map(|line| item.captures(line)) {
+                        out.push((caps[3].to_string(), &caps[2] == "enum"));
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The last `n` characters of `text`, cut on a char boundary.
+fn last_chars(text: &str, n: usize) -> &str {
+    let from = text
+        .char_indices()
+        .rev()
+        .nth(n.saturating_sub(1))
+        .map_or(0, |(at, _)| at);
+    &text[from..]
+}
+
+/// The offset just past the bracket closing the one opened before `from`.
+fn close_of(bytes: &[u8], from: usize) -> usize {
+    let (mut end, mut depth) = (from, 1);
+    while depth > 0 && end < bytes.len() {
+        depth += match bytes[end] {
+            b'{' | b'(' | b'[' => 1,
+            b'}' | b')' | b']' => -1,
+            _ => 0,
+        };
+        end += 1;
+    }
+    end
+}
+
+/// The offset of the innermost bracket still open at `at`.
+fn enclosing_open(bytes: &[u8], at: usize) -> Option<usize> {
+    let mut depth = 0;
+    for at in (0..at).rev() {
+        match bytes[at] {
+            b'}' | b')' | b']' => depth += 1,
+            b'{' | b'(' | b'[' if depth == 0 => return Some(at),
+            b'{' | b'(' | b'[' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `text` with every bracketed group below the top level removed.
+fn top_level(text: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0;
+    for ch in text.chars() {
+        match ch {
+            '{' | '(' | '[' => depth += 1,
+            '}' | ')' | ']' => depth -= 1,
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+// Criterion 4, enforced: no hot file holds a per-verb dispatcher for a
+// command's subcommand enum (a fn taking one, or a match over its variants
+// with no catch-all arm), or a `{ … }` or tuple pattern over a command's clap
+// type or variant without `..`. Any of these means a new flag or verb on
+// that command must edit the hot file. Renaming imports (`use X as Y`) are
+// followed, and a glob import of a command's verbs is refused outright,
+// since bare variants would slip past every check.
+// trace:STORY-1728.ac245f28 | ai:claude
+#[test]
+fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let types = command_clap_types(&src);
+    assert!(
+        types.len() > 100,
+        "clap types were collected: {}",
+        types.len()
+    );
+    let decl = regex::Regex::new(r"(enum|struct|impl|for|fn)\s+$").unwrap();
+    let comment = regex::Regex::new(r"//[^\n]*").unwrap();
+    let use_item = regex::Regex::new(r"\buse\s+[^;]*;").unwrap();
+    let rename = regex::Regex::new(r"\b(\w+)\s+as\s+(\w+)\b").unwrap();
+    let glob = regex::Regex::new(r"\b(\w+)::\*").unwrap();
+    let fn_open = regex::Regex::new(r"\bfn\s+(\w+)\s*(<[^>]*>)?\s*\(").unwrap();
+    let param_type = regex::Regex::new(r":\s*&?(?:mut\s+)?(?:[\w:]*::)?(\w+)").unwrap();
+    let catch_all = regex::Regex::new(r"(^|[,\s])(_|[a-z]\w*)\s*(=>|if\s)").unwrap();
+    let arm_follow = regex::Regex::new(r"^\s*(=>|\||if\s)").unwrap();
+    let match_kw = regex::Regex::new(r"\bmatch\b").unwrap();
+    let mut violations = Vec::new();
+    let mut entries: Vec<_> = std::fs::read_dir(&src)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    entries.sort();
+    for path in entries {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !is_hot_file(&name) {
+            continue;
+        }
+        let raw = std::fs::read_to_string(&path).unwrap();
+        // Blank comments in place so offsets still map to lines.
+        let text = comment.replace_all(&raw, |caps: &regex::Captures| " ".repeat(caps[0].len()));
+        let bytes = text.as_bytes();
+        let line_of = |at: usize| text[..at].matches('\n').count() + 1;
+
+        // This file's spellings of each clap type: its own name, plus any
+        // `use … as` rename.
+        let mut names: Vec<String> = types.iter().map(|(name, _)| name.clone()).collect();
+        let mut enums: Vec<String> = types
+            .iter()
+            .filter(|(_, is_enum)| *is_enum)
+            .map(|(name, _)| name.clone())
+            .collect();
+        for item in use_item.find_iter(&text) {
+            for caps in rename.captures_iter(item.as_str()) {
+                if names.contains(&caps[1].to_string()) {
+                    names.push(caps[2].to_string());
+                    if enums.contains(&caps[1].to_string()) {
+                        enums.push(caps[2].to_string());
+                    }
+                }
+            }
+            for caps in glob.captures_iter(item.as_str()) {
+                if enums.contains(&caps[1].to_string()) {
+                    violations.push(format!(
+                        "{name}:{} glob-imports `{}` verbs; name them through the enum",
+                        line_of(item.start()),
+                        &caps[1]
+                    ));
+                }
+            }
+        }
+        // A variant segment is capitalised; `Type::method(…)` is a call.
+        let group =
+            regex::Regex::new(&format!(r"\b({})(::[A-Z]\w*)?\s*[{{(]", names.join("|"))).unwrap();
+        let variant = regex::Regex::new(&format!(r"\b({})::[A-Z]\w*\b", enums.join("|"))).unwrap();
+
+        for found in group.find_iter(&text) {
+            if decl.is_match(last_chars(&text[..found.start()], 12)) {
+                continue;
+            }
+            let end = close_of(bytes, found.end());
+            // Only this level's own fields: drop nested groups.
+            let fields = top_level(&text[found.end()..end - 1]);
+            let listed = if found.as_str().ends_with('{') {
+                !fields.trim().is_empty()
+            } else {
+                // One tuple field binds the whole payload; two or more
+                // spell the variant out.
+                fields.trim().trim_end_matches(',').contains(',')
+            };
+            if listed && !fields.contains("..") {
+                violations.push(format!(
+                    "{name}:{} `{}` lists every field; add `..`",
+                    line_of(found.start()),
+                    found.as_str().trim_end_matches(['{', '(']).trim()
+                ));
+            }
+        }
+
+        for found in fn_open.captures_iter(&text) {
+            let open = found.get(0).unwrap().end();
+            let params = &text[open..close_of(bytes, open) - 1];
+            for ty in param_type.captures_iter(params) {
+                if enums.contains(&ty[1].to_string()) {
+                    violations.push(format!(
+                        "{name}:{} fn {} dispatches `{}` verbs; move it into the command's module",
+                        line_of(found.get(0).unwrap().start()),
+                        &found[1],
+                        &ty[1]
+                    ));
+                }
+            }
+        }
+
+        // A match arm over a command's verbs, in a match with no catch-all.
+        let mut seen_blocks = std::collections::BTreeSet::new();
+        for found in variant.find_iter(&text) {
+            let mut after = found.end();
+            if matches!(bytes.get(after), Some(b'{' | b'(')) {
+                after = close_of(bytes, after + 1);
+            } else if let Some(gap) = text[after..].find(|ch: char| !ch.is_whitespace()) {
+                if matches!(bytes.get(after + gap), Some(b'{' | b'(')) {
+                    after = close_of(bytes, after + gap + 1);
+                }
+            }
+            if !arm_follow.is_match(&text[after..]) {
+                continue;
+            }
+            // The innermost unclosed bracket before the arm must be a `{`
+            // opening a match (an unclosed `(` is `matches!` or a call).
+            let Some(open) = enclosing_open(bytes, found.start()) else {
+                continue;
+            };
+            if bytes[open] != b'{' {
+                continue;
+            }
+            let head = &text[..open];
+            let head = &head[head.rfind([';', '{', '}']).map_or(0, |at| at + 1)..];
+            if !match_kw.is_match(head) || !seen_blocks.insert(open) {
+                continue;
+            }
+            let arms = top_level(&text[open + 1..close_of(bytes, open + 1) - 1]);
+            if !catch_all.is_match(&arms) {
+                violations.push(format!(
+                    "{name}:{} matches every `{}` verb with no catch-all arm",
+                    line_of(found.start()),
+                    found.as_str().split("::").next().unwrap()
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "a new flag or verb on these commands would have to edit a hot file:\n{}",
+        violations.join("\n")
+    );
 }

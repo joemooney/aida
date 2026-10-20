@@ -147,7 +147,8 @@ fn ci_fix_argv_is_contained_and_scoped_to_its_worktree() {
         Some(&wt),
         None,
         None,
-    );
+    )
+    .unwrap();
     assert_eq!(permission_mode(&contained), "dontAsk", "{contained:?}");
     let settings = settings_json(&contained);
     assert!(
@@ -167,10 +168,12 @@ fn ci_fix_argv_is_contained_and_scoped_to_its_worktree() {
         None,
         None,
         None,
-    );
+    )
+    .unwrap();
     assert_eq!(
         uncontained,
         session::headless_vendor_args(HeadlessVendor::Claude, "fix ci", SID, false, None, None)
+            .unwrap()
     );
 }
 
@@ -191,7 +194,8 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
             None,
             None,
             Some(&root),
-        );
+        )
+        .unwrap();
         assert_eq!(prog, "claude");
         assert_eq!(
             permission_mode(&args),
@@ -213,7 +217,8 @@ fn advisor_argv_is_contained_for_cold_boot_and_fork() {
             None,
             None,
             None,
-        );
+        )
+        .unwrap();
         let (_, legacy) = session::advisor_tier_program_and_args_with_tuning(
             HeadlessVendor::Claude,
             is_fork,

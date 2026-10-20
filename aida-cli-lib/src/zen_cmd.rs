@@ -5,6 +5,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "zen_cmd_args.rs"]
+pub(crate) mod zen_cmd_args;
+pub(crate) use zen_cmd_args::*;
+
 /// `aida zen status` — print the corroborated zen context of the current
 /// process. The bare status word (`zen` / `interactive`) goes to stdout so a
 /// skill can branch on it cleanly; any informational note goes to stderr.
@@ -161,3 +166,304 @@ pub(crate) fn handle_zen_command(cmd: &ZenCommand) -> Result<()> {
         }
     }
 }
+
+/// One-shot AUTONOMOUS implement + ship from a spec OR a one-line thought.
+/// Pass an approved spec id to drive it; pass free text to draft a spec from
+/// the thought, file it, and drive that — thought to (gated) merged in one
+/// line. Auto-queues the spec, then drives it through the SAME
+/// `--auto-complete` orchestrator `aida burndown` uses (implement → CI →
+/// review → merge → pull). FULLY HEADLESS by default — kick one off and
+/// walk away; an INDEPENDENT reviewer always runs before the auto-merge.
+/// Drives are SERIALIZED per repo: a global drain lock allows one drive at
+/// a time, so a second `aida zen` while one is live is refused. To drive
+/// several specs at once, use the `aida burndown` fan-out — one
+/// orchestrator over worktree-isolated implementer subagents. Use
+/// `--supervised` to drive the implementer yourself. The auto-implement
+/// counterpart to `aida ship` (which finishes a HUMAN-implemented spec).
+/// With no argument, prints help.
+// trace:STORY-721 | ai:claude — plain `//` keeps the marker out of `--help`.
+// trace:STORY-725 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "zen")]
+pub(crate) struct ZenArgs {
+    /// An approved SPEC id to drive, OR a free-text thought to draft
+    /// into a spec and drive. Free text is drafted into a title +
+    /// description + acceptance criteria, filed as a draft, then routed
+    /// through the approve-gate before driving.
+    #[clap(value_name = "SPEC")]
+    pub spec: Option<String>,
+
+    /// Supervised drive: YOU drive the implementer interactively, and the
+    /// reviewer still runs headless as an independent gate before the
+    /// auto-merge. The opt-in counterpart to the fire-and-forget default
+    /// (which runs the implementer headless too). Maps to the
+    /// orchestrator's `--no-human=reviewer-only`.
+    #[clap(long, conflicts_with = "no_human")]
+    pub supervised: bool,
+
+    /// Explicit autonomy mode override, forwarded to the orchestrator. The
+    /// reviewer ALWAYS runs headless as an independent gate; this only
+    /// governs the implementer. The DEFAULT is `both` (fully headless
+    /// fire-and-forget — kick one off and walk away; drives are serialized
+    /// per repo, use `aida burndown` to drive several specs at once).
+    /// `--no-human=reviewer-only` (= `--supervised`) keeps the implementer
+    /// interactive. Aliases: `--unattended`, `--headless`.
+    #[clap(
+        long,
+        value_name = "MODE",
+        num_args = 0..=1,
+        default_missing_value = "both",
+        aliases = ["unattended", "headless"]
+    )]
+    pub no_human: Option<String>,
+
+    /// Skip the post-merge `aida pull` (the Done → Completed auto-bump) —
+    /// forwarded to the orchestrator.
+    #[clap(long)]
+    pub no_pull: bool,
+
+    /// Override the soft suitability warnings (under-specified / coupled)
+    /// and drive anyway. Does NOT override the hard refusals (epic,
+    /// keystone, blocked).
+    // trace:TASK-1037 | ai:claude
+    #[clap(long)]
+    pub force: bool,
+
+    /// Own worktree + own PR: split this spec out of its scope (parent epic
+    /// / active focus) instead of routing into the scope worktree. The
+    /// explicit exception to the default-into-scope routing.
+    // trace:ADR-6 | ai:claude
+    #[clap(long, conflicts_with = "into_epic")]
+    pub solo: bool,
+
+    /// Force the cluster route: drive inside the scope (parent epic / focus)
+    /// worktree even when the default would otherwise pick its own. The
+    /// counterpart to `--solo`.
+    // trace:ADR-6 | ai:claude
+    #[clap(long)]
+    pub into_epic: bool,
+
+    /// Resolve + validate the spec and PRINT the plan WITHOUT driving it.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Emit the drive-suitability GATE VERDICT as JSON and exit WITHOUT
+    /// driving — the machine-readable pre-flight a shell-out consumer (the
+    /// TUI drive verb) reads to surface a gate hold, and its clarify / force
+    /// remedy, instead of a false "drive launched". Implies a dry run; needs
+    /// a real SPEC id (not a free-text thought).
+    // trace:STORY-744 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+
+    /// Which vendor CLI runs the headless implementer for this drive:
+    /// `claude`, `codex`, or `agy` (alias: `--agent`, matching `aida agent
+    /// new <vendor>`). A per-invocation override — no need to export
+    /// `AIDA_HEADLESS_VENDOR` just to drive one spec on Codex. Resolution
+    /// order: this flag > the `AIDA_HEADLESS_VENDOR` env > the
+    /// `[orchestrator] headless_vendor` / `[agents] vendor` config knob >
+    /// `claude` (default).
+    // trace:TASK-1116 | ai:claude
+    #[clap(long, visible_alias = "agent", value_name = "VENDOR")]
+    pub vendor: Option<String>,
+
+    /// 2-agent bake-off: fan claude + codex to INDEPENDENTLY implement this
+    /// spec in separate worktrees (same acceptance, no shared context), run
+    /// each candidate's CI (a failing candidate is eliminated), have ONE
+    /// BLIND reviewer score the passers side-by-side (vendor identity
+    /// stripped), merge the winner into the current branch, delete the
+    /// loser branch, and record the outcome (a CompeteOutcome row in
+    /// `.aida/events.jsonl` + a spec comment) for dispatch-policy data.
+    /// Premium mode — 2x implement cost; best for hard/ambiguous specs.
+    // trace:STORY-722 | ai:claude
+    #[clap(
+        long,
+        conflicts_with_all = ["vendor", "supervised", "no_human", "solo", "into_epic", "json"]
+    )]
+    pub compete: bool,
+
+    /// Inspect the corroborated zen context — whether `AIDA_ZEN=1` is backed
+    /// by a verifiable provenance or is a stale / leaked value. A skill
+    /// introspection hook, not a daily-driver.
+    // trace:BUG-237 | ai:claude
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::ZenCommand>,
+}
+
+fn run_zen(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ZenArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // BUG-237: zen-context introspection. Like `orchestrator status`, reads
+            // only env vars + the drain-state file + session leases — no requirement
+            // store. The `aida zen <spec>` autonomous-drive form (STORY-721) needs the
+            // store to validate the spec's status, so only the introspection
+            // subcommands short-circuit here; the spec-drive path falls through to the
+            // post-storage dispatch. trace:BUG-237 trace:TASK-336 trace:STORY-721 | ai:claude
+            if let ZenArgs {
+                command: Some(zen_cmd),
+                ..
+            } = &args
+            {
+                return crate::command_registry::returned(handle_zen_command(zen_cmd));
+            }
+            // STORY-722: `aida zen <spec> --compete` — the 2-agent bake-off. Like
+            // `aida compete` it self-loads the store (to resolve the spec + assemble
+            // the brief) and orchestrates worktrees + headless vendor runs, so it
+            // dispatches early and works identically on both storage backends.
+            // trace:STORY-722 | ai:claude
+            if let ZenArgs {
+                spec,
+                compete: true,
+                dry_run,
+                command: None,
+                ..
+            } = &args
+            {
+                let Some(spec) = spec.as_deref() else {
+                    anyhow::bail!(
+                        "`aida zen --compete` needs a SPEC id (e.g. `aida zen TASK-123 --compete`)"
+                    );
+                };
+                return crate::command_registry::returned(compete_cmd::handle_zen_compete(
+                    spec, *dry_run,
+                ));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // STORY-721: `aida zen <spec>` autonomous implement+ship drive. The
+                // introspection subcommands (`zen status` / `finish` / `needs-human`)
+                // short-circuit before storage init in `run()`; this arm only sees the
+                // spec-drive form (`command: None`), which needs the store to validate
+                // the spec's status before driving it. trace:STORY-721 | ai:claude
+                ZenArgs {
+                    spec,
+                    supervised,
+                    no_human,
+                    no_pull,
+                    force,
+                    solo,
+                    into_epic,
+                    dry_run,
+                    json,
+                    vendor,
+                    // trace:STORY-722 — the --compete form dispatches before storage init.
+                    compete: _,
+                    command: _,
+                } => {
+                    let storage = Storage::new(store_path.to_path_buf());
+                    // STORY-744: the machine-readable gate probe short-circuits the
+                    // drive — resolve + classify the suitability gate and print the
+                    // verdict as JSON so a shell-out consumer (the TUI drive verb) reads
+                    // the SAME gate the drive runs instead of parsing human prose.
+                    if *json {
+                        return crate::command_registry::returned(run_zen_gate_json(
+                            &storage,
+                            spec.as_deref(),
+                        ));
+                    }
+                    // TASK-1116: a per-invocation `--vendor`/`--agent` picks the headless
+                    // implementer for this drive (top precedence). Installed before the
+                    // self-invoked `aida queue work --auto-complete` child spawns so it
+                    // inherits the choice via `AIDA_HEADLESS_VENDOR`.
+                    apply_drive_vendor_override(vendor.as_deref())?;
+                    let user_id = current_user_id(None);
+                    return crate::command_registry::returned(run_zen_drive(
+                        &storage,
+                        Some(store_path),
+                        &user_id,
+                        spec.as_deref(),
+                        no_human.as_deref(),
+                        *supervised,
+                        *no_pull,
+                        *force,
+                        *solo,
+                        *into_epic,
+                        *dry_run,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-721: `aida zen <spec>` autonomous implement+ship drive on the
+                // legacy (centralized) storage path. The introspection subcommands
+                // short-circuit before storage init; this arm only sees the spec-drive
+                // form. trace:STORY-721 | ai:claude
+                ZenArgs {
+                    spec,
+                    supervised,
+                    no_human,
+                    no_pull,
+                    force,
+                    solo,
+                    into_epic,
+                    dry_run,
+                    json,
+                    vendor,
+                    // trace:STORY-722 — the --compete form dispatches before storage init.
+                    compete: _,
+                    command: _,
+                } => {
+                    // STORY-744: the machine-readable gate probe short-circuits the
+                    // drive entirely — it resolves + classifies and prints the verdict.
+                    if *json {
+                        run_zen_gate_json(&storage, spec.as_deref())?;
+                    } else {
+                        // TASK-1116: a per-invocation `--vendor`/`--agent` picks the
+                        // headless implementer for this drive (top precedence).
+                        apply_drive_vendor_override(vendor.as_deref())?;
+                        let user_id = current_user_id(None);
+                        run_zen_drive(
+                            &storage,
+                            None, // legacy storage path: no git backend for auto-approve
+                            &user_id,
+                            spec.as_deref(),
+                            no_human.as_deref(),
+                            *supervised,
+                            *no_pull,
+                            *force,
+                            *solo,
+                            *into_epic,
+                            *dry_run,
+                        )?;
+                    }
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ZEN: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "zen",
+    help_after: "orchestrator",
+    command: <ZenArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_zen),
+};

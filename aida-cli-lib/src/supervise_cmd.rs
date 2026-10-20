@@ -11,6 +11,11 @@ use crate::process_retry::RetryEtxtbsy;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "supervise_cmd_args.rs"]
+pub(crate) mod supervise_cmd_args;
+pub(crate) use supervise_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -765,3 +770,76 @@ mod story_1096_supervise_watch_tests;
 #[cfg(test)]
 #[path = "tests/bug_1621_watch_redrive_tests.rs"]
 mod bug_1621_watch_redrive_tests;
+
+/// Product-role supervision helpers for nudging stuck work.
+// trace:STORY-1052 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "supervise")]
+pub(crate) struct SuperviseArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::SuperviseCommand,
+}
+
+fn run_supervise(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <SuperviseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                SuperviseArgs {
+                    inner: supervise_cmd,
+                } => {
+                    // trace:STORY-1052 | ai:codex
+                    return crate::command_registry::returned(self::handle_supervise_command(
+                        supervise_cmd,
+                        backend,
+                        store_path,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                SuperviseArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida supervise commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SUPERVISE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "supervise",
+        help_after: "burndown",
+        command: <SuperviseArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_supervise),
+    };

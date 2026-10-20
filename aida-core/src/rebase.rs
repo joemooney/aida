@@ -129,9 +129,8 @@ impl std::fmt::Display for DetectError {
 impl std::error::Error for DetectError {}
 
 fn git(repo: &Path, args: &[&str]) -> Result<String, DetectError> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
+    // trace:BUG-1985 | ai:claude
+    let out = crate::git_ops::host_git_command(repo)
         .args(args)
         .output()
         .map_err(|e| DetectError::Git(format!("spawn failed: {e}")))?;
@@ -238,7 +237,14 @@ pub fn detect(
     if fetch {
         if let Some((remote, remote_branch)) = upstream.split_once('/') {
             // trace:BUG-1622 | ai:claude
-            if git_ok(repo, &["fetch", "--end-of-options", remote, remote_branch]) {
+            // trace:BUG-2181 | ai:claude
+            let mut fetch = Command::new("git");
+            fetch
+                .arg("-C")
+                .arg(repo)
+                .args(["fetch", "--end-of-options", remote, remote_branch]);
+            crate::git_ops::configure_remote_credentials(&mut fetch, repo, remote);
+            if fetch.output().is_ok_and(|o| o.status.success()) {
                 fetched = true;
             }
         }
