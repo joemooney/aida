@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1752",
+  "publishes": [
+    {
+      "at": "2026-10-20T04:07:23.206227696Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T04:11:40.563445208Z",
+      "spec": "TASK-1752",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-20T01:29:39.492900294Z",
+      "spec": "TASK-1752",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T04:06:27.660132550Z",
+      "spec": "TASK-1752",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T04:06:41.880490843Z",
+      "spec": "TASK-1752",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2763
+      }
+    },
+    {
+      "ts": "2026-10-20T04:07:22.712670207Z",
+      "spec": "TASK-1752",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "3c7e184d14f171218ad70453efee47cd99730122",
+        "pr": 2763,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
