@@ -16,8 +16,12 @@ The separate merge-hold workflow is unchanged.
   binary. Each lane lists the binary's tests and runs half of the top-level
   modules as libtest name filters. Filters match substrings, so modules whose
   `<module>::` filter also matches another module's tests share a half.
-  Groups are balanced by test count, largest first. A lane fails if the halves
-  overlap or leave a listed test out.
+  Groups are balanced by measured time, largest first: `[lib_module_seconds]`
+  in `scripts/test-time-budget.toml` records each module's summed test
+  seconds, derived from timestamped lane logs with
+  `scripts/ci-test-shards.py --lib-weights`. A module without an entry weighs
+  its test count times the mean per test. A lane fails if the halves overlap
+  or leave a listed test out.
 - `cli-0` and `cli-1`: Cargo metadata supplies every CLI integration target.
   Targets sort by decreasing measured main-run duration, then name, and alternate
   between halves. `scripts/test-time-budget.toml` records those measurements in

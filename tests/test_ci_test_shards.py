@@ -68,6 +68,30 @@ class ShardsTest(unittest.TestCase):
         self.assertIn('root_test', a + b)
         self.assertLessEqual(abs(len(ran_a) - len(ran_b)), 3)
 
+    def test_lib_halves_balance_measured_seconds_not_counts(self):
+        names = [f'slow::t{i}' for i in range(2)] + [f'fast::t{i}' for i in range(50)] + \
+                [f'mid::t{i}' for i in range(10)] + ['new::t0']
+        a, b = shards.lib_halves(names, {'slow': 100.0, 'fast': 5.0, 'mid': 90.0})
+        self.assertEqual({tuple(a), tuple(b)}, {('slow::',), ('fast::', 'mid::', 'new::')})
+        self.assertEqual(shards.lib_halves(names, {'slow': 100.0, 'fast': 5.0, 'mid': 90.0}), (a, b))
+
+    def test_lib_weights_read_test_times_from_dispatch_order(self):
+        # Two workers: a and b start at once; c starts when a (the first
+        # completion) frees a worker; d when b does.
+        log = '\n'.join([
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:00.0000000Z running 1001 tests',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:02.0000000Z test x::a ... ok',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:05.0000000Z test x::b ... ok',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:06.0000000Z test y::c ... FAILED',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:09.0000000Z test y::d ... ignored',
+        ])
+        self.assertEqual(shards.lib_test_seconds(log, threads=2),
+                         {'x::a': 2.0, 'x::b': 5.0, 'y::c': 4.0, 'y::d': 4.0})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / 'lib-0.log'
+            path.write_text(log)
+            self.assertEqual(shards.lib_weights([str(path)], 2), ['"x" = 7.0', '"y" = 8.0'])
+
     def test_lib_halves_refuses_an_unsplittable_binary(self):
         with self.assertRaises(ValueError):
             shards.lib_halves(['only::one'])

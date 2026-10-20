@@ -192,7 +192,7 @@ jobs:
         if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: >-
           python3 scripts/test-timings.py target/test-run.log
-          --budget scripts/test-time-budget.toml
+          --budget scripts/test-time-budget.toml --lane "${{ matrix.shard }}"
           --json target/test-timings.json
           --summary "$GITHUB_STEP_SUMMARY"
 

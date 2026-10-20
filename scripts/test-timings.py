@@ -17,9 +17,12 @@ seconds on CI's ubuntu-latest runner. With `--budget` the script fails when:
   budgeted, or made faster, in the PR that slows it down);
 - a budgeted binary runs over its entry.
 An entry whose binary did not run (a filtered or partial run) is a note.
+`--lane NAME` overlays the file's `[lane_budget.NAME]` entries, for a binary
+that runs split across lanes (the aida-cli-lib halves, lib-0 and lib-1).
+trace:TASK-1979 | ai:claude
 
 Usage:
-  scripts/test-timings.py LOG [--step NAME] [--budget FILE] [--json OUT] [--summary OUT] [--top N]
+  scripts/test-timings.py LOG [--step NAME] [--budget FILE [--lane NAME]] [--json OUT] [--summary OUT] [--top N]
 
 `LOG` may be a raw `cargo test` log or a `gh run view --log` download (the
 job/step/timestamp prefixes and ANSI colors are stripped; pass `--step 'Run
@@ -125,11 +128,13 @@ class Budget:
     entries: dict[str, float]
 
 
-def load_budget(path: str) -> Budget:
+def load_budget(path: str, lane: str | None = None) -> Budget:
     with open(path, "rb") as fh:
         table = tomllib.load(fh)
     limit = float(table.get("default_limit", 10))
     entries = {str(k): float(v) for k, v in table.get("budget", {}).items()}
+    if lane:
+        entries.update({str(k): float(v) for k, v in table.get("lane_budget", {}).get(lane, {}).items()})
     return Budget(limit, entries)
 
 
@@ -180,6 +185,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("log")
     ap.add_argument("--step", help="with a `gh run view --log` download: read only this step (e.g. 'Run tests')")
     ap.add_argument("--budget", help="budget TOML; fail on a violation")
+    ap.add_argument("--lane", help="CI lane: apply its [lane_budget.LANE] entries over [budget]")
     ap.add_argument("--json", help="write the rows as JSON here")
     ap.add_argument("--summary", help="append a Markdown table here")
     ap.add_argument("--top", type=int, default=25, help="rows in the printed and Markdown tables")
@@ -187,7 +193,7 @@ def main(argv: list[str]) -> int:
     try:
         with open(a.log, encoding="utf-8", errors="replace") as fh:
             rows = parse_log(step_lines(fh, a.step) if a.step else fh)
-        budget = load_budget(a.budget) if a.budget else None
+        budget = load_budget(a.budget, a.lane) if a.budget else None
     except (OSError, tomllib.TOMLDecodeError, ValueError) as e:
         print(f"test-timings: {e}", file=sys.stderr)
         return 2

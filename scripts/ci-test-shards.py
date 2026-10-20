@@ -18,7 +18,10 @@ trace:TASK-1979 | ai:claude
 from __future__ import annotations
 
 import argparse
+import collections
+import datetime
 import importlib.util
+import re
 import json
 from pathlib import Path
 import subprocess
@@ -55,11 +58,16 @@ def matched(filters, names):
     return {n for n in names if any(f in n for f in filters)}
 
 
-def lib_halves(names):
-    """Two disjoint filter lists over the lib's test names, balanced by test count.
+def lib_halves(names, seconds=None):
+    """Two disjoint filter lists over the lib's test names, balanced by time.
 
+    `seconds` maps a top-level module to its measured test seconds (summed
+    per-test, from CI logs; see --lib-weights). A module without an entry
+    weighs its test count times the measured mean per test. Ties fall to
+    test count, then module name, so the split is deterministic.
     trace:TASK-1979 | ai:claude
     """
+    seconds = seconds or {}
     names = sorted(set(names))
     modules = sorted({module_of(n) for n in names})
     parent = {m: m for m in modules}
@@ -77,12 +85,16 @@ def lib_halves(names):
     groups = {}
     for n in names:
         groups.setdefault(root(module_of(n)), set()).add(module_of(n))
-    weight = {g: sum(1 for n in names if root(module_of(n)) == g) for g in groups}
-    halves, counts = ([], []), [0, 0]
-    for g in sorted(groups, key=lambda g: (-weight[g], g)):
-        side = 0 if counts[0] <= counts[1] else 1
+    count = collections.Counter(module_of(n) for n in names)
+    known = [m for m in modules if m in seconds]
+    mean = sum(seconds[m] for m in known) / max(1, sum(count[m] for m in known)) if known else 1.0
+    cost = {m: seconds.get(m, count[m] * mean) for m in modules}
+    weight = {g: (sum(cost[m] for m in ms), sum(count[m] for m in ms)) for g, ms in groups.items()}
+    halves, totals = ([], []), [(0, 0), (0, 0)]
+    for g in sorted(groups, key=lambda g: (-weight[g][0], -weight[g][1], g)):
+        side = 0 if totals[0] <= totals[1] else 1
         halves[side].extend(filters[m] for m in sorted(groups[g]))
-        counts[side] += weight[g]
+        totals[side] = (totals[side][0] + weight[g][0], totals[side][1] + weight[g][1])
     runs = [matched(h, names) for h in halves]
     if runs[0] & runs[1] or runs[0] | runs[1] != set(names) or not all(halves):
         raise ValueError('lib halves are not a disjoint cover of the listed tests')
@@ -175,6 +187,45 @@ def lib_test_names(root, profile):
     return [line[:-len(': test')] for line in listing.stdout.splitlines() if line.endswith(': test')]
 
 
+RUNNING_RE = re.compile(r'(\d{4}-\d\d-\d\dT[\d:]+(?:\.\d+)?)Z running (\d+) tests?$')
+DONE_RE = re.compile(r'(\d{4}-\d\d-\d\dT[\d:]+(?:\.\d+)?)Z test (\S+) \.\.\. (?:ok|FAILED|ignored)')
+
+
+def stamp(text):
+    return datetime.datetime.fromisoformat(text[:26])
+
+
+def lib_test_seconds(log, threads):
+    """Per-test seconds from a timestamped lib-lane job log (`gh run view --job N --log`).
+
+    libtest hands tests out in name order to `threads` workers, so test k
+    starts when the (k - threads)th completion frees a worker; its time is
+    its completion minus that start.
+    trace:TASK-1979 | ai:claude
+    """
+    lines = log.splitlines()
+    start = next(stamp(m[1]) for m in map(RUNNING_RE.search, lines) if m and int(m[2]) > 1000)
+    finish = {}
+    for m in map(DONE_RE.search, lines):
+        if m and stamp(m[1]) >= start:
+            finish.setdefault(m[2], stamp(m[1]))
+    freed = sorted(finish.values())
+    return {name: max(0.0, (finish[name] - (start if k < threads else freed[k - threads])).total_seconds())
+            for k, name in enumerate(sorted(finish))}
+
+
+def lib_weights(paths, threads):
+    """TOML lines: each module's summed test seconds, the max over the logs."""
+    best = collections.Counter()
+    for path in paths:
+        per_module = collections.Counter()
+        for name, secs in lib_test_seconds(Path(path).read_text(errors='replace'), threads).items():
+            per_module[module_of(name)] += secs
+        for module, secs in per_module.items():
+            best[module] = max(best[module], secs)
+    return [f'"{m}" = {round(s, 1)}' for m, s in sorted(best.items()) if round(s, 1) >= 0.1]
+
+
 def check_root(root):
     # --directory also catches a new directory at root, not just loose files.
     raw = subprocess.check_output(['git', 'ls-files', '--others', '--exclude-standard',
@@ -193,8 +244,14 @@ def main(argv=None):
     mode.add_argument('--shard', choices=(*SHARDS, 'all'))
     mode.add_argument('--compile', action='store_true')
     mode.add_argument('--check-root', action='store_true')
+    mode.add_argument('--lib-weights', nargs='+', metavar='JOB_LOG',
+                      help='print [lib_module_seconds] entries from timestamped lib-lane job logs')
     parser.add_argument('--profile')
+    parser.add_argument('--threads', type=int, default=4, help="the logs' test threads (CI runners: 4)")
     args = parser.parse_args(argv)
+    if args.lib_weights:
+        print('\n'.join(lib_weights(args.lib_weights, args.threads)))
+        return 0
     root = Path(__file__).resolve().parents[1]
     if args.check_root:
         return check_root(root)
@@ -205,7 +262,9 @@ def main(argv=None):
         ['cargo', 'metadata', '--no-deps', '--format-version', '1'], cwd=root))
     packages = [p for p in metadata['packages'] if p['id'] in metadata['workspace_members']]
     with (root / 'scripts/test-time-budget.toml').open('rb') as handle:
-        budgets = tomllib.load(handle)['shard_seconds']
+        timings = tomllib.load(handle)
+    budgets = timings['shard_seconds']
+    module_seconds = timings.get('lib_module_seconds', {})
     gaps, repeats = union_problems(packages, budgets)
     if gaps:
         print('::error::no test shard runs these cargo test --workspace targets: ' +
@@ -224,7 +283,7 @@ def main(argv=None):
             command += profile
             if shard.startswith('lib-') and args.shard != 'all':
                 try:
-                    filters = lib_halves(lib_test_names(root, profile))[int(shard[-1])]
+                    filters = lib_halves(lib_test_names(root, profile), module_seconds)[int(shard[-1])]
                 except ValueError as err:
                     print(f'::error::cannot plan {shard}: {err}', file=sys.stderr)
                     return 1
