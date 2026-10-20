@@ -1,0 +1,28 @@
+id: 01a15a46-ba9f-7b81-a873-3ca17432ccb9
+spec_id: TASK-2012
+agreed_id: TASK-2012
+title: Test focus-local hidden-row footers under an active focus
+description: |
+  BUG-2190 added scoped_len (aida-cli-lib/src/requirements_cli.rs:4733) so the knowledge, machine-draft and accepted-decision hidden-row footers count only rows inside the focus, while the focus banner's hidden count covers the widened view. The bug_2190 integration test checks the banner count, but no test runs those footers with a nonzero count under an active focus. Add one: focus a subtree, put a machine-filed draft both inside and outside it, and assert the footer counts only the one inside.
+
+  Raised in review of PR-2780: https://github.com/joemooney/aida/pull/2780
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T17:05:47.167266008Z
+modified_at: 2026-10-20T17:05:47.167266008Z
+req_type: Task
+tags:
+- from-review:PR-2780
+- list
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
+  branch: pr-2780
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 01a15a3f133c

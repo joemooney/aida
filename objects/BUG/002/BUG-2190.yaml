@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:14:07.605406343Z
-modified_at: 2026-10-20T16:55:42.207139558Z
+modified_at: 2026-10-20T17:06:04.829140447Z
 req_type: Bug
 tags:
 - burndown
@@ -37,6 +37,12 @@ comments:
   content: 'Resumed original lease01a154bd56f4 in codex/bug-2190 and fast-forwarded to current mainf801433bcd after preserving the old patch. Handler now lives in requirements_cli.rs. Full original integration matrix passes (51.13s): every open status and renderer, focused-empty disclosure, exact hidden count excluding META/other lenses, no-focus/all escapes. The earlier short stdout failure was existing TOON cache metadata, confirmed by isolated old-binary write tracing; focus text is stderr and no focused IDs appear. Third author checker found pre-lens counts; fixed by applying focus after other lenses while retaining focus-local hidden footers. Reduced redundant status-by-renderer combinations and added80s binary budget; reduced fixture still needs final targeted execution. Fast/compile checks pending; no PR yet.'
   created_at: 2026-10-20T01:52:01.486317805Z
   modified_at: 2026-10-20T01:52:01.486317805Z
+- id: 01a15a46-ff9d-7210-ae58-7a4318fea293
+  author: joe
+  content: 'Reviewer round 1 (PR-2780 @151f1fd2a9): APPROVED. CI green, mergeState CLEAN. Canonical record at aida-worktrees/aida-pr-2780/.aida/review-verdicts/BUG-2190.json. The phase-3 handshake /home/joe/ai/aida/.aida/review-verdicts/PR-2780.json was NOT written: the reviewer sandbox mounts that directory read-only, and aida review record failed its anchored write. Re-run the record from a seat that can write the primary .aida/review-verdicts. Non-blocking findings filed: TASK-2011 (perf), TASK-2012 (test coverage), TASK-2013 (cosmetic). PR comment withheld until the handshake exists.'
+  created_at: 2026-10-20T17:06:04.829140447Z
+  modified_at: 2026-10-20T17:06:04.829140447Z
+  session_id: 01a15a3f133c
 history:
 - id: 01a154ba-d525-7cf0-b362-1254df941302
   author: joe
