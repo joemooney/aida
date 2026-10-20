@@ -999,8 +999,7 @@ fn include_supervised_defaults_on_with_drive() {
     assert!(!inc(true, false, true));
     assert!(!inc(false, false, false));
     assert!(inc(false, true, false));
-    use clap::Parser;
-    let parse = |args: &[&str]| crate::cli::Cli::try_parse_from(args);
+    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
     assert!(parse(&["aida", "mandate", "start", "--drive"]).is_ok());
     assert!(parse(&[
         "aida",

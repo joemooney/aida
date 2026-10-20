@@ -421,6 +421,7 @@ Commands:
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
   alias         Discoverable registry of AIDA's built-in shortcuts
+  fleet         Fleet operations over relay runs and lanes
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -5718,7 +5719,15 @@ Usage: aida mandate start [OPTIONS]
 
 Options:
       --ship-held
-          Cover shipping held PRs (the only scope today; required)
+          Cover shipping held PRs (required unless --drive)
+
+      --drive
+          A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
+          on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers
+          sensitive specs unless --exclude-supervised
+
+      --exclude-supervised
+          With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
           How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be
@@ -5769,6 +5778,9 @@ Usage: aida mandate status [OPTIONS]
 Options:
       --json
           Print JSON
+
+      --line
+          Print one line while a mandate is active, nothing otherwise
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -23974,6 +23986,58 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida fleet
+Fleet operations over relay runs and lanes.
+
+`drive --tick` runs one drive-mandate tick: it classifies every relay lane and routes each stalled
+one's next action to the advisor seat or the operator, under an active drive mandate only. It holds
+no seat grant and runs no model.
+
+Usage: aida fleet [OPTIONS] <COMMAND>
+
+Commands:
+  drive  The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without
+         `--tick`, shows what a tick would route, changing nothing
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida fleet drive
+The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without `--tick`,
+shows what a tick would route, changing nothing
+
+Usage: aida fleet drive [OPTIONS]
+
+Options:
+      --tick
+          Run one tick: route stalled lanes and ledger every action
+
+      --json
+          Print the tick report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== help all (command groups)
 Getting started
   why            Ask your code why it exists — the decision behind any line
@@ -29176,6 +29240,16 @@ Working on aida itself
     "about": "Start a time-boxed mandate that lets the advisor seat ship held PRs with an attested, independent approval and green CI. Start and stop require a human at an interactive terminal; a same-uid process that forges files in the AIDA home is outside the threat model (the same as session grants)",
     "flags": [
       {
+        "name": "drive",
+        "takes_value": false,
+        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised"
+      },
+      {
+        "name": "exclude-supervised",
+        "takes_value": false,
+        "help": "With --drive: keep sensitive specs human-only"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -29198,7 +29272,7 @@ Working on aida itself
       {
         "name": "ship-held",
         "takes_value": false,
-        "help": "Cover shipping held PRs (the only scope today; required)"
+        "help": "Cover shipping held PRs (required unless --drive)"
       },
       {
         "name": "ttl",
@@ -29251,6 +29325,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Print JSON"
+      },
+      {
+        "name": "line",
+        "takes_value": false,
+        "help": "Print one line while a mandate is active, nothing otherwise"
       }
     ],
     "hidden": false
@@ -47107,6 +47186,57 @@ Working on aida itself
         "name": "project",
         "takes_value": false,
         "help": "Remove from the project store (`.aida/aliases.toml`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "fleet"
+    ],
+    "about": "Fleet operations over relay runs and lanes",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "fleet",
+      "drive"
+    ],
+    "about": "The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without `--tick`, shows what a tick would route, changing nothing",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the tick report as JSON"
+      },
+      {
+        "name": "tick",
+        "takes_value": false,
+        "help": "Run one tick: route stalled lanes and ledger every action"
       }
     ],
     "hidden": false
