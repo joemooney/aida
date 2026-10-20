@@ -6171,8 +6171,12 @@ mod init_roster_tests {
     use super::*;
 
     // trace:STORY-1540 | ai:antigravity
+    // trace:TASK-1970 | ai:antigravity
     #[test]
     fn init_at_non_tty_writes_no_team_roster() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let _env = crate::test_env::EnvVarsGuard::apply(&[

@@ -234,18 +234,25 @@ fn real_git() -> &'static Path {
     })
 }
 
-/// A hermetic fixture `git` command: pinned binary, no system/global config,
-/// no inherited repo-locating env, no background auto-maintenance.
+/// A hermetic fixture `git` command: pinned binary, explicit child cwd
+/// (general subprocess hygiene; `-C` also `chdir`s inside `git`), no
+/// system/global config, no inherited repo-locating env, no background
+/// auto-maintenance.
 // trace:BUG-1955 | ai:claude
+// trace:TASK-1970 | ai:antigravity
 fn fixture_git(dir: &Path, clock: i64) -> Command {
     let date = format!("@{clock} +0000");
     let mut cmd = Command::new(real_git());
+    if dir.is_dir() {
+        cmd.current_dir(dir);
+    }
     cmd.args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
         .arg("-C")
         .arg(dir)
         .env("GIT_AUTHOR_DATE", &date)
         .env("GIT_COMMITTER_DATE", &date)
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("HOME", dir);
     for var in [
         "GIT_DIR",
@@ -261,11 +268,17 @@ fn fixture_git(dir: &Path, clock: i64) -> Command {
     cmd
 }
 
+// trace:TASK-1970 | ai:antigravity
 fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
     let out = fixture_git(dir, clock).args(args).output().unwrap();
     assert!(
         out.status.success(),
-        "git {args:?} failed: {}",
+        "git {args:?} failed (status={:?}, dir={}, dir_exists={}, objects_exists={}, cwd={:?}): {}",
+        out.status.code(),
+        dir.display(),
+        dir.is_dir(),
+        dir.join(".git/objects").is_dir(),
+        std::env::current_dir().ok(),
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()
