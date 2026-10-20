@@ -3,12 +3,12 @@ spec_id: TASK-1744
 agreed_id: TASK-1744
 title: Deliver mid-session grant expiry notices to Codex and Antigravity tool-only sessions
 description: Follow-up from BUG-2014 advisor condition C5. Claude Code delivery is scoped to its templates. Design and verify an informational delivery path for Codex and Antigravity headless tool-only sessions, reusing the typed grant verdict, effective parent expiry and deduplication contract. Require no graph/cache initialization, no authority from role labels, no prompt or tool denial, bounded delivery and explicit version/runtime evidence. Architecture sketch/signoff required before introducing client hook contracts.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T23:07:55.197268358Z
-modified_at: 2026-10-18T23:20:30.657016875Z
+modified_at: 2026-10-20T02:51:40.048755305Z
 req_type: Task
 tags:
 - from-implementer:BUG-2014
@@ -98,6 +98,21 @@ history:
   timestamp: 2026-10-18T23:20:31.047510098Z
   session_id: 01a1514e3193
   changes: []
+- id: 01a15738-c28b-7fd0-97cb-0090b7e3b1a3
+  author: aida-auto-bump
+  timestamp: 2026-10-20T02:51:40.043886591Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15738-c290-7993-b16a-cdba3a69fe8d
+  timestamp: 2026-10-20T02:51:40.048747817Z
+  agent: aida
+  commit_sha: 9be73d9a8f13e2b61e9196b3e24c5fcfdc90f4ad
+  summary: 'Carry-over of the attested PASS at 84129d133a: head 47db2f0e7b is a GitHub update-branch merge of origin/main only (taking in #2754''s ci.yml change); the PR''s own patch-id is identical (1316589997) before and after.'
+  review_verdict: approved
 filed_at:
   code_sha: 01c287987496090ce7b77e85c5ddd8c073ef11d1
   branch: bug-2014-work
@@ -105,11 +120,7 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: 3163cc1b21
   vendor: codex
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core delivery is sound and CI is green, but signed condition 3 (fail open outside the repo) is unmet when cwd is any git checkout without the ignored handler copy. There are also gaps in the condition-5 citation, sketch conformance and test coverage.
-  recovery_hint: address the review findings, move TASK-1744 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T23:20:30.657016875Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T02:51:40.043882104Z
+  completion_sha: 9be73d9a8f13e2b61e9196b3e24c5fcfdc90f4ad
