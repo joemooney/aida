@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1791",
+  "publishes": [
+    {
+      "at": "2026-10-20T09:27:26.792892530Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T17:55:46.157199804Z",
+      "spec": "TASK-1791",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T22:18:15.417759859Z",
+      "spec": "TASK-1791",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1791",
+        "branch": "pr-2703",
+        "first_seen": "2026-10-16T22:18:15.356811204+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T02:18:47.934461889Z",
+      "spec": "TASK-1791",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T09:26:48.613345540Z",
+      "spec": "TASK-1791",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T09:27:01.605381908Z",
+      "spec": "TASK-1791",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2770
+      }
+    },
+    {
+      "ts": "2026-10-20T09:27:26.520108702Z",
+      "spec": "TASK-1791",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "8165eca0c9a7b7a9063b532bcf90993336a4146d",
+        "pr": 2770,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
