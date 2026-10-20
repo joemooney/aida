@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2177",
+  "publishes": [
+    {
+      "at": "2026-10-20T17:52:25.826434677Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-20T17:52:25.459017875Z",
+      "spec": "BUG-2177",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-20T17:52:25.459629588Z",
+      "spec": "BUG-2177",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
