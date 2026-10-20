@@ -3,12 +3,12 @@ spec_id: BUG-2181
 agreed_id: BUG-2181
 title: Remote calls outside the mirror path still put an operator-embedded HTTP token in git-remote-http argv
 description: 'Follow-up from the PR #2736 round-2 review (BUG-2119). BUG-2119 routes the mirror/hub remote calls in remote_create.rs and gitlab_project_create.rs through configure_git_remote_credentials. Other host remote calls still hand git-remote-http the stored origin URL, so an operator-embedded oauth2:<token>@ on origin still shows up in ps / /proc/<pid>/cmdline. Sites: store_push_pull.rs:79/93/593/1485/2529 (fetch, ls-remote, push origin), store_sync.rs:1157 (git_ops::remote_branch_head_sha origin), plus the ls-remote calls in doctor_cmd.rs, pr_cmd.rs, pr_lookup.rs, session_start.rs and phase_driver.rs. Fix: route these through configure_git_remote_credentials, or move the helper into aida_core::git_ops so every host remote call gets it.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:06:36.673317847Z
-modified_at: 2026-10-20T12:10:55.656309392Z
+modified_at: 2026-10-20T12:11:03.142716256Z
 req_type: Bug
 tags:
 - forge
@@ -64,6 +64,14 @@ history:
   timestamp: 2026-10-20T12:10:56.948605606Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15938-e466-7062-aee6-a4310a42e44c
+  author: aida-pr-open
+  timestamp: 2026-10-20T12:11:03.142712353Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: befc5a2e236ee7b20164f52c22d62a7058613203
   branch: main
