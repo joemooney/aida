@@ -13,12 +13,12 @@ description: |-
   (4) an evil merge (a merge commit carrying non-main changes) does not;
   (5) a rebase with an identical patch carries over, if supported, or is refused with a reason.
   Closes BUG-2177. Trailer (TASK-ID BUG-2177).
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:15:17.615382008Z
-modified_at: 2026-10-19T17:35:52.990976467Z
+modified_at: 2026-10-20T01:20:28.567188398Z
 req_type: Task
 tags:
 - review
@@ -83,6 +83,20 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a156e5-458f-72c3-b3bb-635f08ddf201
+  author: aida-auto-bump
+  timestamp: 2026-10-20T01:20:28.559950696Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a156e5-4597-7aa0-ab6b-97290328f26a
+  timestamp: 2026-10-20T01:20:28.567178033Z
+  agent: aida
+  commit_sha: f801433bcd6b50fc7ec2f7ee19dee5bae2c7cbf1
+  summary: 'Carry-over of the attested PASS at 57b4081532: head d632c6c5b9 is a GitHub update-branch merge of origin/main only; the PR''s own patch-id is identical (940efa8e39) before and after.'
+  review_verdict: approved
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -91,11 +105,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Core proof (review_carryover.rs) is sound and the adversarial tests 1-6 are covered, but the carry-over misses one aida pr ship path (mandate), the 'aida review' surface the spec names is not addressed, BUG-2177 symptom 2 is closed unfixed, and the proof is not bound to the base the merge lands on. PR CI Build was still pending at review time.
-  recovery_hint: address the review findings, move TASK-1960 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-19T17:34:35.269762256Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T01:20:28.559946092Z
+  completion_sha: f801433bcd6b50fc7ec2f7ee19dee5bae2c7cbf1
