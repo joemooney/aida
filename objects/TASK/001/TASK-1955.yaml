@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-19T16:10:00.506977693Z
+modified_at: 2026-10-20T18:53:22.862776011Z
 req_type: Task
 tags:
 - launch
@@ -118,6 +118,12 @@ comments:
     Seen 2026-10-16 00:58. Five 'aida agent new claude --bg --role implementer --spec X --name N' launches (TASK-1784/fix-task-1784, TASK-1734/rebase-2673, STORY-1679/rebase-2678, (no spec)/fix-story-1699, STORY-1698/fix-2687) all show in 'aida agent status' as NAME=fix-task-1784 SPEC=TASK-1784 WORKTREE=/home/joe/ai/aida, while 'claude agents --json' shows the five distinct sessions and the correct pool worktrees. The four later rows are the bg-spare PIDs (claude bg-spare --bg-spare ...claim.sock) the Claude supervisor recycles; the registry seems to key the row on the first-registered record or resolve the spare's identity through the first one. Effect: the advisor cannot tell which seat is which without 'claude agents --json'; 'aida agent stop <name>' is ambiguous. Expected: each row carries its own name/spec/lease (the linked lease ids are distinct: 01a143ac, 01a143ae, 01a143b1).
   created_at: 2026-10-19T16:09:51.444352079Z
   modified_at: 2026-10-19T16:09:51.444352079Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15aa9-3c2e-7e51-aeca-cf4d19d7f841
+  author: joe
+  content: 'Advisor triage 11:55: folded in TASK-2010: "Test-git maintenance ratchet: catch split-statement and variable-args git spawns, and scan tests/*.sh and tests/*.py"'
+  created_at: 2026-10-20T18:53:22.862776011Z
+  modified_at: 2026-10-20T18:53:22.862776011Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
