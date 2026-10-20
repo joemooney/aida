@@ -22,12 +22,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:30.122948646Z
-modified_at: 2026-10-19T15:51:08.574199573Z
+modified_at: 2026-10-20T01:29:30.491804907Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
-- operator-held
 - tech-debt
 history:
 - id: 01a154dc-092d-7333-91e7-7979ca6e59a5
@@ -35,10 +34,11 @@ history:
   timestamp: 2026-10-19T15:51:08.845897513Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
-deferred: true
-deferred_at: 2026-10-19T15:51:08.574199573Z
-deferred_until: when STORY-1853, STORY-1690 and TASK-1945 have landed (dev-cycle speed work) or an operator asks for it
-deferred_reason: 'Advisor triage 2026-10-19: P3 roadmap/design work, parked so the open view shows actionable work while the dev-cycle speed push is on (operator goal: under 100 open).'
+- id: 01a156ed-8e66-7740-872d-a772a11f78fe
+  author: joe
+  timestamp: 2026-10-20T01:29:31.494790154Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 execution_mode: drive
 filed_at:
   code_sha: 014a28d3f7621809d6a6ccc7c7972e42df00d972
