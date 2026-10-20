@@ -1,0 +1,27 @@
+id: 01a15743-00a5-7680-80ff-864518b6428d
+spec_id: TASK-1972
+agreed_id: TASK-1972
+title: 'survivors(): document or test the CLONE_PARENT + FD_CLOEXEC guard narrowing'
+description: |
+  aida-cli-lib/src/regen/score/roots.rs:283-300 (PR-2761) now skips a close-on-exec guard copy held by any process whose PPid is the scorer. A clone(CLONE_PARENT) sibling of a scored command, which BUG-2160 says must still be counted, can set FD_CLOEXEC on its guard copy and, with cwd/exe outside the roots, escapes counting and the kill. That's about as strong as closing the guard fd (already an evasion), but TASK-1956 says to preserve survivor-detection limits. Add a test or an explicit comment acknowledging the narrowing.
+
+  Raised in review of PR-2761: https://github.com/joemooney/aida/pull/2761#issuecomment-6282336765
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T03:02:51.301296787Z
+modified_at: 2026-10-20T03:02:51.301296787Z
+req_type: Task
+tags:
+- from-review:PR-2761
+- regen
+- severity:minor
+filed_at:
+  code_sha: 184230ef1d45dcb08275acb2799f227801dbc0cb
+  branch: pr-2761
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a1573c922a

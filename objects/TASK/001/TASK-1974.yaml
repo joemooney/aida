@@ -1,0 +1,27 @@
+id: 01a15743-2332-79f3-884f-1576d46459bd
+spec_id: TASK-1974
+agreed_id: TASK-1974
+title: as_tui_test_emitter should restore the previous flag value via a drop guard
+description: |
+  aida-core/src/db/cache_refresh.rs:486 sets TUI_TEST_EMITTER to false on exit instead of restoring the previous value, and leaves it set on panic. Use a drop guard that restores the prior value.
+
+  Raised in review of PR-2761: https://github.com/joemooney/aida/pull/2761#issuecomment-6282336765
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T03:03:00.146253197Z
+modified_at: 2026-10-20T03:03:00.146253197Z
+req_type: Task
+tags:
+- from-review:PR-2761
+- severity:cosmetic
+- tests
+filed_at:
+  code_sha: 184230ef1d45dcb08275acb2799f227801dbc0cb
+  branch: pr-2761
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a1573c922a
