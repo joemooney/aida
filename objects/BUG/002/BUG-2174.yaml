@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T07:54:28.323605219Z
-modified_at: 2026-10-20T17:47:27.271786124Z
+modified_at: 2026-10-20T18:14:28.918063772Z
 req_type: Bug
 comments:
 - id: 01a158e3-0630-7c72-9560-c406000ae999
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-10-20T11:38:48.338109377Z
   modified_at: 2026-10-20T11:38:48.338109377Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15a85-9f36-71d3-b445-7c849ec29dc8
+  author: joe
+  content: 'Implemented in PR #2783 (option (a) only): ''Where change notes go'' rule added to the shared generate_aida_md, which feeds both .claude/AIDA.md and the AGENTS.md auto-upgraded block; mirrored into this repo''s AGENTS.md block; test change_notes_rule_reaches_claude_and_agents_blocks. No merge=union, no cleanup of existing paragraphs. Gates: check-ci-fast (32 passed), test-touched, check-templates OK.'
+  created_at: 2026-10-20T18:14:28.918063772Z
+  modified_at: 2026-10-20T18:14:28.918063772Z
+  session_id: 3df84e51-2432-44c3-9cb4-aa78788940f7
 history:
 - id: 01a1591b-4b77-70d3-817d-10d95ec24c3f
   author: joe
