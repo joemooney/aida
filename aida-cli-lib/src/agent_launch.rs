@@ -4880,7 +4880,7 @@ pub(crate) fn build_agent_new_bg_command(
         // registry/brief identity. trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove("AIDA_SESSION_GRANT")
+        .env_remove(seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
@@ -5087,7 +5087,7 @@ pub(crate) fn run_tracked_agent(
         // USER (see the bg-dispatch block above). trace:BUG-558 | ai:claude
         .env("AIDA_USER", &plan.name)
         .env("AIDA_PROJECT_ROOT", &plan.project_root)
-        .env_remove("AIDA_SESSION_GRANT")
+        .env_remove(seat_authority::GRANT_ENV) // trace:TASK-1752 | ai:claude
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
