@@ -14,13 +14,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T18:30:21.526241483Z
-modified_at: 2026-10-20T18:30:21.526241483Z
+modified_at: 2026-10-20T18:52:56.460743752Z
 req_type: Task
 tags:
 - carried-from:BUG-2174
 - finding-hash:076be2a7
 - from-review:PR-2783
 - kind:carried-forward
+comments:
+- id: 01a15aa8-d50c-77c1-b699-0dcbadedf53a
+  author: joe
+  content: 'Advisor triage 11:55: folded into sweep TASK-1954. The finding text above is carried there by reference.'
+  created_at: 2026-10-20T18:52:56.460743752Z
+  modified_at: 2026-10-20T18:52:56.460743752Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15a9c-a2dd-7ee2-85a2-910cf583325a
   author: joe
