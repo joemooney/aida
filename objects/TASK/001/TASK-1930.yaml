@@ -3,12 +3,12 @@ spec_id: TASK-1930
 agreed_id: TASK-1930
 title: 'TASK-1332 slice 1: store writer inventory'
 description: 'Slice 1 of TASK-1332, which is item 1 of the 2026-10-12 advisor ruling''s five missing items: inventory every store writer path and whether it holds the existing writer lock across sync pre-commit and rebase. Implemented on branch agy/task-1332. Commits trailer THIS spec, not TASK-1332, so that merging does not auto-complete the parent. Items 2-5 stay on TASK-1332 as open scope.'
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T01:19:40.941818039Z
-modified_at: 2026-10-20T12:57:39.445020229Z
+modified_at: 2026-10-20T13:22:50.121926039Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -60,6 +60,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Done
+- id: 01a1597a-990b-7eb3-becd-9560c96b4440
+  author: aida-auto-bump
+  timestamp: 2026-10-20T13:22:49.227930806Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1597a-9c89-76f1-b81e-fd0db9ecd8b1
+  timestamp: 2026-10-20T13:22:50.121914040Z
+  agent: aida
+  commit_sha: b488fcca7e76ff67c26505664cb84b0458edec43
+  summary: 'Carry-over (advisor): the independent reviewer PASSED round 4 at 6fdcd430ff; 020f92549f is gh pr update-branch onto main (the #2769 CI-definition change) with an IDENTICAL own patch-id.'
+  review_verdict: approved
 filed_at:
   code_sha: 4ac9efab327e10def5d7d2d127bcaeb22c219d54
   branch: main
@@ -68,11 +83,7 @@ filed_at:
   aida_build_sha: 4ac9efab32
   vendor: claude
   session: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 3: all round-2 code findings fixed (no-op CAS guard with non-vacuous tests, config-trust CI fix, inventory citations accurate: 142/142). Still PARTIAL: the inventory (the spec''s sole deliverable) dropped real store writers, and its follow-up row cites TASK-1975 for scope TASK-1975 does not cover. All CI test lanes are green; CI (rest) ''Test time budget'' fails identically on main (pre-existing).'
-  recovery_hint: address the review findings, move TASK-1930 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T05:48:02.459163072Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T13:22:49.227924966Z
+  completion_sha: b488fcca7e76ff67c26505664cb84b0458edec43
