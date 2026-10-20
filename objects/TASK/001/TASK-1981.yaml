@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T18:16:13.166733953Z
+modified_at: 2026-10-20T19:07:52.403967434Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -81,6 +81,11 @@ comments:
   content: 'Session 5 local next-slice work: F6 init/dev-release exact-SHA capture/publication wrappers and F7 add/node/heal/GC-config barrier/error tests implemented in the same isolated worktree; still uncommitted and NOT pushed into frozen PR-2778. Targeted Rust build and fast gates are running, no pass claim. Author self-check round 1 found and corrected an adapter-specific test assertion (init does not stage arbitrary object files). Remaining non-node callers that discard rollback errors were captured separately as draft BUG-2194; this slice does not claim to change their claim/schedule/offline semantics.'
   created_at: 2026-10-20T18:11:16.299823088Z
   modified_at: 2026-10-20T18:11:16.299823088Z
+- id: 01a15ab6-80d3-7930-a3cc-9e25ebe4c7c7
+  author: ai:codex:joe
+  content: 'Relay Session 5: remaining F6 exact-SHA init/dev-release publication and F7 coverage are implemented and committed ONLY LOCALLY at 4737fd5c7521a8d55ad85faf14f5b15f9241d42c (implementation c60359d2c0, normal main merge through 6657ffff6d, docs-rule compliance commit 4737fd5c75). Worktree /home/joe/ai/aida-agy-batch is clean. Final merged-source gates completed: fast 32; targeted 224 CLI + 155 core; all test targets compiled (870.0s), no full suite execution. Three author self-check rounds, final two no findings; this is not independent review. Publication retries only NFF once, preserves typed evidence refusals/second rejection, stage/status/commit errors stop before push; initial init offline warning and outer release best effort remain. New barriers cover both publication phases, add-vs-sync A1, six node writers plus direct rollback-error propagation, runtime-untracking commit and GC configuration. GC stays outside the AIDA lock. BUG-2194 separately tracks eight other non-node CLI discarders. Remote PR-2778 is still frozen at e683d5a679 and independently approved; no next-slice push, own verdict, hold clear, merge, or completion. Advisor must ship that prior non-completing slice before the final completing PR can be pushed. Relay handoff records this external block.'
+  created_at: 2026-10-20T19:07:52.403967434Z
+  modified_at: 2026-10-20T19:07:52.403967434Z
 history:
 - id: 01a158f3-5991-7fc2-ba6f-30ab954f620e
   author: joe
