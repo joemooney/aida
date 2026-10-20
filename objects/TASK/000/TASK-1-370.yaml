@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T20:42:25.064147232Z
-modified_at: 2026-10-19T20:42:25.064147232Z
+modified_at: 2026-10-20T10:58:28.392598505Z
 req_type: Task
 tags:
 - carried-from:BUG-1982
 - finding-hash:dc31c9b8
 - from-review:BUG-1982
 - kind:carried-forward
+comments:
+- id: 01a158f6-71a8-7810-8d49-158ccbf14438
+  author: joe
+  content: 'Advisor 2026-10-20 04:00: closing. This records an AC that was VERIFIED on BUG-1982, which is complete; there is no work.'
+  created_at: 2026-10-20T10:58:28.392598505Z
+  modified_at: 2026-10-20T10:58:28.392598505Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a156bf-b405-7bd0-b6bd-0415225bba18
   author: joe
