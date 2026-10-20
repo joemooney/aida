@@ -1,0 +1,27 @@
+id: 01a1577b-e7f2-7070-9c52-102ccbe4e7e3
+spec_id: TASK-1978
+agreed_id: TASK-1978
+title: 'CI shard planner: guard that shard union covers every cargo test --workspace target'
+description: |
+  scripts/ci-test-shards.py commands() hardcodes aida-cli --bins/--test and aida-cli-lib --lib/--doc/--test selections. If aida-cli gains a lib target, or aida-cli-lib gains a bin or a test=true example, cargo test --workspace would run it but no shard would, and nothing fails. tests/test_ci_test_shards.py only checks synthetic packages. Add a test over real 'cargo metadata --no-deps' asserting every test=true/doctest=true target of every workspace member is selected by exactly one shard.
+
+  Raised in review of PR-2762: https://github.com/joemooney/aida/pull/2762
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:05:00.530832724Z
+modified_at: 2026-10-20T04:05:00.530832724Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-2762
+- severity:minor
+filed_at:
+  code_sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+  branch: pr-2762
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a15775df04

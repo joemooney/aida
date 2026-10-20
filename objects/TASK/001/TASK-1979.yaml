@@ -1,0 +1,27 @@
+id: 01a1577c-0bac-7ca1-861f-23e1f090ddc3
+spec_id: TASK-1979
+agreed_id: TASK-1979
+title: 'CI fan-out: lib lane leaves ~39s headroom on the 12-min target; cache saved only from gates'
+description: |
+  On PR-2762 run 39366328696, CI (lib) took 11m11s of an 11m21s wall time. rust-cache save-if is gates-only (ci.yml), and the gates lane never compiles the test lanes' test binaries or aida-cli dev-deps, so the test lanes restore a cache that lacks those. Split the aida-cli-lib unit tests (as the advisor noted) and/or let a test lane save the cache.
+
+  Raised in review of PR-2762: https://github.com/joemooney/aida/pull/2762
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:05:09.676386991Z
+modified_at: 2026-10-20T04:05:09.676386991Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-2762
+- severity:minor
+filed_at:
+  code_sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+  branch: pr-2762
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a15775df04

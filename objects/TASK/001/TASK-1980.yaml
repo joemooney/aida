@@ -1,0 +1,27 @@
+id: 01a1577c-2ca9-70e3-92a6-6959038f9e55
+spec_id: TASK-1980
+agreed_id: TASK-1980
+title: check-ci-list mislabels Run tests local command after shard planner
+description: |
+  scripts/check-ci-gates.py:441 prints '(local: cargo test --profile agent)' for any reshaped step, but local_test_command now turns Run tests into 'python3 scripts/ci-test-shards.py --shard all --profile agent'. Print the actual reshaped command.
+
+  Raised in review of PR-2762: https://github.com/joemooney/aida/pull/2762
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:05:18.121068723Z
+modified_at: 2026-10-20T04:05:18.121068723Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-2762
+- severity:cosmetic
+filed_at:
+  code_sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
+  branch: pr-2762
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a15775df04
