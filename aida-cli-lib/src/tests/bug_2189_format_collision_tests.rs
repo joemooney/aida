@@ -184,3 +184,99 @@ fn global_format_applies_on_either_side_of_each_command() {
         ));
     }
 }
+
+/// Run the command's handler at the early dispatch point (no store opened).
+fn dispatch_early(argv: &[&str]) -> Result<Flow> {
+    let cli = try_parse_from(argv).unwrap();
+    let Command::Registered(invocation) = &cli.command;
+    invocation.run_early(&cli.globals)
+}
+
+/// The former local `--format` spelling now parses as the global output
+/// format; each command refuses it, naming its own option, instead of
+/// silently emitting its default format.
+#[test]
+fn old_format_spelling_is_refused_naming_the_new_option() {
+    for (argv, expected) in [
+        (
+            &["aida", "export", "--format", "json"][..],
+            "use --export-format json (or -f json)",
+        ),
+        (
+            &["aida", "--format", "toon", "export", "-o", "out.json"][..],
+            "use --export-format <mapping|json|spec|impl|tree>",
+        ),
+        (
+            &["aida", "report", "ai-integration", "--format", "json"][..],
+            "use --report-format markdown|html (or -f)",
+        ),
+        (
+            &["aida", "config", "format", "two", "--format", "human"][..],
+            "aida config format single|two",
+        ),
+    ] {
+        let error = dispatch_early(argv).unwrap_err().to_string();
+        assert!(error.contains(expected), "{argv:?}: {error}");
+        assert!(error.contains("--format"), "{argv:?}: {error}");
+        assert!(!error.contains("BUG-"), "{argv:?}: {error}");
+    }
+}
+
+#[test]
+fn commands_without_the_global_format_still_dispatch() {
+    for argv in [
+        &["aida", "export", "-f", "json"][..],
+        &[
+            "aida",
+            "report",
+            "ai-integration",
+            "--report-format",
+            "html",
+        ][..],
+        &["aida", "config", "format", "two"][..],
+        // Other report/config subcommands keep accepting the global flag.
+        &["aida", "--format", "json", "config", "show"][..],
+    ] {
+        assert!(
+            matches!(dispatch_early(argv).unwrap(), Flow::Continue),
+            "{argv:?}"
+        );
+    }
+}
+
+/// `--format json` reaches the JSON-capability gate before any handler; the
+/// old spelling there also names the renamed option, while a JSON request
+/// from the environment alone, or on another command, keeps the generic error.
+#[test]
+fn json_gate_names_the_renamed_option_for_the_old_spelling() {
+    let gate = |argv: &[&str]| {
+        let mut argv: Vec<String> = argv.iter().map(|arg| arg.to_string()).collect();
+        crate::json_capability_gate(&mut argv)
+            .unwrap_err()
+            .to_string()
+    };
+    for (argv, expected) in [
+        (
+            &["aida", "export", "--format", "json"][..],
+            "use --export-format json (or -f json)",
+        ),
+        (
+            &["aida", "--format", "json", "report", "ai-integration"][..],
+            "use --report-format markdown|html (or -f)",
+        ),
+        (
+            &["aida", "config", "format", "two", "--format", "json"][..],
+            "aida config format single|two",
+        ),
+    ] {
+        let error = gate(argv);
+        assert!(error.contains(expected), "{argv:?}: {error}");
+        assert!(!error.contains("BUG-"), "{argv:?}: {error}");
+    }
+    for argv in [
+        &["aida", "export", "-f", "tree"][..],
+        &["aida", "config", "numbering", "global", "--format", "json"][..],
+    ] {
+        assert!(gate(argv).contains("has no JSON projection"), "{argv:?}");
+    }
+}

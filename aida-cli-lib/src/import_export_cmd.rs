@@ -199,6 +199,8 @@ fn run_export(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <ExportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-2189 | ai:claude
+    crate::command_registry::refuse_global_format(ctx, "export")?;
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
