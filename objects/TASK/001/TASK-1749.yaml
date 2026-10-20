@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-10-20T03:44:36.367972658Z
+modified_at: 2026-10-20T05:07:49.348417808Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -85,6 +85,17 @@ comments:
     Requested advisor signoff is for this direction and slices only. No implementation started, no deferral lifted, no new command/file format/authority policy activated.
   created_at: 2026-10-20T03:44:36.367972658Z
   modified_at: 2026-10-20T03:44:36.367972658Z
+- id: 01a157b5-69e4-7701-98e3-ddacd086baa8
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-19 22:15: the SKETCH (codex, 03:44Z) is APPROVED as the direction and slice plan, with 2 conditions. Implementation stays DEFERRED (the operator reopens it after STORY-1853/STORY-1690/TASK-1945).
+    Approved as written: the dependency-neutral launch-policy in aida-core (no core-to-CLI dependency); LaunchRequest as untrusted intent resolved ONCE into a private-field LaunchContext; authority only via seat_authority handles (building on TASK-1752, merged as #2763), never role/name strings; monotonic containment; no process-global set_var for child launch; Query contexts with no seat/grant; the site table; S0 to S3 with the contained paths first; an exact file+symbol+purpose exception ledger that can't expand; runtime fake-vendor assertions; and BUG-2188/2168 proceeding independently.
+    Condition 1 (env): do NOT switch to env_clear plus an allowlist until S3, and only behind a compatibility test matrix per vendor (claude/codex/antigravity: auth, proxy/CA, XDG, SSH_AUTH_SOCK, terminal, locale). S0 to S2 SCRUB the protected AIDA keys (seat/grant/purpose/lease/contained/role) and add the validated child context; ambient vendor env passes through unchanged. Reason: an allowlist that's wrong breaks every agent launch at once, and that risk is separable from the authority fix.
+    Condition 2 (guard): match the existing ratchet/scanner style (token-aware scanning like the story_1728 hot-file guard and the TASK-1752 grant guard) unless syn is already a dev-dependency. Don't add a parser dependency just for this guard. The mutant fixtures (direct/aliased/dynamic spawn plus env setters in a new module) are required either way.
+    Each slice is its own PR, with strict review for S0/S1 (containment).
+  created_at: 2026-10-20T05:07:49.348417808Z
+  modified_at: 2026-10-20T05:07:49.348417808Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154eb-d392-7811-adf8-d43de174ed67
   author: joe
