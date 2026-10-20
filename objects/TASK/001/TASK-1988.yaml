@@ -1,0 +1,20 @@
+id: 01a157bb-382c-7b02-91dd-035a5a54366e
+spec_id: TASK-1988
+agreed_id: TASK-1988
+title: 'STORY-1853 S2 PR-2: nextest gating swap via --partition across the S6 shards; per-test budgets from JUnit (closes AC4)'
+description: 'Split from TASK-1957 by advisor ruling 2026-10-19 22:15. TASK-1957 is now PR-1 only (#2766: the shadow nextest lane) and completes on that merge. This spec owns the remaining S2 scope from the PR-2766 review: (a) swap the gating test lanes to cargo nextest run --partition across the S6 shards, keeping doctests on cargo test; (b) move the S1 time budgets (scripts/test-time-budget.toml) to per-test keys read from nextest JUnit output, which closes STORY-1853 AC4; (c) the rest of TASK-1957''s PR-2 items as listed in .aida/review-verdicts/PR-2766.json. Precondition: the shadow lane shows parity with the cargo-test totals on at least 3 main runs.'
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T05:14:09.836170552Z
+modified_at: 2026-10-20T05:14:09.836170552Z
+req_type: Task
+filed_at:
+  code_sha: 880d7667bc566fe9eb9c0f8d05e6d8c8636f8ab5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
