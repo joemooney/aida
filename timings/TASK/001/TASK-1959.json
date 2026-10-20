@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1959",
+  "publishes": [
+    {
+      "at": "2026-10-20T06:27:35.198437891Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T16:14:19.070492390Z",
+      "spec": "TASK-1959",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T01:39:02.749952703Z",
+      "spec": "TASK-1959",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1959",
+        "branch": "pr-2760",
+        "first_seen": "2026-10-20T01:39:02.749870752+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T06:13:37.173657098Z",
+      "spec": "TASK-1959",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2760,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ccb13f932b2b"
+      }
+    },
+    {
+      "ts": "2026-10-20T06:26:24.590600442Z",
+      "spec": "TASK-1959",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T06:26:39.359314772Z",
+      "spec": "TASK-1959",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2760
+      }
+    },
+    {
+      "ts": "2026-10-20T06:27:34.690414526Z",
+      "spec": "TASK-1959",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "58218872e47c81d0b327eba59d06ec353bd3a3c9",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
