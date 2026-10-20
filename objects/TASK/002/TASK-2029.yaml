@@ -1,0 +1,27 @@
+id: 01a15b77-6193-7833-a31f-55b2fe9dfcaa
+spec_id: TASK-2029
+agreed_id: TASK-2029
+title: 'lane-liveness: test routed seat jobs through schedule due/done'
+description: |
+  Nothing tests a routed lane-liveness-<seat> job surfacing through due_seat_jobs/collect_due (maintenance_schedule.rs:1735-1750, builtin injection with no config entry), or 'aida schedule done lane-liveness-<seat>' clearing it through the builtin_routed_seat_task fallback (maintenance_schedule.rs:1361). The routing tests stop at the ledger.
+
+  Raised in review of PR-2743: https://github.com/joemooney/aida/pull/2743#issuecomment-6303344372
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T22:38:32.851797616Z
+modified_at: 2026-10-20T22:38:32.851797616Z
+req_type: Task
+tags:
+- from-review:PR-2743
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: f118728675770f6db404c06afdc019caf8d2c1d5
+  branch: pr-2743
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b732108

@@ -1,0 +1,26 @@
+id: 01a15b77-422e-72b1-83f6-7c2f4eb34a28
+spec_id: TASK-2028
+agreed_id: TASK-2028
+title: 'lane-liveness: review pickup should judge only required checks'
+description: |
+  rollup_green_at (aida-cli-lib/src/lane_liveness.rs:1162-1189) needs every statusCheckRollup entry to be green. The approved sketch said 'green required checks'. Any failing optional check makes the PR invisible to the unpicked-ready-pr check forever. Restrict the check to required checks, or add a configurable ignore list.
+
+  Raised in review of PR-2743: https://github.com/joemooney/aida/pull/2743#issuecomment-6303344372
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T22:38:24.814352136Z
+modified_at: 2026-10-20T22:38:24.814352136Z
+req_type: Task
+tags:
+- from-review:PR-2743
+- severity:minor
+filed_at:
+  code_sha: f118728675770f6db404c06afdc019caf8d2c1d5
+  branch: pr-2743
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b732108

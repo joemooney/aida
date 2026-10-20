@@ -1,0 +1,26 @@
+id: 01a15b76-ffab-7f21-86e9-9ebdb31cfb2b
+spec_id: TASK-2025
+agreed_id: TASK-2025
+title: 'lane-liveness: operator gate findings marked routed when [notify] is unconfigured'
+description: |
+  route_findings (aida-cli-lib/src/lane_liveness.rs:620-633) treats send_direct_bounded Ok with suppressed == 0 as delivered. When no trusted [notify] command is set, it returns DirectNotifyOutcome::default() (configured=false, sent=0), so a human-only hold is recorded in routed.json, reaches nobody, and is never retried. This repo has no [notify] section. Record the finding only when sent > 0 or pending > 0, and fall back to the advisor seat (or warn) when notify is unconfigured.
+
+  Raised in review of PR-2743: https://github.com/joemooney/aida/pull/2743#issuecomment-6303344372
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T22:38:07.787868952Z
+modified_at: 2026-10-20T22:38:07.787868952Z
+req_type: Task
+tags:
+- from-review:PR-2743
+- severity:minor
+filed_at:
+  code_sha: f118728675770f6db404c06afdc019caf8d2c1d5
+  branch: pr-2743
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b732108
