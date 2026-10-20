@@ -1,0 +1,30 @@
+id: 01a15a81-fe2f-7ee3-a5f3-e6b879e8252d
+spec_id: BUG-2194
+agreed_id: BUG-2194
+title: Preserve rollback failures in non-node CLI CAS callers
+description: |
+  TASK-1981 fixes rollback_commit_if_head_matches so dirty-tree, hook and replay failures return an error, and node CAS callers propagate it. A source audit of the remaining CLI callers found eight discarded Results: db_block.rs handle_block_command (~304) and auto_allocate_block_inner (~980); schedule_ledger.rs write_cas_opts (~422) and write_batch_cas_opts (~589); coordination.rs acquire_claim (~840/848) and acquire_lock_claim (~1313/1318). On push rejection these paths can continue after rollback failed; coordination's push-error paths can also return an Unavailable outcome after discarding that failure.
+
+  This is a separate draft because authority/claim unavailable semantics and scheduled-run offline policy require deliberate acceptance rather than silently broadening TASK-1981's reviewed node scope. Source observation only: no new reproduction or production incident asserted.
+
+  ## Acceptance
+  - Decide and document caller-specific rollback-error handling, keeping existing offline success policy where the rollback actually succeeds.
+  - A failed rollback must remain observable and prevent the affected CAS retry from treating the store as clean or claiming the failed operation succeeded.
+  - Add direct caller tests with a peer commit plus dirty tracked file or deterministic replay refusal, proving peer HEAD and dirty state survive and the caller stops after the first failure.
+  - Keep exact-SHA push outside the store lock; do not alter claim authority, force-push, reset peer work or add production test environment seams.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:10:31.087634134Z
+modified_at: 2026-10-20T18:10:31.087634134Z
+req_type: Bug
+tags:
+- from-implementer:TASK-1981
+filed_at:
+  code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: codex
