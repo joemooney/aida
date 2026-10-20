@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T14:19:31.715610724Z
-modified_at: 2026-10-20T05:17:50.757662997Z
+modified_at: 2026-10-20T05:19:18.100998677Z
 req_type: Bug
 tags:
 - contained
@@ -29,6 +29,13 @@ relationships:
   target_id: 01a150cf-1349-77c2-9027-5e15ee9c691d
   created_at: 2026-10-18T20:58:52.664547527Z
   created_by: joe
+comments:
+- id: 01a157bf-ec55-74a3-b948-439172deb7d5
+  author: joe
+  content: 'Advisor 2026-10-19 22:22, known follow-up (outside this AC, tracked here rather than as a new spec): a linked worktree''s own .git POINTER FILE isn''t denied (the !is_file() check skips it). Rewriting it to an in-worktree gitdir with hooks is the same escape class as main .git/hooks. Handle it in the next contained-hardening pass, together with the narrowed deny set from the PR-2748 round-1 review.'
+  created_at: 2026-10-20T05:19:18.100998677Z
+  modified_at: 2026-10-20T05:19:18.100998677Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150cf-6efa-71e0-8d6d-e6f6eb1991f5
   author: joe
