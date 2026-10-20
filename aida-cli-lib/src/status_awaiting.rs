@@ -1101,7 +1101,7 @@ pub(crate) fn emit_notice_time_line() {
     // per seat when it expires or is stopped. The grant's turn stamp lets the
     // drive tick tell whether an advisor seat is live. Fail-open.
     // trace:STORY-1700 | ai:claude
-    let grant = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+    let grant = crate::seat_authority::current_grant_id();
     crate::mandate_drive::stamp_grant_turn(grant.as_deref(), now.with_timezone(&chrono::Utc));
     if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc), session_id.as_deref())
     {
@@ -1144,9 +1144,7 @@ pub(crate) fn mandate_notice_line(
     let dir = crate::mandate::mandate_dir().ok()?;
     let state = crate::mandate::current_state();
     let seat = mandate_seen_key(
-        std::env::var(crate::seat_authority::GRANT_ENV)
-            .ok()
-            .as_deref(),
+        crate::seat_authority::current_grant_id().as_deref(),
         session_id,
         std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
     );

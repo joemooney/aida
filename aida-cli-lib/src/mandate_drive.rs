@@ -1399,7 +1399,7 @@ pub(crate) fn advisor_live(project_root: &Path, now: DateTime<Utc>) -> bool {
 }
 
 /// STORY-1700: the per-turn notice's stamp for the session's seat grant
-/// (`AIDA_SESSION_GRANT`), read back by [`advisor_live`].
+/// ([`crate::seat_authority::GRANT_ENV`]), read back by [`advisor_live`].
 // trace:STORY-1700 | ai:claude
 pub(crate) fn stamp_grant_turn(grant: Option<&str>, now: DateTime<Utc>) {
     if let Some(g) = grant
