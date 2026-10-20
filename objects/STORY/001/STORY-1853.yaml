@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-20T10:54:19.908418537Z
+modified_at: 2026-10-20T10:57:59.458547540Z
 req_type: Story
 tags:
 - architecture
@@ -199,6 +199,15 @@ comments:
   content: 'Advisor 2026-10-19 21:51: S6 LANDED (#2762, TASK-1949 completed). PR CI is 11m21s in total (run 39366328696), against 34-40 min before; 11747 passed+ignored across 85 binaries vs main''s 11721/85, so no test was dropped. AC1 (12 min or less) is met on the PR run; AC1/AC2 are still to be confirmed as a median of 3 main runs. The CI-timeout risk from the 19:25 comment is resolved. Headroom is thin, with lib at 11m11s, so the lib split is TASK-1979 (which absorbed 1978/1980). Remaining: S4 (TASK-1959, #2760, rework in progress), S2 (TASK-1957, nextest; now unblocked), S3 (TASK-1958, after S2). Local compile speed is #2765 (TASK-1985, profile.agent incremental=true).'
   created_at: 2026-10-20T04:50:40.800489793Z
   modified_at: 2026-10-20T04:50:40.800489793Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a158f6-00a2-7dc3-b53b-53919fa0483f
+  author: joe
+  content: |
+    Advisor 2026-10-20 03:58: folded in as superseded (open-list cleanup). These items are now this spec's scope:
+    - TASK-1646: cosmetic: AC2 asks both counts recorded in the PR; PR body carries only the mai…
+    - TASK-1644: info: STORY-1853 AC5 (passed+ignored >= baseline) is recorded on the spec but n…
+  created_at: 2026-10-20T10:57:59.458547540Z
+  modified_at: 2026-10-20T10:57:59.458547540Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
