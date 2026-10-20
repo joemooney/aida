@@ -15533,13 +15533,25 @@ Options:
 ===== aida config format
 Set the ID format (single-level or two-level)
 
-Usage: aida config format <FORMAT>
+Usage: aida config format [OPTIONS] <FORMAT>
 
 Arguments:
-  <FORMAT>  Format: "single" for PREFIX-NNN, "two" for FEATURE-TYPE-NNN
+  <FORMAT>
+          Format: "single" for PREFIX-NNN, "two" for FEATURE-TYPE-NNN
 
 Options:
-  -h, --help  Print help
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida config numbering
 Set the numbering strategy
 
@@ -16169,12 +16181,31 @@ Export requirements to different formats
 Usage: aida export [OPTIONS]
 
 Options:
-  -f, --format <FORMAT>  Output format: mapping, json, spec, impl, tree. The default is `mapping`;
-                         the export -> import round-trip needs `--format tree` [default: mapping]
-  -o, --output <OUTPUT>  Output file path
-      --id <ID>          Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement
-                         and all descendants
-  -h, --help             Print help
+  -f, --export-format <FORMAT>
+          Export format: mapping, json, spec, impl, tree. The default is `mapping`; the export ->
+          import round-trip needs `--export-format tree`
+          
+          [default: mapping]
+
+  -o, --output <OUTPUT>
+          Output file path
+
+      --id <ID>
+          Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement and all
+          descendants
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida import
 Import requirements from a tree JSON file
 
@@ -17170,11 +17201,32 @@ Generate AI integration report
 Usage: aida report ai-integration [OPTIONS]
 
 Options:
-  -f, --format <FORMAT>              Output format: markdown or html [default: markdown]
-  -o, --output <OUTPUT>              Output file path (defaults to stdout)
-      --project-root <PROJECT_ROOT>  Project root directory for scaffolding status check
-      --include-scaffold             Include scaffolding status in report
-  -h, --help                         Print help
+  -f, --report-format <FORMAT>
+          Report format: markdown or html
+          
+          [default: markdown]
+
+  -o, --output <OUTPUT>
+          Output file path (defaults to stdout)
+
+      --project-root <PROJECT_ROOT>
+          Project root directory for scaffolding status check
+
+      --include-scaffold
+          Include scaffolding status in report
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida init
 Initialize AIDA in the current project
 
@@ -38846,9 +38898,14 @@ Working on aida itself
     "about": "Set the ID format (single-level or two-level)",
     "flags": [
       {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": true
@@ -39514,14 +39571,19 @@ Working on aida itself
     "about": "Export requirements to different formats",
     "flags": [
       {
+        "name": "export-format",
+        "takes_value": true,
+        "help": "Export format: mapping, json, spec, impl, tree. The default is `mapping`; the export -> import round-trip needs `--export-format tree`"
+      },
+      {
         "name": "format",
         "takes_value": true,
-        "help": "Output format: mapping, json, spec, impl, tree. The default is `mapping`; the export -> import round-trip needs `--format tree`"
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       },
       {
         "name": "id",
@@ -40563,12 +40625,12 @@ Working on aida itself
       {
         "name": "format",
         "takes_value": true,
-        "help": "Output format: markdown or html"
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       },
       {
         "name": "include-scaffold",
@@ -40584,6 +40646,11 @@ Working on aida itself
         "name": "project-root",
         "takes_value": true,
         "help": "Project root directory for scaffolding status check"
+      },
+      {
+        "name": "report-format",
+        "takes_value": true,
+        "help": "Report format: markdown or html"
       }
     ],
     "hidden": true

@@ -370,9 +370,9 @@ fn git_remote_https_receives_stripped_url_and_credential_helper_supplies_token()
         ("PATH", Some(&new_path)),
         // A parent-supplied GIT_CONFIG_* pair (CI's safe.directory, say)
         // must survive the pairs aida appends. trace:BUG-2119 | ai:claude
-        ("GIT_CONFIG_COUNT", Some("1")),
         ("GIT_CONFIG_KEY_0", Some("aida.inherited")),
         ("GIT_CONFIG_VALUE_0", Some("kept")),
+        ("GIT_CONFIG_COUNT", Some("1")),
     ]);
 
     let mut cmd =
@@ -691,7 +691,16 @@ fn a_username_only_url_falls_back_to_the_gitlab_token() {
 // trace:BUG-2119 | ai:claude
 #[test]
 fn git_config_pairs_append_after_inherited_and_explicit_counts() {
-    let _guard = crate::test_env::EnvVarsGuard::apply(&[("GIT_CONFIG_COUNT", Some("2"))]);
+    // The count is process-wide: give it the pairs it promises, or a git that a
+    // parallel test spawns meanwhile dies on "missing config key
+    // GIT_CONFIG_KEY_0". trace:TASK-1979 | ai:claude
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("GIT_CONFIG_KEY_0", Some("aida.inherited0")),
+        ("GIT_CONFIG_VALUE_0", Some("kept")),
+        ("GIT_CONFIG_KEY_1", Some("aida.inherited1")),
+        ("GIT_CONFIG_VALUE_1", Some("kept")),
+        ("GIT_CONFIG_COUNT", Some("2")),
+    ]);
     let mut inherited = std::process::Command::new("git");
     crate::gitlab_project_create::configure_git_remote_credentials(
         &mut inherited,

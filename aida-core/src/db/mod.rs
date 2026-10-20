@@ -71,7 +71,8 @@ pub use sqlite_backend::SqliteBackend;
 // trace:TASK-1717 | ai:claude
 #[cfg(feature = "native")]
 pub use store_lock::{
-    any_store_write_lock_held, store_write_lock_held, store_write_lock_path, with_store_write_lock,
+    any_store_write_lock_held, store_write_lock_contended_count, store_write_lock_contended_for,
+    store_write_lock_held, store_write_lock_path, with_store_write_lock,
 };
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
 #[cfg(feature = "native")]

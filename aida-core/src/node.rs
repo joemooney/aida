@@ -814,6 +814,20 @@ pub struct BlockRegistry {
     pub blocks: Vec<AgreedIdBlock>,
 }
 
+#[cfg(feature = "native")]
+thread_local! {
+    /// Per-thread hold count for `BlockRegistry::with_dispense_lock` (`blocks.lock`),
+    /// used to enforce the binding A1 lock order (`store_write_lock -> blocks.lock`).
+    static DISPENSE_LOCK_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Whether the current thread holds `blocks.lock` via [`BlockRegistry::with_dispense_lock`].
+// trace:TASK-1930 | ai:agy
+#[cfg(feature = "native")]
+pub(crate) fn dispense_lock_held() -> bool {
+    DISPENSE_LOCK_DEPTH.with(|d| d.get() > 0)
+}
+
 impl BlockRegistry {
     /// Load from a YAML file. Returns an empty registry if the file does not exist.
     #[cfg(feature = "native")]
@@ -861,8 +875,7 @@ impl BlockRegistry {
     /// load→dispense→save under the lock; callers must not load/save the
     /// registry outside it. The lock is released when this returns (success
     /// or error).
-    ///
-    /// trace:BUG-474 | ai:claude
+    // trace:BUG-474 trace:TASK-1930 | ai:agy
     #[cfg(feature = "native")]
     pub fn with_dispense_lock<T, F>(blocks_path: &Path, f: F) -> anyhow::Result<T>
     where
@@ -883,11 +896,18 @@ impl BlockRegistry {
             .open(&lock_path)?;
         lock_file.lock_exclusive()?;
 
-        let result = f();
+        struct DispenseLockGuard(std::fs::File);
+        impl Drop for DispenseLockGuard {
+            fn drop(&mut self) {
+                DISPENSE_LOCK_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+                use fs2::FileExt;
+                let _ = FileExt::unlock(&self.0);
+            }
+        }
+        DISPENSE_LOCK_DEPTH.with(|d| d.set(d.get() + 1));
+        let _guard = DispenseLockGuard(lock_file);
 
-        // Release the lock regardless of how the closure exited.
-        let _ = lock_file.unlock();
-        result
+        f()
     }
 
     /// Find the active (non-exhausted) block for a given node + type prefix.
