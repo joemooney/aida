@@ -8,12 +8,12 @@ description: |-
   Fix: answer the mandate exclusion-history question from an index (history_index / the history cache already used by aida history), or one batched 'git log --all --name-only' pass over the needed paths, instead of N full-history walks. Keep fail-closed when the index is stale or unreadable.
 
   Acceptance: (1) the exclusion-history lookup for a PR touching files with K traced specs does at most one store history walk, or none with a fresh index (test counts git invocations); (2) results are identical to the per-spec walk on a fixture (test); (3) aida pr ship step 1 on this repo finishes in under 30 s warm (manual evidence in the PR).
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:18:21.688483900Z
-modified_at: 2026-10-20T11:38:52.798779370Z
+modified_at: 2026-10-20T11:39:25.241844719Z
 req_type: Bug
 comments:
 - id: 01a150ab-804e-7563-b3ff-4dbebed13b88
@@ -37,6 +37,14 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1591b-eeb9-7be1-9ad9-1318e88c252c
+  author: aida-session-start
+  timestamp: 2026-10-20T11:39:25.241843850Z
+  session_id: 922261ed-530a-4e6c-afda-50941530bad0
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
   branch: main
