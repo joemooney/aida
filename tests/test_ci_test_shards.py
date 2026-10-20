@@ -82,6 +82,45 @@ class ShardsTest(unittest.TestCase):
         self.assertIn('--shard all --profile agent', gates.local_test_command(source))
         self.assertIn('!cancelled()', steps['Test shard root hygiene']['if'])
 
+    # trace:TASK-1957 | ai:claude
+    def test_nextest_runner_keeps_selection_and_leaves_doctests_on_cargo_test(self):
+        packages = [dict(name='aida-cli', targets=[target('one'), target('two')]),
+                    dict(name='aida-cli-lib', targets=[target('lib', 'lib')])]
+        for shard in shards.SHARDS:
+            for command in shards.commands(shard, packages, {}):
+                rewritten = shards.for_runner(command, 'nextest', 'agent')
+                if '--doc' in command:
+                    self.assertEqual(rewritten, command + ['--profile', 'agent'])
+                    continue
+                self.assertEqual(rewritten[:6], ['cargo', 'nextest', 'run', '--no-fail-fast', '--profile', 'ci'])
+                self.assertEqual(rewritten[8:], command[3:] + ['--cargo-profile', 'agent'])
+                self.assertEqual(shards.for_runner(command, 'cargo'), command)
+
+    def test_totals_count_libtest_and_nextest_logs_alike(self):
+        log = ['test result: ok. 5 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.0s',
+               '\x1b[32;1m     Summary\x1b[0m [  12.345s] 126 tests run: 120 passed (3 slow), 2 failed, '
+               '1 timed out, 4 skipped',
+               '     Summary [   1.0s] 8/10 tests run: 8 passed, 0 skipped']
+        self.assertEqual(shards.totals(log), dict(passed=133, failed=3, ignored=6))
+
+    def test_nextest_shadow_job_is_parallel_and_non_gating(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        shadow = workflow['jobs']['nextest-shadow']
+        self.assertNotIn('needs', shadow)
+        self.assertNotIn('nextest-shadow', workflow['jobs']['build-result']['needs'])
+        self.assertEqual(shadow['strategy']['matrix']['shard'], list(shards.SHARDS))
+        steps = {s.get('name'): s for s in shadow['steps']}
+        self.assertTrue(steps['Run tests under nextest']['continue-on-error'])
+        install = steps['Install cargo-nextest']
+        self.assertRegex(install['uses'], r'^taiki-e/install-action@[0-9a-f]{40}$')
+        self.assertRegex(install['with']['tool'], r'^cargo-nextest@\d+\.\d+\.\d+$')
+        self.assertFalse(steps['Cache Rust dependencies']['with']['save-if'])
+        config = tomllib.loads((ROOT / '.config/nextest.toml').read_text())['profile'][shards.NEXTEST_PROFILE]
+        self.assertEqual(config['retries'], 0)
+        self.assertEqual(config['slow-timeout']['period'], '10s')
+        self.assertIn('terminate-after', config['slow-timeout'])
+        self.assertEqual(config['junit']['path'], 'junit.xml')
+
     def test_root_guard_detects_loose_files_and_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
