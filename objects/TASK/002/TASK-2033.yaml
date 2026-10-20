@@ -1,0 +1,27 @@
+id: 01a15bb1-4eb8-7802-b2d8-be31141272b7
+spec_id: TASK-2033
+agreed_id: TASK-2033
+title: 'BUG-2169 S2 tests: assert main/.git denied under forged main; cover a mismatched cargo_target_dir lease'
+description: |
+  only_the_host_lease_makes_a_host_recorded_clone (bug_2169_contained_clone_bwrap_tests.rs) does not assert that fx.main/.git stays denied in both layers while the forged main is in place. Its comment says a lease recording any other cargo_target_dir path grants nothing, but no test covers a genuine-main lease naming a different cargo_target_dir.
+
+  Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T23:41:49.112942354Z
+modified_at: 2026-10-20T23:41:49.112942354Z
+req_type: Task
+tags:
+- from-review:PR-2787
+- severity:cosmetic
+- tests
+filed_at:
+  code_sha: 45025e7234009af5f935bde71591c6f0469de938
+  branch: pr-2787
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15baf707c
