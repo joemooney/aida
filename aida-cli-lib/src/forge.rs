@@ -1922,6 +1922,9 @@ impl Forge for GitHubForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2498,6 +2501,9 @@ impl Forge for GitLabForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2866,6 +2872,9 @@ impl Forge for PureGitForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: the branch merges into `base`; there is no forge to
+            // read it from. trace:TASK-1968 | ai:claude
+            Some(base.as_str()),
             || {
                 opts.match_head
                     .clone()
