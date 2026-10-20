@@ -6494,8 +6494,6 @@ fn run_schedule(
                         Some(backend),
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -6510,8 +6508,6 @@ fn run_schedule(
                         "`aida schedule` is available in the default (distributed) mode."
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida schedule` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

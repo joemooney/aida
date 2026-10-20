@@ -17,7 +17,7 @@ default_limit = 10
 [budget]
 "aida_cli_lib:src/lib.rs" = 560  # max measured 370.8s, 9195 tests
 "task_1717_store_writer_lock:tests/task_1717_store_writer_lock.rs" = 100  # max measured 65.9s, 43 tests
-"aida_core:src/lib.rs" = 80  # max measured 52.1s, 1552 tests
+"aida_core:src/lib.rs" = 135  # max measured 86.9s, 1562 tests, in the S6 "rest" lane (main run 39371035274, PR run 39372831537); was 80 from 52.1s under the single build job
 "agent_error_channel:tests/agent_error_channel.rs" = 70  # max measured 44.0s, 2 tests
 "bug_1502_format_json_audit:tests/bug_1502_format_json_audit.rs" = 45  # max measured 29.1s, 9 tests
 "bug_1947_session_end_live_process:tests/bug_1947_session_end_live_process.rs" = 45  # max measured 29.1s, 11 tests

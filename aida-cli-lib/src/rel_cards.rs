@@ -829,6 +829,14 @@ pub(crate) fn not_found_requested_id(msg: &str) -> Option<String> {
 /// path, so the one-shot cache read is off the hot path.
 // trace:TASK-1082 | ai:claude
 pub(crate) fn known_spec_ids_for_suggestion(project_root: &std::path::Path) -> Vec<String> {
+    // Opening the dispenser or backend scaffolds `objects/` and
+    // `.aida/dispenser.toml`, so an unattached store must not be opened: a
+    // fresh clone's typo'd `aida show` left a plain `.aida-store/` that git
+    // then resolved to the enclosing checkout.
+    // trace:TASK-1959 | ai:claude
+    if !aida_core::store_locate::is_store_attached(project_root) {
+        return Vec::new();
+    }
     let store_path = project_root.join(".aida-store");
     let Ok(dispenser) = load_dispenser(&store_path) else {
         return Vec::new();

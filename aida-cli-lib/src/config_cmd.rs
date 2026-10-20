@@ -5343,8 +5343,6 @@ fn run_config(
                     let storage = Storage::new(store_path);
                     self::handle_config_command(config_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -5364,8 +5362,6 @@ fn run_config(
                 ConfigArgs { inner: config_cmd } => {
                     self::handle_config_command(config_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida config` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

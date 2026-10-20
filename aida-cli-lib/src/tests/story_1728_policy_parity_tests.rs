@@ -1,10 +1,14 @@
 //! Policy parity against main's legacy tables. The fixture holds, for every
 //! command path and every single-flag variant of it that parses, the three
 //! answers main's tables gave before the commands moved into the registry:
-//! stakeholder action, per-write auto-push and the role-restore skip. It was
-//! captured from origin/main a27fe3fc76 (the last tree where those tables
-//! classified the migrated commands) with `AIDA_CAPTURE_MAIN_POLICY=1` and must
-//! never be regenerated from this branch: the registry is what it checks.
+//! stakeholder action, per-write auto-push, the role-restore skip and the
+//! team-identity write. The first three were captured from origin/main
+//! a27fe3fc76 (the last tree where those tables classified the migrated
+//! commands) with `AIDA_CAPTURE_MAIN_POLICY=1`. The team-identity column was
+//! derived from that tree's `is_write_command` (status_awaiting.rs:1407),
+//! which matched top-level commands only, so every verb of a listed command is
+//! a write. The fixture must never be regenerated from a branch: the registry
+//! is what it checks.
 // trace:STORY-1728 | ai:claude
 
 use super::*;
@@ -93,15 +97,17 @@ fn answers(argv: &str) -> String {
     full.extend(argv.split(' '));
     let cli = crate::command_registry::try_parse_from(&full).expect("synthesized argv parses");
     format!(
-        "{:?}\t{}\t{}",
+        "{:?}\t{}\t{}\t{}",
         crate::stakeholder_role::stakeholder_cli_action(&cli.command),
         crate::command_triggers_per_write_auto_push(&cli.command),
         crate::role::role_restore_prompt_should_skip(&cli.command),
+        crate::status_awaiting::is_write_command(&cli.command),
     )
 }
 
-/// `argv\tstakeholder\tauto_push\tskip_role_restore` for every command path
-/// and every single-flag variant of it that parses, sorted.
+/// `argv\tstakeholder\tauto_push\tskip_role_restore\tteam_identity_write`
+/// for every command path and every single-flag variant of it that parses,
+/// sorted.
 fn policy_rows() -> Vec<String> {
     let mut root = crate::command_registry::built_command();
     root.build();
@@ -148,7 +154,8 @@ fn collect_paths(cmd: &clap::Command, prefix: &[String], out: &mut Vec<Vec<Strin
 
 // F2 (advisor round 1 on #2751): every command and verb, and every
 // single-flag variant that parses, answers stakeholder action, per-write
-// auto-push and the role-restore skip exactly as main's legacy tables did.
+// auto-push, the role-restore skip and the team-identity write exactly as
+// main's legacy tables did.
 // trace:STORY-1728.ac394c52 | ai:claude
 #[test]
 fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
@@ -187,7 +194,7 @@ fn registered_policy_matches_mains_legacy_tables_for_every_verb() {
     assert!(
         diverged.is_empty(),
         "{} of {} invocations diverge from main's legacy policy tables \
-         (stakeholder\\tauto_push\\tskip_role_restore):\n{}",
+         (stakeholder\\tauto_push\\tskip_role_restore\\tteam_identity_write):\n{}",
         diverged.len(),
         want.len(),
         diverged.join("\n")

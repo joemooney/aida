@@ -81,7 +81,8 @@ impl std::fmt::Display for ComplexityLevel {
 
 /// Three-step expected assistance level. Records *what the pickup thinks
 /// will be needed*; the actual count of advisor / human interventions
-/// comes from the STORY-325 punt ledger via [`punt_count_for_spec`].
+/// comes from the punt ledger via [`punt_count_for_spec`].
+// trace:STORY-325 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum AssistanceLevel {
