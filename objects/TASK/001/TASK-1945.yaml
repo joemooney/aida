@@ -19,12 +19,31 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-19T15:26:47.394433803Z
+modified_at: 2026-10-20T03:52:19.983586923Z
 req_type: Task
 tags:
 - review
 - ship
 - throughput
+comments:
+- id: 01a15770-4d0f-72f2-aa34-f40d497df07c
+  author: ai:codex:joe
+  content: |
+    SKETCH: review-on-push runner. Proposing `aida review watch` as a long-running, bounded-poll command in its own review_watch module, registered through command_registry (review args extension stays in its owning module; no legacy Command variant). New lifecycle/persisted coordination requires advisor signoff before implementation.
+
+    Resolve the canonical common project root and pinned forge repository, then discover open non-draft changes through existing forge APIs. Read head/base and overlapping paths before dispatch. Pending CI never delays a review. A stale overlapping base produces one durable author notification per PR/head; a stale non-overlap can be reviewed but cannot become ship-ready until 0 behind. Unknown forge/base/verdict/hold/CI evidence refuses readiness and reports the exact error without claiming clean state.
+
+    Use a shared per-PR lock and atomic local state file (version 1) under the main project's .aida/review-watch/. State records repository/change identity, head, process PID/start identity, attempt/round, child-launch receipt and once-only notification keys. Persist launch reservation before spawning the ordinary attested `aida queue work PR-N --role reviewer --no-human --vendor ...` path; never mint or synthesize a verdict. Launch handoff must publish a child PID/start receipt under the same lock before reviewer work begins. A restart reconciles the receipt/live identity; an ambiguous launch remains reserved and reports recovery rather than launching a duplicate. Existing reviewer-lease exclusion remains a second guard. A global short lock admits at most max-concurrent-reviewers (default 2) across watcher instances; no lock is held while waiting for a review or network command.
+
+    A head change invalidates readiness immediately, marks the prior attempt superseded and requests shutdown of only the recorded child process group after checking PID/start identity. Reap/confirm exit and reconcile the review lease before admitting the new head. Never terminate an unrelated/reused PID or delete another session's lease. Queue pickup rechecks the forge head at launch; a moving head returns to reconciliation. Watcher exit leaves recoverable launch receipts; supervision/grant expiry stays with existing session authority. Review instructions explicitly forbid local cargo; the launcher retains its existing resource limiter and no bypass env is set. Existing risk-scaled policy and two-round cap remain authoritative, with a durable cap refusal/wake rather than infinite redispatch.
+
+    Ship-ready is report-only in the initial command: require current head exact equality with recorded approved reviewed_sha and CI evidence SHA, required CI success, 0 behind current main, and no hold. Read using anchored production verdict readers and current hold/authority APIs; re-fetch head before emitting. Once-only ready wake/mail goes to advisor. This command never merges; an active fire-mode caller may consume the wake through existing pr ship, which rechecks all gates/mandate. Request-changes produces one author notification per head/verdict identity naming the retained findings artifact. Notification failures stay retryable; persist a sent receipt only after success, with an idempotency key supported by the existing mailbox or a dedicated outbox so crashes cannot create an unbounded duplicate stream.
+
+    Acceptance tests use fake forge snapshots and child launch barriers: (a) pending CI still launches immediately; (b) stale overlap emits one merge-main notification; (c) SHA mismatch/red or unknown CI/hold/behind-main all refuse readiness; (d) new head supersedes only the old recorded live child and waits for its exit; (e) kill/restart around reservation, spawn receipt and notification edges produces no duplicate reviewer. Add concurrent-watcher and PID-reuse tests, authoritative head movement during launch, two-round cap and missing/corrupt state refusals. Local gates: targeted tests, make check-ci-fast, make check-ci-compile. Never run a full suite.
+
+    Open design boundary for signoff: initial watcher emits readiness only, with auto-ship left to the existing mandate-governed consumer. This satisfies the explicit 'auto-ship only under active fire-mode mandate' restriction while keeping implementation within this lane's NEVER MERGE instruction. If direct watcher auto-ship is required, make it a separate signed-off slice using existing pr ship unchanged.
+  created_at: 2026-10-20T03:52:19.983586923Z
+  modified_at: 2026-10-20T03:52:19.983586923Z
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
