@@ -53,8 +53,16 @@ pub enum ReportCommand {
 
     /// Generate AI integration report
     AiIntegration {
-        /// Output format: markdown or html
-        #[clap(long, short = 'f', default_value = "markdown")]
+        /// Report format: markdown or html
+        // Not `--format`: that is the global output-format flag, and a
+        // same-named local arg made clap panic at parse. trace:BUG-2189 | ai:claude
+        #[clap(
+            id = "report_format",
+            long = "report-format",
+            short = 'f',
+            value_name = "FORMAT",
+            default_value = "markdown"
+        )]
         format: String,
 
         /// Output file path (defaults to stdout)

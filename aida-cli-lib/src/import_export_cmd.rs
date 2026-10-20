@@ -23,13 +23,13 @@ pub(crate) fn handle_export_command(
     let store = storage.load()?;
 
     // The default format is `mapping`, but the documented export -> import
-    // round-trip needs `--format tree`. Passing `--id` while leaving the
+    // round-trip needs `--export-format tree`. Passing `--id` while leaving the
     // format at its default is almost always "I meant a tree export" — warn
     // rather than silently emit the wrong shape. trace:TASK-778
     if id.is_some() && format != "tree" {
         eprintln!(
-            "{}: --id is set but --format is `{}`. The export -> import \
-             round-trip needs `--format tree`; --id is ignored for `{}`.",
+            "{}: --id is set but --export-format is `{}`. The export -> import \
+             round-trip needs `--export-format tree`; --id is ignored for `{}`.",
             "Note".yellow(),
             format,
             format
@@ -169,10 +169,19 @@ pub(crate) fn handle_import_command(
 #[clap(name = "export")]
 #[clap(hide = true)]
 pub(crate) struct ExportArgs {
-    /// Output format: mapping, json, spec, impl, tree. The default is
-    /// `mapping`; the export -> import round-trip needs `--format tree`.
+    /// Export format: mapping, json, spec, impl, tree. The default is
+    /// `mapping`; the export -> import round-trip needs `--export-format tree`.
     // trace:TASK-778
-    #[clap(long, short = 'f', default_value = "mapping")]
+    // Not `--format`: that is the global output-format flag (OutputFormat),
+    // and a same-named local arg made clap panic at parse time.
+    // trace:BUG-2189 | ai:claude
+    #[clap(
+        id = "export_format",
+        long = "export-format",
+        short = 'f',
+        value_name = "FORMAT",
+        default_value = "mapping"
+    )]
     pub format: String,
 
     /// Output file path

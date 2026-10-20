@@ -481,3 +481,7 @@ mod story_1728_command_registry_tests;
 #[cfg(test)]
 #[path = "tests/story_1728_policy_parity_tests.rs"]
 mod story_1728_policy_parity_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2189_format_collision_tests.rs"]
+mod bug_2189_format_collision_tests;
