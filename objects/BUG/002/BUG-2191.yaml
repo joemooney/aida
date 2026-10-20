@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:08:45.955661905Z
-modified_at: 2026-10-20T11:41:41.193362762Z
+modified_at: 2026-10-20T11:41:59.418784343Z
 req_type: Bug
 tags:
 - ci
@@ -26,6 +26,19 @@ comments:
   content: 'Advisor 04:47: promoted to Approved and assigned to a fixer.'
   created_at: 2026-10-20T11:41:41.193362762Z
   modified_at: 2026-10-20T11:41:41.193362762Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1591e-48fa-7d40-8f4f-8c8d9107be5c
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF 2026-10-20 04:50 (mechanism):
+    REJECTED: a workspace-wide GIT_CONFIG_COUNT/KEY/VALUE env. Production code appends its own GIT_CONFIG_* pairs (the BUG-2004 token path), and tonight's PR-2769 lib-0 failure was exactly a GIT_CONFIG_KEY_0 env race, so a global env would collide with it. Also rejected: GIT_CONFIG_GLOBAL/SYSTEM files, because many fixtures already override those for isolation.
+    APPROVED:
+    1 One test-support helper per crate family (reuse an existing fixture-git helper if there is one) that builds the git Command with '-c maintenance.auto=false -c gc.auto=0', mirroring production's transaction_git_config. Fixtures call it instead of Command::new("git") for commit/merge/commit-tree/am/rebase.
+    2 A RATCHET guard test: count the test-source sites that spawn a write-class git subcommand outside the helper; the count may only go DOWN (baseline file checked in). New fixtures can't regress.
+    3 Migrate in this PR every fixture in a file that has flaked (the history fixture, plus any in CI logs with 'unable to create temporary file'), plus as many others as stay mechanical. The rest drain through the ratchet.
+    4 Keep the bug-2118 LD_PRELOAD reproduction working, and show it passing for a migrated fixture.
+  created_at: 2026-10-20T11:41:59.418784343Z
+  modified_at: 2026-10-20T11:41:59.418784343Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591d-f09f-7a71-b895-e080cd7d90ba
