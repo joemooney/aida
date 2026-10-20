@@ -1,0 +1,34 @@
+id: 01a15b36-7a89-7af3-a62e-c63900fba984
+spec_id: STORY-1884
+agreed_id: STORY-1884
+title: 'Review PR-2786: [AI:claude] perf(show): cut per-host-git-call overhead on the show path (BUG-2192)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `abf9f7f0`) for branch `claude/bug-2192`.
+
+  - PR: <https://github.com/joemooney/aida/pull/2786>
+  - Branch: `claude/bug-2192` → `main`
+
+  ## Covers
+
+  - BUG-2192
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 2786` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T21:27:39.401454713Z
+modified_at: 2026-10-20T21:27:39.401454713Z
+req_type: Story
+filed_at:
+  code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
