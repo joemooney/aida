@@ -484,6 +484,8 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     || open_change_head(live_head().ok().flatten()).ok(),
                     false,
                     crate::mandate::rework_release_decision,
+                    // It ignores the carry-over. trace:TASK-1968 | ai:claude
+                    false,
                 )
                 .map(|cover| cover.id)
                 .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(pr)))

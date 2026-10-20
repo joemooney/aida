@@ -1849,6 +1849,10 @@ pub(crate) fn mandate_ship_cover(
     decide: fn(
         &crate::mandate::ShipCheck<'_>,
     ) -> std::result::Result<String, crate::mandate::MandateRefusal>,
+    // TASK-1968: whether `decide` reads `ShipCheck::carry_over`. Only a ship
+    // does; the proof (an `ls-remote` plus fetches) is skipped otherwise and
+    // `carry_over` is `None` (not attempted). trace:TASK-1968 | ai:claude
+    prove_carry_over: bool,
 ) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
     use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::mandate::current_state_reporting(true);
@@ -2028,13 +2032,17 @@ pub(crate) fn mandate_ship_cover(
         ledger: &ledger,
         hold: &hold,
         // trace:TASK-1960 | ai:claude
-        carry_over: mandate_carry_over(
-            main_worktree,
-            pr,
-            &candidates,
-            head.as_deref(),
-            Some(info.base_ref.as_str()),
-        ),
+        carry_over: prove_carry_over
+            .then(|| {
+                mandate_carry_over(
+                    main_worktree,
+                    pr,
+                    &candidates,
+                    head.as_deref(),
+                    Some(info.base_ref.as_str()),
+                )
+            })
+            .flatten(),
     })?;
     Ok(MandateCover {
         id,
@@ -2457,9 +2465,15 @@ fn ship_preflight_gates(
             Some(change.base.as_str()),
         )),
     )?;
-    crate::merge_hold::enforce_corpus_gate_before_merge(project_root, change.id, &ids, || {
-        Some(status.head_sha.clone())
-    })
+    // TASK-1968: the corpus gate honours the same clean-merge carry-over.
+    // trace:TASK-1968 | ai:claude
+    crate::merge_hold::enforce_corpus_gate_before_merge(
+        project_root,
+        change.id,
+        &ids,
+        Some(change.base.as_str()),
+        || Some(status.head_sha.clone()),
+    )
     .map_err(|e| ShipRefusal::Review.error(e))?;
     let gate = crate::review_marker::merge_gate(main_worktree, change.id, || {
         Some(status.head_sha.clone())
@@ -2972,6 +2986,7 @@ pub(crate) fn pr_ship_with_method(
             || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
             override_stale_approval,
             crate::mandate::ship_decision,
+            true,
         )
     };
     let mut mandate_cover = mandate_cover_now();

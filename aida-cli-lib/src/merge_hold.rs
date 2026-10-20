@@ -2869,6 +2869,33 @@ pub(crate) fn corpus_merge_gate(
     bodies: &[(String, String)],
     head: Option<&str>,
 ) -> CorpusMergeGate {
+    corpus_merge_gate_carrying(pr, bodies, head, &|_| None)
+}
+
+/// The TASK-1960 carry-over prover the corpus gate consults: the SAME proof
+/// the approval-head gate applies (`review_carryover::prove_for_refusal`),
+/// asked about a `Moved` refusal from an approved sha to the head. `None` =
+/// no carry-over is available here.
+// trace:TASK-1968 | ai:claude
+pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
+    &crate::pr_ship::ApprovalHeadRefusal,
+) -> Option<
+    Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
+>;
+
+/// [`corpus_merge_gate`], except that a head nothing approves may still
+/// clear when an approval at an older head carries over to it (TASK-1968):
+/// every live verdict's current recording approves, the corpus cleanly
+/// approves that older sha, and `prove` shows the head moved only by clean
+/// merges of the protected base with the PR's own diff unchanged. Anything
+/// short of that refuses exactly as [`corpus_merge_gate`] does.
+// trace:TASK-1968 | ai:claude
+pub(crate) fn corpus_merge_gate_carrying(
+    pr: u64,
+    bodies: &[(String, String)],
+    head: Option<&str>,
+    prove: CorpusCarryOverProver<'_>,
+) -> CorpusMergeGate {
     use crate::review_verdict as rv;
     let live: Vec<&(String, String)> = bodies
         .iter()
@@ -2934,16 +2961,29 @@ pub(crate) fn corpus_merge_gate(
         // Verdict evidence exists but nothing cleanly approves this head: a
         // refusal left at an older sha (a head move alone does not lift the
         // hold) or an approval recorded at the OLD rejected sha (parent AC3).
-        Ok(None) => CorpusMergeGate::Refuse {
-            message: format!(
-                "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
-                 head {} — a head move alone does not lift a recorded refusal, and an approval \
-                 at an older commit is not evidence this head was reviewed. {}",
-                rv::short_sha(head),
-                corpus_release_hint(pr, &first_key)
-            ),
-            arm: None,
-        },
+        //
+        // TASK-1968: the one exception is TASK-1960's carry-over — an
+        // approval at an older head whose only successors are clean merges of
+        // the protected base, with the PR's own diff unchanged.
+        // trace:TASK-1968 | ai:claude
+        Ok(None) => {
+            let not_carried = match corpus_carry_over(&live, head, prove) {
+                Some(Ok(_)) => return CorpusMergeGate::Clear,
+                Some(Err(why)) => format!(" The approval did not carry over: {}.", why.reason()),
+                None => String::new(),
+            };
+            CorpusMergeGate::Refuse {
+                message: format!(
+                    "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
+                     head {} — a head move alone does not lift a recorded refusal, and an \
+                     approval at an older commit is not evidence this head was reviewed.\
+                     {not_carried} {}",
+                    rv::short_sha(head),
+                    corpus_release_hint(pr, &first_key)
+                ),
+                arm: None,
+            }
+        }
         Err(message) => CorpusMergeGate::Refuse {
             message: format!(
                 "PR-{pr}'s verdict corpus cannot be reconciled at its current head {}: {message} \
@@ -2954,6 +2994,56 @@ pub(crate) fn corpus_merge_gate(
             arm: None,
         },
     }
+}
+
+/// Whether an approval in the live corpus carries over to `head`. `None` =
+/// no approval is eligible to carry over: a live artifact that does not
+/// parse, has no reviewed sha, or whose current recording does not approve
+/// (a standing refusal at ANY sha is never carried past), or no approved sha
+/// the corpus itself cleanly approves. Otherwise each eligible approved sha
+/// is proven in turn; the first proof wins, else the last refusal is
+/// returned for the message.
+// trace:TASK-1968 | ai:claude
+fn corpus_carry_over(
+    live: &[&(String, String)],
+    head: &str,
+    prove: CorpusCarryOverProver<'_>,
+) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
+    use crate::review_verdict as rv;
+    let mut approved: Vec<String> = Vec::new();
+    for (_, body) in live {
+        let verdict = rv::parse_recorded_verdict(body)?;
+        if !verdict.kind.approves() {
+            return None;
+        }
+        let sha = verdict.reviewed_sha?;
+        let sha = sha.trim();
+        if sha.is_empty() || rv::same_reviewed_sha(sha, head) {
+            return None;
+        }
+        if !approved.iter().any(|a| rv::same_reviewed_sha(a, sha)) {
+            approved.push(sha.to_string());
+        }
+    }
+    let mut last = None;
+    for sha in approved {
+        let corpus_approves = matches!(
+            rv::reconcile_artifacts_for_sha(live.iter().map(|(_, b)| b.as_str()), &sha),
+            Ok(Some(kind)) if kind.approves()
+        );
+        if !corpus_approves {
+            continue;
+        }
+        let refusal = crate::pr_ship::ApprovalHeadRefusal::Moved {
+            reviewed_sha: sha,
+            head_sha: head.to_string(),
+        };
+        match prove(&refusal)? {
+            Ok(proof) => return Some(Ok(proof)),
+            Err(why) => last = Some(Err(why)),
+        }
+    }
+    last
 }
 
 /// Gather the `(key, body)` pairs the gate judges: the PR-keyed record plus
@@ -3009,11 +3099,19 @@ pub(crate) fn corpus_gate_bodies(
 /// read. On a definite at-head refusal the mirrors are refreshed best-effort
 /// from the gate's own `CorpusArm` (never from a second predicate), and the
 /// refusal stands whether or not the mirrors landed.
+///
+/// `base_branch` is the PR's base as the caller knows it (`None` = read it
+/// from the forge); a carry-over is proven against the remote's default
+/// branch and only for a PR that targets it (TASK-1968). The proof here is
+/// quiet: it records nothing, since the approval gate that pins the merge
+/// records and announces it.
 // trace:BUG-1774 | ai:claude
+// trace:TASK-1968 | ai:claude
 pub(crate) fn enforce_corpus_gate_before_merge(
     project_root: &Path,
     pr: u64,
     spec_hints: &[String],
+    base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
     let main_root = crate::main_worktree_root_from(project_root);
@@ -3032,7 +3130,12 @@ pub(crate) fn enforce_corpus_gate_before_merge(
         return Ok(());
     }
     let head = head();
-    match corpus_merge_gate(pr, &bodies, head.as_deref()) {
+    let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
+    let site = crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch);
+    let prove = |refusal: &crate::pr_ship::ApprovalHeadRefusal| {
+        crate::review_carryover::prove_for_refusal(&site, pr, refusal)
+    };
+    match corpus_merge_gate_carrying(pr, &bodies, head.as_deref(), &prove) {
         CorpusMergeGate::Clear => Ok(()),
         CorpusMergeGate::Refuse { message, arm } => {
             if let Some(arm) = arm.filter(|_| pr > 0) {
