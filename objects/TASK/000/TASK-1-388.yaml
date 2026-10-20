@@ -1,0 +1,30 @@
+id: 01a15a94-2856-7e40-b5bf-269595c9483e
+spec_id: TASK-1-388
+title: 'cosmetic (non-blocking): aida-core/src/scaffolding/aida_md.rs:202 trace:BUG-217…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2174, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic (non-blocking): aida-core/src/scaffolding/aida_md.rs:202 trace:BUG-2174 comment sits above the '### Agent surface' push_str, ~85 lines before the '## Where change notes go' text it describes (line 288); move it next to the section.
+
+  PR: #2783
+  Reviewed sha: 1a4434b4adda869a708ec5cbaa3d9ccdfeb097be
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-20T18:30:21.526241483Z
+modified_at: 2026-10-20T18:30:21.526241483Z
+req_type: Task
+tags:
+- carried-from:BUG-2174
+- finding-hash:076be2a7
+- from-review:PR-2783
+- kind:carried-forward
+filed_at:
+  code_sha: 8efb0c2886002f2017cc7c5ab709499496169f61
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
