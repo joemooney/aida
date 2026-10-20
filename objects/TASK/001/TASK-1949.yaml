@@ -3,12 +3,12 @@ spec_id: TASK-1949
 agreed_id: TASK-1949
 title: 'STORY-1853 slice S6: CI job fan-out (parallel test shards + gates jobs, aggregate ''Build (ubuntu-latest)'' check)'
 description: 'Per the advisor ruling on STORY-1853 (2026-10-19 08:30), split ci.yml''s build job into parallel jobs that share the rust-cache key: (a) the aida_cli_lib unit tests; (b) and (c) the aida-cli integration binaries in two deterministic halves; (d) the remaining crates plus doc tests; (e) the non-test gates. An aggregate job named ''Build (ubuntu-latest)'' needs all of them, so branch protection and merge-hold-gate are unchanged. AC: (1) PR CI wall time is 12 min or less (today 35). (2) The passed+ignored test count is at least main''s, with both counts recorded in the PR. (3) The required check name is unchanged and merge-hold-gate still passes. Owner: codex-impl.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:39:09.353084265Z
-modified_at: 2026-10-19T21:04:08.935071695Z
+modified_at: 2026-10-20T01:11:20.370151215Z
 req_type: Task
 tags:
 - ci
@@ -41,6 +41,13 @@ history:
   timestamp: 2026-10-19T15:39:28.849544698Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a156dc-e832-7ff1-9225-7d2bd945d2aa
+  author: aida-session-start
+  timestamp: 2026-10-20T01:11:20.370150469Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
