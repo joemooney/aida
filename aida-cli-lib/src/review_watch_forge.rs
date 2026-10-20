@@ -40,6 +40,8 @@ fn clear_routing(command: &mut Command) {
         "GIT_ALTERNATE_OBJECT_DIRECTORIES",
         "GIT_CONFIG_COUNT",
         "GIT_CONFIG_PARAMETERS",
+        "AIDA_TEST_GH_BINARY",
+        "AIDA_TEST_GLAB_BINARY",
     ] {
         command.env_remove(name);
     }
@@ -131,7 +133,9 @@ impl Repository {
         let mut command;
         let program;
         if self.kind == ForgeKind::GitHub {
-            program = crate::resolve_forge_cli(self.kind).context("GitHub CLI is unavailable")?;
+            // Resolve through PATH at the bounded spawn. The ordinary resolver's
+            // sanity `--version` probe is unbounded and unsuitable for a watcher.
+            program = "gh";
             command = Command::new(program);
             command
                 .env("GH_HOST", &self.host)
@@ -148,7 +152,7 @@ impl Repository {
                 "number,headRefOid,isDraft,state,author",
             ]);
         } else {
-            program = crate::resolve_forge_cli(self.kind).context("GitLab CLI is unavailable")?;
+            program = "glab";
             command = Command::new(program);
             command
                 .env("GITLAB_HOST", &self.host)
@@ -175,7 +179,9 @@ impl Repository {
         command.current_dir(root).stdin(Stdio::null());
         self.pin_command(&mut command);
         let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
-            .context("forge discovery timed out or failed to spawn")?;
+            .with_context(|| {
+            format!("{program} discovery timed out or failed to spawn; ensure {program} is on PATH")
+        })?;
         anyhow::ensure!(
             out.status.success(),
             "forge discovery failed ({})",
@@ -301,7 +307,7 @@ impl Repository {
                     .map(String::from)
                     .collect())
             };
-            Ok(!names(&base)?.is_disjoint(&names(&head)?))
+            Ok(paths_overlap(&names(&base)?, &names(&head)?))
         })();
         // These UUID refs belong only to this probe, never another watcher.
         let _ = output(root, "git", &["update-ref", "-d", &base]);
@@ -368,4 +374,19 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         gitlab,
         overlap: None,
     }))
+}
+
+// A path and its descendant also conflict (file/directory replacement).
+// trace:TASK-1993 | ai:codex
+pub(super) fn paths_overlap(left: &BTreeSet<String>, right: &BTreeSet<String>) -> bool {
+    let descendant = |paths: &BTreeSet<String>, name: &str| {
+        let prefix = format!("{name}/");
+        paths
+            .range(prefix.clone()..)
+            .next()
+            .is_some_and(|path| path.starts_with(&prefix))
+    };
+    left.iter()
+        .any(|name| right.contains(name) || descendant(right, name))
+        || right.iter().any(|name| descendant(left, name))
 }

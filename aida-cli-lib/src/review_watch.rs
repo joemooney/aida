@@ -20,14 +20,14 @@ pub struct ReviewWatchArgs {
     /// Discover and dispatch once, then leave admitted reviews running.
     #[arg(long)]
     pub once: bool,
-    /// Seconds between discovery passes.
-    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=3600))]
+    /// Seconds between discovery passes (default 10).
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=3600), hide_default_value = true)]
     pub interval: u64,
-    /// Maximum concurrent watcher-launched reviews across watcher instances.
-    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=2))]
+    /// Maximum watcher-launched reviews across instances: one or two (default two).
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=2), hide_default_value = true)]
     pub max_concurrent: u8,
-    /// Override the ordinary queue-work vendor selection.
-    #[arg(long, value_parser = ["claude", "codex", "agy"])]
+    /// Vendor: claude, codex, or agy; omit for ordinary queue-work selection.
+    #[arg(long, value_parser = ["claude", "codex", "agy"], hide_possible_values = true)]
     pub vendor: Option<String>,
     #[arg(long, hide = true)]
     launch_reservation: Option<String>,
@@ -125,6 +125,24 @@ impl Directory {
         );
         Ok(Self { handle })
     }
+    fn existing(path: &Path) -> Result<Option<Self>> {
+        let handle = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)
+        {
+            Ok(handle) => handle,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let meta = handle.metadata()?;
+        anyhow::ensure!(
+            meta.is_dir() && meta.uid() == effective_uid() && meta.mode() & 0o022 == 0,
+            "unsafe review history directory {}",
+            path.display()
+        );
+        Ok(Some(Self { handle }))
+    }
     fn path(&self) -> PathBuf {
         use std::os::fd::AsRawFd;
         PathBuf::from(format!("/proc/self/fd/{}", self.handle.as_raw_fd()))
@@ -189,6 +207,7 @@ impl Directory {
 }
 
 struct Store {
+    runtime: Directory,
     dir: Directory,
     repository: String,
 }
@@ -197,6 +216,7 @@ impl Store {
         let runtime = Directory::open(&root.join(".aida"))?;
         let dir = Directory::open(&runtime.path().join("review-watch"))?;
         Ok(Self {
+            runtime,
             dir,
             repository: repository.into(),
         })
@@ -238,6 +258,80 @@ impl Store {
         }
         Ok(result)
     }
+    fn history(&self, key: &str) -> Result<History> {
+        let mut history = History::default();
+        let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
+            return Ok(history);
+        };
+        // GitLab's ordinary standalone collector historically used PR-N too.
+        let aliases = if let Some(number) = key.strip_prefix("MR-") {
+            vec![key.to_string(), format!("PR-{number}")]
+        } else {
+            vec![key.to_string()]
+        };
+        for alias in aliases {
+            if let Some(bytes) = dir.read(&format!("{alias}.json"))? {
+                history.add(&bytes)?;
+            }
+            if history.keys.len() >= 2 {
+                return Ok(history);
+            }
+            if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
+                let mut names = Vec::new();
+                for (index, entry) in std::fs::read_dir(archive.path())?.enumerate() {
+                    anyhow::ensure!(index < 1000, "review archive exceeds admission scan limit");
+                    let name = entry?
+                        .file_name()
+                        .into_string()
+                        .map_err(|_| anyhow::anyhow!("non-UTF8 review archive entry"))?;
+                    anyhow::ensure!(
+                        names.len() < 1000,
+                        "review archive exceeds admission scan limit"
+                    );
+                    if name.ends_with(".json") {
+                        names.push(name);
+                    }
+                }
+                names.sort();
+                for name in names {
+                    let bytes = archive
+                        .read(&name)?
+                        .context("review history disappeared during admission")?;
+                    history.add(&bytes)?;
+                    if history.keys.len() >= 2 {
+                        return Ok(history);
+                    }
+                }
+            }
+        }
+        Ok(history)
+    }
+    fn round_for(&self, key: &str, attempt: &Attempt) -> Result<usize> {
+        self.transaction(key, |state| {
+            let entry = state
+                .entries
+                .get(key)
+                .context("review reservation disappeared")?;
+            anyhow::ensure!(
+                entry
+                    .attempts
+                    .iter()
+                    .any(|a| a.token == attempt.token && a.head == attempt.head && active(a)),
+                "review reservation changed before queue work"
+            );
+            let history = self.history(key)?;
+            anyhow::ensure!(
+                !history.contains(&attempt.head),
+                "head already has a recorded review; route further work to the advisor"
+            );
+            let used = history.used(entry);
+            anyhow::ensure!(
+                used <= 2,
+                "two-round review cap reached outside watcher; route further work to the advisor"
+            );
+            Ok(used)
+        })
+    }
     fn transition(&self, key: &str, token: &str, phase: Phase) -> Result<Attempt> {
         let me = Identity::current()?;
         self.transaction(key, |state| {
@@ -261,6 +355,66 @@ impl Store {
             attempt.phase = phase;
             Ok(attempt.clone())
         })
+    }
+}
+
+// Durable rounds outside this watcher count too. Deduplicate current/archive
+// copies using the verdict writer's recording identity, never a separate policy.
+// trace:TASK-1993 | ai:codex
+#[derive(Default)]
+struct History {
+    keys: BTreeSet<crate::review_verdict::RecordingKey>,
+}
+impl History {
+    fn add(&mut self, bytes: &[u8]) -> Result<()> {
+        let mut object = serde_json::from_slice::<serde_json::Value>(bytes)?
+            .as_object()
+            .cloned()
+            .context("review history is not an object")?;
+        let rounds = match object.remove("rounds") {
+            None => Vec::new(),
+            Some(serde_json::Value::Array(rounds)) => rounds,
+            Some(_) => anyhow::bail!("invalid retained review rounds"),
+        };
+        for value in std::iter::once(serde_json::Value::Object(object)).chain(rounds) {
+            let object = value
+                .as_object()
+                .context("invalid historical review round")?;
+            anyhow::ensure!(
+                object
+                    .get("unarchived_rounds")
+                    .is_none_or(|v| v.as_u64() == Some(0)),
+                "unidentifiable historical rounds require advisor reconciliation"
+            );
+            let key = crate::review_verdict::recording_key(object);
+            anyhow::ensure!(
+                key.0
+                    .as_deref()
+                    .is_some_and(|sha| (7..=64).contains(&sha.len())
+                        && sha.bytes().all(|b| b.is_ascii_hexdigit()))
+                    && !key.1.is_empty()
+                    && crate::review_verdict::VerdictKind::parse(&key.2)
+                        != crate::review_verdict::VerdictKind::Unknown,
+                "unidentifiable historical review requires advisor reconciliation"
+            );
+            self.keys.insert(key);
+        }
+        Ok(())
+    }
+    fn contains(&self, head: &str) -> bool {
+        self.keys.iter().any(|key| {
+            key.0
+                .as_deref()
+                .is_some_and(|sha| crate::review_verdict::same_reviewed_sha(sha, head))
+        })
+    }
+    fn used(&self, entry: &Entry) -> usize {
+        self.keys.len()
+            + entry
+                .attempts
+                .iter()
+                .filter(|a| a.phase != Phase::Failed && !self.contains(&a.head))
+                .count()
     }
 }
 
@@ -354,6 +508,7 @@ fn select(
         anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
         let repository = state.repository.clone();
         let entry = state.entries.entry(key.clone()).or_default();
+        let history = store.history(&key)?;
         if overlap {
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
                 message: stale_message(&repository, &key, change), sent: false,
@@ -369,7 +524,8 @@ fn select(
         if entry.attempts.iter().any(active) {
             return Ok(Action::Skip("prior head still active or ambiguous; S1 waits without signalling processes".into()));
         }
-        if entry.attempts.iter().filter(|a| a.phase != Phase::Failed).count() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        if history.used(entry) >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip("global reviewer capacity is occupied or reserved".into())); }
         let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None };
         if let Some(failed) = entry.attempts.iter_mut().find(|a| a.phase == Phase::Failed) { *failed = attempt.clone(); }
@@ -487,6 +643,7 @@ fn child_with_program(
         .context("invalid launch reservation")?;
     let id = parse_key(key)?;
     let store = Store::open(root, &repo.identity)?;
+    let round = std::cell::Cell::new(0);
     execute_reservation(
         &store,
         key,
@@ -500,12 +657,14 @@ fn child_with_program(
                     && current.overlap == Some(false),
                 "head changed before review dispatch"
             );
+            round.set(store.round_for(key, attempt)?);
             Ok(())
         },
         |attempt| {
             let mut cmd = watch_command(repo, root, program);
             cmd.args(queue_args(key, attempt.vendor.as_deref()))
-                .env(WATCH_HEAD, &attempt.head);
+                .env(WATCH_HEAD, &attempt.head)
+                .env("AIDA_REVIEW_ROUND", round.get().to_string());
             let status = crate::process_retry::RetryEtxtbsy::status_retrying_etxtbsy(&mut cmd)?;
             anyhow::ensure!(status.success(), "attested review exited {status}; receipt retained; inspect .aida/review-watch/state.json and `aida session leases --all`");
             Ok(())
@@ -564,6 +723,15 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
         current.head == head && current.overlap == Some(false),
         "review-watch head changed before reviewer launch; no review started"
     );
+    let store = Store::open(root, &repository.identity)?;
+    let key = current.key();
+    let state = store.load()?;
+    let attempt = state
+        .entries
+        .get(&key)
+        .and_then(|entry| entry.attempts.iter().find(|a| active(a) && a.head == head))
+        .context("missing watcher reservation at reviewer launch")?;
+    store.round_for(&key, attempt)?;
     Ok(true)
 }
 

@@ -371,10 +371,11 @@ assert attempt['identity']['start'] and attempt['identity']['boot']
 assert sys.argv[1:] == ['queue', 'work', key, '--role', 'reviewer', '--no-human', '--fresh', '--vendor', 'claude']
 for name in os.environ:
     assert not name.startswith(('AIDA_FROM_PR_', 'AIDA_AGENT_GATE_'))
-    assert not name.startswith('AIDA_REVIEW_') or name == 'AIDA_REVIEW_WATCH_HEAD'
+    assert not name.startswith('AIDA_REVIEW_') or name in ['AIDA_REVIEW_WATCH_HEAD', 'AIDA_REVIEW_ROUND']
 for name in ['GH_REPO', 'GLAB_REPO', 'GITLAB_REPO', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_NAMESPACE', 'GIT_CONFIG_COUNT', 'AIDA_GRADED_REVIEW_CONTEXT']:
     assert name not in os.environ, name
 assert os.environ['AIDA_REVIEW_WATCH_HEAD'] == attempt['head']
+assert os.environ['AIDA_REVIEW_ROUND'] == '1'
 assert os.environ['GH_HOST'] in ['github.com', 'gitlab.example.test']
 assert os.environ.get('AIDA_SESSION_GRANT')
 (root / 'queue-ready').write_text(str(os.getppid()))
@@ -676,4 +677,97 @@ fn task1993_review_subcommand_parser_enforces_bounded_settings() {
         crate::review_cmd::ReviewArgs::try_parse_from(["review", "watch", "--interval", "0"])
             .is_err()
     );
+}
+
+// trace:TASK-1993 | ai:codex
+#[test]
+fn task1993_existing_and_mixed_review_rounds_share_the_cap() {
+    let (temp, store) = fixture();
+    let path = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir(&path).unwrap();
+    let record = |head: u64| serde_json::json!({"reviewed_sha": format!("{head:040x}"), "recorded_by":"manual-reviewer", "verdict":"request-changes"});
+    let write = |value: serde_json::Value| {
+        let file = path.join("PR-1.json");
+        std::fs::write(&file, serde_json::to_vec(&value).unwrap()).unwrap();
+        std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    };
+    write(record(1));
+    assert!(matches!(
+        select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    let second = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+    store
+        .transition("PR-1", &second.token, Phase::Running)
+        .unwrap();
+    assert_eq!(store.round_for("PR-1", &second).unwrap(), 2);
+    // A manual/drain second round lands before queue/vendor launch.
+    let mut two = record(3);
+    two["rounds"] = serde_json::json!([record(1)]);
+    write(two);
+    assert!(store.round_for("PR-1", &second).is_err());
+    store
+        .transition("PR-1", &second.token, Phase::Failed)
+        .unwrap();
+    let Action::Skip(reason) = select(&store, &change(1, 4, false), None, 2).unwrap() else {
+        panic!("third review dispatched");
+    };
+    assert!(reason.contains("two-round"));
+    // A fresh watcher also sees both historical rounds.
+    let reopened = Store::open(temp.path(), &store.repository).unwrap();
+    assert!(matches!(
+        select(&reopened, &change(1, 5, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    let mut prior = record(7);
+    prior["rounds"] = serde_json::json!([record(6)]);
+    let file = path.join("PR-2.json");
+    std::fs::write(&file, serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    assert!(matches!(
+        select(&reopened, &change(2, 8, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(reopened.load().unwrap().entries["PR-2"].attempts.is_empty());
+}
+
+// trace:TASK-1993 | ai:codex
+#[test]
+fn task1993_history_deduplicates_archives_and_refuses_unsafe_evidence() {
+    let (temp, store) = fixture();
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    let archive = verdicts.join("PR-1");
+    std::fs::create_dir_all(&archive).unwrap();
+    let body = serde_json::to_vec(&serde_json::json!({"reviewed_sha":"a".repeat(40), "recorded_by":"reviewer", "verdict":"approved"})).unwrap();
+    for file in [
+        verdicts.join("PR-1.json"),
+        archive.join(format!("{}.json", "a".repeat(40))),
+    ] {
+        std::fs::write(&file, &body).unwrap();
+        std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    assert_eq!(store.history("PR-1").unwrap().keys.len(), 1);
+    std::fs::remove_file(verdicts.join("PR-1.json")).unwrap();
+    assert_eq!(store.history("PR-1").unwrap().keys.len(), 1);
+    std::fs::rename(&archive, verdicts.join("kept")).unwrap();
+    std::os::unix::fs::symlink(verdicts.join("kept"), &archive).unwrap();
+    assert!(store.history("PR-1").is_err());
+}
+
+// trace:TASK-1993 | ai:codex
+#[test]
+fn task1993_file_directory_collisions_are_stale_overlap() {
+    let paths = |names: &[&str]| names.iter().map(|s| s.to_string()).collect();
+    assert!(forge::paths_overlap(
+        &paths(&["config"]),
+        &paths(&["config/settings"])
+    ));
+    assert!(forge::paths_overlap(
+        &paths(&["config/settings"]),
+        &paths(&["config"])
+    ));
+    assert!(!forge::paths_overlap(
+        &paths(&["config"]),
+        &paths(&["config-backup/settings"])
+    ));
 }

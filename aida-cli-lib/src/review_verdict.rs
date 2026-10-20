@@ -613,13 +613,15 @@ fn round_findings(m: &JsonObj) -> Vec<String> {
         .unwrap_or_default()
 }
 
-type RecordingKey = (Option<String>, String, String, Vec<String>);
+// Shared with watcher admission to count exactly the writer's retained rounds.
+// trace:TASK-1993 | ai:codex
+pub(crate) type RecordingKey = (Option<String>, String, String, Vec<String>);
 
 /// Everything about a round that carries review signal. Two rounds with equal
 /// keys are the same recording, so retaining the second adds nothing; any
 /// difference — a different reviewer above all — is signal that overwriting
 /// would destroy.
-fn recording_key(m: &JsonObj) -> RecordingKey {
+pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
     let field = |k: &str| {
         m.get(k)
             .and_then(|v| v.as_str())

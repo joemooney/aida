@@ -302,6 +302,8 @@ running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
 seconds, and `--max-concurrent` accepts one or two reviewers (default two).
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
+The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
+per-command timeouts; the watcher avoids unbounded version-detection probes.
 Discovery pins origin's forge host/project and fetches the default branch and
 change head into private temporary refs. A symbolic `origin/HEAD` is required;
 unknown metadata, head movement, or unreadable base evidence refuses dispatch.
@@ -323,8 +325,12 @@ files or clear ambiguous receipts while a reviewer may still be running.
 
 Stale-head notifications have deterministic IDs and retry without overwriting
 mailbox reader flags. Delivery is recorded only after successful publication.
-A head is launched once, with at most two completed/admitted rounds per change;
-ordinary queue-work risk and review authority checks still apply. New heads wait
+A head is launched once. Existing manual/drain verdicts and their retained
+archives share the two-round cap with watcher reservations; current/archive
+copies deduplicate using the verdict writer's recording identity. History is
+rechecked before queue work and at the final vendor boundary; unreadable or
+unidentifiable history refuses dispatch. The round prompt comes from that
+combined count. Ordinary queue-work risk and review authority checks still apply. New heads wait
 while an earlier review is active or ambiguous. Review instructions forbid local
 Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
 authority, process termination, ship-ready report, or merge action.
