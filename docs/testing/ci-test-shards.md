@@ -5,8 +5,8 @@
 
 The `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
 dependency cache. Gates and contracts share the base cache, which gates saves.
-Each test-lane group (`lib`, `cli`, `rest`) saves and restores its own keyed
-cache, because the test lanes compile test binaries and dev-dependencies that
+Each test-lane group (`lib`, `cli`, `rest`) saves and restores its own cache
+under a suffixed shared key (`ci-dev-profile-lib`, and so on), because the test lanes compile test binaries and dev-dependencies that
 gates never builds.
 `build-result` retains the required `Build (ubuntu-latest)` check and runs even
 when a lane fails or is cancelled. It succeeds only when the whole matrix does.
@@ -37,7 +37,12 @@ The separate merge-hold workflow is unchanged.
 Before running anything, every test lane checks the shard union: the planned
 commands must select every target `cargo test --workspace` runs (each
 test-enabled lib, bin, integration, example, or bench target, and each
-doctest). A target that no lane selects fails the lane and is named.
+doctest), and each exactly once (the two lib halves count as one). A target
+that no lane selects, or that two lanes select, fails the lane and is named.
+
+Gates and contracts set `AIDA_CI_PREBUILT_CLI=1`: their shell contract tests
+use the workspace binary those lanes already built instead of running
+`cargo build -p aida-cli`, whose different feature set recompiled the CLI.
 
 Docs-only changes skip the test execution and expensive gates; the existing
 unconditional documentation guards still execute in their respective gate lanes. Every test

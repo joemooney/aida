@@ -85,18 +85,46 @@ class ShardsTest(unittest.TestCase):
         metadata = json.loads(subprocess.check_output(
             ['cargo', 'metadata', '--no-deps', '--format-version', '1'], cwd=ROOT))
         packages = [p for p in metadata['packages'] if p['id'] in metadata['workspace_members']]
-        self.assertEqual(shards.union_gaps(packages, {}), [])
+        self.assertEqual(shards.union_problems(packages, {}), ([], []))
         lib = dict(target('lib', 'lib'), doctest=True)
-        packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two'), dict(lib, name='cli')]),
+        packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two'),
+                                                   dict(lib, name='cli'), target('macros', 'proc-macro')]),
                     dict(name='aida-cli-lib', targets=[lib, target('tool', 'bin'), target('ex', 'example')]),
                     dict(name='aida-core', targets=[dict(lib, name='core')])]
-        self.assertEqual(shards.union_gaps(packages, {}), [
-            ('aida-cli', 'doc', 'cli'), ('aida-cli', 'lib', 'cli'),
+        gaps, repeats = shards.union_problems(packages, {})
+        self.assertEqual(gaps, [
+            ('aida-cli', 'doc', 'cli'), ('aida-cli', 'lib', 'cli'), ('aida-cli', 'lib', 'macros'),
             ('aida-cli-lib', 'bin', 'tool'), ('aida-cli-lib', 'example', 'ex')])
-        with patch.object(shards, 'union_gaps', return_value=[('aida-cli', 'lib', 'cli')]), \
+        self.assertEqual(repeats, [])
+        with patch.object(shards, 'union_problems', return_value=([('aida-cli', 'lib', 'cli')], [])), \
                 patch.object(shards.subprocess, 'call', return_value=0) as call:
             self.assertEqual(shards.main(['--shard', 'rest']), 1)
         call.assert_not_called()
+
+    def test_union_guard_refuses_a_target_two_shards_run(self):
+        packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two')]),
+                    dict(name='aida-cli-lib', targets=[dict(target('lib', 'lib'), doctest=True)])]
+        real = shards.commands
+
+        def overlapping(shard, pkgs, budgets):
+            # A rest lane that also ran every CLI integration target.
+            extra = [['cargo', 'test', '-p', 'aida-cli', '--test', 'one']] if shard == 'rest' else []
+            return real(shard, pkgs, budgets) + extra
+        with patch.object(shards, 'commands', side_effect=overlapping):
+            gaps, repeats = shards.union_problems(packages, {})
+        self.assertEqual(gaps, [])
+        self.assertEqual(repeats, [('aida-cli', 'test', 'one')])
+        with patch.object(shards, 'union_problems', return_value=([], [('aida-cli', 'test', 'one')])), \
+                patch.object(shards.subprocess, 'call', return_value=0) as call:
+            self.assertEqual(shards.main(['--shard', 'cli-0']), 1)
+        call.assert_not_called()
+
+    def test_check_ci_list_labels_run_tests_with_its_real_local_command(self):
+        listing = subprocess.run(['python3', 'scripts/check-ci-gates.py', '--list', '--tier', 'all'],
+                                 cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        line = next(l for l in listing.splitlines() if l.startswith('PLAN  Run tests  '))
+        self.assertIn('(local: python3 scripts/ci-test-shards.py --shard all --profile agent', line)
+        self.assertNotIn('(local: cargo test --profile agent)', listing)
 
     def test_rest_keeps_core_features_supplied_by_excluded_cli(self):
         manifest = tomllib.loads((ROOT / 'aida-cli-lib/Cargo.toml').read_text())

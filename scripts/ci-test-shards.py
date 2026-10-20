@@ -18,6 +18,7 @@ trace:TASK-1979 | ai:claude
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -25,6 +26,10 @@ import sys
 import tomllib
 
 SHARDS = ('lib-0', 'lib-1', 'cli-0', 'cli-1', 'rest')
+_spec = importlib.util.spec_from_file_location('test_touched', Path(__file__).with_name('test-touched.py'))
+_touched = sys.modules.setdefault('test_touched', importlib.util.module_from_spec(_spec))
+_spec.loader.exec_module(_touched)
+LIB_KINDS = set(_touched.LIB_KINDS)  # One definition of a library target's kinds.
 LIB_UNIT = ['-p', 'aida-cli-lib', '--lib']
 
 
@@ -109,10 +114,16 @@ def commands(shard, packages, budgets):
     raise ValueError(f'unknown shard: {shard}')
 
 
+def unit_kind(target):
+    if LIB_KINDS & set(target['kind']):
+        return 'lib'
+    return 'bin' if 'bin' in target['kind'] else target['kind'][0]
+
+
 def units(package):
     """What `cargo test` runs for a package by default: every test-enabled target, plus doctests."""
-    found = {(package['name'], 'bin' if 'bin' in t['kind'] else 'lib' if 'lib' in t['kind'] else t['kind'][0],
-              t['name']) for t in package['targets'] if t.get('test') and 'custom-build' not in t['kind']}
+    found = {(package['name'], unit_kind(t), t['name'])
+             for t in package['targets'] if t.get('test') and 'custom-build' not in t['kind']}
     found |= {(package['name'], 'doc', t['name']) for t in package['targets'] if t.get('doctest')}
     return found
 
@@ -134,16 +145,23 @@ def selected(command, packages):
     return {u for u in every if u[1] in kinds or (u[1] == 'test' and u[2] in tests)}
 
 
-def union_gaps(packages, budgets):
-    """Targets cargo test --workspace runs that no shard selects.
+def union_problems(packages, budgets):
+    """(gaps, repeats): targets cargo test --workspace runs that no shard
+    selects, and targets more than one shard selects.
 
+    lib-1 runs the same unit binary as lib-0 under the other half's filters
+    (checked disjoint when the lanes run), so the pair counts once.
     trace:TASK-1979 | ai:claude
     """
-    covered = set()
+    seen = {}
     for shard in SHARDS:
+        if shard == 'lib-1':
+            continue
         for command in commands(shard, packages, budgets):
-            covered |= selected(command, packages)
-    return sorted(set().union(*map(units, packages)) - covered)
+            for unit in selected(command, packages):
+                seen[unit] = seen.get(unit, 0) + 1
+    required = set().union(*map(units, packages))
+    return sorted(required - set(seen)), sorted(u for u, n in seen.items() if n > 1)
 
 
 def lib_test_names(root, profile):
@@ -188,10 +206,14 @@ def main(argv=None):
     packages = [p for p in metadata['packages'] if p['id'] in metadata['workspace_members']]
     with (root / 'scripts/test-time-budget.toml').open('rb') as handle:
         budgets = tomllib.load(handle)['shard_seconds']
-    gaps = union_gaps(packages, budgets)
+    gaps, repeats = union_problems(packages, budgets)
     if gaps:
         print('::error::no test shard runs these cargo test --workspace targets: ' +
               ', '.join(':'.join(gap) for gap in gaps), file=sys.stderr)
+    if repeats:
+        print('::error::more than one test shard runs these targets: ' +
+              ', '.join(':'.join(unit) for unit in repeats), file=sys.stderr)
+    if gaps or repeats:
         return 1
     profile = ['--profile', args.profile] if args.profile else []
     status = 0
