@@ -311,7 +311,10 @@ impl EnvVarsGuard {
 
 impl Drop for EnvVarsGuard {
     fn drop(&mut self) {
-        for (key, prev) in &self.prev {
+        // Reverse order, so a var applied after the ones it depends on (a
+        // GIT_CONFIG_COUNT after its pairs) is removed before them.
+        // trace:TASK-1979 | ai:claude
+        for (key, prev) in self.prev.iter().rev() {
             // SAFETY: still holding ENV_LOCK via self._guard.
             #[allow(unused_unsafe)]
             unsafe {

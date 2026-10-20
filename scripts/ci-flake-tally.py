@@ -82,7 +82,10 @@ def classify(run: dict) -> tuple[str, list[int]]:
     builds = [j for j in jobs if j["name"].startswith((BUILD_JOB_PREFIX, "CI ("))]
     if not builds:
         return "no-build-job", []
-    expected = {f"CI ({lane})" for lane in ('lib', 'cli-0', 'cli-1', 'rest')}
+    # The lib lane split in two (TASK-1979); older runs keep the single lane.
+    # trace:TASK-1979 | ai:claude
+    lib = ('lib-0', 'lib-1') if any(j['name'] == 'CI (lib-0)' for j in builds) else ('lib',)
+    expected = {f"CI ({lane})" for lane in (*lib, 'cli-0', 'cli-1', 'rest')}
     sharded = any(j['name'].startswith('CI (') for j in builds)
     # Matrix gate lanes also have a skipped Run tests step. They are not test
     # shards and must not turn every complete test suite into "incomplete".
