@@ -1,5 +1,6 @@
 id: 01a155e6-c083-7f20-8c10-2d0b488c2717
 spec_id: TASK-1-371
+agreed_id: TASK-1641
 title: 'AC ac7f9407 (non-blocking, unverified by reviewer this round): real_claude_cont…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-1982, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -18,6 +19,11 @@ tags:
 - finding-hash:3449d9ed
 - from-review:BUG-1982
 - kind:carried-forward
+history:
+- id: 01a156bf-b439-7cb1-b521-23d1417ab2ac
+  author: joe
+  timestamp: 2026-10-20T00:39:26.521363217Z
+  changes: []
 filed_at:
   code_sha: c416dbcc0bdb5bd038c7f8019c4d36db3cc338b4
   branch: main
