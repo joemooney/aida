@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T10:24:36.954851539Z
-modified_at: 2026-10-20T10:24:36.954851539Z
+modified_at: 2026-10-20T10:56:30.521308215Z
 req_type: Task
 tags:
 - from-review:PR-2772
@@ -19,6 +19,17 @@ tags:
 - performance
 - severity:minor
 - show
+relationships:
+- rel_type: Supersedes
+  target_id: 01a158d7-5897-7532-b5dc-ba44705d955f
+  created_at: 2026-10-20T10:56:30.521295942Z
+  created_by: joe
+history:
+- id: 01a158f4-ac09-7051-9120-dfe4f9d8c673
+  author: joe
+  timestamp: 2026-10-20T10:56:32.265175117Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes: []
 filed_at:
   code_sha: 42481f97c70e50a200eb225059c8f303788e8b18
   branch: pr-2772
