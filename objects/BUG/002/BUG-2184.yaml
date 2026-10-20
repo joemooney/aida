@@ -8,8 +8,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T23:57:07.069855639Z
-modified_at: 2026-10-20T11:38:39.243327570Z
+modified_at: 2026-10-20T11:38:55.824516212Z
 req_type: Bug
+comments:
+- id: 01a1591b-7bd0-7ab3-8443-05122e5604dd
+  author: joe
+  content: 'Advisor 04:40: promoted to Approved; ships in one PR with BUG-2179.'
+  created_at: 2026-10-20T11:38:55.824516212Z
+  modified_at: 2026-10-20T11:38:55.824516212Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a1591b-3b0b-7c42-992f-58ac2dbdb87f
   author: joe
