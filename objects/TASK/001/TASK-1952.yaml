@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-20T10:55:24.620223650Z
+modified_at: 2026-10-20T10:57:49.268255045Z
 req_type: Task
 tags:
 - contained
@@ -135,6 +135,18 @@ comments:
   created_at: 2026-10-19T17:37:15.306267215Z
   modified_at: 2026-10-19T17:37:15.306267215Z
   session_id: 5e7cd0ae-fc8a-4e77-abf9-a8ab628b7a74
+- id: 01a158f5-d8d4-7d00-aa8a-ab1ac179b16a
+  author: joe
+  content: |
+    Advisor 2026-10-20 03:58: folded in as superseded (open-list cleanup). These items are now this spec's scope:
+    - TASK-1642: cosmetic: PR body names test bug_1982_unexpressible_main_git_deny_grants_no_wri…
+    - TASK-1643: minor (non-blocking): aida-git-guardrails.sh now scans the raw COMMAND for the …
+    - TASK-1641: AC ac7f9407 (non-blocking, unverified by reviewer this round): real_claude_cont…
+    - TASK-1976: TASK-1752 grant-env guard: env-read detector misses split, aliased and vars() reads
+    - TASK-1977: TASK-1752 grant-env guard exempts tests/ dirs wholesale, not test helpers by name
+  created_at: 2026-10-20T10:57:49.268255045Z
+  modified_at: 2026-10-20T10:57:49.268255045Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
