@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-20T05:15:47.861120196Z
+modified_at: 2026-10-20T15:59:28.850425487Z
 req_type: Story
 relationships:
 - rel_type:
@@ -73,6 +73,125 @@ comments:
     - Anchor all three criteria (`trace:STORY-1688.acd96462`, `trace:STORY-1688.ace1f616`, `trace:STORY-1688.acfeeb8f`), including a unit test for `acfeeb8f` asserting `hook_allowed = false` and `CronJobFired` event-driven routing with zero model-side polling.
   created_at: 2026-10-20T05:15:47.861120196Z
   modified_at: 2026-10-20T05:15:47.861120196Z
+- id: 01a15a0a-0652-7983-8068-8a0321d32305
+  author: claude
+  content: |
+    ARCHITECTURE SKETCH (STORY-1688)
+
+    Fixer: claude (taking over PR #2743 from agy2). This replaces the 2026-10-20 05:15 SKETCH comment. That comment still parsed comment text for advisor signoff and FACTORY READY, kept merge as a seat, and left the drain halt and hand-written fixture paths open. Each section below names the round-1 finding it closes (R1..R10, in the order they appear in .aida/review-verdicts/PR-2743.json).
+
+    ## 0. Principle: every check reads a structured record or doesn't run
+
+    Any check that would need comment text is dropped. Production code will contain no comment-body matching (no `FACTORY READY`, `awaiting advisor signoff`, `hold cleared`, `review (merge):`, or `extract_sha_after`). The fixture-override inputs `.aida/lane-liveness/{snapshot,prs,leases}.json` are deleted from `load_snapshot`, because they are hand-written records on the production read path (R3, R8).
+
+    ## 1. What it detects, and the source for each check
+
+    | Finding (id key) | Source of truth | Trust | Routes to |
+    |---|---|---|---|
+    | `dead-lane:<lane_id>`: lane process is dead while its assigned work is still open | (a) driver registry `.aida/drivers/*.json` (`DriverRecord`: pid + pid_start_time + heartbeat/ttl, written by `aida driver register`); (b) `.aida/drain-state.json` (`orchestrator_pid` + start identity, `stopped_at`); (c) NEW headless lane record `.aida/lanes/headless-<lease_id>.json`, written only by `run_vendor_headless_child` | High. Pid liveness uses `process_identity_is_alive` (start identity, so recycled pids are caught). Open work is re-validated each tick against the live lease plus spec status (section 2). | lane's `seat` if it is a registered role; otherwise advisor |
+    | `stale-log:<lane_id>`: lane process is alive but its log or heartbeat hasn't moved for more than N minutes while it has open work | driver `heartbeat_at` / handoff mtime; headless log mtime; drain `phase_started_at` plus newest headless log | Medium. mtime is advisory, so it only routes and never acts. | same as dead-lane |
+    | `unpicked-ready-pr:PR-<n>@<sha8>`: an open, non-draft PR whose head has had green required checks for more than 30m, with no review lease and no verdict at that head | `gh pr list --json number,isDraft,headRefOid,labels,statusCheckRollup` (structured forge API: check conclusion + `completedAt`). Review started = a live `PR-<n>` lease whose `pr_head_sha` == head, OR a recorded verdict (`read_recorded_verdict`, which resolves by spec id or PR key, fixing the `PR-N.json`-only lookup) whose `reviewed_sha` == head. | High. The ready signal is green checks at head, not a FACTORY READY comment, so ready time = last required check's `completedAt`. Optional filter: label `factory` (config `review_pickup_labels`, default `[]` = all PRs). | reviewer |
+    | `gate-wait-operator:PR-<n>@<sha8>`: a human-only merge hold has waited more than 15m | `.aida/merge-holds/PR-<n>` (`MergeHoldRecord`: `reason_kind` in {Supervision, Decision, Recusal, Unknown}, `target_head_sha`) plus `MergeHoldChanged{placed:true}` event `ts` from events.jsonl for the start time (file mtime as fallback) | High (the hold store is canonical) | operator push notification only (`notify::send_direct`); no seat job |
+    | `gate-wait-advisor:<msg_id>`: an advisor request has gone unanswered for more than 15m | mailbox: a `Message` with `to = advisor`, `intent ∈ {request, handoff}`, not retracted, deleted or archived, and no later message in its `thread_id` from an advisor seat | High (append-only typed store). This replaces the "awaiting advisor signoff" comment parse. Sketch-ready mails must be sent with `--intent request`; the fixer/orchestrate templates get that one-word change. | advisor |
+    | `orphaned-work:<lease_id>`: a spec lease is held by a dead process, with no pushed progress for more than 30m | `.aida/sessions/*.json` `SessionLease` (`active_pid`/`creator_pid` + start identity, `started_at`, branch); pushed progress = `origin/<branch>` commit ts | High. Excludes review/manual/interrupted/driver-vouched leases and terminal specs. Bounded by the age window (section 3). | advisor |
+
+    Dropped in this slice:
+    - Relay lanes. `relay.status` is written by an out-of-repo script, and `relay-stall-guard` already owns blocked and exited relays. Reading it here too would route the same stall twice, so lane-liveness skips `.aida/relay`.
+    - `needs operator hold clear` / `awaiting advisor signoff` comment gates. The two typed rows above replace them.
+
+    A Rework hold (review refusal) is not a gate-wait. When the PR head moves past `target_head_sha`, the PR falls under `unpicked-ready-pr` once checks are green, so a rework push wakes the reviewer.
+
+    ## 2. Lane-record lifecycle (R2, R3)
+
+    The headless record is keyed `headless-<lease_id>`. With no lease there is no record, because there is no assigned work.
+    - spawn: `register_headless_lane_for_child` writes `{lease_id, spec, pid, pid_start_time, log_path, vendor, started_at}`. It records the lease id, not a frozen `assigned_work` list.
+    - exit, any code including 0: `finish_headless_lane_for_child` re-reads the lease.
+      - If the lease is gone (the child released it, i.e. finished its work), it deletes the record.
+      - Otherwise it writes `exited_at` and `exit_status`. A clean exit that leaves work held is exactly the 16:51 incident, so the record now persists.
+    - every tick, re-validate:
+      - the record is live work only while its lease exists and the spec isn't Completed/Done/Rejected and no newer live lease holds the spec;
+      - otherwise the routed tick garbage-collects it (deletes the file). A read-only `doctor check` only skips it.
+    - expiry: a record with `exited_at` older than `dead_lane_report_hours` (default 24, the same as relay-stall's `EXIT_REPORT_HOURS`) is GC'd.
+    - spawn_claude_headless_resume_granted: wire it to the same register/finish pair, or correct the doc comment. I'll wire it if its call site has the lease id; otherwise I'll fix the doc and file a follow-up (R9).
+
+    Drain:
+    - A drain with `stopped_at` set was deliberately halted (`drain_signal`), so it isn't a lane and produces no finding.
+    - dead = `orchestrator_alive() == false && stopped_at.is_none()`, i.e. a crash.
+    - open work = members not completed/failed, re-checked against spec status.
+    - a crashed drain-state older than 24h (`started_at`/phase) expires from the check.
+
+    Driver records already have pid identity and TTL. Their open work = leases with `driver == label` that are still live-spec.
+
+    ## 3. Shipping safely against the backlog of 21 dead leases (R1)
+
+    - `.aida/config.toml`: `lane-liveness` ships `enabled = false`, the same precedent as `stranded-branches-guard`, with a comment naming the enable step.
+    - Age window: `orphaned-work` only considers leases whose last progress is within `max_orphan_age_hours` (default 24). It also skips leases whose spec is terminal, i.e. the rows `aida session reap` would retire anyway.
+      - Today's 21 leases (oldest 2026-10-04) fall outside the window, so when enabled the check reports only the ones that went dead in the last day.
+      - That holds up because enabled, the job fires at 30m, well inside 24h. A lease that ages out was already routed once while it was in the window.
+    - I'm not adding a baseline file. The age window plus lease_id keys make the starting set deterministic, and a baseline would be one more writer to keep correct.
+    - Enable step (advisor/operator): run `aida doctor check lane-liveness` read-only, confirm the findings are real, then flip `enabled = true`.
+    - Test: a fixture of 21 old dead leases created through the production lease writer, plus 1 fresh one, gives exactly 1 finding.
+    - Dedupe: per-seat ledger `due_since` already gives one wake per episode until `aida schedule done`. The routed note carries the finding ids, so a stuck finding doesn't re-wake the seat every 10m.
+
+    ## 4. Routing: registered roles only, one route per finding (R5, R6, R9)
+
+    - The job runs as `doctor check lane-liveness --route`. It routes only under `AIDA_SCHEDULE_CHILD=1`, and it exits 0 once routing succeeds, because routed findings are not job failures. So no `CronJobFailed:lane-liveness` fires, and the `lane-liveness-route` job is deleted. That removes the double advisor wake.
+    - Seat jobs are `lane-liveness-advisor` and `lane-liveness-reviewer`, plus `-integrator`/`-implementer` only when a driver record names that seat.
+      - The `merge` and `operator` seats are gone.
+      - Before routing, a finding's seat is checked against `role::AGENT_ROLES` via `canonical_role_name`. An unregistered seat falls back to advisor with a warning in the note.
+      - A test asserts every route target is a registered role.
+    - Operator gates go to push notification only (`notify::send_direct`, rule `lane-liveness-operator-gate`, whose `min_interval` throttles repeats). No seat job, so the advisor doesn't also wake for a human-only hold.
+    - Single prompt source: one `const ROUTES: &[(seat, prompt)]` in `lane_liveness.rs`. `builtin_routed_seat_task` builds the seat Task from it, and the `[[schedule.jobs]] lane-liveness-{advisor,merge,operator}` entries are removed from `.aida/config.toml`. A test asserts config.toml has no `lane-liveness-*` seat entries.
+
+    ## 5. Finding ids (R7)
+
+    - `lane-liveness:orphaned-work:<lease_id>` (two dead leases on BUG-1918 give two ids; the summary names the spec)
+    - `lane-liveness:dead-lane:<lane_id>` and `:stale-log:<lane_id>`
+    - `lane-liveness:unpicked-ready-pr:PR-<n>@<sha8>`, `:gate-wait-operator:PR-<n>@<sha8>`
+    - `lane-liveness:gate-wait-advisor:<mailbox msg id>`
+
+    ## 6. Criteria: traces and tests with production writers (R3, R4)
+
+    All fixtures are built in a tempdir through the production writers:
+    - `leases` writer / `session_start` lease creation
+    - `driver_registry::write`
+    - `DrainState::write`
+    - `register_/finish_headless_lane_for_child` with a real `ExitStatus` from a spawned `true`/`false` child
+    - `merge_hold::write_typed_hold` (emits `MergeHoldChanged`)
+    - `mailbox_store::write_message`
+    - `review_verdict::write_verdict_atomic`
+
+    The only non-writer input is the forge JSON. `load_open_prs` takes a `PrSource` seam (production: `gh pr list --json ...`); tests pass captured `gh` output in its real schema. A dead pid comes from spawning a child and reaping it.
+
+    - `trace:STORY-1688.acd96462` (fixture per check): dead lane (driver, drain crash, headless non-zero), stale log, unpicked ready PR (and its negatives: a review lease at head, a verdict at head, a verdict at an old head still counts as unpicked), stale operator hold, unanswered advisor request (negatives: a reply in thread, intent fyi), orphaned work (negatives: review lease, manual, terminal spec, outside the age window, BUG-1918×2 → 2 ids). Also covers: a deliberately halted drain gives no finding; records are GC'd once the lease is released or the spec completes.
+    - `trace:STORY-1688.ace1f616` (2026-10-13 replay; each case gives its finding in one `scan_and_route_at` call at threshold + 10m):
+      1. 09:50 Codex lane stopped by the role leak: driver record + driver-labelled lease, pid dead → `dead-lane` → advisor.
+      2. 8 ready PRs unseen: 8 PRs green at head for >30m with no review lease or verdict → 8 `unpicked-ready-pr` findings → the reviewer ledger (not advisor).
+      3. 16:51 headless Codex exit 0 with work held: register → spawn `true` → finish(success) while the lease is held → the record persists → `dead-lane`.
+      4. Implementer subagent died when its parent advisor rotated: lease with a reaped creator pid, no push for >30m → `orphaned-work:<lease_id>`.
+    - `trace:STORY-1688.acfeeb8f` (no model-side polling):
+      - the `command_table` entry is `hook_allowed: false`;
+      - the job is `JobKind::Substrate` with `every`;
+      - every `ROUTES` seat Task has `interval: None` and `on == [CronJobFired:<its own name>]`;
+      - routing writes only the ledger, events, and notify (no model spawn).
+
+    Gate in phase 2: `make check-ci-fast`, `make test-touched`, `make check-ci-compile`.
+
+    ## 7. TASK-2003: not folded in
+
+    TASK-2003 changes spec status on a rework push and adds last-activity to `aida list`. Those are status-machine and list-UI changes, not detection and routing.
+    - There is no head-push event to hook. The only shared piece is that this job will see a rework head past a Rework hold, through `unpicked-ready-pr`. That wakes the reviewer, but it doesn't change the spec status.
+    - Folding it in would add a second architectural surface to an already-large PR.
+    - Recommendation: keep it separate and note the shared signal on TASK-2003.
+
+    ## Design fork for the advisor
+
+    The advisor-gate source is the mailbox request with no reply (needs `--intent request` on sketch-ready mails).
+    - Alternative: drop the advisor gate from slice 1 entirely.
+    - I recommend the mailbox version. It's the only structured record of "waiting on advisor" that exists today.
+  created_at: 2026-10-20T15:59:28.850425487Z
+  modified_at: 2026-10-20T15:59:28.850425487Z
+  session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
 history:
 - id: 01a150cb-d752-7903-8da3-bcdf44282df0
   author: joe
