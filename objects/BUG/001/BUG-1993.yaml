@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-18T22:03:05.018018638Z
+modified_at: 2026-10-20T05:14:25.370387262Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -158,6 +158,19 @@ comments:
   created_at: 2026-10-16T09:25:31.241322035Z
   modified_at: 2026-10-16T09:25:31.241322035Z
   session_id: b0657c59-d482-4ef7-a931-e3c7b919e148
+- id: 01a157bb-74da-7ac3-bd10-d53b076c1184
+  author: joe
+  content: |-
+    Measured on current main (1ad2024f9d, load avg 10.46 10.84 15.63, 3 runs each):
+    - git log --all -F --date-order --pretty=format:%H%x1f%h%x1f%s%x1f%B%x1e --grep BUG-1993: [1322.7, 922.2, 926.9] ms (median 926.9 ms)
+    - git worktree list --porcelain: [15.1, 20.9, 18.8] ms (median 18.8 ms)
+    - aida show BUG-1993 (piped/toon): [1407.6, 1144.4, 1048.4] ms (median 1144.4 ms)
+    - aida show BUG-1993 --format json (full linkage): [7152.3, 8554.0, 7498.6] ms (median 7498.6 ms)
+    - aida doctor check performance: 35.2% of 1821 calls over 1000 ms in 24h (worst 44568 ms).
+
+    PR #2747 (split to BUG-1993 only) runs git log --all and scan_trace_graph_bounded concurrently in collect_git_linkage_opts, skips nested git worktrees (.claude/worktrees, etc.) during trace walks, bounds resolve_default_branch_ref, branch --contains, and worktree list with measured budgets (LINKAGE_COMMIT_LOG_TIMEOUT=3s, LINKAGE_TRACE_SCAN_BUDGET=3s, LINKAGE_BRANCH_SCAN_BUDGET=2s, LINKAGE_SHIPPED_CHECK_TIMEOUT=1s, LINKAGE_WORKTREE_LIST_TIMEOUT=1s, SHOW_FORGE_LOOKUP_BUDGET=4s), and renders timeouts as unknown/incomplete.
+  created_at: 2026-10-20T05:14:25.370387262Z
+  modified_at: 2026-10-20T05:14:25.370387262Z
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
