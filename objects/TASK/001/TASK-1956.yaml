@@ -27,7 +27,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:10:09.552795156Z
-modified_at: 2026-10-19T20:02:25.261167174Z
+modified_at: 2026-10-20T01:02:06.010345910Z
 req_type: Task
 tags:
 - ci
@@ -60,6 +60,12 @@ comments:
   created_at: 2026-10-19T20:02:25.261167174Z
   modified_at: 2026-10-19T20:02:25.261167174Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a156d4-72ba-7442-8ad3-fb75c47d8643
+  author: joe
+  content: 'PR-2761 @ 184230ef1d: fixes BUG-2182 (pidfd exit readiness, 30s deadline), the cache_binding note clobber (cfg(test) RwLock gate on emit_cache_note), and BUG-2155 (survivors() no longer kills a child mid-execve holding a close-on-exec guard copy; production fix plus deterministic regression test). Under load: help test baseline 29/30 → 30/30. BUG-2156 not reproduced and not addressed.'
+  created_at: 2026-10-20T01:02:06.010345910Z
+  modified_at: 2026-10-20T01:02:06.010345910Z
+  session_id: 9fe272cf-c758-4b18-8dd3-5bf2d731dfdf
 history:
 - id: 01a154ed-9c7f-7af0-a31a-f0ba19c4ea70
   author: joe
