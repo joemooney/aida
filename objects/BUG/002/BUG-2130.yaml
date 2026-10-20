@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T23:34:04.554872418Z
-modified_at: 2026-10-18T21:31:21.323275311Z
+modified_at: 2026-10-20T13:40:10.498893073Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -41,6 +41,12 @@ comments:
   created_at: 2026-10-18T21:31:21.323275311Z
   modified_at: 2026-10-18T21:31:21.323275311Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
+- id: 01a1598a-7c82-7863-9e04-11caf112b1a6
+  author: joe
+  content: 'Advisor 06:40: v0.16.0 is tagged (faf1f33a7f), and the release workflow is running. That meets ruling condition (c), a tagged release containing the new reader, so the writer switch in PR-2735 is unblocked once the portability ratchet (/tmp literal) is fixed. agy1 is out of quota until about 10-23, so this needs a new owner.'
+  created_at: 2026-10-20T13:40:10.498893073Z
+  modified_at: 2026-10-20T13:40:10.498893073Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a13dbb-0d3a-74c3-bfcd-6b2e49d1497b
   author: aida-lease-take
