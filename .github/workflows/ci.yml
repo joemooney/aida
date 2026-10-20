@@ -803,13 +803,15 @@ jobs:
             echo "::warning::nextest shadow (${{ matrix.shard }}) did not pass: $OUTCOME (non-gating)"
           fi
 
+      # One JUnit report per nextest invocation (the rest shard runs up to
+      # three); the shard script renames each before the next run.
       - name: Upload nextest report
         if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' }}
         uses: actions/upload-artifact@v5
         with:
           name: nextest-shadow-${{ matrix.shard }}
           path: |
-            target/nextest/ci/junit.xml
+            target/nextest/ci/junit-*.xml
             target/nextest-run.log
           if-no-files-found: warn
 

@@ -17,7 +17,8 @@ trace:TASK-1979 | ai:claude
 
 --runner nextest runs the same selections under cargo-nextest's `ci` profile
 (.config/nextest.toml) for the non-gating shadow lanes; doctests stay on
-cargo test. --totals sums passed/failed/ignored from either
+cargo test. Each nextest invocation's JUnit report is kept as
+junit-<shard>-<n>.xml. --totals sums passed/failed/ignored from either
 runner's log, so a shadow lane is compared with its cargo-test lane by count.
 trace:TASK-1957 | ai:claude
 """
@@ -49,6 +50,9 @@ LIBTEST_RE = re.compile(r'test result: \w+\. (\d+) passed; (\d+) failed; (\d+) i
 # run prints `118/120 tests run`. Without filters, skipped means #[ignore].
 NEXTEST_RE = re.compile(r'Summary \[\s*[\d.]+s\] \d+(?:/\d+)? tests? run: (.*)$')
 NEXTEST_PART_RE = re.compile(r'(\d+) (passed|failed|timed out|skipped)')
+# Lines that end a cargo-test section: this script's command echo, and
+# nextest's own output (its start line and captured test output).
+SECTION_END_RE = re.compile(r'^(?:\+ |\s*Starting \d+ tests?|\s*-{3} (?:STDOUT|STDERR))')
 
 
 def cli_halves(targets, budgets):
@@ -167,23 +171,39 @@ def totals(lines):
 
     A libtest binary counts its LAST result line: tests that re-run their own
     binary as a child (with a filter) print the child's result line first.
+    Result lines count only inside a cargo-test section (a Running/Doc-tests
+    header up to the next command or nextest output), so a child's result
+    printed in nextest's captured failure output counts nowhere.
     """
     result = dict(passed=0, failed=0, ignored=0)
-    sections, section = {}, 0
+    sections, section, inside = {}, 0, False
     for line in lines:
         line = ANSI_RE.sub('', line)
         if LIBTEST_HEADER_RE.search(line):
-            section += 1
-        elif match := LIBTEST_RE.search(line):
-            sections[section] = [int(value) for value in match.groups()]
+            section, inside = section + 1, True
+        elif SECTION_END_RE.search(line):
+            inside = False
         elif match := NEXTEST_RE.search(line):
+            inside = False
             for count, kind in NEXTEST_PART_RE.findall(match.group(1)):
                 key = {'skipped': 'ignored', 'timed out': 'failed'}.get(kind, kind)
                 result[key] += int(count)
+        elif inside and (match := LIBTEST_RE.search(line)):
+            sections[section] = [int(value) for value in match.groups()]
     for counts in sections.values():
         for key, value in zip(('passed', 'failed', 'ignored'), counts):
             result[key] += value
     return result
+
+
+def keep_junit(target_dir, shard, index):
+    """Move the `ci` profile's report aside so the next invocation can't overwrite it."""
+    report = Path(target_dir) / 'nextest' / NEXTEST_PROFILE / 'junit.xml'
+    if not report.exists():
+        return None
+    kept = report.with_name(f'junit-{shard}-{index}.xml')
+    report.replace(kept)
+    return kept
 
 
 def unit_kind(target):
@@ -347,7 +367,7 @@ def main(argv=None):
     if gaps or repeats:
         return 1
     profile = ['--profile', args.profile] if args.profile else []
-    status = 0
+    status, reports = 0, 0
     for shard in SHARDS if args.shard == 'all' else [args.shard]:
         if shard == 'lib-1' and args.shard == 'all':
             continue  # lib-0 ran the whole binary.
@@ -367,6 +387,8 @@ def main(argv=None):
                 code = subprocess.call(command, cwd=root)
                 if code:
                     status = 1  # --no-fail-fast also spans separate cargo invocations.
+                if command[1] == 'nextest':
+                    reports += keep_junit(metadata['target_directory'], shard, reports) is not None
     return status
 
 

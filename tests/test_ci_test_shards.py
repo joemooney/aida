@@ -104,6 +104,16 @@ class ShardsTest(unittest.TestCase):
         command = call.call_args.args[0]
         self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
         self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--profile', 'agent'])
+        # trace:TASK-1957 | ai:claude
+        with patch.object(shards, 'lib_test_names', return_value=names), \
+                patch.object(shards.subprocess, 'call', return_value=0) as call, \
+                patch.object(shards, 'keep_junit') as keep:
+            self.assertEqual(shards.main(['--shard', 'lib-1', '--runner', 'nextest', '--profile', 'agent']), 0)
+        command = call.call_args.args[0]
+        self.assertEqual(command[:3], ['cargo', 'nextest', 'run'])
+        self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
+        self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--cargo-profile', 'agent'])
+        self.assertEqual(keep.call_args.args[1:], ('lib-1', 0))
 
     def test_union_guard_accepts_the_workspace_and_names_gaps(self):
         metadata = json.loads(subprocess.check_output(
@@ -219,6 +229,28 @@ class ShardsTest(unittest.TestCase):
                '1 timed out, 4 skipped',
                '     Summary [   1.0s] 8/10 tests run: 8 passed, 0 skipped']
         self.assertEqual(shards.totals(log), dict(passed=134, failed=4, ignored=6))
+        # A child's result in nextest's captured failure output, after a
+        # cargo-test section, counts nowhere and leaves the section's count.
+        log = ['     Running unittests src/lib.rs (target/debug/deps/x-0123)',
+               'test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
+               '--- STDOUT:              x foo::child ---',
+               ' test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.0s',
+               '     Summary [   1.0s] 5 tests run: 4 passed, 1 failed, 0 skipped']
+        self.assertEqual(shards.totals(log), dict(passed=104, failed=1, ignored=0))
+        log[2] = '+ cargo nextest run --no-fail-fast --profile ci -p x --bins'
+        self.assertEqual(shards.totals(log), dict(passed=104, failed=1, ignored=0))
+
+    def test_each_nextest_invocation_keeps_its_own_junit_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = pathlib.Path(tmp) / 'nextest' / shards.NEXTEST_PROFILE / 'junit.xml'
+            report.parent.mkdir(parents=True)
+            self.assertIsNone(shards.keep_junit(tmp, 'rest', 0))
+            for index in range(3):
+                report.write_text(f'<run {index}/>')
+                self.assertEqual(shards.keep_junit(tmp, 'rest', index).name, f'junit-rest-{index}.xml')
+            self.assertFalse(report.exists())
+            self.assertEqual(sorted(p.read_text() for p in report.parent.glob('junit-*.xml')),
+                             ['<run 0/>', '<run 1/>', '<run 2/>'])
 
     def test_nextest_shadow_job_is_parallel_and_non_gating(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
@@ -237,6 +269,12 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(config['slow-timeout']['period'], '10s')
         self.assertIn('terminate-after', config['slow-timeout'])
         self.assertEqual(config['junit']['path'], 'junit.xml')
+        upload = steps['Upload nextest report']['with']['path']
+        self.assertIn('target/nextest/ci/junit-*.xml', upload)
+        nextest = tomllib.loads((ROOT / '.config/nextest.toml').read_text())
+        self.assertEqual(nextest['test-groups']['serial'], {'max-threads': 1})
+        self.assertTrue(config['overrides'])
+        self.assertTrue(all(o['test-group'] == 'serial' for o in config['overrides']))
 
     def test_root_guard_detects_loose_files_and_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
