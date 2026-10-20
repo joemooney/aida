@@ -877,12 +877,11 @@ fn task_1417_relationship_collapse_declares_view_limit_at_threshold() {
         parse_spec_id(&String::from_utf8_lossy(&out.stdout))
     };
 
-    let add_n_references = |spec: &str, n: usize| {
-        for i in 0..n {
-            let target = add_spec(&format!("TASK-1417 fixture: rel target {i}"));
+    let add_references = |spec: &str, targets: &[String]| {
+        for target in targets {
             let rel = aida(&repo, &home)
                 .env("AIDA_AGENT_OUTPUT", "toon")
-                .args(["rel", "add", spec, &target, "--type", "references"])
+                .args(["rel", "add", spec, target, "--type", "references"])
                 .output()
                 .expect("run aida rel add");
             assert!(
@@ -895,7 +894,10 @@ fn task_1417_relationship_collapse_declares_view_limit_at_threshold() {
 
     // ---- Exactly five: still enumerated inline, no collapse. ----
     let five_spec = add_spec("TASK-1417 fixture: five relations");
-    add_n_references(&five_spec, 5);
+    let targets: Vec<String> = (0..5)
+        .map(|i| add_spec(&format!("TASK-1417 fixture: rel target {i}")))
+        .collect();
+    add_references(&five_spec, &targets);
     let five_show = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "0")
         .args(["show", &five_spec])
@@ -914,8 +916,13 @@ fn task_1417_relationship_collapse_declares_view_limit_at_threshold() {
     );
 
     // ---- Six: collapses, and the collapse DECLARES itself. ----
+    // Six distinct edges without six more specs: the same five targets plus
+    // the five-relation spec itself (each `aida add` costs seconds).
+    // trace:TASK-1959 | ai:claude
     let six_spec = add_spec("TASK-1417 fixture: six relations");
-    add_n_references(&six_spec, 6);
+    let mut six_targets = targets.clone();
+    six_targets.push(five_spec.clone());
+    add_references(&six_spec, &six_targets);
     let six_show = aida(&repo, &home)
         .env("AIDA_AGENT_OUTPUT", "0")
         .args(["show", &six_spec])
