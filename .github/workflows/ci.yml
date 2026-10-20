@@ -146,6 +146,14 @@ jobs:
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true') }}
         run: bash scripts/check-generated-proto.sh
 
+      # The lib shard's BUG-1745/BUG-1749 unit tests spawn target/debug/aida,
+      # which `cargo test -p aida-cli-lib --lib` does not build. Build only that
+      # bin, in the same dev profile and cache as the tests.
+      # trace:TASK-1949 | ai:claude
+      - name: Build aida binary for lib unit tests
+        if: ${{ matrix.shard == 'lib' && (steps.changes.outputs.full_ci == 'true') }}
+        run: cargo build -p aida-cli --bin aida
+
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
       - name: Run tests

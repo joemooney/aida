@@ -47,6 +47,7 @@
 # trace:BUG-2014 | ai:codex
 "Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
+"Build aida binary for lib unit tests" = "full"
 # Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
 "Check aida-cli without default features" = "fast"
 "TUI seam guard" = "fast"
