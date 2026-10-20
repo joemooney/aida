@@ -12,12 +12,12 @@ description: |-
   Each panics before running: "Mismatch between definition and access of `format`. Could not downcast to TypeId(...)" (clap_builder parser/error.rs:32), from GlobalArgs::from_arg_matches_mut. Each subcommand defines its own non-global `format` arg with a different value type, which shadows the global `--format` (OutputFormat) id, so the global decode downcasts the wrong type.
 
   Found by the STORY-1728 per-verb policy parity enumeration. Fix: give the local args a distinct id (e.g. `#[arg(id = "export_format", long = "format")]`), or reuse OutputFormat. Add a test that every command path parses without panicking.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:57:44.815274718Z
-modified_at: 2026-10-20T11:39:54.007722952Z
+modified_at: 2026-10-20T13:06:45.893355375Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -57,6 +57,21 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1596b-e5fa-7661-b0d1-cfed58c3fc12
+  author: aida-auto-bump
+  timestamp: 2026-10-20T13:06:45.882113337Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1596b-e605-75c3-ba74-b5a4c14b75e3
+  timestamp: 2026-10-20T13:06:45.893343934Z
+  agent: aida
+  commit_sha: 61e86576bdd776bc48925214bce9ee60d65c3362
+  summary: 'Carry-over (advisor): the independent reviewer PASSED round 2 at 8f84085e76; 9a14522057 is gh pr update-branch onto main with an IDENTICAL own patch-id.'
+  review_verdict: approved
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
@@ -65,11 +80,7 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Panic fix is correct and well-tested (shadow walk + per-command parse tests, CI green), but the flag rename left three docs teaching the removed --format flag
-  recovery_hint: address the review findings, move BUG-2189 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T10:28:52.309417695Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T13:06:45.882108696Z
+  completion_sha: 61e86576bdd776bc48925214bce9ee60d65c3362
