@@ -6,12 +6,12 @@ description: |
   TASK-1985 says to measure the same rebuild after a small edit, before and after `incremental = true` in [profile.agent], median of 3. PR-2765 deferred this until after merge. Record the numbers on TASK-1985 so the trade-off (larger per-worktree caches under target/worktrees/) is justified with data.
 
   Raised in review of PR-2765: https://github.com/joemooney/aida/pull/2765
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:59:33.046241065Z
-modified_at: 2026-10-20T10:35:59.006276823Z
+modified_at: 2026-10-20T10:36:01.028941954Z
 req_type: Task
 tags:
 - from-review:PR-2765
@@ -34,6 +34,14 @@ history:
   timestamp: 2026-10-20T08:23:30.138879396Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a158e1-e284-76d1-9434-e4b23c159195
+  author: joe
+  timestamp: 2026-10-20T10:36:01.028933968Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 187896cd54410f9cb9c5f8d713eff31c0cda9741
   branch: pr-2765
@@ -42,3 +50,6 @@ filed_at:
   aida_build_sha: f801433bcd
   vendor: claude
   session: 01a157a35822
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T10:36:01.028921214Z
