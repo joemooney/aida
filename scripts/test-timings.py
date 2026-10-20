@@ -23,8 +23,9 @@ seconds on CI's ubuntu-latest runner. With `--budget` the script fails when:
   budgeted, or made faster, in the PR that slows it down);
 - a budgeted row runs over its entry.
 An entry for a test whose binary ran but which did not run itself (renamed or
-removed) is a note; entries for binaries that did not run (another lane's) are
-not mentioned.
+removed) is a note; entries for binaries that did not run (another lane's, or
+the other aida-cli-lib half's) are not mentioned. Over-budget tests whose JUnit
+time spans overlap each other are a runner stall: a CI warning, not a failure.
 
 Usage:
   scripts/test-timings.py LOG [--junit XML...] [--step NAME] [--budget FILE] [--json OUT] [--summary OUT] [--top N]
@@ -43,6 +44,7 @@ trace:STORY-1853 | ai:claude
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -70,6 +72,7 @@ class Binary:
     failed: int
     ignored: int
     seconds: float
+    started: str = ""  # JUnit start timestamp (ISO 8601); empty for log rows
 
 
 def clean(line: str) -> str:
@@ -143,7 +146,7 @@ def parse_junit(path: str) -> list[Binary]:
         for case in suite.iter("testcase"):
             failed = case.find("failure") is not None or case.find("error") is not None
             rows.append(Binary(f"{suite.get('name')} {case.get('name')}", int(not failed), int(failed), 0,
-                               float(case.get("time") or 0)))
+                               float(case.get("time") or 0), case.get("timestamp") or ""))
     return rows
 
 
@@ -166,9 +169,37 @@ def load_budget(path: str) -> Budget:
     return Budget(limit, entries)
 
 
+def span(row: Binary):
+    """(start, end) of a JUnit row, or None for a row without a timestamp."""
+    try:
+        start = datetime.datetime.fromisoformat(row.started)
+    except ValueError:
+        return None
+    return start, start + datetime.timedelta(seconds=row.seconds)
+
+
+def stalled(over: list[Binary]) -> set[str]:
+    """Keys of over-budget rows that ran at the same time as another over-budget row.
+
+    A runner stall (shared-runner I/O or CPU starvation) slows every test
+    running through it at once: on PR-2785 run 39492854022 three unrelated
+    lib tests that take 1-2 s went to 18 s together. A regression slows one
+    test whenever it runs, so an over-budget test that overlaps no other
+    over-budget test still fails the gate. trace:TASK-1988 | ai:claude
+    """
+    spans = {r.key: span(r) for r in over}
+    keys = set()
+    for a in over:
+        for b in over:
+            sa, sb = spans[a.key], spans[b.key]
+            if a is not b and sa and sb and sa[0] < sb[1] and sb[0] < sa[1]:
+                keys.add(a.key)
+    return keys
+
+
 def check(rows: list[Binary], budget: Budget) -> tuple[list[str], list[str]]:
     """(violations, notes) for the rows against the budget."""
-    violations: list[str] = []
+    found: list[tuple[Binary, str]] = []
     notes: list[str] = []
     seen = set()
     for r in rows:
@@ -176,17 +207,23 @@ def check(rows: list[Binary], budget: Budget) -> tuple[list[str], list[str]]:
         allowed = budget.entries.get(r.key)
         if allowed is None:
             if r.seconds > budget.default_limit:
-                violations.append(
+                found.append((r,
                     f"{r.key}: {r.seconds:.1f}s with no budget entry (limit {budget.default_limit:g}s "
                     "for an unbudgeted test). Make it faster, or add it to scripts/test-time-budget.toml "
                     "with the measured time plus headroom and say why in the PR."
-                )
+                ))
         elif r.seconds > allowed:
-            violations.append(
+            found.append((r,
                 f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
                 "Find what slowed it down; raise the entry only with a reason in the PR."
-            )
-    ran = {binary_of(key) for key in seen}
+            ))
+    stall = stalled([r for r, _ in found])
+    violations = [message for r, message in found if r.key not in stall]
+    notes += [f"runner stall (overlaps another over-budget test, not failing): {message}"
+              for r, message in found if r.key in stall]
+    # The aida-cli-lib unit binary runs split across lib-0 and lib-1, so the
+    # other half's entries never run in a lane; only other binaries get notes.
+    ran = {binary_of(key) for key in seen} - {"aida-cli-lib"}
     for key in sorted(set(budget.entries) - seen):
         if binary_of(key) in ran:
             notes.append(f"{key}: budgeted but did not run in this log")
@@ -254,7 +291,8 @@ def main(argv: list[str]) -> int:
         return 0
     violations, notes = check(rows, budget)
     for n in notes:
-        print(f"test-timings: note: {n}")
+        # A stall shows as a CI warning annotation, so it is seen, not buried.
+        print(f"{'::warning::' if n.startswith('runner stall') else ''}test-timings: note: {n}")
     for v in violations:
         print(f"test-timings: BUDGET: {v}", file=sys.stderr)
     return 1 if violations else 0

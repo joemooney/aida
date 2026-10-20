@@ -139,9 +139,28 @@ class BudgetTest(unittest.TestCase):
         # trace:TASK-1988 | ai:claude
         self.assertTrue(all(k.startswith("doctests:") or " " in k for k in b.entries), b.entries)
 
+    # trace:TASK-1988 | ai:claude
+    def test_overlapping_over_budget_tests_are_a_stall_and_a_lone_one_fails(self):
+        def row(key, start, secs):
+            return tt.Binary(key, 1, 0, 0, secs, f"2026-10-20T20:39:{start:02d}.000+00:00")
+        b = tt.Budget(10, {})
+        # Run 39492854022: three tests that take 1-2 s went to 18 s together.
+        rows = [row("x a", 10, 18.7), row("x b", 11, 17.7), row("x c", 11, 17.9), row("x fine", 12, 1.0)]
+        v, notes = tt.check(rows, b)
+        self.assertEqual(v, [])
+        self.assertEqual(sum(n.startswith("runner stall") for n in notes), 3)
+        # Over budget at different times: each is a regression, not a stall.
+        v, _ = tt.check([row("x a", 0, 12.0), row("x b", 30, 12.0)], b)
+        self.assertEqual(len(v), 2)
+        # A log row has no timestamp and never clusters.
+        v, _ = tt.check([tt.Binary("doctests:x", 1, 0, 0, 12.0), tt.Binary("doctests:y", 1, 0, 0, 12.0)], b)
+        self.assertEqual(len(v), 2)
+
     def test_note_only_for_a_budgeted_test_whose_binary_ran(self):
-        b = tt.Budget(10, {"bin-a gone": 20, "bin-b other_lane": 20})
-        v, notes = tt.check([tt.Binary("bin-a kept", 1, 0, 0, 1.0)], b)
+        b = tt.Budget(10, {"bin-a gone": 20, "bin-b other_lane": 20, "aida-cli-lib other::half": 20})
+        # The lib binary runs split across two lanes: its other half is silent.
+        v, notes = tt.check([tt.Binary("bin-a kept", 1, 0, 0, 1.0),
+                             tt.Binary("aida-cli-lib this::half", 1, 0, 0, 1.0)], b)
         self.assertEqual(v, [])
         self.assertEqual(notes, ["bin-a gone: budgeted but did not run in this log"])
 
