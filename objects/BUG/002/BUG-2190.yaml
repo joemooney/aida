@@ -9,12 +9,12 @@ description: |-
   - `aida list --all --format json` returns 5346 specs: 238 Draft, 203 Approved, 20 NeedsAttention, 12 InProgress.
   - `aida show STORY-1853` reports in-progress.
   The open lens and the status filter are therefore dropping every open spec. Because agents cannot see the backlog through the primary listing surface, burndown planning breaks. Look at status-name normalization ('Approved' vs 'approved' vs 'NeedsAttention') and the lens predicate. The fix needs a regression test that lists a fixture with one spec of each open status.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:14:07.605406343Z
-modified_at: 2026-10-20T17:06:04.829140447Z
+modified_at: 2026-10-20T17:07:19.220499443Z
 req_type: Bug
 tags:
 - burndown
@@ -64,6 +64,21 @@ history:
   timestamp: 2026-10-20T16:55:43.682792092Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15a48-222a-75e1-99e2-faa5c7096a01
+  author: aida-auto-bump
+  timestamp: 2026-10-20T17:07:19.210431794Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15a48-2234-7901-8a5e-eb3641ed22d7
+  timestamp: 2026-10-20T17:07:19.220495278Z
+  agent: aida
+  commit_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  summary: Focus disclosure now prints before every renderer's early return (JSON/--short on stderr). The hidden count is computed after the other lenses and before --limit. A real-CLI regression covers every open status, status spellings, all four renderers and the --no-focus escape. CI green at the head (CLEAN).
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -72,3 +87,7 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T17:07:19.210426237Z
+  completion_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
