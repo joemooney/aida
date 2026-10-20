@@ -213,3 +213,51 @@ fn baseline_grants_at_twenty_minutes_emit_nothing() {
         assert!(notice(root.path(), now).unwrap().is_none(), "{seat}");
     }
 }
+
+// trace:TASK-1744 | ai:antigravity
+#[test]
+fn client_protocol_rendering_for_claude_codex_and_antigravity() {
+    assert_eq!(NoticeClient::parse("").unwrap(), NoticeClient::Claude);
+    assert_eq!(NoticeClient::parse("claude").unwrap(), NoticeClient::Claude);
+    assert_eq!(NoticeClient::parse("codex").unwrap(), NoticeClient::Codex);
+    assert_eq!(
+        NoticeClient::parse("agy").unwrap(),
+        NoticeClient::Antigravity
+    );
+    assert_eq!(
+        NoticeClient::parse("antigravity").unwrap(),
+        NoticeClient::Antigravity
+    );
+    assert!(NoticeClient::parse("unknown-client").is_err());
+
+    let msg = "The advisor seat grant expired. Renew: aida role enter advisor".to_string();
+    let expected_pre_tool_use = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "additionalContext": msg
+        }
+    });
+    assert_eq!(
+        NoticeClient::Claude.render(Some(msg.clone())),
+        Some(expected_pre_tool_use.clone())
+    );
+    assert_eq!(
+        NoticeClient::Codex.render(Some(msg.clone())),
+        Some(expected_pre_tool_use)
+    );
+    assert_eq!(NoticeClient::Claude.render(None), None);
+    assert_eq!(NoticeClient::Codex.render(None), None);
+
+    assert_eq!(
+        NoticeClient::Antigravity.render(Some(msg.clone())),
+        Some(serde_json::json!({
+            "injectSteps": [
+                { "ephemeralMessage": msg }
+            ]
+        }))
+    );
+    assert_eq!(
+        NoticeClient::Antigravity.render(None),
+        Some(serde_json::json!({}))
+    );
+}

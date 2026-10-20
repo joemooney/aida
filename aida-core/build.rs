@@ -44,6 +44,13 @@ fn main() {
     // Codex hook wiring — the same handlers as settings.json, wired to
     // Codex's hook events. TASK-1181.
     embed_file(&mut code, "templates/codex-hooks.json", "codex-hooks.json");
+    // Antigravity hook wiring — PreInvocation expiry notice for tool-only sessions.
+    // trace:TASK-1744 | ai:antigravity
+    embed_file(
+        &mut code,
+        "templates/antigravity-hooks.json",
+        "antigravity-hooks.json",
+    );
 
     // Reserved namespaces injected into `aida ultraplan` prompts and
     // scaffolded into `.aida/reserved-paths.toml`. trace:TASK-517

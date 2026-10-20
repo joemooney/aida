@@ -1858,6 +1858,10 @@ fn complete_init_scaffolding(
     if codex_profile_selected {
         maybe_scaffold_codex_hooks_on_init(root, force);
     }
+    // trace:TASK-1744 | ai:antigravity
+    if antigravity_profile_selected && !no_hooks {
+        maybe_scaffold_antigravity_hooks_on_init(root, force);
+    }
 
     let manifest_written = ensure_project_manifest_scaffold(root, force).unwrap_or(false);
     if manifest_written {
@@ -3374,6 +3378,9 @@ mod task_631_init_self_commit_tests {
             ".codex/skills",
             ".agents/skills/aida-queue/SKILL.md",
             ".agents/skills/aida-implement/SKILL.md",
+            // trace:TASK-1744 | ai:antigravity
+            ".agents/hooks.json",
+            ".agents/hooks",
             ".antigravity",
         ] {
             assert!(
@@ -3635,6 +3642,151 @@ mod task_631_init_self_commit_tests {
             assert!(
                 !dir.path().join(".codex/hooks.json").exists(),
                 "agent={agent:?}, no_hooks={no_hooks} must not scaffold Codex hooks"
+            );
+        }
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn reinit_repairs_missing_antigravity_hook_handlers_without_force() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        aida_core::scaffolding::codex_hooks::scaffold_antigravity_hooks(root, false).unwrap();
+        let wiring = root.join(".agents/hooks.json");
+        let customized = format!("{}\n", std::fs::read_to_string(&wiring).unwrap());
+        std::fs::write(&wiring, &customized).unwrap();
+        std::fs::remove_dir_all(root.join(".agents/hooks")).unwrap();
+
+        maybe_repair_codex_hooks_on_reinit(root, None, false).unwrap();
+
+        for name in aida_core::scaffolding::codex_hooks::antigravity_handler_names() {
+            assert!(
+                root.join(".agents/hooks").join(&name).is_file(),
+                "re-init must restore missing Antigravity handler {name}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(wiring).unwrap(),
+            customized,
+            "non-force repair must preserve customized Antigravity wiring"
+        );
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn reinit_antigravity_hook_repair_honors_agent_allow_list_no_hooks_and_third_party_hooks_json()
+    {
+        for (agent, no_hooks) in [
+            (Some("claude"), false),
+            (Some("codex"), false),
+            (Some("antigravity"), true),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            maybe_repair_codex_hooks_on_reinit(dir.path(), agent, no_hooks).unwrap();
+            assert!(
+                !dir.path().join(".agents/hooks.json").exists(),
+                "agent={agent:?}, no_hooks={no_hooks} must not scaffold Antigravity hooks"
+            );
+            assert!(
+                !dir.path().join(".agents/hooks").exists(),
+                "agent={agent:?}, no_hooks={no_hooks} must not drop Antigravity handlers"
+            );
+        }
+
+        // Pre-existing third-party .agents/hooks.json without AIDA's key must not
+        // trigger handler installation on re-init, even when antigravity is enabled.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        write_enabled_agent_selection(
+            root,
+            AgentSelection {
+                claude: true,
+                codex: true,
+                antigravity: true,
+            },
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".agents")).unwrap();
+        let third_party =
+            "{\"third-party\":{\"PreInvocation\":[{\"type\":\"command\",\"command\":\"true\"}]}}\n";
+        std::fs::write(root.join(".agents/hooks.json"), third_party).unwrap();
+
+        maybe_repair_codex_hooks_on_reinit(root, None, false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join(".agents/hooks.json")).unwrap(),
+            third_party
+        );
+        assert!(
+            !root.join(".agents/hooks").exists(),
+            "third-party .agents/hooks.json without AIDA wiring must not receive unreferenced handlers"
+        );
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn fresh_init_scaffolds_antigravity_hooks_only_when_selected_and_hooks_enabled() {
+        let store = aida_core::models::RequirementsStore::new();
+
+        // 1. `--agent antigravity` with hooks enabled scaffolds `.agents/hooks.json` and handler.
+        {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+            complete_init_scaffolding(
+                root,
+                &store,
+                Some("antigravity"),
+                false, // with_mcp
+                true,  // no_skills
+                false, // no_hooks
+                false, // force
+                root.join(".aida-store"),
+                "test store",
+                false, // verbose
+                crate::cli::InitFootprint::Full,
+                true, // suppress scaffold commit
+            )
+            .unwrap();
+            assert!(
+                root.join(".agents/hooks.json").is_file(),
+                "fresh init with --agent antigravity must scaffold .agents/hooks.json"
+            );
+            assert!(
+                root.join(".agents/hooks/aida-grant-expiry-notice.sh")
+                    .is_file(),
+                "fresh init with --agent antigravity must scaffold handler"
+            );
+        }
+
+        // 2. `--agent antigravity --no-hooks` or non-antigravity allow-list (`--agent codex`) does not.
+        for (agent, no_hooks) in [(Some("antigravity"), true), (Some("codex"), false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".gitignore"), ".aida/*\n!.aida/config.toml\n").unwrap();
+            complete_init_scaffolding(
+                root,
+                &store,
+                agent,
+                false, // with_mcp
+                true,  // no_skills
+                no_hooks,
+                false, // force
+                root.join(".aida-store"),
+                "test store",
+                false, // verbose
+                crate::cli::InitFootprint::Full,
+                true, // suppress scaffold commit
+            )
+            .unwrap();
+            assert!(
+                !root.join(".agents/hooks.json").exists(),
+                "fresh init with agent={agent:?}, no_hooks={no_hooks} must not scaffold .agents/hooks.json"
+            );
+            assert!(
+                !root.join(".agents/hooks").exists(),
+                "fresh init with agent={agent:?}, no_hooks={no_hooks} must not scaffold .agents/hooks"
             );
         }
     }
@@ -4814,6 +4966,38 @@ fn maybe_scaffold_codex_hooks_on_init(project_root: &std::path::Path, force: boo
     }
 }
 
+// trace:TASK-1744 | ai:antigravity
+fn maybe_scaffold_antigravity_hooks_on_init(project_root: &std::path::Path, force: bool) {
+    match aida_core::scaffolding::codex_hooks::scaffold_antigravity_hooks(project_root, force) {
+        Ok(outcome) if outcome.warning.is_some() => {
+            if let Some(w) = outcome.warning {
+                eprintln!("  {} {w}", "Warning:".yellow());
+            }
+        }
+        Ok(outcome) if !outcome.written.is_empty() => {
+            println!(
+                "  {} wrote Antigravity hook wiring ({} file(s) under .agents/) — mid-session grant expiry notices now fire in Antigravity sessions too",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                outcome.written.len(),
+            );
+        }
+        Ok(outcome) if !outcome.skipped_existing.is_empty() => {
+            println!(
+                "  {} Antigravity hook wiring already present ({} file(s) skipped; use --force to overwrite)",
+                crate::glyph(crate::glyphs::Glyph::Bullet).dimmed(),
+                outcome.skipped_existing.len(),
+            );
+        }
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} Antigravity hook scaffold skipped ({e})",
+                "Warning:".yellow()
+            );
+        }
+    }
+}
+
 /// Repair the ignored, machine-local Codex hook handlers when `aida init` is
 /// re-run in an existing project. The normal already-initialized guard returns
 /// before full scaffolding, but a tracked/retained `.codex/hooks.json` can
@@ -4841,6 +5025,23 @@ fn maybe_repair_codex_hooks_on_reinit(
     };
     if codex_selected {
         maybe_scaffold_codex_hooks_on_init(project_root, false);
+    }
+    // trace:TASK-1744 | ai:antigravity
+    let antigravity_selected = match agent {
+        Some(agent) => parse_agent_selection(agent)?.antigravity,
+        None => {
+            if project_root.join(".agents/hooks.json").exists() {
+                aida_core::scaffolding::codex_hooks::antigravity_hooks_wired(project_root)
+            } else {
+                read_enabled_agent_selection(project_root)
+                    .is_some_and(|selection| selection.antigravity)
+                    || aida_core::agents_config::resolve_default_vendor(project_root).as_deref()
+                        == Some("antigravity")
+            }
+        }
+    };
+    if antigravity_selected {
+        maybe_scaffold_antigravity_hooks_on_init(project_root, false);
     }
     Ok(())
 }
@@ -5967,8 +6168,12 @@ mod init_roster_tests {
     use super::*;
 
     // trace:STORY-1540 | ai:antigravity
+    // trace:TASK-1970 | ai:antigravity
     #[test]
     fn init_at_non_tty_writes_no_team_roster() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let _env = crate::test_env::EnvVarsGuard::apply(&[
