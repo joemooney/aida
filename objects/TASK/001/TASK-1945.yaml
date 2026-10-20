@@ -14,12 +14,12 @@ description: |-
   4. Respect the cargo-slot limiter and a max-concurrent-reviewers setting (default 2). Reviewers run no cargo.
   5. Tests: (a) a review starts on a pending-CI head; (b) a stale head is skipped and mailed once; (c) the ship gate refuses on an SHA mismatch, red CI or a hold; (d) a new head supersedes a running review; (e) a restart is idempotent and launches no duplicate reviewers.
   The 2-round cap and risk-scaled review rules are unchanged.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-20T05:08:07.916366262Z
+modified_at: 2026-10-20T07:24:46.381598236Z
 req_type: Task
 tags:
 - review
@@ -71,6 +71,13 @@ history:
   author: ai:codex:joe
   timestamp: 2026-10-20T07:23:32.484327370Z
   changes: []
+- id: 01a15832-cbad-75c2-9ea7-5f8abd1c9b0a
+  author: aida-session-start
+  timestamp: 2026-10-20T07:24:46.381597447Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
