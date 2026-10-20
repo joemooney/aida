@@ -7,55 +7,58 @@
 #
 # Recalibrated for the TASK-1979 lane layout (lib-0, lib-1, cli-0, cli-1, rest),
 # from post-S6 main runs 39371035274, 39373597572, 39374644094, 39378420619
-# and 39380387908, and PR-2769 runs 39383875258 and 39396053306. Each entry is
-# the slowest measured time x1.5, rounded up to 5 s, for every binary whose x1.5
-# crosses the default limit. The aida-cli-lib unit binary runs as two halves,
-# each budgeted under [lane_budget.<lane>] below (test-timings.py --lane).
-# Lower an entry when you speed a binary up; raise one only
-# with a reason in the PR. STORY-1853 S4 targets the top of this list.
+# and 39380387908, and PR-2769 runs 39383875258, 39396053306 and 39398646423.
+# Each entry is the slowest measured time x1.5, rounded up to 5 s, for every
+# binary whose x1.5 crosses the default limit. The aida-cli-lib unit binary
+# runs as two halves, each budgeted under [lane_budget.<lane>] below
+# (test-timings.py --lane). Lower an entry when you speed a binary up; raise
+# one only with a reason in the PR. STORY-1853 S4 targets the top of this list.
 # trace:STORY-1853 | ai:claude
 
 default_limit = 10
 
 [budget]
-"aida_core:src/lib.rs" = 135  # max measured 88.0s, median 85.9s over 7 runs, 1563 tests
-"task_1717_store_writer_lock:tests/task_1717_store_writer_lock.rs" = 105  # max measured 69.0s, median 67.6s over 7 runs, 43 tests
-"agent_error_channel:tests/agent_error_channel.rs" = 75  # max measured 47.4s, median 36.0s over 7 runs, 2 tests
-"bug_1502_format_json_audit:tests/bug_1502_format_json_audit.rs" = 50  # max measured 33.0s, median 31.7s over 7 runs, 9 tests
-"bug_1947_session_end_live_process:tests/bug_1947_session_end_live_process.rs" = 50  # max measured 30.1s, median 22.7s over 7 runs, 11 tests
-"task_1290_criteria_gate:tests/task_1290_criteria_gate.rs" = 35  # max measured 22.9s, median 13.0s over 7 runs, 5 tests
-"task_1335_reconcile_unavailable_evidence:tests/task_1335_reconcile_unavailable_evidence.rs" = 35  # max measured 21.2s, median 19.3s over 7 runs, 17 tests
-"journey:tests/journey.rs" = 30  # max measured 19.7s, median 16.0s over 7 runs, 5 tests
-"queue_work_dry_run:tests/queue_work_dry_run.rs" = 30  # max measured 17.8s, median 16.6s over 7 runs, 15 tests
-"bug_1940_corrupt_cache:tests/bug_1940_corrupt_cache.rs" = 25  # max measured 15.9s, median 14.4s over 7 runs, 7 tests
-"path_isolation_guardrail:tests/path_isolation_guardrail.rs" = 25  # max measured 15.4s, median 14.8s over 7 runs, 3 tests
-"bug_1252_structural_tags:tests/bug_1252_structural_tags.rs" = 20  # max measured 11.2s, median 8.7s over 7 runs, 2 tests
-"bug_1956_reader_fallbacks_bounded_under_writer:tests/bug_1956_reader_fallbacks_bounded_under_writer.rs" = 20  # max measured 10.5s, median 10.1s over 7 runs, 4 tests
-"bug_1993_linkage_budgets:tests/bug_1993_linkage_budgets.rs" = 20  # max measured 11.0s, median 10.8s over 7 runs, 1 tests
-"bug_2139_headless_child_grant:tests/bug_2139_headless_child_grant.rs" = 20  # max measured 12.9s, median 11.7s over 7 runs, 6 tests
-"story_1644_list_sort_cap:tests/story_1644_list_sort_cap.rs" = 20  # max measured 12.0s, median 11.2s over 7 runs, 2 tests
-"story_1649_show_linkage:tests/story_1649_show_linkage.rs" = 20  # max measured 11.8s, median 11.2s over 7 runs, 12 tests
-"story_1653_derived_driver:tests/story_1653_derived_driver.rs" = 20  # max measured 11.7s, median 11.0s over 7 runs, 11 tests
-"task_1283_protocol_cli:tests/task_1283_protocol_cli.rs" = 20  # max measured 12.6s, median 11.4s over 7 runs, 4 tests
-"bug_1234_edit_description_sources:tests/bug_1234_edit_description_sources.rs" = 15  # max measured 7.1s, median 3.6s over 7 runs, 3 tests
-"bug_1687_defer_status_lens:tests/bug_1687_defer_status_lens.rs" = 15  # max measured 8.1s, median 7.6s over 7 runs, 4 tests
-"bug_1771_status_lens_filters:tests/bug_1771_status_lens_filters.rs" = 15  # max measured 8.9s, median 8.5s over 7 runs, 4 tests
-"bug_1808_delegation_preflight:tests/bug_1808_delegation_preflight.rs" = 15  # max measured 7.3s, median 6.9s over 7 runs, 5 tests
-"bug_1921_faq_short_ids:tests/bug_1921_faq_short_ids.rs" = 15  # max measured 8.9s, median 8.5s over 7 runs, 9 tests
-"bug_1952_session_end_from_worktree:tests/bug_1952_session_end_from_worktree.rs" = 15  # max measured 7.0s, median 6.4s over 7 runs, 3 tests
-"bug_1993_toon_linkage_budget:tests/bug_1993_toon_linkage_budget.rs" = 15  # max measured 9.0s, median 8.4s over 7 runs, 1 tests
-"story_1642_knowledge_list:tests/story_1642_knowledge_list.rs" = 15  # max measured 7.3s, median 6.9s over 7 runs, 2 tests
-"story_1650_history_status_flow:tests/story_1650_history_status_flow.rs" = 15  # max measured 9.3s, median 8.6s over 7 runs, 13 tests
-"task_1527_refresh_worker:tests/task_1527_refresh_worker.rs" = 15  # max measured 6.7s, median 6.4s over 7 runs, 7 tests
-"task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 8.1s, median 7.7s over 7 runs, 4 tests
+"aida_core:src/lib.rs" = 135  # max measured 88.0s, median 84.3s over 8 runs, 1563 tests
+"task_1717_store_writer_lock:tests/task_1717_store_writer_lock.rs" = 105  # max measured 69.0s, median 67.1s over 8 runs, 43 tests
+"agent_error_channel:tests/agent_error_channel.rs" = 75  # max measured 47.4s, median 19.6s over 8 runs, 2 tests
+"bug_1502_format_json_audit:tests/bug_1502_format_json_audit.rs" = 50  # max measured 33.0s, median 31.6s over 8 runs, 9 tests
+"bug_1947_session_end_live_process:tests/bug_1947_session_end_live_process.rs" = 50  # max measured 30.1s, median 17.9s over 8 runs, 11 tests
+"task_1290_criteria_gate:tests/task_1290_criteria_gate.rs" = 35  # max measured 22.9s, median 12.0s over 8 runs, 5 tests
+"task_1335_reconcile_unavailable_evidence:tests/task_1335_reconcile_unavailable_evidence.rs" = 35  # max measured 21.2s, median 19.1s over 8 runs, 17 tests
+"journey:tests/journey.rs" = 30  # max measured 19.7s, median 16.3s over 8 runs, 5 tests
+"queue_work_dry_run:tests/queue_work_dry_run.rs" = 30  # max measured 17.8s, median 16.5s over 8 runs, 15 tests
+"bug_1940_corrupt_cache:tests/bug_1940_corrupt_cache.rs" = 25  # max measured 15.9s, median 10.3s over 8 runs, 7 tests
+"path_isolation_guardrail:tests/path_isolation_guardrail.rs" = 25  # max measured 15.4s, median 14.8s over 8 runs, 3 tests
+"bug_1252_structural_tags:tests/bug_1252_structural_tags.rs" = 20  # max measured 11.2s, median 8.7s over 8 runs, 2 tests
+"bug_1921_faq_short_ids:tests/bug_1921_faq_short_ids.rs" = 20  # max measured 11.1s, median 8.6s over 8 runs, 9 tests
+"bug_1956_reader_fallbacks_bounded_under_writer:tests/bug_1956_reader_fallbacks_bounded_under_writer.rs" = 20  # max measured 10.5s, median 10.1s over 8 runs, 4 tests
+"bug_1993_linkage_budgets:tests/bug_1993_linkage_budgets.rs" = 20  # max measured 11.0s, median 10.8s over 8 runs, 1 tests
+"bug_2139_headless_child_grant:tests/bug_2139_headless_child_grant.rs" = 20  # max measured 12.9s, median 11.6s over 8 runs, 6 tests
+"story_1644_list_sort_cap:tests/story_1644_list_sort_cap.rs" = 20  # max measured 12.2s, median 11.2s over 8 runs, 2 tests
+"story_1649_show_linkage:tests/story_1649_show_linkage.rs" = 20  # max measured 12.0s, median 11.2s over 8 runs, 12 tests
+"story_1653_derived_driver:tests/story_1653_derived_driver.rs" = 20  # max measured 11.7s, median 11.1s over 8 runs, 11 tests
+"task_1283_protocol_cli:tests/task_1283_protocol_cli.rs" = 20  # max measured 12.6s, median 11.4s over 8 runs, 4 tests
+"bug_1234_edit_description_sources:tests/bug_1234_edit_description_sources.rs" = 15  # max measured 7.1s, median 3.7s over 8 runs, 3 tests
+"bug_1687_defer_status_lens:tests/bug_1687_defer_status_lens.rs" = 15  # max measured 8.1s, median 7.6s over 8 runs, 4 tests
+"bug_1771_status_lens_filters:tests/bug_1771_status_lens_filters.rs" = 15  # max measured 9.5s, median 8.5s over 8 runs, 4 tests
+"bug_1808_delegation_preflight:tests/bug_1808_delegation_preflight.rs" = 15  # max measured 7.7s, median 6.9s over 8 runs, 5 tests
+"bug_1952_session_end_from_worktree:tests/bug_1952_session_end_from_worktree.rs" = 15  # max measured 7.0s, median 6.4s over 8 runs, 3 tests
+"bug_1993_toon_linkage_budget:tests/bug_1993_toon_linkage_budget.rs" = 15  # max measured 9.0s, median 8.4s over 8 runs, 1 tests
+"story_1642_knowledge_list:tests/story_1642_knowledge_list.rs" = 15  # max measured 7.4s, median 6.9s over 8 runs, 2 tests
+"story_1650_history_status_flow:tests/story_1650_history_status_flow.rs" = 15  # max measured 9.3s, median 8.7s over 8 runs, 13 tests
+"task_1527_refresh_worker:tests/task_1527_refresh_worker.rs" = 15  # max measured 6.8s, median 6.4s over 8 runs, 7 tests
+"task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 8.2s, median 7.8s over 8 runs, 4 tests
 
 # Per-lane budgets for a binary split across lanes; test-timings.py --lane
-# applies them over [budget]. trace:TASK-1979 | ai:claude
+# applies them over [budget]. Each lib half's time on PR-2769 runs 39383875258,
+# 39396053306 and 39398646423, recomputed for the halves these weights produce
+# from those runs' per-test times (--lib-weights's estimator, which matched
+# run 39398646423's lanes within 4 s), x1.5. trace:TASK-1979 | ai:claude
 [lane_budget.lib-0]
-"aida_cli_lib:src/lib.rs" = 490  # INTERIM: the slower pre-balance half (325.5s, run 39396053306) x1.5
+"aida_cli_lib:src/lib.rs" = 350  # max 231.6s (runs: 159.5, 231.6, 205.2s), ~4127 tests
 
 [lane_budget.lib-1]
-"aida_cli_lib:src/lib.rs" = 490  # INTERIM: the slower pre-balance half (325.5s, run 39396053306) x1.5
+"aida_cli_lib:src/lib.rs" = 340  # max 223.7s (runs: 156.4, 213.5, 223.7s), ~5128 tests
 
 # Deterministic CLI half-split weights, measured on main 128a5bb6eb,
 # CI run 39348896342. Independent of the enforcement limits above.
@@ -142,7 +145,7 @@ default_limit = 10
 # lib-0/lib-1 halves by. Regenerate from the timestamped lane logs:
 #   gh run view --job <lib-0 job> --log > lib-0.log   (and lib-1)
 #   python3 scripts/ci-test-shards.py --lib-weights lib-0.log lib-1.log
-# Measured on PR-2769 runs 39383875258 and 39396053306. A module without an
+# Measured on PR-2769 runs 39383875258, 39396053306 and 39398646423. A module without an
 # entry weighs its test count times the mean per test. Independent of the
 # enforcement limits above. trace:TASK-1979 | ai:claude
 [lib_module_seconds]
@@ -151,21 +154,21 @@ default_limit = 10
 "advisor_watch" = 0.3
 "agent_launch" = 9.0
 "agent_registry" = 0.1
-"agent_registry_root" = 3.4
+"agent_registry_root" = 3.5
 "auto_branch_tests" = 0.1
-"auto_bump_done_tests" = 73.4
-"auto_complete" = 2.0
+"auto_bump_done_tests" = 105.5
+"auto_complete" = 3.6
 "awaiting_you" = 0.2
 "branch_behind_main_tests" = 0.2
 "brief" = 2.5
-"bug_1434_stale_base_tests" = 0.4
+"bug_1434_stale_base_tests" = 0.6
 "bug_1452_refusal_aftermath_tests" = 0.9
 "bug_1468_stale_check_tests" = 0.5
-"bug_1622_git_option_injection_tests" = 0.5
+"bug_1622_git_option_injection_tests" = 0.6
 "bug_1624_shell_and_git_guard_tests" = 1.2
-"bug_1631_history_spec_id_tests" = 1.1
+"bug_1631_history_spec_id_tests" = 1.2
 "bug_1635_history_event_modes_tests" = 1.9
-"bug_1638_race_seam_tests" = 38.7
+"bug_1638_race_seam_tests" = 47.1
 "bug_1668_trivial_criteria_tests" = 0.1
 "bug_1670_stale_cache_callers_tests" = 33.4
 "bug_1723_config_trust_tests" = 1.1
@@ -176,16 +179,17 @@ default_limit = 10
 "bug_588_history_id_resolves_uuid_tests" = 0.4
 "bug_777_stale_lease_recovery_tests" = 1.1
 "burndown" = 0.1
-"burndown_run" = 0.1
+"burndown_run" = 0.3
 "changelog" = 0.1
 "child_store_commit" = 1.6
-"cli" = 23.5
-"command_registry" = 70.0
+"ci_probe" = 0.3
+"cli" = 27.1
+"command_registry" = 79.2
 "commit" = 0.2
 "compete_cmd" = 0.1
 "config_cmd" = 1.1
-"config_commit" = 0.3
-"contained_boundary" = 146.3
+"config_commit" = 0.8
+"contained_boundary" = 148.5
 "context_prompt" = 0.2
 "coordination" = 20.6
 "cr_8_filing_provenance_tests" = 1.6
@@ -201,51 +205,57 @@ default_limit = 10
 "drain_lock" = 0.2
 "drain_next_n" = 12.5
 "drain_reliability_wiring_tests" = 0.8
-"drain_signal" = 8.0
-"drain_state" = 0.7
+"drain_signal" = 8.1
+"drain_state" = 1.3
 "edit_rebase" = 18.6
 "epic_72_exposition_tests" = 0.1
 "event_wait" = 2.0
+"events" = 0.1
 "exit_signal" = 1.3
 "external_cmd" = 0.5
-"findings_gate" = 3.5
+"field_study" = 0.1
+"findings_gate" = 4.1
 "forge" = 0.4
 "forge_binary_resolution_tests" = 0.1
-"freshness_gate" = 0.2
+"freshness_gate" = 0.4
 "gitlab_mirror_link" = 0.9
-"gitlab_project_create" = 2.7
+"gitlab_project_create" = 2.8
 "global_queue" = 12.2
 "grant_expiry_notice" = 0.3
 "handle_fetch_command_tests" = 1.0
-"handle_pull_command_tests" = 8.4
+"handle_pull_command_tests" = 9.1
 "harvest" = 0.4
 "headless_tail" = 1.2
-"headless_tee" = 1.3
-"help_catalog" = 1.9
+"headless_tee" = 1.8
+"help_catalog" = 3.0
 "history" = 1.2
 "history_indexer" = 15.3
-"history_layout" = 0.2
-"history_views" = 4.5
+"history_layout" = 0.3
+"history_views" = 5.6
 "human_audit" = 2.9
-"identity_gate" = 0.2
+"identity_gate" = 0.3
 "idle_in_progress" = 0.1
 "implementer_preflight" = 3.5
 "in_flight_linkage_integration_tests" = 2.9
 "init_cmd" = 12.2
 "interview" = 0.4
-"leases" = 7.1
+"leases" = 8.9
 "live_work" = 17.7
-"mailbox_cmd" = 0.3
+"mailbox_cmd" = 0.4
+"mailbox_store" = 0.1
+"main_checkout_drift" = 0.1
 "maintenance_schedule" = 8.9
-"mandate" = 2.5
-"mandate_traces" = 1.1
+"mandate" = 2.8
+"mandate_traces" = 1.2
+"markdown_render" = 0.1
 "mass_change" = 0.2
 "mcp" = 48.1
-"merge_hold" = 2.8
-"merge_lock" = 4.0
+"merge_hold" = 3.0
+"merge_lock" = 4.1
 "notify" = 2.3
-"orchestrator_leases" = 13.2
-"phase_gates" = 11.2
+"orchestrator" = 0.2
+"orchestrator_leases" = 17.5
+"phase_gates" = 11.5
 "plan_intent" = 0.1
 "pr_cmd" = 33.2
 "pr_list" = 0.1
@@ -253,7 +263,7 @@ default_limit = 10
 "pr_ship" = 0.4
 "process_retry" = 0.3
 "protocol_cmd" = 1.0
-"ps_integrate" = 2.7
+"ps_integrate" = 2.9
 "push_pull_scope_tests" = 0.3
 "questions" = 0.1
 "queue_cmd" = 0.8
@@ -264,26 +274,29 @@ default_limit = 10
 "regen" = 16.2
 "rel_cards" = 23.3
 "remote_create" = 3.5
-"report_cmd" = 11.7
-"requirements_cli" = 1.4
-"resolve_gh_binary_tests" = 0.2
-"review_authority" = 0.5
+"report_cmd" = 13.6
+"requirements_cli" = 1.9
+"resolve_gh_binary_tests" = 0.3
+"review_authority" = 0.6
 "review_carryover" = 4.8
 "review_gates" = 0.7
 "review_verdict" = 0.4
-"rework_hold_release" = 0.8
+"reviewer_summary" = 0.1
+"rework_hold_release" = 1.0
+"role" = 0.1
+"role_cmd" = 0.1
 "runaway_seats" = 3.1
 "sandbox_cmd" = 2.6
 "scaffold_cmd" = 2.1
-"scaffold_refresh" = 14.9
+"scaffold_refresh" = 18.8
 "schedule_driver" = 0.4
-"seat_authority" = 2.2
+"seat_authority" = 2.5
 "seat_clone" = 8.5
-"seat_occupancy" = 1.5
-"session" = 6.2
-"session_end" = 14.8
+"seat_occupancy" = 1.8
+"session" = 6.9
+"session_end" = 20.3
 "session_end_resolution_tests" = 0.5
-"session_liveness" = 0.5
+"session_liveness" = 0.7
 "session_manifest" = 0.1
 "session_reap" = 3.6
 "session_root_resolution_tests" = 0.5
@@ -297,42 +310,44 @@ default_limit = 10
 "status_awaiting" = 8.0
 "status_cleanup" = 0.5
 "status_cmd" = 0.1
-"status_prs" = 13.5
-"status_sections" = 259.0
+"status_prs" = 16.0
+"status_sections" = 284.9
 "statusline_contract" = 0.1
-"statusline_tests" = 1.8
-"store_push_pull" = 7.6
-"store_sync" = 0.2
+"statusline_tests" = 2.0
+"store_push_pull" = 8.2
+"store_sync" = 0.3
 "store_walkup_tests" = 0.1
 "story1163_forge_dispatch_tests" = 0.4
 "story_1350_review_approach_tests" = 0.8
 "story_1405_review_marker_tests" = 0.1
 "story_1428_gate_promote_tests" = 10.7
+"story_1436_gate_held_tests" = 1.3
 "story_1650_history_flow_tests" = 3.4
 "story_255_discipline_pack_tests" = 0.2
-"story_284_store_sync_tests" = 1.7
-"story_423_asciinema_tests" = 0.3
+"story_284_store_sync_tests" = 2.2
+"story_423_asciinema_tests" = 0.9
 "story_441_archive_config_tests" = 1.9
 "story_698_test_plan_capture_tests" = 1.6
 "story_780_init_bootstrap_tests" = 0.4
-"supervise_cmd" = 5.0
+"supervise_cmd" = 5.4
 "supervisor" = 7.8
 "task_1056_batched_git_fanout_tests" = 0.3
 "task_1063_prune_verb_crossref_tests" = 0.1
 "task_1175_queue_insertion_order_tests" = 1.3
 "task_1265_rework_no_op_tests" = 0.2
-"task_1475_filing_drift_tests" = 0.3
-"task_1480_history_id_alias_tests" = 1.2
-"task_1487_store_polish_tests" = 0.8
+"task_1475_filing_drift_tests" = 0.4
+"task_1480_history_id_alias_tests" = 1.4
+"task_1487_store_polish_tests" = 0.9
 "task_1507_history_cache_tests" = 497.5
 "task_1508_history_source_tests" = 0.3
 "task_1512_history_transition_filters_tests" = 5.2
+"task_1562_worktree_reclaim_tests" = 0.1
 "task_1737_authority_trailers_tests" = 23.2
 "task_518_pr_to_spec_tests" = 1.1
 "test_env" = 1.6
 "test_exec" = 0.1
 "test_home" = 3.9
-"timing_record" = 3.9
+"timing_record" = 4.0
 "token_ledger" = 0.1
 "trusted_config" = 0.1
 "upgrade_release" = 0.3
