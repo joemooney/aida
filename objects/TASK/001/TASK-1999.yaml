@@ -6,18 +6,27 @@ description: |
   PR-2772 (BUG-1993) adds resolve_default_branch_ref_until (lib_part3.rs), default_branch_refs_until and ref_exists_until (shipped_linkage.rs) as line-for-line copies of resolve_default_branch_ref / default_branch_refs / ref_exists, so the unbounded shared resolvers stay byte-identical. The candidate order (origin/HEAD symbolic-ref, init.defaultBranch, main, master; origin/<name> before <name>) now lives in two places. A future change to one (e.g. a new fallback) would make show and the gates/completion warning disagree on the default branch. Fix: factor the candidate walk into one helper parameterised by a git-call closure (bounded vs unbounded), or add a parity test that runs both on repos with/without origin/HEAD, with init.defaultBranch, and with master-only.
 
   Raised in review of PR-2772: https://github.com/joemooney/aida/pull/2772
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T10:24:30.359745808Z
-modified_at: 2026-10-20T10:24:30.359745808Z
+modified_at: 2026-10-20T10:56:24.863832539Z
 req_type: Task
 tags:
 - from-review:PR-2772
 - performance
 - severity:minor
 - show
+history:
+- id: 01a158f4-8f1f-7070-b338-0c14cee962f8
+  author: joe
+  timestamp: 2026-10-20T10:56:24.863825026Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 42481f97c70e50a200eb225059c8f303788e8b18
   branch: pr-2772
