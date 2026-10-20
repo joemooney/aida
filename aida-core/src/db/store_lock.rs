@@ -186,6 +186,10 @@ pub(crate) fn acquire(root: &Path) -> Result<StoreWriteGuard> {
                             .entry(key.clone())
                             .or_insert(0) += 1;
                     }
+                    // The cross-process team test executes the unit-test binary;
+                    // production builds must never consume this path.
+                    // trace:TASK-1981 | ai:codex
+                    #[cfg(test)]
                     if let Some(signal_path) =
                         std::env::var_os("AIDA_TEST_STORE_LOCK_CONTENDED_FILE")
                     {
