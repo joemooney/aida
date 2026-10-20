@@ -7,12 +7,12 @@ description: |-
 
   info: STORY-1853 AC5 (passed+ignored >= baseline) is recorded on the spec but not enforced by any gate; AC1/AC2 remain open for S2-S6.
   Reviewed sha: 2ec26b136a34893242acd55a87da35d1a287ee1c
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T00:39:55.092165340Z
-modified_at: 2026-10-20T00:39:55.092165340Z
+modified_at: 2026-10-20T10:54:14.246057968Z
 req_type: Task
 tags:
 - carried-from:TASK-1948
@@ -24,6 +24,14 @@ history:
   author: joe
   timestamp: 2026-10-20T01:20:14.722898398Z
   changes: []
+- id: 01a158f2-90e6-7b31-b28c-16e4d0283884
+  author: joe
+  timestamp: 2026-10-20T10:54:14.246051436Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
   branch: main
