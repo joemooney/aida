@@ -1105,6 +1105,11 @@ reject `st_nlink != 1`. Every production verdict reader shares this path: record
 archive and adoption; the ship approval and corpus merge gates; the orchestrator
 phase-3/4 handshake; drain, burndown, rework-release and status readers. A
 present but refused current file contributes no evidence, archived rounds included.
+Retained-history enumeration also pins the archive directory, including empty
+archives; linked archives or linked/non-regular JSON entries refuse rework release.
+The no-replace publication fallback briefly creates a second hard link before
+unlinking the temporary name. Concurrent readers fail closed during that window;
+a successful unlink restores ordinary reads.
 Reviewer coexistence also verifies that the anchor resolves to a requirement
 credited by the change's title trailer or branch; unavailable metadata refuses
 the exception. Direct `session start --role reviewer` has no coexistence input

@@ -2481,3 +2481,36 @@ fn per_sha_archive_carries_unarchived_rounds() {
         Some(1)
     );
 }
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_retained_history_rejects_linked_archive_entries_and_directories() {
+    use crate::rework_hold_release::RetainedHistory;
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("STORY-77.json");
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let body = format!(r#"{{"verdict":"request-changes","reviewed_sha":"{sha}"}}"#);
+    std::fs::write(&file, &body).unwrap();
+    adopt_direct_write(&file).unwrap();
+    assert_eq!(RetainedHistory::beside(&file).unwrap().archived.len(), 1);
+    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+    let link = tmp.path().join("archive-link");
+    std::fs::hard_link(&archive, &link).unwrap();
+    assert!(RetainedHistory::beside(&file).is_err());
+    std::fs::remove_file(&link).unwrap();
+    assert_eq!(RetainedHistory::beside(&file).unwrap().archived.len(), 1);
+    let moved = tmp.path().join("moved-archive");
+    let archive_dir = archive.parent().unwrap();
+    std::fs::rename(archive_dir, &moved).unwrap();
+    symlink(&moved, archive_dir).unwrap();
+    assert!(RetainedHistory::beside(&file).is_err());
+    // An empty symlink target must refuse too, rather than appear as no history.
+    std::fs::remove_file(moved.join(archive.file_name().unwrap())).unwrap();
+    assert!(RetainedHistory::beside(&file).is_err());
+    std::fs::remove_file(archive_dir).unwrap();
+    std::fs::rename(&moved, archive_dir).unwrap();
+    assert!(RetainedHistory::beside(&file).unwrap().archived.is_empty());
+}

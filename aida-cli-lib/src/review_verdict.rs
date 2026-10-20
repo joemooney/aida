@@ -549,7 +549,11 @@ fn rename_no_replace(_temp: &Path, _dest: &Path) -> std::io::Result<()> {
 }
 
 /// The fallback for [`publish_verdict_no_replace`]. `unlink` is a parameter so
-/// a test can make it fail.
+/// a test can make it fail. During the hard-link/unlink interval the new
+/// destination has nlink=2, so anchored readers transiently refuse it. This
+/// fail-closed window exists only on the no-RENAME_NOREPLACE fallback; after
+/// successful unlink the destination is singly linked and readable again.
+// trace:TASK-1801 | ai:codex
 fn link_then_unlink(
     temp: &Path,
     dest: &Path,
@@ -1623,16 +1627,24 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
     let Some(dir) = verdict_archive_dir(path) else {
         return Ok(Vec::new());
     };
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
+    // Anchor even an empty archive before enumeration. Otherwise an empty
+    // symlinked directory can silently erase the refusal history. Enumerate
+    // the held Linux directory descriptor rather than rediscovering its path.
+    // trace:TASK-1801 | ai:codex
+    use std::os::fd::AsRawFd;
+    let anchor = match open_verdict_directory(&dir) {
+        Ok(anchor) => anchor,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
     };
+    let entries = std::fs::read_dir(format!("/proc/self/fd/{}", anchor.as_raw_fd()))
+        .map_err(|e| format!("could not read {}: {e}", dir.display()))?;
     let mut files = Vec::new();
     for entry in entries {
-        let file = entry
+        let name = entry
             .map_err(|e| format!("could not read {}: {e}", dir.display()))?
-            .path();
+            .file_name();
+        let file = dir.join(name);
         if file.extension().is_some_and(|ext| ext == "json") {
             files.push(file);
         }
@@ -1640,7 +1652,7 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
     files.sort();
     let mut recordings = Vec::new();
     for file in files {
-        let text = std::fs::read_to_string(&file)
+        let text = read_verdict_body(&file)
             .map_err(|e| format!("could not read {}: {e}", file.display()))?;
         let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&text) else {
             return Err(format!("{} is not a JSON object", file.display()));
