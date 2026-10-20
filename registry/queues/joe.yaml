@@ -114,14 +114,6 @@
   for_role: reviewer
   added_by_machine: imac
 - user_id: joe
-  requirement_id: 01a150cc-44eb-7502-9b6e-cda8265f1425
-  position: 108000
-  added_by: joe
-  note: auto-queued by `aida pr` (abf9f7f0); covers 1 spec
-  added_at: 2026-10-18T20:55:54.466949565Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a150cc-e7e6-78c3-9f4b-3dddaed4e639
   position: 109000
   added_by: joe
