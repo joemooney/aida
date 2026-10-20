@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-20T18:53:11.641852429Z
+modified_at: 2026-10-20T22:22:21.567004475Z
 req_type: Task
 tags:
 - cli
@@ -205,6 +205,12 @@ comments:
   content: 'Advisor triage 11:55: folded in TASK-1657: "minor (non-blocking): Claude sessions in the AIDA repo itself never see the rul…"'
   created_at: 2026-10-20T18:53:11.641852429Z
   modified_at: 2026-10-20T18:53:11.641852429Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b68-8f7f-76a0-8948-79fa2ef046cc
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-1654 — cosmetic: focus banner (requirements_cli.rs:4897) prints ''1 matching specs hidd…'
+  created_at: 2026-10-20T22:22:21.567004475Z
+  modified_at: 2026-10-20T22:22:21.567004475Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
