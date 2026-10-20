@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-20T22:22:54.724444543Z
+modified_at: 2026-10-20T22:23:06.326624245Z
 req_type: Task
 tags:
 - cli
@@ -229,6 +229,12 @@ comments:
   content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2013 — Focus banner: singular form for one hidden spec'
   created_at: 2026-10-20T22:22:54.724444543Z
   modified_at: 2026-10-20T22:22:54.724444543Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15b69-3e56-7502-a577-bce343b9cf99
+  author: joe
+  content: 'Folded in (advisor triage 2026-10-20 15:25): TASK-2002 — PR-2774 cosmetic nits: stray blank line after doc comment, misplaced use'
+  created_at: 2026-10-20T22:23:06.326624245Z
+  modified_at: 2026-10-20T22:23:06.326624245Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154e5-8be2-7ad1-b92b-8f8f1d3f7bcf
