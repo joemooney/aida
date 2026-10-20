@@ -196,7 +196,10 @@ mod bug_2192_lease_scan_tests {
         );
         write(
             "c.toml",
-            "tree_kind = \"worktree\"\nworktree_path = \"/tmp/x\"\n".to_string(),
+            format!(
+                "tree_kind = \"worktree\"\nworktree_path = \"{}\"\n",
+                main.path().join("aida-wt").display()
+            ),
         );
         write("c.activity.toml", "last = 1\n".to_string());
 
