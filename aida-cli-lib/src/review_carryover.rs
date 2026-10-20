@@ -390,10 +390,13 @@ pub(crate) fn proven_base_refusal(
     match base_at_merge.map(str::trim).filter(|b| !b.is_empty()) {
         Some(base) if base == proven_base => None,
         Some(base) => Some(format!(
-            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR now targets `{base}`. Re-run `aida pr ship` against the current base."
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the \
+             PR now targets `{base}`. Re-run `aida pr ship` against the current base."
         )),
         None => Some(format!(
-            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR's base could not be re-read before the merge, so the carry-over cannot be shown              to still apply."
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the \
+             PR's base could not be re-read before the merge, so the carry-over cannot be shown \
+             to still apply."
         )),
     }
 }

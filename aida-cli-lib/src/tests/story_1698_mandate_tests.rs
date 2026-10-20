@@ -1460,6 +1460,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                     // No approval/clearance is fabricated: the fixture decision refuses.
                     Err(MandateRefusal::SpecsUnresolved)
                 },
+                false,
             )
         },
     );
@@ -1702,6 +1703,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
                 || Some(head.clone()),
                 false,
                 crate::mandate::ship_decision,
+                true,
             )
         },
     );
@@ -1876,6 +1878,7 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
                 || Some(head.clone()),
                 false,
                 crate::mandate::ship_decision,
+                true,
             )
         },
     );
