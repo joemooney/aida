@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2012",
+  "publishes": [
+    {
+      "at": "2026-10-20T16:10:42.604313517Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-14T01:34:14.880959323Z",
+      "spec": "BUG-2012",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "guided"
+      }
+    },
+    {
+      "ts": "2026-10-20T16:10:02.098316304Z",
+      "spec": "BUG-2012",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2748
+      }
+    },
+    {
+      "ts": "2026-10-20T16:10:41.297681677Z",
+      "spec": "BUG-2012",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "1456ad35b0a1fb175e6a53c0a774396bd04e3c6a",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
