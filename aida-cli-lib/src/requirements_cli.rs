@@ -3589,8 +3589,6 @@ fn run_add(
                         }
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -3689,8 +3687,6 @@ fn run_add(
                         )?;
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida add` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -5743,8 +5739,6 @@ fn run_list(
                         maybe_print_whats_left_tip(status.as_deref(), &reqs);
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -5777,8 +5771,6 @@ fn run_list(
                     }
                     list_requirements(&storage, status, priority, r#type, feature, tags)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida list` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -6167,19 +6159,29 @@ fn run_show(
                                             ids.push(origin.to_string());
                                         }
                                     }
-                                    let linkage = {
+                                    let (linkage, drift_since_filing) = {
                                         let _phase = crate::usage::phase("linkage");
-                                        crate::collect_git_linkage(&project_root, &ids)
+                                        // BUG-1993: one deadline for collection
+                                        // and the drift hint.
+                                        let deadline = std::time::Instant::now()
+                                            + crate::SHOW_LINKAGE_DEADLINE;
+                                        let linkage = crate::collect_git_linkage_until(
+                                            &project_root,
+                                            &ids,
+                                            deadline,
+                                        );
+                                        // TASK-1475: compute before `linkage.{files,commits}`
+                                        // are moved into the JSON payload below.
+                                        // trace:TASK-1475 trace:BUG-1993 | ai:claude
+                                        let drift_since_filing = crate::filing_drift_hint_until(
+                                            &project_root,
+                                            req.filed_at.as_ref(),
+                                            &linkage.files,
+                                            &linkage.commits,
+                                            deadline,
+                                        );
+                                        (linkage, drift_since_filing)
                                     };
-                                    // TASK-1475: compute before `linkage.{files,commits}`
-                                    // are moved into the JSON payload below.
-                                    // trace:TASK-1475 | ai:claude
-                                    let drift_since_filing = crate::filing_drift_hint(
-                                        &project_root,
-                                        req.filed_at.as_ref(),
-                                        &linkage.files,
-                                        &linkage.commits,
-                                    );
                                     // trace:BUG-1594 trace:BUG-1993 | ai:claude
                                     let incomplete = linkage.incomplete_notes();
                                     Some(GitLinkageJson {
@@ -7271,8 +7273,6 @@ fn run_show(
                         }
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -7287,8 +7287,6 @@ fn run_show(
                     // so the --comments flag is a no-op here. Git backend honors it.
                     show_requirement(&storage, id)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida show` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -8834,8 +8832,6 @@ fn run_edit(
                         }
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -8942,8 +8938,6 @@ fn run_edit(
                         )?;
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida edit` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -9015,8 +9009,6 @@ fn run_del(
                     backend.delete_requirement(&req.id)?;
                     println!("Deleted: {}", id);
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -9029,8 +9021,6 @@ fn run_del(
                 DelArgs { id, yes } => {
                     delete_requirement(&storage, id, *yes)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida del` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -9166,8 +9156,6 @@ fn run_grep(
                         *invert_match,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida grep` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -9473,8 +9461,6 @@ fn run_search(
                         println!("{block}");
                     }
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -9513,8 +9499,6 @@ fn run_search(
                         false, // don't invert match
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida search` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

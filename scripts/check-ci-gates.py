@@ -438,7 +438,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.list:
         for name, command in plan:
-            reshaped = "  (local: cargo test --profile agent)" if command != dict(steps)[name] else ""
+            # Print the reshaped command itself: it is not always `cargo test`. trace:TASK-1979 | ai:claude
+            reshaped = f"  (local: {command})" if command != dict(steps)[name] else ""
             print(f"PLAN  {name}  [{tiers[name]}]{reshaped}")
         # Derived gates are not part of `all`, but a listing that hid them would
         # make `make check-ci-compile` undiscoverable, which is the defect the

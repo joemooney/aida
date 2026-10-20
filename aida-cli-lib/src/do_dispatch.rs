@@ -512,8 +512,6 @@ fn run_do(
                         *force,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -526,8 +524,6 @@ fn run_do(
                 DoArgs { spec, mode, force } => {
                     run_do_drive(&storage, spec, mode.as_deref(), *force)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida do` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

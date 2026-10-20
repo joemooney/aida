@@ -1971,8 +1971,6 @@ fn run_usage(
                         store.as_ref(),
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -2094,8 +2092,6 @@ fn run_usage(
                         store.as_ref(),
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida usage` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

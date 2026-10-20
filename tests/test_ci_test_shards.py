@@ -3,6 +3,7 @@
 trace:TASK-1949 | ai:codex
 """
 import importlib.util
+import json
 import pathlib
 import subprocess
 import tempfile
@@ -39,7 +40,8 @@ class ShardsTest(unittest.TestCase):
         packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two')]),
                     dict(name='aida-cli-lib', targets=[target('lib', 'lib'), target('future')])]
         plan = {s: shards.commands(s, packages, {}) for s in shards.SHARDS}
-        self.assertEqual(plan['lib'], [['cargo', 'test', '--no-fail-fast', '-p', 'aida-cli-lib', '--lib']])
+        for half in ('lib-0', 'lib-1'):
+            self.assertEqual(plan[half], [['cargo', 'test', '--no-fail-fast', '-p', 'aida-cli-lib', '--lib']])
         cli = plan['cli-0'][0] + plan['cli-1'][0]
         self.assertEqual(cli.count('--test'), 2)
         rest = plan['rest']
@@ -49,6 +51,104 @@ class ShardsTest(unittest.TestCase):
         self.assertEqual(rest[1][-3:], ['-p', 'aida-cli', '--bins'])
         self.assertEqual(rest[2][-3:], ['-p', 'aida-cli-lib', '--doc'])
         self.assertEqual(rest[3][-2:], ['--test', 'future'])
+
+    # trace:TASK-1979 | ai:claude
+    def test_lib_halves_are_a_disjoint_balanced_cover(self):
+        # `leases::` also matches ship::leases::q and `tests::` matches cli::tests::b,
+        # so those modules must share a half, or a test would run in both.
+        names = ['tests::a', 'cli::tests::b', 'cli::x', 'ship::leases::q', 'leases::z',
+                 'leases::w', 'other::y', 'other::v', 'root_test']
+        a, b = shards.lib_halves(names)
+        self.assertEqual(shards.lib_halves(list(reversed(names))), (a, b))
+        ran_a, ran_b = shards.matched(a, names), shards.matched(b, names)
+        self.assertFalse(ran_a & ran_b)
+        self.assertEqual(ran_a | ran_b, set(names))
+        for together in (['tests::', 'cli::'], ['leases::', 'ship::']):
+            self.assertTrue(set(together) <= set(a) or set(together) <= set(b))
+        self.assertIn('root_test', a + b)
+        self.assertLessEqual(abs(len(ran_a) - len(ran_b)), 3)
+
+    def test_lib_halves_balance_measured_seconds_not_counts(self):
+        names = [f'slow::t{i}' for i in range(2)] + [f'fast::t{i}' for i in range(50)] + \
+                [f'mid::t{i}' for i in range(10)] + ['new::t0']
+        a, b = shards.lib_halves(names, {'slow': 100.0, 'fast': 5.0, 'mid': 90.0})
+        self.assertEqual({tuple(a), tuple(b)}, {('slow::',), ('fast::', 'mid::', 'new::')})
+        self.assertEqual(shards.lib_halves(names, {'slow': 100.0, 'fast': 5.0, 'mid': 90.0}), (a, b))
+
+    def test_lib_weights_read_test_times_from_dispatch_order(self):
+        # Two workers: a and b start at once; c starts when a (the first
+        # completion) frees a worker; d when b does.
+        log = '\n'.join([
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:00.0000000Z running 1001 tests',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:02.0000000Z test x::a ... ok',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:05.0000000Z test x::b ... ok',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:06.0000000Z test y::c ... FAILED',
+            'CI (lib-0)\tRun tests\t2026-10-20T08:00:09.0000000Z test y::d ... ignored',
+        ])
+        self.assertEqual(shards.lib_test_seconds(log, threads=2),
+                         {'x::a': 2.0, 'x::b': 5.0, 'y::c': 4.0, 'y::d': 4.0})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / 'lib-0.log'
+            path.write_text(log)
+            self.assertEqual(shards.lib_weights([str(path)], 2), ['"x" = 7.0', '"y" = 8.0'])
+
+    def test_lib_halves_refuses_an_unsplittable_binary(self):
+        with self.assertRaises(ValueError):
+            shards.lib_halves(['only::one'])
+
+    def test_lib_lane_runs_its_half_as_filters(self):
+        names = ['a::one', 'b::two', 'b::three']
+        with patch.object(shards, 'lib_test_names', return_value=names), \
+                patch.object(shards.subprocess, 'call', return_value=0) as call:
+            self.assertEqual(shards.main(['--shard', 'lib-1', '--profile', 'agent']), 0)
+        command = call.call_args.args[0]
+        self.assertEqual(command[command.index('--') + 1:], list(shards.lib_halves(names)[1]))
+        self.assertEqual(command[command.index('--') - 2:command.index('--')], ['--profile', 'agent'])
+
+    def test_union_guard_accepts_the_workspace_and_names_gaps(self):
+        metadata = json.loads(subprocess.check_output(
+            ['cargo', 'metadata', '--no-deps', '--format-version', '1'], cwd=ROOT))
+        packages = [p for p in metadata['packages'] if p['id'] in metadata['workspace_members']]
+        self.assertEqual(shards.union_problems(packages, {}), ([], []))
+        lib = dict(target('lib', 'lib'), doctest=True)
+        packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two'),
+                                                   dict(lib, name='cli'), target('macros', 'proc-macro')]),
+                    dict(name='aida-cli-lib', targets=[lib, target('tool', 'bin'), target('ex', 'example')]),
+                    dict(name='aida-core', targets=[dict(lib, name='core')])]
+        gaps, repeats = shards.union_problems(packages, {})
+        self.assertEqual(gaps, [
+            ('aida-cli', 'doc', 'cli'), ('aida-cli', 'lib', 'cli'), ('aida-cli', 'lib', 'macros'),
+            ('aida-cli-lib', 'bin', 'tool'), ('aida-cli-lib', 'example', 'ex')])
+        self.assertEqual(repeats, [])
+        with patch.object(shards, 'union_problems', return_value=([('aida-cli', 'lib', 'cli')], [])), \
+                patch.object(shards.subprocess, 'call', return_value=0) as call:
+            self.assertEqual(shards.main(['--shard', 'rest']), 1)
+        call.assert_not_called()
+
+    def test_union_guard_refuses_a_target_two_shards_run(self):
+        packages = [dict(name='aida-cli', targets=[target('aida', 'bin'), target('one'), target('two')]),
+                    dict(name='aida-cli-lib', targets=[dict(target('lib', 'lib'), doctest=True)])]
+        real = shards.commands
+
+        def overlapping(shard, pkgs, budgets):
+            # A rest lane that also ran every CLI integration target.
+            extra = [['cargo', 'test', '-p', 'aida-cli', '--test', 'one']] if shard == 'rest' else []
+            return real(shard, pkgs, budgets) + extra
+        with patch.object(shards, 'commands', side_effect=overlapping):
+            gaps, repeats = shards.union_problems(packages, {})
+        self.assertEqual(gaps, [])
+        self.assertEqual(repeats, [('aida-cli', 'test', 'one')])
+        with patch.object(shards, 'union_problems', return_value=([], [('aida-cli', 'test', 'one')])), \
+                patch.object(shards.subprocess, 'call', return_value=0) as call:
+            self.assertEqual(shards.main(['--shard', 'cli-0']), 1)
+        call.assert_not_called()
+
+    def test_check_ci_list_labels_run_tests_with_its_real_local_command(self):
+        listing = subprocess.run(['python3', 'scripts/check-ci-gates.py', '--list', '--tier', 'all'],
+                                 cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        line = next(l for l in listing.splitlines() if l.startswith('PLAN  Run tests  '))
+        self.assertIn('(local: python3 scripts/ci-test-shards.py --shard all --profile agent', line)
+        self.assertNotIn('(local: cargo test --profile agent)', listing)
 
     def test_rest_keeps_core_features_supplied_by_excluded_cli(self):
         manifest = tomllib.loads((ROOT / 'aida-cli-lib/Cargo.toml').read_text())
@@ -80,6 +180,8 @@ class ShardsTest(unittest.TestCase):
         source = steps['Run tests']['run']
         self.assertEqual(gates.derive_compile_command('Run tests', source), 'python3 scripts/ci-test-shards.py --compile --profile agent')
         self.assertIn('--shard all --profile agent', gates.local_test_command(source))
+        self.assertEqual(steps['Build aida binary for lib unit tests']['if'],
+                         "${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}")
         self.assertIn('!cancelled()', steps['Test shard root hygiene']['if'])
 
     def test_root_guard_detects_loose_files_and_directories(self):
@@ -147,6 +249,8 @@ class TallyTest(unittest.TestCase):
             ([job('Build (ubuntu-latest)', None)] + [job(f'CI ({lane})', 'skipped') for lane in shards.SHARDS], ('docs-only', [])),
             ([job('CI (lib)', 'success'), job('CI (rest)', 'skipped', 2)], ('incomplete', [])),
             ([job(f'CI ({lane})', 'success') for lane in shards.SHARDS] + [job('CI (gates)', 'skipped'), job('CI (contracts)', 'skipped')], ('pass', [])),
+            ([job(f'CI ({lane})', 'success') for lane in ('lib', 'cli-0', 'cli-1', 'rest')], ('pass', [])),
+            ([job(f'CI ({lane})', 'success') for lane in ('lib-0', 'cli-0', 'cli-1', 'rest')], ('incomplete', [])),
             ([job('CI (lib)', 'failure'), job('CI (rest)', 'failure', 2)], ('fail', [1, 2])),
         ]
         for jobs, expected in cases:

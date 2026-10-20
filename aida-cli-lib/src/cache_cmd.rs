@@ -675,8 +675,6 @@ fn run_cache(
                         cache_cmd, backend,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -692,8 +690,6 @@ fn run_cache(
                      Run `aida init --distributed` first, or pass --file pointing to a git store."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida cache` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

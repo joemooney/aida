@@ -625,8 +625,6 @@ fn run_comment(
                         req_id
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -639,8 +637,6 @@ fn run_comment(
                 CommentArgs { inner: comment_cmd } => {
                     self::handle_comment_command(comment_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida comment` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

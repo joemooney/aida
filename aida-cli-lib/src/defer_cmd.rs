@@ -316,8 +316,6 @@ fn run_defer(
                         store_path,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -335,8 +333,6 @@ fn run_defer(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida defer` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -391,8 +387,6 @@ fn run_undefer(
                     // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude
                     self::handle_undefer_command(id, backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -410,8 +404,6 @@ fn run_undefer(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida undefer` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

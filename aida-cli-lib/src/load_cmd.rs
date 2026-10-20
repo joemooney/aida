@@ -184,8 +184,6 @@ fn run_load(
                     let storage = Storage::new(store_path);
                     self::handle_load_command(load_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -198,8 +196,6 @@ fn run_load(
                 LoadArgs { inner: load_cmd } => {
                     self::handle_load_command(load_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida load` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
