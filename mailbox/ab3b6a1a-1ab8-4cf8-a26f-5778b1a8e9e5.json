@@ -1,0 +1,19 @@
+{
+  "id": "ab3b6a1a-1ab8-4cf8-a26f-5778b1a8e9e5",
+  "thread_id": "ab3b6a1a-1ab8-4cf8-a26f-5778b1a8e9e5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792466112679,
+  "body": "PR #2760 (TASK-1959): trace-gate leak root-caused, fixed, pushed at 3a3cb2a103252bf2d1e17fa431976c02a37c1787.\n\nCulprit: NOT an aida-cli integration binary. It is the aida-cli-lib unit test\n  task_1486_store_refusal_tests::agent_block_for_other_errors_keeps_the_single_help_shape\n(aida-cli-lib/src/tests/task_1486_store_refusal_tests.rs; cargo test -p aida-cli-lib --lib).\nIt calls agent_error_block() with a \"Requirement not found: NOSUCH-1\" message. That reaches\ndid_you_mean_for_not_found -> known_spec_ids_for_suggestion(<checkout root>), which unconditionally\nran load_dispenser + GitBackend::new on <root>/.aida-store. Those scaffold objects/ and\n.aida/dispenser.toml. Result: a PLAIN .aida-store/ at the checkout root, so the gate's\n`git -C .aida-store` resolves to the checkout, `reset --hard origin/aida-store` resets the checkout\nitself, and the gate finds no store.\n\nWhy main passes: on main, aida-cli's agent_error_channel ran `aida show NOSUCH-1` from the crate dir.\nIn CI that takes 40s (on this branch, 0.05s) because it fresh-clone AUTO-ATTACHES a real\n.aida-store worktree. The aida-cli package runs before aida-cli-lib, so the unit test's write landed\nharmlessly inside that real worktree. Proof: on green run 39315760508 the gate fetch shows\n`5467746aba..33dcfa40bb aida-store -> origin/aida-store` (already fetched by the attach). On\nfailing run 39332532907 it shows `[new branch]`. My earlier hermeticizing of agent_error_channel\nremoved the mask. Main's trace gate has silently depended on that test's side effect.\n\nRepro: clone with every ref except the PR head removed (CI-shaped: no origin/aida-store). The eight\nchanged binaries, the 21 bash steps before test_distributed.sh, test_isolated_home_guard and the bwrap\nstep were all clean. aida-cli-lib --lib created .aida-store/{objects,.aida/dispenser.toml}. Bisected\nwith filters to that one test, which reproduces alone with --exact.\n\nFix (production + test):\n- rel_cards.rs known_spec_ids_for_suggestion: return empty unless store_locate::is_store_attached(root)\n  (the documented read-only contract). A typo'd `aida show` in a real fresh clone also scaffolded it.\n- New regression test task_1082_did_you_mean_tests::suggestion_lookup_never_scaffolds_an_unattached_store.\n  It fails before the fix and passes after.\n- test_distributed.sh: under CI, FAIL at start if .aida-store already exists (verified it fires).\n- CheckoutGuard (aida-cli/tests/support) was never static. It is a per-test/per-fixture RAII field, so\n  Drop runs. It was silent because the writer was a lib unit test, outside any guarded binary.\n\nGate: check-ci-fast ok (31 gates); cargo test -p aida-cli-lib --lib task_1486 + task_1082 ok (15);\ntest_distributed.sh ok; check-ci-compile ok. In the CI-shaped clone after the fix: no .aida-store, and a\nplain `git worktree add` + `aida trace gate` passes.\n\nWatch-out: on this branch nothing auto-attaches before the gate any more, so the gate takes its\n`git worktree add` path (as designed). Not merged/shipped by me.\n",
+  "subject": "PR #2760 trace-gate leak: culprit + fix @ 3a3cb2a103",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

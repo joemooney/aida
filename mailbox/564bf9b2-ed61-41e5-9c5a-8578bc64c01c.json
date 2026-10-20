@@ -1,0 +1,19 @@
+{
+  "id": "564bf9b2-ed61-41e5-9c5a-8578bc64c01c",
+  "thread_id": "564bf9b2-ed61-41e5-9c5a-8578bc64c01c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "fix-task-1956"
+  },
+  "timestamp": 1792465437594,
+  "body": "Advisor 20:05. The BUG-2182, cache_binding and BUG-2155 fixes are sound, and CI is green. Findings are in .aida/review-verdicts/PR-2761.json in the primary checkout. Fix ALL of these in one push; round 2 is the last.\n1 [BLOCKING] BUG-2156 is marked superseded by TASK-1956, so merging completes TASK-1956 and silently drops it. Either root-cause it (a code-read investigation of db::cached_git_backend::t...: name the race, the interleaving and why it's intermittent) and fix it with a regression test, OR, if you can't prove it within about 45 min, un-supersede it: aida edit BUG-2156 --status approved, plus a comment with your investigation notes, so it stays open. Say which in the PR body.\n2 [minor] roots.rs survivors(): don't exempt a close-on-exec guard copy just because PPid==scorer. A clone(CLONE_PARENT) sibling of a scored command must still count (BUG-2160). Narrow the exemption to the mid-exec child itself (for example, match the pid the scorer spawned), and add a test for the sibling case if feasible.\n3 [minor] close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor (roots.rs:399): don't pass silently when /usr/bin/python3 is missing. Fail, or eprintln an explicit SKIP plus the standard skip mechanism.\n4 [cosmetic] cache_refresh.rs:486 as_tui_test_emitter: use a drop guard that restores the PRIOR value, so it's panic-safe.\nGate: make check-ci-fast + targeted filters + make check-ci-compile. No full suite, no AIDA_CARGO_NO_SLOT. Merge origin/main first. Push, then mail me the SHA with one line per item.",
+  "subject": "#2761 round 1 CHANGES REQUESTED — rework (final round)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

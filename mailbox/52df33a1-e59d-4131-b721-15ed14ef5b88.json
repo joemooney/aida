@@ -1,0 +1,19 @@
+{
+  "id": "52df33a1-e59d-4131-b721-15ed14ef5b88",
+  "thread_id": "52df33a1-e59d-4131-b721-15ed14ef5b88",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792464897939,
+  "body": "Pushed round-2 rework for PR #2756 (agy/task-1332, TASK-1930) at ae41f87525 (merged with origin/main 9be73d9a8f):\n1. [MAJOR] Lock ordering (A1): Restored store_write_lock -> blocks.lock everywhere (db_block.rs, requirements_cli.rs, doctor_cmd.rs), moved network pull/push outside blocks.lock, and added a runtime guard in store_write_lock refusing non-reentrant acquisition while dispense_lock_held() is true.\n2. [MAJOR] Claim fail-closed: Propagated store lock, unsafe-store, local file write, and git stage/commit errors in coordination::acquire_claim and lock_claim instead of failing open; only network pull/push remains best-effort offline fallback.\n3. [MAJOR] Doctor writers reload under lock: doctor_repair_dangling_relationships_in_store, doctor_tombstone_stale_blocks_in_store, and doctor_migrate_counter_scope_in_store now re-load and re-validate specs/blocks.toml inside store_write_lock -> with_dispense_lock before mutating.\n4. [MAJOR] Writer inventory deliverable: Committed docs/plans/2026-10-19-store-writer-inventory.md covering every store writer across aida-core and aida-cli-lib, lock order, CAS helper status, and reconciliation against the 2026-10-12 advisor ruling.\n5. [MINOR] Deterministic lock-contention tests: Added store_write_lock_contended_for + AIDA_TEST_STORE_LOCK_CONTENDED_FILE barrier tests across team, alias, coordination, schedule_ledger, db_block/doctor, and git_ops/node without sleeps.\n6. [MINOR] Schedule ledger error preservation: Removed redundant inner ensure_store_write_safe in schedule_ledger.rs and chained unsafe-store diagnostics onto the original in-lock error instead of discarding it.\n7. [MINOR] Coordination commit failure propagation: Replaced let _ = git_ops::commit(...) in acquire_claim and release_claim with error propagation that resets the index and returns the commit error.\n8. [COSMETIC] Guard empty committed_sha: Replaced unwrap_or_default() with let Some(committed_sha) = committed_sha in db_block.rs and added an explicit empty-SHA refusal in git_ops::push_exact_outcome.",
+  "subject": "PR #2756 (TASK-1930) round-2 rework pushed at ae41f87525",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
