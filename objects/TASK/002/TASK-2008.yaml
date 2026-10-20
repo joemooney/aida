@@ -1,0 +1,20 @@
+id: 01a159bf-9294-7303-8baf-af447935c9ce
+spec_id: TASK-2008
+agreed_id: TASK-2008
+title: aida pr ship step 1 under 30 s warm (follow-up to the BUG-2179 batched mandate scan)
+description: BUG-2179 (PR-2776) cut ship step 1 from 10–40 min to about 48 s; its AC3 was amended to <60 s. Profile what remains (the store snapshot, trace collection, per-spec mandate evaluation) and get it below 30 s warm, timed on the real command with a median of 3.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T14:38:09.556119969Z
+modified_at: 2026-10-20T14:38:09.556119969Z
+req_type: Task
+filed_at:
+  code_sha: 12d4692052cd272c5b7f75ff289b84bdb2e49f65
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
