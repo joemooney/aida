@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2190",
+  "publishes": [
+    {
+      "at": "2026-10-20T17:07:26.230050263Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:14:54.154515194Z",
+      "spec": "BUG-2190",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T01:50:32.966270844Z",
+      "spec": "BUG-2190",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-20T06:21:15.496623408Z",
+      "spec": "BUG-2190",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2190",
+        "branch": "codex/bug-2190",
+        "first_seen": "2026-10-20T06:21:15.496584677+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-20T17:06:49.100083318Z",
+      "spec": "BUG-2190",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-20T17:07:03.772529159Z",
+      "spec": "BUG-2190",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2780
+      }
+    },
+    {
+      "ts": "2026-10-20T17:07:25.863067874Z",
+      "spec": "BUG-2190",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "03fe56b082721daf63d4283f0d48545ce82ec961",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
