@@ -3,12 +3,12 @@ spec_id: TASK-1957
 agreed_id: TASK-1957
 title: 'STORY-1853 slice S2: cargo-nextest (shadow job, then gating swap; per-test budgets enforce AC4)'
 description: 'Approved sketch: STORY-1853 comment 4 (2026-10-19 00:40). PR 1 adds nextest as a NON-GATING shadow. Run it as its own parallel CI job after S6 fan-out (TASK-1949) lands, so it adds no wall time. It must record pass/fail parity and passed+ignored >= 11,683 for 3 main runs. PR 2 makes nextest gating, using nextest --partition across the S6 test shards in place of the binary half-split, and moves S1 budgets to per-test keys from JUnit (this closes STORY-1853 AC4). Use a serial test-group, with comments, for tests that guard external resources. No retries in the ci profile. Pin the nextest install. Precondition for local use: aida-host''s bin/cargo slot wrapper gates the ''nextest'' subcommand (aida-host STORY-100 lane). Until then agents must not run cargo nextest locally.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:28.623567193Z
-modified_at: 2026-10-20T13:03:21.314814213Z
+modified_at: 2026-10-20T13:39:18.240704839Z
 req_type: Task
 tags:
 - ci
@@ -77,6 +77,20 @@ history:
   timestamp: 2026-10-20T13:03:21.850027690Z
   session_id: 01a1595f3932
   changes: []
+- id: 01a15989-aed7-7c90-9c88-c42bbf381bb6
+  author: aida-auto-bump
+  timestamp: 2026-10-20T13:39:17.847169053Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15989-b060-72a0-b41b-ec581566d40a
+  timestamp: 2026-10-20T13:39:18.240694239Z
+  agent: aida
+  commit_sha: 12d4692052cd272c5b7f75ff289b84bdb2e49f65
+  summary: 'PR-1 shadow nextest lane meets TASK-1957 (post-split scope): non-gating, parallel (all shadow jobs finish before CI (gates), run 39428299727), pinned, retries=0, serial test-group documented; all round-3 findings fixed (filtered-out marker subtracted from nextest skipped, 0.9.146 output headers, exec failed->failed, comment wording); parity exact on all 5 shards, passed+ignored 11,788 >= 11,683; 22 unit tests pass locally, CI green. merge-hold-gate red is the supervised-spec hold, not a code defect.'
+  review_verdict: approved
 filed_at:
   code_sha: 18aa13a0a0d6bdc85b762c77aac3d64e2005919f
   branch: main
@@ -85,11 +99,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Shadow lane is correctly non-gating, pinned, no-retry, serial-grouped; but --totals overcounts ignored tests in the lib-0/lib-1 shadow lanes (nextest 'skipped' includes name-filtered tests), so the parity count the shadow exists to record is wrong for 2 of 5 lanes.
-  recovery_hint: address the review findings, move TASK-1957 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T13:03:21.314814213Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T13:39:17.847164066Z
+  completion_sha: 12d4692052cd272c5b7f75ff289b84bdb2e49f65
