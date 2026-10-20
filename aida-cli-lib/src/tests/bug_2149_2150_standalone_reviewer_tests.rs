@@ -75,6 +75,16 @@ fn run_mock_reviewer(
     tmp: &std::path::Path,
     setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
 ) -> (Result<()>, std::path::PathBuf) {
+    run_mock_reviewer_mode(tmp, false, setup)
+}
+
+// trace:BUG-2187 | ai:codex
+#[cfg(unix)]
+fn run_mock_reviewer_mode(
+    tmp: &std::path::Path,
+    no_human: bool,
+    setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
+) -> (Result<()>, std::path::PathBuf) {
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
     std::fs::create_dir_all(worktree.join(".aida")).unwrap();
@@ -100,6 +110,23 @@ fn run_mock_reviewer(
         ("AIDA_TEST_PR_HEAD_SHA", Some(HEAD)),
         (crate::seat_authority::GRANT_ENV, None),
     ]);
+    // Headless launch resolves its grant root independently of the arguments
+    // passed to the standalone collector; pin that root to this fixture too.
+    // trace:BUG-2187 | ai:codex
+    struct RestoreAmbient(Option<crate::test_ambient::Ambient>);
+    impl Drop for RestoreAmbient {
+        fn drop(&mut self) {
+            crate::test_ambient::replace(self.0.take());
+        }
+    }
+    let _ambient = RestoreAmbient(crate::test_ambient::replace(Some(
+        crate::test_ambient::Ambient {
+            project_root: project.clone(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+            stderr_is_terminal: false,
+        },
+    )));
     let launcher_grant = crate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
@@ -136,7 +163,7 @@ fn run_mock_reviewer(
         "pr-59",
         "reviewer",
         &worktree,
-        false,
+        no_human,
         true,
         &verdict_path,
         false,
@@ -697,4 +724,32 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         None,
         "an ordinary work plan cannot authorize review coexistence",
     );
+}
+
+// trace:BUG-2187 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer_mode(tmp.path(), true, |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        env.set_key("AIDA_OS_WRAP", "0");
+        env.unset_key("AIDA_CONTAINED");
+        std::fs::write(
+            l.project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "")
+            .replacen("#!/bin/sh\n", "#!/bin/sh\n[ \"$AIDA_AGENT_TYPE\" = claude ] || exit 73\n[ \"$AIDA_AGENT_NAME\" = claude-reviewer ] || exit 73\n", 1)
+    });
+    result.expect("a scrubbed launcher must still identify its actual child vendor");
+    let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json")).unwrap();
+    let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    assert!(verdict.attestation.is_some());
+    assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
 }

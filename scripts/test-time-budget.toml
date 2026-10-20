@@ -42,3 +42,8 @@ default_limit = 10
 "task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 7.5s, 4 tests
 "bug_1687_defer_status_lens:tests/bug_1687_defer_status_lens.rs" = 15  # max measured 7.1s, 4 tests
 "bug_1808_delegation_preflight:tests/bug_1808_delegation_preflight.rs" = 15  # max measured 6.7s, 5 tests
+
+# Real reviewer setup plus recorder/authority-negative subprocesses measured
+# 16.84s on the loaded agent profile; allow fixture/setup headroom in CI.
+# trace:BUG-2187 | ai:codex
+"bug_2187_reviewer_record_identity:tests/bug_2187_reviewer_record_identity.rs" = 30

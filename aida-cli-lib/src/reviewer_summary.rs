@@ -618,3 +618,183 @@ mod tests {
         assert!(!s.contains("implementation effort:"), "{s}");
     }
 }
+
+/// Preserve useful evidence after a failed recording without treating log text
+/// as a verdict or replaying a command under the launcher's authority.
+// trace:BUG-2187 | ai:codex
+pub(crate) fn unrecorded_review_recovery(
+    worktree: &Path,
+    log_path: Option<&Path>,
+    jsonl: Option<&str>,
+) -> String {
+    let mut out = format!(
+        "Unrecorded review artifacts: {}. No approval was accepted.\n",
+        worktree.display()
+    );
+    if let Some(path) = log_path {
+        out.push_str(&format!("Full reviewer log: {}\n", path.display()));
+    }
+    if let Some(log) = jsonl {
+        if let Some(text) = final_review_draft(log) {
+            if !text.trim().is_empty() {
+                out.push_str("Unrecorded final draft (informational):\n");
+                out.push_str(&recovery_excerpt(&text));
+                out.push('\n');
+            }
+        }
+        if let Some(command) = last_record_command(log) {
+            out.push_str("Last tool command mentioning review record (retry only from an attested reviewer session):\n");
+            out.push_str(&recovery_excerpt(&command));
+            out.push('\n');
+        }
+    }
+    out.push_str("Inspect the retained draft/log before retrying; the launcher must not record a verdict on the reviewer's behalf.");
+    out
+}
+
+// Claude emits a terminal result; Codex emits completed agent messages.
+// Agy's current -p argv emits plain response text (no JSON output flag).
+// Unknown/truncated formats retain the raw excerpt rather than losing evidence.
+// trace:BUG-2187 | ai:codex
+fn final_review_draft(log: &str) -> Option<String> {
+    if let Some(text) = parse_result_event(log).and_then(|e| e.result_text) {
+        if !text.trim().is_empty() {
+            return Some(text);
+        }
+    }
+    for line in log.lines().rev() {
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if event["type"] == "item.completed" && event["item"]["type"] == "agent_message" {
+            if let Some(text) = event["item"]["text"]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+            {
+                return Some(text.to_string());
+            }
+        }
+    }
+    (!log.trim().is_empty()).then(|| {
+        format!(
+            "Captured reviewer output (format unrecognized or plain text):\n{}",
+            log.trim()
+        )
+    })
+}
+
+// Display-only: this does not parse or accept a verdict, and never executes
+// any text found in a vendor log. trace:BUG-2187 | ai:codex
+fn last_record_command(jsonl: &str) -> Option<String> {
+    for line in jsonl.lines().rev() {
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if event["type"] == "item.completed" && event["item"]["type"] == "command_execution" {
+            if let Some(command) = event["item"]["command"]
+                .as_str()
+                .filter(|s| s.contains("review record"))
+            {
+                return Some(command.to_string());
+            }
+        }
+        if event.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+            continue;
+        }
+        let content = event
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .or_else(|| event.get("content"))
+            .and_then(|c| c.as_array());
+        for block in content.into_iter().flatten().rev() {
+            if block.get("type").and_then(|v| v.as_str()) != Some("tool_use")
+                || block.get("name").and_then(|v| v.as_str()) != Some("Bash")
+            {
+                continue;
+            }
+            if let Some(command) = block
+                .get("input")
+                .and_then(|v| v.get("command"))
+                .and_then(|v| v.as_str())
+                .filter(|s| s.contains("review record"))
+            {
+                return Some(command.to_string());
+            }
+        }
+    }
+    None
+}
+
+// The complete, unmodified evidence stays in the named log.
+// trace:BUG-2187 | ai:codex
+fn recovery_excerpt(text: &str) -> String {
+    let mut chars = text.chars();
+    let excerpt: String = chars.by_ref().take(8192).collect();
+    if chars.next().is_some() {
+        format!("{excerpt}\n[truncated; see full reviewer log]")
+    } else {
+        excerpt
+    }
+}
+
+#[cfg(test)]
+mod bug2187_recovery_tests {
+    use super::*;
+
+    // trace:BUG-2187 | ai:codex
+    #[test]
+    fn recovery_keeps_the_draft_attempted_command_and_log_location() {
+        let command = "aida review record STORY-77 --verdict request-changes --sha 1234567 --summary 'fix the leak' --pr 59";
+        let tool = serde_json::json!({"type":"assistant","message":{"content":[
+            {"type":"tool_use","name":"Bash","input":{"command":command}}
+        ]}});
+        let result = serde_json::json!({"type":"result","result":"Request changes: fix the leak. Recording was refused."});
+        let log = format!("{tool}\n{result}\n{{truncated");
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/logs/review.jsonl")),
+            Some(&log),
+        );
+        assert!(out.contains(command));
+        assert!(out.contains("Request changes: fix the leak"));
+        assert!(out.contains("/logs/review.jsonl"));
+        assert!(out.contains("No approval was accepted"));
+        assert!(out.contains("attested reviewer session"));
+    }
+
+    // trace:BUG-2187 | ai:codex
+    #[test]
+    fn codex_and_plain_agy_recovery_preserve_the_final_draft() {
+        let command = "aida review record STORY-77 --verdict rejected --sha 1234567 --summary fix";
+        let log = format!(
+            "{}\n{}\n{{partial",
+            serde_json::json!({"type":"item.completed","item":{"type":"command_execution","command":command}}),
+            serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"Rejected: fix the leak"}})
+        );
+        let out =
+            unrecorded_review_recovery(Path::new("/review"), Some(Path::new("/log")), Some(&log));
+        assert!(out.contains(command));
+        assert!(out.contains("Rejected: fix the leak"));
+        let agy = format!("Request changes: fix the leak. Recording failed. Retry {command}");
+        let out =
+            unrecorded_review_recovery(Path::new("/review"), Some(Path::new("/log")), Some(&agy));
+        assert!(out.contains(&agy));
+        assert!(out.contains("No approval was accepted"));
+    }
+
+    // trace:BUG-2187 | ai:codex
+    #[test]
+    fn missing_or_large_draft_still_names_the_preserved_evidence() {
+        let missing = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some("invalid"),
+        );
+        assert!(missing.contains("/review"));
+        assert!(missing.contains("/log"));
+        let text = "é".repeat(9000);
+        let excerpt = recovery_excerpt(&text);
+        assert!(excerpt.contains("[truncated; see full reviewer log]"));
+        assert!(excerpt.len() < text.len());
+    }
+}

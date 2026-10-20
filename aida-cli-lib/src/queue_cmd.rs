@@ -13213,6 +13213,15 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
+    // Keep a recoverable final draft even if a tool refuses the recording.
+    // No command from the draft is automatically replayed by this launcher.
+    // trace:BUG-2187 | ai:codex
+    let recovery_prompt = format!(
+        "{prompt}\n\nIf recording the verdict fails, include your final verdict draft and the exact \
+         `aida review record` command you attempted (including the reviewed SHA, summary, and findings) \
+         in your final response. Do not report a successful recording when it failed."
+    );
+    let prompt = recovery_prompt.as_str();
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
@@ -13486,12 +13495,29 @@ pub(crate) fn run_standalone_reviewer(
     // `/aida-review` skill wrote and (headless only) the JSONL log.
     // `--quiet` suppresses it for scripted consumers that read the
     // verdict file directly. trace:BUG-226 | ai:claude
-    if !quiet {
-        let verdict_json = std::fs::read_to_string(verdict_path).ok();
-        let result_event = log_path
+    // Failure evidence is available in quiet mode too. It is diagnostic only;
+    // the collector above remains the sole acceptance decision.
+    // trace:BUG-2187 | ai:codex
+    let log_body = if !quiet || collected.is_err() {
+        log_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| reviewer_summary::parse_result_event(&s));
+    } else {
+        None
+    };
+    let result_event = log_body
+        .as_deref()
+        .and_then(reviewer_summary::parse_result_event);
+    let recovery = collected.as_ref().err().map(|_| {
+        reviewer_summary::unrecorded_review_recovery(
+            worktree,
+            log_path.as_deref(),
+            log_body.as_deref(),
+        )
+    });
+    if !quiet {
+        let verdict_json = std::fs::read_to_string(verdict_path).ok();
+
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -13507,9 +13533,16 @@ pub(crate) fn run_standalone_reviewer(
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
     if let Some(code) = status.code().filter(|c| *c != 0) {
+        if let Some(recovery) = &recovery {
+            eprintln!("{recovery}");
+        }
         std::process::exit(code);
     }
-    standalone_reviewer_outcome(pr, collected.err(), verdict_path)
+    standalone_reviewer_outcome(pr, collected.err(), verdict_path).map_err(|err| {
+        anyhow::Error::new(NoReviewVerdict {
+            message: format!("{err:#}\n{}", recovery.as_deref().unwrap_or_default()),
+        })
+    })
 }
 
 /// BUG-2149: the launch command's result once the reviewer exited cleanly. A
