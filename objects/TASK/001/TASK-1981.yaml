@@ -9,12 +9,12 @@ description: |-
   3. Test gaps: add a barrier and error-preservation test for write_batch_cas_opts, plus an add-vs-sync barrier test for run_add's agreed-id dispense (the dispenser path A1 names). Also cover hijack_node, unregister_node and set_node_*.
   4. Seams: PR-2756 added AIDA_TEST_STORE_LOCK_CONTENDED_FILE (store_lock.rs) and AIDA_TEST_TEAM_WRITER_CHILD_DONE/_STORE (team.rs), test-only env reads in production code. Drain them with TASK-1751's injected context when it un-defers. Until then, don't add more.
   Full findings are in .aida/review-verdicts/PR-2756.json.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T10:58:07.616452061Z
+modified_at: 2026-10-20T13:02:19.279602513Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -48,6 +48,13 @@ history:
   timestamp: 2026-10-20T10:55:05.617084737Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15967-d48f-7431-b8c2-c4ed720803f2
+  author: joe
+  timestamp: 2026-10-20T13:02:19.279597894Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3c7e184d14f171218ad70453efee47cd99730122
   branch: main
