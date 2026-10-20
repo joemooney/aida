@@ -17,8 +17,19 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:31:45.399075033Z
-modified_at: 2026-10-20T21:31:45.399075033Z
+modified_at: 2026-10-20T21:32:18.594285003Z
 req_type: Task
+relationships:
+- rel_type: References
+  target_id: 01a1380e-2128-76a3-889a-4d1d759e76bf
+  created_at: 2026-10-20T21:32:18.594281580Z
+  created_by: joe
+history:
+- id: 01a15b3a-c27b-7dc0-a30b-c377aca9e3a9
+  author: joe
+  timestamp: 2026-10-20T21:32:19.963590622Z
+  session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
+  changes: []
 filed_at:
   code_sha: cb782c925504496e41a460f2958a40ab5b01a54e
   branch: agy2/story-1688
