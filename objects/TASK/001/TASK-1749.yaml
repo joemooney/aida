@@ -25,13 +25,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-10-19T16:08:23.365917491Z
+modified_at: 2026-10-20T01:29:45.882252991Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
 - operator-held
 - tech-debt
+comments:
+- id: 01a156ed-c69a-7932-9423-493f79d2b24f
+  author: joe
+  content: 'Operator + advisor 2026-10-19 18:30: SKETCH requested now. Implementation stays deferred until STORY-1853 S6 / STORY-1690 / TASK-1945 land. The sketch is codex item 0b, after TASK-1949 is pushed. Measured on main 2026-10-19: agent_launch.rs exists; 8 files still spawn claude/codex directly (session.rs x5, init_cmd.rs x3, burndown_run.rs x2, questions, doctor_cmd, autopilot_intake, claude_agents, aida-core ai/client); AIDA_SESSION_ROLE is set in 9 files and AIDA_CONTAINED in 9 files. The sketch must cover: (1) LaunchContext fields and who builds it; (2) a site-by-site migration table for every spawn/env site above; (3) slices ordered by risk, contained first; (4) a guard test failing on any new Command::new(claude|codex) or a hand-set AIDA_SESSION_ROLE/AIDA_CONTAINED outside the launcher; (5) the interaction with TASK-1752 (grant reads) and with BUG-2188/2168 (agent new). Post it as a SKETCH comment here, for advisor signoff.'
+  created_at: 2026-10-20T01:29:45.882252991Z
+  modified_at: 2026-10-20T01:29:45.882252991Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154eb-d392-7811-adf8-d43de174ed67
   author: joe
