@@ -25,12 +25,12 @@ description: |
   1. Fixture tests for each check, including a dead lane, a stale log, an unpicked READY PR and a stale gate wait.
   2. The 2026-10-13 incidents, replayed, each produce a finding within one tick.
   3. No model-side polling anywhere.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-20T20:11:30.373624080Z
+modified_at: 2026-10-20T20:12:08.907616431Z
 req_type: Story
 relationships:
 - rel_type:
@@ -239,6 +239,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a15af1-594b-7ce3-9ec6-4780ebee01cb
+  author: joe
+  timestamp: 2026-10-20T20:12:08.907613306Z
+  session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
   branch: main
