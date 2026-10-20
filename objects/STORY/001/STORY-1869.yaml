@@ -3,13 +3,27 @@ spec_id: STORY-1869
 agreed_id: STORY-1869
 title: 'Review PR-2769: [AI:claude] ci(shards): split the lib unit lane, per-lane caches, shard-union guard (TASK-1979)'
 description: Reviewer story for PR-2769 (TASK-1979 round 2, head 72a6ab10a7). Filed by hand because the PR uses (Refs TASK-1979) trailers, which auto-queue-review does not recognise.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:00:04.833667790Z
-modified_at: 2026-10-20T09:00:04.833667790Z
+modified_at: 2026-10-20T12:40:00.432482071Z
 req_type: Story
+comments:
+- id: 01a15953-7496-7132-bc47-c9560b553dd7
+  author: aida-auto-bump
+  content: 'Auto-completed: PR #2769 is merged on the forge (its merge commit was outside the local scan window).'
+  created_at: 2026-10-20T12:40:03.990497680Z
+  modified_at: 2026-10-20T12:40:03.990497680Z
+history:
+- id: 01a15953-7496-7132-bc47-c964e5858d74
+  author: aida-auto-bump
+  timestamp: 2026-10-20T12:40:03.990504231Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 419579e7c4510fece5f45c04ef3edc6878dda24d
   branch: main
@@ -18,3 +32,6 @@ filed_at:
   aida_build_sha: 419579e7c4
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T12:40:03.990495314Z
