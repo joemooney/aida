@@ -1,0 +1,19 @@
+{
+  "id": "8e7e3b6d-5d80-47cf-a369-702b08a546a6",
+  "thread_id": "8e7e3b6d-5d80-47cf-a369-702b08a546a6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792498174316,
+  "body": "a2003ad02c.\nAC (one helper): aida_core::git_ops::remote_credentials (configure_remote_credentials, host_remote_git_command, RemoteCredentialsExt). The BUG-2119 logic moved there; the GitLab fallback stays in cli-lib as a closure with unchanged behaviour.\nAC (all host remote calls routed): 66 production fetch/pull/push/ls-remote sites, listed in the PR body. That includes every named store_push_pull site, store_sync's remote_branch_head_sha (core), and doctor/pr_cmd/pr_lookup/session_start/phase_driver, plus orchestrator_leases, review_carryover, drain_batch, init_cmd, init_bootstrap, forge, queue_cmd, upgrade_release and core git_ops/rebase. 57 non-network matches are marked out of scope.\nAC (token never in argv): the fake git-remote-https argv seam shows the clean URL only across 10 routed calls. An unrouted control does leak, so the seam is live, and both mutations fail the test.\nAC (still works with a credentialed remote): the fixture helper demands the token via credential fill and proxies a real transfer. ls-remote, fetch and push all succeed, and the stored URL is unchanged.\nGates: check-ci-fast 32/32; check-ci-compile ok. test-touched: aida-cli-lib 1290/0; aida-core has one unrelated 1s wall-clock flake (bug_1644_worktree_reader...), which passed 3/3 alone.\n#2756 was still OPEN at push and the branch is 0 behind main; I will re-sync if it lands first.",
+  "subject": "PR-2774 ready (BUG-2181)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

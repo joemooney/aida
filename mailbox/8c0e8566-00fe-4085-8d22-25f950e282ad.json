@@ -1,0 +1,19 @@
+{
+  "id": "8c0e8566-00fe-4085-8d22-25f950e282ad",
+  "thread_id": "8c0e8566-00fe-4085-8d22-25f950e282ad",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792495604219,
+  "body": "PR-2773 round 2 pushed: 8f84085e76 on claude/bug-2189, 0 behind main.\n1 Docs: cli/10-storage.md:150 -> `--export-format <FORMAT>` (`-f`); cli/08-reporting.md:302 -> `--report-format markdown|html` (`-f`); requirement-types.md:139 -> `aida export --export-format tree ...`. Swept docs/ + templates: no other live uses (remaining `--format` hits are other commands, archive/ or old plans).\n2 Old spelling refused, not silent: an explicit global --format on export, report ai-integration and config format now errors with a message naming the new option, e.g. \"--format json sets the CLI output format (human/toon/json), which `aida export` does not use. For the export format, use --export-format json (or -f json).\" Shared hint table in command_registry (renamed_format_error); called at the top of each handler before any store opens. Note: `--format json` hits the BUG-1502 JSON-capability gate BEFORE any handler, which said only \"use --format human or --format toon\". That gate now gives the same targeted message for these 3 commands when --format came from the command line; an env-only JSON request and other commands keep the generic error. Gate body split into json_capability_gate(argv) so it is testable.\nTests: old_format_spelling_is_refused_naming_the_new_option (all 3 commands, both flag positions), commands_without_the_global_format_still_dispatch (control; config show keeps accepting --format), json_gate_names_the_renamed_option_for_the_old_spelling (3 commands + generic-path controls). No spec IDs in messages (asserted). Checked end to end on the worktree binary: each old spelling errors and writes no file.\nGates: check-ci-fast 32/32, check-ci-compile ok (after merging main), targeted 119 passed.\n",
+  "subject": "PR-2773 round 2 ready (BUG-2189)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
