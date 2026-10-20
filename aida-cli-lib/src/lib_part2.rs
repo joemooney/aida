@@ -14,7 +14,7 @@
 /// trace:FR-1-071 | ai:claude
 pub(crate) fn handle_retire_legacy_ids(
     backend: &aida_core::CachedGitBackend,
-    _store_path: &std::path::Path,
+    store_path: &std::path::Path,
     dry_run: bool,
 ) -> Result<()> {
     use aida_core::DatabaseBackend;
@@ -63,28 +63,33 @@ pub(crate) fn handle_retire_legacy_ids(
         return Ok(());
     }
 
-    // Apply: load the mutable store, update each affected req, save once.
-    // The save() path (post-BUG-1-040) writes only changed YAMLs and deletes
-    // files that fell out of the store, so renames are handled automatically.
-    let mut mutable = store;
-    for req in mutable.requirements.iter_mut() {
-        let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
-            (Some(s), Some(a)) if s != a => Some(a.to_string()),
-            _ => None,
-        };
-        if let Some(new_spec) = needs {
-            req.spec_id = Some(new_spec);
-            req.agreed_id = None;
-        }
-    }
-    backend.save(&mutable)?;
+    // Apply under store-write.lock via update_atomically so the read + rename
+    // + commit execute on a fresh snapshot without racing concurrent writers.
+    // trace:TASK-1981 | ai:agy
+    let mut retired_count = 0usize;
+    aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
+        backend.update_atomically(|mutable| {
+            for req in mutable.requirements.iter_mut() {
+                let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
+                    (Some(s), Some(a)) if s != a => Some(a.to_string()),
+                    _ => None,
+                };
+                if let Some(new_spec) = needs {
+                    req.spec_id = Some(new_spec);
+                    req.agreed_id = None;
+                    retired_count += 1;
+                }
+            }
+        })?;
+        Ok(())
+    })?;
 
     println!();
     println!(
         "{} Retired {} legacy spec_id{}. Canonical id now lives in spec_id alone.",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-        renames.len(),
-        if renames.len() == 1 { "" } else { "s" }
+        retired_count,
+        if retired_count == 1 { "" } else { "s" }
     );
     Ok(())
 }

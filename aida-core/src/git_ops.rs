@@ -2393,8 +2393,10 @@ pub fn first_parent_sha(repo: &Path, sha: &str) -> Option<String> {
 /// was pushing unlocked (`HEAD != expected_sha`), drops `expected_sha` via
 /// `git rebase --onto <expected_sha>~1 <expected_sha>` so the peer's commit is
 /// preserved rather than erased by a blind `reset --hard HEAD~1`. If that
-/// rebase conflicts, aborts it and leaves `HEAD` untouched.
+/// rebase conflicts, aborts it and leaves `HEAD` untouched (`Ok(false)`).
+/// Non-conflict reset or rebase errors surface as `Err`.
 // trace:TASK-1930 | ai:agy
+// trace:TASK-1981 | ai:agy
 pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Result<bool> {
     if expected_sha.is_empty() {
         return Ok(false);
@@ -2404,13 +2406,27 @@ pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Resul
         let parent = format!("{expected_sha}~1");
         if current == expected_sha {
             let out = git(repo, &["reset", "--hard", &parent])?;
-            return Ok(out.success);
+            if !out.success {
+                anyhow::bail!(
+                    "git reset --hard {parent} failed while rolling back {expected_sha}: {}",
+                    out.stderr
+                );
+            }
+            return Ok(true);
         }
         if is_ancestor(repo, expected_sha, &current).unwrap_or(false) {
             let rebased = git(repo, &["rebase", "--onto", &parent, expected_sha])?;
-            if !rebased.success && rebase_in_progress(repo) {
-                let _ = git(repo, &["rebase", "--abort"]);
+            if rebased.success {
+                return Ok(true);
             }
+            if rebase_in_progress(repo) {
+                let _ = git(repo, &["rebase", "--abort"]);
+                return Ok(false);
+            }
+            anyhow::bail!(
+                "git rebase --onto {parent} {expected_sha} failed without conflict while rolling back {expected_sha}: {}",
+                rebased.stderr
+            );
         }
         Ok(false)
     })
@@ -4032,7 +4048,9 @@ pub fn configure_store_gc_auto(repo: &Path, threshold: u32) -> bool {
 pub fn apply_store_gc_auto_from_env(repo: &Path) {
     let override_val = std::env::var("AIDA_STORE_GC_AUTO").ok();
     if let Some(threshold) = resolve_store_gc_auto(override_val.as_deref()) {
-        let _ = configure_store_gc_auto(repo, threshold);
+        // trace:TASK-1981 | ai:agy
+        let _ =
+            crate::db::with_store_write_lock(repo, || Ok(configure_store_gc_auto(repo, threshold)));
     }
 }
 
@@ -4041,9 +4059,13 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
 /// Best-effort: failures are swallowed.
 // trace:TASK-1033 | ai:claude
 pub fn gc_auto(repo: &Path) -> bool {
-    git(repo, &["gc", "--auto"])
-        .map(|r| r.success)
-        .unwrap_or(false)
+    // trace:TASK-1981 | ai:agy
+    crate::db::with_store_write_lock(repo, || {
+        Ok(git(repo, &["gc", "--auto"])
+            .map(|r| r.success)
+            .unwrap_or(false))
+    })
+    .unwrap_or(false)
 }
 
 /// Opportunistic store maintenance for a sync chokepoint (`aida pull`,
@@ -4063,18 +4085,22 @@ pub fn gc_auto(repo: &Path) -> bool {
 /// `off`/`0` disables).
 // trace:STORY-733 | ai:claude
 pub fn opportunistic_store_gc(repo: &Path) {
-    apply_store_gc_auto_from_env(repo);
-    let _ = gc_auto(repo);
-    // STORY-733: the occasional aggressive consolidation. Self-throttling +
-    // best-effort — a failed aggressive repack must never break the sync.
-    let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
-    if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
-        if let Some(counts) = count_objects(repo) {
-            if counts.packs >= threshold as usize {
-                let _ = gc_aggressive(repo);
+    // trace:TASK-1981 | ai:agy
+    let _ = crate::db::with_store_write_lock(repo, || {
+        apply_store_gc_auto_from_env(repo);
+        let _ = gc_auto(repo);
+        // STORY-733: the occasional aggressive consolidation. Self-throttling +
+        // best-effort — a failed aggressive repack must never break the sync.
+        let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
+        if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
+            if let Some(counts) = count_objects(repo) {
+                if counts.packs >= threshold as usize {
+                    let _ = gc_aggressive(repo);
+                }
             }
         }
-    }
+        Ok(())
+    });
 }
 
 /// The pack-count high-water mark at which AIDA's opportunistic store
@@ -4155,7 +4181,8 @@ pub fn count_objects(repo: &Path) -> Option<StoreObjectCounts> {
 /// is unaffected. Returns the [`GitResult`] (caller decides how loud to be).
 // trace:STORY-733 | ai:claude
 pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
-    git(repo, &["gc", "--aggressive"])
+    // trace:TASK-1981 | ai:agy
+    crate::db::with_store_write_lock(repo, || git(repo, &["gc", "--aggressive"]))
 }
 
 /// Outcome of squashing the orphan store branch to a single snapshot commit.
@@ -4695,7 +4722,8 @@ pub fn register_node_full_identity(
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4802,7 +4830,8 @@ pub fn register_node_remote_only(
         match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(id),
             Ok(false) => {
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Remote-only node backfill: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4941,7 +4970,8 @@ pub fn set_node_identity_field(
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly. trace:BUG-1-069
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Node identity update: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -5140,7 +5170,8 @@ pub fn hijack_node(
                 if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
                     let _ = std::fs::remove_file(marker_path);
                 }
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 continue;
             }
             Err(e) => anyhow::bail!("Hijack push failed: {}", e),
@@ -5201,7 +5232,8 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 continue;
             }
             Err(e) => anyhow::bail!("Node unregister failed: {}", e),

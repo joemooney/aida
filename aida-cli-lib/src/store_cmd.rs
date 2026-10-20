@@ -97,21 +97,25 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
     }
 
     // ── Safe path: aggressive repack ──
-    let before = aida_core::git_ops::count_objects(&store_path);
-    if let Some(b) = before {
-        println!(
-            "{} {} packs, {} loose objects before compaction",
-            "Store:".bold(),
-            b.packs.to_string().cyan(),
-            b.loose.to_string().cyan()
-        );
-    }
-    println!("Running an aggressive repack (deep gc — this can take a moment)...");
-    let res = aida_core::git_ops::gc_aggressive(&store_path)?;
-    if !res.success {
-        anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
-    }
-    let after = aida_core::git_ops::count_objects(&store_path);
+    // trace:TASK-1981 | ai:agy
+    let (before, after) = aida_core::db::with_store_write_lock(&store_path, || -> Result<_> {
+        let before = aida_core::git_ops::count_objects(&store_path);
+        if let Some(b) = before {
+            println!(
+                "{} {} packs, {} loose objects before compaction",
+                "Store:".bold(),
+                b.packs.to_string().cyan(),
+                b.loose.to_string().cyan()
+            );
+        }
+        println!("Running an aggressive repack (deep gc — this can take a moment)...");
+        let res = aida_core::git_ops::gc_aggressive(&store_path)?;
+        if !res.success {
+            anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
+        }
+        let after = aida_core::git_ops::count_objects(&store_path);
+        Ok((before, after))
+    })?;
     match (before, after) {
         (Some(b), Some(a)) => println!(
             "{} {} -> {} packs, {} -> {} loose objects",
@@ -200,17 +204,29 @@ fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
         return Ok(());
     }
 
-    let message = format!(
-        "snapshot: compacted aida-store @ {} (squashed {} commits; backup: {})",
-        chrono::Local::now().format("%Y-%m-%d"),
-        commit_count,
-        backup_ref
-    );
-    let outcome = aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
+    // trace:TASK-1981 | ai:agy
+    let outcome = aida_core::db::with_store_write_lock(store_path, || -> Result<_> {
+        let locked_count = aida_core::git_ops::host_git_command(store_path)
+            .args(["rev-list", "--count", "HEAD"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| commit_count.clone());
+        let message = format!(
+            "snapshot: compacted aida-store @ {} (squashed {} commits; backup: {})",
+            chrono::Local::now().format("%Y-%m-%d"),
+            locked_count,
+            backup_ref
+        );
+        let outcome =
+            aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
 
-    // Reclaim the now-unreferenced object space (the old commits are still held
-    // by the backup ref, so this won't drop them until that ref is deleted).
-    let _ = aida_core::git_ops::gc_aggressive(store_path);
+        // Reclaim the now-unreferenced object space (the old commits are still held
+        // by the backup ref, so this won't drop them until that ref is deleted).
+        let _ = aida_core::git_ops::gc_aggressive(store_path);
+        Ok(outcome)
+    })?;
 
     println!(
         "{} squashed to snapshot {}",
