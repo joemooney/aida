@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T08:02:09.826476443Z
-modified_at: 2026-10-20T08:22:56.960181844Z
+modified_at: 2026-10-20T08:23:04.410096617Z
 req_type: Task
 tags:
 - from-review:PR-2747
@@ -22,6 +22,13 @@ relationships:
   target_id: 01a130fa-86cc-7933-8301-b80b6ea230ef
   created_at: 2026-10-20T08:22:56.960178081Z
   created_by: joe
+comments:
+- id: 01a15868-2bda-7130-904d-a3054c35cf28
+  author: joe
+  content: 'Advisor 2026-10-20 01:25: folded into BUG-1993 (item 3 of the fix-bug-1993 brief: revert the .git skip).'
+  created_at: 2026-10-20T08:23:04.410096617Z
+  modified_at: 2026-10-20T08:23:04.410096617Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15868-04fd-7550-b157-2a6a827238f6
   author: joe
