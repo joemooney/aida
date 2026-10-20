@@ -10867,6 +10867,11 @@ Emit a deduplicated informational tool-hook expiry notice
 Usage: aida role expiry-notice [OPTIONS]
 
 Options:
+      --client <CLIENT>
+          Target hook client protocol (`claude`, `codex`, or `agy`)
+          
+          [default: claude]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -34208,6 +34213,11 @@ Working on aida itself
     ],
     "about": "Emit a deduplicated informational tool-hook expiry notice",
     "flags": [
+      {
+        "name": "client",
+        "takes_value": true,
+        "help": "Target hook client protocol (`claude`, `codex`, or `agy`)"
+      },
       {
         "name": "format",
         "takes_value": true,
