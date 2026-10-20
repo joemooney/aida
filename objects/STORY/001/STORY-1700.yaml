@@ -17,7 +17,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T04:05:24.802270123Z
-modified_at: 2026-10-20T18:57:11.003418216Z
+modified_at: 2026-10-20T19:32:00.474991764Z
 req_type: Story
 relationships:
 - rel_type: References
@@ -128,6 +128,12 @@ comments:
   created_at: 2026-10-18T21:52:47.325668665Z
   modified_at: 2026-10-18T21:52:47.325668665Z
   session_id: 18e1ec81-d2bf-4c7e-9fbd-6c54e9fd07cf
+- id: 01a15acc-995a-7dd2-9ae1-88276cd015c4
+  author: joe
+  content: Commit 5b771e29f9 references this requirement
+  created_at: 2026-10-20T19:32:00.474991764Z
+  modified_at: 2026-10-20T19:32:00.474991764Z
+  session_id: f3b43458-b5f1-4732-9e7d-141e2991c03f
 history:
 - id: 01a142e3-013c-7d20-8c89-0379840eb0c2
   author: joe
