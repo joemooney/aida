@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T07:54:28.323605219Z
-modified_at: 2026-10-18T07:54:28.323605219Z
+modified_at: 2026-10-20T10:37:15.696442550Z
 req_type: Bug
+comments:
+- id: 01a158e3-0630-7c72-9560-c406000ae999
+  author: joe
+  content: 'Implementer sketch (overnight lane, 2026-10-20 03:40; spec still Draft, so not started). Cause: the operator''s global ~/.codex/AGENTS.md tells Codex to keep ''recent major updates'' in the project AGENTS.md, so Codex prepends a change paragraph to AGENTS.md (52 trace-tagged blocks now) and OVERVIEW.md (57) on every PR. No in-repo gate or template requires them. Fix: (a) add a rule to the generated AIDA block (template master aida-core/src/scaffolding/codex_md.rs, mirrored via make sync-templates): ''Do not add per-change notes to AGENTS.md or OVERVIEW.md; record them in the PR body and an aida comment on the spec; edit these files only for a real architecture change''. The repo-level rule overrides the global habit for Codex here. (b) As a stopgap, a .gitattributes ''merge=union'' for AGENTS.md and OVERVIEW.md, so local merge-ups of prepended paragraphs stop conflicting (GitHub''s server-side merge ignores it; the agents'' local ''git merge origin/main'' honours it). (c) Optionally, a one-time PR that moves the existing per-change blocks into their specs'' comments. That conflicts once with open PRs, so it ships alone. No architecture change; (a)+(b) is one small PR. The operator may also want to edit ~/.codex/AGENTS.md, which is outside the repo and not mine to touch.'
+  created_at: 2026-10-20T10:37:15.696442550Z
+  modified_at: 2026-10-20T10:37:15.696442550Z
+  session_id: 922261ed-530a-4e6c-afda-50941530bad0
 filed_at:
   code_sha: 188adef04b9056f190f0f8436ee652f4e4272d00
   branch: main
