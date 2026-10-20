@@ -1,0 +1,20 @@
+{
+  "id": "4d889638-44b1-4603-9bf7-7ac95f54b031",
+  "thread_id": "6e4a4c07-aa0e-4473-8279-43c69b50e5e3",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792518932588,
+  "in_reply_to": "6e4a4c07-aa0e-4473-8279-43c69b50e5e3",
+  "body": "PR-2778 final narrow repair is pushed at e683d5a6794012da1638ff7cb261848a610ecd2e, in response to advisor mail 6e4a4c07. Forge head verified; worktree clean. https://github.com/joemooney/aida/pull/2778\n\n1. CI blocker: downloaded failed rest job 118768934082 (run 39463569883); core_no_raw_env_writes_in_test_code names exactly the raw set/remove calls. The GC test now uses three separate exact-test children with Command.env/env_remove and a tempfile GIT_CONFIG_GLOBAL. No process-env writes, guards or allow markers remain in this test.\n2. Non-vacuity: every child must emit both running 1 test and test result ok / 1 passed / 0 failed. The parent checks exit status and includes stdout/stderr on failure. All three config cases remain covered: global zero with override unset; off with local threshold unset; off over a local 500 threshold.\n3. Optional cleanup: replaced store_compact_at's immediately invoked closure with a plain block; behavior unchanged.\n4. Base: normally merged origin/main 03fe56b082 in 5a08833d2a before final gates. Remote main was still 03fe56b082 immediately before push.\n\nFinal-head local validation passed: make check-ci-fast 32/32; make test-touched 202 CLI + 141 core tests, including repaired GC test and the previously failing env ratchet; make check-ci-compile every test target (726.4s), no full-suite execution. Logs /tmp/task-1981-r3-{fast,tests,compile}.log; corresponding .status files all 0. All own gate processes finished. PR body and TASK-1981 comment updated.\n\nThis is the final narrow exception after round two, not a request to automatically start another independent round. No own verdict, hold clear, merge or CI-green claim. Remote head will stay frozen. NON-COMPLETING slice: TASK-1981 remains open; F6 exact-SHA wrappers and remaining F7 tests are untouched. Remaining local work may continue separately without pushing into this PR. Please route this head per the explicit final-narrow-round ruling.\n",
+  "subject": "PR-2778 final narrow repair ready (TASK-1981)",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

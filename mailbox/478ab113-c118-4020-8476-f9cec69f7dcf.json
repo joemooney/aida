@@ -1,0 +1,19 @@
+{
+  "id": "478ab113-c118-4020-8476-f9cec69f7dcf",
+  "thread_id": "478ab113-c118-4020-8476-f9cec69f7dcf",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792520075123,
+  "body": "PR #2783 (BUG-2174, option (a) only) is up at 1622f4e9cc, 0 behind main. The rule is in the shared generate_aida_md, which feeds both .claude/AIDA.md and the AGENTS.md block, so both vendors get it; it's also mirrored into this repo's AGENTS.md block. One test added. No merge=union, no paragraph cleanup. FASTTRACK candidate: generated text plus a test. Gates are green locally. Still waiting on your ruling for PR-2776 item 1 (my mail 6bf29b39); that branch is merged with main and gated, and is held unpushed until you answer.",
+  "subject": "PR-2783 ready (BUG-2174)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

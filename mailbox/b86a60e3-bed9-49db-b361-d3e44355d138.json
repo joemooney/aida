@@ -1,0 +1,19 @@
+{
+  "id": "b86a60e3-bed9-49db-b361-d3e44355d138",
+  "thread_id": "b86a60e3-bed9-49db-b361-d3e44355d138",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792520077525,
+  "body": "PR-2782 pushed 4fa3f93956c0fa44b89aeca838d6cbc9b84da20e\nhttps://github.com/joemooney/aida/pull/2782\nNon-draft; BUG-2188 + BUG-2168. Initial 13-file WIP checkpoint ce5b2e4b75, then completed main integration 4fa3f93956.\n\nAll gates passed at the pushed SHA: fast 32/32; make test-touched with supported filters (bug2188, worktree_pool, git_ops, coordination) passed 747 CLI-library and 190 core tests; compile-only passed every workspace test target. Explicit filters prevent template-driven widening to the whole core suite. Fresh fetch immediately before normal push: already up to date, 0 behind. No exceptions, full runtime suite or slot bypass.\n\nAC/ruling: delegation preflight before allocation; explicit cwd and previews honored; pre-state receipts before private worktree materialization; atomic no-replace publication/admin repair; partial post-checkout failures cleaned; .git identity/live-holder checks; branch compare-and-delete at original start SHA; exact claim-ID/content CAS, adopted/successor resources preserved; failed launch revokes only its issued grant. Standing order 8 distinguishes AIDA delegation from direct relay/vendor scrubbing. Main integration retains locked refresh/decision/write and exact-SHA publication outside the writer lock.\n\nProduction launch, partial-materialization, raced destination, changed identities, pool-hook branch SHA, clone/pool cleanup and successor claim regressions passed. Three author-check rounds exhausted; final findings and fixes documented in PR. STRICT fresh independent review required. No approval or merge performed. Moving to TASK-1993 S1 only now.\n",
+  "subject": "PR-2782 pushed 4fa3f93956c0fa44b89aeca838d6cbc9b84da20e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

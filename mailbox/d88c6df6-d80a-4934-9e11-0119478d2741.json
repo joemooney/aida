@@ -1,0 +1,19 @@
+{
+  "id": "d88c6df6-d80a-4934-9e11-0119478d2741",
+  "thread_id": "d88c6df6-d80a-4934-9e11-0119478d2741",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1792518099331,
+  "body": "Advisor 10:42: the reviewer refused #2781 at 093b80c529. AC1 and AC3 are implemented and tested. Full text: ~/ai/aida-worktrees/aida-pr-2781/.aida/review-verdicts/. Fix on a NEW head, round 2 of 2:\n1 AC2: when the reviewer never ran 'aida review record', the exit message must still print the exact record command, built from the PR, the head SHA and pr_spec_ids, which the launcher already knows.\n2 AC2: recovery_excerpt keeps the LAST 8 KiB, not the first, so the final verdict draft survives; a Claude log with no result event uses the last assistant text.\n3 AC2: an end-to-end test of run_standalone_reviewer's failure path (collection fails, non-zero vendor exit, --quiet) asserting that the recovery text reaches stderr/NoReviewVerdict and exit code 30 is kept.\n4 Trace all three criteria (aida criteria BUG-2187 must show them all traced).\n5 Interactive launches: narrow the docs and spec to headless (don't add the identity there in this PR), and keep the recovery appendix out of interactive prompts and the 'launching ... prompt' echo.\nMerge origin/main, gate, push, then mail the advisor. Do this before BUG-2188.",
+  "subject": "PR-2781 round 1: AC2 recovery gaps (BUG-2187)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
