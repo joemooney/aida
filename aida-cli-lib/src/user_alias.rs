@@ -521,8 +521,12 @@ mod tests {
         });
     }
 
+    // trace:TASK-1970 | ai:antigravity
     #[test]
     fn project_overrides_personal_on_name_clash() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path();
         write(
