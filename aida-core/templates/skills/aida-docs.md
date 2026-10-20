@@ -111,8 +111,8 @@ aida list --type <type>
 aida show <SPEC-ID>
 
 # Export requirements (formats: mapping, tree, json)
-aida export --format tree
-aida export --format json
+aida export --export-format tree
+aida export --export-format json
 ```
 
 ## Best Practices

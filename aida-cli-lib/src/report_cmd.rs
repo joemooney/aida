@@ -1069,6 +1069,13 @@ fn run_report(
 ) -> anyhow::Result<crate::command_registry::Flow> {
     use crate::*;
     let args = <ReportArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    // trace:BUG-2189 | ai:claude
+    if matches!(
+        args.command,
+        Some(crate::cli::ReportCommand::AiIntegration { .. })
+    ) {
+        crate::command_registry::refuse_global_format(ctx, "report ai-integration")?;
+    }
     match &ctx.store {
         None => Ok(crate::command_registry::Flow::Continue),
         Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
