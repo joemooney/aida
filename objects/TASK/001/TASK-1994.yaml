@@ -6,17 +6,26 @@ description: |
   trace.rs:67 (PR-2747) skips any directory containing `.git`, so git submodules are skipped too, not only the nested linked worktrees (`.claude/worktrees`) it targets. walk_source_for_traces is shared with the doctor trace checks (doctor_cmd.rs:12916, 13728), so doctor orphan/coverage results change for projects with submodules. Nothing tests or documents that. Narrow the skip to linked worktrees (a `.git` file whose gitdir points into <repo>/.git/worktrees/), or document and test the submodule exclusion.
 
   Raised in review of PR-2747: https://github.com/joemooney/aida/pull/2747#issuecomment-6286331573
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T08:02:09.826476443Z
-modified_at: 2026-10-20T08:02:09.826476443Z
+modified_at: 2026-10-20T08:22:54.461858037Z
 req_type: Task
 tags:
 - from-review:PR-2747
 - severity:minor
 - trace
+history:
+- id: 01a15868-04fd-7550-b157-2a6a827238f6
+  author: joe
+  timestamp: 2026-10-20T08:22:54.461850418Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 23a02f2f927c9adc4f6c2654e99dd850e27ed448
   branch: pr-2747
