@@ -557,6 +557,7 @@ mod tests {
                 rows: Some(vec![row("Build", "CI", "pending")]),
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
+                registration_polls: std::cell::Cell::new(0),
             };
             let root = tempfile::tempdir().unwrap();
             let start = Instant::now();
@@ -589,6 +590,7 @@ mod tests {
                 rows: Some(rows),
                 required: vec![],
                 row_reads: std::cell::Cell::new(0),
+                registration_polls: std::cell::Cell::new(0),
             };
             let result = wait_for_ship_ci(
                 root.path(),
@@ -599,9 +601,13 @@ mod tests {
                 Some(Duration::ZERO),
                 Duration::from_secs(15),
             );
-            (result, forge.row_reads.get())
+            (
+                result,
+                forge.row_reads.get(),
+                forge.registration_polls.get(),
+            )
         };
-        let (green, reads) = wait(
+        let (green, reads, polls) = wait(
             CheckRegistration::Registered,
             vec![row("Build", "CI", "pass")],
         );
@@ -609,21 +615,33 @@ mod tests {
             matches!(green, Ok(crate::forge::CiState::Success)),
             "{green:?}"
         );
-        assert_eq!(reads, 1);
+        assert_eq!((reads, polls), (1, 1));
 
-        let (pending, reads) = wait(
+        let (pending, reads, polls) = wait(
             CheckRegistration::Registered,
             vec![row("Build", "CI", "pending")],
         );
         let message = format!("{:#}", pending.unwrap_err());
         assert!(message.contains("still pending: Build"), "{message}");
-        assert_eq!(reads, 1);
+        assert_eq!((reads, polls), (1, 1));
 
-        let (red, _) = wait(
+        let (red, _, _) = wait(
             CheckRegistration::Registered,
             vec![row("Build", "CI", "fail")],
         );
         assert!(format!("{:#}", red.unwrap_err()).contains("CI is red"));
+
+        // Checks not registered yet: one registration poll, then the timeout
+        // reports what was polled, not a placeholder. No rows are read.
+        let (unregistered, reads, polls) = wait(CheckRegistration::NotYet, vec![]);
+        let error = unregistered.unwrap_err();
+        assert_eq!(crate::exit_code_for_error(&error), 21);
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("still pending: checks have not registered"),
+            "{message}"
+        );
+        assert_eq!((reads, polls), (0, 1));
     }
 
     // trace:BUG-2184 | ai:claude
@@ -814,6 +832,7 @@ mod tests {
         rows: Option<Vec<CheckRow>>,
         required: Vec<String>,
         row_reads: std::cell::Cell<usize>,
+        registration_polls: std::cell::Cell<usize>,
     }
     impl crate::forge::Forge for FakeForge {
         fn authenticated_user_login(&self) -> anyhow::Result<String> {
@@ -914,6 +933,8 @@ mod tests {
             &self,
             _: &crate::forge::ChangeRef,
         ) -> anyhow::Result<crate::forge::CheckRegistration> {
+            self.registration_polls
+                .set(self.registration_polls.get() + 1);
             let mut v = self.registrations.borrow_mut();
             Ok(if v.len() > 1 { v.remove(0) } else { v[0] })
         }
@@ -942,6 +963,7 @@ mod tests {
             rows,
             required: vec![HOLD_GATE_CHECK.into()],
             row_reads: std::cell::Cell::new(0),
+            registration_polls: std::cell::Cell::new(0),
         }
     }
 
