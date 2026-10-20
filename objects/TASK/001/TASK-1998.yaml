@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/tests/task_1507_history_cache_tests.rs, doc comment on `real_git()` (~line 205): "Defensive hardening; the CI root cause is unconfirmed." PR-2771 confirmed the root cause (detached git auto-maintenance on git 2.54+, guarded by NO_AUTO_MAINTENANCE), so this sentence now contradicts the NO_AUTO_MAINTENANCE doc a few lines below. Reword it to say PATH pinning is general hygiene and point at NO_AUTO_MAINTENANCE / BUG-2118 for the actual CI fix.
 
   Raised in review of PR-2771: https://github.com/joemooney/aida/pull/2771
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:55:04.808474574Z
-modified_at: 2026-10-20T09:55:04.808474574Z
+modified_at: 2026-10-20T10:56:11.243065653Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2771
 - severity:cosmetic
+history:
+- id: 01a158f4-59eb-7353-888b-c78da1d7540c
+  author: joe
+  timestamp: 2026-10-20T10:56:11.243030230Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 8165eca0c9a7b7a9063b532bcf90993336a4146d
   branch: main
