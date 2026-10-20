@@ -1,0 +1,19 @@
+{
+  "id": "a3040e69-e64d-4d65-9cbd-ed85f1e22f38",
+  "thread_id": "a3040e69-e64d-4d65-9cbd-ed85f1e22f38",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792478774332,
+  "body": "Fixer bug-2130 STOPPED before any edit (no claim, no commits; worktree clean at 474735dd24).\n1) Condition (c) unmet: reader commit 3f7bcd28fd (TASK-1750 steps 1+2) is in NO tagged release. 'git tag --contains 3f7bcd28fd' = empty; latest release v0.15.0 (2026-09-12). Your 2026-10-18 ruling on BUG-2130 says the writer switch lands only after that release, and your later mail to agy1 says '#2735: holding on its release condition is correct'. This brief says writers record linux-starttime now, which is the same switch.\n2) Duplicate work: PR-2735 (agy/bug-2130, OPEN, MERGEABLE) already implements the writer switch + scheme-aware readers + btime-shift tests, and has two rounds of review findings (/tmp literal, adopt-lease recycled-pid test, legacy lock-blocks test, worktree_gc owner_is_caller, leases lease_minted_by_returned_phase_child, ...).\n3) The only release-independent piece, 'legacy rfc3339 mismatch resolves to alive', is Option C, which you rejected on 2026-10-14.\nOptions: (A) keep holding; operator cuts a release, then agy finishes PR-2735 rework. (B) you waive (c) on BUG-2130, and I take over PR-2735's rework instead of opening a duplicate PR. (C) you reverse the Option-C rejection; that is a new STRICT design. Reply with A/B/C.",
+  "subject": "BLOCKED: BUG-2130 brief conflicts with standing condition (c) + duplicates PR-2735",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
