@@ -3,12 +3,12 @@ spec_id: BUG-2001
 agreed_id: BUG-2001
 title: OS wrapper binds headless_worktree_root() read-write, which falls back to cwd/$HOME outside git
 description: 'Found during BUG-1971. claude_program_and_args / os_wrapped_program_and_args (STORY-612) bind headless_worktree_root() rw. That helper falls back to cwd (then ''.'') when no git root resolves, so a contained headless launch outside a git repo gets an OS-level rw bind of cwd, possibly $HOME. BUG-1971 made the settings-level write boundary fail closed in this case; the OS wrapper should match (refuse or bind nothing rw). Expected: no git root => contained launch refuses or binds no rw worktree.'
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T00:51:24.065349766Z
-modified_at: 2026-10-20T05:17:39.855354657Z
+modified_at: 2026-10-20T16:10:26.314036663Z
 req_type: Bug
 tags:
 - contained
@@ -56,6 +56,21 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a15a14-0e83-7ec3-9088-3bd68e0c12d0
+  author: aida-auto-bump
+  timestamp: 2026-10-20T16:10:26.307532940Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15a14-0e8a-72b2-aeec-39efb53e0cca
+  timestamp: 2026-10-20T16:10:26.314024452Z
+  agent: aida
+  commit_sha: 1456ad35b0a1fb175e6a53c0a774396bd04e3c6a
+  summary: os_wrapped_program_and_args refuses outside git (session.rs:3440-3451), test os_wrap_outside_git_refuses_instead_of_binding_cwd_rw; CI green at 8c3cbe305d.
+  review_verdict: approved
 execution_mode: guided
 filed_at:
   code_sha: 6dfba7ac1c808da98f75e148d486a21f2a0bea3a
@@ -65,11 +80,7 @@ filed_at:
   aida_build_sha: 97453570d6
   vendor: claude
   session: 708486eb-7208-40d5-9d42-c2f9760386b3
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2001 PASS on its own (os_wrap refuses outside git; test os_wrap_outside_git_refuses_instead_of_binding_cwd_rw). PR held for BUG-2012 rework
-  recovery_hint: address the review findings, move BUG-2001 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T05:17:39.855354657Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T16:10:26.307527835Z
+  completion_sha: 1456ad35b0a1fb175e6a53c0a774396bd04e3c6a
