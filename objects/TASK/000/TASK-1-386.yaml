@@ -12,13 +12,20 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T17:07:36.838882013Z
-modified_at: 2026-10-20T17:07:36.838882013Z
+modified_at: 2026-10-20T22:22:24.879344363Z
 req_type: Task
 tags:
 - carried-from:BUG-2190
 - finding-hash:844a01fb
 - from-review:BUG-2190
 - kind:carried-forward
+comments:
+- id: 01a15b68-9c6f-74f3-b08a-6b4a5f9aa696
+  author: joe
+  content: Superseded into sweep TASK-1954 (advisor triage 2026-10-20 15:25); the item carries over there verbatim.
+  created_at: 2026-10-20T22:22:24.879344363Z
+  modified_at: 2026-10-20T22:22:24.879344363Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15a93-8992-7cf0-a37d-e29ebf79df82
   author: joe
