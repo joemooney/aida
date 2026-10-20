@@ -1,3 +1,10 @@
+`aida review watch` dispatches attested reviews without waiting for CI. Shared
+versioned runtime state reserves at most two reviews before spawning; ambiguous
+receipts retain capacity. Stale overlapping heads notify the forge author once;
+new heads wait for prior work. No process termination or readiness/merge action
+exists in this slice. See [review watch](docs/cli/06-roles-sessions.md#watching-for-new-review-heads).
+<!-- trace:TASK-1993 | ai:codex -->
+
 CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
 `Build (ubuntu-latest)` remains the required check. CLI halves use committed
 main-run timings; each shard keeps its timing budget and root hygiene check.

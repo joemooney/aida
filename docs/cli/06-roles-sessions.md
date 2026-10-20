@@ -291,3 +291,41 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+
+## Watching for new review heads
+
+`aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and
+starts ordinary attested reviewers as soon as a head is eligible. It does not
+wait for CI. Run it from a shell with a validated grant that delegates the
+reviewer seat. `--once` performs one discovery pass and leaves admitted reviews
+running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
+seconds, and `--max-concurrent` accepts one or two reviewers (default two).
+`--vendor` uses the ordinary queue-work vendor selection when omitted.
+
+Discovery pins origin's forge host/project and fetches the default branch and
+change head into private temporary refs. A symbolic `origin/HEAD` is required;
+unknown metadata, head movement, or unreadable base evidence refuses dispatch.
+A stale base with overlapping changed paths receives a local mailbox request to
+merge the default branch; a stale non-overlapping head remains reviewable. The
+recipient is the exact forge author login/username, with no inferred mapping to
+an agent seat. Read that identity's mailbox with `aida mailbox inbox <login>`.
+The watcher never updates a branch.
+
+Version-1 atomic state lives under the main worktree's `.aida/review-watch/`.
+Permanent admission and per-change lock files coordinate watcher instances.
+Each launch is reserved before spawn, and its dispatcher records PID, process
+start identity and boot ID before calling `queue work ... --role reviewer
+--no-human`. Pending/running receipts count toward global capacity, even after
+a PID disappears or is reused. A missing/corrupt/unsafe state file refuses
+reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
+and `aida session leases --all` before operator recovery. Do not delete lock
+files or clear ambiguous receipts while a reviewer may still be running.
+
+Stale-head notifications have deterministic IDs and retry without overwriting
+mailbox reader flags. Delivery is recorded only after successful publication.
+A head is launched once, with at most two completed/admitted rounds per change;
+ordinary queue-work risk and review authority checks still apply. New heads wait
+while an earlier review is active or ambiguous. Review instructions forbid local
+Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
+authority, process termination, ship-ready report, or merge action.
+<!-- trace:TASK-1993 | ai:codex -->
