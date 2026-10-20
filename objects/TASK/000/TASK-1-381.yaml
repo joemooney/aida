@@ -14,7 +14,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-20T06:39:15.854797685Z
-modified_at: 2026-10-20T08:23:39.767275391Z
+modified_at: 2026-10-20T08:23:49.643135015Z
 req_type: Task
 tags:
 - carried-from:TASK-1985
@@ -26,6 +26,13 @@ relationships:
   target_id: 01a157ad-ed53-7710-b450-88a8bda6c76f
   created_at: 2026-10-20T08:23:39.767271482Z
   created_by: joe
+comments:
+- id: 01a15868-dc8b-7360-b3e9-cac0114270e7
+  author: joe
+  content: 'Advisor 2026-10-20 01:25: folded into TASK-1987 (duplicate).'
+  created_at: 2026-10-20T08:23:49.643135015Z
+  modified_at: 2026-10-20T08:23:49.643135015Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a15817-eafe-77d3-837c-242caf1cde83
   author: joe
