@@ -96,6 +96,12 @@ pub fn clone_lease_roots(main: &Path) -> Vec<PathBuf> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "toml"))
         .filter_map(|p| read_regular_file(&p))
+        // BUG-2192: most of `.aida/sessions` is not a clone lease, and this
+        // runs on every host git call. A TOML value that parses to "clone"
+        // needs the literal text or an escape (a backslash), so a body with
+        // neither can skip the parse without changing what is found.
+        // trace:BUG-2192 | ai:claude
+        .filter(|body| body.contains("clone") || body.contains('\\'))
         .filter_map(|body| toml::from_str::<toml::Value>(&body).ok())
         .filter(|lease| lease.get("tree_kind").and_then(|v| v.as_str()) == Some("clone"))
         .filter_map(|lease| lease.get("worktree_path")?.as_str().map(PathBuf::from))
@@ -156,4 +162,48 @@ pub fn host_git_refusal(clone_root: &Path) -> String {
          configuration and hooks are writable by the seat",
         clone_root.display()
     )
+}
+
+#[cfg(test)]
+mod bug_2192_lease_scan_tests {
+    use super::clone_lease_roots;
+
+    /// The pre-parse filter skips only bodies that cannot hold a "clone"
+    /// value: a plain clone lease and one that spells it with a TOML escape
+    /// are both found; a worktree lease and an activity file are not.
+    // trace:BUG-2192 | ai:claude
+    #[test]
+    fn lease_scan_filter_keeps_every_clone_lease() {
+        let main = tempfile::TempDir::new().unwrap();
+        let sessions = main.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let plain = main.path().join("aida-seat-plain");
+        let escaped = main.path().join("aida-seat-escaped");
+        let write = |name: &str, body: String| std::fs::write(sessions.join(name), body).unwrap();
+        write(
+            "a.toml",
+            format!(
+                "tree_kind = \"clone\"\nworktree_path = \"{}\"\n",
+                plain.display()
+            ),
+        );
+        write(
+            "b.toml",
+            format!(
+                "tree_kind = \"\\u0063lone\"\nworktree_path = \"{}\"\n",
+                escaped.display()
+            ),
+        );
+        write(
+            "c.toml",
+            "tree_kind = \"worktree\"\nworktree_path = \"/tmp/x\"\n".to_string(),
+        );
+        write("c.activity.toml", "last = 1\n".to_string());
+
+        let mut found = clone_lease_roots(main.path());
+        found.sort();
+        let mut want = vec![plain, escaped];
+        want.sort();
+        assert_eq!(found, want);
+    }
 }
