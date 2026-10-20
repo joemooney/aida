@@ -199,6 +199,9 @@ memory before relying on it. Prefer the `$aida-memory-query` and
         // `aida list` for project size; this file is conventions, not
         // state. trace:TASK-1-098 | ai:claude
         s.push_str("\n\n");
+        // BUG-2174: "Where change notes go" keeps per-change paragraphs out of
+        // AGENTS.md/OVERVIEW.md, which made every merge re-conflict open PRs.
+        // trace:BUG-2174 | ai:claude
         s.push_str(
             "### Agent surface\n\
              \n\
@@ -281,6 +284,13 @@ memory before relying on it. Prefer the `$aida-memory-query` and
              \n\
              Set `AIDA_COMMIT_STRICT=true` (or commit through the `/aida-commit` skill) to\n\
              enforce; otherwise the commit-msg hook just warns on non-conforming messages.\n\
+             \n\
+             ## Where change notes go\n\
+             \n\
+             Do not add per-change notes to `AGENTS.md` or `OVERVIEW.md`; record them in\n\
+             the PR body and an `aida comment add` on the spec. Edit these files only for a\n\
+             real architecture change. A paragraph prepended by every PR makes each merge\n\
+             conflict with every other open PR.\n\
              \n\
              ## Capture proactively, not reactively\n\
              \n\
@@ -669,6 +679,32 @@ mod tests {
         let actual =
             format!("{HEADER}{body}\n## Claude Code skills (slash commands)\n\nTAMPERED\n");
         assert!(!aida_md_matches(&actual, &expected));
+    }
+
+    /// BUG-2174: both vendors' generated conventions tell agents to keep
+    /// per-change notes out of AGENTS.md/OVERVIEW.md.
+    // trace:BUG-2174 | ai:claude
+    #[test]
+    fn change_notes_rule_reaches_claude_and_agents_blocks() {
+        use crate::models::RequirementsStore;
+        use crate::scaffolding::{ScaffoldConfig, Scaffolder};
+        use std::path::PathBuf;
+
+        let store = RequirementsStore::default();
+        let scaffolder = Scaffolder::new(PathBuf::from("aida-bug2174"), ScaffoldConfig::default());
+        let rule = "Do not add per-change notes to `AGENTS.md` or `OVERVIEW.md`";
+        for (surface, text) in [
+            ("AIDA.md", scaffolder.generate_aida_md(&store)),
+            ("AGENTS.md", scaffolder.generate_agents_md(&store)),
+        ] {
+            assert!(text.contains("## Where change notes go"), "{surface}");
+            assert!(text.contains(rule), "{surface}");
+        }
+        let block = scaffolder.generate_aida_md_for_agents(&store);
+        assert!(
+            extract_aida_block(&block).is_some_and(|inner| inner.contains(rule)),
+            "the rule sits inside the auto-upgraded AGENTS.md block"
+        );
     }
 
     /// End-to-end regression for TASK-125: the AIDA.md that
