@@ -5671,7 +5671,10 @@ pub(crate) fn handle_init_distributed_sibling(
                 }
                 Ok(false) => {
                     // Remote has content — pull first then push
-                    git_ops::pull_rebase(&store_dir, "origin", &branch)?;
+                    // trace:TASK-1930 | ai:agy
+                    aida_core::db::with_store_write_lock(&store_dir, || {
+                        git_ops::pull_rebase(&store_dir, "origin", &branch)
+                    })?;
                     git_ops::push(&store_dir, "origin", &branch)?;
                     println!("  {} with remote and pushed", "Synced".green(),);
                 }
