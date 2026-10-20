@@ -49,6 +49,12 @@ default_limit = 10
 "task_1527_refresh_worker:tests/task_1527_refresh_worker.rs" = 15  # max measured 6.8s, median 6.4s over 8 runs, 7 tests
 "task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 8.2s, median 7.8s over 8 runs, 4 tests
 
+# Focus/status disclosure fixture: full original matrix measured 51.13s on
+# the loaded local agent profile; the reduced renderer/status matrix keeps
+# each axis covered separately. CI/debug budget includes headroom for setup.
+# trace:BUG-2190 | ai:codex
+"bug_2190_list_focus_disclosure:tests/bug_2190_list_focus_disclosure.rs" = 80
+
 # Per-lane budgets for a binary split across lanes; test-timings.py --lane
 # applies them over [budget]. Each lib half's time on PR-2769 runs 39383875258,
 # 39396053306 and 39398646423, recomputed for the halves these weights produce
