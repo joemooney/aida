@@ -11255,3 +11255,11 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/task_1981_node_writer_tests.rs"]
+mod task_1981_node_writer_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1981_gc_config_tests.rs"]
+mod task_1981_gc_config_tests;

@@ -298,3 +298,87 @@ fn task_1981_orphan_queue_heal_waits_and_rechecks_removal() {
     child.unwrap().join().unwrap();
     assert!(storage.queue_list(&user, false).unwrap().is_empty());
 }
+
+#[test]
+fn task_1981_runtime_untracking_waits_and_commits_after_peer() {
+    use aida_core::git_ops;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let store = root.join(".aida-store");
+    git_ops::init(&store).unwrap();
+    git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
+    let git = |args: &[&str]| {
+        let output = git_ops::host_git_command(&store)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+    for (key, value) in [
+        ("maintenance.auto", "false"),
+        ("gc.auto", "0"),
+        ("commit.gpgSign", "false"),
+    ] {
+        git(&["config", key, value]);
+    }
+    std::fs::create_dir_all(store.join(".aida")).unwrap();
+    let runtime = store.join(".aida/node.toml");
+    std::fs::write(&runtime, "node_id = 'n1'\n").unwrap();
+    git(&["add", ".aida/node.toml"]);
+    git(&["commit", "-qm", "seed tracked runtime"]);
+    let head = git_ops::head_sha(&store).unwrap();
+    let index = std::fs::read(store.join(".git/index")).unwrap();
+    let before = aida_core::db::store_write_lock_contended_for(&store);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut child = None;
+    let mut peer = String::new();
+    aida_core::db::with_store_write_lock(&store, || {
+        let root = root.clone();
+        child = Some(std::thread::spawn(move || {
+            let finding = DoctorFinding {
+                category: "store-tracked-runtime".into(),
+                id: ".aida/node.toml".into(),
+                summary: "runtime".into(),
+                action: "untrack".into(),
+                safe_heal: true,
+            };
+            tx.send(heal_doctor_store_tracked_runtime(&root, &finding))
+                .unwrap();
+        }));
+        let started = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&store) == before {
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "heal never contended"
+            );
+            assert!(rx.try_recv().is_err(), "heal escaped writer lock");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(git_ops::head_sha(&store)?, head);
+        assert_eq!(std::fs::read(store.join(".git/index"))?, index);
+        assert!(!store.join(".gitignore").exists());
+        std::fs::write(store.join("peer.txt"), "peer")?;
+        git(&["add", "peer.txt"]);
+        git(&["commit", "-qm", "peer"]);
+        peer = git_ops::head_sha(&store)?;
+        Ok(())
+    })
+    .unwrap();
+    let result = rx.recv_timeout(Duration::from_secs(20)).unwrap().unwrap();
+    child.unwrap().join().unwrap();
+    assert_eq!(result.status, "healed");
+    assert_eq!(git(&["rev-parse", "HEAD^"]), peer);
+    assert_eq!(git(&["show", "HEAD:peer.txt"]), "peer");
+    assert!(git(&["ls-files", ".aida/node.toml"]).is_empty());
+    assert_eq!(
+        std::fs::read_to_string(&runtime).unwrap(),
+        "node_id = 'n1'\n"
+    );
+    assert!(git(&["show", "HEAD:.gitignore"]).contains(".aida/node.toml"));
+    assert!(git(&["status", "--porcelain"]).is_empty());
+}

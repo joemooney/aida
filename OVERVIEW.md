@@ -1121,6 +1121,11 @@ lock their read/write/commit window. Interactive repairs restrict mutations to
 confirmed edges or blocks, while counter-scope migration refuses new active
 unconfirmed blocks before changing policy. Whole-store saves already lock and
 perform optimistic conflict detection; the inventory distinguishes that
-protection from in-lock reloads. See
+protection from in-lock reloads. Init and dev-release publication stage, commit
+and capture the branch/SHA under the writer lock, then publish that exact SHA
+after unlocking. Only non-fast-forward failures rebase and capture one new
+snapshot; retry failures, including hypothesis evidence refusals, propagate.
+Initial init outages retain the offline warning; release sync remains best effort
+at the command boundary, with stage/status/commit errors reported before any push. See
 [store writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
