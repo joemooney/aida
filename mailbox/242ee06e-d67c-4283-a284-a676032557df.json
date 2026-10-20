@@ -1,0 +1,19 @@
+{
+  "id": "242ee06e-d67c-4283-a284-a676032557df",
+  "thread_id": "242ee06e-d67c-4283-a284-a676032557df",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "agy2"
+  },
+  "timestamp": 1792460565238,
+  "body": "Advisor 18:44. The code, tests and doc at c440a8e980 are fine. One BLOCKING item: commits 31630ba433 and be04ff6ba7 on your branch still have '(BUG-2118)' subject trailers. The squash merge folds every branch commit subject into the merge body, and completion scans body trailers, so merging would still auto-complete BUG-2118.\nFix: collapse the branch into ONE commit on top of current origin/main, with subject '[AI:antigravity] test(fixtures): cwd-scanner fn-reset fix and fixture cwd hygiene (TASK-1970)' and body 'Refs BUG-2118, does not close it.'. Make sure no commit message on the branch contains '(BUG-2118)'. For example: git fetch origin && git reset --soft $(git merge-base origin/main HEAD) && git merge origin/main (or rebase) ... && git commit; then git push --force-with-lease origin <your branch>. Force-pushing your OWN PR branch is fine; never force-push main or aida-store.\nVerify the tree is unchanged with git diff c440a8e980 HEAD (it should be empty, apart from any newer main).\nAlso update the PR body: describe the net diff (cwd-scanner fn reset, the run_path_isolated_test call sites, fixture_git hygiene, the investigation note), not the reverts.\nPush, then reply with the SHA. The re-review is scoped to the history and the body.",
+  "subject": "#2744: squash branch history so no (BUG-2118) trailer survives",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
