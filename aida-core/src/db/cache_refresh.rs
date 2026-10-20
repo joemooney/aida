@@ -145,7 +145,7 @@ impl RefreshLock {
     /// `Ok(None)` means another holder kept it the whole time.
     // trace:BUG-1940 | ai:claude
     pub fn acquire_within(cache_path: &Path, bound: Duration) -> std::io::Result<Option<Self>> {
-        let deadline = std::time::Instant::now() + bound;
+        let deadline = std::time::Instant::now() + capped_lock_wait(bound);
         loop {
             if let Some(lock) = Self::try_acquire(cache_path)? {
                 return Ok(Some(lock));
@@ -160,6 +160,26 @@ impl RefreshLock {
     pub fn is_nested(&self) -> bool {
         self.nested
     }
+}
+
+/// `bound`, shortened to `AIDA_TEST_CACHE_LOCK_WAIT_MS` when that is set. A
+/// test seam (like `AIDA_TEST_GH_BINARY`): a binary-driving test that holds
+/// the refresh lock for the whole wait gets the refusal without sitting out
+/// the production bound. It can only shorten the wait, never lengthen it.
+// trace:TASK-1959 | ai:claude
+fn capped_lock_wait(bound: Duration) -> Duration {
+    cap_lock_wait(
+        bound,
+        std::env::var("AIDA_TEST_CACHE_LOCK_WAIT_MS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn cap_lock_wait(bound: Duration, cap_ms: Option<&str>) -> Duration {
+    cap_ms
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map_or(bound, |ms| bound.min(Duration::from_millis(ms)))
 }
 
 /// `registry_entry=None` beside a contended `direct_flock` looks
@@ -1251,5 +1271,19 @@ except OSError:
             assert_eq!(nested.metadata()["stale"], false);
         }
         assert_eq!(scope.metadata()["stale"], true);
+    }
+
+    // trace:TASK-1959 | ai:claude
+    #[test]
+    fn task_1959_lock_wait_cap_only_shortens() {
+        let ten = Duration::from_secs(10);
+        assert_eq!(cap_lock_wait(ten, None), ten);
+        assert_eq!(cap_lock_wait(ten, Some("200")), Duration::from_millis(200));
+        assert_eq!(cap_lock_wait(ten, Some("60000")), ten, "never lengthens");
+        assert_eq!(
+            cap_lock_wait(ten, Some("soon")),
+            ten,
+            "unparsable is ignored"
+        );
     }
 }
