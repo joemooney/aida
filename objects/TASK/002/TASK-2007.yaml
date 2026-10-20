@@ -6,12 +6,12 @@ description: |
   session.rs contained_settings_json_with_boundary (3135-3167) appends the main-checkout deny paths only after the sandbox filesystem object is built, so they reach permissions.deny only. BUG-1982's extra_deny writes both layers explicitly; do the same here instead of relying on Claude Code's implicit merge.
 
   Raised in review of PR-2748: https://github.com/joemooney/aida/pull/2748#issuecomment-6293042943
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T14:20:04.780664128Z
-modified_at: 2026-10-20T22:24:12.037701750Z
+modified_at: 2026-10-20T22:24:15.037300109Z
 req_type: Task
 tags:
 - contained
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-20T22:24:12.037701750Z
   modified_at: 2026-10-20T22:24:12.037701750Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15b6a-4abd-7fc0-8202-818ed71df9ca
+  author: joe
+  timestamp: 2026-10-20T22:24:15.037296784Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 111462ca0b91e1e728da282a2a6392772149a5b1
   branch: pr-2748
