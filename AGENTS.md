@@ -1,3 +1,9 @@
+CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
+`Build (ubuntu-latest)` remains the required check. CLI halves use committed
+main-run timings; each shard keeps its timing budget and root hygiene check.
+See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
 comments of unchanged sibling fn/impl items retain their scope; attribution
