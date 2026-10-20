@@ -14,7 +14,7 @@
 /// trace:FR-1-071 | ai:claude
 pub(crate) fn handle_retire_legacy_ids(
     backend: &aida_core::CachedGitBackend,
-    store_path: &std::path::Path,
+    _store_path: &std::path::Path,
     dry_run: bool,
 ) -> Result<()> {
     use aida_core::DatabaseBackend;
@@ -63,25 +63,21 @@ pub(crate) fn handle_retire_legacy_ids(
         return Ok(());
     }
 
-    // Apply under store-write.lock via update_atomically so the read + rename
-    // + commit execute on a fresh snapshot without racing concurrent writers.
-    // trace:TASK-1981 | ai:agy
+    // update_atomically reloads canonical state and holds store-write.lock
+    // through rename persistence and cache refresh. trace:TASK-1981 | ai:codex
     let mut retired_count = 0usize;
-    aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
-        backend.update_atomically(|mutable| {
-            for req in mutable.requirements.iter_mut() {
-                let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
-                    (Some(s), Some(a)) if s != a => Some(a.to_string()),
-                    _ => None,
-                };
-                if let Some(new_spec) = needs {
-                    req.spec_id = Some(new_spec);
-                    req.agreed_id = None;
-                    retired_count += 1;
-                }
+    backend.update_atomically(|mutable| {
+        for req in mutable.requirements.iter_mut() {
+            let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
+                (Some(s), Some(a)) if s != a => Some(a.to_string()),
+                _ => None,
+            };
+            if let Some(new_spec) = needs {
+                req.spec_id = Some(new_spec);
+                req.agreed_id = None;
+                retired_count += 1;
             }
-        })?;
-        Ok(())
+        }
     })?;
 
     println!();
@@ -1002,3 +998,7 @@ pub(crate) fn ambiguous_id_in_chain(
 // predicates back the two guards — a spawn-time assertion (`aida agent new`) and
 // a stranded-primary alarm (`aida status` / `aida ps`). Kept side-effect-free so
 // both are unit-testable without git/leases.
+
+#[cfg(test)]
+#[path = "tests/task_1981_retire_tests.rs"]
+mod task_1981_retire_tests;

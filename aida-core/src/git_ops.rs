@@ -2417,7 +2417,9 @@ pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Resul
         if is_ancestor(repo, expected_sha, &current).unwrap_or(false) {
             let rebased = git(repo, &["rebase", "--onto", &parent, expected_sha])?;
             if rebased.success {
-                return Ok(true);
+                // Preserve the existing bool contract: true means HEAD matched.
+                // trace:TASK-1981 | ai:codex
+                return Ok(false);
             }
             if rebase_in_progress(repo) {
                 let _ = git(repo, &["rebase", "--abort"]);
@@ -4059,11 +4061,30 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
 /// Best-effort: failures are swallowed.
 // trace:TASK-1033 | ai:claude
 pub fn gc_auto(repo: &Path) -> bool {
-    // trace:TASK-1981 | ai:agy
+    // Explicit maintenance must override transaction_git_config's gc.auto=0,
+    // and finish before the lock is released (never detach). Reading the local
+    // value avoids seeing the transaction's command-line override instead of
+    // the threshold persisted by configure_store_gc_auto.
+    // trace:TASK-1981 | ai:codex
     crate::db::with_store_write_lock(repo, || {
-        Ok(git(repo, &["gc", "--auto"])
-            .map(|r| r.success)
-            .unwrap_or(false))
+        let configured = git(repo, &["config", "--local", "--get", "gc.auto"])?;
+        let threshold = if configured.success {
+            configured.stdout
+        } else {
+            "6700".into()
+        };
+        Ok(git(
+            repo,
+            &[
+                "-c",
+                &format!("gc.auto={threshold}"),
+                "-c",
+                "gc.autoDetach=false",
+                "gc",
+                "--auto",
+            ],
+        )?
+        .success)
     })
     .unwrap_or(false)
 }
@@ -10759,6 +10780,92 @@ mod tests {
         }
         let err = push_exact(&repo, "origin", &next, "main").unwrap_err();
         assert!(err.to_string().starts_with("git push failed:"), "{err:#}");
+    }
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_rollback_reports_dirty_tree_failure_without_losing_peer() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        std::fs::write(repo.join("seed"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "writer"]);
+        let writer = head_sha(&repo).unwrap();
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "peer"]);
+        let peer = head_sha(&repo).unwrap();
+        std::fs::write(repo.join("seed"), "dirty\n").unwrap();
+        let err = rollback_commit_if_head_matches(&repo, &writer).unwrap_err();
+        assert!(
+            err.to_string().contains("failed without conflict"),
+            "{err:#}"
+        );
+        assert_eq!(head_sha(&repo).unwrap(), peer);
+        assert_eq!(
+            std::fs::read_to_string(repo.join("seed")).unwrap(),
+            "dirty\n"
+        );
+        assert!(!rebase_in_progress(&repo));
+    }
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_explicit_auto_gc_runs_under_transaction_without_detaching() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        let before = seed_multi_pack_store(&repo, 4);
+        assert!(before.packs > 1);
+        assert!(configure_store_gc_auto(&repo, 500));
+        run_git(&repo, &["config", "gc.autoPackLimit", "1"]);
+        assert!(gc_auto(&repo));
+        assert!(count_objects(&repo).unwrap().packs < before.packs,
+            "explicit auto-gc must run despite the transaction's gc.auto=0 and complete before return");
+        assert_eq!(
+            git(&repo, &["config", "gc.autoDetach"]).unwrap().stdout,
+            "true",
+            "per-command override must not alter persisted detach policy"
+        );
+    }
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_gc_waits_for_store_writer_lock() {
+        use std::time::{Duration, Instant};
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        let before = crate::db::store_write_lock_contended_for(&repo);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut child = None;
+        crate::db::with_store_write_lock(&repo, || {
+            let contender = repo.clone();
+            child = Some(std::thread::spawn(move || {
+                tx.send(gc_aggressive(&contender)).unwrap()
+            }));
+            let start = Instant::now();
+            while crate::db::store_write_lock_contended_for(&repo) == before {
+                assert!(
+                    start.elapsed() < Duration::from_secs(10),
+                    "gc never contended"
+                );
+                assert!(rx.try_recv().is_err(), "gc escaped the writer lock");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert!(
+            rx.recv_timeout(Duration::from_secs(30))
+                .unwrap()
+                .unwrap()
+                .success
+        );
+        child.unwrap().join().unwrap();
     }
 
     // trace:TASK-1930 | ai:agy

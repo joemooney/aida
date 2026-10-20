@@ -1,3 +1,11 @@
+Store GC, compaction and doctor heal writers use the existing store writer
+lock; explicit auto-GC finishes under that lock. Legacy ID retirement reloads
+through `update_atomically`, and doc/finding filing uses its atomic persistence
+without a second object write. Interactive doctor repairs keep the confirmed
+set; counter migration refuses newly active unconfirmed blocks. See the
+[writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
+<!-- trace:TASK-1981 | ai:codex -->
+
 CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
 `Build (ubuntu-latest)` remains the required check. CLI halves use committed
 main-run timings; each shard keeps its timing budget and root hygiene check.

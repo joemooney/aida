@@ -1108,3 +1108,16 @@ Verdict collection validates metadata and reads bytes from the same opened
 regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
+
+Store writer follow-up (TASK-1981): GC and compaction retain the existing
+`store-write.lock` across maintenance; explicit auto-GC overrides transaction
+suppression for its configured local threshold and runs in the foreground.
+Legacy ID retirement reloads through `update_atomically`; doc/finding filing
+no longer rewrites objects after releasing that transaction. Doctor heals
+lock their read/write/commit window. Interactive repairs restrict mutations to
+confirmed edges or blocks, while counter-scope migration refuses new active
+unconfirmed blocks before changing policy. Whole-store saves already lock and
+perform optimistic conflict detection; the inventory distinguishes that
+protection from in-lock reloads. See
+[store writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
+<!-- trace:TASK-1981 | ai:codex -->

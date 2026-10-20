@@ -7371,33 +7371,29 @@ pub(crate) fn heal_doctor_parent_tag_drift(
 ) -> Result<DoctorHealResult> {
     let store_path = project_root.join(".aida-store");
     let storage = Storage::new(&store_path);
-    // trace:TASK-1981 | ai:agy
+    // Read, validate and save under the existing writer lock. The save's inner
+    // acquisition is reentrant on this thread. trace:TASK-1981 | ai:codex
     aida_core::db::with_store_write_lock(&store_path, || -> Result<()> {
-        let mut missing_err: Option<anyhow::Error> = None;
-        storage.update_atomically(|store| {
-            let Some(req_id) = store.get_requirement_by_spec_id(&finding.id).map(|r| r.id) else {
-                missing_err = Some(anyhow::anyhow!("parent-tag-drift requirement disappeared"));
-                return;
-            };
-            let expected: Vec<String> = store
-                .get_requirement_by_id(&req_id)
-                .into_iter()
-                .flat_map(|req| req.relationships.iter())
-                .filter(|rel| rel.rel_type == aida_core::models::RelationshipType::Child)
-                .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
-                .filter_map(|parent| parent.spec_id.as_deref())
-                .map(|id| format!("parent:{id}"))
-                .collect();
-            let Some(req) = store.get_requirement_by_id_mut(&req_id) else {
-                missing_err = Some(anyhow::anyhow!("requirement disappeared"));
-                return;
-            };
-            req.tags.retain(|tag| !tag.starts_with("parent:"));
-            req.tags.extend(expected);
-        })?;
-        if let Some(err) = missing_err {
-            return Err(err);
-        }
+        let mut store = storage.load()?;
+        let req_id = store
+            .get_requirement_by_spec_id(&finding.id)
+            .context("parent-tag-drift requirement disappeared")?
+            .id;
+        let expected: Vec<String> = store
+            .get_requirement_by_id(&req_id)
+            .into_iter()
+            .flat_map(|req| req.relationships.iter())
+            .filter(|rel| rel.rel_type == aida_core::models::RelationshipType::Child)
+            .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+            .filter_map(|parent| parent.spec_id.as_deref())
+            .map(|id| format!("parent:{id}"))
+            .collect();
+        let req = store
+            .get_requirement_by_id_mut(&req_id)
+            .context("requirement disappeared")?;
+        req.tags.retain(|tag| !tag.starts_with("parent:"));
+        req.tags.extend(expected);
+        storage.save(&store)?;
         Ok(())
     })?;
     Ok(DoctorHealResult {
@@ -12789,7 +12785,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         source_uuid: uuid::Uuid,
         source_spec: String,
         target_uuid: uuid::Uuid,
-        rel_type: String,
+        rel_type: aida_core::RelationshipType,
     }
     let mut dangling: Vec<Dangling> = Vec::new();
     for req in &reqs {
@@ -12800,7 +12796,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
                     source_uuid: req.id,
                     source_spec: source_spec.clone(),
                     target_uuid: rel.target_id,
-                    rel_type: format!("{:?}", rel.rel_type),
+                    rel_type: rel.rel_type.clone(),
                 });
             }
         }
@@ -12824,7 +12820,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         println!(
             "  {} → {}: target uuid {} not found",
             d.source_spec.bold(),
-            d.rel_type.dimmed(),
+            format!("{:?}", d.rel_type).dimmed(),
             d.target_uuid.to_string().yellow()
         );
     }
@@ -12856,13 +12852,14 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     // When confirmed interactively (`!yes`), only strip edges that were in the
     // user-confirmed preview set AND are still dangling under the lock.
     // trace:TASK-58 trace:TASK-1930 trace:TASK-1981 | ai:agy
-    let confirmed_edges: Option<std::collections::HashSet<(uuid::Uuid, uuid::Uuid)>> =
-        (!yes).then(|| {
-            dangling
-                .iter()
-                .map(|d| (d.source_uuid, d.target_uuid))
-                .collect()
-        });
+    let confirmed_edges: Option<
+        std::collections::HashSet<(uuid::Uuid, uuid::Uuid, aida_core::RelationshipType)>,
+    > = (!yes).then(|| {
+        dangling
+            .iter()
+            .map(|d| (d.source_uuid, d.target_uuid, d.rel_type.clone()))
+            .collect()
+    });
     let _ = reqs;
     let fixed =
         doctor_repair_dangling_relationships_in_store(&store_path, confirmed_edges.as_ref())?;
@@ -12881,7 +12878,9 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
 // trace:TASK-1930 trace:TASK-1981 | ai:agy
 pub(crate) fn doctor_repair_dangling_relationships_in_store(
     store_path: &std::path::Path,
-    confirmed_edges: Option<&std::collections::HashSet<(uuid::Uuid, uuid::Uuid)>>,
+    confirmed_edges: Option<
+        &std::collections::HashSet<(uuid::Uuid, uuid::Uuid, aida_core::RelationshipType)>,
+    >,
 ) -> Result<usize> {
     let objects_root = store_path.join("objects");
     let mut fixed = 0usize;
@@ -12899,7 +12898,9 @@ pub(crate) fn doctor_repair_dangling_relationships_in_store(
                     return true;
                 }
                 match confirmed_edges {
-                    Some(confirmed) => !confirmed.contains(&(req_id, r.target_id)),
+                    Some(confirmed) => {
+                        !confirmed.contains(&(req_id, r.target_id, r.rel_type.clone()))
+                    }
                     None => false,
                 }
             });
@@ -14174,6 +14175,19 @@ pub(crate) fn doctor_migrate_counter_scope_in_store(
                 anyhow::bail!("already on global counter_scope — nothing to migrate");
             }
             let mut fresh_registry = BlockRegistry::load(&blocks_path)?;
+            // Migration changes the node's entire allocation policy. Refuse a
+            // new unconfirmed active block rather than leave it usable under
+            // the new scope. trace:TASK-1981 | ai:codex
+            if confirmed_blocks.is_some_and(|confirmed| {
+                fresh_registry.blocks.iter().any(|b| {
+                    b.node_id == node_id
+                        && !b.is_exhausted()
+                        && !confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                })
+            }) {
+                anyhow::bail!("active blocks changed since confirmation; rerun counter migration");
+            }
+
             if !fresh_registry.blocks.iter().any(|b| {
                 b.node_id == node_id
                     && !b.is_exhausted()
@@ -14555,3 +14569,7 @@ pub(crate) static DOCTOR: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/bug_1985_destructive_gate_tests.rs"]
 mod bug_1985_destructive_gate_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1981_writer_tests.rs"]
+mod task_1981_writer_tests;
