@@ -1,0 +1,32 @@
+id: 01a159cb-c548-7f41-aeaa-50cc1e76e20b
+spec_id: TASK-2009
+agreed_id: TASK-2009
+title: Child store commit aborts when a host-staged path is deleted by the child (pathspec unknown to git)
+description: |
+  In aida-cli-lib/src/child_store_commit.rs commit_store_writes_since (BUG-2185), a path that is missing from the worktree gets `git rm --cached --ignore-unmatch`. If that path was staged-added in the baseline (`1 A.` entry, or the destination of a host-staged rename `2 R.`) and the child then deletes it, the rm drops it from the index. Git then knows it from neither the index nor HEAD, so `commit_paths(store, msg, &refs)` (`git commit -- <paths>`) fails with "pathspec 'x' did not match any file(s) known to git". The WHOLE commit aborts, and all of the child's other store writes stay uncommitted: the mandate store_snapshot dirty-store refusal BUG-2185 set out to remove.
+
+  Reproduced with plain git: add a; rm a; git rm --cached --ignore-unmatch a; git add b; git commit -- b a → exit 1, b left staged.
+
+  Trigger needs host-staged, uncommitted store dirt (contained children can't stage), so the case is rare. Fix: drop paths absent from both index and HEAD from refs before commit_paths (or check with `git ls-files`/`git cat-file -e HEAD:<p>`), and add a unit test.
+
+  Raised in review of PR-2777: https://github.com/joemooney/aida/pull/2777#issuecomment-6293734093
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T14:51:28.968634668Z
+modified_at: 2026-10-20T14:51:28.968634668Z
+req_type: Task
+tags:
+- containment
+- from-review:PR-2777
+- severity:minor
+- store
+filed_at:
+  code_sha: 6bd0d98c4d89e5561ea6d35dd373ca8abc93ea78
+  branch: pr-2777
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12d4692052
+  vendor: claude
+  session: 01a159bae978
