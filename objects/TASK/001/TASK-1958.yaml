@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:42.914143023Z
-modified_at: 2026-10-20T18:26:16.373244218Z
+modified_at: 2026-10-20T18:39:12.265570916Z
 req_type: Task
 tags:
 - ci
@@ -40,6 +40,12 @@ comments:
   created_at: 2026-10-20T18:26:16.373244218Z
   modified_at: 2026-10-20T18:26:16.373244218Z
   session_id: 58bdd224-f211-492e-b9bb-42d1919c06f6
+- id: 01a15a9c-4189-7010-9dc5-4408f86a5405
+  author: joe
+  content: 'ADVISOR RULING 11:40: S3 PR 2 (moving 69 test files into one harness) is CANCELLED on the PR 1 data: it saves about 3–8 s of wall time (13 s at most) out of a 96.5 s build, where the 70 s aida-cli-lib compile dominates. That isn''t worth a 69-file move and its merge-conflict cost. TASK-1958 completes with #2784 (the measurement workflow stays as non-gating evidence). STORY-1853''s remaining wall-time lever is TASK-1988 (nextest gating) plus the aida-cli-lib compile, which is out of S3''s scope.'
+  created_at: 2026-10-20T18:39:12.265570916Z
+  modified_at: 2026-10-20T18:39:12.265570916Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154f1-214e-78d3-b5b5-60e4b67c8803
   author: joe
