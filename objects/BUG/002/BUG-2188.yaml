@@ -12,12 +12,12 @@ description: |
   1. The worktree-creation error includes the underlying cause (git stderr, pool state, conflicting lease).
   2. A launch refused after setup rolls back its branch, worktree and lease, so a failed launch leaves no orphan.
   3. Standing order 8 and the launcher agree on how an advisor launches an implementer child (scrub vs delegate); fix whichever is wrong, and document it.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T18:15:47.642525612Z
+modified_at: 2026-10-20T18:23:01.423170233Z
 req_type: Bug
 tags:
 - agents
@@ -79,6 +79,14 @@ history:
   timestamp: 2026-10-20T18:15:49.221401343Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15a8d-712f-7020-a3b7-f26f5415f69f
+  author: aida-orchestrator
+  timestamp: 2026-10-20T18:23:01.423189345Z
+  session_id: 01a15a8a5080
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: a27fe3fc76a33ba543e6826a5dfe31e21f85980c
   branch: main
@@ -87,3 +95,11 @@ filed_at:
   aida_build_sha: a27fe3fc76
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Rollback/receipt design matches the advisor ruling and is well tested, but agent new --spec now hard-fails whenever the warm pool is full (fallback removed), same-clone claim re-acquisition no longer refreshes claim metadata, and all three BUG-2188 criteria remain unanchored.
+  recovery_hint: address the review findings, move BUG-2188 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T18:23:01.423170233Z
