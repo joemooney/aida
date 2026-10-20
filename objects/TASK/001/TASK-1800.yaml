@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-20T07:54:39.894687001Z
+modified_at: 2026-10-20T08:52:43.843444739Z
 req_type: Task
 relationships:
 - rel_type:
@@ -328,6 +328,12 @@ comments:
   content: 'ADVISOR RULING 2026-10-20 00:56: stop stacking audit PRs. #2715-#2719 are closed as superseded by #2720, now retargeted to main as the one audit PR. The 17/50 evidence is already decisive for direction: in full-file mode 117 incidental matches vs 29 true supervised touches (scoped 93 vs 27), and no refused case was proven incidental-only, only mixed. AC1 (classify all 50) may continue in #2720 only if cheap. Next is AC2: cut the incidental rate (module-level item attribution, non-Rust hunk scoping) without dropping a true touch, staying ADD-only and fail-closed, and use the 17 inventoried cases as the regression corpus. #2720 itself: STANDARD review once codex confirms it''s 0 behind main.'
   created_at: 2026-10-20T07:54:39.894687001Z
   modified_at: 2026-10-20T07:54:39.894687001Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15883-52c3-7090-85b8-d3355714255b
+  author: joe
+  content: 'Advisor 01:55 correction: the stack top is #2721 (audit-eighteen), not #2720. #2721 now targets main; #2720 is closed as superseded.'
+  created_at: 2026-10-20T08:52:43.843444739Z
+  modified_at: 2026-10-20T08:52:43.843444739Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
