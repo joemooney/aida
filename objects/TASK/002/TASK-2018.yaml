@@ -1,0 +1,27 @@
+id: 01a15aa7-2ac6-7192-855e-a960811f6a87
+spec_id: TASK-2018
+agreed_id: TASK-2018
+title: Extend git auto-maintenance ratchet to split-statement argv and shell/Python test files
+description: |
+  tests/test_git_maintenance_ratchet.py (BUG-2191) misses two shapes, which docs/testing/bug-2118-history-fixture-object-write.md lists as known exclusions: (1) split statements and variable argv, e.g. `let mut c = Command::new("git"); c.arg("commit")`; (2) tests/*.sh and tests/*.py fixtures that still run bare `git commit`, e.g. tests/test_distributed.sh and tests/test_cache_refresh_outputs.py. So a new fixture written in either shape gets past the guard. Follow-up: cover both shapes, or migrate those fixtures and add a simple grep ratchet for the scripts. The 46 baselined sites (production helpers like host_git_command, regen git, and aida-tui) also still need to drain.
+
+  Raised in review of PR-2779: https://github.com/joemooney/aida/pull/2779
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:51:07.334018225Z
+modified_at: 2026-10-20T18:51:07.334018225Z
+req_type: Task
+tags:
+- from-review:PR-2779
+- severity:minor
+- tests
+filed_at:
+  code_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 01a15a9e8ecf

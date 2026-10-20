@@ -1,0 +1,27 @@
+id: 01a15aa7-17a7-73b1-b08b-85eacdd942c8
+spec_id: TASK-2017
+agreed_id: TASK-2017
+title: test_git helper leaks one git template tempdir per test process
+description: |
+  test_git::git_command() (aida-core/src/test_git.rs, aida-cli-lib/src/test_git.rs, aida-cli/tests/support/test_git.rs) keeps its init.templateDir in a `static OnceLock<tempfile::TempDir>`. Rust never drops statics, so the TempDir destructor never runs and each test process leaves a /tmp/aida-test-git-template-* directory behind. Under nextest (process per test, as the CI "Nextest shadow" lanes and many local runs use) that is one leaked dir for every test that calls the helper. Two such leftovers were already in /tmp on the reviewer host during review. Fix: use a stable path keyed by content hash (written idempotently), or a path under target/, instead of a per-process TempDir.
+
+  Raised in review of PR-2779: https://github.com/joemooney/aida/pull/2779
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:51:02.439851626Z
+modified_at: 2026-10-20T18:51:02.439851626Z
+req_type: Task
+tags:
+- from-review:PR-2779
+- severity:minor
+- tests
+filed_at:
+  code_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 01a15a9e8ecf
