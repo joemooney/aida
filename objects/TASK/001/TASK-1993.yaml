@@ -24,6 +24,15 @@ tags:
 - review
 - slice:S1
 - watch
+relationships:
+- rel_type: Child
+  target_id: 01a154c5-609a-7d51-9126-d7d4345597dd
+  created_at: 2026-10-20T07:23:23.774922454Z
+history:
+- id: 01a15831-932b-7d62-817b-31414de69032
+  author: ai:codex:joe
+  timestamp: 2026-10-20T07:23:26.379396042Z
+  changes: []
 filed_at:
   code_sha: 419579e7c4510fece5f45c04ef3edc6878dda24d
   branch: main
