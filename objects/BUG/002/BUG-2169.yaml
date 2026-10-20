@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-20T22:16:27.948810374Z
+modified_at: 2026-10-20T23:05:22.719019335Z
 req_type: Bug
 comments:
 - id: 01a14468-6b8e-7cc1-8b0f-bea6641c15b3
@@ -101,6 +101,11 @@ history:
   timestamp: 2026-10-20T22:16:28.544496933Z
   session_id: 01a15b5f2873
   changes: []
+- id: 01a15b8f-f32f-7512-a4d3-90fd624049d4
+  author: joe
+  timestamp: 2026-10-20T23:05:22.991305990Z
+  session_id: 01a15b8caa1a
+  changes: []
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -113,7 +118,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: S2 boundary design and the live bwrap T1-T5/T8 harness are sound (the CI live gate passed), but CI is red (the portability ratchet, plus an unexplained lib-1 failure), the interactive resume launch still skips os_wrap (condition 2), and a refused --bg launch leaks its lease and clone.
+  detail: 'STRICT round 2: B1-B4 all fixed (portability ok, CI green, resume wrapped+tested, bg refused pre-claim+tested), but host_recorded_clone trusts a seat-chosen main: a forged main in a seat-writable dir yields a forged lease whose symlinked cargo_target_dir canonicalizes to a write grant (e.g. real <main>/.git) on the next launch/resume.'
   recovery_hint: address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-20T22:16:27.948810374Z
+  shelved_at: 2026-10-20T23:05:22.719019335Z
