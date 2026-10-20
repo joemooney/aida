@@ -1,0 +1,32 @@
+id: 01a15779-b0a1-7a51-9a2f-6a04ffaf5f17
+spec_id: TASK-1975
+agreed_id: TASK-1975
+title: Unlocked write_object after update_atomically in doc/findings writers (TASK-1930 Category E)
+description: |
+  TASK-1930's inventory (docs/plans/2026-10-19-store-writer-inventory.md, Category E) found real unlocked store writers and deferred them to TASK-1332 without filing a spec:
+  - aida-cli-lib/src/doc_cmd.rs (~119): calls backend.update_atomically(...), then object_store::write_object(&store_path.join("objects"), &written) outside with_store_write_lock.
+  - findings_gate.rs (file/promote/recur finding) has the same pattern.
+  - lib_part2.rs handle_retire_legacy_ids and doctor_heal: load outside the lock, then save.
+  - opportunistic_store_gc and store compact gc: no lock held.
+  Each one should either fold into the locked transaction or re-read under with_store_write_lock.
+
+  Raised in review of PR-2756: https://github.com/joemooney/aida/pull/2756#issuecomment-6283079499
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T04:02:35.297471995Z
+modified_at: 2026-10-20T04:02:35.297471995Z
+req_type: Task
+tags:
+- from-review:PR-2756
+- severity:minor
+- store-lock
+filed_at:
+  code_sha: eea970fc24ee08d5ccf93340f1f99273b6356052
+  branch: pr-2756
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a1575a8824
