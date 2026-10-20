@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T07:32:22.636710022Z
-modified_at: 2026-10-20T06:11:04.864563774Z
+modified_at: 2026-10-20T06:58:52.113026371Z
 req_type: Bug
 tags:
 - agents
@@ -47,6 +47,11 @@ comments:
   created_at: 2026-10-20T06:11:04.864563774Z
   modified_at: 2026-10-20T06:11:04.864563774Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1581b-1451-7033-a4fd-4bfb89c872fb
+  author: ai:codex:joe
+  content: Final author self-check round 3 found destination nesting in git worktree move and loss of the original pool branch SHA. Corrected with shared atomic no-replace publication plus admin repair and preservation of the pre-checkout branch receipt. Initial targeted Rust run passed 15/16 tests, including both new P1 repros, partial post-checkout allocation, changed resource identities, and real shared-claim acquisition/adoption/successor release. The one failure was the production-entrypoint fixture counting an idle returned pool directory as an orphan; that assertion is corrected to check idle pool state, branch and lease removal, and revoked child grants. Current launch/coordination/core/pool filters and compile chain are queued; fast gate passed the no-default-feature check and awaits its TUI check. No ready, approval or PR claim. Three author-check rounds exhausted; strict independent review remains required.
+  created_at: 2026-10-20T06:58:52.113026371Z
+  modified_at: 2026-10-20T06:58:52.113026371Z
 history:
 - id: 01a154ba-bb6b-7813-a614-dcecb1f228a8
   author: joe
