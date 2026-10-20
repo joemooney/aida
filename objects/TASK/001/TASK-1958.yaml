@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:13:42.914143023Z
-modified_at: 2026-10-20T18:17:48.163941676Z
+modified_at: 2026-10-20T18:26:16.373244218Z
 req_type: Task
 tags:
 - ci
@@ -20,6 +20,26 @@ relationships:
   target_id: 01a1520b-60c2-7532-8779-bf18cf4e5669
   created_at: 2026-10-19T16:14:13.679747610Z
   created_by: joe
+comments:
+- id: 01a15a90-6ab5-7ad3-9378-54568037b8b4
+  author: joe
+  content: |-
+    S3 PR 1 measurement (Refs TASK-1958). PR #2784, run 39474109685, artifact cargo-timings-aida-cli-tests. `cargo build --tests --timings -p aida-cli`, dev profile, rustc 1.99.1 (default rust-lld), jobs=4 on 4 CPUs, warm cli-lane dependency cache.
+
+    **Totals**
+    - Whole build: 96.5 s. The critical path is aida-core (19.9 s), then aida-cli-lib (69.1 s, ending at 83.5 s). Only then do the test binaries start.
+    - 70 aida-cli test units: the 69 tests/*.rs binaries plus the aida bin's unit-test target. Their compile+link time sums to **49.0 s of CPU**: min 0.20 s, median 0.64 s, max 2.32 s.
+    - Integration-test phase on the wall clock: 83.4 s → 96.5 s = **13.1 s**.
+
+    **Per binary (compile+link; cargo does not report link time separately)**
+    task_1717_store_writer_lock 2.32 · bug_1952_session_end_from_worktree 1.69 · task_1335_reconcile_unavailable_evidence 1.47 · bug_1502_format_json_audit 1.42 · bug_1252_structural_tags 1.27 · bug_1770_tag_whitespace 1.24 · bug_1683_live_drain_lock 1.22 · bug_1956_reader_fallbacks_bounded_under_writer 1.21 · bug_2139_headless_child_grant 1.18 · bug_1674_show_bounded_under_writer 1.14 · task_1527_refresh_worker 1.12 · bug_1926_store_identity_push 1.10 · queue_work_dry_run 1.08 · bug_1921_faq_short_ids 1.05 · bug_1234_edit_description_sources 1.04. The other 55 are each between 0.20 and 0.97 s. The full list is in the artifact.
+
+    **Projected saving from merging into one binary:** about **3–8 s of wall time, with a ceiling of 13 s**, not the sketch's 30–40 s. The fixed per-binary cost is at most the smallest unit, 0.20 s, and that includes the link. So 70 links cost about 14 s of CPU, which is about 3.5 s of wall time on 4 jobs. Merging removes that, but the merged crate still has to compile all ~35 s of test-body CPU in one crate, and the rustc front end runs serially there. So the realistic gain is a few seconds, and on a cold front end it could be zero or even a small loss. Even deleting the entire phase saves only 13 s, about 13% of this build. The 70 s aida-cli-lib compile dominates.
+
+    **Recommendation for the advisor:** CI compile time doesn't justify the 69-file move (S3 PR 2). Its remaining value is local: incremental rebuilds after an aida-cli-lib change relink 70 binaries, which is about 14 s of CPU per edit cycle, and the binary count drops for nextest. Consider dropping S3 PR 2, or demoting it to optional, and putting that effort into S4 or the aida-cli-lib compile time instead.
+  created_at: 2026-10-20T18:26:16.373244218Z
+  modified_at: 2026-10-20T18:26:16.373244218Z
+  session_id: 58bdd224-f211-492e-b9bb-42d1919c06f6
 history:
 - id: 01a154f1-214e-78d3-b5b5-60e4b67c8803
   author: joe
