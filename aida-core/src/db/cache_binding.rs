@@ -545,12 +545,15 @@ mod tests {
     #[test]
     fn rebind_note_routes_to_cache_read_note_while_tui_owns_terminal() {
         use crate::db::cache_refresh::{
-            cache_read_note, reset_cache_read_observations, set_tui_owns_terminal, CacheReadScope,
-            TUI_TERMINAL_TEST_LOCK,
+            as_tui_test_emitter, cache_read_note, reset_cache_read_observations,
+            set_tui_owns_terminal, CacheReadScope, TUI_TERMINAL_TEST_LOCK,
         };
 
+        // The write side excludes every other test's cache note: one landing
+        // here overwrote this test's note in CI (TASK-1956).
+        // trace:TASK-1956 | ai:claude
         let _serial = TUI_TERMINAL_TEST_LOCK
-            .lock()
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _scope = CacheReadScope::new();
         reset_cache_read_observations();
@@ -562,9 +565,10 @@ mod tests {
         rename_over(&CacheFile::Wal.path_for(&path), b"");
         rename_over(&CacheFile::Shm.path_for(&path), b"");
 
-        let reason = std::thread::spawn(move || cache.rebind_if_replaced().unwrap())
-            .join()
-            .unwrap();
+        let reason =
+            std::thread::spawn(move || as_tui_test_emitter(|| cache.rebind_if_replaced().unwrap()))
+                .join()
+                .unwrap();
         set_tui_owns_terminal(prev);
 
         assert!(reason.is_some());
