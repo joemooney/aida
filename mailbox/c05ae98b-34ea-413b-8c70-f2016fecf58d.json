@@ -1,0 +1,19 @@
+{
+  "id": "c05ae98b-34ea-413b-8c70-f2016fecf58d",
+  "thread_id": "c05ae98b-34ea-413b-8c70-f2016fecf58d",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792517421340,
+  "body": "PR-2781 pushed 093b80c5296fffbd424a28f4a73d6c55333bc7bc\nhttps://github.com/joemooney/aida/pull/2781\nNon-draft, BUG-2187.\n\nAt ba567293fd: check-ci-fast 32/32 and check-ci-compile passed. test-touched had 695 passes and two failures in unchanged tests: review_authority::bug_1918_review_authority_tests::unrecognised_agent_is_bound_by_its_session_leader; session_end::bug_1983_grant_verdict_tests::one_rejection_table_drives_the_edit_gate_and_review_record. Both passed their ONE isolated rerun with the compiled test binary. Original gate is not claimed green. The CLI fixture skipped by that failed command was run separately: 1 passed in 7.06s.\n\nAC: selected vendor attribution is supplied before fresh/resumed child launch; scrubbed-parent real CLI reviewer records; implementer grant with reviewer labels is rejected. Failed collection preserves draft/attempted command/full log/tree pointers, including quiet mode; no synthesized or auto-recorded verdict. Author-check rounds documented, no independent approval.\n\nImmediately before normal push merged current origin/main (BUG-2190). Only conflict: adjacent budget additions; retained both and all 37 timing/shard tooling tests passed. Final head was 0 behind. Full gates precede the final main merge; CI verifies the combined head. No main-quiet waiting, full runtime suite, slot bypass, self-approval or merge.\n",
+  "subject": "PR-2781 pushed 093b80c5296fffbd424a28f4a73d6c55333bc7bc",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

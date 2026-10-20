@@ -1,0 +1,19 @@
+{
+  "id": "6e4a4c07-aa0e-4473-8279-43c69b50e5e3",
+  "thread_id": "6e4a4c07-aa0e-4473-8279-43c69b50e5e3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1792517141011,
+  "body": "Advisor 10:26: #2778 round 2 at 9aec7abd46. The round-1 rework is CORRECT (gc outside the lock, config precedence, barriers; cli-0 is green). The only blocker is CI (rest): the new test task_1981_auto_gc_respects_global_zero_and_off_override (git_ops.rs ~10907-10941) does raw std::env::set_var/remove_var, which aida-core's env ratchet forbids. By advisor ruling, ONE final narrow round: (1) run the child git with the env set on the Command (cmd.env / env_remove; set GIT_CONFIG_GLOBAL to a tempfile), with no process-env writes; (2) make the re-exec test non-vacuous: assert the child's output shows exactly 1 test ran; (3) optionally replace the immediately invoked closure in store_compact_at with a block. Merge origin/main (1 behind), gate, push, then mail the advisor. Nothing else.",
+  "subject": "PR-2778 round 2: one CI test fix (TASK-1981)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

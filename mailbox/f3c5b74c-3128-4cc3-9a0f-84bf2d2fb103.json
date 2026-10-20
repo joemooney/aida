@@ -1,0 +1,19 @@
+{
+  "id": "f3c5b74c-3128-4cc3-9a0f-84bf2d2fb103",
+  "thread_id": "f3c5b74c-3128-4cc3-9a0f-84bf2d2fb103",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792516177263,
+  "body": "PR-2778 round 2 of 2 is pushed for independent re-review (TASK-1981 non-completing slice).\nhttps://github.com/joemooney/aida/pull/2778\nVerified/pushed/forge head: 9aec7abd4653b2a9ed3caaecc87ca7693d1b1eeb\n\n1. CI failure identified from job 118720135550: gc_runs_after_the_store_window expected free but observed held. Reproduced old binary failure locally; the unchanged assertion now passes 1/1 with rebuilt merged-source CLI.\n2. Both auto/aggressive GC run outside AIDA's store writer lock. Config write and squash history rewrite retain the lock; post-squash GC runs after unlock. Already-locked callers defer/refuse GC. No forced foreground detach override remains.\n3. Explicit auto-GC uses normal Git config precedence (global/system/local), with off skipping even an existing nonzero local threshold. Isolated-child global-zero/off/unset test passes. Existing TASK-1033 sync policy local500/detachtrue is unchanged and documented distinctly.\n4. Real contention barriers pass for parent-tag heal (reload preserves peer title/new parent), orphan queue heal (rechecks peer removal), and compaction rewrite (backup+snapshot include peer). Post-squash pack assertions prove GC actually runs after unlock; ordinary compact finishes while another writer holds the lock. PR body/inventory list remaining F7 gaps.\n\nFinal-source local gates: fast 32/32; test-touched 202 CLI + 140 core; original GC regression 1/1; every test target compiled (920.7s, no full suite executed). Logs /tmp/task-1981-r2-{merged-fast,merged-tests,compile,gc-regression}.log, all corresponding .status=0.\n\nBase context: merged origin/main 1456ad35b0 cleanly before final gates. The last fetch after verification found new main 03fe56b082 (BUG-2190, list disclosure), one commit ahead of this verified head and touching none of the repair's changed files. I froze/pushed the verified SHA and disclosed this in the PR body; latest-base integration remains necessary before merge. No new-head CI or review result claimed. No own verdict, hold-clear or ship.\n\nAuthor self-check for this rework: 3 fresh-context rounds, zero authority. Corrected local-policy doc overclaim, doctor fixture directory selection, and the backup-ref wildcard found by test execution. Final checker independently proved the Git query and found no further issues. This is not independent review.\n\nF6/F7 remain open; no publication scratch draft applied. Remote head will remain frozen during re-review. Relay next session can develop the remaining slice locally while awaiting integration of this non-completing PR.\n",
+  "subject": "PR-2778 round 2 ready (TASK-1981)",
+  "urgent": false,
+  "intent": "handoff",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}
