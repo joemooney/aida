@@ -1,0 +1,28 @@
+id: 01a158d7-5897-7532-b5dc-ba44705d955f
+spec_id: TASK-1999
+agreed_id: TASK-1999
+title: Bounded default-branch resolvers duplicate their unbounded twins (drift risk)
+description: |
+  PR-2772 (BUG-1993) adds resolve_default_branch_ref_until (lib_part3.rs), default_branch_refs_until and ref_exists_until (shipped_linkage.rs) as line-for-line copies of resolve_default_branch_ref / default_branch_refs / ref_exists, so the unbounded shared resolvers stay byte-identical. The candidate order (origin/HEAD symbolic-ref, init.defaultBranch, main, master; origin/<name> before <name>) now lives in two places. A future change to one (e.g. a new fallback) would make show and the gates/completion warning disagree on the default branch. Fix: factor the candidate walk into one helper parameterised by a git-call closure (bounded vs unbounded), or add a parity test that runs both on repos with/without origin/HEAD, with init.defaultBranch, and with master-only.
+
+  Raised in review of PR-2772: https://github.com/joemooney/aida/pull/2772
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T10:24:30.359745808Z
+modified_at: 2026-10-20T10:24:30.359745808Z
+req_type: Task
+tags:
+- from-review:PR-2772
+- performance
+- severity:minor
+- show
+filed_at:
+  code_sha: 42481f97c70e50a200eb225059c8f303788e8b18
+  branch: pr-2772
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: 419579e7c4
+  vendor: claude
+  session: 01a158cbc5b8
