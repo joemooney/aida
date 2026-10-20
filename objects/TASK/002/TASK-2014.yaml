@@ -11,12 +11,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T17:22:56.516063545Z
-modified_at: 2026-10-20T17:22:56.516063545Z
+modified_at: 2026-10-20T22:24:22.153348751Z
 req_type: Task
 tags:
 - from-review:PR-2778
 - severity:minor
 - tests
+comments:
+- id: 01a15b6a-6689-7163-88a9-ab401a263b62
+  author: joe
+  content: Superseded into sweep TASK-1955 (advisor triage 2026-10-20 15:25); the item carries over there verbatim.
+  created_at: 2026-10-20T22:24:22.153348751Z
+  modified_at: 2026-10-20T22:24:22.153348751Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 9aec7abd4653b2a9ed3caaecc87ca7693d1b1eeb
   branch: pr-2778
