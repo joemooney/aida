@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-19T16:06:57.261451020Z
-modified_at: 2026-10-19T19:50:10.599672512Z
+modified_at: 2026-10-20T03:15:58.055727950Z
 req_type: Task
 tags:
 - carried-from:STORY-1728
@@ -31,6 +31,12 @@ comments:
   created_at: 2026-10-19T19:50:04.933482623Z
   modified_at: 2026-10-19T19:50:04.933482623Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a1574f-01e7-7463-9087-a5fe172d55cb
+  author: joe
+  content: Commit 9be73d9a8f references this requirement
+  created_at: 2026-10-20T03:15:58.055727950Z
+  modified_at: 2026-10-20T03:15:58.055727950Z
+  session_id: 8be4cccd-29f5-4c08-ae34-3734debb6fc4
 history:
 - id: 01a1554a-3755-7951-a6d6-f6225491b1ee
   author: joe
