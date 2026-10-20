@@ -1,3 +1,4 @@
+use aida_core::git_ops::RemoteCredentialsExt as _;
 // `aida init` command cluster, lifted verbatim out of `main.rs`
 // (SPIKE-78 pure-movement extraction). The four init handlers
 // (`handle_init_command`, `handle_init_distributed_worktree`,
@@ -4638,6 +4639,8 @@ pub(crate) fn handle_init_distributed_worktree(
                     .arg("-C")
                     .arg(&cwd)
                     .args(["push", "-u", "origin", cb])
+                    // trace:BUG-2181 | ai:claude
+                    .remote_credentials(&cwd, "origin")
                     .output();
                 match out {
                     Ok(o) if o.status.success() => {
@@ -4657,7 +4660,8 @@ pub(crate) fn handle_init_distributed_worktree(
         }
 
         // The orphan-store push (unchanged behavior).
-        let push_result = aida_core::git_ops::host_git_command(&store_path)
+        // trace:BUG-2181 | ai:claude
+        let push_result = aida_core::git_ops::host_remote_git_command(&store_path, "origin")
             .args(["push", "-u", "origin", branch_name])
             .output();
         match push_result {
