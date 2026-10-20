@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:15.367292037Z
-modified_at: 2026-10-20T01:29:45.882252991Z
+modified_at: 2026-10-20T03:44:36.367972658Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
@@ -39,6 +39,52 @@ comments:
   created_at: 2026-10-20T01:29:45.882252991Z
   modified_at: 2026-10-20T01:29:45.882252991Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15769-3a0f-78c1-bafc-943157de5974
+  author: ai:codex:joe
+  content: |
+    SKETCH: one agent launcher (documentation only; implementation remains deferred pending STORY-1853 S6, STORY-1690, TASK-1945 and operator reopening).
+
+    Inventory checked at origin/main 857e2ef848 (2026-10-19 20:45 MST). The 18:30 inventory includes administrative CLI probes as well as actual agent sessions; both must be accounted for, with distinct capabilities.
+
+    1. Context and ownership
+    Introduce a small dependency-neutral launch-policy module in aida-core, consumed by the CLI launcher; core must never depend on aida-cli-lib. LaunchRequest is untrusted intent: vendor/executable, launch kind (fresh/resume/exec/background/query), argv, requested seat, spec/backing change, cwd, contained request, session/resume IDs, model/effort and stdio/log needs. A CLI LaunchContext resolver builds the operational context exactly once after read-only preflight: canonical project/common-state root; canonical child worktree/cwd and lease identity; caller subject/session; validated authority/delegation result from seat_authority; selected vendor identity and harness version; effective containment/permission/sandbox posture; child session identity; finite child-environment snapshot; owned setup resources/cleanup token. Fields granting authority stay private and cannot be reconstructed from role/name strings. Agent labels carry no authority. Core's AI request path receives an explicit limited context/resolver interface; absent a valid context it refuses before spawning rather than bypassing CLI policy.
+
+    Use one command constructor plus spawn/exec/query adapters, all taking the resolved context; callers choose stdio and lifecycle behavior without setting protected env. Parent containment is monotonic: strict ambient parsing, inherited containment cannot be disabled, unsupported vendor/posture refuses before allocation. Existing plan-only/headless rules remain in their policy helpers. Construct child env with env_clear plus an explicit tested allowlist (PATH/HOME/locale/terminal, required vendor credentials, intentional model controls, required proxy/CA settings); scrub ambient seat/grant/purpose/lease identity, then add validated child context. Never log secret env values. A contained OS wrapper and argv posture must agree. No process-global set_var for child launch. Administrative Query contexts (version/agents/MCP config) carry no seat/grant and cannot become sessions. Preserve current hook, timeout, output-bound and no-probe preview contracts.
+
+    2. Site-by-site migration table (paths relative to source directories; symbols are anchors because line numbers move)
+    - CLI session.rs: build_contained_resume_command; build_claude_exec_command; build_run_claude_session_command; spawn_vendor_headless_with_seat_granted; spawn_claude_resume_with_grant; build_codex_session_command/exec_codex_session; spawn_reviewer_launch_plan_granted; build_exec_vendor_headless_command; apply_headless_child_seat_env; spawn_claude_headless_resume_granted; build_claude_resume_exec_command. Replace every raw/dynamic vendor Command constructor and seat/contained writer with the common constructor. Include interactive, headless, resume, exec and reviewer variants, all three vendors; no hidden fallback path.
+    - CLI agent_launch.rs: build_agent_new_bg_command and run_tracked_agent (foreground/background), plus reported_harness_version. Resolve once after vendor/authority/cwd preflight, use a restricted query context for the version probe, pass the same session context to background and foreground. Previews resolve only read-only intent and never probe or allocate.
+    - CLI burndown_run.rs: build_burndown_quiet_command and build_burndown_verbose_command -> same context, differing stdio only. Any indirect AIDA phase child retains its explicit child identity through a common control-child environment adapter.
+    - CLI questions.rs: build_questions_clarify_command -> advisor child context; no hand-set seat/containment.
+    - CLI autopilot_intake.rs: build_autopilot_intake_command -> advisor child context; preserve delegated grant/purpose validation.
+    - CLI phase_driver.rs: build_phase_driver_advisor_command -> launcher. auto_punt_text_question invokes AIDA, not a vendor; replace hand-set implementer role with the control-child environment adapter validated for the existing phase.
+    - CLI phase_driver_trait.rs: build_phase_driver_ci_fix_command -> implementer context; preserve child-grant isolation and ceiling.
+    - CLI compete_cmd.rs: build_compete_arm_command -> common constructor; arms retain their worktree and judges their project root, with existing prevalidation of all vendors before artifacts. Include dynamic executable/wrapper paths.
+    - CLI orchestrator_leases.rs: run_one_agent_gate is an AIDA control child; common control-child adapter replaces hand-set role, without minting authority from gate.role.
+    - CLI zen_drive_root.rs: carved-out implementer queue child likewise uses control-child adapter, preserving delegation and target binding.
+    - CLI queue_cmd.rs: apply_queue_work_contained_env and handle_queue_work currently mutate parent containment/role; thread LaunchRequest/validated control-child context through pickup instead. Preserve shell role-update behavior as an explicit shell export API, distinct from child execution. Audit consumers before deleting these parent mutations.
+    - CLI init_cmd.rs: agent_cli_detected, antigravity MCP registration probe, and the three codex MCP list/add call sites -> restricted query/admin constructor, no seat or grant. Keep setup command semantics and do not misclassify them as agent sessions.
+    - CLI doctor_cmd.rs: installed_codex_version -> query constructor, no launch authority.
+    - CLI claude_agents.rs: list_agents -> query constructor; preserve AIDA_AGENT_CMD fixture override and graceful unavailable behavior.
+    - CORE ai/client.rs: send_cli_request -> shared policy-backed AI-request constructor/interface with explicit project/cwd/containment and no inherited seat. Its which/availability probes use query policy. No reverse core-to-CLI dependency.
+    Every production writer identified by the measured nine role/containment files is covered above, including removals and parent set_var; additional control-child writers are intentionally included. Tests and generated shell snippets are inventoried separately, never silently grandfathered as executable spawn sites.
+
+    3. Slices ordered by risk (contained execution first)
+    S0: lock behavior with fake-vendor env/argv/cwd fixtures for contained fresh/resume/exec/reviewer, invalid containment, inherited advisor env, all vendors, previews and failures. Add typed context/constructor alongside old adapters, initially used only by these contained session paths. No authority-policy change.
+    S1: convert remaining session paths and contained agent-new foreground/background; then contained burndown/intake/questions/phase fixes/compete. Each migration removes its protected env writes and adds constructor parity/refusal coverage. All containment-critical paths finish before uncontained/query cleanup.
+    S2: convert ordinary interactive/headless/background and AIDA control-child paths; remove pickup process-global launch env mutations after consumers are explicitly threaded. Preserve queue/reviewer lease/attestation boundaries.
+    S3: migrate administrative probes and core AI requests through the shared lower-level interface, finish allowlist compatibility tests, remove temporary migration exceptions and enforce zero remaining production bypasses. Each slice needs independent review; authority API changes retain strict signoff.
+
+    4. Guard and executable evidence
+    Add a repository-wide Rust syntax-aware guard (syn visitor or equivalent, including macro token inspection) that catches literal claude/codex/antigravity Command::new, qualified/aliased constructors, dynamic vendor executable dispatch, and hand-set AIDA_SESSION_ROLE/AIDA_CONTAINED env/env_remove/set_var outside the launcher/control-env module. Dynamic execution requires an explicit classified non-vendor purpose or context constructor; unknown sites fail rather than assuming harmlessness. Initial exceptions are an exact file+symbol+purpose migration ledger with no expansion permitted; remove each in its slice. Cover production Rust, generated Rust/templates and shell vendor launches separately; fixtures/tests have scoped exemptions, not a blanket source-file exemption. Mutant fixtures add direct and aliased/dynamic spawns plus env setters in a new module and must fail. Runtime fake vendors assert actual child cwd, argv and full protected env for foreground/background/exec/resume and scrubbed parents; unsupported contained vendors and invalid grants must leave no process/lease/worktree artifacts. Guard alone cannot establish runtime containment.
+
+    5. TASK-1752 and BUG-2188/2168
+    TASK-1752 is already in progress/PR-2763: build on its seat_authority API, do not add another grant parser or read raw grant env in callers. LaunchContext holds the validated forwarding/delegation handle, not a cached permission verdict; seat_authority revalidates at authority-bearing boundaries and handles subject/roster/parent/expiry. Query contexts explicitly drop grants. Coordinate final literal guard ownership with TASK-1752 so allowed forwarding cannot become an alternate validator.
+    BUG-2188/2168 remain bounded immediate repairs, not blocked on this refactor: detailed worktree errors, explicit cwd honored/refused, checked dormant-own-worktree adoption, delegation preflight before allocation, exact scrubbed-env recovery guidance, and transactional cleanup of resources owned by this attempt. Later LaunchContext consumes their resolved worktree/lease transaction and recovery errors unchanged. Never delete an adopted/pre-existing resource on failure. Reviewer attestation and independent approval stay unchanged; a role/name/env label cannot authorize a verdict.
+
+    Requested advisor signoff is for this direction and slices only. No implementation started, no deferral lifted, no new command/file format/authority policy activated.
+  created_at: 2026-10-20T03:44:36.367972658Z
+  modified_at: 2026-10-20T03:44:36.367972658Z
 history:
 - id: 01a154eb-d392-7811-adf8-d43de174ed67
   author: joe
