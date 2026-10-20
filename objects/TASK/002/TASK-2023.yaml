@@ -16,13 +16,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:56:42.362157745Z
-modified_at: 2026-10-20T21:56:42.362157745Z
+modified_at: 2026-10-20T22:24:57.669674673Z
 req_type: Task
 tags:
 - ci
 - from-review:PR-2785
 - severity:minor
 - test-budget
+comments:
+- id: 01a15b6a-f145-7d10-acbf-ddf396db2dda
+  author: joe
+  content: Superseded into sweep TASK-2020 (advisor triage 2026-10-20 15:25); the item carries over there verbatim.
+  created_at: 2026-10-20T22:24:57.669674673Z
+  modified_at: 2026-10-20T22:24:57.669674673Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: b60ea1beb2ccab227613e36a6b2239aca63cbd10
   branch: pr-2785
