@@ -1,0 +1,20 @@
+id: 01a1597f-3c29-76a2-9b4a-99d0eec2ed15
+spec_id: BUG-2193
+agreed_id: BUG-2193
+title: aida dev release pushes the release commit straight to main, which branch protection now refuses
+description: '2026-10-20 06:25: release.sh commit + tag + push failed with GH006 (required checks merge-hold-gate, Build). v0.15.0 predates the protection. Acceptance: when the default branch requires status checks, release.sh pushes the release commit to release/vX.Y.Z, opens a PR, waits for its checks, and tags the merged commit only after merge (never tagging a commit main won''t contain); it never leaves a local tag on an unpushed commit. Also: release.sh must refuse to start, or take the main merge-lease, while an aida pr ship is in progress (a concurrent ship fast-forwarded the primary checkout during cargo check on the same morning).'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T13:27:53.129267364Z
+modified_at: 2026-10-20T13:27:53.129267364Z
+req_type: Bug
+filed_at:
+  code_sha: def9cb2ab8ca026fde658737b692bbd74f3e4ab5
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a4fb8e6c07
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
