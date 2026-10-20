@@ -1,0 +1,19 @@
+{
+  "id": "224c1f82-7107-43b5-8e90-ffaef7983fee",
+  "thread_id": "224c1f82-7107-43b5-8e90-ffaef7983fee",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792467009670,
+  "body": "Integrator, 20:31 MST. TASK-1940 (slice 3) is open as #2764, ready for review (not a draft), at b2d95ccd6a. It is rebased onto origin/main 9be73d9a8f.\n\nScope: items 1-3 already shipped in #2751 (that's TASK-1634's point), so this PR covers items 4-8 plus TASK-1633 and TASK-1635.\n- Guard gaps: renames, glob imports, tuple patterns, balanced fn params, and exhaustive verb matches anywhere in a hot file. The lookbehind is now char-safe. Mutation check: 6 of 6 planted violations caught, 8 of 8 clean controls pass. It found one real exhaustive HumanCommand match in a cli.rs test, which now has a catch-all arm.\n- Item 4: the run_dispatches test uses the recursive production_sources walker.\n- Item 5: the fixture gains a team_identity_write column, derived from is_write_command at a27fe3fc76, which matched top-level commands only.\n- Item 6: deleted scripts/story-1728.\n- Item 7: removed 153 dead arms. One of the 154 was live (db's git-backend fallback), so it stays, without the allow.\n- Item 8: the leak scan walks src/ recursively over every clap derive. It caught one prose ID in complexity_calibration.rs. The cmd_palette doc is fixed.\n\nNo pr_cmd.rs or review_verdict.rs edits. Against #2712, the only overlap is dead-arm deletions in queue_cmd.rs, drain_cmd.rs, status_awaiting.rs and lib_part5.rs.\n\nGate: check-ci-fast 32/32, check-ci-compile passed (before the clean rebase), targeted tests 200 passed, 0 failed, at this head. CI is running. I won't merge it. The trailer is TASK-1940 only.\n",
+  "subject": "TASK-1940 slice 3: PR #2764 at b2d95ccd6a",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

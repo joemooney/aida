@@ -1,0 +1,19 @@
+{
+  "id": "7b39bd04-3b80-4c3d-95a0-079c1d8df5e0",
+  "thread_id": "7b39bd04-3b80-4c3d-95a0-079c1d8df5e0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792466545536,
+  "body": "TASK-1752 PR: https://github.com/joemooney/aida/pull/2763, head a8684094ba (2 commits behind main; does not touch the same files). Behavior unchanged.\n\nMoved sites:\n- seat_authority.rs: NEW current_grant_id() returns the raw non-blank handle, UNVALIDATED (grant_check still decides authority)\n- queue_cmd.rs:13216 standalone-reviewer launcher_grant: env::var(...).filter(non-blank) -> current_grant_id()\n- queue_cmd.rs headless_baseline_notice: literal -> {grant_env}=GRANT_ENV, identical text\n- queue_cmd.rs:10803 doc comment: literal -> GRANT_ENV link\n- session.rs:3712 doc comment: literal -> GRANT_ENV link\n- session_misc.rs:598 current-session fallback: env::var(...).ok() -> current_grant_id() (blank was already dropped by the later trim filter). NOT in the brief's 5 modules, but it was a direct read. The :589 /proc environ lookup of ANOTHER pid stays as is\n- role_cmd.rs (persona enter, role enter export/unset, role end unset): literal -> format with GRANT_ENV, byte-identical eval output\n- agent_launch.rs bg and exec child: .env_remove(\"AIDA_SESSION_GRANT\") -> .env_remove(seat_authority::GRANT_ENV)\n- role_cmd_args.rs: clap help text for `aida role expiry` kept verbatim (user-facing). It is the guard's ONE exemption, matched by exact line\n\nGuard: src/tests/task_1752_grant_env_guard_tests.rs bans the literal and any env::var read of the grant outside seat_authority.rs, across all crates. It skips tests/ dirs and inline #[cfg(test)] mod blocks anywhere in a file, and fails if a block never closes. Mutation-checked.\n\nGates passed: check-ci-fast (32), check-ci-compile, test-touched (847), the lib filters for touched modules, and the bug_2139/queue_work_dry_run/task_1736 integration tests.\n",
+  "subject": "TASK-1752 ready for STRICT review: PR-2763 @ a8684094ba",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
