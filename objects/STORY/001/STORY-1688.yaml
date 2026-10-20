@@ -30,7 +30,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-18T23:43:50.825275314Z
+modified_at: 2026-10-20T05:15:47.861120196Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,41 @@ relationships:
   target_id: 01a150cb-791c-74b2-a779-6ce5ccc57c9a
   created_at: 2026-10-18T20:54:55.868484454Z
   created_by: joe
+comments:
+- id: 01a157bc-b715-7ed1-b5d2-2cb67fe4acf3
+  author: joe
+  content: |-
+    SKETCH: Lane-liveness substrate job and seat routing (STORY-1688, addressing PR #2743 review findings)
+
+    1. Live-Backlog Behavior & Rollout Posture
+    - Ship `lane-liveness` disabled by default in `.aida/config.toml` (`enabled = false`, matching the `stranded-branches-guard` rollout pattern) until the existing `.aida/sessions` dead-lease backlog is reaped via `aida session reap`.
+    - Bound `load_orphaned_leases` with an upper age window (`max_orphan_age_minutes = 1440` / 24h, aligned with `session reap`) and only flag leases whose backing spec is still `InProgress` with no newer live lease or merged PR, so historical dead session files never permanently trip the guard.
+
+    2. Dead-Lane Record Expiry & Production Discovery
+    - `finish_headless_lane_for_child`: do NOT unconditionally delete `.aida/lanes/headless-<key>.json` on exit code 0. When a headless child exits 0 while its spec lease is still held and its assigned spec remains `InProgress` without pushed branch/PR completion (the 2026-10-13 16:51 headless Codex incident), persist `alive = false` and `exited_at` so the next tick detects the prematurely-exited lane.
+    - Re-validation & expiry: during snapshot evaluation, cross-check each lane record's `assigned_work` against live `.aida/sessions` leases and current spec status. A dead-lane record (or a halted `drain-state.json` with `stopped_at.is_some()`) expires and is pruned once:
+      (a) all of its `assigned_work` specs are `Completed`/`Done`/`Rejected` or owned by a newer live lease PID, OR
+      (b) `now - exited_at > dead_lane_ttl_minutes` (default 120m) after its finding has been routed once.
+    - Incident replay tests (Criterion 2, `trace:STORY-1688.ace1f616`): drive all four 2026-10-13 incidents through production writers/readers (`register_headless_lane_for_child` / `finish_headless_lane_for_child`, `drain-state.json`, session lease records, and `relay.status`), never hand-written `.aida/lanes/*.toml` fixtures.
+
+    3. Routing to Registered Seats Only (Single Routing Path)
+    - Route only to registered roles in `aida role list` (`advisor`, `integrator`, `reviewer`, `implementer`, `product`) — never unregistered pseudo-seats (`merge` or `operator`):
+      - `unpicked-ready-pr` (`FACTORY READY` at current head >30m with no review started) -> `reviewer` (configurable via `review_pickup_seat`, fallback `integrator`).
+      - `dead-lane`, `stale-log`, `orphaned-work` -> `advisor` (or `integrator` when scoped to an active drain).
+      - `stale-gate-wait` (`awaiting advisor signoff` >15m) -> `advisor`; operator merge-hold waits (`.aida/merge-holds/PR-<N>` marker or `aida:merge-hold` label >15m) -> operator push notification + `advisor` escalation.
+    - Single routing mechanism: emit `CronJobFired:lane-liveness:<seat>` event-driven seat jobs from one canonical prompt definition in `builtin_routed_seat_task` (removing the duplicate `lane-liveness-route` on `CronJobFailed` and duplicate `.aida/config.toml` route prompts) so advisor findings never fire twice and reviewer-only findings do not wake the advisor.
+
+    4. Finding-ID Keys, Gate-Wait Parsing & Criterion Traces
+    - Finding IDs are collision-free and deterministic:
+      - `orphaned-work:<SPEC-ID>:<lease_id>` (keyed on both `spec_id` and `lease_id` so multiple dead leases on one spec, e.g. `BUG-1918` or `BUG-2169`, never collide)
+      - `dead-lane:<lane_id>`
+      - `stale-log:<lane_id>`
+      - `unpicked-ready-pr:PR-<number>@<head_sha8>`
+      - `stale-gate-wait:PR-<number>:<gate_kind>@<head_sha8>`
+    - Gate-wait parsing: check durable `.aida/merge-holds/PR-<N>` markers and `aida:merge-hold` / `aida:merge-hold-recorded` labels for operator holds; for advisor signoff, require explicit signoff markers (`ADVISOR SIGNOFF` / `SIGN-OFF: PASS`) with word-bounded SHA matching instead of substring `"advisor signoff"` or `"at "`.
+    - Anchor all three criteria (`trace:STORY-1688.acd96462`, `trace:STORY-1688.ace1f616`, `trace:STORY-1688.acfeeb8f`), including a unit test for `acfeeb8f` asserting `hook_allowed = false` and `CronJobFired` event-driven routing with zero model-side polling.
+  created_at: 2026-10-20T05:15:47.861120196Z
+  modified_at: 2026-10-20T05:15:47.861120196Z
 history:
 - id: 01a150cb-d752-7903-8da3-bcdf44282df0
   author: joe
