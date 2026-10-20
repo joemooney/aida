@@ -25,12 +25,12 @@ description: |
   1. Fixture tests for each check, including a dead lane, a stale log, an unpicked READY PR and a stale gate wait.
   2. The 2026-10-13 incidents, replayed, each produce a finding within one tick.
   3. No model-side polling anywhere.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T01:36:52.520942602Z
-modified_at: 2026-10-20T20:11:27.286942612Z
+modified_at: 2026-10-20T20:11:30.373624080Z
 req_type: Story
 relationships:
 - rel_type:
@@ -198,6 +198,12 @@ comments:
   created_at: 2026-10-20T20:11:27.286942612Z
   modified_at: 2026-10-20T20:11:27.286942612Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15af0-c2c5-7d83-b5bc-e2e600e5855b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Detection logic is sound and CI Build is green, but the guard ships enabled against an existing backlog of dead leases, dead-lane records never expire, incident replays use hand-written lane records instead of production discovery, and no acceptance criterion is traced (criterion 3 has no test).. No triage reason was given.'
+  created_at: 2026-10-20T20:11:30.373619270Z
+  modified_at: 2026-10-20T20:11:30.373619270Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a150cb-d752-7903-8da3-bcdf44282df0
   author: joe
@@ -225,6 +231,14 @@ history:
   timestamp: 2026-10-18T23:43:51.077517769Z
   session_id: 01a1516381f6
   changes: []
+- id: 01a15af0-c2c5-7d83-b5bc-e2df9de43563
+  author: joe
+  timestamp: 2026-10-20T20:11:30.373602886Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 8dd9f4880796aecb8ea611d5896e0e1cd1d0388a
   branch: main
@@ -233,11 +247,3 @@ filed_at:
   aida_build_sha: 3163cc1b21
   vendor: claude
   session: 5740e215-8b31-4a71-aa61-528a3fbb8c6f
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Detection logic is sound and CI Build is green, but the guard ships enabled against an existing backlog of dead leases, dead-lane records never expire, incident replays use hand-written lane records instead of production discovery, and no acceptance criterion is traced (criterion 3 has no test).
-  recovery_hint: address the review findings, move STORY-1688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T23:43:50.825275314Z
