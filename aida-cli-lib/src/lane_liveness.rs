@@ -624,8 +624,9 @@ pub(crate) fn route_findings(
             &message,
             Some(NOTIFY_TIMEOUT),
         ) {
-            // A rate-limited (suppressed) notice was not delivered; retry it.
-            Ok(outcome) if outcome.suppressed == 0 => {
+            // Unconfigured notify reaches no one and a rate-limited notice
+            // was not delivered: leave both unrouted so they retry.
+            Ok(outcome) if outcome.configured && outcome.suppressed == 0 => {
                 for f in &human {
                     routed.entry(f.id.clone()).or_insert(now);
                 }
@@ -1255,9 +1256,16 @@ fn load_open_prs(
             });
         let checks_green_at = rollup_green_at(&pr.status_check_rollup, reworked_past_refusal);
         let scope = format!("PR-{}", pr.number);
+        // A reviewer session (`aida queue work PR-<n> --role reviewer`) has a
+        // worktree and no agent pid, so the canonical state reads it Dormant
+        // until a live session is probed; either way the review has started.
+        // Only a Stale lease (worktree gone or past 24h) has not.
         let review_lease = leases.iter().any(|l| {
             l.scope.eq_ignore_ascii_case(&scope)
-                && matches!(crate::lease_state_for(l, &[], now), crate::LeaseState::Live)
+                && !matches!(
+                    crate::lease_state_for(l, &[], now),
+                    crate::LeaseState::Stale
+                )
                 && l.pr_head_sha
                     .as_deref()
                     .is_none_or(|sha| crate::review_verdict::same_reviewed_sha(sha, head))

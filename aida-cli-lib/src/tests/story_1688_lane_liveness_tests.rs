@@ -1000,6 +1000,154 @@ fn orchestrate_templates_send_and_answer_the_sketch_request() {
     }
 }
 
+fn git(root: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {args:?}");
+}
+
+/// A git repo on `main` whose committed `.aida/config.toml` is `config`.
+fn repo_with_config(root: &Path, config: &str) {
+    git(root, &["init", "-q", "-b", "main"]);
+    git(root, &["config", "user.email", "test@example.com"]);
+    git(root, &["config", "user.name", "AIDA Test"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(root.join(".aida").join("config.toml"), config).unwrap();
+    git(root, &["add", ".aida/config.toml"]);
+    git(root, &["commit", "-qm", "seed"]);
+}
+
+// Round 3 (major): a reviewer session minted by the production writer
+// (`aida queue work PR-<n> --role reviewer` -> `session_start`) has a
+// worktree and no agent pid. Its PR counts as review started, not unpicked.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn reviewer_session_lease_counts_as_review_started() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    repo_with_config(&root, "");
+    // The forge's PR head ref, which `session_start` fetches for a PR scope.
+    let origin = tmp.path().join("origin.git");
+    git(
+        tmp.path(),
+        &["init", "-q", "--bare", origin.to_str().unwrap()],
+    );
+    git(
+        &root,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    git(
+        &root,
+        &["push", "-q", "origin", "main", "HEAD:refs/pull/2770/head"],
+    );
+    let head = String::from_utf8(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat_and(&root, "reviewer", &[], &[]);
+    let worktree = root.join("review-wt");
+    crate::session_start::session_start(
+        "PR-2770",
+        None,
+        None,
+        false,
+        Some(worktree.to_str().unwrap()),
+        Some("github"),
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        Some("reviewer".to_string()),
+        false,
+        Some(false),
+        /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
+    )
+    .unwrap();
+    let minted = crate::leases::list_leases(&root);
+    assert_eq!(minted.len(), 1, "{minted:?}");
+    assert!(minted[0].review_verb && minted[0].active_pid.is_none());
+
+    let now = Utc::now();
+    let feed = prs_json(vec![gh_pr(
+        2770,
+        &head,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    assert!(findings_at(&root, now, &prs).is_empty());
+
+    // Once the review session is gone, the PR is unpicked again.
+    std::fs::remove_file(lease_path(&root, &minted[0].id)).unwrap();
+    assert_eq!(
+        ids(&findings_at(&root, now, &prs)),
+        [format!(
+            "lane-liveness:unpicked-ready-pr:PR-2770@{}",
+            &head[..8]
+        )]
+    );
+}
+
+// Round 3 (minor): a human-only hold counts as routed only once a notice
+// reached the operator. With notify unconfigured it stays unrouted and
+// retries every tick; with a configured command it is recorded once.
+// trace:STORY-1688.acd96462 | ai:claude
+#[test]
+fn operator_gate_is_routed_only_when_a_notice_is_sent() {
+    let hold = |root: &Path| {
+        crate::merge_hold::write_typed_hold(
+            root,
+            &crate::merge_hold::typed_hold(
+                2780,
+                crate::merge_hold::HoldReasonKind::Supervision,
+                "supervised spec needs a human",
+                Some(HEAD_A.into()),
+            ),
+        )
+        .unwrap();
+    };
+    let id = "lane-liveness:gate-wait-operator:PR-2780@a1b2c3d4";
+    let later = Utc::now() + Duration::minutes(20);
+
+    let unconfigured = tempfile::tempdir().unwrap();
+    hold(unconfigured.path());
+    for tick in 0..2 {
+        let found = scan_and_route_at(
+            unconfigured.path(),
+            later + Duration::minutes(10 * tick),
+            true,
+            &no_prs,
+        );
+        assert_eq!(found.len(), 1);
+        assert!(!load_routed(unconfigured.path()).contains_key(id));
+    }
+
+    let configured = tempfile::tempdir().unwrap();
+    repo_with_config(configured.path(), "[notify]\ncommand = \"true\"\n");
+    hold(configured.path());
+    scan_and_route_at(configured.path(), later, true, &no_prs);
+    assert!(load_routed(configured.path()).contains_key(id));
+}
+
 // Every route target is a registered agent role, and every route has a job.
 // trace:STORY-1688.acd96462 | ai:claude
 #[test]
