@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T10:24:36.954851539Z
-modified_at: 2026-10-20T10:56:30.521308215Z
+modified_at: 2026-10-20T10:58:10.215134293Z
 req_type: Task
 tags:
 - from-review:PR-2772
@@ -24,6 +24,15 @@ relationships:
   target_id: 01a158d7-5897-7532-b5dc-ba44705d955f
   created_at: 2026-10-20T10:56:30.521295942Z
   created_by: joe
+comments:
+- id: 01a158f6-2aa7-7e12-98b6-88d19e97ea14
+  author: joe
+  content: |
+    Advisor 2026-10-20 03:58: folded in as superseded (open-list cleanup). These items are now this spec's scope:
+    - TASK-1999: Bounded default-branch resolvers duplicate their unbounded twins (drift risk)
+  created_at: 2026-10-20T10:58:10.215134293Z
+  modified_at: 2026-10-20T10:58:10.215134293Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a158f4-ac09-7051-9120-dfe4f9d8c673
   author: joe
