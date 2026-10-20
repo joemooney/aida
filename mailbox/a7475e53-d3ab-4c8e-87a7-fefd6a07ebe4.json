@@ -1,0 +1,18 @@
+{
+  "id": "a7475e53-d3ab-4c8e-87a7-fefd6a07ebe4",
+  "thread_id": "a7475e53-d3ab-4c8e-87a7-fefd6a07ebe4",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792472872492,
+  "body": "PR #2748 ready at 90f0c63303a7661faf68f3b44cf07bd180d8b083 (0 behind origin/main).\n- BUG-2001: os_wrapped_program_and_args bound headless_worktree_root() read-write even when it fell back to cwd/$HOME outside a git repository; now resolves find_project_root_from(worktree_root) and refuses outside git. Proven by session::tests::os_wrap_outside_git_refuses_instead_of_binding_cwd_rw.\n- BUG-2012: contained_settings_json allowed Edit/Write on <root>/.git when a main checkout was passed without store_write_paths/extra_deny, and two BUG-1971 mutations survived; now denies <root>/.git and <root>/.git/** via contained_main_checkout_git_deny_paths(write_roots) and routes contained_session_git_root through contained_session_write_roots. Proven by tests::bug_1928_contained_boundary_tests::main_checkout_git_hooks_and_config_are_denied_by_contained_settings and tests::bug_1928_contained_boundary_tests::spawn_claude_headless_resume_forwards_contained_then_some_cwd.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
