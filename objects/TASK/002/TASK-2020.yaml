@@ -1,0 +1,26 @@
+id: 01a15aee-5660-7a00-b624-a30d03b34741
+spec_id: TASK-2020
+agreed_id: TASK-2020
+title: Recalibrate per-test nextest budgets from more runs once the test lanes gate
+description: |
+  scripts/test-time-budget.toml was calibrated from only 3 nextest shadow runs on main. A test whose max measured time is under about 6.7s (x1.5 stays under the default) gets no entry and must stay under the hard 10s default_limit. Under nextest's num-cpus parallel load, the wall-clock-sensitive integration tests (bug_1594_show_bounded, bug_1956_*, bug_1993_*) may drift over it and fail the Test time budget step. Recalibrate from more gating runs.
+
+  Raised in review of PR-2785: https://github.com/joemooney/aida/pull/2785#issuecomment-6300385815
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T20:08:51.552079826Z
+modified_at: 2026-10-20T20:08:51.552079826Z
+req_type: Task
+tags:
+- from-review:PR-2785
+- severity:minor
+filed_at:
+  code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
+  branch: pr-2785
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15ae8fccf
