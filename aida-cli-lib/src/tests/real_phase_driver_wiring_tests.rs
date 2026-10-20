@@ -2895,7 +2895,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
     assert_eq!(porcelain(), "", "fixture store starts clean");
     let head_before = git(&store_root, &["rev-parse", "HEAD"]);
 
-    let launched_at = crate::queue_cmd::reviewer_spawn_instant(&work);
+    let baseline = crate::child_store_commit::StoreBaseline::capture(&store_root);
     // The contained reviewer: store files writable, git history not.
     let git_dirs = [store_root.join(".git"), store_root.join(".git/objects")];
     let host_modes: Vec<_> = git_dirs
@@ -2929,7 +2929,7 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
 
     // The host launcher, after the reviewer exits.
     let committed =
-        crate::child_store_commit::commit_child_store_writes(&work, launched_at, "reviewer");
+        crate::child_store_commit::commit_child_store_writes(&work, &baseline, "reviewer");
     assert!(
         committed.iter().any(|p| p.ends_with("TASK-9.yaml")),
         "the shelved spec is committed: {committed:?}"
@@ -2951,4 +2951,178 @@ fn bug_2180_reviewer_request_changes_leaves_store_worktree_clean() {
         .unwrap();
     assert_eq!(spec.status, RequirementStatus::NeedsAttention);
     assert_eq!(spec.failure_reason.as_ref().unwrap().phase, "reviewer");
+}
+
+/// A project whose distributed store has a committed lease file, for the
+/// BUG-2185 launcher wiring tests. `extra_config` is appended to
+/// `.aida/config.toml`. Returns `(work, store_root)`.
+// trace:BUG-2185 | ai:claude
+fn bug_2185_project_with_store(
+    tmp: &std::path::Path,
+    extra_config: &str,
+) -> (std::path::PathBuf, std::path::PathBuf) {
+    let work = tmp.join("work");
+    std::fs::create_dir_all(work.join(".aida")).unwrap();
+    git(&work, &["init", "-q", "-b", "main"]);
+    git(&work, &["config", "user.email", "aida@example.invalid"]);
+    git(&work, &["config", "user.name", "AIDA Test"]);
+    write_commit(&work, "base.txt", "base\n", "chore: base");
+    std::fs::write(
+        work.join(".aida/config.toml"),
+        format!("store_path = \".aida-store\"\n{extra_config}"),
+    )
+    .unwrap();
+    let store_root = work.join(".aida-store");
+    std::fs::create_dir_all(store_root.join("coordination/leases")).unwrap();
+    git(&store_root, &["init", "-q", "-b", "aida-store"]);
+    git(
+        &store_root,
+        &["config", "user.email", "aida@example.invalid"],
+    );
+    git(&store_root, &["config", "user.name", "AIDA Test"]);
+    write_commit(&store_root, ".gitignore", ".aida/\n", "fixture");
+    write_commit(
+        &store_root,
+        "coordination/leases/held.toml",
+        "id = \"held\"\n",
+        "fixture",
+    );
+    (work, store_root)
+}
+
+/// The store writes a BUG-2185 child makes: a lease release (a deletion,
+/// which has no modification time) and a new object.
+// trace:BUG-2185 | ai:claude
+fn bug_2185_child_store_writes(store_root: &std::path::Path) -> String {
+    format!(
+        "rm '{s}/coordination/leases/held.toml'\nmkdir -p '{s}/objects'\nprintf 'n: 1\\n' > '{s}/objects/new.yaml'\n",
+        s = store_root.display()
+    )
+}
+
+/// Both child writes are committed together, and nothing of theirs is left
+/// dirty. (Host dirt from before the launch, such as the seat registry the
+/// standalone launcher writes, is not the child's and stays.)
+fn bug_2185_assert_store_committed(store_root: &std::path::Path) {
+    let status = git(
+        store_root,
+        &["status", "--porcelain", "--untracked-files=all"],
+    );
+    assert!(
+        !status.contains("coordination/leases/held.toml") && !status.contains("objects/new.yaml"),
+        "the launcher left the child's store writes uncommitted:\n{status}"
+    );
+    let head = git(
+        store_root,
+        &["show", "--name-status", "--format=%s", "HEAD"],
+    );
+    assert!(
+        head.starts_with("reviewer: commit 2 store changes")
+            && head.contains("D\tcoordination/leases/held.toml")
+            && head.contains("A\tobjects/new.yaml"),
+        "the deletion and the new object are one launcher commit:\n{head}"
+    );
+}
+
+/// The phase driver's real reviewer entry point commits the child's store
+/// writes, a deletion included, on the error exit a missing verdict takes.
+/// Fails if `run_reviewer` stops arming the commit.
+// trace:BUG-2185 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2185_phase_driver_reviewer_commits_child_store_writes_on_its_error_exit() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (work, store_root) = bug_2185_project_with_store(tmp.path(), "");
+    let fake_aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &fake_aida,
+        format!(
+            "#!/bin/sh\n{}exit 0\n",
+            bug_2185_child_store_writes(&store_root)
+        ),
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+    let mut d = driver(&work, "TASK-9");
+    assert_eq!(d.lifecycle_forge, crate::forge::ForgeKind::None);
+    d.aida_exe = fake_aida;
+    d.pr_number = Some(7);
+
+    let failure = d
+        .run_reviewer()
+        .expect_err("the fake reviewer records no verdict");
+    assert_eq!(failure.kind, FailureKind::NoVerdict, "{failure:?}");
+    bug_2185_assert_store_committed(&store_root);
+}
+
+/// `aida queue work --role reviewer`'s real launcher, `run_standalone_reviewer`,
+/// commits the child's store writes on its error exit (no verdict recorded).
+/// Fails if the launcher stops arming the commit.
+// trace:BUG-2185 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(home.join(".aida")).unwrap();
+    let (work, store_root) =
+        bug_2185_project_with_store(tmp.path(), "[agents]\nenabled = [\"codex\"]\n");
+    let mock = tmp.path().join("mock-agent.sh");
+    crate::test_exec::write_executable(
+        &mock,
+        format!(
+            "#!/bin/sh\n{}exit 0\n",
+            bug_2185_child_store_writes(&store_root)
+        ),
+    );
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS_VENDOR", None),
+        ("AIDA_HOME", Some(home.to_str().unwrap())),
+        ("HOME", Some(home.to_str().unwrap())),
+        ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        (crate::seat_authority::GRANT_ENV, None),
+    ]);
+    let grant_id = crate::seat_authority::test_support::mint_grant_for(
+        &work,
+        &crate::current_user_id(None),
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::seat_authority::GRANT_ENV, &grant_id);
+    crate::session::set_headless_vendor_override(None);
+    let launch_vendor = crate::session::resolve_enabled_headless_vendor(&work).unwrap();
+    let worktree = tmp.path().join("reviewer-worktree");
+    std::fs::create_dir_all(&worktree).unwrap();
+
+    let result = crate::queue_cmd::run_standalone_reviewer(
+        &work,
+        59,
+        crate::session_misc::QueueWorkLaunch::Fresh(
+            "019e0000-0000-7000-8000-0000000021850".to_string(),
+        ),
+        "/aida-review --pr 59",
+        None,
+        "STORY-59",
+        "review/story-59",
+        "reviewer",
+        &worktree,
+        false,
+        true,
+        &tmp.path().join("verdict.json"),
+        false,
+        launch_vendor,
+    );
+    let e = result.expect_err("the mock records no verdict");
+    assert!(
+        e.downcast_ref::<crate::queue_cmd::NoReviewVerdict>()
+            .is_some(),
+        "the launch must fail only for the missing verdict: {e:#}"
+    );
+    bug_2185_assert_store_committed(&store_root);
+    crate::session::set_headless_vendor_override(None);
 }

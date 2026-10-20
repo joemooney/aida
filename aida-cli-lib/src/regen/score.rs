@@ -645,6 +645,27 @@ fn run_trial(
     harness: &str,
     unconfined: bool,
 ) -> Result<TrialRecord> {
+    run_trial_with_timeout(
+        config, dir, manifest, model, vendor, harness, unconfined, None,
+    )
+}
+
+// Fixtures that hang a generated tool pass a short deadline instead of
+// waiting out the 30s default.
+// trace:TASK-1791 | ai:claude
+#[cfg(test)]
+#[cfg(target_os = "linux")]
+#[allow(clippy::too_many_arguments)]
+fn run_trial_with_timeout(
+    config: &RegenConfig,
+    dir: &Path,
+    manifest: Manifest,
+    model: &str,
+    vendor: &str,
+    harness: &str,
+    unconfined: bool,
+    command_timeout: Option<std::time::Duration>,
+) -> Result<TrialRecord> {
     // Legacy execution-policy fixtures become an actual committed executable
     // oracle, exercising the same bundle path as production.
     let repo = tempfile::TempDir::new()?;
@@ -677,7 +698,10 @@ fn run_trial(
     let cache = tempfile::tempdir_in("/var/tmp")?;
     let bundle =
         OracleBundle::freeze_in_cache(repo.path(), sha, &config.oracle_paths, dir, cache.path())?;
-    let env = ScoreEnv::new(&config, unconfined)?;
+    let mut env = ScoreEnv::new(&config, unconfined)?;
+    if let Some(timeout) = command_timeout {
+        env.command_timeout = timeout;
+    }
     run_trial_in_env(
         &config, dir, manifest, model, vendor, harness, unconfined, env, &bundle, None,
     )
@@ -1058,11 +1082,16 @@ mod tests {
             .trim()
             .parse()
             .unwrap();
-        use std::os::fd::{AsRawFd, FromRawFd};
         // Absent only if the timeout struck between the two writes; the pidfd
         // wait then pins whatever the PID names now (still bounded).
         let start = std::fs::read_to_string(dir.path().join("descendant.start")).ok();
-        let start = start.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        assert_group_member_exits(pid, start.as_deref());
+    }
+
+    /// A process SIGKILLed by a group timeout exits within a generous bound.
+    pub(super) fn assert_group_member_exits(pid: u32, start: Option<&str>) {
+        use std::os::fd::{AsRawFd, FromRawFd};
+        let start = start.map(str::trim).filter(|s| !s.is_empty());
         // SIGKILL is delivered when killpg returns, but the descendant only
         // exits once the kernel next runs it, which can be well over a second
         // on a loaded runner (e.g. while it pages in from disk). The old 1s

@@ -200,6 +200,60 @@ pub(crate) enum Flow {
     Continue,
 }
 
+/// The option that replaced a command's former local `--format`, for the
+/// commands whose own format option has another name; `value` is the global
+/// `--format` value given.
+// trace:BUG-2189 | ai:claude
+fn renamed_format_hint(command: &str, value: &str) -> Option<String> {
+    match command {
+        "export" => {
+            let value = if value == "json" {
+                value
+            } else {
+                "<mapping|json|spec|impl|tree>"
+            };
+            Some(format!(
+                "For the export format, use --export-format {value} (or -f {value})."
+            ))
+        }
+        "report ai-integration" => {
+            Some("For the report format, use --report-format markdown|html (or -f).".into())
+        }
+        "config format" => Some(
+            "Pass the ID format as a positional argument: aida config format single|two.".into(),
+        ),
+        _ => None,
+    }
+}
+
+/// The error for an explicit global `--format <value>` on `aida <command>`
+/// when that command's own format option has another name; `None` otherwise.
+// trace:BUG-2189 | ai:claude
+pub(crate) fn renamed_format_error(command: &str, value: &str) -> Option<anyhow::Error> {
+    let hint = renamed_format_hint(command, value)?;
+    Some(anyhow::anyhow!(
+        "--format {value} sets the CLI output format (human/toon/json), which `aida {command}` \
+         does not use. {hint}"
+    ))
+}
+
+/// Refuse an explicit global `--format` on a command whose own format option
+/// has another name, so the former local `--format` spelling fails loudly
+/// instead of silently producing the default format.
+// trace:BUG-2189 | ai:claude
+pub(crate) fn refuse_global_format(ctx: &DispatchCtx, command: &str) -> Result<()> {
+    let Some(format) = ctx.globals.and_then(|globals| globals.format) else {
+        return Ok(());
+    };
+    let value = clap::ValueEnum::to_possible_value(&format)
+        .map(|value| value.get_name().to_string())
+        .unwrap_or_default();
+    match renamed_format_error(command, &value) {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
 /// A `return <Result<()>>` from a legacy dispatcher arm, as a `Flow`.
 // trace:STORY-1728 | ai:claude
 pub(crate) fn returned(result: Result<()>) -> Result<Flow> {
@@ -481,3 +535,7 @@ mod story_1728_command_registry_tests;
 #[cfg(test)]
 #[path = "tests/story_1728_policy_parity_tests.rs"]
 mod story_1728_policy_parity_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2189_format_collision_tests.rs"]
+mod bug_2189_format_collision_tests;

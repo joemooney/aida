@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
 /// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
@@ -2860,6 +2861,8 @@ pub(crate) fn remote_head_sha(project_root: &std::path::Path, branch: &str) -> O
         .arg("-C")
         .arg(project_root)
         .args(["ls-remote", "origin", &format!("refs/heads/{branch}")])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .output()
         .ok()?;
     if !out.status.success() {

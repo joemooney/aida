@@ -10,9 +10,9 @@ are retained with recovery instructions; failed children revoke only the grant
 issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
-CI fan-out keeps libtest: CLI-library units, two deterministic CLI-integration
-halves, remaining workspace tests/doctests, and two gate lanes run on six
-parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
+CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
+run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
 lanes succeed. Test timing budgets remain per binary, and each test lane checks
 for untracked root entries. See [CI fan-out](docs/testing/ci-test-shards.md).
 <!-- trace:TASK-1949 | ai:codex -->
@@ -593,8 +593,10 @@ descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
 the group and records an output-limit failure without child diagnostics. The
 best-effort survivor probe runs after a successful installation; installer
 failure paths (including timeout) return before that probe, so escaped
-descendants on those paths are not detected by it.
-<!-- trace:TASK-1791 | ai:codex -->
+descendants on those paths are not detected by it. A completeness `--help`
+probe that times out marks its component incomplete with the reason
+`--help timed out`; the trial still runs the oracle and keeps its record.
+<!-- trace:TASK-1791 | ai:codex trace:TASK-1791 | ai:claude -->
 
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
