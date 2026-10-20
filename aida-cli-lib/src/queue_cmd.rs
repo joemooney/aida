@@ -7,6 +7,7 @@
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use std::path::Path;
 
 // trace:STORY-1728 | ai:claude
@@ -14470,6 +14471,8 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         .arg("-C")
         .arg(repo)
         .args(args)
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(repo, "origin")
         .status()?;
     Ok(status.success())
 }
