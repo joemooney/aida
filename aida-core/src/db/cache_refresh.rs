@@ -264,14 +264,12 @@ fn lock_holders(_sidecar: &Path) -> String {
 /// `try_acquire` then reports contention against an empty registry until the
 /// child reaches `exec`.
 ///
-/// That is the kernel's contract, not a defect here: nothing in `RefreshLock`
-/// can stop a sibling thread from forking, `O_CLOEXEC` is already the strongest
-/// available mitigation, and in production the caller simply loses the
-/// single-flight race and serves stale — the designed degradation. It is only a
-/// problem for a test that demands the lock be free at the instant the last
-/// guard drops, which is not something the kernel promises. Such a test waits
-/// for the window to close, bounded, and reports the diagnostic for a
-/// descriptor that never comes back.
+/// Nothing in `RefreshLock` can stop a sibling thread from forking, but its
+/// drop now releases the lock with an explicit `LOCK_UN` before closing, which
+/// frees the description for every copy (BUG-2156), so no window remains once
+/// the last guard drops. Tests written before the unlock still wait for it,
+/// bounded, as a backstop that reports the diagnostic for a descriptor that
+/// never comes back.
 ///
 /// The bound is a coarse backstop, not a measurement: the window closes as soon
 /// as the racing child reaches `exec`, which is microseconds on an idle host,
@@ -334,7 +332,15 @@ impl Drop for RefreshLock {
         let lock = held.get_mut(&self.path).unwrap();
         lock.depth -= 1;
         if lock.depth == 0 {
-            held.remove(&self.path);
+            if let Some(lock) = held.remove(&self.path) {
+                // Unlock before closing: a child a sibling thread forked while
+                // this guard was alive holds a copy of the locked description
+                // until its exec, and a bare close would leave the flock held
+                // by that copy, so the next reader loses the lock and serves
+                // stale (BUG-2156). LOCK_UN on any copy releases it for all.
+                // trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
+                let _ = fs2::FileExt::unlock(&lock._file);
+            }
         }
     }
 }
@@ -484,10 +490,15 @@ thread_local! {
 // trace:TASK-1956 | ai:claude
 #[cfg(test)]
 pub(crate) fn as_tui_test_emitter<T>(f: impl FnOnce() -> T) -> T {
-    TUI_TEST_EMITTER.with(|e| e.set(true));
-    let out = f();
-    TUI_TEST_EMITTER.with(|e| e.set(false));
-    out
+    // Restore the prior value even if `f` panics, so nesting stays correct.
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TUI_TEST_EMITTER.with(|e| e.set(self.0));
+        }
+    }
+    let _restore = Restore(TUI_TEST_EMITTER.with(|e| e.replace(true)));
+    f()
 }
 
 // trace:TASK-1739 | ai:codex
@@ -795,13 +806,14 @@ mod tests {
     /// host, made deterministic. `pre_exec` runs in the child after `fork` and
     /// before `exec`, with the parent's descriptors — including the guard's —
     /// still open, so holding the child there reproduces a descheduled
-    /// pre-exec child exactly. Dropping the guard in that window must leave the
-    /// lock held, with an empty registry, and the diagnostic must say SELF
-    /// rather than implicate an unrelated holder.
-    // trace:BUG-1729 | ai:claude
+    /// pre-exec child exactly. Dropping the guard in that window used to leave
+    /// the lock held by the child's copy, so the next reader lost it and served
+    /// stale (BUG-2156). The drop now unlocks explicitly: the lock is free at
+    /// once, with the child still holding its copy of the descriptor.
+    // trace:BUG-1729 | ai:claude trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
     #[cfg(target_os = "linux")]
     #[test]
-    fn a_forked_child_holds_the_lock_past_its_guard_until_exec() {
+    fn a_forked_child_does_not_hold_the_lock_past_its_guard() {
         use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
         use std::os::unix::process::CommandExt;
         let d = tempfile::tempdir().unwrap();
@@ -891,33 +903,16 @@ mod tests {
         );
 
         drop(guard);
-        let report = RefreshLock::diagnose_unavailable(&path);
         assert!(
-            RefreshLock::try_acquire(&path).unwrap().is_none(),
-            "the inherited descriptor did not hold the lock past the guard; {report}"
+            RefreshLock::try_acquire(&path).unwrap().is_some(),
+            "the inherited descriptor held the lock past the guard; {}",
+            RefreshLock::diagnose_unavailable(&path)
         );
-        assert!(report.contains("registry_entry=None"), "{report}");
-        assert!(report.contains("WouldBlock"), "{report}");
-        // The lock record keeps the pid that CREATED it, so the holder reads as
-        // this process even though the descriptor keeping it alive belongs to a
-        // child. That pair is what a CI log has to go on: a holder of SELF with
-        // an empty `own_fds` says an inherited descriptor, not a leak here,
-        // though it cannot say whose fork produced it; a holder of SELF with a
-        // descriptor still listed is a leak, which
-        // `the_diagnostic_names_a_descriptor_no_guard_owns` pins.
-        assert!(report.contains("SELF/pid="), "{report}");
-        assert!(report.contains("own_fds=[]"), "{report}");
 
         // Release the child: its `poll` sees EOF and it proceeds to `exec`.
         // trace:BUG-1939 | ai:claude
         drop(release_w);
         spawner.join().unwrap();
-        // Once the child execs, its copy closes and the lock is free again.
-        assert!(
-            acquire_past_fork_window(&path).unwrap().is_some(),
-            "the lock stayed held after the forked child exited; {}",
-            RefreshLock::diagnose_unavailable(&path)
-        );
     }
 
     /// A diagnostic is worth only what it says at the one moment it is read.

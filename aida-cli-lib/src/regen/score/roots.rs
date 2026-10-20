@@ -222,6 +222,34 @@ fn is_own_pre_exec_fork(proc_dir: &Path) -> bool {
     }
 }
 
+/// The process group from `/proc/<pid>/stat` (the field after the state, which
+/// follows the parenthesized command name).
+// trace:TASK-1956 | ai:claude
+fn process_group(proc_dir: &Path) -> Option<i32> {
+    let stat = std::fs::read_to_string(proc_dir.join("stat")).ok()?;
+    stat.rsplit_once(')')?
+        .1
+        .split_whitespace()
+        .nth(2)?
+        .parse()
+        .ok()
+}
+
+/// A child of this process caught mid-exec by a concurrent spawn: its parent
+/// is the scorer and it sits either in the scorer's own process group (a plain
+/// `Command`) or in a group it leads (`command::run`'s `process_group(0)`).
+/// A clone(CLONE_PARENT) sibling of a scored command also has the scorer as
+/// parent, but inherits the scored command's group, which it neither leads nor
+/// shares with the scorer, so it is never mistaken for one.
+// trace:TASK-1956 | ai:claude trace:BUG-2155 | ai:claude
+fn is_own_spawn(proc_dir: &Path, pid: i32) -> bool {
+    if parent_pid(proc_dir) != Some(std::process::id() as i32) {
+        return false;
+    }
+    let own_group = unsafe { libc::getpgrp() };
+    process_group(proc_dir).is_some_and(|group| group == own_group || group == pid)
+}
+
 /// Whether descriptor `fd` of the process at `proc_dir` is close-on-exec, from
 /// the `flags:` line of its fdinfo (octal, with O_CLOEXEC reported there).
 /// Unreadable means "no": the descriptor still counts as held.
@@ -286,9 +314,12 @@ pub(super) fn survivors(roots: &[PathBuf], guard_fd: Option<RawFd>, kill: bool) 
         // that copy SIGKILLed concurrent `git` spawns mid-exec, which then
         // failed with empty stderr in parallel regen tests (BUG-2155). A
         // scored command holds the guard with close-on-exec cleared (see
-        // `run_with_bundle`), so it still matches.
+        // `run_with_bundle`), so it still matches, and so does a
+        // clone(CLONE_PARENT) sibling of one that sets close-on-exec on its
+        // copy: it stays in the scored command's process group. Only a sibling
+        // that also leaves that group evades, no more than closing the guard.
         // trace:TASK-1956 | ai:claude trace:BUG-2155 | ai:claude
-        let own_child = parent_pid(&entry.path()) == Some(std::process::id() as i32);
+        let own_child = is_own_spawn(&entry.path(), pid);
         let holds_guard = guard.as_ref().is_some_and(|guard| {
             std::fs::read_dir(entry.path().join("fd"))
                 .ok()
@@ -426,7 +457,8 @@ mod tests {
                 });
             }
             let Ok(mut child) = cmd.spawn() else {
-                return; // No python3.
+                eprintln!("SKIP close_on_exec_guard_copy_in_a_mid_exec_child_is_not_a_survivor: /usr/bin/python3 cannot be spawned");
+                return;
             };
             let pid = child.id() as i32;
             let mut ready = String::new();
@@ -484,7 +516,10 @@ print(pid,flush=True)
         {
             Ok(out) if out.status.success() => out,
             // No python3, or an architecture without a known clone number.
-            _ => return,
+            _ => {
+                eprintln!("SKIP clone_parent_sibling_of_a_scored_command_is_counted_and_killed: /usr/bin/python3 could not clone a sibling");
+                return;
+            }
         };
         let sibling: i32 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
         assert!(sibling > 0, "clone failed");
@@ -503,6 +538,89 @@ print(pid,flush=True)
             "not a CLONE_PARENT sibling"
         );
         assert_eq!(count, 1, "the sibling under the root was not counted");
+        assert_eq!(
+            ended,
+            Some(Some(libc::SIGKILL)),
+            "the sibling was not killed"
+        );
+    }
+
+    // A scored command in its own process group, holding the guard as
+    // inheritable, clones a CLONE_PARENT sibling that marks its guard copy
+    // close-on-exec. Its parent is the scorer, like a mid-exec spawn, but it is
+    // in the scored command's group, so it is still counted and killed.
+    // trace:TASK-1956 | ai:claude
+    #[test]
+    fn close_on_exec_guard_copy_in_a_clone_parent_sibling_is_a_survivor() {
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        let mut fds = [0; 2];
+        assert_eq!(unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) }, 0);
+        let (read_end, write_end) =
+            unsafe { (File::from_raw_fd(fds[0]), File::from_raw_fd(fds[1])) };
+        let guard = write_end.as_raw_fd();
+        let unrelated_root = TempDir::new().unwrap();
+        let script = format!(
+            r#"
+import ctypes,os,time
+libc=ctypes.CDLL(None,use_errno=True)
+CLONE_PARENT,SIGCHLD,SYS_clone=0x8000,17,{{'x86_64':56,'aarch64':220}}[os.uname().machine]
+pid=libc.syscall(SYS_clone,CLONE_PARENT|SIGCHLD,0,0,0,0)
+if pid==0:
+ os.set_inheritable({guard},False)
+ print('ready',flush=True)
+ n=os.open('/dev/null',os.O_RDWR)
+ for fd in (0,1,2): os.dup2(n,fd)
+ time.sleep(60); os._exit(0)
+print(pid,flush=True)
+"#
+        );
+        let mut cmd = Command::new("/usr/bin/python3");
+        cmd.args(["-c", &script])
+            .process_group(0)
+            .stdin(Stdio::null());
+        unsafe {
+            cmd.pre_exec(move || {
+                if libc::fcntl(guard, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        // Output waits for the sibling's stdout too, so it is ready by then.
+        let out = match cmd.output() {
+            Ok(out) if out.status.success() => out,
+            _ => {
+                eprintln!("SKIP close_on_exec_guard_copy_in_a_clone_parent_sibling_is_a_survivor: /usr/bin/python3 could not clone a sibling");
+                return;
+            }
+        };
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let sibling: i32 = stdout
+            .lines()
+            .find_map(|line| line.trim().parse().ok())
+            .expect("the sibling pid");
+        assert!(sibling > 0, "clone failed");
+        assert!(stdout.lines().any(|line| line == "ready"), "{stdout}");
+        let parent = parent_pid(Path::new(&format!("/proc/{sibling}")));
+        let count = survivors(
+            std::slice::from_ref(&unrelated_root.path().to_path_buf()),
+            Some(guard),
+            true,
+        )
+        .unwrap();
+        let ended = reap(sibling, 30);
+        if ended.is_none() {
+            unsafe { libc::kill(sibling, libc::SIGKILL) };
+            reap(sibling, 30);
+        }
+        drop((read_end, write_end));
+        assert_eq!(
+            parent,
+            Some(std::process::id() as i32),
+            "not a CLONE_PARENT sibling"
+        );
+        assert_eq!(count, 1, "the close-on-exec sibling was not counted");
         assert_eq!(
             ended,
             Some(Some(libc::SIGKILL)),
