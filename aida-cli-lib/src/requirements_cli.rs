@@ -6159,19 +6159,21 @@ fn run_show(
                                             ids.push(origin.to_string());
                                         }
                                     }
-                                    let linkage = {
+                                    let (linkage, drift_since_filing) = {
                                         let _phase = crate::usage::phase("linkage");
-                                        crate::collect_git_linkage(&project_root, &ids)
+                                        let linkage =
+                                            crate::collect_git_linkage(&project_root, &ids);
+                                        // TASK-1475: compute before `linkage.{files,commits}`
+                                        // are moved into the JSON payload below.
+                                        // trace:TASK-1475 trace:BUG-1993 | ai:claude
+                                        let drift_since_filing = crate::filing_drift_hint(
+                                            &project_root,
+                                            req.filed_at.as_ref(),
+                                            &linkage.files,
+                                            &linkage.commits,
+                                        );
+                                        (linkage, drift_since_filing)
                                     };
-                                    // TASK-1475: compute before `linkage.{files,commits}`
-                                    // are moved into the JSON payload below.
-                                    // trace:TASK-1475 | ai:claude
-                                    let drift_since_filing = crate::filing_drift_hint(
-                                        &project_root,
-                                        req.filed_at.as_ref(),
-                                        &linkage.files,
-                                        &linkage.commits,
-                                    );
                                     // trace:BUG-1594 trace:BUG-1993 | ai:claude
                                     let incomplete = linkage.incomplete_notes();
                                     Some(GitLinkageJson {

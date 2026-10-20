@@ -1800,6 +1800,73 @@ pub(crate) fn resolve_default_branch_ref(project_root: &std::path::Path) -> Opti
     None
 }
 
+/// BUG-1993: resolving the default branch hit the caller's deadline before git
+/// finished. Distinct from `Ok(None)` (no candidate ref exists in the repo),
+/// so show/linkage callers render "unknown" instead of "not shipped" or "no
+/// default branch".
+// trace:BUG-1993 | ai:antigravity
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DefaultBranchResolveTimedOut;
+
+/// [`resolve_default_branch_ref`] bounded by `deadline`, for `aida show`
+/// linkage callers only (non-show gate callers use the unbounded
+/// [`resolve_default_branch_ref`] so a slow git call never fails open as
+/// "no default branch"). Returns `Err` when the deadline expires before or
+/// during any git subprocess.
+// trace:BUG-1993 | ai:antigravity
+pub(crate) fn resolve_default_branch_ref_until(
+    project_root: &std::path::Path,
+    deadline: std::time::Instant,
+) -> std::result::Result<Option<String>, DefaultBranchResolveTimedOut> {
+    use std::process::Command as PCmd;
+    let git = |args: &[&str]| -> std::result::Result<Option<String>, DefaultBranchResolveTimedOut> {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err(DefaultBranchResolveTimedOut);
+        }
+        let mut cmd = PCmd::new("git");
+        cmd.arg("-C").arg(project_root).args(args);
+        match command_output_with_timeout_detail(cmd, remaining) {
+            BoundedCommandOutput::Completed(o) if o.status.success() => Ok(Some(
+                String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
+            )
+            .filter(|s| !s.is_empty())),
+            BoundedCommandOutput::TimedOut => Err(DefaultBranchResolveTimedOut),
+            _ => Ok(None),
+        }
+    };
+
+    if let Some(short) = git(&[
+        "symbolic-ref",
+        "--quiet",
+        "--short",
+        "refs/remotes/origin/HEAD",
+    ])? {
+        return Ok(Some(short));
+    }
+
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(cfg) = git(&["config", "--get", "init.defaultBranch"])? {
+        candidates.push(cfg);
+    }
+    for lit in ["main", "master"] {
+        if !candidates.iter().any(|c| c == lit) {
+            candidates.push(lit.to_string());
+        }
+    }
+
+    for name in candidates {
+        let origin = format!("origin/{}", name);
+        if git(&["rev-parse", "--verify", "--quiet", &origin])?.is_some() {
+            return Ok(Some(origin));
+        }
+        if git(&["rev-parse", "--verify", "--quiet", &name])?.is_some() {
+            return Ok(Some(name));
+        }
+    }
+    Ok(None)
+}
+
 // ============================================================================
 // TASK-113 — `aida ultraplan <SPEC>`. Assemble a rich, structured planning
 // prompt from a spec's full context (description, acceptance, related specs,

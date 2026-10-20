@@ -135,6 +135,19 @@ fn ref_exists(project_root: &std::path::Path, full_ref: &str) -> bool {
     .is_some()
 }
 
+fn ref_exists_until(
+    project_root: &std::path::Path,
+    full_ref: &str,
+    deadline: std::time::Instant,
+) -> std::result::Result<bool, ScanTimedOut> {
+    Ok(git_out_until(
+        project_root,
+        &["rev-parse", "--verify", "--quiet", full_ref],
+        deadline,
+    )?
+    .is_some())
+}
+
 /// Resolve the default branch the way the doctor scan does
 /// (`resolve_default_branch_ref`: `origin/HEAD`, then `init.defaultBranch`,
 /// then `main`/`master`), then expand it to BOTH the remote-tracking and the
@@ -153,6 +166,32 @@ pub(crate) fn default_branch_refs(project_root: &std::path::Path) -> DefaultBran
         ref_exists(project_root, &format!("refs/remotes/{remote_short}")).then_some(remote_short);
     let local = ref_exists(project_root, &format!("refs/heads/{name}")).then_some(name);
     DefaultBranchRefs { remote, local }
+}
+
+// trace:BUG-1993 | ai:antigravity
+pub(crate) fn default_branch_refs_until(
+    project_root: &std::path::Path,
+    deadline: std::time::Instant,
+) -> std::result::Result<DefaultBranchRefs, ScanTimedOut> {
+    let Some(resolved) =
+        resolve_default_branch_ref_until(project_root, deadline).map_err(|_| ScanTimedOut)?
+    else {
+        return Ok(DefaultBranchRefs::default());
+    };
+    let name = resolved
+        .strip_prefix("origin/")
+        .unwrap_or(resolved.as_str())
+        .to_string();
+    let remote_short = format!("origin/{name}");
+    let remote = ref_exists_until(
+        project_root,
+        &format!("refs/remotes/{remote_short}"),
+        deadline,
+    )?
+    .then_some(remote_short);
+    let local =
+        ref_exists_until(project_root, &format!("refs/heads/{name}"), deadline)?.then_some(name);
+    Ok(DefaultBranchRefs { remote, local })
 }
 
 /// Upper-cased spec ids named by trace tokens on one line, with any
@@ -332,13 +371,20 @@ pub(crate) fn scan_default_branch_linkage_within(
     budget: std::time::Duration,
 ) -> DefaultBranchLinkage {
     let deadline = std::time::Instant::now() + budget;
-    // trace:BUG-1958 | ai:claude
-    let refs = refs_worth_scanning(project_root, &default_branch_refs(project_root), deadline);
     let wanted: HashSet<String> = ids
         .iter()
         .map(|id| id.trim().to_ascii_uppercase())
         .filter(|id| !id.is_empty())
         .collect();
+    // trace:BUG-1993 | ai:antigravity
+    let Ok(branch_refs) = default_branch_refs_until(project_root, deadline) else {
+        return DefaultBranchLinkage {
+            scan_incomplete: !wanted.is_empty(),
+            ..Default::default()
+        };
+    };
+    // trace:BUG-1958 | ai:claude
+    let refs = refs_worth_scanning(project_root, &branch_refs, deadline);
     let mut out = DefaultBranchLinkage {
         scanned_refs: refs.clone(),
         ..Default::default()
@@ -400,7 +446,7 @@ pub(crate) fn spec_lookup_ids(req: &aida_core::Requirement) -> Vec<String> {
 /// whitespace.
 // trace:STORY-1649 | ai:claude
 pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
-    if linkage.scanned_refs.is_empty() {
+    if linkage.scanned_refs.is_empty() && !linkage.scan_incomplete {
         return "unknown (no default branch found)".to_string();
     }
     // BUG-1993: an incomplete scan that found nothing is unknown, not false.
@@ -428,6 +474,7 @@ pub(crate) fn render_toon_linkage(linkage: &DefaultBranchLinkage) -> String {
     }
     match linkage.found_on.as_deref() {
         Some(found) => parts.push(format!("on={found}")),
+        None if linkage.scanned_refs.is_empty() => parts.push("checked=unknown".to_string()),
         None => parts.push(format!("checked={}", linkage.scanned_refs.join("+"))),
     }
     if !linkage.corroborated() {

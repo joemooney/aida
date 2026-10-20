@@ -50,7 +50,7 @@ pub(crate) fn walk_source_for_traces(
     for entry in entries.flatten() {
         let path = entry.path();
         let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-        // Skip noise dirs.
+        // Skip noise dirs and nested git worktrees/subrepositories (BUG-1993).
         if path.is_dir() {
             if matches!(
                 name,
@@ -64,7 +64,8 @@ pub(crate) fn walk_source_for_traces(
                     | ".cache"
                     | ".venv"
                     | "venv"
-            ) {
+            ) || path.join(".git").exists()
+            {
                 continue;
             }
             walk_source_for_traces(&path, re, out);
@@ -443,6 +444,10 @@ pub(crate) struct GitLinkage {
     /// is `false` then, but renderers must read it as "unknown".
     // trace:BUG-1993 | ai:claude
     pub(crate) shipped_unknown: bool,
+    /// BUG-1993: the `git worktree list --porcelain` probe hit its time
+    /// budget, so `worktree` is unknown rather than absent (PRIN-5).
+    // trace:BUG-1993 | ai:antigravity
+    pub(crate) worktree_scan_incomplete: bool,
     /// Worktree path checked out at `branch`, if any.
     pub(crate) worktree: Option<String>,
     /// PR number parsed from a squash-merge subject (shipped case only).
@@ -468,6 +473,9 @@ impl GitLinkage {
         }
         if let Some((scanned, total)) = self.branch_scan_truncated {
             notes.push(format_branch_scan_truncated_note(scanned, total));
+        }
+        if self.worktree_scan_incomplete {
+            notes.push(LINKAGE_WORKTREE_SCAN_INCOMPLETE_NOTE.to_string());
         }
         if self.files_scan_incomplete {
             notes.push(LINKAGE_TRACE_SCAN_INCOMPLETE_NOTE.to_string());
@@ -531,6 +539,12 @@ pub(crate) const LINKAGE_BRANCH_SCAN_MAX_COMMITS: usize = 20;
 // trace:BUG-1594 | ai:claude
 pub(crate) const LINKAGE_BRANCH_SCAN_BUDGET: std::time::Duration =
     std::time::Duration::from_secs(2);
+
+/// BUG-1993: the wall-clock budget for `git worktree list --porcelain`
+/// (measured ~3 ms on this repo; 1 s headroom for a loaded host).
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_WORKTREE_LIST_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(1);
 
 /// BUG-1594: the wall-clock budget for the trace-comment source walk.
 // trace:BUG-1594 | ai:claude
@@ -726,29 +740,23 @@ pub(crate) fn collect_git_linkage_opts(
     // (e.g. the `aida human` reviews sweep). trace:BUG-568 | ai:claude
     warn_multi_repo_scan_limited(project_root, "git-linkage scan");
 
-    let git = |args: &[&str]| -> Option<String> {
-        PCmd::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(args)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
-    };
     // BUG-380: capture stderr via output() so an invalid `target` ref
     // cannot leak `fatal: Not a valid object name <X>` to the user's
     // terminal — belt-and-braces alongside `resolve_default_branch_ref`,
     // which already filters `target` to a ref that exists.
-    // BUG-1993: bounded; `None` means the check did not finish in budget,
-    // so the shipped state is unknown rather than false.
+    // BUG-1993: bounded by `deadline`; `None` means the check did not finish
+    // in budget, so the shipped state is unknown rather than false.
     // trace:BUG-1993 | ai:claude
-    let is_ancestor = |sha: &str, target: &str| -> Option<bool> {
+    let is_ancestor = |sha: &str, target: &str, deadline: std::time::Instant| -> Option<bool> {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
         let mut cmd = PCmd::new("git");
         cmd.arg("-C")
             .arg(project_root)
             .args(["merge-base", "--is-ancestor", sha, target]);
-        match command_output_with_timeout_detail(cmd, LINKAGE_SHIPPED_CHECK_TIMEOUT) {
+        match command_output_with_timeout_detail(cmd, remaining) {
             BoundedCommandOutput::Completed(o) => Some(o.status.success()),
             BoundedCommandOutput::SpawnFailed => Some(false),
             BoundedCommandOutput::TimedOut => None,
@@ -767,33 +775,66 @@ pub(crate) fn collect_git_linkage_opts(
     // filter that previously excluded the orphan `aida-store` bookkeeping
     // commits ("update TASK-92"): those carry the bare id but neither a
     // trailer nor a `trace:` line, so the resolver drops them. trace:BUG-546
-    let wanted_lc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
-    let mut args: Vec<&str> = vec![
-        "log",
-        "--all",
-        "-F",
-        "--date-order",
-        "--pretty=format:%H\u{1f}%h\u{1f}%s\u{1f}%B%x1e",
-    ];
-    for id in ids {
-        args.push("--grep");
-        args.push(id.as_str());
-    }
+    //
+    // ---- Files carrying trace comments for the spec ----
+    // BUG-550: gated — the per-spec source-tree walk only matters to callers
+    // that render `files`; the reviews-bucket classifier skips it.
+    // BUG-1594: bounded — a cold page cache made this walk alone take tens
+    // of seconds; past the budget the list is flagged partial, not complete.
     // BUG-1993: the `--all` walk is the costliest linkage call (0.6-1.1 s
-    // idle on this repo), so it is bounded. A timeout yields no commits and
-    // marks the scan incomplete; a spawn failure or git error stays the old
-    // silent empty result. trace:BUG-1993 | ai:claude
-    let mut log_cmd = PCmd::new("git");
-    log_cmd.arg("-C").arg(project_root).args(&args);
-    let (log, commits_scan_incomplete) =
-        match command_output_with_timeout_detail(log_cmd, LINKAGE_COMMIT_LOG_TIMEOUT) {
-            BoundedCommandOutput::Completed(o) if o.status.success() => (
-                String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
-                false,
-            ),
-            BoundedCommandOutput::TimedOut => (String::new(), true),
-            _ => (String::new(), false),
-        };
+    // idle on this repo), so it is bounded and runs concurrently with
+    // `scan_trace_graph_bounded` (0.2-0.5 s) so their combined wall-clock
+    // cost is `max(log, trace)` instead of `log + trace`. A timeout yields no
+    // commits and marks the scan incomplete; a spawn failure or git error
+    // stays the old silent empty result. trace:BUG-1993 | ai:claude
+    let wanted_lc: HashSet<String> = ids.iter().map(|s| s.to_ascii_uppercase()).collect();
+    let ((log, commits_scan_incomplete), (files, files_scan_incomplete)) =
+        std::thread::scope(|s| {
+            let log_handle = s.spawn(|| {
+                let mut args: Vec<&str> = vec![
+                    "log",
+                    "--all",
+                    "-F",
+                    "--date-order",
+                    "--pretty=format:%H\u{1f}%h\u{1f}%s\u{1f}%B%x1e",
+                ];
+                for id in ids {
+                    args.push("--grep");
+                    args.push(id.as_str());
+                }
+                let mut log_cmd = PCmd::new("git");
+                log_cmd.arg("-C").arg(project_root).args(&args);
+                match command_output_with_timeout_detail(log_cmd, LINKAGE_COMMIT_LOG_TIMEOUT) {
+                    BoundedCommandOutput::Completed(o) if o.status.success() => (
+                        String::from_utf8_lossy(&o.stdout).trim_end().to_string(),
+                        false,
+                    ),
+                    BoundedCommandOutput::TimedOut => (String::new(), true),
+                    _ => (String::new(), false),
+                }
+            });
+            let trace_res = if scan_trace {
+                let wanted: HashSet<String> = ids.iter().cloned().collect();
+                let (trace_hits, complete) = scan_trace_graph_bounded(
+                    project_root,
+                    &wanted,
+                    Some(LINKAGE_TRACE_SCAN_BUDGET),
+                );
+                let mut f: Vec<(String, Option<String>)> = trace_hits
+                    .values()
+                    .flatten()
+                    .map(|h| (h.file.clone(), h.symbol.clone()))
+                    .collect();
+                f.sort();
+                f.dedup();
+                (f, !complete)
+            } else {
+                (Vec::new(), false)
+            };
+            let log_res = log_handle.join().unwrap_or_else(|_| (String::new(), true));
+            (log_res, trace_res)
+        });
+
     let commits: Vec<(String, String, String)> = log
         .split('\u{1e}')
         .filter_map(|record| {
@@ -823,35 +864,13 @@ pub(crate) fn collect_git_linkage_opts(
         })
         .collect();
 
-    // ---- Files carrying trace comments for the spec ----
-    // BUG-550: gated — the per-spec source-tree walk only matters to callers
-    // that render `files`; the reviews-bucket classifier skips it.
-    // BUG-1594: bounded — a cold page cache made this walk alone take tens
-    // of seconds; past the budget the list is flagged partial, not complete.
-    let mut files_scan_incomplete = false;
-    let files: Vec<(String, Option<String>)> = if scan_trace {
-        let wanted: HashSet<String> = ids.iter().cloned().collect();
-        let (trace_hits, complete) =
-            scan_trace_graph_bounded(project_root, &wanted, Some(LINKAGE_TRACE_SCAN_BUDGET));
-        files_scan_incomplete = !complete;
-        let mut f: Vec<(String, Option<String>)> = trace_hits
-            .values()
-            .flatten()
-            .map(|h| (h.file.clone(), h.symbol.clone()))
-            .collect();
-        f.sort();
-        f.dedup();
-        f
-    } else {
-        Vec::new()
-    };
-
     // ---- Branch / worktree / shipped state (anchored on newest commit) ----
     let mut shipped = false;
     let mut branch: Option<String> = None;
     let mut other_branches: Vec<String> = Vec::new();
     let mut branch_scan_truncated: Option<(usize, usize)> = None;
     let mut worktree: Option<String> = None;
+    let mut worktree_scan_incomplete = false;
     let mut shipped_pr: Option<u64> = None;
     let mut shipped_unknown = commits_scan_incomplete;
     if let Some((full, _, _)) = commits.first() {
@@ -859,9 +878,15 @@ pub(crate) fn collect_git_linkage_opts(
         // literal "main"; on master-default repos the literal leaks
         // `fatal: Not a valid object name 'main'` from git through
         // is_ancestor's inherited stderr.
-        let verdict = resolve_default_branch_ref(project_root)
-            .map(|main_ref| is_ancestor(full, &main_ref))
-            .unwrap_or(Some(false));
+        // BUG-1993: bound default-branch resolution and `is-ancestor` under
+        // [`LINKAGE_SHIPPED_CHECK_TIMEOUT`]; a timeout yields `None`
+        // (`shipped_unknown = true`), never `Some(false)`.
+        let shipped_deadline = std::time::Instant::now() + LINKAGE_SHIPPED_CHECK_TIMEOUT;
+        let verdict = match resolve_default_branch_ref_until(project_root, shipped_deadline) {
+            Ok(Some(main_ref)) => is_ancestor(full, &main_ref, shipped_deadline),
+            Ok(None) => Some(false),
+            Err(DefaultBranchResolveTimedOut) => None,
+        };
         shipped = verdict == Some(true);
         // trace:BUG-1993 | ai:claude
         shipped_unknown = verdict.is_none();
@@ -899,23 +924,35 @@ pub(crate) fn collect_git_linkage_opts(
             // commit cap AND a wall-clock budget; if either stops the walk,
             // record it so the renderer says the branch search is partial.
             // trace:BUG-1594 | ai:claude
-            let scan_started = std::time::Instant::now();
+            let branch_deadline = std::time::Instant::now() + LINKAGE_BRANCH_SCAN_BUDGET;
             let mut scanned = 0usize;
             for (commit_full, _, _) in &commits {
-                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS
-                    || scan_started.elapsed() >= LINKAGE_BRANCH_SCAN_BUDGET
-                {
+                if scanned >= LINKAGE_BRANCH_SCAN_MAX_COMMITS {
                     break;
                 }
-                scanned += 1;
-                let Some(contains) = git(&[
+                let remaining =
+                    branch_deadline.saturating_duration_since(std::time::Instant::now());
+                if remaining.is_zero() {
+                    break;
+                }
+                let mut cmd = PCmd::new("git");
+                cmd.arg("-C").arg(project_root).args([
                     "branch",
                     "--all",
                     "--contains",
                     commit_full,
                     "--format=%(refname:short)",
-                ]) else {
-                    continue;
+                ]);
+                let contains = match command_output_with_timeout_detail(cmd, remaining) {
+                    BoundedCommandOutput::Completed(o) if o.status.success() => {
+                        scanned += 1;
+                        String::from_utf8_lossy(&o.stdout).trim_end().to_string()
+                    }
+                    BoundedCommandOutput::TimedOut => break,
+                    _ => {
+                        scanned += 1;
+                        continue;
+                    }
                 };
                 // BUG-553: a commit can be reachable from MULTIPLE branches when a
                 // later spec's branch was stacked on this one's unmerged commit
@@ -987,18 +1024,33 @@ pub(crate) fn collect_git_linkage_opts(
                 branch = Some(id_matches.remove(0));
                 other_branches = id_matches;
             }
-            if let (Some(b), Some(wt)) =
-                (branch.as_deref(), git(&["worktree", "list", "--porcelain"]))
-            {
-                let mut cur_path: Option<String> = None;
-                for line in wt.lines() {
-                    if let Some(p) = line.strip_prefix("worktree ") {
-                        cur_path = Some(p.to_string());
-                    } else if let Some(r) = line.strip_prefix("branch ") {
-                        if r.trim_start_matches("refs/heads/") == b {
-                            worktree = cur_path.clone();
+            // BUG-1993: bound `git worktree list --porcelain` so a stalled git
+            // cannot hang `aida show`, and record `worktree_scan_incomplete`
+            // on timeout (PRIN-5). trace:BUG-1993 | ai:antigravity
+            if let Some(b) = branch.as_deref() {
+                let mut wt_cmd = PCmd::new("git");
+                wt_cmd
+                    .arg("-C")
+                    .arg(project_root)
+                    .args(["worktree", "list", "--porcelain"]);
+                match command_output_with_timeout_detail(wt_cmd, LINKAGE_WORKTREE_LIST_TIMEOUT) {
+                    BoundedCommandOutput::Completed(o) if o.status.success() => {
+                        let wt = String::from_utf8_lossy(&o.stdout);
+                        let mut cur_path: Option<String> = None;
+                        for line in wt.lines() {
+                            if let Some(p) = line.strip_prefix("worktree ") {
+                                cur_path = Some(p.to_string());
+                            } else if let Some(r) = line.strip_prefix("branch ") {
+                                if r.trim_start_matches("refs/heads/") == b {
+                                    worktree = cur_path.clone();
+                                }
+                            }
                         }
                     }
+                    BoundedCommandOutput::TimedOut => {
+                        worktree_scan_incomplete = true;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1014,6 +1066,7 @@ pub(crate) fn collect_git_linkage_opts(
         files_scan_incomplete,
         commits_scan_incomplete,
         shipped_unknown,
+        worktree_scan_incomplete,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude — the scanned repo's workspace slug.
@@ -1029,13 +1082,14 @@ pub(crate) fn print_git_linkage(
 ) {
     use std::process::Command as PCmd;
 
-    let git = |args: &[&str]| -> Option<String> {
-        PCmd::new("git")
-            .arg("-C")
-            .arg(project_root)
-            .args(args)
-            .output()
-            .ok()
+    let git_until = |args: &[&str], deadline: std::time::Instant| -> Option<String> {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return None;
+        }
+        let mut cmd = PCmd::new("git");
+        cmd.arg("-C").arg(project_root).args(args);
+        command_output_with_timeout(cmd, remaining)
             .filter(|o| o.status.success())
             .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
     };
@@ -1050,6 +1104,7 @@ pub(crate) fn print_git_linkage(
         files_scan_incomplete,
         commits_scan_incomplete,
         shipped_unknown,
+        worktree_scan_incomplete,
         worktree,
         shipped_pr,
         // trace:STORY-634 | ai:claude
@@ -1239,6 +1294,9 @@ pub(crate) fn print_git_linkage(
                     format_branch_scan_truncated_note(scanned, total).yellow()
                 );
             }
+            if worktree_scan_incomplete {
+                println!("  {}", LINKAGE_WORKTREE_SCAN_INCOMPLETE_NOTE.yellow());
+            }
         }
     }
 
@@ -1259,11 +1317,17 @@ pub(crate) fn print_git_linkage(
                 String::new()
             }
         );
+        // BUG-1993: share one deadline across all verbose `--shortstat` calls
+        // so N commits cannot cost N seconds. trace:BUG-1993 | ai:antigravity
+        let shortstat_deadline = std::time::Instant::now() + LINKAGE_SHIPPED_CHECK_TIMEOUT;
         for (full, short, subject) in commits.iter().take(cap) {
             println!("    {} {}", short.yellow(), subject);
             if verbose {
-                if let Some(stat) =
-                    git(&["show", "--shortstat", "--format=", full]).filter(|s| !s.is_empty())
+                if let Some(stat) = git_until(
+                    &["show", "--shortstat", "--format=", full],
+                    shortstat_deadline,
+                )
+                .filter(|s| !s.is_empty())
                 {
                     if let Some(last) = stat.lines().last() {
                         println!("      {}", last.trim().dimmed());
@@ -1326,6 +1390,12 @@ pub(crate) const LINKAGE_COMMIT_SCAN_INCOMPLETE_NOTE: &str =
 // trace:BUG-1993 | ai:claude
 pub(crate) const LINKAGE_SHIPPED_UNKNOWN_NOTE: &str =
     "shipped state unknown (merge check did not finish in time budget)";
+
+/// BUG-1993: the note rendered when `git worktree list --porcelain` stopped at
+/// its time budget.
+// trace:BUG-1993 | ai:antigravity
+pub(crate) const LINKAGE_WORKTREE_SCAN_INCOMPLETE_NOTE: &str =
+    "worktree scan incomplete (time budget) — worktree path unknown";
 
 /// Why a trailer reference fails the validity gate. trace:STORY-498 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -3347,8 +3417,12 @@ pub(crate) fn handle_doc_suggest(range: Option<&str>, json: bool) -> Result<()> 
 
 #[cfg(test)]
 mod show_forge_budget_tests {
-    use super::SHOW_FORGE_LOOKUP_BUDGET;
-    use crate::FORGE_CLI_CALL_TIMEOUT;
+    use super::{
+        ensure_pr_open_spec_attribution, walk_source_for_traces, SHOW_FORGE_LOOKUP_BUDGET,
+    };
+    use crate::{
+        resolve_default_branch_ref_until, DefaultBranchResolveTimedOut, FORGE_CLI_CALL_TIMEOUT,
+    };
     use std::time::Duration;
 
     /// BUG-1594's integration test reports its wall-clock only as a soft
@@ -3364,5 +3438,160 @@ mod show_forge_budget_tests {
              ({FORGE_CLI_CALL_TIMEOUT:?}) must stay within show's 10 s forge ceiling"
         );
         assert!(FORGE_CLI_CALL_TIMEOUT > Duration::ZERO);
+    }
+
+    // trace:BUG-1993 | ai:antigravity
+    #[test]
+    fn trace_walk_skips_nested_git_worktrees_and_subrepos() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(
+            root.join("src/lib.rs"),
+            "// trace:BUG-1993 | ai:antigravity\npub fn main_fn() {}\n",
+        )
+        .unwrap();
+
+        let nested_wt = root.join("nested-worktree");
+        std::fs::create_dir_all(nested_wt.join("src")).unwrap();
+        // Worktrees have a `.git` file; subrepos have a `.git` directory.
+        std::fs::write(
+            nested_wt.join(".git"),
+            format!("gitdir: {}\n", root.join("elsewhere").display()),
+        )
+        .unwrap();
+        std::fs::write(
+            nested_wt.join("src/dup.rs"),
+            "// trace:BUG-1993 | ai:antigravity\npub fn dup_fn() {}\n",
+        )
+        .unwrap();
+
+        let nested_subrepo = root.join("nested-subrepo");
+        std::fs::create_dir_all(nested_subrepo.join(".git")).unwrap();
+        std::fs::create_dir_all(nested_subrepo.join("src")).unwrap();
+        std::fs::write(
+            nested_subrepo.join("src/sub.rs"),
+            "// trace:BUG-1993 | ai:antigravity\npub fn sub_fn() {}\n",
+        )
+        .unwrap();
+
+        let re = regex::Regex::new(r"trace:([A-Z]+-\d+)").unwrap();
+        let mut traces = std::collections::HashMap::new();
+        walk_source_for_traces(root, &re, &mut traces);
+        assert_eq!(
+            traces.get("BUG-1993"),
+            Some(&vec![(root.join("src/lib.rs"), 1)])
+        );
+    }
+
+    // trace:BUG-1993 | ai:antigravity
+    #[test]
+    fn bounded_default_branch_timeout_is_distinct_from_no_default_branch() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["init", "--initial-branch=main", "--quiet"])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        // An expired deadline on the bounded helper returns `Err(DefaultBranchResolveTimedOut)`,
+        // distinct from `Ok(None)` ("no candidate ref exists").
+        let res = resolve_default_branch_ref_until(&root, std::time::Instant::now());
+        assert_eq!(res, Err(DefaultBranchResolveTimedOut));
+
+        // And the TOON linkage scan on an expired budget never reports "no default branch".
+        let scan = crate::shipped_linkage::scan_default_branch_linkage_within(
+            &root,
+            &["BUG-1993".to_string()],
+            Duration::ZERO,
+        );
+        let rendered = crate::shipped_linkage::render_toon_linkage(&scan);
+        assert!(
+            !rendered.contains("no default branch"),
+            "timed-out linkage scan must not claim 'no default branch': {rendered}"
+        );
+        assert!(rendered.contains("reason=scan-timeout"), "{rendered}");
+    }
+
+    /// BUG-1993 regression guard: `ensure_pr_open_spec_attribution` must use the
+    /// unbounded `resolve_default_branch_ref` so a slow `git symbolic-ref`
+    /// (> `LINKAGE_SHIPPED_CHECK_TIMEOUT`) does not map to `None` ("no default
+    /// branch") and fail open on an unattributed branch.
+    // trace:BUG-1993 | ai:antigravity
+    #[cfg(unix)]
+    #[test]
+    fn slow_symbolic_ref_does_not_fail_open_pr_open_spec_attribution() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo = tmp.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        let real_git = std::env::var_os("PATH")
+            .and_then(|paths| {
+                std::env::split_paths(&paths)
+                    .map(|d| d.join("git"))
+                    .find(|p| p.is_file())
+            })
+            .expect("real git on PATH");
+
+        let run_git = |args: &[&str]| {
+            let st = std::process::Command::new(&real_git)
+                .arg("-C")
+                .arg(&repo)
+                .args(args)
+                .status()
+                .unwrap();
+            assert!(st.success(), "git {args:?} failed");
+        };
+        run_git(&["init", "--initial-branch=main", "--quiet"]);
+        run_git(&["config", "user.email", "t@example.com"]);
+        run_git(&["config", "user.name", "Test"]);
+        run_git(&["commit", "-q", "--allow-empty", "-m", "chore: base"]);
+        run_git(&["checkout", "-q", "-b", "feat/unattributed"]);
+        run_git(&[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "feat: unattributed work without spec trailer",
+        ]);
+
+        // Shim `git` so `symbolic-ref` sleeps longer than `LINKAGE_SHIPPED_CHECK_TIMEOUT` (1s)
+        // before exiting non-zero (no origin/HEAD), while all other git subcommands pass through.
+        let shim_dir = tmp.path().join("shim");
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        let shim_git = shim_dir.join("git");
+        std::fs::write(
+            &shim_git,
+            format!(
+                "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = \"symbolic-ref\" ]; then\n    sleep 1.2\n    exit 1\n  fi\ndone\nexec '{}' \"$@\"\n",
+                real_git.display()
+            ),
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&shim_git).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&shim_git, perms).unwrap();
+
+        let old_path = std::env::var_os("PATH").unwrap_or_default();
+        let mut new_paths = vec![shim_dir];
+        new_paths.extend(std::env::split_paths(&old_path));
+        let joined = std::env::join_paths(new_paths).unwrap();
+        let _guard = crate::test_env::EnvVarGuard::set("PATH", joined);
+
+        let res = ensure_pr_open_spec_attribution(&repo, "feat/unattributed", "BUG-1993");
+        assert!(
+            res.is_err(),
+            "ensure_pr_open_spec_attribution must refuse unattributed branch even when symbolic-ref is slow"
+        );
     }
 }
