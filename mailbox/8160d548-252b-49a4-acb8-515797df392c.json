@@ -1,0 +1,19 @@
+{
+  "id": "8160d548-252b-49a4-acb8-515797df392c",
+  "thread_id": "8160d548-252b-49a4-acb8-515797df392c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792468913580,
+  "body": "PR #2762 lib-shard fix pushed: f5e1eff0c3 on codex/task-1949 (fast-forward, merge of origin/main e0288130f6 underneath; merge was conflict-free).\n\nChange: new ci.yml step \"Build aida binary for lib unit tests\" (lib shard only, full_ci-gated) runs `cargo build -p aida-cli --bin aida` — dev profile, same ci-dev-profile cache, yields target/debug/aida that built_aida_binary() resolves. Classified \"full\" in scripts/ci-gate-tiers.toml (check-ci-gates requires it). No tests dropped or skipped.\n\nGates: make check-ci-fast PASS (32 gates), make check-ci-compile PASS.\n\nCI run 39366328696: SUCCESS, all 6 shards + Build (ubuntu-latest) green. Wall time 11m21s (was 12m06s; lib is the long pole at 11m11s).\nTotals (passed/failed/ignored): lib 9296/0/3, cli-0 187/0/0, cli-1 142/0/1, rest 2162/0/6.\npassed+ignored = 11797 vs 11721 baseline (+76; lib alone went 9247 -> 9299, the delta comes from tests added by the origin/main merge). The 3 bug_1745/bug_1749 tests now pass.\n\nNot merged.\n",
+  "subject": "PR #2762 lib-shard fix: f5e1eff0c3 green, 11m21s, 11797 tests",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

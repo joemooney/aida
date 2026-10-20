@@ -1,0 +1,19 @@
+{
+  "id": "f486251c-6e5d-429e-a44b-8414406794d4",
+  "thread_id": "f486251c-6e5d-429e-a44b-8414406794d4",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792468978180,
+  "body": "Exact fast-gate failure on main857e2ef848 + BUG2190: tests/test_grant_expiry_notice_hook.py:160 test_hard_timeout_below_two_seconds measured2.268334435997531 vs <2.1. No hook source changes on this branch; host IO some ~99%. Isolated hook retry + full fast retry started, focus real-CLI regression and compile gate queued independently. TASK1801 fast32passed, targeted library compilation running. TASK1945 sketch now posted successfully; signoff pending.",
+  "subject": "BUG-2190 gate timing failure; retrying",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
