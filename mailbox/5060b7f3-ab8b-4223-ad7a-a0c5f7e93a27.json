@@ -1,0 +1,19 @@
+{
+  "id": "5060b7f3-ab8b-4223-ad7a-a0c5f7e93a27",
+  "thread_id": "5060b7f3-ab8b-4223-ad7a-a0c5f7e93a27",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792523947591,
+  "body": "Head bae947dfe8 (main merged; check-ci-fast, test-touched 338 passed, check-ci-compile, dev build smoke: all green).\nTiming: warm medians of the production scan path 26.2 s (#2725, 403 specs) and 35.6 s (#2779, 621 specs), load under 2.3, so under the amended 60 s. Cold first run: 265 s, almost all in the deleted-spec -G alias walk (worth adding to the <30 s follow-up).\nCAVEAT: this is not the real 'aida pr ship' command. It scans only under an active mandate, which needs a human at a terminal, and none is active. Recipe is on BUG-2179 and in the PR body if you want the real-command number before approving.\nItem 1 (AC3): objects-dir walk (ef1204a48c), timings above, in the PR body and on BUG-2179.\nItem 2 (re-collection): collect_on_stable_store; tests for change-once proceeds, change-always refuses after 3, and unreadable snapshot refuses (7991a69b57).\nItem 3 (NotYet): zero budget plus NotYet polls registration once, reads 0 rows, exit 21 (7991a69b57).",
+  "subject": "PR-2776 round 2 pushed (BUG-2179)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

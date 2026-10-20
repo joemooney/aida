@@ -1,0 +1,19 @@
+{
+  "id": "44310a01-8625-4d5b-b307-1b86052254c1",
+  "thread_id": "44310a01-8625-4d5b-b307-1b86052254c1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792523959936,
+  "body": "Head bae947dfe8. Warm scan-path medians: 26.2 s (#2725, 403 specs) and 35.6 s (#2779, 621 specs), under the amended 60 s. NOT the real pr ship command: it needs an active mandate, which only a human can start. Recipe is on BUG-2179. Items 2 and 3: 7991a69b57. Details are in the PR body.",
+  "subject": "PR-2776 round 2 pushed (BUG-2179)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

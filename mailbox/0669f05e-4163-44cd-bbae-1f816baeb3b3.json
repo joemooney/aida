@@ -1,0 +1,19 @@
+{
+  "id": "0669f05e-4163-44cd-bbae-1f816baeb3b3",
+  "thread_id": "0669f05e-4163-44cd-bbae-1f816baeb3b3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792523363732,
+  "body": "PR-2779 round 2 pushed (BUG-2191): new head f2f340210e9d, 0 behind main.\n1 BLOCKER fixed: bug_2169 clone_invocations now skips `-c <kv>` / `--config-env <v>` pairs before the subcommand (it already followed -C). CI lib-1 PASSES at f2f340210e (nextest shadow lib-0/lib-1 pass too); the other lanes were still queued when I sent this. merge-hold-gate red is the hold.\n2 Traces: `# trace:BUG-2191.ac7c1671` on every ratchet test; `trace:BUG-2191.aca71745` on git_command_turns_off_auto_maintenance in both test_git.rs files (aida criteria now shows both traced). ac490e38: doc table gained aida-cli task_1717_store_writer_lock via support/test_git.rs (43 tests) 5/5 passed, and aida-core git_ops::tests + worktree_pool (171 tests) 5/5 passed, both under git 2.55 + LD_PRELOAD widening. Guarded runs only; the earlier aida-cli-lib control (1/5 fail without the guard) shows the wrapper reaches fixture git. Doc carries `trace:BUG-2191.ac490e38`.\n3 push is in WRITE_CLASS. Bare remotes: the helper now also passes `-c init.templateDir=<per-process template>`, whose config sets receive.autogc=false, gc.auto=0 and maintenance.auto=false (plus the default hooks/, info/exclude, description layout). Every repo the helper inits or clones, bare remotes included, carries it, so receive-pack (which never sees the client's -c) stays quiet. Verified that template config is copied by init --bare and clone --bare on git 2.43 and 2.55; the helper unit tests assert a bare remote's three keys. Baseline now 51 (push sites counted).\n4 Recorded as known exclusions in the doc: split-statement / variable-argv detection, and tests/*.sh|*.py.\nGates: check-ci-fast 33/33 and check-ci-compile ok after merging main; the final merge (a workflow-only commit) was re-checked with check-ci-fast only. Targeted lib run of 228 passed.\n",
+  "subject": "PR-2779 round 2 ready (BUG-2191)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
