@@ -1,0 +1,20 @@
+id: 01a15ae7-3090-7dd0-93ed-aec8da82840f
+spec_id: BUG-2196
+agreed_id: BUG-2196
+title: 'Flaky: bug_2005_wrapper_staleness_tests::pre_fix_fixture_actually_leaks_in_zsh_and_not_in_bash fails intermittently in CI lib-1'
+description: '2026-10-20 12:44: failed on PR-2776''s CI (lib-1, run after update-branch to ad22bc2ac3) at aida-cli-lib/src/tests/bug_2005_wrapper_staleness_tests.rs:141. The PR doesn''t touch that area, and a rerun of the failed jobs passed. Acceptance: find the timing or shell-environment dependency (zsh startup, rc files, PATH on the runner) and make the test deterministic, or gate it on zsh being present and configured.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T20:01:03.120785913Z
+modified_at: 2026-10-20T20:01:03.120785913Z
+req_type: Bug
+filed_at:
+  code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
