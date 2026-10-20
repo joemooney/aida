@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T16:10:51.339931588Z
-modified_at: 2026-10-20T16:10:51.339931588Z
+modified_at: 2026-10-20T18:53:18.323461788Z
 req_type: Task
+comments:
+- id: 01a15aa9-2a73-77e1-87a5-bd629414faa5
+  author: joe
+  content: 'Advisor triage 11:55: folded into sweep TASK-1955. The finding text above is carried there by reference.'
+  created_at: 2026-10-20T18:53:18.323461788Z
+  modified_at: 2026-10-20T18:53:18.323461788Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 1456ad35b0a1fb175e6a53c0a774396bd04e3c6a
   branch: main
