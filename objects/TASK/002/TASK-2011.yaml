@@ -6,12 +6,12 @@ description: |
   aida-cli-lib/src/requirements_cli.rs:4884: since BUG-2190 moved the focus retain to after the driver lens, list_driver_map runs over the pre-focus row set. A focused `aida list` now resolves a derived driver (lease probe) for every in-progress spec in the project, not just the focused ones. The pre-focus set is only needed when `--driver` filters rows; for display, the map could be computed (or trimmed) after focus.
 
   Raised in review of PR-2780: https://github.com/joemooney/aida/pull/2780
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T17:05:42.020649309Z
-modified_at: 2026-10-20T22:22:36.226912302Z
+modified_at: 2026-10-20T22:22:39.762656973Z
 req_type: Task
 tags:
 - from-review:PR-2780
@@ -25,6 +25,15 @@ comments:
   created_at: 2026-10-20T22:22:36.226912302Z
   modified_at: 2026-10-20T22:22:36.226912302Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15b68-d692-7750-ae70-ada5f8f26e5c
+  author: joe
+  timestamp: 2026-10-20T22:22:39.762654Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 151f1fd2a97bf165823cb9384b94bc5587230a5e
   branch: pr-2780
