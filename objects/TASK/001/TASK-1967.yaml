@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T19:47:09.301864104Z
-modified_at: 2026-10-20T10:57:44.001479630Z
+modified_at: 2026-10-20T10:58:04.602592051Z
 req_type: Task
 tags:
 - story-1854
@@ -44,6 +44,16 @@ relationships:
   target_id: 01a157ad-ed53-7710-b450-88a8bda6c76f
   created_at: 2026-10-20T10:57:44.001467546Z
   created_by: joe
+comments:
+- id: 01a158f6-14ba-7722-9cc6-64e7116bc354
+  author: joe
+  content: |
+    Advisor 2026-10-20 03:58: folded in as superseded (open-list cleanup). These items are now this spec's scope:
+    - TASK-1649: non-blocking: with incremental on, sccache reports workspace crates under --pro…
+    - TASK-1987: Cargo.toml [profile.agent] comment misattributes CARGO_INCREMENTAL=0 to the CI workflow
+  created_at: 2026-10-20T10:58:04.602592051Z
+  modified_at: 2026-10-20T10:58:04.602592051Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a155b4-e9de-7c33-ad86-b3607cbbfd53
   author: joe
