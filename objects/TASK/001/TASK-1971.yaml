@@ -1,0 +1,27 @@
+id: 01a156f8-e1e9-76e2-906d-2b654ca629b1
+spec_id: TASK-1971
+agreed_id: TASK-1971
+title: PR-2744 description is stale against its merge-base diff
+description: |
+  The PR-2744 body says it removes .current_dir(home.path()) from run_path_isolated_test_output and reverts agent_launch.rs/session_end.rs, but the merge-base diff touches neither the function nor those files. Update the PR description so it describes what actually merges.
+
+  Raised in review of PR-2744: https://github.com/joemooney/aida/pull/2744#issuecomment-6281337855
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T01:41:53.769753357Z
+modified_at: 2026-10-20T01:41:53.769753357Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2744
+- severity:cosmetic
+filed_at:
+  code_sha: c440a8e980f866f8c2d8883881e9c2733267968a
+  branch: pr-2744
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: c416dbcc0b
+  vendor: claude
+  session: 01a156f12e65

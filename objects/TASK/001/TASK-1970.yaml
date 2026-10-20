@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T00:48:22.397656290Z
-modified_at: 2026-10-20T00:48:43.732767505Z
+modified_at: 2026-10-20T01:41:14.488509760Z
 req_type: Task
 tags:
 - bug-2118
@@ -22,6 +22,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a156f8-4af5-7472-afc3-1dc286fa7705
+  author: joe
+  timestamp: 2026-10-20T01:41:15.125152085Z
+  session_id: 01a156f12e65
+  changes: []
 filed_at:
   code_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
   branch: main
@@ -30,3 +35,11 @@ filed_at:
   aida_build_sha: c416dbcc0b
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Code/test/doc scope is fine, but the branch history still carries (BUG-2118) completion trailers that a squash merge would fold into the body and auto-complete BUG-2118, defeating TASK-1970's purpose.
+  recovery_hint: address the review findings, move TASK-1970 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-20T01:41:14.488509760Z
