@@ -7,6 +7,7 @@
 
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use std::path::Path;
 
 // trace:STORY-1728 | ai:claude
@@ -13225,6 +13226,10 @@ pub(crate) fn run_standalone_reviewer(
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
+    // BUG-2185: armed before the launch, so the reviewer's store writes are
+    // committed on every exit from here, an `Err` after the child ran
+    // included. trace:BUG-2185 | ai:claude
+    let store_commit = crate::child_store_commit::ChildStoreCommit::arm(project_root, "reviewer");
     // trace:TASK-1752 | ai:claude
     let launcher_grant = crate::seat_authority::current_grant_id();
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
@@ -13423,7 +13428,7 @@ pub(crate) fn run_standalone_reviewer(
     // store write it made) is left uncommitted for its host — this launcher.
     // Commit it now, or the mandate's fail-closed store snapshot refuses
     // every ship until someone commits by hand. trace:BUG-2180 | ai:claude
-    crate::child_store_commit::commit_child_store_writes(project_root, launched_at, "reviewer");
+    store_commit.commit();
 
     let pr_spec_ids: Vec<String> = fetch_pr_ship_metadata_via_gh(project_root, pr)
         .map(|meta| review_calibration_spec_ids(project_root, &meta.title, branch, &meta.body))
@@ -14503,6 +14508,8 @@ pub(crate) fn recover_push_branch(repo: &std::path::Path, branch: &str) -> Resul
         .arg("-C")
         .arg(repo)
         .args(args)
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(repo, "origin")
         .status()?;
     Ok(status.success())
 }

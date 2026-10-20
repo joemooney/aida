@@ -303,8 +303,8 @@ pub(crate) fn protected_base(repo: &Path) -> Result<String, CarryOverRefusal> {
     let unresolvable = || CarryOverRefusal::Unresolvable {
         what: "the remote's default branch".to_string(),
     };
-    let out =
-        git(repo, &["ls-remote", "--symref", "origin", "HEAD"]).map_err(|_| unresolvable())?;
+    let out = origin_git(repo, &["ls-remote", "--symref", "origin", "HEAD"])
+        .map_err(|_| unresolvable())?;
     out.lines()
         .find_map(|l| {
             let rest = l.strip_prefix("ref:")?;
@@ -390,10 +390,13 @@ pub(crate) fn proven_base_refusal(
     match base_at_merge.map(str::trim).filter(|b| !b.is_empty()) {
         Some(base) if base == proven_base => None,
         Some(base) => Some(format!(
-            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR now targets `{base}`. Re-run `aida pr ship` against the current base."
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the \
+             PR now targets `{base}`. Re-run `aida pr ship` against the current base."
         )),
         None => Some(format!(
-            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the              PR's base could not be re-read before the merge, so the carry-over cannot be shown              to still apply."
+            "PR-{pr} was not merged: its approval carried over against `{proven_base}`, but the \
+             PR's base could not be re-read before the merge, so the carry-over cannot be shown \
+             to still apply."
         )),
     }
 }
@@ -440,7 +443,7 @@ pub(crate) fn prove_carry_over(
         });
     }
     let base_ref = format!("origin/{base_branch}");
-    let _ = git(
+    let _ = origin_git(
         repo,
         &[
             "fetch",
@@ -687,7 +690,7 @@ fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
             if sha.len() != 40 && sha.len() != 64 {
                 return None;
             }
-            git(repo, &["fetch", "--quiet", "--no-tags", "origin", &sha]).ok()?;
+            origin_git(repo, &["fetch", "--quiet", "--no-tags", "origin", &sha]).ok()?;
             resolve_commit(repo, &sha)
         })
         .filter(|full| full.starts_with(&sha))
@@ -709,11 +712,23 @@ fn resolve_commit(repo: &Path, rev: &str) -> Option<String> {
 }
 
 fn git_raw(repo: &Path, args: &[&str]) -> Result<std::process::Output, CarryOverRefusal> {
-    std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .stdin(std::process::Stdio::null())
+    git_raw_via(repo, None, args)
+}
+
+/// `git_raw`, plus `remote`'s stored credentials kept out of argv when the
+/// call contacts it.
+// trace:BUG-2181 | ai:claude
+fn git_raw_via(
+    repo: &Path,
+    remote: Option<&str>,
+    args: &[&str],
+) -> Result<std::process::Output, CarryOverRefusal> {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(repo).args(args);
+    if let Some(remote) = remote {
+        aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, remote);
+    }
+    cmd.stdin(std::process::Stdio::null())
         .output()
         .map_err(|e| CarryOverRefusal::Git {
             detail: format!("could not run git: {e}"),
@@ -721,7 +736,18 @@ fn git_raw(repo: &Path, args: &[&str]) -> Result<std::process::Output, CarryOver
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
-    let out = git_raw(repo, args)?;
+    git_via(repo, None, args)
+}
+
+/// [`git`] for a call that contacts origin.
+
+// trace:BUG-2181 | ai:claude
+fn origin_git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
+    git_via(repo, Some("origin"), args)
+}
+
+fn git_via(repo: &Path, remote: Option<&str>, args: &[&str]) -> Result<String, CarryOverRefusal> {
+    let out = git_raw_via(repo, remote, args)?;
     if !out.status.success() {
         return Err(CarryOverRefusal::Git {
             detail: format!(

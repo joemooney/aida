@@ -1472,6 +1472,11 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
 /// which has no fallback.
 /// trace:STORY-612 | ai:claude
 fn headless_worktree_root() -> PathBuf {
+    // trace:BUG-2001 | ai:antigravity
+    #[cfg(test)]
+    if let Some(cwd) = contained_cwd_seam::cwd() {
+        return crate::find_project_root_from(&cwd).unwrap_or(cwd);
+    }
     crate::find_project_root()
         .ok()
         .or_else(|| std::env::current_dir().ok())
@@ -1486,9 +1491,12 @@ fn headless_worktree_root() -> PathBuf {
 /// cannot disagree on a symlinked path. Outside a git repository there is no
 /// worktree, so there are no roots and `dontAsk` denies every edit: the
 /// boundary fails closed instead of widening to cwd (possibly `$HOME`).
-// trace:BUG-1971 | ai:claude
+// trace:BUG-1971 | trace:BUG-2012 | ai:antigravity
 pub(crate) fn contained_session_write_roots() -> Vec<PathBuf> {
-    write_roots_for_git_root(contained_session_git_root().as_deref())
+    contained_session_cwd()
+        .as_deref()
+        .map(contained_session_write_roots_from)
+        .unwrap_or_default()
 }
 
 /// The write roots of a contained session whose process cwd is `cwd`: the git
@@ -1498,22 +1506,24 @@ pub(crate) fn contained_session_write_roots_from(cwd: &Path) -> Vec<PathBuf> {
     write_roots_for_git_root(crate::find_project_root_from(cwd).ok().as_deref())
 }
 
-/// The git root a contained session launched from this process writes in:
-/// the git root of the process cwd, or `None` outside a git repository. Under
-/// `cfg(test)` a [`contained_cwd_seam`] cwd wins, then a pinned hermetic
-/// project root.
-// trace:BUG-1971 | ai:claude
-fn contained_session_git_root() -> Option<PathBuf> {
+// trace:BUG-2012 | ai:antigravity
+fn contained_session_cwd() -> Option<PathBuf> {
     #[cfg(test)]
     if let Some(cwd) = contained_cwd_seam::cwd() {
-        return crate::find_project_root_from(&cwd).ok();
+        return Some(cwd);
     }
     #[cfg(test)]
     if let Some(root) = crate::test_ambient::project_root() {
         return Some(root);
     }
-    let cwd = std::env::current_dir().ok()?;
-    crate::find_project_root_from(&cwd).ok()
+    std::env::current_dir().ok()
+}
+
+/// The git root a contained session launched from this process writes in:
+/// the git root of the process cwd, or `None` outside a git repository.
+// trace:BUG-1971 | trace:BUG-2012 | ai:antigravity
+fn contained_session_git_root() -> Option<PathBuf> {
+    contained_session_write_roots().into_iter().next()
 }
 
 /// BUG-1971: test-only, per-thread stand-in for the process cwd that
@@ -2852,21 +2862,36 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
 
 /// Every spelling of `<main>/.git` a tool or sandbox path may resolve to: the
 /// main checkout as given and canonical ([`contained_write_roots`]), each
-/// joined with `.git`, plus the canonical `.git` itself when it is a symlink.
+/// joined with `.git`, plus the canonical `.git` itself when it is a symlink,
+/// and the `gitdir:` target when `<main>/.git` is a main-checkout gitfile.
 ///
 /// [`contained_write_roots`]: crate::contained_boundary::contained_write_roots
 // trace:BUG-1982 | ai:claude
+// trace:BUG-2012 | ai:antigravity
 pub(crate) fn main_git_deny_paths(main: &Path) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = crate::contained_boundary::contained_write_roots(main)
-        .into_iter()
-        .map(|root| root.join(".git"))
-        .collect();
+    let roots = crate::contained_boundary::contained_write_roots(main);
+    let mut paths: Vec<PathBuf> = roots.iter().map(|root| root.join(".git")).collect();
     if paths.is_empty() {
         paths.push(main.join(".git"));
     }
     if let Ok(canonical) = std::fs::canonicalize(main.join(".git")) {
         if !paths.contains(&canonical) {
             paths.push(canonical);
+        }
+    }
+    for root in std::iter::once(main).chain(roots.iter().map(PathBuf::as_path)) {
+        if let Some(raw_target) = aida_core::git_ops::worktree_gitdir_path(root) {
+            let target = crate::contained_boundary::normalize_lexical(&raw_target);
+            if !crate::contained_boundary::is_linked_worktree_gitdir(&target) {
+                if !paths.contains(&target) {
+                    paths.push(target.clone());
+                }
+                if let Ok(canon_target) = std::fs::canonicalize(&target) {
+                    if !paths.contains(&canon_target) {
+                        paths.push(canon_target);
+                    }
+                }
+            }
         }
     }
     paths
@@ -3130,13 +3155,20 @@ pub(crate) fn contained_settings_json_with_boundary(
     }
     // Tool writes do not pass through Bash's OS sandbox, so deny the host
     // git authority paths in both layers (including exact pointer files).
-    // trace:BUG-1929 | ai:codex
+    // BUG-2012: also deny `<root>/.git` and `<root>/.git/**` for any main
+    // checkout in `write_roots` even when `store_write_paths` is empty.
+    // trace:BUG-1929 | trace:BUG-2012 | ai:antigravity
     let mut deny: Vec<String> = destructive_command_deny_rules()
         .into_iter()
         .map(str::to_owned)
         .collect();
+    for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
+        if !deny_paths.contains(&path) {
+            deny_paths.push(path);
+        }
+    }
     for path in &deny_paths {
-        if let Some(abs) = crate::contained_boundary::root_rule_path(&path) {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(path) {
             for tool in crate::contained_boundary::WRITE_TOOLS {
                 deny.push(format!("{tool}(/{abs})"));
                 deny.push(format!("{tool}(/{abs}/**)"));
@@ -3407,6 +3439,18 @@ pub(crate) fn os_wrapped_program_and_args(
     if !os_wrap_enabled(worktree_root) {
         return Ok((program.to_string(), program_args));
     }
+    // BUG-2001: fail closed when no git root resolves for `worktree_root`
+    // (e.g. `headless_worktree_root()` fell back to cwd / `$HOME` outside a git
+    // repository). Never bind a non-repository directory read-write in bwrap.
+    // trace:BUG-2001 | ai:antigravity
+    let worktree_root_buf = crate::find_project_root_from(worktree_root).with_context(|| {
+        format!(
+            "[contained] os_wrap is enabled, but {} is not inside a git repository — \
+             refusing to bind a non-repository directory read-write in bubblewrap",
+            worktree_root.display()
+        )
+    })?;
+    let worktree_root = worktree_root_buf.as_path();
     let claude_args = program_args;
     if which_on_path("bwrap").is_none() {
         anyhow::bail!(
@@ -5950,6 +5994,7 @@ mod tests {
         fn wrapped_args(cfg: &str) -> Option<Vec<String>> {
             let tmp = tempfile::tempdir().unwrap();
             let wt = tmp.path();
+            std::fs::create_dir_all(wt.join(".git")).unwrap();
             std::fs::create_dir_all(wt.join(".aida")).unwrap();
             std::fs::write(wt.join(".aida/config.toml"), cfg).unwrap();
             if which_on_path("bwrap").is_none() || bwrap_preflight().is_err() {
@@ -8279,6 +8324,7 @@ mod tests {
         // A worktree with `[contained] os_wrap = true`.
         let tmp = tempfile::tempdir().unwrap();
         let wt = tmp.path();
+        std::fs::create_dir_all(wt.join(".git")).unwrap();
         std::fs::create_dir_all(wt.join(".aida")).unwrap();
         std::fs::write(
             wt.join(".aida/config.toml"),
@@ -8453,6 +8499,7 @@ mod tests {
         // ON via the env override.
         _env.set("1");
         let on_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(on_dir.path().join(".git")).unwrap();
         match os_wrapped_program_and_args(on_dir.path(), resolved_binary, args.clone()) {
             Ok((program, out_args)) => {
                 // userns-capable host: bwrap wrap with the resolved binary inside.
@@ -8482,6 +8529,39 @@ mod tests {
                 );
             }
         }
+    }
+
+    // trace:BUG-2001 | ai:antigravity
+    #[test]
+    fn os_wrap_outside_git_refuses_instead_of_binding_cwd_rw() {
+        let mut _env = OsWrapEnvGuard::acquire();
+        _env.set("1");
+
+        let outside_git = tempfile::tempdir().unwrap();
+        let resolved_binary = "/bin/echo";
+        let args = vec!["--print".to_string(), "hi".to_string()];
+
+        let err = os_wrapped_program_and_args(outside_git.path(), resolved_binary, args.clone())
+            .expect_err("os_wrap outside git must refuse before binding non-repo dir read-write");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not inside a git repository")
+                && msg.contains("refusing to bind a non-repository directory read-write"),
+            "refusal must explain non-repository os_wrap failure: {msg}"
+        );
+
+        let _cwd = contained_cwd_seam::pin(outside_git.path());
+        assert_eq!(
+            headless_worktree_root(),
+            outside_git.path().to_path_buf(),
+            "headless_worktree_root must honor contained_cwd_seam in unit tests"
+        );
+        let err2 = claude_program_and_args(&headless_worktree_root(), args)
+            .expect_err("headless claude_program_and_args outside git must refuse os_wrap");
+        assert!(
+            format!("{err2:#}").contains("not inside a git repository"),
+            "headless path must refuse outside-git os_wrap: {err2:#}"
+        );
     }
 
     // trace:BUG-2006 | ai:antigravity

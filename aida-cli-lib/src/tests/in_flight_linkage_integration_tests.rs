@@ -153,6 +153,7 @@ fn linkage(
         files_scan_incomplete: false,
         commits_scan_incomplete: false,
         shipped_unknown: false,
+        worktree_scan_incomplete: false,
         worktree: None,
         shipped_pr,
         repo: None,

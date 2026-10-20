@@ -16,6 +16,8 @@ pub enum ConfigCommand {
     /// Set the ID format (single-level or two-level)
     Format {
         /// Format: "single" for PREFIX-NNN, "two" for FEATURE-TYPE-NNN
+        // Distinct from the global --format id. trace:BUG-2189 | ai:claude
+        #[clap(id = "id_format", value_name = "FORMAT")]
         format: String,
     },
 

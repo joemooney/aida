@@ -139,8 +139,24 @@ class BudgetTest(unittest.TestCase):
     def test_committed_budget_file_loads(self):
         b = tt.load_budget(str(REPO / "scripts/test-time-budget.toml"))
         self.assertEqual(b.default_limit, 10)
-        self.assertIn("aida_cli_lib:src/lib.rs", b.entries)
         self.assertTrue(all(v > b.default_limit for v in b.entries.values()))
+        # The lib unit binary runs as two halves, each with its own budget.
+        # trace:TASK-1979 | ai:claude
+        self.assertNotIn("aida_cli_lib:src/lib.rs", b.entries)
+        halves = [tt.load_budget(str(REPO / "scripts/test-time-budget.toml"), lane).entries
+                  for lane in ("lib-0", "lib-1")]
+        for half in halves:
+            self.assertGreater(half["aida_cli_lib:src/lib.rs"], b.default_limit)
+            self.assertEqual({k: v for k, v in half.items() if k != "aida_cli_lib:src/lib.rs"}, b.entries)
+
+    def test_lane_budget_overrides_only_its_lane(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "budget.toml"
+            path.write_text('default_limit = 10\n[budget]\n"a" = 20\n'
+                            '[lane_budget.lib-0]\n"a" = 30\n"lib" = 40\n')
+            self.assertEqual(tt.load_budget(str(path)).entries, {"a": 20})
+            self.assertEqual(tt.load_budget(str(path), "lib-0").entries, {"a": 30, "lib": 40})
+            self.assertEqual(tt.load_budget(str(path), "cli-0").entries, {"a": 20})
 
     def test_main_exit_codes_and_outputs(self):
         with tempfile.TemporaryDirectory() as d:

@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 authors = ["Joe Mooney"]
 license = "MIT"
@@ -78,3 +78,7 @@ dotenvy = "0.15"
 inherits = "release"
 opt-level = 1
 debug = false
+# Release leaves incremental off, which made every local rebuild after a merge
+# recompile aida-cli-lib from scratch. CI exports CARGO_INCREMENTAL=0, so it is
+# unaffected. trace:TASK-1985 | ai:claude
+incremental = true

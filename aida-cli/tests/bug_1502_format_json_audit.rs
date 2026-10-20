@@ -444,6 +444,8 @@ fn unsupported_global_json_pin_errors_before_human_fallback() {
 
 #[test]
 fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
+    // trace:TASK-1959 | ai:claude
+    let _checkout = support::CheckoutGuard::new();
     let (_tmp, repo, home, spec) = fixture();
     let catalog = json(
         &aida(&repo, &home, &["help", "commands", "--json", "--hidden"]),
@@ -513,6 +515,7 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
     }
 
     let verified: BTreeSet<&str> = probes.iter().map(|(path, _)| *path).collect();
+    let mut unsupported: Vec<String> = Vec::new();
     for entry in catalog.as_array().unwrap() {
         let path = entry["path"]
             .as_array()
@@ -541,16 +544,45 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         // Missing required operands may make clap reject first; either way the
         // global JSON pin can never reach a successful human/TOON fallback.
         if expected == "JSON not honoured" {
-            let mut args: Vec<&str> = path.split_whitespace().skip(1).collect();
-            args.extend(["--format", "json"]);
-            let out = aida(&repo, &home, &args);
-            assert!(
-                !out.status.success(),
-                "unsupported catalog path silently succeeded: {path}\n{}",
-                String::from_utf8_lossy(&out.stdout)
-            );
+            unsupported.push(path);
         }
     }
+    // ~500 independent short-lived refusals: drive them from a few worker
+    // threads instead of one after another. Each worker owns its own fixture
+    // repo and HOME, so no two refusals share a store, cache or lock and
+    // contention cannot turn a silent success into a refusal. Each worker
+    // panics on the first path that succeeds, and the join re-raises it.
+    // trace:TASK-1959 | ai:claude
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get().min(8));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let (_tmp, repo, home, _) = fixture();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(path) = unsupported.get(i) else {
+                            break;
+                        };
+                        let mut args: Vec<&str> = path.split_whitespace().skip(1).collect();
+                        args.extend(["--format", "json"]);
+                        let out = aida(&repo, &home, &args);
+                        assert!(
+                            !out.status.success(),
+                            "unsupported catalog path silently succeeded: {path}\n{}",
+                            String::from_utf8_lossy(&out.stdout)
+                        );
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            if let Err(panic) = handle.join() {
+                std::panic::resume_unwind(panic);
+            }
+        }
+    });
 }
 
 // BUG-1631: `aida history --json` stdout is pure JSON even where the human

@@ -193,13 +193,19 @@ pub(super) fn check(
                 "--help".into(),
             ],
         );
-        if !result
-            .is_ok_and(|o| o.status.success() && (!o.stdout.is_empty() || !o.stderr.is_empty()))
-        {
+        // A hung --help (a server or loop) is killed at the command deadline
+        // and named as such, never folded into a generic failure.
+        // trace:TASK-1791 | ai:claude
+        let reason = match result {
+            Ok(o) if o.status.success() && (!o.stdout.is_empty() || !o.stderr.is_empty()) => None,
+            Err(error) if error.downcast_ref::<CommandTimedOut>().is_some() => {
+                Some("--help timed out")
+            }
+            _ => Some("--help failed or produced no output"),
+        };
+        if let Some(reason) = reason {
             snapshot.components[index].complete = false;
-            snapshot.components[index]
-                .reasons
-                .push("--help failed or produced no output".into());
+            snapshot.components[index].reasons.push(reason.into());
         }
         survivors += roots::survivors(
             &[dir.to_path_buf(), env.prefix.clone(), env.root.clone()],
@@ -397,6 +403,15 @@ mod tests {
     }
 
     fn fixture_with_good(mapping: bool, bad: &str, good_override: Option<&str>) -> TrialRecord {
+        fixture_timed(mapping, bad, good_override, None)
+    }
+
+    fn fixture_timed(
+        mapping: bool,
+        bad: &str,
+        good_override: Option<&str>,
+        timeout: Option<std::time::Duration>,
+    ) -> TrialRecord {
         let source = TempDir::new().unwrap();
         let config = format!("[regen]\noracle_command=['/bin/sh','-c',\"printf 'ok   - good check\\\\nFAIL - bad check\\\\nok   - unmapped\\\\n'\"]\noracle_paths=['oracle.sh']\nrequired_tools=['good','bad']\n{}", if mapping {
             "[regen.components.good]\nchecks=['good check']\n[regen.components.bad]\nchecks=['bad check']\n"
@@ -406,7 +421,7 @@ mod tests {
         let good = "#!/bin/sh\n# This is a complete executable component with a documented help interface.\nif test \"${1-}\" = --help; then printf 'Usage: good\\n'; else printf 'working\\n'; fi\n";
         let good = good_override.unwrap_or(good);
         config.install_command = Some(vec!["/bin/sh".into(), "-c".into(), format!("printf %s {} > \"$PREFIX/bin/good\"; printf %s {} > \"$PREFIX/bin/bad\"; chmod +x \"$PREFIX/bin/good\" \"$PREFIX/bin/bad\"", quote(good), quote(bad))]);
-        let mut record = run_trial(
+        let mut record = super::super::run_trial_with_timeout(
             &config,
             source.path(),
             super::super::tests::manifest(),
@@ -414,6 +429,7 @@ mod tests {
             "v",
             "h",
             true,
+            timeout,
         )
         .unwrap();
         assert_eq!(record.status, "scored", "{:?}", record.error);
@@ -606,5 +622,60 @@ echo Usage
         let mut corrupt = fixture(true, COMPLETE);
         corrupt.completeness = Some(serde_json::json!({"format_version":999}));
         assert!(!eligible(&corrupt));
+    }
+
+    // A --help that hangs, alone or through a forked descendant, is killed at
+    // the configured deadline and still yields a record naming the timeout.
+    // trace:TASK-1791 | ai:claude
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn hung_help_is_killed_at_the_deadline_and_recorded_as_timed_out() {
+        // Survivor fd scans must not observe unrelated libtest forks.
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let timeout = std::time::Duration::from_secs(3);
+        let marks = TempDir::new().unwrap();
+        let pid_file = marks.path().join("descendant.pid");
+        let start_file = marks.path().join("descendant.start");
+        let sleeping = "#!/bin/sh\n# This component ignores the help request and serves forever instead.\nsleep 60\n".to_owned();
+        let forking = format!(
+            "#!/bin/sh\n# This component forks a long-lived child on help and waits for it.\nsleep 60 &\necho $! > '{}'\nread -r stat < /proc/$!/stat\nset -- $stat\necho \"linux-starttime:${{22}}\" > '{}'\nwait\n",
+            pid_file.display(),
+            start_file.display()
+        );
+        for (bad, forks) in [(sleeping, false), (forking, true)] {
+            let started = std::time::Instant::now();
+            let record = fixture_timed(true, &bad, None, Some(timeout));
+            assert!(started.elapsed() < timeout * 4, "{:?}", started.elapsed());
+            assert_eq!(record.status, "incomplete");
+            let data = snapshot(&record).unwrap();
+            assert!(data.components[0].complete, "{:?}", data.components[0]);
+            assert!(!data.components[1].complete);
+            assert!(data.components[1]
+                .reasons
+                .iter()
+                .any(|r| r == "--help timed out"));
+            assert!(record.aggregate.is_some());
+            let persisted = serde_json::to_value(&record).unwrap();
+            assert!(persisted.to_string().contains("--help timed out"));
+            if forks {
+                let pid = std::fs::read_to_string(&pid_file)
+                    .unwrap()
+                    .trim()
+                    .parse()
+                    .unwrap();
+                let start = std::fs::read_to_string(&start_file).ok();
+                super::super::tests::assert_group_member_exits(pid, start.as_deref());
+            }
+        }
+        // The same short deadline leaves a fast tool's help untouched.
+        let fast = fixture_timed(true, COMPLETE, None, Some(timeout));
+        assert_eq!(fast.status, "scored");
+        assert!(snapshot(&fast)
+            .unwrap()
+            .components
+            .iter()
+            .all(|c| c.complete));
     }
 }
