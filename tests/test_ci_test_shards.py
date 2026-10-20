@@ -3,6 +3,7 @@
 trace:TASK-1949 | ai:codex
 """
 import importlib.util
+import io
 import json
 import pathlib
 import subprocess
@@ -229,16 +230,42 @@ class ShardsTest(unittest.TestCase):
                '1 timed out, 4 skipped',
                '     Summary [   1.0s] 8/10 tests run: 8 passed, 0 skipped']
         self.assertEqual(shards.totals(log), dict(passed=134, failed=4, ignored=6))
-        # A child's result in nextest's captured failure output, after a
-        # cargo-test section, counts nowhere and leaves the section's count.
-        log = ['     Running unittests src/lib.rs (target/debug/deps/x-0123)',
-               'test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
-               '--- STDOUT:              x foo::child ---',
-               ' test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.0s',
-               '     Summary [   1.0s] 5 tests run: 4 passed, 1 failed, 0 skipped']
-        self.assertEqual(shards.totals(log), dict(passed=104, failed=1, ignored=0))
-        log[2] = '+ cargo nextest run --no-fail-fast --profile ci -p x --bins'
-        self.assertEqual(shards.totals(log), dict(passed=104, failed=1, ignored=0))
+        # A child's lines in nextest's captured failure output (0.9.146
+        # headers), after a cargo-test section, count nowhere and leave the
+        # section's count; an indented `Running` there opens no section.
+        for header in ('  stdout ───', '── stdout ──', '+ cargo nextest run --no-fail-fast --profile ci -p x --bins'):
+            log = ['+ cargo test --no-fail-fast -p x --doc',
+                   '     Running unittests src/lib.rs (target/debug/deps/x-0123)',
+                   'test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.0s',
+                   header,
+                   '         Running unittests src/lib.rs (target/debug/deps/x-0123)',
+                   '    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.0s',
+                   '  stderr ───',
+                   '     Summary [   1.0s] 7 tests run: 4 passed, 1 failed, 1 exec failed, 1 timed out, 0 skipped']
+            self.assertEqual(shards.totals(log), dict(passed=104, failed=3, ignored=0), header)
+
+    def test_totals_count_only_ignored_tests_in_a_filtered_lib_lane(self):
+        # lib-0 under nextest: the other half's 5260 tests are skipped too.
+        log = ['+ cargo test -p aida-cli-lib --lib -- --list --format terse',
+               '# lib-0: 40 module filters, 5260 tests filtered out',
+               '+ cargo nextest run --no-fail-fast --profile ci --no-tests warn -p aida-cli-lib --lib -- a:: b::',
+               '    Starting 4006 tests across 1 binary (5262 tests skipped)',
+               '     Summary [ 300.0s] 4006 tests run: 4006 passed, 5262 skipped']
+        self.assertEqual(shards.totals(log), dict(passed=4006, failed=0, ignored=2))
+        # The cargo-test lane prints the same marker; libtest counts filtered
+        # tests apart from ignored ones, so it takes nothing off.
+        log[2:] = ['+ cargo test --no-fail-fast -p aida-cli-lib --lib -- a:: b::',
+                   '     Running unittests src/lib.rs (target/debug/deps/aida_cli_lib-0123)',
+                   'test result: ok. 4006 passed; 0 failed; 2 ignored; 0 measured; 5260 filtered out; finished in 9.0s']
+        self.assertEqual(shards.totals(log), dict(passed=4006, failed=0, ignored=2))
+        names = ['a::one', 'b::two', 'b::three']
+        with patch.object(shards, 'lib_test_names', return_value=names), \
+                patch.object(shards.subprocess, 'call', return_value=0), \
+                patch('sys.stdout', new_callable=io.StringIO) as out:
+            shards.main(['--shard', 'lib-1'])
+        marker = next(line for line in out.getvalue().splitlines() if line.startswith('# lib-1'))
+        excluded = len(names) - len(shards.matched(shards.lib_halves(names)[1], names))
+        self.assertEqual(shards.FILTERED_RE.search(marker).group(1), str(excluded))
 
     def test_each_nextest_invocation_keeps_its_own_junit_report(self):
         with tempfile.TemporaryDirectory() as tmp:

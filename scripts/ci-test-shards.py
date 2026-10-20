@@ -46,13 +46,15 @@ ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]')
 TARGET_FILTERS = {'--lib', '--bins', '--bin', '--test', '--tests', '--doc'}
 LIBTEST_HEADER_RE = re.compile(r'^\s*(?:Running \S|Doc-tests \S)')
 LIBTEST_RE = re.compile(r'test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored;')
-# `Summary [  12.3s] 120 tests run: 118 passed, 2 failed, 3 skipped`; a cancelled
-# run prints `118/120 tests run`. Without filters, skipped means #[ignore].
+# `Summary [  12.3s] 120 tests run: 118 passed, 2 failed, 1 exec failed, 3 skipped`;
+# a cancelled run prints `118/120 tests run`. skipped is #[ignore] plus every
+# test a name filter excluded; FILTERED_RE's marker says how many of those.
 NEXTEST_RE = re.compile(r'Summary \[\s*[\d.]+s\] \d+(?:/\d+)? tests? run: (.*)$')
-NEXTEST_PART_RE = re.compile(r'(\d+) (passed|failed|timed out|skipped)')
-# Lines that end a cargo-test section: this script's command echo, and
-# nextest's own output (its start line and captured test output).
-SECTION_END_RE = re.compile(r'^(?:\+ |\s*Starting \d+ tests?|\s*-{3} (?:STDOUT|STDERR))')
+NEXTEST_PART_RE = re.compile(r'(\d+) (passed|failed|exec failed|timed out|skipped)')
+FILTERED_RE = re.compile(r'^# \S+: \d+ module filters, (\d+) tests? filtered out$')
+# nextest's own output: its start line and the headers of captured test output
+# (0.9.146: `  stdout ───`, or `── stdout ──` without indentation).
+NEXTEST_OUTPUT_RE = re.compile(r'^\s*(?:Starting \d+ tests?|(?:─+ )?(?:stdout|stderr|output|execfail) ─+$)')
 
 
 def cli_halves(targets, budgets):
@@ -171,24 +173,34 @@ def totals(lines):
 
     A libtest binary counts its LAST result line: tests that re-run their own
     binary as a child (with a filter) print the child's result line first.
-    Result lines count only inside a cargo-test section (a Running/Doc-tests
-    header up to the next command or nextest output), so a child's result
-    printed in nextest's captured failure output counts nowhere.
+    libtest lines count only while cargo test is the runner: from a `+ cargo
+    test` echo until nextest output or a `+ cargo nextest` echo. Only an echo
+    switches back, so a child's `Running`/`test result:` lines in nextest's
+    captured output count nowhere. A nextest summary's skipped count, less the
+    filtered-out tests its marker line names, is the run's #[ignore] count.
     """
     result = dict(passed=0, failed=0, ignored=0)
-    sections, section, inside = {}, 0, False
+    sections, section, cargo, filtered = {}, 0, True, 0
     for line in lines:
         line = ANSI_RE.sub('', line)
-        if LIBTEST_HEADER_RE.search(line):
-            section, inside = section + 1, True
-        elif SECTION_END_RE.search(line):
-            inside = False
+        if line.startswith('+ '):
+            cargo = not line.startswith('+ cargo nextest ')
+            filtered = 0 if cargo else filtered
+        elif match := FILTERED_RE.search(line):
+            filtered = int(match.group(1))
         elif match := NEXTEST_RE.search(line):
-            inside = False
+            cargo = False
             for count, kind in NEXTEST_PART_RE.findall(match.group(1)):
-                key = {'skipped': 'ignored', 'timed out': 'failed'}.get(kind, kind)
-                result[key] += int(count)
-        elif inside and (match := LIBTEST_RE.search(line)):
+                key = {'skipped': 'ignored', 'timed out': 'failed', 'exec failed': 'failed'}.get(kind, kind)
+                result[key] += int(count) - (filtered if kind == 'skipped' else 0)
+            filtered = 0
+        elif NEXTEST_OUTPUT_RE.search(line):
+            cargo = False
+        elif not cargo:
+            continue
+        elif LIBTEST_HEADER_RE.search(line):
+            section += 1
+        elif match := LIBTEST_RE.search(line):
             sections[section] = [int(value) for value in match.groups()]
     for counts in sections.values():
         for key, value in zip(('passed', 'failed', 'ignored'), counts):
@@ -375,11 +387,15 @@ def main(argv=None):
             filters = []
             if shard.startswith('lib-') and args.shard != 'all':
                 try:
-                    filters = lib_halves(lib_test_names(root, profile), module_seconds)[int(shard[-1])]
+                    names = lib_test_names(root, profile)
+                    filters = lib_halves(names, module_seconds)[int(shard[-1])]
                 except ValueError as err:
                     print(f'::error::cannot plan {shard}: {err}', file=sys.stderr)
                     return 1
-                print(f'# {shard}: {len(filters)} module filters', flush=True)
+                # nextest reports the other half's tests as skipped; --totals
+                # takes this count back out. trace:TASK-1957 | ai:claude
+                excluded = len(names) - len(matched(filters, names))
+                print(f'# {shard}: {len(filters)} module filters, {excluded} tests filtered out', flush=True)
             for command in for_runner(selection, args.runner, args.profile):
                 # Both runners take libtest-style substring filters after `--`.
                 command += ['--'] + filters if filters else []

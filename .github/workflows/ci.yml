@@ -715,9 +715,11 @@ jobs:
   # STORY-1853 S2, shadow period: run the cargo-test lanes' shard set again
   # under cargo-nextest (.config/nextest.toml `ci` profile, per-test slow and
   # kill budget) and report pass/ignore totals for comparison with the
-  # cargo-test lanes. NON-GATING: build-result does not need this job, and the
-  # test step continues on error, so a nextest-only failure shows as a warning
-  # and in the job summary, never as a red check. A later PR swaps it in.
+  # cargo-test lanes. NON-GATING: build-result does not need this job, so no
+  # outcome of it blocks a merge. Only the test step continues on error: a
+  # nextest test failure shows as a warning and in the job summary, while a
+  # setup, totals or upload step failure (or the timeout) still turns this
+  # job's own check red. A later PR swaps it in.
   # trace:TASK-1957 | ai:claude
   nextest-shadow:
     name: Nextest shadow (${{ matrix.shard }})
