@@ -1192,8 +1192,6 @@ fn run_done(
                     // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
                     handle_done_command(spec, backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -1211,8 +1209,6 @@ fn run_done(
                      --centralized mode, use `aida edit <spec> --status completed`."
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida done` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -1293,8 +1289,6 @@ fn run_punt(
                         store_path,
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -1314,8 +1308,6 @@ fn run_punt(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida punt` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

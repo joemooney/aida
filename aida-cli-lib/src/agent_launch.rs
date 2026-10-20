@@ -5356,8 +5356,6 @@ fn run_agent(
                 AgentArgs { inner: agent_cmd } => {
                     return crate::command_registry::returned(handle_agent_command(agent_cmd));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -5370,8 +5368,6 @@ fn run_agent(
                 AgentArgs { inner: agent_cmd } => {
                     handle_agent_command(agent_cmd)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida agent` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

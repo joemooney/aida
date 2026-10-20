@@ -195,9 +195,7 @@ fn every_registered_command_parses_through_the_registry_path() {
         (vec!["aida", "_bg-fetch", "fixture-store"], "_bg-fetch"),
     ] {
         let cli = try_parse_from(&argv).unwrap_or_else(|err| panic!("{argv:?}: {err}"));
-        let Command::Registered(invocation) = &cli.command else {
-            panic!("{argv:?} parsed as legacy {:?}", cli.command);
-        };
+        let Command::Registered(invocation) = &cli.command;
         assert_eq!(invocation.reg.name, name);
         let _ = invocation.policy();
     }
@@ -238,9 +236,7 @@ fn migrated_commands_keep_their_legacy_policy() {
 #[test]
 fn bg_fetch_handler_receives_its_positional() {
     let cli = try_parse_from(["aida", "_bg-fetch", "fixture-store"]).unwrap();
-    let Command::Registered(invocation) = &cli.command else {
-        panic!("expected registered");
-    };
+    let Command::Registered(invocation) = &cli.command;
     let args = <crate::session_misc_cmd::BgFetchArgs as FromArgMatches>::from_arg_matches(
         &invocation.matches,
     )
@@ -553,10 +549,9 @@ fn run_dispatches_early_handlers_before_any_store_is_opened() {
 
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut sites = Vec::new();
-    for entry in std::fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if !name.ends_with(".rs") || name == "command_registry.rs" {
+    for path in production_sources(&src) {
+        let name = path.strip_prefix(&src).unwrap().display().to_string();
+        if name == "command_registry.rs" {
             continue;
         }
         let text = std::fs::read_to_string(&path).unwrap();
@@ -588,10 +583,11 @@ fn run_dispatches_early_handlers_before_any_store_is_opened() {
     );
 }
 
-/// `is_write_command` on main before the registry (origin/main aaff1236ad,
-/// status_awaiting.rs): the commands the team-identity guard refuses under a
-/// shared `default` identity when `AIDA_TEAM_REQUIRE_USER=1`. Every verb of
-/// these commands counted; every other command was a read.
+/// `is_write_command` on main before the registry (origin/main a27fe3fc76,
+/// status_awaiting.rs:1407, the base the policy fixture was captured at): the
+/// commands the team-identity guard refuses under a shared `default` identity
+/// when `AIDA_TEAM_REQUIRE_USER=1`. Every verb of these commands counted;
+/// every other command was a read.
 const MAIN_TEAM_IDENTITY_WRITES: &[&str] = &[
     "add",
     "archive",
@@ -814,10 +810,66 @@ fn command_clap_types(src: &std::path::Path) -> Vec<(String, bool)> {
     out
 }
 
+/// The last `n` characters of `text`, cut on a char boundary.
+fn last_chars(text: &str, n: usize) -> &str {
+    let from = text
+        .char_indices()
+        .rev()
+        .nth(n.saturating_sub(1))
+        .map_or(0, |(at, _)| at);
+    &text[from..]
+}
+
+/// The offset just past the bracket closing the one opened before `from`.
+fn close_of(bytes: &[u8], from: usize) -> usize {
+    let (mut end, mut depth) = (from, 1);
+    while depth > 0 && end < bytes.len() {
+        depth += match bytes[end] {
+            b'{' | b'(' | b'[' => 1,
+            b'}' | b')' | b']' => -1,
+            _ => 0,
+        };
+        end += 1;
+    }
+    end
+}
+
+/// The offset of the innermost bracket still open at `at`.
+fn enclosing_open(bytes: &[u8], at: usize) -> Option<usize> {
+    let mut depth = 0;
+    for at in (0..at).rev() {
+        match bytes[at] {
+            b'}' | b')' | b']' => depth += 1,
+            b'{' | b'(' | b'[' if depth == 0 => return Some(at),
+            b'{' | b'(' | b'[' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `text` with every bracketed group below the top level removed.
+fn top_level(text: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0;
+    for ch in text.chars() {
+        match ch {
+            '{' | '(' | '[' => depth += 1,
+            '}' | ')' | ']' => depth -= 1,
+            _ if depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
 // Criterion 4, enforced: no hot file holds a per-verb dispatcher for a
-// command's subcommand enum, or a `{ … }` pattern over a command's clap
-// type or variant without `..`. Either one means a new flag or verb on that
-// command must edit the hot file.
+// command's subcommand enum (a fn taking one, or a match over its variants
+// with no catch-all arm), or a `{ … }` or tuple pattern over a command's clap
+// type or variant without `..`. Any of these means a new flag or verb on
+// that command must edit the hot file. Renaming imports (`use X as Y`) are
+// followed, and a glob import of a command's verbs is refused outright,
+// since bare variants would slip past every check.
 // trace:STORY-1728.ac245f28 | ai:claude
 #[test]
 fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
@@ -828,17 +880,16 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
         "clap types were collected: {}",
         types.len()
     );
-    let names: Vec<&str> = types.iter().map(|(name, _)| name.as_str()).collect();
-    let group = regex::Regex::new(&format!(r"\b({})(::\w+)?\s*\{{", names.join("|"))).unwrap();
     let decl = regex::Regex::new(r"(enum|struct|impl|for|fn)\s+$").unwrap();
     let comment = regex::Regex::new(r"//[^\n]*").unwrap();
-    let param = regex::Regex::new(r"fn\s+(\w+)\s*(<[^>]*>)?\s*\(([^)]*)\)").unwrap();
+    let use_item = regex::Regex::new(r"\buse\s+[^;]*;").unwrap();
+    let rename = regex::Regex::new(r"\b(\w+)\s+as\s+(\w+)\b").unwrap();
+    let glob = regex::Regex::new(r"\b(\w+)::\*").unwrap();
+    let fn_open = regex::Regex::new(r"\bfn\s+(\w+)\s*(<[^>]*>)?\s*\(").unwrap();
     let param_type = regex::Regex::new(r":\s*&?(?:mut\s+)?(?:[\w:]*::)?(\w+)").unwrap();
-    let enums: Vec<&str> = types
-        .iter()
-        .filter(|(_, is_enum)| *is_enum)
-        .map(|(name, _)| name.as_str())
-        .collect();
+    let catch_all = regex::Regex::new(r"(^|[,\s])(_|[a-z]\w*)\s*(=>|if\s)").unwrap();
+    let arm_follow = regex::Regex::new(r"^\s*(=>|\||if\s)").unwrap();
+    let match_kw = regex::Regex::new(r"\bmatch\b").unwrap();
     let mut violations = Vec::new();
     let mut entries: Vec<_> = std::fs::read_dir(&src)
         .unwrap()
@@ -855,36 +906,67 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
         let text = comment.replace_all(&raw, |caps: &regex::Captures| " ".repeat(caps[0].len()));
         let bytes = text.as_bytes();
         let line_of = |at: usize| text[..at].matches('\n').count() + 1;
+
+        // This file's spellings of each clap type: its own name, plus any
+        // `use … as` rename.
+        let mut names: Vec<String> = types.iter().map(|(name, _)| name.clone()).collect();
+        let mut enums: Vec<String> = types
+            .iter()
+            .filter(|(_, is_enum)| *is_enum)
+            .map(|(name, _)| name.clone())
+            .collect();
+        for item in use_item.find_iter(&text) {
+            for caps in rename.captures_iter(item.as_str()) {
+                if names.contains(&caps[1].to_string()) {
+                    names.push(caps[2].to_string());
+                    if enums.contains(&caps[1].to_string()) {
+                        enums.push(caps[2].to_string());
+                    }
+                }
+            }
+            for caps in glob.captures_iter(item.as_str()) {
+                if enums.contains(&caps[1].to_string()) {
+                    violations.push(format!(
+                        "{name}:{} glob-imports `{}` verbs; name them through the enum",
+                        line_of(item.start()),
+                        &caps[1]
+                    ));
+                }
+            }
+        }
+        // A variant segment is capitalised; `Type::method(…)` is a call.
+        let group =
+            regex::Regex::new(&format!(r"\b({})(::[A-Z]\w*)?\s*[{{(]", names.join("|"))).unwrap();
+        let variant = regex::Regex::new(&format!(r"\b({})::[A-Z]\w*\b", enums.join("|"))).unwrap();
+
         for found in group.find_iter(&text) {
-            if decl.is_match(&text[found.start().saturating_sub(12)..found.start()]) {
+            if decl.is_match(last_chars(&text[..found.start()], 12)) {
                 continue;
             }
-            let (mut end, mut depth) = (found.end(), 1);
-            while depth > 0 && end < bytes.len() {
-                depth += match bytes[end] {
-                    b'{' => 1,
-                    b'}' => -1,
-                    _ => 0,
-                };
-                end += 1;
-            }
-            // Only this level's own fields: drop nested `{ … }` groups.
-            let mut flat = text[found.end()..end - 1].to_string();
-            let nested = regex::Regex::new(r"\{[^{}]*\}").unwrap();
-            while nested.is_match(&flat) {
-                flat = nested.replace_all(&flat, "").into_owned();
-            }
-            if !flat.trim().is_empty() && !flat.contains("..") {
+            let end = close_of(bytes, found.end());
+            // Only this level's own fields: drop nested groups.
+            let fields = top_level(&text[found.end()..end - 1]);
+            let listed = if found.as_str().ends_with('{') {
+                !fields.trim().is_empty()
+            } else {
+                // One tuple field binds the whole payload; two or more
+                // spell the variant out.
+                fields.trim().trim_end_matches(',').contains(',')
+            };
+            if listed && !fields.contains("..") {
                 violations.push(format!(
                     "{name}:{} `{}` lists every field; add `..`",
                     line_of(found.start()),
-                    found.as_str().trim_end_matches('{').trim()
+                    found.as_str().trim_end_matches(['{', '(']).trim()
                 ));
             }
         }
-        for found in param.captures_iter(&text) {
-            for ty in param_type.captures_iter(&found[3]) {
-                if enums.contains(&&ty[1]) {
+
+        for found in fn_open.captures_iter(&text) {
+            let open = found.get(0).unwrap().end();
+            let params = &text[open..close_of(bytes, open) - 1];
+            for ty in param_type.captures_iter(params) {
+                if enums.contains(&ty[1].to_string()) {
                     violations.push(format!(
                         "{name}:{} fn {} dispatches `{}` verbs; move it into the command's module",
                         line_of(found.get(0).unwrap().start()),
@@ -892,6 +974,43 @@ fn adding_a_flag_to_a_command_cannot_require_a_hot_file_edit() {
                         &ty[1]
                     ));
                 }
+            }
+        }
+
+        // A match arm over a command's verbs, in a match with no catch-all.
+        let mut seen_blocks = std::collections::BTreeSet::new();
+        for found in variant.find_iter(&text) {
+            let mut after = found.end();
+            if matches!(bytes.get(after), Some(b'{' | b'(')) {
+                after = close_of(bytes, after + 1);
+            } else if let Some(gap) = text[after..].find(|ch: char| !ch.is_whitespace()) {
+                if matches!(bytes.get(after + gap), Some(b'{' | b'(')) {
+                    after = close_of(bytes, after + gap + 1);
+                }
+            }
+            if !arm_follow.is_match(&text[after..]) {
+                continue;
+            }
+            // The innermost unclosed bracket before the arm must be a `{`
+            // opening a match (an unclosed `(` is `matches!` or a call).
+            let Some(open) = enclosing_open(bytes, found.start()) else {
+                continue;
+            };
+            if bytes[open] != b'{' {
+                continue;
+            }
+            let head = &text[..open];
+            let head = &head[head.rfind([';', '{', '}']).map_or(0, |at| at + 1)..];
+            if !match_kw.is_match(head) || !seen_blocks.insert(open) {
+                continue;
+            }
+            let arms = top_level(&text[open + 1..close_of(bytes, open + 1) - 1]);
+            if !catch_all.is_match(&arms) {
+                violations.push(format!(
+                    "{name}:{} matches every `{}` verb with no catch-all arm",
+                    line_of(found.start()),
+                    found.as_str().split("::").next().unwrap()
+                ));
             }
         }
     }

@@ -104,8 +104,6 @@ fn run_server(
                         ctx.globals.and_then(|globals| globals.server.as_deref()),
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida server` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

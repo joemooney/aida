@@ -199,8 +199,6 @@ fn run_assign(
                     // user's work queue. trace:STORY-639 | ai:claude
                     self::handle_assign_command(id, to, backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -218,8 +216,6 @@ fn run_assign(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida assign` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -279,8 +275,6 @@ fn run_unassign(
                     // trace:STORY-639 | ai:claude
                     self::handle_unassign_command(id, *from_queue, backend, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -298,8 +292,6 @@ fn run_unassign(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida unassign` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

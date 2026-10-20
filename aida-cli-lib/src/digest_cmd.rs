@@ -199,8 +199,6 @@ fn run_digest(
                         &store,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -216,8 +214,6 @@ fn run_digest(
                      the deprecated centralized backend with `aida db export-git`)."
                 );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida digest` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

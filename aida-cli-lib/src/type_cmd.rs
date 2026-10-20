@@ -140,8 +140,6 @@ fn run_type(
                 TypeArgs { inner: type_cmd } => {
                     self::handle_type_command(type_cmd, &storage)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida type` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
