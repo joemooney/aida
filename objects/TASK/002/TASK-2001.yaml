@@ -1,0 +1,30 @@
+id: 01a15942-7fc0-73c1-a69e-5805e3e04a91
+spec_id: TASK-2001
+agreed_id: TASK-2001
+title: BUG-2181 argv test covers only half the routed remote sites
+description: |
+  PR-2774 (BUG-2181) routes many host remote calls through aida_core::git_ops::configure_remote_credentials, but bug_2181_host_remote_credentials_tests.rs only exercises git_ops remote_branch_head_sha / is_remote_reachable / fetch_branch_into_local / push, phase_driver::remote_head_sha, orchestrator_leases::remote_branch_gone, pr_lookup::probe_branch_on_origin, store_push_pull::run_remote_git_with_timeout and fetch_branch.
+  Routed but with no argv test: git_ops push_exact_outcome, pull, fetch_rebase_target (pull_rebase); rebase::detect fetch; pr_cmd ls-remote/fetch/push sites (850, 6257, preflight fetches); session_start align_reused_pr_branch / remote_branch_absent; review_carryover origin_git; doctor heal push --delete; init_bootstrap git_push_in; upgrade_release pull --ff-only (upstream_remote).
+  Each is a one-line route today, but a later refactor that drops the .remote_credentials() call would regress silently. Extend the CredentialedOrigin fixture to the session_start and pr_cmd ls-remote probes and to push_exact_outcome / pull_rebase, or add a ratchet that flags a host remote git call built without the helper.
+
+  Raised in review of PR-2774: https://github.com/joemooney/aida/pull/2774
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T12:21:32.736148096Z
+modified_at: 2026-10-20T12:21:32.736148096Z
+req_type: Task
+tags:
+- from-review:PR-2774
+- security
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: a2003ad02c7230f631171b2d3f1bbe6d1a81bf57
+  branch: pr-2774
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: a4fb8e6c07
+  vendor: claude
+  session: 01a1593ac1e9
