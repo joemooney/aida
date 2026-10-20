@@ -1,0 +1,33 @@
+id: 01a15b51-12fa-7ee3-bed5-da88a0185ef2
+spec_id: TASK-2023
+agreed_id: TASK-2023
+title: test-timings stall waiver is fail-open for multi-test and unbudgeted regressions
+description: |
+  scripts/test-timings.py stalled() (added in PR-2785 b60ea1beb2, TASK-1988 round 3) downgrades to a ::warning:: ANY over-budget rows whose JUnit time spans overlap. Three gaps:
+  1. Rows with no budget entry that exceed default_limit are waived too. nextest runs num-cpus tests at once, so a PR that adds two new 30 s tests to one binary (which run concurrently) passes the gate, so STORY-1853 AC4's "an unbudgeted test over 10 s fails" stops holding.
+  2. The overrun has no upper bound: a test at 5x its entry is still "a stall" if another over-budget test overlaps it.
+  3. A shared-fixture regression slows several tests at once, so it looks exactly like a stall and is waived.
+  Suggested tightening: never waive unbudgeted rows; cap the waived overrun (e.g. <= 2x the entry); optionally require overlapping rows to come from different binaries/modules; add unit tests for each refusal. Minor: span() catches only ValueError, so comparing a naive timestamp with a tz-aware one raises TypeError and crashes the step.
+  Not blocking: the round-3 green runs (39494894926 attempts 1 and 2) had zero stall warnings, so the calibration alone made the gate green.
+
+  Raised in review of PR-2785: https://github.com/joemooney/aida/pull/2785
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T21:56:42.362157745Z
+modified_at: 2026-10-20T21:56:42.362157745Z
+req_type: Task
+tags:
+- ci
+- from-review:PR-2785
+- severity:minor
+- test-budget
+filed_at:
+  code_sha: b60ea1beb2ccab227613e36a6b2239aca63cbd10
+  branch: pr-2785
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15b4e6eae
