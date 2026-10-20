@@ -22,12 +22,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T04:11:30.122948646Z
-modified_at: 2026-10-20T01:29:36.162517192Z
+modified_at: 2026-10-20T01:29:40.489918103Z
 req_type: Task
 tags:
 - arch-review-2026-10-13
 - architecture
 - tech-debt
+comments:
+- id: 01a156ed-b189-7012-af96-e73a3994c697
+  author: joe
+  content: 'Operator + advisor 2026-10-19 18:30: UN-DEFERRED. Small now, because main has 5 non-seat_authority modules reading AIDA_SESSION_GRANT: session.rs, queue_cmd.rs, role_cmd_args.rs, role_cmd.rs, agent_launch.rs. One PR: route every read through seat_authority (grant_check or a read accessor), with no behavior change, plus a guard test that fails when any module other than seat_authority.rs names AIDA_SESSION_GRANT. Exempt test helpers explicitly, by name, in the guard.'
+  created_at: 2026-10-20T01:29:40.489918103Z
+  modified_at: 2026-10-20T01:29:40.489918103Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 history:
 - id: 01a154dc-092d-7333-91e7-7979ca6e59a5
   author: joe
