@@ -24,19 +24,31 @@ pub(super) struct Repository {
     remote: String,
 }
 
+// Apply the same repository-routing hygiene to probes and both child levels.
+// trace:TASK-1993 | ai:codex
+fn clear_routing(command: &mut Command) {
+    for name in [
+        "GH_REPO",
+        "GLAB_REPO",
+        "GITLAB_REPO",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+    ] {
+        command.env_remove(name);
+    }
+}
+
 fn output(root: &Path, program: &str, args: &[&str]) -> Result<Vec<u8>> {
     let mut command = Command::new(program);
-    command
-        .current_dir(root)
-        .args(args)
-        .stdin(Stdio::null())
-        .env_remove("GH_REPO")
-        .env_remove("GLAB_REPO")
-        .env_remove("GITLAB_REPO")
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_COMMON_DIR")
-        .env_remove("GIT_INDEX_FILE");
+    command.current_dir(root).args(args).stdin(Stdio::null());
+    clear_routing(&mut command);
     let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
         .with_context(|| format!("review-watch {program} probe failed or exceeded 30 seconds"))?;
     anyhow::ensure!(
@@ -104,6 +116,12 @@ impl Repository {
             remote,
         })
     }
+    pub fn pin_command(&self, command: &mut Command) {
+        clear_routing(command);
+        command
+            .env("GH_HOST", &self.host)
+            .env("GITLAB_HOST", &self.host);
+    }
     fn json(&self, root: &Path, id: Option<u64>, page: u32) -> Result<serde_json::Value> {
         let pinned = Self::load(root)?;
         anyhow::ensure!(
@@ -154,12 +172,8 @@ impl Repository {
                 ]);
             }
         }
-        command
-            .current_dir(root)
-            .stdin(Stdio::null())
-            .env_remove("GH_REPO")
-            .env_remove("GLAB_REPO")
-            .env_remove("GITLAB_REPO");
+        command.current_dir(root).stdin(Stdio::null());
+        self.pin_command(&mut command);
         let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
             .context("forge discovery timed out or failed to spawn")?;
         anyhow::ensure!(
@@ -270,7 +284,15 @@ impl Repository {
                 let bytes = output(
                     root,
                     "git",
-                    &["diff", "--name-only", "-z", ancestor, tip, "--"],
+                    &[
+                        "diff",
+                        "--no-renames",
+                        "--name-only",
+                        "-z",
+                        ancestor,
+                        tip,
+                        "--",
+                    ],
                 )?;
                 let text = String::from_utf8(bytes).context("non-UTF8 path evidence")?;
                 Ok(text

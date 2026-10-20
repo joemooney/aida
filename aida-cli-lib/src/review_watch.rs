@@ -446,7 +446,42 @@ fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
     args
 }
 
+// Clear inherited orchestration/gate context so queue work must take its
+// ordinary standalone attested path in the same pinned repository.
+// trace:TASK-1993 | ai:codex
+fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.current_dir(root).stdin(Stdio::null());
+    for (key, _) in std::env::vars_os() {
+        if key.to_str().is_some_and(|key| {
+            key.starts_with("AIDA_REVIEW_")
+                || key.starts_with("AIDA_FROM_PR_")
+                || key.starts_with("AIDA_AGENT_GATE_")
+        }) {
+            command.env_remove(key);
+        }
+    }
+    command
+        .env_remove("AIDA_GRADED_REVIEW_CONTEXT")
+        .env_remove("AIDA_SESSION_PURPOSE")
+        .env_remove("AIDA_CARGO_NO_SLOT");
+    repo.pin_command(&mut command);
+    command
+}
+
 fn child(root: &Path, repo: &forge::Repository, reservation: &str) -> Result<()> {
+    child_with_program(root, repo, reservation, &crate::aida_exe_path())
+}
+
+// Kept separate from executable resolution so process-level fixtures exercise
+// the production receipt/preflight/queue command boundary without an LLM.
+// trace:TASK-1993 | ai:codex
+fn child_with_program(
+    root: &Path,
+    repo: &forge::Repository,
+    reservation: &str,
+    program: &Path,
+) -> Result<()> {
     let (key, token) = reservation
         .split_once(':')
         .context("invalid launch reservation")?;
@@ -468,12 +503,9 @@ fn child(root: &Path, repo: &forge::Repository, reservation: &str) -> Result<()>
             Ok(())
         },
         |attempt| {
-            let mut cmd = Command::new(crate::aida_exe_path());
-            cmd.current_dir(root)
-                .args(queue_args(key, attempt.vendor.as_deref()))
-                .env(WATCH_HEAD, &attempt.head)
-                .env_remove("AIDA_CARGO_NO_SLOT")
-                .stdin(Stdio::null());
+            let mut cmd = watch_command(repo, root, program);
+            cmd.args(queue_args(key, attempt.vendor.as_deref()))
+                .env(WATCH_HEAD, &attempt.head);
             let status = crate::process_retry::RetryEtxtbsy::status_retrying_etxtbsy(&mut cmd)?;
             anyhow::ensure!(status.success(), "attested review exited {status}; receipt retained; inspect .aida/review-watch/state.json and `aida session leases --all`");
             Ok(())
@@ -600,17 +632,14 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
                     use std::os::unix::process::CommandExt;
                     let logs = Directory::open(&store.dir.path().join("logs"))?;
                     let log = logs.file(&format!("{key}-{}.log", attempt.token), true)?;
-                    let mut command = Command::new(crate::aida_exe_path());
+                    let mut command = watch_command(&repo, &root, &crate::aida_exe_path());
                     command
-                        .current_dir(&root)
                         .args([
                             "review",
                             "watch",
                             "--launch-reservation",
                             &format!("{key}:{}", attempt.token),
                         ])
-                        .env_remove("AIDA_CARGO_NO_SLOT")
-                        .stdin(Stdio::null())
                         .stdout(Stdio::from(log.try_clone()?))
                         .stderr(Stdio::from(log))
                         .process_group(0);

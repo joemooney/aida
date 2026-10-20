@@ -348,11 +348,122 @@ fn task1993_strict_discovery_handles_gitlab_and_refuses_unknown_evidence() {
     assert!(forge::parse_change(&row, true).is_err());
 }
 
+// Spawn the production child boundary in another test process, then hold its
+// queue-work executable at a barrier while inspecting its persisted receipt.
+// trace:TASK-1993 | ai:codex
+fn process_dispatch_barrier(root: &Path, repo: &forge::Repository, change: &forge::Change) {
+    let store = Store::open(root, &repo.identity).unwrap();
+    let attempt = dispatch(select(&store, change, Some("claude".into()), 2).unwrap());
+    let ticket = root.join(".aida/task1993-process-ticket");
+    std::fs::write(&ticket, format!("{}:{}", change.key(), attempt.token)).unwrap();
+    let program = root.parent().unwrap().join("bin/queue-fixture");
+    crate::test_exec::write_executable(
+        &program,
+        r#"#!/usr/bin/python3
+import json, os, pathlib, sys, time
+root = pathlib.Path.cwd()
+state = json.loads((root / '.aida/review-watch/state.json').read_text())
+key = sys.argv[3]
+attempt = state['entries'][key]['attempts'][0]
+assert attempt['phase'] == 'running'
+assert attempt['identity']['pid'] == os.getppid()
+assert attempt['identity']['start'] and attempt['identity']['boot']
+assert sys.argv[1:] == ['queue', 'work', key, '--role', 'reviewer', '--no-human', '--fresh', '--vendor', 'claude']
+for name in os.environ:
+    assert not name.startswith(('AIDA_FROM_PR_', 'AIDA_AGENT_GATE_'))
+    assert not name.startswith('AIDA_REVIEW_') or name == 'AIDA_REVIEW_WATCH_HEAD'
+for name in ['GH_REPO', 'GLAB_REPO', 'GITLAB_REPO', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_NAMESPACE', 'GIT_CONFIG_COUNT', 'AIDA_GRADED_REVIEW_CONTEXT']:
+    assert name not in os.environ, name
+assert os.environ['AIDA_REVIEW_WATCH_HEAD'] == attempt['head']
+assert os.environ['GH_HOST'] in ['github.com', 'gitlab.example.test']
+assert os.environ.get('AIDA_SESSION_GRANT')
+(root / 'queue-ready').write_text(str(os.getppid()))
+deadline = time.monotonic() + 15
+while not (root / 'queue-release').exists():
+    assert time.monotonic() < deadline, 'process barrier timed out'
+    time.sleep(0.01)
+"#,
+    );
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command.current_dir(root).args([
+        "--exact", "review_watch::tests::task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads",
+        "--nocapture", "--test-threads=1",
+    ]);
+    for name in [
+        "AIDA_REVIEW_VERDICT_FILE",
+        "AIDA_REVIEW_ROUND",
+        "AIDA_AGENT_GATE_NAME",
+        "AIDA_AGENT_GATE_ROLE",
+        "AIDA_FROM_PR_REVIEW",
+        "AIDA_FROM_PR_NUMBER",
+        "AIDA_FROM_PR_HEAD_SHA",
+        "AIDA_GRADED_REVIEW_CONTEXT",
+        "GH_REPO",
+        "GLAB_REPO",
+        "GITLAB_REPO",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_NAMESPACE",
+    ] {
+        command.env(name, "unrelated-parent-context");
+    }
+    let mut child = command.spawn().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !root.join("queue-ready").exists() {
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("dispatcher exited before barrier: {status}");
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("queue barrier was never reached");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let state = store.load().unwrap();
+    let receipt = &state.entries[&change.key()].attempts[0];
+    assert_eq!(receipt.phase, Phase::Running);
+    assert_eq!(receipt.identity.as_ref().unwrap().pid, child.id());
+    assert!(matches!(
+        select(&store, change, None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    std::fs::write(root.join("queue-release"), "continue").unwrap();
+    while child.try_wait().unwrap().is_none() {
+        if std::time::Instant::now() > deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            panic!("dispatcher did not complete");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(child.wait().unwrap().success());
+    assert_eq!(
+        store.load().unwrap().entries[&change.key()].attempts[0].phase,
+        Phase::Completed
+    );
+    std::fs::remove_file(ticket).unwrap();
+}
+
 // Exercise the production discovery/probe argv against fake forge CLIs and
 // real local Git refs, rather than returning a preclassified overlap boolean.
 #[test]
 fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads() {
     if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let cwd = std::env::current_dir().unwrap();
+    if let Ok(ticket) = std::fs::read_to_string(cwd.join(".aida/task1993-process-ticket")) {
+        let repo = forge::Repository::load(&cwd).unwrap();
+        child_with_program(
+            &cwd,
+            &repo,
+            &ticket,
+            &cwd.parent().unwrap().join("bin/queue-fixture"),
+        )
+        .unwrap();
         return;
     }
     for gitlab in [false, true] {
@@ -471,6 +582,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "a stale non-overlapping head remains reviewable"
         );
         assert_eq!(repo.change(&root, 1).unwrap().head, head);
+        process_dispatch_barrier(&root, &repo, &changes[0]);
         std::fs::write(temp.path().join("bad-count"), "").unwrap();
         assert!(
             repo.probe(&root, &mut changes[0]).is_err(),
@@ -483,6 +595,27 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "moving head must not dispatch"
         );
         changes[0].head = head;
+        // Renames must include their source in the overlap set.
+        git_run(&root, &["checkout", "-q", "feature"]);
+        git_run(&root, &["mv", "own.rs", "renamed.rs"]);
+        git_run(&root, &["commit", "-qm", "rename feature path"]);
+        let renamed_head = git_run(&root, &["rev-parse", "HEAD"]);
+        git_run(
+            &root,
+            &[
+                "push",
+                "-q",
+                "origin",
+                "feature:refs/pull/1/head",
+                "feature:refs/merge-requests/1/head",
+            ],
+        );
+        git_run(&root, &["checkout", "-q", "main"]);
+        let mut renamed_row = row.clone();
+        renamed_row[if gitlab { "sha" } else { "headRefOid" }] = renamed_head.clone().into();
+        std::fs::write(&list, serde_json::to_vec(&vec![&renamed_row]).unwrap()).unwrap();
+        std::fs::write(&view, serde_json::to_vec(&renamed_row).unwrap()).unwrap();
+        changes[0].head = renamed_head;
         std::fs::write(root.join("own.rs"), "overlapping main advance").unwrap();
         git_run(&root, &["commit", "-qam", "overlapping main advance"]);
         git_run(&root, &["push", "-q", "origin", "main"]);
