@@ -30,6 +30,15 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-grant-expiry-notice.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" --client codex",
+            "timeout": 2
+          }
+        ]
       }
     ],
     "PostToolUse": [

@@ -1034,7 +1034,10 @@ mod tests {
         let mut env = ScoreEnv::new(&cfg, true).unwrap();
         env.command_timeout = std::time::Duration::from_secs(1);
         let tool = env.prefix.join("bin/regen-fixture-tool");
-        std::fs::write(&tool, "#!/bin/sh\ntest \"$1\" = --help || exit 1\nsleep 60 &\necho $! > descendant.pid\nwait\n").unwrap();
+        // Also record the descendant's kernel start time (stat field 22) so the
+        // check below follows that exact process, never a reused PID.
+        // trace:TASK-1956 | ai:claude
+        std::fs::write(&tool, "#!/bin/sh\ntest \"$1\" = --help || exit 1\nsleep 60 &\necho $! > descendant.pid\nread -r stat < /proc/$!/stat\nset -- $stat\necho \"linux-starttime:${22}\" > descendant.start\nwait\n").unwrap();
         std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o700)).unwrap();
         let dir = TempDir::new().unwrap();
         let start = std::time::Instant::now();
@@ -1055,13 +1058,43 @@ mod tests {
             .trim()
             .parse()
             .unwrap();
-        // Killed orphan descendants may remain zombies until init reaps them.
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
-        while aida_core::liveness::pid_is_alive(pid) && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        use std::os::fd::{AsRawFd, FromRawFd};
+        // Absent only if the timeout struck between the two writes; the pidfd
+        // wait then pins whatever the PID names now (still bounded).
+        let start = std::fs::read_to_string(dir.path().join("descendant.start")).ok();
+        let start = start.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        // SIGKILL is delivered when killpg returns, but the descendant only
+        // exits once the kernel next runs it, which can be well over a second
+        // on a loaded runner (e.g. while it pages in from disk). The old 1s
+        // wall-clock window flaked there (BUG-2182). Pin the exact process
+        // with a pidfd and wait for its exit readiness instead, with a
+        // generous deadline. A zombie already counts as dead, so reaping
+        // latency never matters.
+        // trace:TASK-1956 | ai:claude trace:BUG-2182 | ai:claude
+        let pidfd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid as libc::pid_t, 0) } as i32;
+        if pidfd >= 0 {
+            let pidfd = unsafe { std::os::fd::OwnedFd::from_raw_fd(pidfd) };
+            // Only wait if the pidfd pins the descendant itself, not a reuse.
+            if start.is_none()
+                || aida_core::liveness::process_start_identity_exact(pid).as_deref() == start
+            {
+                let mut poll = libc::pollfd {
+                    fd: pidfd.as_raw_fd(),
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                while poll.revents & libc::POLLIN == 0 {
+                    let left = deadline.saturating_duration_since(std::time::Instant::now());
+                    if left.is_zero() {
+                        break;
+                    }
+                    unsafe { libc::poll(&mut poll, 1, left.as_millis() as libc::c_int) };
+                }
+            }
         }
         assert!(
-            !aida_core::liveness::pid_is_alive(pid),
+            !aida_core::liveness::process_identity_is_alive(pid, start),
             "sleeping descendant {pid} survived the group timeout"
         );
     }

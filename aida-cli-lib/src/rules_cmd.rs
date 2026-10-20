@@ -160,8 +160,6 @@ fn run_rules(
                         rules_cmd, backend,
                     ));
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -180,8 +178,6 @@ fn run_rules(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rules` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

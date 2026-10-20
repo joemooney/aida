@@ -1,3 +1,10 @@
+CI fan-out keeps libtest: CLI-library units, two deterministic CLI-integration
+halves, remaining workspace tests/doctests, and two gate lanes run on six
+parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
+lanes succeed. Test timing budgets remain per binary, and each test lane checks
+for untracked root entries. See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
 invalid probes clear inherited context; previews perform no version probe.
@@ -1046,14 +1053,16 @@ store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
 
-Claude Code tool hooks deliver informational seat-grant expiry notices once at
+Claude Code, Codex (`PreToolUse`), and Antigravity (`PreInvocation` via
+`--client agy`) hooks deliver informational seat-grant expiry notices once at
 the 2h, 30m and expired crossings, without requiring a user prompt. A local
 grant-id ledger uses a permanent flock sidecar and atomic replacement. No
 requirements graph or cache is initialized; the shared authority validator
-retains its local roster lookup. Failed ledger access emits no context and
-leaves SessionStart/statusline warnings as fallback. See
+retains its local roster lookup. Failed ledger access emits no context (`{}` for
+Antigravity) and leaves SessionStart/statusline warnings as fallback. See
 [verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+<!-- trace:TASK-1744 | ai:antigravity -->
 
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index

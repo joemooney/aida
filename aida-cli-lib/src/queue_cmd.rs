@@ -10800,7 +10800,8 @@ pub(crate) fn queue_work_issues_child_grant(no_launch: bool) -> bool {
 /// BUG-2139: whether this launch is a fresh headless pickup — the arm that
 /// execs the vendor through `session::exec_vendor_headless`. It is the one
 /// arm where a launcher that cannot delegate a BASELINE seat still launches,
-/// with the child at baseline authority (`AIDA_SESSION_GRANT=""`); every other
+/// with the child at baseline authority (an empty
+/// [`crate::seat_authority::GRANT_ENV`]); every other
 /// arm requires delegation.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn queue_work_is_fresh_headless(
@@ -10814,8 +10815,10 @@ pub(crate) fn queue_work_is_fresh_headless(
 /// BUG-2139: the one line a baseline headless launch prints.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn headless_baseline_notice(seat: &str, cause: &str) -> String {
+    // trace:TASK-1752 | ai:claude
+    let grant_env = crate::seat_authority::GRANT_ENV;
     format!(
-        "headless `{seat}` child runs ungranted at baseline authority (AIDA_SESSION_GRANT=\"\"): \
+        "headless `{seat}` child runs ungranted at baseline authority ({grant_env}=\"\"): \
          the launcher cannot delegate `{seat}` ({cause})"
     )
 }
@@ -13213,9 +13216,8 @@ pub(crate) fn run_standalone_reviewer(
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
-    let launcher_grant = std::env::var(crate::seat_authority::GRANT_ENV)
-        .ok()
-        .filter(|s| !s.trim().is_empty());
+    // trace:TASK-1752 | ai:claude
+    let launcher_grant = crate::seat_authority::current_grant_id();
     // Spawn the resolved vendor, wait, and capture the headless JSONL log
     // path (None for an interactive review — there is no stream-json log).
     // BUG-2149: every arm returns the id of the child reviewer grant it
@@ -16526,8 +16528,6 @@ fn run_queue(
                     let storage = Storage::new(store_path);
                     handle_queue_command(queue_cmd, &storage, store_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16540,8 +16540,6 @@ fn run_queue(
                 QueueArgs { inner: queue_cmd } => {
                     handle_queue_command(queue_cmd, &storage, &requirements_path)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida queue` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16664,8 +16662,6 @@ fn run_rework(
                         },
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -16711,8 +16707,6 @@ fn run_rework(
                         },
                     )?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida rework` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

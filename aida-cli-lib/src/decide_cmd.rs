@@ -119,8 +119,6 @@ fn run_decide(
                 DecideArgs { spec } => {
                     self::handle_decide_command(backend, store_path, spec)?;
                 }
-                #[allow(unreachable_patterns)]
-                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
             }
             Ok(crate::command_registry::Flow::Continue)
         }
@@ -139,8 +137,6 @@ fn run_decide(
                      deprecated --centralized backend)"
                     );
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!("`aida decide` finished before storage init"),
             }
             Ok(crate::command_registry::Flow::Continue)
         }

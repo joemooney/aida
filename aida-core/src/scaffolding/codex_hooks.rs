@@ -45,7 +45,10 @@ pub fn handler_names() -> Vec<String> {
     for line in text.lines() {
         if let Some(i) = line.find("/.codex/hooks/") {
             let rest = &line[i + "/.codex/hooks/".len()..];
-            if let Some(name) = rest.split('"').next() {
+            if let Some(name) = rest
+                .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+                .next()
+            {
                 let n = name.trim().to_string();
                 if !n.is_empty() && !names.contains(&n) {
                     names.push(n);
@@ -62,6 +65,7 @@ pub fn handler_names() -> Vec<String> {
 pub struct CodexHooksOutcome {
     pub written: Vec<String>,
     pub skipped_existing: Vec<String>,
+    pub warning: Option<String>,
 }
 
 /// Write the Codex hook wiring and handlers under `project_root`.
@@ -106,6 +110,256 @@ pub fn scaffold_codex_hooks(
     Ok(out)
 }
 
+/// Where the Antigravity wiring lives, relative to the project root.
+// trace:TASK-1744 | ai:antigravity
+pub const AGY_HOOKS_JSON_REL: &str = ".agents/hooks.json";
+/// Where the Antigravity handler scripts live, relative to the project root.
+pub const AGY_HOOKS_DIR_REL: &str = ".agents/hooks";
+/// The named hook key AIDA manages inside `.agents/hooks.json`.
+pub const AGY_EXPIRY_NOTICE_KEY: &str = "aida-grant-expiry-notice";
+
+/// True when `.agents/hooks.json` is a valid JSON object containing AIDA's
+/// `aida-grant-expiry-notice` entry. A third-party `.agents/hooks.json` that
+/// lacks AIDA's key returns `false` so re-init repair does not drop unreferenced
+/// handler scripts into a repo that opted out.
+// trace:TASK-1744 | ai:antigravity
+pub fn antigravity_hooks_wired(project_root: &Path) -> bool {
+    let wiring = project_root.join(AGY_HOOKS_JSON_REL);
+    let Ok(raw) = std::fs::read_to_string(&wiring) else {
+        return false;
+    };
+    let Ok(serde_json::Value::Object(map)) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    map.contains_key(AGY_EXPIRY_NOTICE_KEY)
+}
+
+/// The handlers referenced by the Antigravity wiring.
+// trace:TASK-1744 | ai:antigravity
+pub fn antigravity_handler_names() -> Vec<String> {
+    let text = crate::templates::EMBEDDED_TEMPLATES
+        .get("antigravity-hooks.json")
+        .copied()
+        .unwrap_or("{}");
+    let mut names: Vec<String> = Vec::new();
+    for line in text.lines() {
+        if let Some(i) = line.find("/.agents/hooks/") {
+            let rest = &line[i + "/.agents/hooks/".len()..];
+            if let Some(name) = rest
+                .split(|c: char| c == '"' || c == '\\' || c.is_whitespace())
+                .next()
+            {
+                let n = name.trim().to_string();
+                if !n.is_empty() && !names.contains(&n) {
+                    names.push(n);
+                }
+            }
+        }
+    }
+    names.sort();
+    names
+}
+
+/// Order-preserving JSON value so merging `aida-grant-expiry-notice` into a
+/// user-owned `.agents/hooks.json` preserves the exact key order of all
+/// third-party hooks and their nested fields without requiring workspace-wide
+/// `serde_json/preserve_order`.
+// trace:TASK-1744 | ai:antigravity
+#[derive(Debug, Clone, PartialEq)]
+enum OrderedJson {
+    Null,
+    Bool(bool),
+    Number(serde_json::Number),
+    String(String),
+    Array(Vec<OrderedJson>),
+    Object(Vec<(String, OrderedJson)>),
+}
+
+impl serde::Serialize for OrderedJson {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Null => serializer.serialize_unit(),
+            Self::Bool(b) => serializer.serialize_bool(*b),
+            Self::Number(n) => n.serialize(serializer),
+            Self::String(s) => serializer.serialize_str(s),
+            Self::Array(items) => {
+                use serde::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(items.len()))?;
+                for item in items {
+                    seq.serialize_element(item)?;
+                }
+                seq.end()
+            }
+            Self::Object(entries) => {
+                use serde::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(entries.len()))?;
+                for (k, v) in entries {
+                    map.serialize_entry(k, v)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for OrderedJson {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = OrderedJson;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("any valid JSON value")
+            }
+            fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                Ok(OrderedJson::Null)
+            }
+            fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(OrderedJson::Bool(v))
+            }
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(OrderedJson::Number(v.into()))
+            }
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(OrderedJson::Number(v.into()))
+            }
+            fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                serde_json::Number::from_f64(v)
+                    .map(OrderedJson::Number)
+                    .ok_or_else(|| E::custom("non-finite JSON number"))
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(OrderedJson::String(v.to_owned()))
+            }
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E> {
+                Ok(OrderedJson::String(v))
+            }
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut items = Vec::new();
+                while let Some(elem) = seq.next_element()? {
+                    items.push(elem);
+                }
+                Ok(OrderedJson::Array(items))
+            }
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut entries: Vec<(String, OrderedJson)> = Vec::new();
+                while let Some((k, v)) = map.next_entry::<String, OrderedJson>()? {
+                    if let Some((_, existing)) = entries.iter_mut().find(|(ek, _)| *ek == k) {
+                        *existing = v;
+                    } else {
+                        entries.push((k, v));
+                    }
+                }
+                Ok(OrderedJson::Object(entries))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+/// Write the Antigravity hook wiring and handlers under `project_root`.
+///
+/// `.agents/hooks.json` is a shared, user-owned file holding named hook entries.
+/// When it already exists as a valid JSON object, only the `aida-grant-expiry-notice`
+/// key is inserted or updated (when `force = true`), preserving all other keys
+/// and their original key order. If `.agents/hooks.json` exists and is invalid
+/// JSON or not a top-level object, it is never overwritten (even with `force = true`),
+/// the handler script is not dropped, and a single warning is recorded on the outcome.
+// trace:TASK-1744 | ai:antigravity
+pub fn scaffold_antigravity_hooks(
+    project_root: &Path,
+    force: bool,
+) -> std::io::Result<CodexHooksOutcome> {
+    let mut out = CodexHooksOutcome::default();
+    let wiring = project_root.join(AGY_HOOKS_JSON_REL);
+
+    let existing_entries = if wiring.exists() {
+        let raw = std::fs::read_to_string(&wiring)?;
+        match serde_json::from_str::<OrderedJson>(&raw) {
+            Ok(OrderedJson::Object(entries)) => Some(entries),
+            _ => {
+                let msg = format!(
+                    "{AGY_HOOKS_JSON_REL} is not a valid top-level JSON object; leaving it untouched and skipping Antigravity hook installation"
+                );
+                out.warning = Some(msg);
+                return Ok(out);
+            }
+        }
+    } else {
+        None
+    };
+
+    let dir = project_root.join(AGY_HOOKS_DIR_REL);
+    std::fs::create_dir_all(&dir)?;
+
+    for name in antigravity_handler_names() {
+        let Some(body) = crate::templates::EMBEDDED_TEMPLATES.get(&format!("hooks/{name}") as &str)
+        else {
+            continue;
+        };
+        let dest = dir.join(&name);
+        if dest.exists() && !force {
+            out.skipped_existing.push(name);
+            continue;
+        }
+        std::fs::write(&dest, format!("{}\n", body.trim_end()))?;
+        set_executable(&dest);
+        out.written.push(name);
+    }
+
+    let template_body = crate::templates::EMBEDDED_TEMPLATES
+        .get("antigravity-hooks.json")
+        .copied()
+        .unwrap_or("{}");
+    match existing_entries {
+        None => {
+            std::fs::write(&wiring, format!("{}\n", template_body.trim_end()))?;
+            out.written.push(AGY_HOOKS_JSON_REL.to_string());
+        }
+        Some(mut entries) => {
+            if entries.iter().any(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY) && !force {
+                out.skipped_existing.push(AGY_HOOKS_JSON_REL.to_string());
+            } else {
+                if let Ok(OrderedJson::Object(template_entries)) =
+                    serde_json::from_str::<OrderedJson>(template_body)
+                {
+                    if let Some((_, entry)) = template_entries
+                        .into_iter()
+                        .find(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY)
+                    {
+                        if let Some((_, slot)) =
+                            entries.iter_mut().find(|(k, _)| k == AGY_EXPIRY_NOTICE_KEY)
+                        {
+                            *slot = entry;
+                        } else {
+                            entries.push((AGY_EXPIRY_NOTICE_KEY.to_string(), entry));
+                        }
+                    }
+                }
+                let rendered = serde_json::to_string_pretty(&OrderedJson::Object(entries))
+                    .map_err(std::io::Error::other)?;
+                std::fs::write(&wiring, format!("{rendered}\n"))?;
+                out.written.push(AGY_HOOKS_JSON_REL.to_string());
+            }
+        }
+    }
+    Ok(out)
+}
+
 #[cfg(unix)]
 fn set_executable(p: &Path) {
     use std::os::unix::fs::PermissionsExt;
@@ -142,43 +396,30 @@ mod tests {
         )
         .expect("codex-hooks.json parses");
 
-        let mut sh = settings
-            .get("hooks")
-            .and_then(|h| h.as_object())
-            .unwrap()
-            .clone();
+        let sh = settings.get("hooks").and_then(|h| h.as_object()).unwrap();
         let ch = codex.get("hooks").and_then(|h| h.as_object()).unwrap();
 
-        // Signed Claude-only delivery: pin the ONE exact additional entry,
-        // assert it has no Codex wiring/handler, then retain full parity for
-        // every shared entry below. An arbitrary divergent hook still fails.
-        // trace:BUG-2014 | ai:codex
-        let claude_only = sh
-            .get_mut("PreToolUse")
-            .unwrap()
-            .as_array_mut()
-            .unwrap()
-            .pop()
-            .unwrap();
-        assert_eq!(
-            claude_only,
-            serde_json::json!({"hooks": [{
-                "type": "command",
-                "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-grant-expiry-notice.sh",
-                "timeout": 2
-            }]})
-        );
-        assert!(!codex.to_string().contains("aida-grant-expiry-notice.sh"));
-        assert!(!handler_names()
+        // trace:TASK-1744 | ai:antigravity
+        assert!(codex.to_string().contains("aida-grant-expiry-notice.sh"));
+        assert!(codex.to_string().contains("--client codex"));
+        assert!(handler_names()
             .iter()
             .any(|name| name == "aida-grant-expiry-notice.sh"));
         let tmp = tempfile::tempdir().unwrap();
         scaffold_codex_hooks(tmp.path(), true).unwrap();
-        assert!(!tmp
+        assert!(tmp
             .path()
             .join(HOOKS_DIR_REL)
             .join("aida-grant-expiry-notice.sh")
-            .exists());
+            .is_file());
+        scaffold_antigravity_hooks(tmp.path(), true).unwrap();
+        assert!(tmp
+            .path()
+            .join(AGY_HOOKS_DIR_REL)
+            .join("aida-grant-expiry-notice.sh")
+            .is_file());
+        assert!(tmp.path().join(AGY_HOOKS_JSON_REL).is_file());
+        assert!(antigravity_hooks_wired(tmp.path()));
 
         // Every Claude event Codex supports must be present.
         const CODEX_EVENTS: &[&str] = &[
@@ -222,13 +463,33 @@ mod tests {
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|h| h["command"].as_str().unwrap().rsplit('/').next().unwrap())
+                    .map(|h| {
+                        h["command"]
+                            .as_str()
+                            .unwrap()
+                            .rsplit('/')
+                            .next()
+                            .unwrap()
+                            .split(|c: char| c == '"' || c.is_whitespace())
+                            .next()
+                            .unwrap()
+                    })
                     .collect();
                 let cn: Vec<&str> = c["hooks"]
                     .as_array()
                     .unwrap()
                     .iter()
-                    .map(|h| h["command"].as_str().unwrap().rsplit('/').next().unwrap())
+                    .map(|h| {
+                        h["command"]
+                            .as_str()
+                            .unwrap()
+                            .rsplit('/')
+                            .next()
+                            .unwrap()
+                            .split(|c: char| c == '"' || c.is_whitespace())
+                            .next()
+                            .unwrap()
+                    })
                     .collect();
                 assert_eq!(sn, cn, "`{ev}` wires different handlers");
             }
@@ -311,5 +572,129 @@ mod tests {
         let forced = scaffold_codex_hooks(&dir, true).unwrap();
         assert!(forced.written.iter().any(|w| w == HOOKS_JSON_REL));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn antigravity_scaffolding_merges_existing_object_without_destroying_third_party_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wiring = root.join(AGY_HOOKS_JSON_REL);
+        std::fs::create_dir_all(wiring.parent().unwrap()).unwrap();
+        std::fs::write(
+            &wiring,
+            r#"{"z-user-hook":{"PreInvocation":[{"type":"command","command":"echo z"}]},"b-user-hook":{"PreInvocation":[{"type":"command","command":"echo b"}]}}"#,
+        )
+        .unwrap();
+        assert!(!antigravity_hooks_wired(root));
+
+        let out = scaffold_antigravity_hooks(root, false).unwrap();
+        assert!(out.warning.is_none());
+        assert!(out.written.iter().any(|w| w == AGY_HOOKS_JSON_REL));
+        assert!(antigravity_hooks_wired(root));
+
+        let merged_raw = std::fs::read_to_string(&wiring).unwrap();
+        let z_pos = merged_raw
+            .find("\"z-user-hook\"")
+            .expect("z-user-hook present");
+        let b_pos = merged_raw
+            .find("\"b-user-hook\"")
+            .expect("b-user-hook present");
+        let aida_pos = merged_raw
+            .find(&format!("\"{AGY_EXPIRY_NOTICE_KEY}\""))
+            .expect("aida key present");
+        assert!(
+            z_pos < b_pos && b_pos < aida_pos,
+            "non-alphabetical third-party key order must be preserved, got:\n{merged_raw}"
+        );
+
+        // Customize AIDA's own key while keeping z-user-hook before b-user-hook;
+        // non-force pass must leave it untouched.
+        let customized_text = r#"{
+  "z-user-hook": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "echo z"
+      }
+    ]
+  },
+  "aida-grant-expiry-notice": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "custom-aida"
+      }
+    ]
+  },
+  "b-user-hook": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "echo b"
+      }
+    ]
+  }
+}
+"#;
+        std::fs::write(&wiring, customized_text).unwrap();
+
+        let second = scaffold_antigravity_hooks(root, false).unwrap();
+        assert!(second
+            .skipped_existing
+            .iter()
+            .any(|s| s == AGY_HOOKS_JSON_REL));
+        assert_eq!(std::fs::read_to_string(&wiring).unwrap(), customized_text);
+
+        // Forced pass overwrites only AIDA's key in-place while preserving z-user-hook before b-user-hook.
+        let forced = scaffold_antigravity_hooks(root, true).unwrap();
+        assert!(forced.written.iter().any(|w| w == AGY_HOOKS_JSON_REL));
+        let forced_raw = std::fs::read_to_string(&wiring).unwrap();
+        let z_after = forced_raw.find("\"z-user-hook\"").unwrap();
+        let aida_after = forced_raw
+            .find(&format!("\"{AGY_EXPIRY_NOTICE_KEY}\""))
+            .unwrap();
+        let b_after = forced_raw.find("\"b-user-hook\"").unwrap();
+        assert!(
+            z_after < aida_after && aida_after < b_after,
+            "in-place forced update must preserve key order, got:\n{forced_raw}"
+        );
+        let after_force: serde_json::Value = serde_json::from_str(&forced_raw).unwrap();
+        assert!(after_force[AGY_EXPIRY_NOTICE_KEY]
+            .to_string()
+            .contains("aida-grant-expiry-notice.sh"));
+    }
+
+    // trace:TASK-1744 | ai:antigravity
+    #[test]
+    fn antigravity_scaffolding_leaves_invalid_or_non_object_hooks_json_untouched_even_with_force() {
+        for raw in ["not-json{{{", "[1, 2, 3]\n", "\"string\"\n"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let wiring = root.join(AGY_HOOKS_JSON_REL);
+            std::fs::create_dir_all(wiring.parent().unwrap()).unwrap();
+            std::fs::write(&wiring, raw).unwrap();
+
+            for force in [false, true] {
+                let out = scaffold_antigravity_hooks(root, force).unwrap();
+                assert!(
+                    out.warning.is_some(),
+                    "expected warning for {raw:?} (force={force})"
+                );
+                assert!(out.written.is_empty());
+                assert_eq!(
+                    std::fs::read_to_string(&wiring).unwrap(),
+                    raw,
+                    "invalid/non-object hooks.json must never be overwritten (force={force})"
+                );
+                assert!(
+                    !root
+                        .join(AGY_HOOKS_DIR_REL)
+                        .join("aida-grant-expiry-notice.sh")
+                        .exists(),
+                    "handler script must not be dropped when hooks.json is invalid (force={force})"
+                );
+            }
+        }
     }
 }

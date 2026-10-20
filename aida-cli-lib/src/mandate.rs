@@ -825,6 +825,10 @@ pub(crate) struct ShipCheck<'a> {
     pub ledger: &'a std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
     /// The PR's merge-hold as the release step will see it.
     pub hold: &'a HoldFacts,
+    /// TASK-1960: the attested-approval carry-over for a moved head, proven
+    /// by the caller (`pr_cmd::mandate_carry_over`): `Ok(head)` = proven for
+    /// that head, `Err(reason)` = the proof failed, `None` = not attempted.
+    pub carry_over: Option<std::result::Result<String, String>>,
 }
 
 /// STORY-1698: the merge-hold a mandate would release. A mandate only ever
@@ -1006,9 +1010,22 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
     }
     approver_is_not_shipper(c)?;
     if let Some(refusal) = crate::pr_ship::approval_head_refusal(c.candidates, c.head) {
-        return Err(MandateRefusal::StaleApproval(
-            crate::pr_ship::approval_head_refusal_message(0, &refusal),
-        ));
+        // TASK-1960: a head moved only by clean merges of the protected base
+        // keeps its approval here exactly as it does at the merge gate.
+        // trace:TASK-1960 | ai:claude
+        let carried = match (&refusal, &c.carry_over) {
+            (crate::pr_ship::ApprovalHeadRefusal::Moved { head_sha, .. }, Some(Ok(proven))) => {
+                !head_sha.trim().is_empty() && proven.eq_ignore_ascii_case(head_sha.trim())
+            }
+            _ => false,
+        };
+        if !carried {
+            let mut message = crate::pr_ship::approval_head_refusal_message(0, &refusal);
+            if let Some(Err(why)) = &c.carry_over {
+                message = format!("{message} The approval did not carry over: {why}.");
+            }
+            return Err(MandateRefusal::StaleApproval(message));
+        }
     }
     Ok(mandate.id.clone())
 }
