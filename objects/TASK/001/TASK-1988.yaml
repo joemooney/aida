@@ -8,8 +8,21 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T05:14:09.836170552Z
-modified_at: 2026-10-20T05:14:09.836170552Z
+modified_at: 2026-10-20T11:35:43.041372851Z
 req_type: Task
+comments:
+- id: 01a15918-8ac1-74a1-b95b-a7b8bde2e27b
+  author: joe
+  content: |-
+    ADVISOR RULING 2026-10-20 04:38 (PR-2766 final round, b84616de5c): PR-1 (the non-gating shadow lane) is accepted. These 4 round-2 findings are BLOCKING scope of this PR-2 (the gating swap); it cannot pass review without them:
+    1 JUnit is overwritten: the rest shard runs up to 3 'cargo nextest run' invocations, and each rewrites target/nextest/ci/junit.xml, so the upload keeps only the last selection. Give each invocation a distinct junit path (or merge them) and upload all.
+    2 totals() parser: a libtest 'test result:' line inside nextest's captured failure output overwrites the preceding cargo-test section (sections[section] = ...). Scope parsing to real section headers, and add the repro as a test.
+    3 A nextest [test-groups] serial group (max-threads=1), with comments, for tests that guard external resources. Under nextest each test is its own process, so in-process static-Mutex serialisation no longer holds. List the tests that need it.
+    4 Record per-shard nextest vs cargo-test passed/failed/ignored and the passed+ignored total (>= baseline) for the PR run, in the PR body.
+    Rationale: PR-1's lane is continue-on-error and outside Build's needs:, so these defects can't affect main CI. They only bite when nextest becomes the gate, which is this PR.
+  created_at: 2026-10-20T11:35:43.041372851Z
+  modified_at: 2026-10-20T11:35:43.041372851Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
 filed_at:
   code_sha: 880d7667bc566fe9eb9c0f8d05e6d8c8636f8ab5
   branch: main
