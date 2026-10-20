@@ -1,0 +1,19 @@
+{
+  "id": "90c9025d-56c0-4f09-b8c5-4d985de15ff8",
+  "thread_id": "90c9025d-56c0-4f09-b8c5-4d985de15ff8",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792477615344,
+  "body": "BUG-2188/2168 third and final author self-check found two concrete P1s in the transactional draft: Git worktree move can silently nest into a concurrently-created destination; pool handoff overwrote precheckout expected branch SHA after a hook-created commit. Corrected both: shared Linux renameat2(RENAME_NOREPLACE) publication + exact marker/admin repair, and preserve the original pool branch receipt. Added deterministic postcheckout-created-destination and pool-hook-commit regression cases. A standalone isolated ctypes/Git proof passed destination-collision preservation, post-rename repair and removal. Rust bug2188 filters remain queued; no pass, ready, independent approval or PR claim. No fourth author checker will be spawned. Existing leading three gate chains remain running; push immediately once required tests/compile pass and refreshed0behind.\n",
+  "subject": "BUG-2188 final author-check findings corrected; Rust gates pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
