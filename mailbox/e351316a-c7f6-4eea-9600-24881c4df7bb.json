@@ -1,0 +1,19 @@
+{
+  "id": "e351316a-c7f6-4eea-9600-24881c4df7bb",
+  "thread_id": "e351316a-c7f6-4eea-9600-24881c4df7bb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792502559669,
+  "body": "Head b896dcb9f4 (0 behind origin/main; CI run 39428299727 all green incl. Build). Gate: check-ci-fast 32/32, test-touched, check-ci-compile pass.\n1 ignored = real #[ignore]: each lib half prints '# lib-N: K module filters, M tests filtered out'; totals() subtracts M from the next nextest Summary's skipped (cargo lanes reset it at the '+ cargo test' echo). New test with a filtered lib-lane log, both runners.\n2 parser follows nextest 0.9.146 format: 'Starting N tests', '  stdout ───'/'── stdout ──' (+stderr/output/execfail) and Summary switch to nextest mode; only a '+ cargo test' echo switches back, so an indented Running in captured output opens no section. Fixture uses current headers.\n3 'N exec failed' -> failed, in the fixture.\n4 ci.yml comment and PR body reworded: only the test step is non-gating; setup/totals/upload failures or timeout can still turn the job red (not required).\nParity (run 39428299727), cargo vs nextest passed/failed/ignored, exact on every shard: lib-0 3974/0/3, lib-1 5305/0/0, cli-0 187/0/0, cli-1 142/0/1, rest 2170/0/6. Total 11778/0/10 -> passed+ignored 11,788 (>= 11,683). Markers 5305/3977 equal the other half's tests. Round-2 fixes (per-run JUnit, scoped totals, serial group for task_1283_protocol_cli) are on 92a7da5e69, below this head. Not merged, not self-approved.",
+  "subject": "PR-2766 round 3 pushed (TASK-1957)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
