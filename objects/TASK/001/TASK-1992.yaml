@@ -1,0 +1,27 @@
+id: 01a15809-6ff6-7bf1-ba74-f081edfccf54
+spec_id: TASK-1992
+agreed_id: TASK-1992
+title: Carry-over proof runs ~4 times per ship on a moved head
+description: |
+  After PR-2768, a ship whose head moved by a clean base merge proves the carry-over (git ls-remote origin HEAD, plus fetches of the base and any missing shas) in four places: the approval-gate preflight, the approval gate under the merge lease, the corpus-gate preflight (pr_cmd.rs ship_preflight_gates), and the corpus gate inside Forge::merge_change (merge_hold.rs enforce_corpus_gate_before_merge). This works against TASK-1966's intent. Consider passing the proof the approval gate already holds (CarryOverSite::proven) to the corpus gate, re-proving only under the lease.
+
+  Raised in review of PR-2768: https://github.com/joemooney/aida/pull/2768
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T06:39:35.926490959Z
+modified_at: 2026-10-20T06:39:35.926490959Z
+req_type: Task
+tags:
+- from-review:PR-2768
+- perf
+- severity:cosmetic
+filed_at:
+  code_sha: 9a0efe103da498a1fb7a1dbbd77ae0647fa853e4
+  branch: pr-2768
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a157f49deb

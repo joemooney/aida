@@ -1,0 +1,27 @@
+id: 01a15809-5b48-7861-aae4-c7e77404b807
+spec_id: TASK-1991
+agreed_id: TASK-1991
+title: 'Ship-level regression: approve, clean update-branch, then both the approval and corpus gates clear'
+description: |
+  TASK-1968's corpus-gate carry-over is tested only at merge_hold::enforce_corpus_gate_before_merge (task_1960_carryover_tests.rs corpus_gate_*). The advisor asked for "approve, update-branch, then ship passes both gates". Nothing runs the approval-head gate (merge_path_approval_gate / ship_preflight_gates) and the corpus gate together on one carried-over head, for example through PureGitForge::merge_change with a bare origin. Also untested: corpus_carry_over (merge_hold.rs ~3007) refusing when an approving verdict has no reviewed_sha, or when a live body is unparseable next to an approval.
+
+  Raised in review of PR-2768: https://github.com/joemooney/aida/pull/2768
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T06:39:30.632223802Z
+modified_at: 2026-10-20T06:39:30.632223802Z
+req_type: Task
+tags:
+- from-review:PR-2768
+- severity:minor
+- test
+filed_at:
+  code_sha: 9a0efe103da498a1fb7a1dbbd77ae0647fa853e4
+  branch: pr-2768
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a157f49deb

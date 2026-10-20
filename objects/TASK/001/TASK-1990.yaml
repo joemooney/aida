@@ -1,0 +1,29 @@
+id: 01a15809-3d41-73d2-9455-bbbe3c86078d
+spec_id: TASK-1990
+agreed_id: TASK-1990
+title: Document or close the nlink=2 window in the verdict publish link-then-unlink fallback (re-filed from TASK-1964)
+description: |
+  TASK-1964 was superseded into the TASK-1968 sweep, but PR-2768 deferred it because the code (review_verdict.rs publish_verdict_no_replace / link_then_unlink) is in PR-2712, which is still open. Merging PR-2768 completes TASK-1968, and nothing else carries this item, so it is re-filed here.
+
+  link_then_unlink (the fallback when renameat2 RENAME_NOREPLACE is unsupported) hard-links temp to dest and then unlinks temp. Between the two calls dest has nlink=2, so a concurrent anchored reader (read_verdict_body) refuses the canonical verdict. This only happens on filesystems without no-replace rename. Document the window, or have readers retry once on an nlink refusal. Do it after PR-2712 merges.
+
+  Raised in review of PR-2768: https://github.com/joemooney/aida/pull/2768
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T06:39:22.945895091Z
+modified_at: 2026-10-20T06:39:22.945895091Z
+req_type: Task
+tags:
+- from-review:PR-2768
+- review
+- severity:minor
+filed_at:
+  code_sha: 9a0efe103da498a1fb7a1dbbd77ae0647fa853e4
+  branch: pr-2768
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: claude
+  session: 01a157f49deb
