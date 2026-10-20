@@ -2096,9 +2096,8 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
 /// `None` when git cannot answer, so the caller keeps the collapsed entry.
 // trace:BUG-1988 | ai:claude
 fn untracked_entries_under(worktree: &std::path::Path, dir: &str) -> Option<Vec<String>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "--untracked-files=all", "--", dir])
         .output()
         .ok()

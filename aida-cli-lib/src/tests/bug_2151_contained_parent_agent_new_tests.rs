@@ -377,7 +377,7 @@ fn resumed_contained_child_write_roots_follow_its_worktree_not_the_launcher_cwd(
         crate::agent_launch::agent_resume_launch_config("claude", &worktree, "018f-session", "go")
             .unwrap();
     let settings = settings_value(&cfg.default_args);
-    let expected = settings_value(&crate::session::claude_contained_flags_for(&worktree));
+    let expected = settings_value(&crate::session::claude_contained_flags_for(&worktree).unwrap());
     assert_eq!(
         settings, expected,
         "resumed child's write roots must be its worktree"
@@ -387,7 +387,7 @@ fn resumed_contained_child_write_roots_follow_its_worktree_not_the_launcher_cwd(
         "worktree {} missing from {settings}",
         worktree.display()
     );
-    let launcher = settings_value(&crate::session::claude_contained_flags());
+    let launcher = settings_value(&crate::session::claude_contained_flags().unwrap());
     assert_ne!(
         settings, launcher,
         "resumed child must not inherit the launcher cwd's write roots"

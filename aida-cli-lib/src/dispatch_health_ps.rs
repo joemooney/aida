@@ -451,9 +451,8 @@ pub(crate) fn dirty_movement_is_fresh(newest_age_secs: Option<u64>, fresh_secs: 
 /// column, which silently cut the first character off the path.
 // trace:BUG-1656 | ai:claude
 pub(crate) fn dirty_paths(worktree: &Path) -> Vec<std::path::PathBuf> {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let Ok(out) = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "-z", "--untracked-files=all"])
         .output()
     else {
@@ -586,7 +585,10 @@ pub(crate) fn probe_worktree(worktree_path: &Path) -> WorktreeGitProbe {
     if !worktree_path.is_dir() {
         return WorktreeGitProbe::default();
     }
-    let dirty = aida_core::git_ops::worktree_is_dirty(worktree_path);
+    // BUG-1985: a non-destructive probe never inspects inside a submodule,
+    // so a live session cannot race a recursion it triggers on every probe.
+    // trace:BUG-1985 | ai:claude
+    let dirty = aida_core::git_ops::worktree_is_dirty_shallow(worktree_path);
     let ahead_of_main = git_stdout(worktree_path, &["rev-list", "--count", "origin/main..HEAD"])
         .or_else(|| git_stdout(worktree_path, &["rev-list", "--count", "main..HEAD"]))
         .and_then(|s| s.parse::<u32>().ok())
@@ -659,9 +661,8 @@ pub(crate) fn parse_commit_time_and_subject(
 /// `worktree`; empty when git fails.
 // trace:BUG-1941 | ai:claude
 fn porcelain_records(worktree: &Path) -> Vec<(String, PathBuf)> {
-    let Ok(out) = Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let Ok(out) = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "-z", "--untracked-files=all"])
         .output()
     else {

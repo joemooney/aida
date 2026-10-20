@@ -7,6 +7,11 @@ use aida_core::RequirementsStore;
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "doc_cmd_args.rs"]
+pub(crate) mod doc_cmd_args;
+pub(crate) use doc_cmd_args::*;
+
 /// Render the docs tree, called from the legacy (Storage facade) dispatch.
 // trace:EPIC-1-052 | ai:claude
 // trace:FR-1-077 | ai:claude
@@ -538,3 +543,148 @@ pub(crate) fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStor
     }
     Ok(())
 }
+
+/// Project the requirements graph as a layered docs tree.
+/// Constitution, vision, constraints, decisions, quality, glossary —
+/// each layer rendered from its corresponding RequirementType. The
+/// graph is the source; this is the projection.
+// trace:FR-1-077 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "docs")]
+pub(crate) struct DocsArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DocsCommand,
+}
+
+fn run_docs(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DocsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DocsArgs { inner: docs_cmd } => {
+                    // trace:FR-1-077 | ai:claude
+                    let store = backend.load()?;
+                    return crate::command_registry::returned(self::handle_docs_with_store(
+                        docs_cmd, &store,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DocsArgs { inner: docs_cmd } => {
+                    // trace:FR-1-077 | ai:claude
+                    self::handle_docs_command(docs_cmd, &storage)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DOCS: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "docs",
+    help_after: "tui",
+    command: <DocsArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_docs),
+};
+
+/// Living-documentation entries — narrative captured during work
+/// (rationale, scenarios, recipes, gotchas) linked to the specs they
+/// explain. Different from `aida docs` (plural), which renders the
+/// graph as a layered docs tree; this is the *raw* doc entry surface
+/// powering the book/tutorial projection.
+// trace:STORY-104, EPIC-24 | ai:claude
+// trace:TASK-487 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "doc")]
+pub(crate) struct DocArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DocCommand,
+}
+
+fn run_doc(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DocArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DocArgs { inner: doc_cmd } => {
+                    // trace:STORY-104 | ai:claude
+                    self::handle_doc_command(doc_cmd, store_path, backend)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DocArgs { inner: _ } => {
+                    // `aida doc` is git-canonical-only — Doc entries live in the
+                    // orphan store alongside every other requirement. Legacy SQLite
+                    // projects fall through to this arm. trace:STORY-104 | ai:claude
+                    anyhow::bail!(
+                        "aida doc requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DOC: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "doc",
+    help_after: "rules",
+    command: <DocArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_doc),
+};

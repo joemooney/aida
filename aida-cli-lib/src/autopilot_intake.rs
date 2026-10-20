@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "autopilot_intake_args.rs"]
+pub(crate) mod autopilot_intake_args;
+pub(crate) use autopilot_intake_args::*;
+
 /// STORY-472: `aida release` — a memorable top-level verb over the dev release
 /// flow. `--check` previews the planned release (read-only); otherwise it
 /// delegates to `handle_dev_release`, forwarding `--skip-xplat-check` via the
@@ -975,7 +980,7 @@ pub(crate) fn handle_intake_command(
         max_risk,
         max_approvals,
         contained,
-    );
+    )?;
 
     let status_code = command.status().map_err(|e| {
         anyhow::anyhow!(
@@ -1009,7 +1014,7 @@ pub(crate) fn build_autopilot_intake_command(
     max_risk: backlog::RiskLevel,
     max_approvals: Option<usize>,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut command = std::process::Command::new("claude");
     command
         .arg("-p")
@@ -1017,7 +1022,7 @@ pub(crate) fn build_autopilot_intake_command(
         .arg("--permission-mode")
         .arg(mode);
     if contained {
-        command.args(crate::session::claude_contained_flags());
+        command.args(crate::session::claude_contained_flags()?);
     }
     command
         .env("AIDA_SESSION_ROLE", "advisor")
@@ -1044,5 +1049,156 @@ pub(crate) fn build_autopilot_intake_command(
     } else {
         command.env_remove("AIDA_CONTAINED");
     }
-    command
+    Ok(command)
 }
+
+/// Inspect, audit, and reverse advisor-autopilot disposition decisions.
+///
+/// A read-only lens over the bounded-authority policy envelope: `inspect`
+/// dry-runs the four-gate evaluation over the current groom candidates and
+/// shows, per spec, what it WOULD decide (and which gate stopped it) without
+/// touching a single spec; `audit` lists the recorded verdicts; `challenge`
+/// marks a recorded verdict as reversed. `executions` lists the actions
+/// autopilot actually took, and `revert` undoes one of them from the prior
+/// state recorded alongside it.
+// trace:TASK-1147 trace:TASK-1018 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "autopilot")]
+pub(crate) struct AutopilotArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::AutopilotCommand,
+}
+
+// TASK-1147: `aida autopilot` (inspect / audit / challenge) is the read-only
+// auditability + reversal surface over the policy envelope. Like `aida
+// groom` it self-loads the store to compute its candidate fence and writes
+// nothing to any spec — dispatch early, no shared storage handle needed.
+// trace:TASK-1147 | ai:claude
+fn run_autopilot(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <AutopilotArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return handle_autopilot_command(cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AUTOPILOT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "autopilot",
+        help_after: "backlog",
+        command: <AutopilotArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_autopilot),
+    };
+
+// trace:STORY-560 trace:STORY-623 trace:STORY-708 | ai:claude
+/// GROOM the open specs: fire a cold-boot advisor agent that reads all open
+/// specs, applies worth-doing judgment, and proposes approve/reject/park/
+/// queue per spec. GROOM is the advisor's canonical verb for deciding a
+/// draft's fate (distinct from REVIEW, which is code review of a PR).
+/// PROPOSE-MODE BY DEFAULT — writes NOTHING until `--apply`. The advisor-side
+/// analog of `aida burndown run` (which fires implementer agents). Policy
+/// knobs live under `[intake]` in `.aida/config.toml`; the safe defaults work
+/// with zero config. Also reachable as `aida advisor assess`; `aida assess`
+/// and `aida intake` are the retained (deprecated) aliases — both normalize
+/// to `groom`.
+///
+/// Caveat: the headless advisor is a COLD-BOOT `claude -p`, not your live
+/// session — same model, less context. Autonomy-eligible is not the same as
+/// worth-doing; keep the propose-mode review load-bearing before `--apply`.
+// `assess` / `intake` are the deprecated aliases of `groom` (STORY-708):
+// kept working for back-compat but hidden from top-level help so only
+// `groom` (canonical) is advertised. The pre-clap rewrite normalizes both
+// to `groom` and prints a one-line deprecation hint.
+// trace:TASK-850 trace:STORY-708 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "groom")]
+#[command(alias = "assess", alias = "intake")]
+pub(crate) struct GroomArgs {
+    /// Execute the proposed approvals + queue groom. Without it, `intake`
+    /// is propose-only (the value judgment stays reviewable). Even with
+    /// `--apply`, the do-not-approve classes and `needs-human`/`strategic`
+    /// specs are fenced out — the agent can never bless them.
+    #[clap(long)]
+    pub apply: bool,
+    /// Cap the number of drafts the agent may approve this run.
+    #[clap(long, value_name = "N")]
+    pub max_approvals: Option<usize>,
+    /// Only consider specs carrying this tag.
+    #[clap(long, value_name = "TAG")]
+    pub only_tag: Option<String>,
+    /// Never consider specs carrying this tag.
+    #[clap(long, value_name = "TAG")]
+    pub exclude_tag: Option<String>,
+    /// Exclude candidates riskier than this ceiling (low / medium / high /
+    /// unknown). Same risk chip `aida backlog list` shows. Default: medium.
+    #[clap(long, value_name = "MAX", default_value = "medium")]
+    pub risk: String,
+    /// After queuing, chain straight into a burndown drain (overrides the
+    /// `[intake] on_apply` config to `drain` for this run). Only meaningful
+    /// with `--apply`.
+    #[clap(long)]
+    pub then_drain: bool,
+    /// Show the candidate fence + the exact `claude -p` command that would
+    /// run, then exit without launching.
+    #[clap(long)]
+    pub dry_run: bool,
+    /// Claude permission mode for the headless pass. Defaults to
+    /// `bypassPermissions` so the unattended advisor can read/edit without
+    /// stalling on prompts. Override with e.g. `acceptEdits`.
+    #[clap(long)]
+    pub permission_mode: Option<String>,
+}
+
+// STORY-560: `aida groom` (canonical; `assess`/`intake` are deprecated
+// aliases — STORY-708) self-loads the store to compute its candidate
+// fence and then launches a headless `claude -p` — no shared storage handle
+// needed. Dispatch early, like burndown. trace:STORY-560 trace:STORY-708 | ai:claude
+fn run_groom(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <GroomArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let GroomArgs {
+        apply,
+        max_approvals,
+        only_tag,
+        exclude_tag,
+        risk,
+        then_drain,
+        dry_run,
+        permission_mode,
+    } = &args;
+    return handle_intake_command(
+        *apply,
+        *max_approvals,
+        only_tag.as_deref(),
+        exclude_tag.as_deref(),
+        risk,
+        *then_drain,
+        *dry_run,
+        permission_mode.as_deref(),
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GROOM: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "groom",
+        help_after: "health",
+        command: <GroomArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_groom),
+    };

@@ -662,6 +662,7 @@ fn ship_check<'a>(
         override_stale_approval: false,
         ledger,
         hold,
+        carry_over: None,
         changed_paths,
         ship_gate: None,
         hold_clear_gate: None,

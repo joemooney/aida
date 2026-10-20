@@ -32,6 +32,11 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
+// trace:STORY-1728 | ai:claude
+#[path = "mandate_args.rs"]
+pub(crate) mod mandate_args;
+pub(crate) use mandate_args::*;
+
 const MANDATE_DIR: &str = "mandates";
 const EXCLUSION_LEDGER: &str = "exclusions.jsonl";
 /// The only scope a mandate can carry today.
@@ -948,6 +953,10 @@ pub(crate) struct ShipCheck<'a> {
     /// STORY-1700: why `hold-clear` is a human gate right now; `None` = not
     /// gated. Read by [`rework_release_decision`].
     pub hold_clear_gate: Option<String>,
+    /// TASK-1960: the attested-approval carry-over for a moved head, proven
+    /// by the caller (`pr_cmd::mandate_carry_over`): `Ok(head)` = proven for
+    /// that head, `Err(reason)` = the proof failed, `None` = not attempted.
+    pub carry_over: Option<std::result::Result<String, String>>,
 }
 
 /// STORY-1700 (R1): the gate checks every mandate path runs before hold
@@ -1166,9 +1175,22 @@ pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, Ma
     }
     approver_is_not_shipper(c)?;
     if let Some(refusal) = crate::pr_ship::approval_head_refusal(c.candidates, c.head) {
-        return Err(MandateRefusal::StaleApproval(
-            crate::pr_ship::approval_head_refusal_message(0, &refusal),
-        ));
+        // TASK-1960: a head moved only by clean merges of the protected base
+        // keeps its approval here exactly as it does at the merge gate.
+        // trace:TASK-1960 | ai:claude
+        let carried = match (&refusal, &c.carry_over) {
+            (crate::pr_ship::ApprovalHeadRefusal::Moved { head_sha, .. }, Some(Ok(proven))) => {
+                !head_sha.trim().is_empty() && proven.eq_ignore_ascii_case(head_sha.trim())
+            }
+            _ => false,
+        };
+        if !carried {
+            let mut message = crate::pr_ship::approval_head_refusal_message(0, &refusal);
+            if let Some(Err(why)) = &c.carry_over {
+                message = format!("{message} The approval did not carry over: {why}.");
+            }
+            return Err(MandateRefusal::StaleApproval(message));
+        }
     }
     Ok(mandate.id.clone())
 }
@@ -1761,3 +1783,43 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/story_1698_mandate_tests.rs"]
 mod story_1698_mandate_tests;
+
+/// Fire-fighting mandate: a human-minted, time-boxed grant that lets the
+/// advisor seat ship held PRs with an attested, independent approval.
+///
+/// `start` and `stop` need a human at an interactive terminal; `status`
+/// is open to anyone. Operator-only specs always stay human-only.
+// trace:STORY-1698 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "mandate")]
+pub(crate) struct MandateArgs {
+    #[clap(subcommand)]
+    pub action: crate::cli::MandateAction,
+}
+
+// STORY-1698: the fire-fighting mandate reads/writes only the user's AIDA
+// home (+ a best-effort audit event); no store handle. trace:STORY-1698 | ai:claude
+fn run_mandate(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <MandateArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let MandateArgs { action } = &args;
+    return self::handle_mandate(action);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static MANDATE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "mandate",
+        help_after: "merge-hold",
+        command: <MandateArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_mandate),
+    };

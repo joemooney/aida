@@ -1668,3 +1668,348 @@ pub(crate) fn handle_status_command(
     let _ = store_path_override; // reserved for future use
     Ok(())
 }
+
+/// Show "where am I right now" — unified view of session, branch,
+/// PR/CI, queue, cache, and project state. Spiritual cousin of
+/// `git status`: one screen, no flag-guessing.
+///
+/// Default sections (each graceful-degrades when its data isn't
+/// available):
+///   Session  — active lease covering cwd: id, scope, role, worktree, age
+///   Branch   — current branch, dirty state, ahead/behind origin
+///   PR / CI  — open PR for the branch + check rollup (via `gh`)
+///   Queue    — top items routed to the active role + total count
+///   Cache    — orphan-store cache freshness
+///   Project  — storage mode, requirement counts (existing view)
+///
+/// With a SPEC argument (`aida status <spec>`), switch to the per-spec
+/// liveness view: the spec's lifecycle status plus a LIVENESS section
+/// answering "is a live session actually working this, or is the
+/// In-Progress flag orphaned?". For a spec-scoped session lease it shows
+/// the session id, role, worktree, started-at, elapsed, and a verdict:
+/// live (the holder process is alive) vs STALE (no live process — the
+/// flag is orphaned). An In-Progress spec with no spec-scoped lease reads
+/// flag-only (the status is not liveness-backed).
+///
+// trace:TASK-220 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "status")]
+pub(crate) struct StatusArgs {
+    /// Optional spec id (SPEC-ID / agreed id). When given, show the
+    /// per-spec liveness view (status + live/STALE/flag-only verdict)
+    /// instead of the project-wide "where am I" snapshot.
+    // The trace marker stays a plain `//` comment so this SPEC-ID never
+    // leaks into `--help` output (the provenance convention).
+    // trace:STORY-694
+    pub spec: Option<String>,
+    /// With a SPEC argument: minutes of idle a spec-scoped lease may sit
+    /// with a live process but no spec movement before it is reported as
+    /// STALLED rather than live. Default 180 (3h). Ignored without a SPEC.
+    // trace:BUG-623
+    #[clap(long, default_value_t = 180)]
+    pub idle_minutes: u64,
+    /// Suppress the AIDA-development-context section even when running
+    /// inside the aida repo
+    #[clap(long)]
+    pub no_dev_context: bool,
+    /// One-line summary (spiritual cousin of `aida statusline`).
+    /// Suppresses every section except a compact role/scope/branch
+    /// readout.
+    // trace:TASK-220 | ai:claude
+    #[clap(long)]
+    pub short: bool,
+    /// Machine-readable JSON output. Sections that fail
+    /// (gh unavailable, no session, etc.) appear as `null` so
+    /// consumers can detect "section absent" without parsing prose.
+    /// Same document as `--format json`.
+    ///
+    /// With a SPEC argument the document is the per-spec liveness view:
+    /// `spec`, `status`, `status_lens`, `in_progress`, `liveness`
+    /// (`live` | `stale` | `flag-only` | `no-session` — `flag-only`
+    /// stays distinct from `live`/`stale`, never collapsed into either),
+    /// `live` (bool), `active_pid`, `worktree`, `idle_secs`,
+    /// `idle_stalled`, `session` (session_id/scope/role/worktree/branch/
+    /// started_at/elapsed_secs/pid, or `null`), `drain` (phase/round/
+    /// orchestrator_pid when a live drain owns the spec, else `null`),
+    /// and `parked` (source: `orchestrator` | `punt`, plus
+    /// phase/kind/cause/detail/hint for an orchestrator shelving or
+    /// category/detail/lean for an agent punt; `null` when not parked).
+    // trace:TASK-220 | ai:claude
+    // trace:BUG-1289 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Focus on the queue section only — skip everything else.
+    // trace:TASK-220 | ai:claude
+    #[clap(long, conflicts_with_all = ["ci", "short"])]
+    pub queue: bool,
+    /// Focus on the PR / CI section only — skip everything else.
+    // trace:TASK-220 | ai:claude
+    #[clap(long, conflicts_with_all = ["queue", "short"])]
+    pub ci: bool,
+    /// Skip the gh-backed PR / CI lookup (offline / fast path).
+    /// The PR/CI section is omitted from text output and reported
+    /// as `null` in `--json`.
+    // trace:TASK-220 | ai:claude
+    #[clap(long)]
+    pub no_ci: bool,
+    /// Focus on the cleanup section only — print just "Needs attention"
+    /// (sticky In-Progress specs, missed auto-bumps, dormant leases,
+    /// stale-on-merged reviewer leases, branches ahead with no PR,
+    /// worktrees with uncommitted work, orphan project dirs, open PRs
+    /// awaiting merge). Default `aida status` adds a one-line summary
+    /// at the bottom when the section is non-empty.
+    ///
+    /// This is a READ-ONLY view — it surfaces what needs cleanup, it
+    /// does not change anything. To actually fix the auto-healable
+    /// items, run `aida doctor heal` (or `aida doctor check` to
+    /// diagnose first). Think of it as glance (status --cleanup) → fix
+    /// (doctor heal).
+    // trace:STORY-385 | ai:claude
+    // trace:TASK-753 | ai:claude
+    #[clap(long, conflicts_with_all = ["queue", "ci", "short", "awaiting"])]
+    pub cleanup: bool,
+    /// Focus on live advisor/external activity recorded in
+    /// `.aida/advisor-activity.jsonl`.
+    ///
+    /// This is a READ-ONLY view. Default `aida status` shows a short
+    /// recent footer when activity exists; pass `--activity` for the full
+    /// filtered feed.
+    // trace:STORY-405 | ai:codex
+    #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup", "awaiting"])]
+    pub activity: bool,
+    /// With `--activity`, only show events after this point: a relative
+    /// duration (`30m`, `12h`, `2d`, `2w`, or `24 hours ago`), an ISO
+    /// date (`2026-05-01`, local midnight), a zone-less ISO datetime
+    /// (`2026-05-01T10:00`, local time), or an RFC3339 timestamp.
+    // trace:STORY-405 | ai:codex
+    #[clap(long, requires = "activity")]
+    pub since: Option<String>,
+    /// Focus on the "Awaiting you" section only — every human-gate item
+    /// (mergeable PRs with no pending CI / requested changes, unacked
+    /// briefs, findings awaiting triage, NeedsAttention escalations).
+    /// On default `aida status` this section also leads the report.
+    // trace:STORY-465 | ai:claude
+    #[clap(long, conflicts_with_all = ["queue", "ci", "short", "cleanup"])]
+    pub awaiting: bool,
+    /// With `--cleanup`: list every item per category instead of the
+    /// first 3. With `--awaiting` (or on default status): lift the
+    /// 5-item cap on the "Awaiting you" section to show every item.
+    // trace:STORY-385 | ai:claude
+    // trace:STORY-465 | ai:claude
+    #[clap(long)]
+    pub verbose: bool,
+    /// Suppress the AIDA doctor "Hygiene" section entirely.
+    // trace:STORY-464 | ai:antigravity
+    #[clap(long)]
+    pub no_hygiene: bool,
+    /// Show the full fleet roster: reveal stale (dead-PID) agents the
+    /// default view hides behind a footer count, and list every worktree
+    /// instead of collapsing a large roster to a one-line summary. By
+    /// default `aida status` reflects LIVE reality and points at
+    /// `aida doctor heal` / `aida session gc` to reap the abandoned ones.
+    // trace:BUG-609 | ai:claude
+    #[clap(long)]
+    pub all: bool,
+    /// Reveal only the stale (dead-PID) agents the default "Active agents"
+    /// headline hides — the narrow form of `--all` (worktrees stay
+    /// summarized).
+    // trace:BUG-609 | ai:claude
+    #[clap(long)]
+    pub stale: bool,
+    /// Reproduce the exhaustive dump: expand every section the terse
+    /// default collapses to a one-line summary (open-PR roster, recently
+    /// merged, inferred remote activity, cross-clone coordination, the
+    /// recent-activity feed, the per-status requirement breakdown, and the
+    /// AIDA-dev-context block). By default `aida status` leads with the
+    /// answer — session / branch / PR / queue / what-needs-you — and folds
+    /// the long-tail rosters behind one-liners so the orientation command
+    /// fits roughly one screen. `--all` implies `--full` (and also reveals
+    /// the fleet roster). Use `--full` when you want the full picture
+    /// without the stale-agent / worktree expansion `--all` adds.
+    // trace:STORY-673 | ai:claude
+    #[clap(long)]
+    pub full: bool,
+    /// Ignore the active focus for this snapshot — drop the focus banner.
+    /// No-op when no focus is set. (`aida status --all` is the fleet
+    /// roster, a different axis, so focus has its own escape here.)
+    // — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub no_focus: bool,
+}
+
+fn run_status(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <StatusArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-694: `aida status <spec>` is the per-spec liveness view — it reads
+            // the local session leases + probes pid liveness and self-loads the store
+            // read-only for the spec's lifecycle status. Like `aida why` it needs no
+            // shared storage handle, so dispatch early (before storage init). The
+            // bare `aida status` (no spec) still flows through the normal dispatch.
+            // trace:STORY-694 | ai:claude
+            if let StatusArgs {
+                spec: Some(spec),
+                idle_minutes,
+                json,
+                ..
+            } = &args
+            {
+                // trace:BUG-1289 | ai:claude
+                return crate::command_registry::returned(handle_status_spec(
+                    spec,
+                    *idle_minutes,
+                    *json || output_format_is_json(),
+                ));
+            }
+            // TASK-188: make dev-binary staleness visible at the point of use. One
+            // stderr line, local git only (no network), silent outside the AIDA
+            // workspace or when the running build matches the default branch.
+            // trace:TASK-188 | ai:claude
+            if let StatusArgs { spec: None, .. } = &args {
+                crate::freshness_gate::warn_if_running_binary_stale();
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                StatusArgs {
+                    // The `spec` form is dispatched early (before storage init), like
+                    // `aida why` — see the early-dispatch block. By the time control
+                    // reaches here `spec` is always `None`. trace:STORY-694
+                    spec: _,
+                    idle_minutes: _,
+                    no_dev_context,
+                    short,
+                    json,
+                    queue,
+                    ci,
+                    no_ci,
+                    cleanup,
+                    activity,
+                    since,
+                    awaiting,
+                    verbose,
+                    no_hygiene,
+                    all,
+                    stale,
+                    full,
+                    no_focus,
+                } => {
+                    // STORY-764: honor the global `--format json` pin the same as the
+                    // command's own `--json`. trace:STORY-764 | ai:claude
+                    let effective_json = *json || output_format_is_json();
+                    // STORY-706: surface the active focus loudly at the top of the
+                    // orientation snapshot, so a focused worktree never reads `aida
+                    // status` as the whole-project picture. Text modes only (JSON
+                    // consumers parse structured sections); `--no-focus` suppresses it.
+                    //
+                    if !effective_json && !*no_focus {
+                        if let Some(focus_ref) = find_project_root()
+                            .ok()
+                            .and_then(|r| crate::focus::resolve_focus(&r))
+                        {
+                            if let Ok(Some(focus_req)) =
+                                backend.get_requirement_by_spec_id(&focus_ref)
+                            {
+                                let n = backend
+                                    .descendant_ids(&focus_req.id)
+                                    .map(|s| s.len())
+                                    .unwrap_or(0);
+                                println!(
+                                    "{}",
+                                    format!(
+                                        "\u{25b8} focused: {} \u{2014} {} item{} in subtree  \
+                                     (--no-focus to widen)",
+                                        focus_req.display_id(),
+                                        n,
+                                        if n == 1 { "" } else { "s" },
+                                    )
+                                    .cyan()
+                                    .bold()
+                                );
+                            }
+                        }
+                    }
+                    return crate::command_registry::returned(handle_status_command_distributed(
+                        *no_dev_context,
+                        *short,
+                        effective_json,
+                        *queue,
+                        *ci,
+                        *no_ci,
+                        *cleanup,
+                        *activity,
+                        since.as_deref(),
+                        *awaiting,
+                        *verbose,
+                        *no_hygiene,
+                        *all,
+                        *stale,
+                        *full,
+                        store_path,
+                        backend,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                StatusArgs {
+                    spec: _,
+                    idle_minutes: _,
+                    no_dev_context,
+                    short: _,
+                    json: _,
+                    queue: _,
+                    ci: _,
+                    no_ci: _,
+                    cleanup: _,
+                    activity: _,
+                    since: _,
+                    awaiting: _,
+                    verbose: _,
+                    no_hygiene: _,
+                    all: _,
+                    stale: _,
+                    full: _,
+                    no_focus: _,
+                } => {
+                    handle_status_command(*no_dev_context, None, &storage)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static STATUS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "status",
+        help_after: "node",
+        command: <StatusArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_status),
+    };

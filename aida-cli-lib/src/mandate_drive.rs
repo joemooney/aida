@@ -29,6 +29,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+// trace:STORY-1728 | ai:claude
+#[path = "mandate_drive_args.rs"]
+pub(crate) mod mandate_drive_args;
+pub(crate) use mandate_drive_args::*;
+
 /// The scheduled job's name (and its run ledger at `schedule/<job>.yaml`).
 pub(crate) const JOB: &str = "mandate-drive";
 /// The scheduled job's command.
@@ -2056,3 +2061,42 @@ pub(crate) fn handle_fleet(action: &crate::cli::FleetAction) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/story_1700_drive_mandate_tests.rs"]
 mod story_1700_drive_mandate_tests;
+
+/// Fleet operations over relay runs and lanes.
+///
+/// `drive --tick` runs one drive-mandate tick: it classifies every relay
+/// lane and routes each stalled one's next action to the advisor seat or
+/// the operator, under an active drive mandate only. It holds no seat
+/// grant and runs no model.
+// trace:STORY-1700 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "fleet")]
+pub(crate) struct FleetArgs {
+    #[clap(subcommand)]
+    pub action: crate::cli::FleetAction,
+}
+
+// STORY-1700: the drive tick reads the AIDA home and the run dirs and
+// opens the store itself only for spec lookups. trace:STORY-1700 | ai:claude
+fn run_fleet(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <FleetArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    handle_fleet(&args.action)
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FLEET: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "fleet",
+        help_after: "mandate",
+        command: <FleetArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_fleet),
+    };

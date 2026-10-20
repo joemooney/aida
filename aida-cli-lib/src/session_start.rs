@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
@@ -412,6 +413,8 @@ pub(crate) fn align_reused_pr_branch(project_root: &std::path::Path, branch: &st
             .arg("-C")
             .arg(project_root)
             .args(["fetch", "origin", &refspec])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(project_root, "origin")
             .output()?;
         if !fetch.status.success() {
             // TASK-1784: a branch that was never pushed has nothing on origin
@@ -447,6 +450,8 @@ fn remote_branch_absent(project_root: &std::path::Path, branch: &str) -> bool {
         .arg(format!("refs/heads/{branch}"))
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status()
         .is_ok_and(|s| s.code() == Some(2))
 }
@@ -1772,6 +1777,8 @@ pub(crate) fn session_start(
             .arg("-C")
             .arg(&project_root)
             .args(["fetch", "origin", refspec.as_str()])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(&project_root, "origin")
             .output()?;
         use std::io::Write;
         let _ = std::io::stderr().write_all(&fetch.stdout);

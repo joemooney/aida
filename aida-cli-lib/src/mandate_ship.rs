@@ -61,6 +61,10 @@ pub(crate) fn mandate_ship_cover(
     decide: fn(
         &crate::mandate::ShipCheck<'_>,
     ) -> std::result::Result<String, crate::mandate::MandateRefusal>,
+    // TASK-1968: whether `decide` reads `ShipCheck::carry_over`. Only a ship
+    // does; the proof (an `ls-remote` plus fetches) is skipped otherwise and
+    // `carry_over` is `None` (not attempted). trace:TASK-1968 | ai:claude
+    prove_carry_over: bool,
 ) -> std::result::Result<MandateCover, crate::mandate::MandateRefusal> {
     use crate::mandate::{HoldFacts, MandateRefusal, MandateState, ShipCheck};
     let state = crate::mandate::current_state_reporting(true);
@@ -243,6 +247,18 @@ pub(crate) fn mandate_ship_cover(
         override_stale_approval,
         ledger: &ledger,
         hold: &hold,
+        // trace:TASK-1960 | ai:claude
+        carry_over: prove_carry_over
+            .then(|| {
+                mandate_carry_over(
+                    main_worktree,
+                    pr,
+                    &candidates,
+                    head.as_deref(),
+                    Some(info.base_ref.as_str()),
+                )
+            })
+            .flatten(),
         changed_paths: Some(&changed_paths),
         ship_gate: crate::mandate_gates::gate_reason(&gates, crate::mandate_gates::GateOp::Ship),
         hold_clear_gate: crate::mandate_gates::gate_reason(
@@ -254,6 +270,24 @@ pub(crate) fn mandate_ship_cover(
         id,
         principal: grant.map(|(_, p)| p).unwrap_or_default(),
     })
+}
+
+/// TASK-1960: the carry-over a mandate ship may rely on — `None` when the
+/// approval does not need one (or cannot get one: no moved head), else the
+/// proven head or the reason it failed. Proof only: the gate that pins the
+/// merge records and announces it.
+// trace:TASK-1960 | ai:claude
+pub(crate) fn mandate_carry_over(
+    repo: &std::path::Path,
+    pr: u64,
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    head: Option<&str>,
+    base_branch: Option<&str>,
+) -> Option<std::result::Result<String, String>> {
+    let refusal = pr_ship::approval_head_refusal(candidates, head)?;
+    let site = crate::review_carryover::CarryOverSite::quiet(repo, base_branch);
+    crate::review_carryover::prove_for_refusal(&site, pr, &refusal)
+        .map(|proved| proved.map(|p| p.new_head).map_err(|why| why.reason()))
 }
 
 /// STORY-1698: put a mandate-released hold back after any failure between

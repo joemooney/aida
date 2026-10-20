@@ -595,7 +595,8 @@ pub(crate) fn resolve_session_grant(
             .map(|cur| cur == lease.id)
             .unwrap_or(false);
         if is_current_session {
-            gid = std::env::var(crate::seat_authority::GRANT_ENV).ok();
+            // trace:TASK-1752 | ai:claude
+            gid = crate::seat_authority::current_grant_id();
         }
     }
     gid.and_then(|id| {

@@ -296,7 +296,7 @@ fn cli_parses_each_view_with_list_style_filters() {
         ("approved", HistoryView::Approved),
         ("closed", HistoryView::Closed),
     ] {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "history",
             word,
@@ -314,13 +314,13 @@ fn cli_parses_each_view_with_list_style_filters() {
             "5",
         ])
         .unwrap();
-        let Command::History {
+        let crate::history::HistoryArgs {
             cmd: Some(ref cmd),
             ref since,
             ref r#type,
             limit,
             ..
-        } = cli.command
+        } = cli.command.registered::<crate::history::HistoryArgs>()
         else {
             panic!("{word}: not a history view");
         };
@@ -334,12 +334,15 @@ fn cli_parses_each_view_with_list_style_filters() {
         assert_eq!(limit, Some(5));
     }
     // The existing surfaces are unchanged.
-    let cli = Cli::try_parse_from(["aida", "history", "TASK-1"]).unwrap();
-    assert!(matches!(cli.command, Command::History { cmd: None, .. }));
-    let cli = Cli::try_parse_from(["aida", "history", "events"]).unwrap();
+    let cli = crate::command_registry::try_parse_from(["aida", "history", "TASK-1"]).unwrap();
     assert!(matches!(
-        cli.command,
-        Command::History {
+        cli.command.registered::<crate::history::HistoryArgs>(),
+        crate::history::HistoryArgs { cmd: None, .. }
+    ));
+    let cli = crate::command_registry::try_parse_from(["aida", "history", "events"]).unwrap();
+    assert!(matches!(
+        cli.command.registered::<crate::history::HistoryArgs>(),
+        crate::history::HistoryArgs {
             cmd: Some(HistoryCommand::Events { .. }),
             ..
         }

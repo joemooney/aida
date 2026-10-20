@@ -156,3 +156,159 @@ pub(crate) fn handle_unassign_command(
     }
     Ok(())
 }
+
+/// Assign a spec to a team member — sets the durable assignee and routes
+/// the spec into that member's work queue so it shows in their
+/// `aida queue list`. Idempotent: re-running with the same target is a
+/// no-op. Surface assigned work with `aida list --mine` (yours) or
+/// `aida list --assigned <user>`.
+// trace:STORY-639 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "assign")]
+pub(crate) struct AssignArgs {
+    /// SPEC-ID or UUID to assign.
+    pub id: String,
+
+    /// The team member to assign to (a username / handle, matching the
+    /// shell identity that `aida queue list` keys off — see
+    /// `current_user_id`).
+    #[clap(long, value_name = "USER")]
+    pub to: String,
+}
+
+fn run_assign(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <AssignArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                AssignArgs { id, to } => {
+                    // STORY-639: set the durable assignee + route into the target
+                    // user's work queue. trace:STORY-639 | ai:claude
+                    self::handle_assign_command(id, to, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                AssignArgs { .. } => {
+                    // STORY-639: assignment uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida assign/unassign requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static ASSIGN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "assign",
+        help_after: "unclaim",
+        command: <AssignArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_assign),
+    };
+
+/// Inverse of `aida assign` — clears the assignee. By default this leaves
+/// the spec in the assignee's queue (the queue is the now-doing list, not
+/// the assignment of record); pass `--from-queue` to also remove it.
+// trace:STORY-639 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "unassign")]
+pub(crate) struct UnassignArgs {
+    /// SPEC-ID or UUID to unassign.
+    pub id: String,
+
+    /// Also remove the spec from the (former) assignee's work queue.
+    #[clap(long)]
+    pub from_queue: bool,
+}
+
+fn run_unassign(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <UnassignArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                UnassignArgs { id, from_queue } => {
+                    // STORY-639: clear the assignee (and optionally dequeue).
+                    // trace:STORY-639 | ai:claude
+                    self::handle_unassign_command(id, *from_queue, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                UnassignArgs { .. } => {
+                    // STORY-639: assignment uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida assign/unassign requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static UNASSIGN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "unassign",
+        help_after: "assign",
+        command: <UnassignArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_unassign),
+    };

@@ -9,6 +9,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "config_cmd_args.rs"]
+pub(crate) mod config_cmd_args;
+pub(crate) use config_cmd_args::*;
+
 use crate::cli::{ConfigPermissionTier, ConfigPermissionsCommand};
 use crate::*;
 use toml_edit::{value, Array, DocumentMut, Item, Table};
@@ -5259,5 +5264,140 @@ mod bug_1639_config_profile_tests {
             std::fs::read(pack.join(DELIVERED_MANIFEST)).unwrap(),
             before
         );
+    }
+}
+
+/// ID configuration commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "config")]
+#[clap(hide = true)]
+pub(crate) struct ConfigArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::ConfigCommand,
+}
+
+fn run_config(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // `aida config menu` is a navigable TUI view over the resolved config
+            // surface (STORY-661). Like `aida tui` it holds no storage handle — the
+            // policy registry it renders resolves from `.aida/config.toml` + the
+            // global files + env directly — so it dispatches before storage init.
+            // trace:STORY-661 | ai:claude
+            if let ConfigArgs {
+                inner: ConfigCommand::Menu,
+            } = &args
+            {
+                return crate::command_registry::returned(config_cmd::handle_config_menu_command());
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // STORY-44: `aida config user` is a global op against
+                // ~/.aida/preferences.toml — no store needed. Route it through the
+                // git-backend path so it works in modern projects too.
+                ConfigArgs {
+                    inner:
+                        ConfigCommand::User {
+                            node_id,
+                            email,
+                            toml: emit_toml,
+                        },
+                } => {
+                    self::handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
+                }
+                // STORY-106: `aida config hints` reads/writes `.aida/config.toml`
+                // — project-level, no store mutation needed. Route through the
+                // git-backend path so it works in modern projects.
+                // trace:STORY-106 | ai:claude
+                ConfigArgs {
+                    inner: ConfigCommand::Hints { enabled },
+                } => {
+                    let storage = Storage::new(store_path);
+                    self::handle_config_hints(enabled.as_deref(), &storage)?;
+                }
+                // STORY-633: `aida config glyph ...` — CLI surface over the glyph
+                // registry, themes, and per-symbol override table. Writes to
+                // .aida/config.toml (or ~/.aida/config.toml with --user), preserving
+                // the rest of the file. trace:STORY-633 | ai:claude
+                ConfigArgs {
+                    inner: ConfigCommand::Glyph(glyph_cmd),
+                } => {
+                    self::handle_config_glyph(glyph_cmd)?;
+                }
+                ConfigArgs { inner: config_cmd } => {
+                    let storage = Storage::new(store_path);
+                    self::handle_config_command(config_cmd, &storage)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-633: glyph CLI surface — config.toml writer, no store needed.
+                // trace:STORY-633 | ai:claude
+                ConfigArgs {
+                    inner: ConfigCommand::Glyph(glyph_cmd),
+                } => {
+                    self::handle_config_glyph(glyph_cmd)?;
+                }
+                ConfigArgs { inner: config_cmd } => {
+                    self::handle_config_command(config_cmd, &storage)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CONFIG: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "config",
+        help_after: "comment",
+        command: <ConfigArgs as clap::CommandFactory>::command,
+        policy: config_cli_policy,
+        run: crate::command_registry::Handler::Store(run_config),
+    };
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn config_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::ConfigCommand;
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <ConfigArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: SA::Configuration,
+        per_write_auto_push: matches!(
+            inner,
+            Some(
+                ConfigCommand::Format { .. }
+                    | ConfigCommand::Numbering { .. }
+                    | ConfigCommand::Digits { .. }
+                    | ConfigCommand::Migrate { .. }
+            )
+        ),
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

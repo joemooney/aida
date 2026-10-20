@@ -1,3 +1,10 @@
+CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
+run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
+lanes succeed. Test timing budgets remain per binary, and each test lane checks
+for untracked root entries. See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
 invalid probes clear inherited context; previews perform no version probe.
@@ -377,6 +384,59 @@ Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
+A contained session has no write access to the main git directory. Launch
+settings deny all of `<main>/.git` in both the sandbox (`denyWrite`) and the
+direct tool rules, whether or not the store write paths are granted, under
+every spelling of the path (as given and canonical, so a symlinked checkout is
+covered). When some spelling cannot be written as an exact rule (it holds a
+character such as `( [ ! {`), the contained launch is refused with an error
+naming the path: no settings are built and no session starts, because Claude
+Code's own sandbox would otherwise leave `<main>/.git` writable to a
+linked-worktree session. That
+covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`, which would
+otherwise let a session point host git at a git directory it controls. It also
+covers the shared config, hooks, refs and objects. Claude Code itself denies
+writes to a worktree's own `.git` pointer. While these denies are in place,
+Claude Code (verified on 2.1.302) leaves no writable path under `<main>/.git`.
+This is conditional: it holds only for sessions launched with AIDA's contained
+settings on a Claude Code whose sandbox applies `denyWrite` over its own grants.
+As a consequence, a contained session in a linked worktree cannot commit,
+because its index and objects live under the denied directory. A contained seat
+commits in its own private clone instead (BUG-2169). Real-sandbox and unit
+evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
+<!-- trace:BUG-1982 | ai:claude -->
+
+Host git over a code tree a contained session may have written (a linked
+worktree, or any tree of a repository a contained session was launched
+against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, plus `submodule.<name>.ignore=dirty` for
+every name in the `.gitmodules` git would read (the file, else the index or
+`HEAD` copy), because a `.gitmodules` `ignore = none` outranks
+`diff.ignoreSubmodules`. A `.gitmodules` that cannot be read, or that names a
+submodule the override cannot express, makes host git refuse. So incidental
+status and diff never enter a submodule, where a planted repository's own
+config (a filter driver, for example) would run on the host. Before any safety
+check in such a tree (pool, adopt, destroy, salvage, session reap, doctor
+heal, worktree gc) and before host staging (`aida compete`), every gitlink
+must be a host-owned submodule: registered in `.gitmodules`, with a `.git`
+pointer that resolves to a submodule git directory (`<common>/modules/...` or
+`<common>/worktrees/<wt>/modules/...`) inside the sandbox-denied common git
+directory. Staging also refuses an untracked nested repository at any depth.
+A tree that fails this is kept and treated as dirty, and so is a tree whose
+`git status` fails: no dirty check reads a git error as clean. Git itself never recurses into a
+submodule there, even once every gitlink passes, because it would read each
+submodule's session-writable work-tree `.gitmodules`. The checks inspect each
+checked-out submodule themselves instead: policy B again over that
+submodule's own index, then its status through the git directory validated a
+moment earlier (`--git-dir`, never re-reading the `.git` pointer), nested
+submodules likewise. So uncommitted edits there still keep the tree. A
+submodule with no `.git` is skipped. The non-destructive `aida ps` probe
+never looks inside a submodule. Salvage refuses edits inside a submodule, because a patch cannot
+hold them. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`, directly or via a
+wrapper; a guard test enforces it.
+<!-- trace:BUG-1985 | ai:claude -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
@@ -521,8 +581,10 @@ descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
 the group and records an output-limit failure without child diagnostics. The
 best-effort survivor probe runs after a successful installation; installer
 failure paths (including timeout) return before that probe, so escaped
-descendants on those paths are not detected by it.
-<!-- trace:TASK-1791 | ai:codex -->
+descendants on those paths are not detected by it. A completeness `--help`
+probe that times out marks its component incomplete with the reason
+`--help timed out`; the trial still runs the oracle and keeps its record.
+<!-- trace:TASK-1791 | ai:codex trace:TASK-1791 | ai:claude -->
 
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
@@ -993,14 +1055,16 @@ store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
 
-Claude Code tool hooks deliver informational seat-grant expiry notices once at
+Claude Code, Codex (`PreToolUse`), and Antigravity (`PreInvocation` via
+`--client agy`) hooks deliver informational seat-grant expiry notices once at
 the 2h, 30m and expired crossings, without requiring a user prompt. A local
 grant-id ledger uses a permanent flock sidecar and atomic replacement. No
 requirements graph or cache is initialized; the shared authority validator
-retains its local roster lookup. Failed ledger access emits no context and
-leaves SessionStart/statusline warnings as fallback. See
+retains its local roster lookup. Failed ledger access emits no context (`{}` for
+Antigravity) and leaves SessionStart/statusline warnings as fallback. See
 [verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+<!-- trace:TASK-1744 | ai:antigravity -->
 
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index

@@ -478,3 +478,111 @@ mod tests {
         assert_eq!(invoked_checkout_root(&primary, None), primary);
     }
 }
+
+/// Detect, classify, and (optionally) execute a rebase of the
+/// current branch onto its upstream. Four phases: detect
+/// (ahead/behind + file-path overlap), classify (clean / ahead-only
+/// / behind-only / diverged-safe / diverged-risky), execute (auto
+/// for safe cases, prompt for risky), report (structured, --json).
+/// Stateless — safe to invoke anywhere.
+// trace:TASK-103 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "rebase")]
+pub(crate) struct RebaseArgs {
+    /// Execute safe rebases (behind-only, diverged-safe) without a
+    /// confirmation prompt. Risky (file-overlap) cases still prompt.
+    #[clap(long)]
+    pub auto: bool,
+    /// Classify only — report the state and exit 0 without
+    /// touching the working tree.
+    #[clap(long)]
+    pub dry_run: bool,
+    /// Skip the `git fetch` during detection; classify against the
+    /// already-cached upstream ref.
+    // trace:TASK-103 | ai:claude
+    #[clap(long)]
+    pub no_fetch: bool,
+    /// Refuse to run on a dirty working tree instead of the default
+    /// auto-stash + pop around the rebase.
+    #[clap(long)]
+    pub no_stash: bool,
+    /// Machine-readable JSON output for skill / agent consumers.
+    #[clap(long)]
+    pub json: bool,
+    /// Target ref to rebase onto (default: the current branch's
+    /// tracked upstream `@{u}`).
+    #[clap(long)]
+    pub branch: Option<String>,
+}
+
+fn run_rebase(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <RebaseArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                RebaseArgs {
+                    auto,
+                    dry_run,
+                    no_fetch,
+                    no_stash,
+                    json,
+                    branch,
+                } => {
+                    return crate::command_registry::returned(self::handle_rebase_command(
+                        store_path,
+                        *auto,
+                        *dry_run,
+                        *no_fetch,
+                        *no_stash,
+                        *json,
+                        branch.as_deref(),
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                RebaseArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida rebase` requires a git-canonical store. Run `aida init` (or upgrade from \
+                     the deprecated centralized backend with `aida db export-git`)."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static REBASE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "rebase",
+        help_after: "pull",
+        command: <RebaseArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_rebase),
+    };

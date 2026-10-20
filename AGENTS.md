@@ -1,3 +1,9 @@
+CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
+`Build (ubuntu-latest)` remains the required check. CLI halves use committed
+main-run timings; each shard keeps its timing budget and root hygiene check.
+See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
 comments of unchanged sibling fn/impl items retain their scope; attribution
@@ -176,12 +182,14 @@ again before releasing labels and the marker.
 See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:STORY-1687 | ai:codex -->
 
-Claude tool-only sessions receive informational grant expiry context at the
-2h, 30m and expired crossings. The hook skips the CLI without a grant and caps
-it below 2s; a grant-local locked ledger deduplicates notices. Ledger failures
-produce no context and leave SessionStart/statusline as fallback. See
+Claude, Codex, and Antigravity (`--client agy`) tool-only sessions receive
+informational grant expiry context at the 2h, 30m and expired crossings. The
+hook skips the CLI without a grant and caps it below 2s; a grant-local locked
+ledger deduplicates notices. Ledger failures produce no context (`{}` for
+Antigravity) and leave SessionStart/statusline as fallback. See
 [expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+<!-- trace:TASK-1744 | ai:antigravity -->
 
 An existing history index catches up through the inline maintenance job
 `cache refresh --history --if-behind`, with a 30-second chunk budget. It takes

@@ -44,6 +44,11 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// trace:STORY-1728 | ai:claude
+#[path = "identity_gate_args.rs"]
+pub(crate) mod identity_gate_args;
+pub(crate) use identity_gate_args::*;
+
 /// First comment line of the standalone identity pre-push hook — the
 /// installer recognizes its own generated hook by this banner (same pattern
 /// as `remote_create::MIRROR_HOOK_HEADER`).
@@ -1209,3 +1214,131 @@ mod task_1330_identity_gate_tests {
         assert_eq!(resolve_governing_config_root(&wt).unwrap().root, wt);
     }
 }
+
+/// Manage the shared person-alias registry — link the different identity
+/// strings one human registers under across machines (`joe`,
+/// `joe.mooney@gmail.com`) so the queue, team roster, and block list
+/// collapse them to one canonical person. Composes with the case-fold.
+/// Also hosts the identity hygiene gate (`check`, `install-hook`): the
+/// `[identity] allowed_emails` allowlist that refuses commits/pushes
+/// carrying any other author, committer, or Co-authored-by email.
+// trace:TASK-845 | ai:claude
+// trace:TASK-1330 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "identity")]
+pub(crate) struct IdentityArgs {
+    #[clap(subcommand)]
+    pub cmd: crate::cli::IdentityCommand,
+}
+
+fn run_identity(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <IdentityArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // TASK-1330: the identity HYGIENE subcommands read only git state and
+            // `.aida/config.toml` — no store needed, and the pre-push hook plumbing
+            // must work even when the store is unavailable — so dispatch them before
+            // storage init, like `remote`. The person-alias registry subcommands
+            // (link/list/show) read the store and fall through to the normal path.
+            // trace:TASK-1330 | ai:claude
+            if let IdentityArgs { cmd } = &args {
+                let project_root = find_project_root()
+                    .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+                match cmd {
+                    crate::cli::IdentityCommand::Check => {
+                        return crate::command_registry::returned(
+                            identity_gate::handle_identity_check(&project_root),
+                        );
+                    }
+                    // BUG-1926: `project_root` here is the checkout being pushed
+                    // from (possibly the `.aida-store` worktree); the handler resolves
+                    // the governing allowlist from the owning project itself.
+                    // trace:BUG-1926 | ai:claude
+                    crate::cli::IdentityCommand::CheckPush { pushed_remote } => {
+                        return crate::command_registry::returned(
+                            identity_gate::handle_identity_check_push(&project_root, pushed_remote),
+                        );
+                    }
+                    crate::cli::IdentityCommand::InstallHook => {
+                        return crate::command_registry::returned(
+                            identity_gate::handle_identity_install_hook(&project_root),
+                        );
+                    }
+                    crate::cli::IdentityCommand::Link { .. }
+                    | crate::cli::IdentityCommand::List { .. }
+                    | crate::cli::IdentityCommand::Show { .. } => {}
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // trace:TASK-845 | ai:claude — the shared person-alias registry.
+                IdentityArgs { cmd } => {
+                    return crate::command_registry::returned(match cmd {
+                        IdentityCommand::Link { a, b } => handle_identity_link(store_path, a, b),
+                        IdentityCommand::List { json } => handle_identity_list(store_path, *json),
+                        IdentityCommand::Show { id, json } => {
+                            handle_identity_show(store_path, id, *json)
+                        }
+                        // TASK-1330: the identity hygiene subcommands are store-free
+                        // and dispatched before storage init. trace:TASK-1330 | ai:claude
+                        IdentityCommand::Check
+                        | IdentityCommand::CheckPush { .. }
+                        | IdentityCommand::InstallHook => {
+                            unreachable!(
+                                "identity hygiene commands are dispatched before storage init"
+                            )
+                        }
+                    });
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // TASK-845: the person-alias registry lives on the orphan `aida-store`
+                // branch — a distributed-mode concept. trace:TASK-845 | ai:claude
+                IdentityArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida identity` is available in the default (distributed) mode — it manages the \
+                     shared person-alias registry on the orphan `aida-store` branch. Legacy \
+                     --centralized mode has no shared registry."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static IDENTITY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "identity",
+        help_after: "team",
+        command: <IdentityArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_identity),
+    };

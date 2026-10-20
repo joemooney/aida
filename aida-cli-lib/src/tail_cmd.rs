@@ -877,3 +877,114 @@ fn print_list(index: &TailIndex, color: bool) -> Result<()> {
 #[cfg(test)]
 #[path = "tests/tail_cmd_tests.rs"]
 mod tail_cmd_tests;
+
+/// Stream a running session's log — found by id, not by file path.
+///
+/// `aida ps` says WHAT is running; this says what THAT ONE is doing right
+/// now. Give it any id you already have and it works out which file under
+/// `.aida/` that work streams into:
+///
+///   aida tail               # the most recently active log
+///   aida tail drain         # the running autonomous drain
+///   aida tail <session-id>  # a session id from `aida ps`
+///   aida tail <SPEC-ID>     # the newest log for that spec
+///   aida tail --list        # every log this project has, and who owns it
+///
+/// Follows by default, like `tail -f`, and renders the readable phase
+/// lines; `--json` passes the raw stream-json events through instead. A
+/// session with no log (an interactive one streams to its terminal, not to
+/// a file) is reported plainly, not as an error.
+///
+/// Each line is stamped with the time of the event behind it, in local
+/// time, so the gaps between lines show the pacing; `--no-timestamp` drops
+/// the prefix.
+// trace:TASK-1167 | ai:claude
+// trace:TASK-1173 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "tail")]
+#[clap(verbatim_doc_comment)]
+pub(crate) struct TailArgs {
+    /// A session id from `aida ps`, a spec id, a drain id, or `drain` for
+    /// the running drain. Omit it for the most recently active log.
+    pub target: Option<String>,
+    /// List every tailable log — drains, running sessions and the log each
+    /// resolves to, and the recent session logs — then exit.
+    #[clap(long, conflicts_with_all = ["target", "lines", "since", "no_follow", "json"])]
+    pub list: bool,
+    /// Pass the raw stream-json events through instead of rendering them.
+    #[clap(long)]
+    pub json: bool,
+    /// Start from at most the last N lines of what is already in the log.
+    #[clap(long, short = 'n', value_name = "N")]
+    pub lines: Option<usize>,
+    /// Skip anything older than this: a relative duration (`30s`, `10m`,
+    /// `2h`, `1d`, `2w`, or `24 hours ago`; a bare integer means seconds),
+    /// an ISO date (`2026-05-01`, local midnight), a zone-less ISO
+    /// datetime (local time), or RFC3339.
+    // trace:TASK-1509 | ai:claude
+    #[clap(long, value_name = "DURATION")]
+    pub since: Option<String>,
+    /// Print what is already there and exit instead of following.
+    #[clap(long)]
+    pub no_follow: bool,
+    /// Interleave tool invocations with the assistant text.
+    #[clap(long)]
+    pub with_tools: bool,
+    /// Drop the leading `[HH:MM:SS]` event time from each line.
+    // trace:TASK-1173 | ai:claude
+    #[clap(long)]
+    pub no_timestamp: bool,
+    /// Annotate idlewatch transitions such as low-information spinning.
+    // trace:STORY-998 | ai:codex
+    #[clap(long)]
+    pub annotate: bool,
+}
+
+// `aida tail` is `aida ps`'s streaming companion: it resolves a session /
+// spec / drain id to the ONE log file that work streams into and tails it.
+// Reads only `.aida/burndown/`, `.aida/headless-logs/` and the lease dir —
+// no store, no network — so dispatch early like `aida ps`.
+// trace:TASK-1167 | ai:claude
+fn run_tail(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <TailArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let TailArgs {
+        target,
+        list,
+        json,
+        lines,
+        since,
+        no_follow,
+        with_tools,
+        no_timestamp,
+        annotate,
+    } = &args;
+    return handle_tail_cli(
+        target.clone(),
+        *list,
+        *json,
+        *lines,
+        since.as_deref(),
+        *no_follow,
+        *with_tools,
+        *no_timestamp,
+        *annotate,
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static TAIL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "tail",
+    help_after: "mandate",
+    command: <TailArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_tail),
+};

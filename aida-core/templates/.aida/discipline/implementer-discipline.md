@@ -180,6 +180,35 @@ The four runtime banners that make up the implementer-discipline bouncer net:
 
 Together they bound the four boundaries of an implementer session lifecycle. Doctor's `spec-status-drift` category (STORY-462) catches anything that slips through.
 
+## Cargo time budgets: hand them to the wrapper
+<!-- trace:STORY-1854 | ai:claude -->
+
+On a host whose `cargo` is the AIDA slot wrapper, a cargo run first waits for a
+build slot, and on a loaded host that wait has passed 30 minutes. An outer
+`timeout` starts its clock when the command is issued, so the queue wait spends
+the budget and the run is killed partway through, then retried, then queued
+again behind itself.
+
+- Write `AIDA_CARGO_TIMEOUT=<dur> cargo ...` (or `AIDA_CARGO_TIMEOUT=<dur> make
+  <target>` for a make target that runs cargo). Never write `timeout <N> cargo
+  ...` or `timeout <N> make <cargo target>`. Once aida-host STORY-100 ships,
+  the wrapper starts that budget when the slot is acquired. Timeouts on
+  commands that are not cargo, such as `timeout 540 gh pr checks ...`, are
+  fine.
+- Run any cargo invocation that can exceed about 10 minutes (tests,
+  `make check-ci-compile`, full builds) in the tool's background mode, not as a
+  foreground call. A foreground tool call has its own cap (one hour for the
+  Claude Code Bash tool) that no environment variable can change.
+- After a timeout or a KILLED run, check `cargo ps` before retrying. The run
+  may still be queued or running, and a blind retry adds a second copy to the
+  queue.
+- **Until aida-host STORY-100 ships `AIDA_CARGO_TIMEOUT` support, the wrapper
+  ignores the variable, and background mode is the only protection.** Write the variable
+  anyway so the budget takes effect once the wrapper honours it.
+
+The `aida-cargo-timeout-guard.sh` PreToolUse hook warns (never blocks) when a
+command wraps cargo or make in an outer timeout, and states the replacement.
+
 ## Companion: the advisor role
 
 The implementer's discipline is the tactical counterpart to the [advisor's discipline](advisor-role.md). The advisor articulates strategy, captures friction, gardens the queue, escalates fork decisions. The implementer takes a single bounded spec and ships it. The two roles coordinate via the substrate — the advisor's filings become the implementer's briefs; the implementer's friction becomes the advisor's observations.
@@ -260,6 +289,21 @@ timeout. The orchestrator seat was being starved by its own fleet.
   out from CI. Whole-tree source-scanning guard tests are not reached by module filters, so
   a change that adds a source file or a pattern such a guard counts relies on CI's run (or
   name the guard with `make test-touched ARGS="--filter <guard>"`). CI is the gate.
+- `make test-touched` never widens to the whole `aida-cli-lib --lib` suite (~9,200 tests).
+  When a crate-root, build-script or unresolvable change would widen it, the script runs only
+  the named module filters, or exits 5 and asks for `ARGS="--filter <module>"`. Do not answer
+  that by running the whole lib suite yourself. merge-2750 and split-2731 both hit the old
+  silent widening on 2026-10-18.
+- Never set `AIDA_CARGO_NO_SLOT`. It bypasses the host's cargo build-slot limiter, so your
+  run competes with two slotted builds on six cores (fix-2725's `make check` took 1h20m). The
+  `aida-git-guardrails.sh` hook blocks it; only the operator bypasses the queue.
+- Any local cargo test run that is not targeted uses `--profile agent`. Automatic cache seeding
+  builds the agent profile, so a debug-profile run recompiles the workspace cold in your
+  worktree and then executes unoptimized tests.
+- Run cargo commands that can exceed ~10 min in the background. Never wrap cargo in
+  `timeout N`: time spent queued for a build slot counts against it, so a queued run times
+  out, is retried, and deepens the queue. After a timeout or kill, check `cargo ps` before
+  retrying.
 
 **Why NOT `CARGO_BUILD_JOBS=1`** (Joe suggested it 2026-09-27): with 2 slots that is only
 2 of 6 cores compiling, idling 4, and each build gets ~3x slower. Throughput collapses.

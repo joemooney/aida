@@ -269,8 +269,9 @@ pub(crate) fn record_red_run_once(
 }
 
 fn git_probe(dir: &Path, args: &[&str]) -> Option<String> {
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(dir).args(args).stdin(Stdio::null());
+    // trace:BUG-1985 | ai:claude
+    let mut cmd = aida_core::git_ops::host_git_command(dir);
+    cmd.args(args).stdin(Stdio::null());
     let out = crate::command_output_with_timeout(cmd, GIT_PROBE_TIMEOUT)?;
     out.status
         .success()

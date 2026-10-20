@@ -249,7 +249,8 @@ fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
     // Claude: `-p` leads and the prompt is the trailing POSITIONAL — correct
     // for claude's boolean `-p`, and unchanged by BUG-1686.
     let claude =
-        session::headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None);
+        session::headless_vendor_args(HeadlessVendor::Claude, prompt, sid, false, None, None)
+            .unwrap();
     assert_eq!(claude.first().map(String::as_str), Some("-p"), "{claude:?}");
     assert_eq!(
         claude.last().map(String::as_str),
@@ -265,7 +266,8 @@ fn claude_and_codex_arms_do_not_take_the_prompt_as_a_flag_value() {
     // Codex: no `-p` token exists, so there is no value-flag to swallow the
     // permission flag; the prompt is `codex exec`'s trailing positional.
     let codex =
-        session::headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None);
+        session::headless_vendor_args(HeadlessVendor::Codex, prompt, sid, false, None, None)
+            .unwrap();
     assert!(
         !codex.iter().any(|a| a == "-p"),
         "codex arm must carry no -p: {codex:?}"

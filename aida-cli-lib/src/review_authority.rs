@@ -687,7 +687,11 @@ fn append_record(path: &Path, record: &AuthorshipRecord) -> std::io::Result<()> 
         .create(true)
         .append(true)
         .open(path)?;
-    writeln!(f, "{line}")
+    // TASK-1968: the record and its newline go out as ONE write. `writeln!`
+    // on an unbuffered File may issue two, and two concurrent appenders then
+    // interleave as `A B \n \n` — two records fused on one line.
+    // trace:TASK-1968 | ai:claude
+    f.write_all(format!("{line}\n").as_bytes())
 }
 
 /// Every parseable record in the authorship ledger.
