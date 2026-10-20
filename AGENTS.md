@@ -2,9 +2,7 @@ Store config, compaction history rewrites and doctor heals use the existing
 store writer lock. GC runs outside that lock using Git’s own maintenance locks. Legacy ID retirement reloads
 through `update_atomically`, and doc/finding filing uses its atomic persistence
 without a second object write. Interactive doctor repairs keep the confirmed
-set; counter migration refuses newly active unconfirmed blocks. Init and dev-release
-publication capture a commit under that lock, then push the exact SHA after
-unlocking; only non-fast-forward failures receive one retry. See the
+set; counter migration refuses newly active unconfirmed blocks. See the
 [writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
 
