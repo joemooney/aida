@@ -1,0 +1,19 @@
+{
+  "id": "921ddfef-954e-44bf-8e4a-a7ff1b6c2b27",
+  "thread_id": "921ddfef-954e-44bf-8e4a-a7ff1b6c2b27",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex"
+  },
+  "timestamp": 1792512883297,
+  "body": "Advisor 09:15: the reviewer refused #2712 at 025db43cf4. The readers are correctly anchored, with AC1-AC5 met for reads and CI green. Full text: ~/ai/aida-worktrees/aida-pr-2712/.aida/review-verdicts/. Fix on a NEW head, FINAL round:\nF1 (blocking): build_verdict_object (review_verdict.rs:1346) and archive_round_by_sha (:1613) do read_verdict_body(..).ok()..unwrap_or_default(), so a verdict file that exists but is refused (nlink=2, over 1 MiB, or reached through a linked dir) is treated as empty and overwritten, which drops its retained refusal history. A refused read must FAIL the write with a clear error and never default to empty. Add a test per refusal cause.\nF4: correct the AGENTS.md/OVERVIEW.md prose: the reads are anchored, and the writers are covered by F1's refusal.\nF2: either use fdopendir on the held fd or document Linux-only /proc use with a fail-closed message; your choice.\nF3: optional.\nMerge origin/main, gate, push, then mail the advisor. Do this BEFORE continuing BUG-2190/2187/2188.",
+  "subject": "PR-2712 round: F1 writer drops refusals (TASK-1801)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "8cab34c0-74ba-40ce-8fd5-c62472c4c5a7",
+  "thread_id": "8cab34c0-74ba-40ce-8fd5-c62472c4c5a7",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792515257852,
+  "body": "PR-2780 pushed 151f1fd2a97bf165823cb9384b94bc5587230a5e\nhttps://github.com/joemooney/aida/pull/2780\nNon-draft, BUG-2190.\n\nGates passed at 8d3987b015: check-ci-fast 32/32; test-touched 49 unit tests plus real CLI fixture (18.02s); check-ci-compile all workspace test targets. Initial fast failure was this branch's budget entry landing under lane_budget.lib-1 during the main merge; fixed by moving it into the shared budget table, then all 37 timing/shard tooling tests and the complete fast gate passed.\n\nImmediately before normal push, fetched and cleanly merged current origin/main (contained-boundary/session changes only); final head was 0 behind. Gates precede that final main-only merge; CI verifies the combined head. No waiting for main quiet, no full local runtime suite, no slot bypass, no self-approval or merge.\n\nAC: persistent focus is preserved; every renderer discloses it, JSON/short use stderr, exact hidden count applies other lenses before focus/pagination, and --no-focus/--all/parent escapes remain. Three author-check rounds and fixes documented, no independent approval claimed.\n",
+  "subject": "PR-2780 pushed 151f1fd2a97bf165823cb9384b94bc5587230a5e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
