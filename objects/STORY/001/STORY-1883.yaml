@@ -1,0 +1,20 @@
+id: 01a15a8e-72bf-72d3-9fc3-ae60b80aa630
+spec_id: STORY-1883
+agreed_id: STORY-1883
+title: 'Review PR-2784: measure aida-cli test-binary build timings (Refs TASK-1958)'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T18:24:07.359632906Z
+modified_at: 2026-10-20T18:24:07.359632906Z
+req_type: Story
+filed_at:
+  code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 1456ad35b0
+  vendor: claude
+  session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
