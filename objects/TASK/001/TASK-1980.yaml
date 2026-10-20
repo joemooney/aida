@@ -6,12 +6,12 @@ description: |
   scripts/check-ci-gates.py:441 prints '(local: cargo test --profile agent)' for any reshaped step, but local_test_command now turns Run tests into 'python3 scripts/ci-test-shards.py --shard all --profile agent'. Print the actual reshaped command.
 
   Raised in review of PR-2762: https://github.com/joemooney/aida/pull/2762
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:05:18.121068723Z
-modified_at: 2026-10-20T04:49:59.256432739Z
+modified_at: 2026-10-20T04:50:04.007268845Z
 req_type: Task
 tags:
 - ci
@@ -24,6 +24,15 @@ comments:
   created_at: 2026-10-20T04:49:59.256432739Z
   modified_at: 2026-10-20T04:49:59.256432739Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a157a5-2867-7bc1-a644-37ebbbc67adb
+  author: joe
+  timestamp: 2026-10-20T04:50:04.007263655Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f5e1eff0c3fe6a49a504ee93214c4eaa2b7455bb
   branch: pr-2762
