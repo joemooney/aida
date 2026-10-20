@@ -4012,6 +4012,7 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         // trace:TASK-1803 | ai:claude
         .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
     if !out.status.success() {
         return None;

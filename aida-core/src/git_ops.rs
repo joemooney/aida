@@ -43,7 +43,29 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
 /// where the caller classifies git's stderr).
 // trace:BUG-1969 | ai:claude
 fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
-    let output = host_git_command(cwd)
+    run_git_result(host_git_command(cwd), args, envs)
+}
+
+/// [`git`] for a call that contacts `remote`: the remote's stored
+/// credentials stay out of every child's `argv`
+/// ([`configure_remote_credentials`]).
+// trace:BUG-2181 | ai:claude
+fn remote_git(cwd: &Path, remote: &str, args: &[&str]) -> Result<GitResult> {
+    remote_git_with_env(cwd, remote, args, &[])
+}
+
+// trace:BUG-2181 | ai:claude
+fn remote_git_with_env(
+    cwd: &Path,
+    remote: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<GitResult> {
+    run_git_result(host_remote_git_command(cwd, remote), args, envs)
+}
+
+fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
+    let output = cmd
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .envs(envs.iter().copied())
         .args(args)
@@ -1177,7 +1199,7 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
     refuse_embedded_repos_for_push(repo, "HEAD")?; // trace:BUG-1929 | ai:claude
-    let result = git(repo, &["push", "--end-of-options", remote, branch])?;
+    let result = remote_git(repo, remote, &["push", "--end-of-options", remote, branch])?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -1296,8 +1318,9 @@ pub fn push_exact_outcome(
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /
     // libcurl's) messages to untranslated English. trace:BUG-1969 | ai:claude
-    let result = git_with_env(
+    let result = remote_git_with_env(
         repo,
+        remote,
         &["push", "--end-of-options", remote, &refspec],
         &[("LC_ALL", "C"), ("LANGUAGE", "C")],
     )?;
@@ -1339,8 +1362,9 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     let target = format!("refs/aida/store-pull/{}", uuid::Uuid::new_v4());
     let refspec = format!("{source}:{target}");
     let result = (|| {
-        let fetched = git(
+        let fetched = remote_git(
             repo,
+            remote,
             &[
                 "fetch",
                 "--no-write-fetch-head",
@@ -1375,7 +1399,14 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
 }
 
 mod evidence;
+// trace:BUG-2181 | ai:claude
+mod remote_credentials;
 pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
+pub use remote_credentials::{
+    configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
+    operator_credential_helper_configured, percent_decode, split_http_url_userinfo,
+    upstream_remote, FallbackCredentials, RemoteCredentialsExt, GIT_CREDENTIAL_HELPER_SCRIPT,
+};
 
 /// Pull with rebase from remote.
 ///
@@ -2317,7 +2348,7 @@ pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
         "refusing a bare git pull of the AIDA store {}; use pull_rebase, which checks hypothesis evidence",
         repo.display()
     );
-    let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
+    let result = remote_git(repo, remote, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);
     }
@@ -3703,7 +3734,7 @@ pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -
 
 /// Check if the remote is reachable (can we push/pull?).
 pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
-    git(repo, &["ls-remote", "--exit-code", remote])
+    remote_git(repo, remote, &["ls-remote", "--exit-code", remote])
         .map(|r| r.success)
         .unwrap_or(false)
 }
@@ -3742,7 +3773,11 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
 /// trace:TASK-844 | ai:claude
 pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
     // trace:BUG-1622 | ai:claude
-    match git(repo, &["ls-remote", "--heads", "--end-of-options", remote]) {
+    match remote_git(
+        repo,
+        remote,
+        &["ls-remote", "--heads", "--end-of-options", remote],
+    ) {
         Ok(r) if r.success => r.stdout.trim().is_empty(),
         _ => false,
     }
@@ -3753,8 +3788,9 @@ pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
 /// callers can treat absence and unreachability the same.
 /// trace:EPIC-1-052 Phase 4 | ai:claude
 pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
-    git(
+    remote_git(
         repo,
+        remote,
         &[
             "ls-remote",
             "--exit-code",
@@ -3778,8 +3814,9 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 /// "fall back to the heavier path".
 // trace:TASK-857 | ai:claude
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
-    let r = git(
+    let r = remote_git(
         repo,
+        remote,
         // trace:BUG-1622 | ai:claude
         &[
             "ls-remote",
@@ -3857,7 +3894,11 @@ pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Resul
     let refspec = format!("{}:{}", branch, branch);
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
-    let result = git(repo, &["fetch", "--end-of-options", remote, &refspec])?;
+    let result = remote_git(
+        repo,
+        remote,
+        &["fetch", "--end-of-options", remote, &refspec],
+    )?;
     if !result.success {
         anyhow::bail!("git fetch {} {} failed: {}", remote, refspec, result.stderr);
     }

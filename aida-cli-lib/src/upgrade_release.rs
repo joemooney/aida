@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 // trace:STORY-1728 | ai:claude
 #[path = "upgrade_release_args.rs"]
@@ -1691,6 +1692,8 @@ pub(crate) fn handle_release(
                 .arg("-C")
                 .arg(r)
                 .args(["pull", "--ff-only"])
+                // trace:BUG-2181 | ai:claude
+                .remote_credentials(r, &aida_core::git_ops::upstream_remote(r))
                 .status();
             if !matches!(pull, Ok(s) if s.success()) {
                 anyhow::bail!(
