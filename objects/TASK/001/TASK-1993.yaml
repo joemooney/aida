@@ -1,0 +1,33 @@
+id: 01a15831-5bfb-7272-8f2c-8a2054a510bf
+spec_id: TASK-1993
+agreed_id: TASK-1993
+title: 'Review watch S1: discover and dispatch attested reviews with durable launch receipts'
+description: |
+  S1 of TASK-1945, explicitly authorized by the advisor signoff at 2026-10-19 22:18 (parent comment) and the operator's 23:15 batch correction. Implement one strict-review PR. The parent's S2 process supersession and S3 readiness/wake slices remain outstanding; this child alone must be used for completion credit.
+
+  Acceptance:
+  1. Add `aida review watch` through the owning review args/command registry and its own review_watch module. Discover open, non-draft changes against a pinned repository/common project root with a bounded poll and a one-pass option. Unknown discovery/head/base/state evidence refuses dispatch with useful diagnostics.
+  2. On an eligible unseen head, dispatch immediately without waiting for or running CI, only through the ordinary attested `aida queue work PR-N --role reviewer --no-human --vendor ...` path. Reviewer instructions forbid local Cargo; never set a slot bypass or synthesize a verdict.
+  3. Versioned atomic state under .aida/review-watch, permanent per-change/global admission locks, reservation before spawn and a PID/start receipt before reviewer work begins make concurrent watchers/restarts idempotent. At most two reviewers, configurable down to one. Ambiguous launches stay reserved with recovery diagnostics. Preserve the existing two-round/risk-scaled review limits.
+  4. Stale overlapping heads do not dispatch and notify the change author once per repository/change/head. Notification retries are idempotent, and a sent receipt is stored only after successful delivery. A stale non-overlapping base may review; never update a branch automatically.
+  5. A new head arriving while an old review is live waits for that review to exit; S1 never signals or terminates a process. No ship-ready or merge action exists in S1; S2/S3 retain the parent signoff's boundaries, including TASK-1960 carry-over for future readiness.
+  6. Targeted fake-forge/child-barrier tests demonstrate pending-CI dispatch, stale-overlap notification deduplication, concurrency/global cap, restart ambiguity/PID-start identity/head movement, two-round cap, unsafe/corrupt state refusal, and absence of process signalling/merge/Cargo execution. Run fast + targeted + compile gates; no full runtime suite. Fresh strict independent review is required.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-20T07:23:12.251645147Z
+modified_at: 2026-10-20T07:23:12.251645147Z
+req_type: Task
+tags:
+- dispatch
+- review
+- slice:S1
+- watch
+filed_at:
+  code_sha: 419579e7c4510fece5f45c04ef3edc6878dda24d
+  branch: main
+  dirty: false
+  aida_version: 0.15.0
+  aida_build_sha: f801433bcd
+  vendor: codex
