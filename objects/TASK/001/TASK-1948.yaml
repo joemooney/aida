@@ -3,12 +3,12 @@ spec_id: TASK-1948
 agreed_id: TASK-1948
 title: 'STORY-1853 slices S0/S0b/S1: gate discipline, agent-profile local runs, per-binary test timing budget'
 description: 'Slice task for PR #2754. It exists so that merging the PR completes this slice and NOT the umbrella STORY-1853, whose AC1/AC2/AC5 and S2–S6 stay open. Scope: S0 (process: no full local suite, AIDA_CARGO_NO_SLOT forbidden in templates), S0b (agent-profile local runs) and S1 (CI per-binary timing artifact plus committed budget file and gate). Advisor ruling 2026-10-19: per-TEST budget enforcement (STORY-1853 AC4) is deferred to S2 (nextest JUnit); S1 enforces per binary.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:37:49.549035318Z
-modified_at: 2026-10-19T15:38:09.382455488Z
+modified_at: 2026-10-20T00:39:40.276267080Z
 req_type: Task
 tags:
 - ci
@@ -34,6 +34,21 @@ history:
   timestamp: 2026-10-19T15:38:10.615878705Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a156bf-e9ef-7262-89c1-8ddf08465acb
+  author: aida-auto-bump
+  timestamp: 2026-10-20T00:39:40.271685376Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a156bf-e9f4-7541-915b-d0e0fbbecfa4
+  timestamp: 2026-10-20T00:39:40.276260870Z
+  agent: aida
+  commit_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
+  pr: 2754
+  summary: 'Round 2: all round-1 findings fixed (parse_log false negative + regression test, TEST_TOUCHED_ALLOW_FULL strict, NO_SLOT bash -c/+=/export forms, TASK-1948 title trailer so STORY-1853 stays open). AC4 per-test deferred to S2 by advisor ruling. CI green at c2505b4 (run 39279979408); head 2ec26b1 only merges main, its CI run 39308404952 was still in Run tests at record time, so ship must gate on it. merge-hold-gate red = round-1 hold, needs operator clear.'
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -42,3 +57,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-20T00:39:40.271680640Z
+  completion_sha: 128a5bb6eb16acbd1313c3108f47fbfdd8089dfb
