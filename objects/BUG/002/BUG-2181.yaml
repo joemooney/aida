@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T22:06:36.673317847Z
-modified_at: 2026-10-18T22:07:27.217994163Z
+modified_at: 2026-10-20T10:03:38.492767064Z
 req_type: Bug
 tags:
 - forge
@@ -21,6 +21,18 @@ comments:
   created_at: 2026-10-18T22:07:27.217994163Z
   modified_at: 2026-10-18T22:07:27.217994163Z
   session_id: 5381fff7-5e31-4278-9d6b-3302c4dba1c2
+- id: 01a158c4-3e7c-78c3-b43b-2fc0c6c2db46
+  author: joe
+  content: |-
+    SKETCH (implementer, per the advisor brief 02:58): add aida_core::git_ops::remote_credentials as the one credential gate.
+    - configure_remote_credentials(cmd, dir, remote): for each stored remote.<r>.url/pushurl carrying userinfo, add a per-invocation url.<clean>.insteadOf=<credentialed> override through GIT_CONFIG_* env, never argv. The embedded token feeds a host-scoped env-backed credential.helper. Stored config is never modified.
+    - configure_remote_credentials_with(..., url_hint, fallback): the same, plus the URL-hint and fallback hooks.
+    - host_remote_git_command(dir, remote) = host_git_command + configure.
+    The GitLab glab/env token fallback depends on cli-lib forge code, so it stays in cli-lib: gitlab_project_create::configure_git_remote_credentials becomes a thin wrapper passing that fallback closure. Its behaviour is unchanged.
+    Every host network call (fetch/pull/push/ls-remote against a named remote) applies the core helper to the builder it already uses. That keeps seat-clone refusal and hardening semantics as they are, adds no GitLab fallback to sites that never had one, and adds one 'git config --get-regexp' spawn per remote call. The PR body lists the sites, each marked routed or out of scope.
+  created_at: 2026-10-20T10:03:38.492767064Z
+  modified_at: 2026-10-20T10:03:38.492767064Z
+  session_id: 8eb7f358-17d3-47ea-9584-5285a9a5eab8
 history:
 - id: 01a1510e-1cbd-7661-bf85-4b7b1342939d
   author: joe
