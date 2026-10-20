@@ -583,12 +583,14 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
 fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
     let tmp = tempfile::tempdir().unwrap();
     let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+
+    // 1. Main checkout with a real `.git` directory: `.git/hooks/*` and `.git/config` denied.
     let main_checkout = parent.join("aida-main");
     std::fs::create_dir_all(main_checkout.join(".git/hooks")).unwrap();
     std::fs::create_dir_all(main_checkout.join("src")).unwrap();
 
     let settings = settings_for(&main_checkout);
-    let home = parent.join("home");
     let pre_commit = main_checkout.join(".git/hooks/pre-commit");
     let git_config = main_checkout.join(".git/config");
     let inside_src = main_checkout.join("src/lib.rs");
@@ -617,6 +619,131 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
             git_config.display()
         );
     }
+
+    // 2. Main checkout with a `.git` gitfile (`--separate-git-dir`): both `.git` file and
+    //    its real gitdir target are denied.
+    let gitfile_main = parent.join("aida-main-gitfile");
+    let sep_git_dir = gitfile_main.join(".real-gitdir");
+    std::fs::create_dir_all(sep_git_dir.join("hooks")).unwrap();
+    std::fs::create_dir_all(gitfile_main.join("src")).unwrap();
+    std::fs::write(
+        gitfile_main.join(".git"),
+        format!("gitdir: {}\n", sep_git_dir.display()),
+    )
+    .unwrap();
+
+    let gitfile_settings = settings_for(&gitfile_main);
+    let sep_hook = sep_git_dir.join("hooks/pre-commit");
+    let sep_config = sep_git_dir.join("config");
+    let gitfile_entry = gitfile_main.join(".git");
+    let gitfile_src = gitfile_main.join("src/lib.rs");
+
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&gitfile_settings, tool, &gitfile_src, &gitfile_main, &home),
+            "{tool} inside gitfile main checkout src/ must remain allowed: {gitfile_settings}"
+        );
+        assert!(
+            !attempt_write(&gitfile_settings, tool, &sep_hook, &gitfile_main, &home),
+            "{tool} on main gitfile target hooks/pre-commit must be denied: {gitfile_settings}"
+        );
+        assert!(
+            !attempt_write(&gitfile_settings, tool, &sep_config, &gitfile_main, &home),
+            "{tool} on main gitfile target config must be denied: {gitfile_settings}"
+        );
+        assert!(
+            !allowed(
+                &gitfile_settings,
+                tool,
+                &gitfile_entry,
+                &gitfile_main,
+                &home
+            ),
+            "{tool} on main checkout .git file must be denied: {gitfile_settings}"
+        );
+    }
+
+    // 3. NEGATIVE: a linked worktree's own gitdir stays allowed when in write_roots.
+    let linked_wt = parent.join("aida-wt-linked");
+    let wt_gitdir = main_checkout.join(".git/worktrees/aida-wt-linked");
+    std::fs::create_dir_all(&linked_wt).unwrap();
+    std::fs::create_dir_all(&wt_gitdir).unwrap();
+    std::fs::write(wt_gitdir.join("commondir"), "../..\n").unwrap();
+    std::fs::write(
+        linked_wt.join(".git"),
+        format!("gitdir: {}\n", wt_gitdir.display()),
+    )
+    .unwrap();
+
+    let wt_roots = vec![linked_wt.clone(), wt_gitdir.clone()];
+    assert!(
+        contained_main_checkout_git_deny_paths(&wt_roots).is_empty(),
+        "linked worktree and its own gitdir must not be classified as main checkout .git"
+    );
+    let wt_settings: serde_json::Value = serde_json::from_str(
+        &crate::session::contained_settings_json(&[], false, &wt_roots),
+    )
+    .unwrap();
+    let wt_index = wt_gitdir.join("index");
+    let wt_head = wt_gitdir.join("HEAD");
+    for tool in WRITE_TOOLS {
+        assert!(
+            attempt_write(&wt_settings, tool, &wt_index, &linked_wt, &home),
+            "{tool} on linked worktree's own gitdir index must stay allowed: {wt_settings}"
+        );
+        let _ = std::fs::remove_file(&wt_index);
+        assert!(
+            attempt_write(&wt_settings, tool, &wt_head, &linked_wt, &home),
+            "{tool} on linked worktree's own gitdir HEAD must stay allowed: {wt_settings}"
+        );
+        let _ = std::fs::remove_file(&wt_head);
+    }
+
+    // 4. NEGATIVE: a non-checkout `.git` stays allowed (both a directory without `.git`
+    //    at launch and a nested `sub/.git` inside a checkout).
+    let non_checkout = parent.join("plain-scratch");
+    std::fs::create_dir_all(&non_checkout).unwrap();
+    assert!(
+        contained_main_checkout_git_deny_paths(std::slice::from_ref(&non_checkout)).is_empty(),
+        "non-checkout directory must not emit a .git deny rule"
+    );
+    let non_checkout_settings = settings_for(&non_checkout);
+    let scratch_git_config = non_checkout.join(".git/config");
+    let nested_git_config = main_checkout.join("nested/.git/config");
+    for tool in WRITE_TOOLS {
+        assert!(
+            attempt_write(
+                &non_checkout_settings,
+                tool,
+                &scratch_git_config,
+                &non_checkout,
+                &home
+            ),
+            "{tool} on non-checkout .git/config must stay allowed: {non_checkout_settings}"
+        );
+        let _ = std::fs::remove_dir_all(non_checkout.join(".git"));
+        assert!(
+            attempt_write(&settings, tool, &nested_git_config, &main_checkout, &home),
+            "{tool} on nested non-checkout .git/config must stay allowed: {settings}"
+        );
+        let _ = std::fs::remove_dir_all(main_checkout.join("nested"));
+    }
+
+    // 5. NEGATIVE: an outside-git `os_wrap` root refuses.
+    std::fs::create_dir_all(non_checkout.join(".aida")).unwrap();
+    std::fs::write(
+        non_checkout.join(".aida/config.toml"),
+        "[contained]\nos_wrap = true\n",
+    )
+    .unwrap();
+    let err =
+        crate::session::os_wrapped_program_and_args(&non_checkout, "/bin/echo", vec!["hi".into()])
+            .expect_err("outside-git os_wrap root must refuse");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("not inside a git repository"),
+        "expected outside-git refusal diagnostic, got: {msg}"
+    );
 }
 
 // trace:BUG-2012 | ai:antigravity

@@ -2860,21 +2860,36 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
 
 /// Every spelling of `<main>/.git` a tool or sandbox path may resolve to: the
 /// main checkout as given and canonical ([`contained_write_roots`]), each
-/// joined with `.git`, plus the canonical `.git` itself when it is a symlink.
+/// joined with `.git`, plus the canonical `.git` itself when it is a symlink,
+/// and the `gitdir:` target when `<main>/.git` is a main-checkout gitfile.
 ///
 /// [`contained_write_roots`]: crate::contained_boundary::contained_write_roots
 // trace:BUG-1982 | ai:claude
+// trace:BUG-2012 | ai:antigravity
 pub(crate) fn main_git_deny_paths(main: &Path) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> = crate::contained_boundary::contained_write_roots(main)
-        .into_iter()
-        .map(|root| root.join(".git"))
-        .collect();
+    let roots = crate::contained_boundary::contained_write_roots(main);
+    let mut paths: Vec<PathBuf> = roots.iter().map(|root| root.join(".git")).collect();
     if paths.is_empty() {
         paths.push(main.join(".git"));
     }
     if let Ok(canonical) = std::fs::canonicalize(main.join(".git")) {
         if !paths.contains(&canonical) {
             paths.push(canonical);
+        }
+    }
+    for root in std::iter::once(main).chain(roots.iter().map(PathBuf::as_path)) {
+        if let Some(raw_target) = aida_core::git_ops::worktree_gitdir_path(root) {
+            let target = crate::contained_boundary::normalize_lexical(&raw_target);
+            if !crate::contained_boundary::is_linked_worktree_gitdir(&target) {
+                if !paths.contains(&target) {
+                    paths.push(target.clone());
+                }
+                if let Ok(canon_target) = std::fs::canonicalize(&target) {
+                    if !paths.contains(&canon_target) {
+                        paths.push(canon_target);
+                    }
+                }
+            }
         }
     }
     paths
