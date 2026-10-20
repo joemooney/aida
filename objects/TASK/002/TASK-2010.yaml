@@ -3,12 +3,12 @@ spec_id: TASK-2010
 agreed_id: TASK-2010
 title: 'Test-git maintenance ratchet: catch split-statement and variable-args git spawns, and scan tests/*.sh and tests/*.py'
 description: Follow-up to BUG-2191 (PR-2779), ruled out of scope on 2026-10-20. The ratchet misses 'let mut c = Command::new("git"); c.arg("commit")' and args passed through a variable (for example aida-core/src/scaffolding/mod.rs:5641), and it doesn't scan shell or Python fixtures (tests/test_distributed.sh, tests/test_bug_1810_store_trailer.sh, tests/test_cache_refresh_outputs.py) that run a bare git commit.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T16:10:51.339931588Z
-modified_at: 2026-10-20T18:53:18.323461788Z
+modified_at: 2026-10-20T18:53:25.654391024Z
 req_type: Task
 comments:
 - id: 01a15aa9-2a73-77e1-87a5-bd629414faa5
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-20T18:53:18.323461788Z
   modified_at: 2026-10-20T18:53:18.323461788Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+history:
+- id: 01a15aa9-4716-7cd2-aba0-c4ed05e90259
+  author: joe
+  timestamp: 2026-10-20T18:53:25.654387364Z
+  session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 1456ad35b0a1fb175e6a53c0a774396bd04e3c6a
   branch: main
