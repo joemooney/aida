@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T16:38:07.308696394Z
-modified_at: 2026-10-20T08:23:00.150288866Z
+modified_at: 2026-10-20T09:56:39.738133729Z
 req_type: Bug
 tags:
 - batch:drain-20261013
@@ -190,6 +190,12 @@ comments:
     - aida show BUG-1993 --format json: runs=[4354.3, 4208.0, 4899.1] ms | median=4354.3 ms (< 5000 ms ceiling; down from 7498.6 ms on main [7152.3, 8554.0, 7498.6] ms at loadavg 10.46 10.84 15.63; phases: open 44-85 ms, lookup 87-109 ms, context 223-318 ms, linkage 3225-4058 ms [median 3319 ms]). Running git log --all and scan_trace_graph_bounded concurrently in collect_git_linkage_opts cuts ~3 s from the linkage phase; the remaining linkage time on an unshipped spec is dominated by max(git log --all, scan_trace_graph_bounded) (~1.0-1.3 s) + LINKAGE_BRANCH_SCAN_BUDGET (2.0 s checking git branch --all --contains across unshipped commits) + filing_drift_hint (~0.3 s).
   created_at: 2026-10-20T07:53:09.634189117Z
   modified_at: 2026-10-20T07:53:09.634189117Z
+- id: 01a158bd-daba-7ad1-a499-f3f867033659
+  author: joe
+  content: Commit 63691e3888 references this requirement
+  created_at: 2026-10-20T09:56:39.738133729Z
+  modified_at: 2026-10-20T09:56:39.738133729Z
+  session_id: bdc37ec9-42ce-4216-93b7-c928e1221a32
 history:
 - id: 01a13674-eaf0-7b33-be7c-3065c731c6f5
   author: joe
