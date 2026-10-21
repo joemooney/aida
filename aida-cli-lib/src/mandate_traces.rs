@@ -12,6 +12,10 @@ pub(crate) enum Scope {
     #[allow(dead_code)]
     FullFile,
     ChangedItems,
+    /// The TASK-1790 fn/impl attribution without the AC2 reference closure,
+    /// kept for the corpus replay's before/after comparison.
+    #[cfg(test)]
+    ChangedItemsV1,
 }
 
 #[derive(Debug, Default)]
@@ -24,6 +28,10 @@ pub(crate) struct Evidence {
     /// rename), for the mandate's gate-touching check.
     // trace:STORY-1700 | ai:claude
     pub paths: BTreeSet<String>,
+    /// Per changed path, both sides: the IDs it supplied and why it fell back.
+    /// Replay provenance for the TASK-1800 corpus test only.
+    #[cfg(test)]
+    pub per_path: std::collections::BTreeMap<String, (BTreeSet<String>, BTreeSet<Fallback>)>,
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
@@ -188,9 +196,15 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
                     }
                 })
                 .collect();
-            let (ids, fallback) = source_ids(path, text, &ranges, scope);
+            let (ids, fallback) = source_evidence(path, text, &ranges, scope);
+            #[cfg(test)]
+            {
+                let entry = out.per_path.entry(path.to_owned()).or_default();
+                entry.0.extend(ids.iter().cloned());
+                entry.1.extend(fallback);
+            }
             out.ids.extend(ids);
-            if fallback {
+            if fallback.is_some() {
                 out.full_file_fallbacks.insert(path.to_owned());
             }
         }
@@ -326,36 +340,244 @@ pub(crate) fn leading_comment_start(
     start
 }
 
+/// One attribution unit: a syn item of any kind, nested items included, with
+/// its leading comment/blank prefix. An inline module is only its shell (the
+/// lines through its open brace, and its close-brace line); the items inside
+/// it are units of their own.
+// trace:TASK-1800 | ai:claude
+struct Unit {
+    ranges: Vec<std::ops::Range<usize>>,
+    /// Names the unit defines, for the same-file reference closure: the item
+    /// ident, struct/union field and enum variant names, the item names in an
+    /// impl, trait or foreign block, the names a `use` brings in.
+    names: BTreeSet<String>,
+    /// The closure cannot see what this unit expands to or brings in: an item
+    /// macro or `macro_rules!`, an item syn kept unparsed, or a glob import.
+    opaque: bool,
+    /// fn, impl and impl fn: the TASK-1790 unit set. Module-comment ownership
+    /// is still decided over this set alone.
+    v1: bool,
+}
+
 #[derive(Default)]
 struct Items {
-    ranges: Vec<std::ops::Range<usize>>,
+    units: Vec<Unit>,
     module_opens: BTreeSet<(usize, usize)>,
+    /// Every identifier inside any macro invocation's token stream.
+    macro_idents: BTreeSet<String>,
+    /// `#[path]` or `include!`: source the parse of this file cannot see.
+    external_source: bool,
 }
-impl<'ast> Visit<'ast> for Items {
-    fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
-        if let Some((brace, _)) = &node.content {
-            let start = brace.span.open().start();
-            self.module_opens.insert((start.line, start.column));
+
+fn name(ident: &syn::Ident) -> String {
+    let s = ident.to_string();
+    s.strip_prefix("r#").map_or(s.clone(), str::to_owned)
+}
+
+fn field_names(fields: &syn::Fields, names: &mut BTreeSet<String>) {
+    names.extend(fields.iter().filter_map(|f| f.ident.as_ref()).map(name));
+}
+
+/// The names a `use` tree brings in; `true` when it globs, whose names the
+/// closure cannot know.
+fn use_names(
+    tree: &syn::UseTree,
+    parent: Option<&syn::Ident>,
+    names: &mut BTreeSet<String>,
+) -> bool {
+    match tree {
+        syn::UseTree::Path(p) => use_names(&p.tree, Some(&p.ident), names),
+        syn::UseTree::Name(n) if n.ident == "self" => {
+            let Some(parent) = parent else { return true };
+            names.insert(name(parent));
+            false
         }
-        syn::visit::visit_item_mod(self, node);
+        syn::UseTree::Name(n) => {
+            names.insert(name(&n.ident));
+            false
+        }
+        syn::UseTree::Rename(r) => {
+            names.insert(name(&r.rename));
+            false
+        }
+        syn::UseTree::Glob(_) => true,
+        syn::UseTree::Group(g) => g
+            .items
+            .iter()
+            .fold(false, |glob, t| use_names(t, parent, names) | glob),
     }
-    fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
-        self.push(node.span());
-        syn::visit::visit_item_fn(self, node);
+}
+
+/// `(name, opaque)` for an item inside an impl, trait or foreign block.
+fn impl_item(item: &syn::ImplItem) -> (Option<&syn::Ident>, bool) {
+    match item {
+        syn::ImplItem::Const(i) => (Some(&i.ident), false),
+        syn::ImplItem::Fn(i) => (Some(&i.sig.ident), false),
+        syn::ImplItem::Type(i) => (Some(&i.ident), false),
+        _ => (None, true),
     }
-    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
-        self.push(node.span());
-        syn::visit::visit_item_impl(self, node);
+}
+fn trait_item(item: &syn::TraitItem) -> (Option<&syn::Ident>, bool) {
+    match item {
+        syn::TraitItem::Const(i) => (Some(&i.ident), false),
+        syn::TraitItem::Fn(i) => (Some(&i.sig.ident), false),
+        syn::TraitItem::Type(i) => (Some(&i.ident), false),
+        _ => (None, true),
     }
-    fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
-        self.push(node.span());
-        syn::visit::visit_impl_item_fn(self, node);
+}
+fn foreign_item(item: &syn::ForeignItem) -> (Option<&syn::Ident>, bool) {
+    match item {
+        syn::ForeignItem::Fn(i) => (Some(&i.sig.ident), false),
+        syn::ForeignItem::Static(i) => (Some(&i.ident), false),
+        syn::ForeignItem::Type(i) => (Some(&i.ident), false),
+        _ => (None, true),
+    }
+}
+
+/// Add the member names of an impl, trait or foreign block; `true` when a
+/// member is opaque.
+fn members<'a>(
+    items: impl Iterator<Item = (Option<&'a syn::Ident>, bool)>,
+    names: &mut BTreeSet<String>,
+) -> bool {
+    let mut opaque = false;
+    for (ident, hidden) in items {
+        names.extend(ident.map(name));
+        opaque |= hidden;
+    }
+    opaque
+}
+
+fn macro_idents(stream: proc_macro2::TokenStream, out: &mut BTreeSet<String>) {
+    for tree in stream {
+        match tree {
+            proc_macro2::TokenTree::Ident(i) => {
+                out.insert(name(&i));
+            }
+            proc_macro2::TokenTree::Group(g) => macro_idents(g.stream(), out),
+            _ => {}
+        }
+    }
+}
+
+// trace:TASK-1800 | ai:claude
+impl<'ast> Visit<'ast> for Items {
+    fn visit_item(&mut self, node: &'ast syn::Item) {
+        use syn::Item as I;
+        let mut names = BTreeSet::new();
+        let mut opaque = false;
+        let mut shell = None;
+        let mut own = |ident: &syn::Ident| {
+            names.insert(name(ident));
+        };
+        match node {
+            I::Fn(i) => own(&i.sig.ident),
+            I::Const(i) => own(&i.ident),
+            I::Static(i) => own(&i.ident),
+            I::Type(i) => own(&i.ident),
+            I::TraitAlias(i) => own(&i.ident),
+            I::ExternCrate(i) => own(i.rename.as_ref().map_or(&i.ident, |(_, r)| r)),
+            I::Macro(i) => {
+                i.ident.iter().for_each(own);
+                opaque = true;
+            }
+            I::Mod(i) => {
+                own(&i.ident);
+                if let Some((brace, _)) = &i.content {
+                    let open = brace.span.open().start();
+                    self.module_opens.insert((open.line, open.column));
+                    shell = Some((open.line, brace.span.close().end().line));
+                }
+            }
+            I::Struct(i) => {
+                own(&i.ident);
+                field_names(&i.fields, &mut names);
+            }
+            I::Union(i) => {
+                own(&i.ident);
+                field_names(&syn::Fields::Named(i.fields.clone()), &mut names);
+            }
+            I::Enum(i) => {
+                own(&i.ident);
+                for variant in &i.variants {
+                    names.insert(name(&variant.ident));
+                    field_names(&variant.fields, &mut names);
+                }
+            }
+            I::Impl(i) => opaque = members(i.items.iter().map(impl_item), &mut names),
+            I::Trait(i) => {
+                own(&i.ident);
+                opaque = members(i.items.iter().map(trait_item), &mut names);
+            }
+            I::ForeignMod(i) => opaque = members(i.items.iter().map(foreign_item), &mut names),
+            I::Use(i) => opaque = use_names(&i.tree, None, &mut names),
+            // Verbatim and any kind syn adds later: nothing to attribute.
+            _ => opaque = true,
+        }
+        let v1 = matches!(node, I::Fn(_) | I::Impl(_));
+        let span = node.span();
+        let start = span.start().line.saturating_sub(1);
+        let ranges = match shell {
+            Some((open, close)) => vec![start..open, close.saturating_sub(1)..close],
+            None => vec![start..span.end().line],
+        };
+        self.units.push(Unit {
+            ranges,
+            names,
+            opaque,
+            v1,
+        });
+        syn::visit::visit_item(self, node);
+    }
+    fn visit_impl_item(&mut self, node: &'ast syn::ImplItem) {
+        let (ident, opaque) = impl_item(node);
+        let v1 = matches!(node, syn::ImplItem::Fn(_));
+        self.push(node.span(), ident, opaque, v1);
+        syn::visit::visit_impl_item(self, node);
+    }
+    fn visit_trait_item(&mut self, node: &'ast syn::TraitItem) {
+        let (ident, opaque) = trait_item(node);
+        self.push(node.span(), ident, opaque, false);
+        syn::visit::visit_trait_item(self, node);
+    }
+    fn visit_foreign_item(&mut self, node: &'ast syn::ForeignItem) {
+        let (ident, opaque) = foreign_item(node);
+        self.push(node.span(), ident, opaque, false);
+        syn::visit::visit_foreign_item(self, node);
+    }
+    fn visit_macro(&mut self, node: &'ast syn::Macro) {
+        if node
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "include")
+        {
+            self.external_source = true;
+        }
+        macro_idents(node.tokens.clone(), &mut self.macro_idents);
+        syn::visit::visit_macro(self, node);
+    }
+    fn visit_attribute(&mut self, node: &'ast syn::Attribute) {
+        if node.path().is_ident("path") {
+            self.external_source = true;
+        }
+        syn::visit::visit_attribute(self, node);
     }
 }
 impl Items {
-    fn push(&mut self, span: proc_macro2::Span) {
-        self.ranges
-            .push(span.start().line.saturating_sub(1)..span.end().line);
+    fn push(
+        &mut self,
+        span: proc_macro2::Span,
+        ident: Option<&syn::Ident>,
+        opaque: bool,
+        v1: bool,
+    ) {
+        self.units.push(Unit {
+            ranges: vec![span.start().line.saturating_sub(1)..span.end().line],
+            names: ident.map(name).into_iter().collect(),
+            opaque,
+            v1,
+        });
     }
 }
 
@@ -407,44 +629,87 @@ fn select_module_headers(
     Some(())
 }
 
+/// Why a changed path fell back to its full-file union. Replay provenance
+/// only; never an authority input.
+// trace:TASK-1800 | ai:claude
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Fallback {
+    /// No proven item parser for the language.
+    NotRust,
+    /// Tokenizing or parsing failed.
+    Unparsed,
+    /// A mode-only change has no text hunk to attribute.
+    ModeOnly,
+    /// A changed line is in no unit.
+    Uncovered,
+    /// A changed or selected unit holds an item macro, `macro_rules!`, an
+    /// unparsed item or a glob import.
+    Opaque,
+    /// A closure name appears inside a macro invocation.
+    MacroName,
+    /// `#[path]` or `include!` is present.
+    ExternalSource,
+}
+
+#[cfg(test)]
 fn source_ids(
     path: &str,
     text: &str,
     changes: &[std::ops::Range<usize>],
     scope: Scope,
 ) -> (BTreeSet<String>, bool) {
+    let (ids, fallback) = source_evidence(path, text, changes, scope);
+    (ids, fallback.is_some())
+}
+
+fn source_evidence(
+    path: &str,
+    text: &str,
+    changes: &[std::ops::Range<usize>],
+    scope: Scope,
+) -> (BTreeSet<String>, Option<Fallback>) {
     if !path.ends_with(".rs") {
         // No proven item/comment parser for other languages: full-file raw
         // union is conservative (may include strings), never guessed attribution.
-        return (trace_ids(text), matches!(scope, Scope::ChangedItems));
+        let fallback = (!matches!(scope, Scope::FullFile)).then_some(Fallback::NotRust);
+        return (trace_ids(text), fallback);
     }
     let Some(comments) = rust_comments(text) else {
-        return (trace_ids(text), true);
+        return (trace_ids(text), Some(Fallback::Unparsed));
     };
     let full = || comments.iter().flat_map(|(_, c)| trace_ids(c)).collect();
     if matches!(scope, Scope::FullFile) {
-        return (full(), false);
+        return (full(), None);
     }
     // A mode-only change has no text hunks to attribute; it is still a
     // changed source file and therefore requires the signed full-file fallback.
     if changes.is_empty() {
-        return (full(), true);
+        return (full(), Some(Fallback::ModeOnly));
     }
     let Ok(file) = syn::parse_file(text) else {
-        return (full(), true);
+        return (full(), Some(Fallback::Unparsed));
     };
     let mut items = Items::default();
     items.visit_file(&file);
-    let lines: Vec<_> = text.lines().collect();
-    for range in &mut items.ranges {
-        range.start = leading_comment_start(range.start, &lines, &comments);
+    #[cfg(test)]
+    let v1 = matches!(scope, Scope::ChangedItemsV1);
+    #[cfg(not(test))]
+    let v1 = false;
+    if v1 {
+        items.units.retain(|unit| unit.v1);
     }
-    // Select item ranges first, then parse each selected comment ONCE. A new
+    let lines: Vec<_> = text.lines().collect();
+    for unit in &mut items.units {
+        if let Some(first) = unit.ranges.first_mut() {
+            first.start = leading_comment_start(first.start, &lines, &comments);
+        }
+    }
+    // Select units first, then parse each selected comment ONCE. A new
     // large file must not rescan an entire impl for every changed source line.
-    let mut selected_items = BTreeSet::new();
+    let mut selected = vec![false; items.units.len()];
     for change in changes {
         // Empty-side insertion/deletion boundaries are evidence too. Either
-        // adjacent line must attribute to an item; otherwise use the full file.
+        // adjacent line must attribute to a unit; otherwise use the full file.
         let touched: Vec<usize> = if change.is_empty() {
             [
                 change.start.checked_sub(1),
@@ -458,13 +723,28 @@ fn source_ids(
         };
         for line in touched {
             let mut attributed = false;
-            for item in items.ranges.iter().filter(|r| r.contains(&line)) {
-                attributed = true;
-                selected_items.insert((item.start, item.end));
+            for (i, unit) in items.units.iter().enumerate() {
+                if unit.ranges.iter().any(|r| r.contains(&line)) {
+                    attributed = true;
+                    selected[i] = true;
+                }
             }
             if !attributed {
-                return (full(), true);
+                return (full(), Some(Fallback::Uncovered));
             }
+        }
+    }
+    let tokens = text.parse::<proc_macro2::TokenStream>().unwrap();
+    // TASK-1800 AC2: the same-file reference closure. Every unit that
+    // mentions a name a selected unit defines is selected too, to a fixpoint;
+    // a closure the parse cannot see fails closed to the full file.
+    // trace:TASK-1800 | ai:claude
+    if !v1 {
+        if items.external_source {
+            return (full(), Some(Fallback::ExternalSource));
+        }
+        if let Some(why) = reference_closure(&items, &tokens, lines.len(), &mut selected) {
+            return (full(), Some(why));
         }
     }
     let mut selected_lines = vec![false; comments.len()];
@@ -473,18 +753,21 @@ fn source_ids(
     // doc comments belong to the file attributes, before its first item too.
     // This only adds evidence; item/fallback attribution remains unchanged.
     // trace:TASK-1800 | ai:codex
-    let tokens = text.parse::<proc_macro2::TokenStream>().unwrap();
     let Some(header_end) = header_end(tokens.clone(), comments.len()) else {
-        return (full(), true);
+        return (full(), Some(Fallback::Unparsed));
     };
     selected_lines[..header_end.min(comments.len())].fill(true);
     // Comments not owned by any function/impl (including its leading prefix)
     // are module evidence, wherever they occur in the file. This is additive:
     // sibling item traces remain scoped and attribution fallback is unchanged.
+    // Ownership stays decided over the fn/impl units alone, so widening the
+    // unit set never removes module evidence.
     // trace:TASK-1800 | ai:codex
     let mut owned_lines = vec![false; comments.len()];
-    for range in &items.ranges {
-        owned_lines[range.start..range.end.min(comments.len())].fill(true);
+    for unit in items.units.iter().filter(|unit| unit.v1) {
+        for range in &unit.ranges {
+            owned_lines[range.start.min(comments.len())..range.end.min(comments.len())].fill(true);
+        }
     }
     for (line, owned) in owned_lines.into_iter().enumerate() {
         selected_lines[line] |= !owned;
@@ -493,19 +776,109 @@ fn source_ids(
     // it still applies independently of which function changed. Use the actual
     // syn module brace identities, never arbitrary function/macro brace groups.
     if select_module_headers(tokens, &items.module_opens, &mut selected_lines).is_none() {
-        return (full(), true);
+        return (full(), Some(Fallback::Unparsed));
     }
-    for (start, end) in selected_items {
-        selected_lines[start..end.min(comments.len())].fill(true);
+    for (unit, _) in items.units.iter().zip(&selected).filter(|(_, s)| **s) {
+        for range in &unit.ranges {
+            selected_lines[range.start.min(comments.len())..range.end.min(comments.len())]
+                .fill(true);
+        }
     }
     let selected = comments
         .iter()
         .filter(|(line, _)| selected_lines[*line])
         .flat_map(|(_, comment)| trace_ids(comment))
         .collect();
-    (selected, false)
+    (selected, None)
+}
+
+/// Grow `selected` over every unit that mentions a name a selected unit
+/// defines, to a fixpoint. `Some` when the closure cannot be trusted: a
+/// selected unit holds or overlaps an opaque unit, or a closure name appears
+/// inside a macro invocation, whose expansion the parse cannot see.
+// trace:TASK-1800 | ai:claude
+fn reference_closure(
+    items: &Items,
+    tokens: &proc_macro2::TokenStream,
+    line_count: usize,
+    selected: &mut [bool],
+) -> Option<Fallback> {
+    fn idents(stream: proc_macro2::TokenStream, by_line: &mut [Vec<String>]) {
+        for tree in stream {
+            match tree {
+                proc_macro2::TokenTree::Ident(i) => {
+                    if let Some(line) = by_line.get_mut(i.span().start().line.saturating_sub(1)) {
+                        line.push(name(&i));
+                    }
+                }
+                proc_macro2::TokenTree::Group(g) => idents(g.stream(), by_line),
+                _ => {}
+            }
+        }
+    }
+    let mut by_line = vec![Vec::new(); line_count + 1];
+    idents(tokens.clone(), &mut by_line);
+    // name -> the units whose lines mention it
+    let mut mentioned_by: std::collections::BTreeMap<&str, Vec<usize>> = Default::default();
+    for (i, unit) in items.units.iter().enumerate() {
+        let mut mentions = BTreeSet::new();
+        for range in &unit.ranges {
+            for line in by_line[range.start.min(line_count)..range.end.min(line_count)].iter() {
+                mentions.extend(line.iter().map(String::as_str));
+            }
+        }
+        for mention in mentions {
+            mentioned_by.entry(mention).or_default().push(i);
+        }
+    }
+    let mut names: BTreeSet<&str> = BTreeSet::new();
+    let mut queue: Vec<&str> = Vec::new();
+    for (unit, _) in items.units.iter().zip(selected.iter()).filter(|(_, s)| **s) {
+        for n in &unit.names {
+            if names.insert(n) {
+                queue.push(n);
+            }
+        }
+    }
+    while let Some(n) = queue.pop() {
+        for &i in mentioned_by.get(n).into_iter().flatten() {
+            if std::mem::replace(&mut selected[i], true) {
+                continue;
+            }
+            for n in &items.units[i].names {
+                if names.insert(n) {
+                    queue.push(n);
+                }
+            }
+        }
+    }
+    let overlaps =
+        |a: &std::ops::Range<usize>, b: &std::ops::Range<usize>| a.start < b.end && b.start < a.end;
+    let opaque: Vec<_> = items
+        .units
+        .iter()
+        .filter(|unit| unit.opaque)
+        .flat_map(|unit| unit.ranges.iter())
+        .collect();
+    for (unit, _) in items.units.iter().zip(selected.iter()).filter(|(_, s)| **s) {
+        if unit
+            .ranges
+            .iter()
+            .any(|r| opaque.iter().any(|o| overlaps(r, o)))
+        {
+            return Some(Fallback::Opaque);
+        }
+    }
+    if names.iter().any(|n| items.macro_idents.contains(*n)) {
+        return Some(Fallback::MacroName);
+    }
+    None
 }
 
 #[cfg(test)]
 #[path = "tests/task_1790_mandate_traces_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/task_1800_trace_replay_tests.rs"]
+mod replay_tests;

@@ -47,7 +47,12 @@ fn unattributable_and_malformed_sources_use_full_file_fallback() {
     for (path, text, change) in [
         (
             "a.rs",
-            "// trace:TASK-1\nuse x::y;\n// trace:TASK-2\nfn f() {}",
+            "// trace:TASK-1\n#![allow(unused)]\n// trace:TASK-2\nfn f() {}",
+            1..2,
+        ),
+        (
+            "a.rs",
+            "// trace:TASK-1\nuse x::*;\n// trace:TASK-2\nfn f() {}",
             1..2,
         ),
         ("a.rs", "// trace:TASK-1\nfn broken( {", 1..2),
@@ -396,7 +401,12 @@ fn hunk_scope_unions_both_committed_headers_and_retains_item_traces() {
     );
     let head = r.commit();
     let got = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
-    assert!(got.full_file_fallbacks.contains("a.rs")); // edited header remains fail closed
+    // The edited header falls back under the fn/impl unit set; with every item
+    // a unit it is the `use` item's leading prefix, and both committed headers
+    // are module evidence either way.
+    let v1 = collect(r.path(), &base, &head, Scope::ChangedItemsV1).unwrap();
+    assert!(v1.full_file_fallbacks.contains("a.rs"));
+    assert!(got.full_file_fallbacks.is_empty());
     assert!(ids(&["SUP-1", "SUP-3", "LOCAL-2"]).is_subset(&got.ids));
     // An unchanged header also applies to a body-only hunk, without fallback.
     let base = head;
@@ -465,4 +475,143 @@ fn inline_module_headers_apply_even_when_attached_to_unchanged_first_function() 
         assert!(!fallback, "{header}");
         assert_eq!(got, ids(&["SUP-1", "LOCAL-2"]), "{header}");
     }
+}
+
+/// TASK-1800 AC2 shape fixture: the IDs and fallback of the item-level
+/// collector for a change on the lines containing `marker`, checked against
+/// the fn/impl collector and the full file. The new set is always a subset of
+/// the full file, and a superset of the old set whenever the old one did not
+/// fall back.
+// trace:TASK-1800 | ai:claude
+fn shape(source: &str, marker: &str) -> (BTreeSet<String>, Option<Fallback>) {
+    let changes: Vec<_> = source
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| line.contains(marker))
+        .map(|(i, _)| i..i + 1)
+        .collect();
+    assert!(!changes.is_empty(), "no line contains {marker:?}");
+    let (full, _) = source_evidence("a.rs", source, &changes, Scope::FullFile);
+    let (old, old_fallback) = source_evidence("a.rs", source, &changes, Scope::ChangedItemsV1);
+    let (new, fallback) = source_evidence("a.rs", source, &changes, Scope::ChangedItems);
+    assert!(new.is_subset(&full), "{new:?} not within {full:?}");
+    if old_fallback.is_none() {
+        assert!(old.is_subset(&new), "{old:?} lost from {new:?}");
+    }
+    if fallback.is_some() {
+        assert_eq!(new, full);
+    }
+    (new, fallback)
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_struct_field_change_selects_the_traced_fns_that_use_it() {
+    let source = "use std::fmt;\n// trace:S-1\nstruct Config {\n    port: u16,\n}\n\n// trace:USE-2\nfn reads(c: &Config) -> u16 {\n    c.port\n}\n\n// trace:CALL-3\nfn caller() -> u16 {\n    reads(&Config { port: 1 })\n}\n\n// trace:OTHER-9\nfn unrelated() {}\n";
+    assert_eq!(
+        source_evidence("a.rs", source, &[3..4], Scope::ChangedItemsV1).1,
+        Some(Fallback::Uncovered)
+    );
+    assert_eq!(
+        shape(source, "port: u16"),
+        (ids(&["S-1", "USE-2", "CALL-3"]), None)
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_const_change_selects_the_traced_fn_that_reads_it() {
+    let source = "use std::fmt;\n// trace:C-1\nconst LIMIT: u32 = 3;\n// trace:USE-2\nfn check(n: u32) -> bool {\n    n < LIMIT\n}\n// trace:OTHER-9\nfn other() {}\n";
+    assert_eq!(shape(source, "LIMIT: u32"), (ids(&["C-1", "USE-2"]), None));
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_use_line_change_selects_the_users_of_what_it_imports() {
+    let source = "use std::fmt;\n// trace:U-1\nuse std::collections::{BTreeMap as Map, btree_set::{self}};\n// trace:USE-2\nfn build() -> Map<u8, u8> {\n    Map::new()\n}\n// trace:SET-3\nfn set() -> btree_set::BTreeSet<u8> {\n    Default::default()\n}\n// trace:OTHER-9\nfn other() {}\n";
+    assert_eq!(
+        shape(source, "BTreeMap as Map"),
+        (ids(&["U-1", "USE-2", "SET-3"]), None)
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_change_inside_a_mod_tests_block_stays_within_its_users() {
+    let source = "use std::fmt;\n// trace:LIB-1\nfn lib() {}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n    // trace:T-2\n    const FIXTURE: u8 = 1;\n    // trace:T-3\n    #[test]\n    fn uses_fixture() {\n        let _ = FIXTURE;\n    }\n    // trace:T-4\n    #[test]\n    fn other() {\n        lib()\n    }\n}\n";
+    assert_eq!(shape(source, "FIXTURE: u8"), (ids(&["T-2", "T-3"]), None));
+    // The module's own brace lines are its shell, not every item inside it.
+    // T-2 sits on a const, which no fn/impl owns: module evidence, as before.
+    assert_eq!(shape(source, "mod tests {"), (ids(&["T-2"]), None));
+    // A glob import's names are unknowable: changing it fails closed.
+    assert_eq!(shape(source, "use super::*;").1, Some(Fallback::Opaque));
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_attribute_only_change_selects_the_item_and_its_users() {
+    let source = "use std::fmt;\n// trace:A-1\n#[derive(Debug)]\nstruct Shape;\n// trace:USE-2\nfn make() -> Shape {\n    Shape\n}\n// trace:OTHER-9\nfn other() {}\n";
+    assert_eq!(
+        shape(source, "#[derive(Debug)]"),
+        (ids(&["A-1", "USE-2"]), None)
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_closure_name_inside_a_macro_invocation_falls_back() {
+    let source = "use std::fmt;\n// trace:C-1\nconst LIMIT: u32 = 3;\n// trace:USE-2\nfn show() -> String {\n    format!(\"{}\", LIMIT)\n}\n// trace:OTHER-9\nfn other() {}\n";
+    assert_eq!(
+        shape(source, "LIMIT: u32"),
+        (ids(&["C-1", "USE-2", "OTHER-9"]), Some(Fallback::MacroName))
+    );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_item_macros_path_attributes_and_include_fall_back() {
+    for (source, marker, why) in [
+        (
+            "use std::fmt;\n// trace:M-1\nmacro_rules! twice {\n    ($e:expr) => { $e * 2 };\n}\n// trace:OTHER-9\nfn other() {}\n",
+            "$e * 2",
+            Fallback::Opaque,
+        ),
+        (
+            "use std::fmt;\n// trace:M-1\nthread_local! { static X: u8 = 1; }\n// trace:F-2\nfn f() {\n    let a = 1;\n}\n",
+            "thread_local!",
+            Fallback::Opaque,
+        ),
+        (
+            "use std::fmt;\n// trace:F-1\nfn f() {\n    macro_rules! local { () => {} }\n    let a = 1;\n}\n// trace:OTHER-9\nfn other() {}\n",
+            "let a = 1",
+            Fallback::Opaque,
+        ),
+        (
+            "use std::fmt;\n#[path = \"other.rs\"]\nmod other;\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n// trace:OTHER-9\nfn g() {}\n",
+            "let a = 1",
+            Fallback::ExternalSource,
+        ),
+        (
+            "use std::fmt;\ninclude!(\"gen.rs\");\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n// trace:OTHER-9\nfn g() {}\n",
+            "let a = 1",
+            Fallback::ExternalSource,
+        ),
+    ] {
+        let (_, fallback) = shape(source, marker);
+        assert_eq!(fallback, Some(why), "{source}");
+    }
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_unchanged_old_scope_is_kept_and_only_grown_by_references() {
+    // A change inside an impl method keeps the whole impl as before; the
+    // methods it defines pull in a free fn that calls one of them.
+    let source = "use std::fmt;\n// trace:I-1\nimpl Thing {\n    // trace:M-2\n    fn get(&self) -> u8 {\n        1\n    }\n}\n// trace:CALL-3\nfn caller(t: &Thing) -> u8 {\n    t.get()\n}\n// trace:OTHER-9\nfn other() {}\nstruct Thing;\n";
+    let (old, old_fallback) = source_evidence("a.rs", source, &[5..6], Scope::ChangedItemsV1);
+    assert_eq!((old, old_fallback), (ids(&["I-1", "M-2"]), None));
+    assert_eq!(
+        shape(source, "        1"),
+        (ids(&["I-1", "M-2", "CALL-3"]), None)
+    );
 }

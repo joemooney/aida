@@ -2830,5 +2830,2776 @@
     "prior_ids_preserved": true,
     "fallback_paths_unchanged": true,
     "full_file_sets_unchanged": true
+  },
+  "ac2_item_level": {
+    "collector_sha256": "47c58970953b8eceb71b697faa41729456a2dde437d9d5ffe10269bb3ff2c129",
+    "replay": "make task-1800-replay POLICY=<frozen per-ID policy classes> OUT=<report>",
+    "old_collector": "ChangedItemsV1 (fn/impl units); reproduces every recorded scoped digest and fallback set above",
+    "drift": [],
+    "invariant_violations": [],
+    "lost_true_or_unresolved_pairs": [],
+    "refusals": {
+      "named": 22,
+      "new": 49,
+      "old": 49
+    },
+    "fallback_case_paths": {
+      "new": 414,
+      "old": 290
+    },
+    "new_fallback_reasons": {
+      "ExternalSource": 120,
+      "MacroName": 129,
+      "NotRust": 116,
+      "Opaque": 49,
+      "Uncovered": 3
+    },
+    "audit_pairs": {
+      "full-only/incidental": {
+        "new_kept": 15,
+        "old_kept": 0,
+        "total": 24
+      },
+      "full-only/true-touch": {
+        "new_kept": 1,
+        "old_kept": 0,
+        "total": 2
+      },
+      "full-only/unresolved": {
+        "new_kept": 6,
+        "old_kept": 0,
+        "total": 7
+      },
+      "scoped/incidental": {
+        "new_kept": 102,
+        "old_kept": 102,
+        "total": 102
+      },
+      "scoped/true-touch": {
+        "new_kept": 29,
+        "old_kept": 29,
+        "total": 29
+      },
+      "scoped/unresolved": {
+        "new_kept": 30,
+        "old_kept": 30,
+        "total": 30
+      }
+    },
+    "audit_cases": {
+      "2647": {
+        "full-only/incidental": [
+          1,
+          0,
+          1
+        ],
+        "full-only/unresolved": [
+          1,
+          0,
+          1
+        ],
+        "scoped/incidental": [
+          3,
+          3,
+          3
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2652": {
+        "scoped/incidental": [
+          13,
+          13,
+          13
+        ],
+        "scoped/unresolved": [
+          5,
+          5,
+          5
+        ]
+      },
+      "2653": {
+        "scoped/incidental": [
+          2,
+          2,
+          2
+        ],
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ]
+      },
+      "2654": {
+        "scoped/incidental": [
+          1,
+          1,
+          1
+        ],
+        "scoped/true-touch": [
+          3,
+          3,
+          3
+        ]
+      },
+      "2656": {
+        "full-only/unresolved": [
+          3,
+          0,
+          2
+        ],
+        "scoped/incidental": [
+          8,
+          8,
+          8
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2666": {
+        "scoped/incidental": [
+          9,
+          9,
+          9
+        ],
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ],
+        "scoped/unresolved": [
+          8,
+          8,
+          8
+        ]
+      },
+      "2669": {
+        "full-only/true-touch": [
+          1,
+          0,
+          0
+        ],
+        "scoped/incidental": [
+          2,
+          2,
+          2
+        ],
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2670": {
+        "full-only/incidental": [
+          13,
+          0,
+          13
+        ],
+        "full-only/unresolved": [
+          3,
+          0,
+          3
+        ],
+        "scoped/incidental": [
+          9,
+          9,
+          9
+        ],
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ],
+        "scoped/unresolved": [
+          4,
+          4,
+          4
+        ]
+      },
+      "2672": {
+        "scoped/incidental": [
+          8,
+          8,
+          8
+        ],
+        "scoped/true-touch": [
+          9,
+          9,
+          9
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2674": {
+        "scoped/incidental": [
+          12,
+          12,
+          12
+        ],
+        "scoped/unresolved": [
+          2,
+          2,
+          2
+        ]
+      },
+      "2676": {
+        "full-only/incidental": [
+          8,
+          0,
+          0
+        ],
+        "scoped/incidental": [
+          12,
+          12,
+          12
+        ],
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ]
+      },
+      "2681": {
+        "scoped/true-touch": [
+          2,
+          2,
+          2
+        ]
+      },
+      "2685": {
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2686": {
+        "full-only/incidental": [
+          1,
+          0,
+          0
+        ],
+        "full-only/true-touch": [
+          1,
+          0,
+          1
+        ],
+        "scoped/incidental": [
+          1,
+          1,
+          1
+        ],
+        "scoped/true-touch": [
+          3,
+          3,
+          3
+        ]
+      },
+      "2697": {
+        "scoped/incidental": [
+          12,
+          12,
+          12
+        ],
+        "scoped/true-touch": [
+          1,
+          1,
+          1
+        ],
+        "scoped/unresolved": [
+          4,
+          4,
+          4
+        ]
+      },
+      "2698": {
+        "full-only/incidental": [
+          1,
+          0,
+          1
+        ],
+        "scoped/incidental": [
+          7,
+          7,
+          7
+        ],
+        "scoped/true-touch": [
+          1,
+          1,
+          1
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      },
+      "2701": {
+        "scoped/incidental": [
+          3,
+          3,
+          3
+        ],
+        "scoped/unresolved": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "rows": [
+      {
+        "pr": 2705,
+        "base": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+        "head": "007c853a0fb0d0f42a8835af04e608d1269fbcef",
+        "full_ids": 179,
+        "old_ids": 93,
+        "new_ids": 156,
+        "new_ids_sha256": "6bf221e0a97e2dfccb52fdf61c483055ae126aeb76607b02bdad940eaadad107",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/seat_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2707,
+        "base": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+        "head": "218d0250cb0fe31e58f7595b96283d24e5758eca",
+        "full_ids": 140,
+        "old_ids": 74,
+        "new_ids": 140,
+        "new_ids_sha256": "4215f13cd3607addf856abdbcf9eab5bafd417ea97d8fc0cff4528b3bdf2486c",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/mandate.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/merge_hold.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/pr_cmd.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2679,
+        "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+        "head": "92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4",
+        "full_ids": 54,
+        "old_ids": 53,
+        "new_ids": 53,
+        "new_ids_sha256": "466198ec3a3e763ac42976ba571165c98451e8d7b0b0dc9bece0a1d7131c73da",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/completeness.rs",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/completeness.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/report.rs": [
+            "MacroName"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2701,
+        "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+        "head": "9d4002c627d8b7e98a3e42626323d6283544046a",
+        "full_ids": 16,
+        "old_ids": 16,
+        "new_ids": 16,
+        "new_ids_sha256": "db890dda49e8ad81887b3e941d8822dde2725a417b4f83638066b9738f65c3ba",
+        "old_fallbacks": [
+          "aida-cli-lib/src/relay_stall.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/relay_stall.rs": [
+            "ExternalSource"
+          ],
+          "docs/cli/03-work-autonomy.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2692,
+        "base": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+        "head": "3ec1b703c0676af1553ffebde59114af90cd0ce0",
+        "full_ids": 656,
+        "old_ids": 396,
+        "new_ids": 531,
+        "new_ids_sha256": "e758a98819299796c6bca38db4becd2aa2013c05bf29fc1ec3b0bc1708c91375",
+        "old_fallbacks": [
+          "aida-cli-lib/src/leases.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2165_headless_child_grant_isolation_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/burndown_run.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/driver_view.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part5.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/phase_driver.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_prs.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_1523_orphaned_in_progress_mapping_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_1656_subagent_liveness_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_1681_ps_reporting_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_2165_headless_child_grant_isolation_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_574_spurious_exit_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_637_spec_claim_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/lease_enforcement_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/live_lease_worktrees_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/queue_rework_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/queue_work_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/session_end_resolution_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/story_456_status_worktrees_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/story_696_ps_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/task345_leases_json_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/task_957_claim_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2683,
+        "base": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+        "head": "cf6ecf1bcb62988ff28bc8534095db9305f6d608",
+        "full_ids": 983,
+        "old_ids": 936,
+        "new_ids": 969,
+        "new_ids_sha256": "5e3b09ac11a4ecc60d10ed8fbcf2a8e007a273871e2b90c6a68fc9d044e34b45",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "Cargo.lock",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/schema.rs",
+          "aida-cli-lib/src/verify_cmd.rs",
+          "aida-core/src/constraints.rs",
+          "aida-core/src/constraints_tests.rs",
+          "aida-core/src/export.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/models.rs",
+          "aida-generate-types/Cargo.toml",
+          "docs/cli-format-json-audit.md",
+          "docs/cli/08-reporting.md",
+          "docs/plans/2026-10-15-story-1673-constraint-probes.md",
+          "scripts/generate-format-json-audit.py",
+          "shared/types.ts"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "Cargo.lock": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part1.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/schema.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/verify_cmd.rs": [
+            "Opaque"
+          ],
+          "aida-core/src/conflict.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/constraints.rs": [
+            "ExternalSource"
+          ],
+          "aida-core/src/constraints_tests.rs": [
+            "Opaque"
+          ],
+          "aida-core/src/db/git_backend.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/sqlite_backend.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/export.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/models.rs": [
+            "Opaque"
+          ],
+          "aida-generate-types/Cargo.toml": [
+            "NotRust"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ],
+          "docs/cli/08-reporting.md": [
+            "NotRust"
+          ],
+          "docs/plans/2026-10-15-story-1673-constraint-probes.md": [
+            "NotRust"
+          ],
+          "scripts/generate-format-json-audit.py": [
+            "NotRust"
+          ],
+          "shared/types.ts": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2691,
+        "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+        "head": "d8d16437ce5fe52f26feaea5c3f5b11b91e09570",
+        "full_ids": 763,
+        "old_ids": 739,
+        "new_ids": 746,
+        "new_ids_sha256": "1dfbbdda9dfd1db29528cf96dac5a549c61055f389b364f7333620389e463960",
+        "old_fallbacks": [
+          "CHANGELOG.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/config_cmd.rs",
+          "aida-cli-lib/src/kernel.rs",
+          "aida-cli-lib/src/seat_authority.rs",
+          "aida-cli-lib/src/tests/task_1787_grant_ttl_tests.rs",
+          "docs/cli/06-roles-sessions.md",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "CHANGELOG.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/config_cmd.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/kernel.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/test_env.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/task_1787_grant_ttl_tests.rs": [
+            "Opaque"
+          ],
+          "docs/cli/06-roles-sessions.md": [
+            "NotRust"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2698,
+        "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+        "head": "06c6c50962f24641bd341c5b11112d00053f5f84",
+        "full_ids": 134,
+        "old_ids": 88,
+        "new_ids": 134,
+        "new_ids_sha256": "04144adcf0fb537dc796332be62f081665b03a3717cc25af4c235a36efafaefb",
+        "old_fallbacks": [
+          "aida-cli-lib/src/session_reap.rs",
+          "aida-cli-lib/src/worktree_gc.rs",
+          "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/session_reap.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/worktree_handler_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/worktree_gc.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs": [
+            "Uncovered"
+          ],
+          "docs/cli/03-work-autonomy.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2673,
+        "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+        "head": "826c3352e4ccecf11795e95d9a9614c27c4f8f39",
+        "full_ids": 86,
+        "old_ids": 83,
+        "new_ids": 83,
+        "new_ids_sha256": "ec8f66f1c890a5661ba10383149d728539fef156b6870d3541c5260788a051a7",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/digest.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "aida-cli-lib/src/regen/score/report/cache.rs",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/digest.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/report.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/report/cache.rs": [
+            "Opaque"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2695,
+        "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+        "head": "57ee0a5281253191556cfd9a625326091f381665",
+        "full_ids": 191,
+        "old_ids": 121,
+        "new_ids": 191,
+        "new_ids_sha256": "484eba14040fae1139fddac66f97338759eeb057a4323db898189da31d4b9e9f",
+        "old_fallbacks": [
+          ".aida/discipline/git-sync-and-review.md",
+          "aida-cli-lib/src/mandate.rs",
+          "aida-cli-lib/src/rework_hold_release.rs",
+          "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs",
+          "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs",
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "docs/agents/aida-repository-guide.md"
+        ],
+        "new_fallbacks": {
+          ".aida/discipline/git-sync-and-review.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/lib_part5.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/mandate.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/merge_hold.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/pr_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/rework_hold_release.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs": [
+            "Opaque"
+          ],
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md": [
+            "NotRust"
+          ],
+          "docs/agents/aida-repository-guide.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2696,
+        "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+        "head": "1ddcc54fb8110e6533561b0d45e1f7c335aca4c5",
+        "full_ids": 172,
+        "old_ids": 87,
+        "new_ids": 129,
+        "new_ids_sha256": "45bc8efa377fc9c070489ef260b9d5ef1ac235dbd23498b3d344bb4b9b3080a6",
+        "old_fallbacks": [
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2171_2170_contained_builders_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/burndown_run.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/questions.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2171_2170_contained_builders_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2684,
+        "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+        "head": "88329ff1903079c3468eb0f6bc56a9464529efda",
+        "full_ids": 302,
+        "old_ids": 189,
+        "new_ids": 201,
+        "new_ids_sha256": "d020a8471997c9aa95668cdf6d012d737ea4e7ba472815a036e2f4a7e617ce61",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/edit_rebase.rs",
+          "aida-cli-lib/src/schema.rs",
+          "aida-core/src/db/mod.rs",
+          "aida-core/src/db/tests/hypothesis_tests.rs",
+          "aida-core/src/export.rs",
+          "aida-core/src/hypothesis.rs",
+          "aida-core/src/import.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/models.rs",
+          "aida-web-react/src/components/dashboard/StatusChart.tsx",
+          "aida-web-react/src/components/kanban/KanbanBoard.tsx",
+          "aida-web-react/src/lib/constants.ts",
+          "docs/cli/02-specs.md",
+          "shared/types.ts"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/schema.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/conflict.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/git_backend.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/mod.rs": [
+            "ExternalSource"
+          ],
+          "aida-core/src/db/sqlite_backend.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/tests/hypothesis_tests.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/export.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/hypothesis.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/import.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/models.rs": [
+            "Opaque"
+          ],
+          "aida-web-react/src/components/dashboard/StatusChart.tsx": [
+            "NotRust"
+          ],
+          "aida-web-react/src/components/kanban/KanbanBoard.tsx": [
+            "NotRust"
+          ],
+          "aida-web-react/src/lib/constants.ts": [
+            "NotRust"
+          ],
+          "docs/cli/02-specs.md": [
+            "NotRust"
+          ],
+          "shared/types.ts": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2697,
+        "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+        "head": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a",
+        "full_ids": 92,
+        "old_ids": 92,
+        "new_ids": 92,
+        "new_ids_sha256": "06806e57efc5d3abb7c42eabb60066ea51d1960b2055d4bb38c9267750e5e4cc",
+        "old_fallbacks": [
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/pr_ship.rs",
+          "aida-cli-lib/src/tests/bug_2164_default_branch_ship_refusal_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/pr_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/pr_ship.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_2164_default_branch_ship_refusal_tests.rs": [
+            "Opaque"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2693,
+        "base": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+        "head": "45f646c54c3ffc9d757351bab2bf572b33111826",
+        "full_ids": 345,
+        "old_ids": 345,
+        "new_ids": 345,
+        "new_ids_sha256": "70809a2e839787ee37cf2e281d7abe2e5f5dd51aeb59a91ccdf936a44531bac8",
+        "old_fallbacks": [
+          "aida-cli-lib/src/queue_cmd.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2166_contained_parent_escape_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2166_contained_parent_escape_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2678,
+        "base": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+        "head": "58ce1964dda751c3f7134ea9b8ff54945aa7d55c",
+        "full_ids": 686,
+        "old_ids": 686,
+        "new_ids": 686,
+        "new_ids_sha256": "5b4698f34c32a2efccd7babc3a0e780971c71125f7acd1ff32ceafec93fbd59b",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/consensus.rs",
+          "aida-cli-lib/src/regen/score.rs"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/consensus.rs": [
+            "Opaque"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2690,
+        "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+        "head": "acc8c0c690e61d02bf424526a00381d372314af9",
+        "full_ids": 245,
+        "old_ids": 191,
+        "new_ids": 245,
+        "new_ids_sha256": "b230459dcc60cba791f7f65c290957cc2e358ac960ab9cea1852bb251a4a1f3e",
+        "old_fallbacks": [
+          ".aida/config.toml",
+          "aida-cli-lib/src/doctor_root.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/relay_stall.rs",
+          "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs",
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "new_fallbacks": {
+          ".aida/config.toml": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/doctor_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/doctor_root.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/maintenance_schedule.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/relay_stall.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs": [
+            "Opaque"
+          ],
+          "docs/cli/03-work-autonomy.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2687,
+        "base": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+        "head": "1fcfa134735ca0cb0f0f4e72ced1979b0a25ebe3",
+        "full_ids": 886,
+        "old_ids": 839,
+        "new_ids": 873,
+        "new_ids_sha256": "e14ec0993296eede52884f473a0631ada236d9a1c16ad26660d6abd59d7be231",
+        "old_fallbacks": [
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/events.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/mandate.rs",
+          "aida-cli-lib/src/merge_hold.rs",
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/tests/story_1698_mandate_tests.rs",
+          "docs/cli-format-json-audit.md",
+          "docs/cli/04-git-lifecycle.md",
+          "docs/monitor-contract-fixtures/events-follow.json"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/events.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part1.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/mandate.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/merge_hold.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/pr_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/rework_hold_release.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/story_1698_mandate_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/timing_record.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/watch.rs": [
+            "MacroName"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ],
+          "docs/cli/04-git-lifecycle.md": [
+            "NotRust"
+          ],
+          "docs/monitor-contract-fixtures/events-follow.json": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2686,
+        "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "head": "9c7ba29c813eb3ee907a2772e705d9224037444e",
+        "full_ids": 19,
+        "old_ids": 16,
+        "new_ids": 18,
+        "new_ids_sha256": "812d1fd54b290807ac69aa2de9f45dec20ec70f351ba84561b9cd767ac673b90",
+        "old_fallbacks": [
+          "aida-cli-lib/src/shift.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/regen.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/oracle.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/roots.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/shift.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2688,
+        "base": "463b81d02796148deba3c59c47daefce584c35f4",
+        "head": "4a1cacb65210e615f8e436e1e92d230c5822ca01",
+        "full_ids": 523,
+        "old_ids": 276,
+        "new_ids": 523,
+        "new_ids_sha256": "cbd742a4eec13682c38d680ae56403b6c4ddb02bf23d3ba80e4efa15075c5740",
+        "old_fallbacks": [
+          "aida-cli-lib/src/drain_gate.rs",
+          "aida-cli-lib/src/seat_authority.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/tests/bug_1808_delegation_preflight_tests.rs",
+          "aida-cli/tests/bug_2139_headless_child_grant.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/drain_gate.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/seat_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/session_end.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_reap.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_1808_delegation_preflight_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli/tests/bug_2139_headless_child_grant.rs": [
+            "Uncovered"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2685,
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "head": "d5f63fee913d206a5ff6f8e27593124b29508b15",
+        "full_ids": 7,
+        "old_ids": 5,
+        "new_ids": 7,
+        "new_ids_sha256": "0fe352b657c985382cb88cedbd357f0469a5cdc37f6f47ec651f278517834ca2",
+        "old_fallbacks": [
+          "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/reconcile_evidence.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/task_140_squash_subject_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2689,
+        "base": "463b81d02796148deba3c59c47daefce584c35f4",
+        "head": "99e6baef64552f1058a180ce215d473c0ef239f3",
+        "full_ids": 190,
+        "old_ids": 175,
+        "new_ids": 190,
+        "new_ids_sha256": "04a59e27e63f7ca399beccd9b32363673f15418244f4fb07a921f14c46fff270",
+        "old_fallbacks": [
+          "aida-cli-lib/src/agent_launch.rs",
+          "aida-cli-lib/src/session.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs",
+          "docs/agents/per-agent-config.md"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part2.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs": [
+            "MacroName"
+          ],
+          "docs/agents/per-agent-config.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2677,
+        "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+        "head": "f60fafc68b18d026682b2334f5c58121b291aaab",
+        "full_ids": 685,
+        "old_ids": 685,
+        "new_ids": 685,
+        "new_ids_sha256": "1397f961640a5117af69096cd96078e156c2e33277c4bf3e7360978ef0426ffd",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs",
+          "aida-cli-lib/src/regen/score/diagnostics.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/adapter.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/diagnostics.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/report.rs": [
+            "MacroName"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2681,
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "head": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b",
+        "full_ids": 12,
+        "old_ids": 5,
+        "new_ids": 12,
+        "new_ids_sha256": "c4a7695833ff8c8e480a14316774acd0398d49f1dd7fd7865d94ea47f2bdc141",
+        "old_fallbacks": [
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_registry_root.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs": [
+            "Opaque"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2680,
+        "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+        "head": "b285957b9f9223cfe2e2c2b5643cb51377b4e896",
+        "full_ids": 544,
+        "old_ids": 477,
+        "new_ids": 516,
+        "new_ids_sha256": "c59c159188eae8fb22b2c5b27a997a96c67e2cb9c06656706125a8abeae93b54",
+        "old_fallbacks": [
+          "aida-cli-lib/src/leases.rs",
+          "aida-cli-lib/src/queue_cmd.rs",
+          "aida-cli-lib/src/review_verdict.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/orchestrator_leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/review_verdict.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs": [
+            "Opaque"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2674,
+        "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+        "head": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66",
+        "full_ids": 125,
+        "old_ids": 125,
+        "new_ids": 125,
+        "new_ids_sha256": "afd0c24455ad912816a0ad76e9d3a83655ff8379f132812eae4b2d85d8a684de",
+        "old_fallbacks": [
+          ".aida/discipline/README.md",
+          ".aida/discipline/git-sync-and-review.md",
+          ".aida/discipline/implementer-discipline.md",
+          ".aida/discipline/workflow-patterns.md",
+          ".github/workflows/ci.yml",
+          "CLAUDE.md",
+          "Makefile",
+          "aida-core/templates/.aida/discipline/README.md",
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "aida-core/templates/.aida/discipline/implementer-discipline.md",
+          "aida-core/templates/.aida/discipline/workflow-patterns.md",
+          "aida-core/templates/skills/aida-fire.md",
+          "aida-core/templates/skills/aida-implement.md",
+          "aida-core/templates/skills/aida-pickup.md",
+          "aida-core/templates/skills/aida-pr/SKILL.md",
+          "scripts/ci-gate-tiers.toml",
+          "scripts/test-touched.py",
+          "tests/test_test_touched.py"
+        ],
+        "new_fallbacks": {
+          ".aida/discipline/README.md": [
+            "NotRust"
+          ],
+          ".aida/discipline/git-sync-and-review.md": [
+            "NotRust"
+          ],
+          ".aida/discipline/implementer-discipline.md": [
+            "NotRust"
+          ],
+          ".aida/discipline/workflow-patterns.md": [
+            "NotRust"
+          ],
+          ".github/workflows/ci.yml": [
+            "NotRust"
+          ],
+          "CLAUDE.md": [
+            "NotRust"
+          ],
+          "Makefile": [
+            "NotRust"
+          ],
+          "aida-core/templates/.aida/discipline/README.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/.aida/discipline/git-sync-and-review.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/.aida/discipline/implementer-discipline.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/.aida/discipline/workflow-patterns.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-fire.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-implement.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-pickup.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-pr/SKILL.md": [
+            "NotRust"
+          ],
+          "scripts/ci-gate-tiers.toml": [
+            "NotRust"
+          ],
+          "scripts/test-touched.py": [
+            "NotRust"
+          ],
+          "tests/test_test_touched.py": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2671,
+        "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+        "head": "d8cea0368fe6c9e0399d43a498258131f23f2d4f",
+        "full_ids": 709,
+        "old_ids": 664,
+        "new_ids": 700,
+        "new_ids_sha256": "5dc561ae0f329f6b7ffd30acd9323b22c61412c94cc44bde99abf4f148f25673",
+        "old_fallbacks": [
+          ".aida/discipline/standing-orders/advisor.md",
+          "Makefile",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/seat_rotation.rs",
+          "aida-core/templates/.aida/discipline/standing-orders/advisor.md",
+          "aida-core/templates/hooks/aida-role-context.sh",
+          "tests/test_session_role_grant.sh"
+        ],
+        "new_fallbacks": {
+          ".aida/discipline/standing-orders/advisor.md": [
+            "NotRust"
+          ],
+          "Makefile": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/scaffold_init.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/seat_rotation.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/story_255_discipline_pack_tests.rs": [
+            "MacroName"
+          ],
+          "aida-core/templates/.aida/discipline/standing-orders/advisor.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/hooks/aida-role-context.sh": [
+            "NotRust"
+          ],
+          "tests/test_session_role_grant.sh": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2672,
+        "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+        "head": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef",
+        "full_ids": 96,
+        "old_ids": 96,
+        "new_ids": 96,
+        "new_ids_sha256": "3c56dbf06780431e4cd2ea89b74f2e7956a6511270f871928264449ce30d40f2",
+        "old_fallbacks": [
+          "aida-cli-lib/src/agent_launch.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2676,
+        "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+        "head": "e1a40a89bcae34ede42bce015543b506c984a10f",
+        "full_ids": 156,
+        "old_ids": 120,
+        "new_ids": 123,
+        "new_ids_sha256": "dcc94da022bb28b5af9a006628b9d9134a4e05283ee688fb781e9871ecdeadb8",
+        "old_fallbacks": [
+          "aida-cli-lib/src/agent_registry.rs",
+          "aida-cli-lib/src/session_end.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_registry.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/agent_registry_root.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_end.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/tests/fleet_state_hygiene_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2667,
+        "base": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+        "head": "c333cec91771650a9c76799688ae8d24745b7137",
+        "full_ids": 681,
+        "old_ids": 681,
+        "new_ids": 681,
+        "new_ids_sha256": "671e2c1f9221201e5817a0a8440b27dc64a6d87d4a246658debe4f13f0b18bbb",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs",
+          "aida-cli-lib/src/regen/score/report.rs",
+          "docs/cli-format-json-audit.md"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/adapter.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/report.rs": [
+            "Opaque"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2666,
+        "base": "a46af7481e794f7ad299631a78a258f55022c503",
+        "head": "7c8c72c75f0db2462d6ac3019eb0dd4665050bcf",
+        "full_ids": 42,
+        "old_ids": 42,
+        "new_ids": 42,
+        "new_ids_sha256": "3ffda5f6ec3afe63665e83aa4a6b26f5a26f11875494dca240dc4976dbf50811",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/adapter.rs"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/adapter.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2664,
+        "base": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+        "head": "79ee6c08874b705d579bdda5a407b67e21306b1d",
+        "full_ids": 684,
+        "old_ids": 684,
+        "new_ids": 684,
+        "new_ids_sha256": "99a0271150225b2c806abf058ceda0a28550335483b029523117bc1a388023ea",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/Cargo.toml",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/controls.rs",
+          "aida-cli-lib/src/regen/score/fresh.rs",
+          "aida-cli-lib/src/regen/score/oracle.rs",
+          "aida-cli-lib/src/regen/score/roots.rs",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/Cargo.toml": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/controls.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/fresh.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/oracle.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score/roots.rs": [
+            "MacroName"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2675,
+        "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+        "head": "a230cf860ef52b0587a6fa21fa93f5132c26786b",
+        "full_ids": 297,
+        "old_ids": 191,
+        "new_ids": 296,
+        "new_ids_sha256": "51e116c35c596b0f858b7fedc03038dfef68f125c033ac19c15d7c72c38f5197",
+        "old_fallbacks": [
+          "aida-cli-lib/src/session_reap.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/mcp.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/session_reap.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/task_957_claim_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/worktree_gc.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2660,
+        "base": "0c69debffe439310aacf3756a5efe363d1216474",
+        "head": "0e526567f131888830d42ae22b51fcb466c37739",
+        "full_ids": 680,
+        "old_ids": 680,
+        "new_ids": 680,
+        "new_ids_sha256": "ccc2abf20f54c524efb2a15d8fbf3bc06cb686ba62f46e9bb266f83951405195",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/regen.rs",
+          "aida-cli-lib/src/regen/score.rs",
+          "aida-cli-lib/src/regen/score/guards.rs",
+          "aida-cli-lib/src/regen/score/oracle.rs",
+          "aida-cli-lib/src/regen/score/roots.rs",
+          "docs/cli-format-json-audit.md",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/regen/score.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/guards.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/oracle.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/regen/score/roots.rs": [
+            "Opaque"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2485,
+        "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+        "head": "6475cfba9b43bae3babefef7614893c22257860f",
+        "full_ids": 1254,
+        "old_ids": 1026,
+        "new_ids": 1223,
+        "new_ids_sha256": "76658cbc142f1fa5418e8f58fcdca9f9cc4dd05792a73f88494c211cef3cfe4c",
+        "old_fallbacks": [
+          ".aida/discipline/machinery-glossary.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/events.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/lib_part5.rs",
+          "aida-cli-lib/src/pr_cmd.rs",
+          "aida-cli-lib/src/pr_ship.rs",
+          "aida-cli-lib/src/review_authority.rs",
+          "aida-cli-lib/src/review_verdict.rs",
+          "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs",
+          "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs",
+          "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs",
+          "aida-cli/tests/task_1287_label_only_merge_hold.rs",
+          "aida-core/templates/.aida/discipline/machinery-glossary.md",
+          "aida-core/templates/commands/aida-drain-queue.md",
+          "aida-core/templates/commands/aida-fasttrack.md",
+          "aida-core/templates/skills/aida-drain-queue.md",
+          "aida-core/templates/skills/aida-fasttrack.md",
+          "docs/cli/04-git-lifecycle.md",
+          "docs/cli/12-glossary.md",
+          "docs/review-process.md"
+        ],
+        "new_fallbacks": {
+          ".aida/discipline/machinery-glossary.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/burndown_run.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part5.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/pr_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/pr_merge_gate.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/pr_ship.rs": [
+            "Opaque",
+            "MacroName"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/review_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/review_verdict.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/seat_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/upgrade_release.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/worktree_gc.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli/tests/task_1287_label_only_merge_hold.rs": [
+            "MacroName"
+          ],
+          "aida-core/templates/.aida/discipline/machinery-glossary.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/commands/aida-drain-queue.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/commands/aida-fasttrack.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-drain-queue.md": [
+            "NotRust"
+          ],
+          "aida-core/templates/skills/aida-fasttrack.md": [
+            "NotRust"
+          ],
+          "docs/cli/04-git-lifecycle.md": [
+            "NotRust"
+          ],
+          "docs/cli/12-glossary.md": [
+            "NotRust"
+          ],
+          "docs/review-process.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2657,
+        "base": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+        "head": "96da17df62ca8e8d195843057015d1c47a9ab096",
+        "full_ids": 529,
+        "old_ids": 222,
+        "new_ids": 529,
+        "new_ids_sha256": "5d59ca2c8f856494306dc356c9207d5583e79087a4925162048578107e34d742",
+        "old_fallbacks": [
+          "aida-cli-lib/src/agent_registry.rs",
+          "aida-cli-lib/src/ps_integrate.rs",
+          "aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/agent_registry.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/leases.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/ps_integrate.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session_start.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/worktree_gc.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2451,
+        "base": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+        "head": "2f0ef157cb27a37e78e64d8335a5cd9e74eef085",
+        "full_ids": 786,
+        "old_ids": 749,
+        "new_ids": 786,
+        "new_ids_sha256": "9985c5c53af986c1f43969d621e2fd5e352954112e0fc374ea3e3d3e795123f5",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/seat_occupancy/cmd.rs",
+          "aida-cli-lib/src/seat_occupancy/config.rs",
+          "aida-cli-lib/src/seat_occupancy/mod.rs",
+          "aida-cli-lib/src/seat_occupancy/runtime.rs",
+          "aida-cli-lib/src/seat_occupancy/scope.rs",
+          "aida-cli-lib/src/seat_occupancy/store.rs",
+          "aida-cli-lib/src/seat_occupancy/tests.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/process_probe.rs",
+          "docs/architecture/external-tool-output-classifiers.md",
+          "docs/cli-format-json-audit.md",
+          "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md",
+          "scripts/config-trust.toml",
+          "tests/test_seat_takeover_lifecycle.py"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/seat_authority.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/seat_occupancy/cmd.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_occupancy/config.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_occupancy/mod.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/seat_occupancy/runtime.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_occupancy/scope.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_occupancy/store.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/seat_occupancy/tests.rs": [
+            "Opaque"
+          ],
+          "aida-core/src/liveness.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/process_probe.rs": [
+            "Opaque"
+          ],
+          "docs/architecture/external-tool-output-classifiers.md": [
+            "NotRust"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ],
+          "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md": [
+            "NotRust"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ],
+          "tests/test_seat_takeover_lifecycle.py": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2670,
+        "base": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+        "head": "182ef87134058ffc1d85c78d52401214b08c8736",
+        "full_ids": 114,
+        "old_ids": 47,
+        "new_ids": 114,
+        "new_ids_sha256": "21166dd55cb1a641f92761a8dc7f5b0ee729ee164caabed5b29937540758738f",
+        "old_fallbacks": [
+          "aida-core/src/store_hooks.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/session.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/git_backend.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2669,
+        "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+        "head": "34b992adce793bb2f022ec77f312b83b6a5aca89",
+        "full_ids": 40,
+        "old_ids": 20,
+        "new_ids": 21,
+        "new_ids_sha256": "976294b44bbf93a008380fca4e1a9f81d3c5b7a9eafaa82d4f5a23b082df44b0",
+        "old_fallbacks": [
+          "docs/cli/03-work-autonomy.md"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/schedule_driver.rs": [
+            "ExternalSource"
+          ],
+          "docs/cli/03-work-autonomy.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2668,
+        "base": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+        "head": "0498eac1e9e30bd322ac7db03d3202bf091d7758",
+        "full_ids": 0,
+        "old_ids": 0,
+        "new_ids": 0,
+        "new_ids_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "old_fallbacks": [
+          "aida-core/templates/memories/feedback_check_ignore_names_the_winner.md"
+        ],
+        "new_fallbacks": {
+          "aida-core/templates/memories/feedback_check_ignore_names_the_winner.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": false,
+        "new_refused": false
+      },
+      {
+        "pr": 2665,
+        "base": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+        "head": "1013c63db6b86f39f75431f429de55e7c76910c4",
+        "full_ids": 1004,
+        "old_ids": 861,
+        "new_ids": 970,
+        "new_ids_sha256": "173719d668ccc98dad8cc533cbe5360f9a0e59243797e25f9f3f2837e8b26127",
+        "old_fallbacks": [
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2144_2146_containment_refusal_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/lib_part2.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/phase_driver.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2144_2146_containment_refusal_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2653,
+        "base": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+        "head": "551163384f4769ebfaa38e3afd7107ad59ca5ce2",
+        "full_ids": 53,
+        "old_ids": 51,
+        "new_ids": 53,
+        "new_ids_sha256": "1cb8a749793115c19a2b9fb8cf445dec0dd566263caa7f423177ab0a719e973e",
+        "old_fallbacks": [
+          "aida-cli-lib/src/drain_cmd.rs",
+          "aida-core/src/db/cache_lock.rs",
+          "aida-core/src/liveness.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/drain_cmd.rs": [
+            "Opaque",
+            "MacroName"
+          ],
+          "aida-cli-lib/src/drain_signal.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/solo_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-core/src/db/cache_lock.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/liveness.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2658,
+        "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+        "head": "c4b503beeccefe43e0284a6a748811da53f6d0e3",
+        "full_ids": 811,
+        "old_ids": 769,
+        "new_ids": 811,
+        "new_ids_sha256": "865b994f8afb2d390f379d9e2bfef5edea3742dbdb1f730f351adbb75c2e6c0c",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/cli.rs",
+          "aida-cli-lib/src/lib.rs",
+          "aida-cli-lib/src/regen.rs",
+          "docs/cli-format-json-audit.md"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/cli.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/lib.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part1.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/regen.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/store_sync.rs": [
+            "ExternalSource"
+          ],
+          "docs/cli-format-json-audit.md": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2663,
+        "base": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+        "head": "099a574c97a4fb3d0473a8e8e0a8e3bbee24c1f2",
+        "full_ids": 554,
+        "old_ids": 228,
+        "new_ids": 530,
+        "new_ids_sha256": "264e1e3637cc900fe79120d05712f80974e54d356266ab84590eba93a12f79ec",
+        "old_fallbacks": [
+          "OVERVIEW.md",
+          "aida-core/src/git_ops.rs",
+          "aida-core/src/store_hooks.rs",
+          "docs/agents/claude-bubblewrap-sandbox.md",
+          "scripts/config-trust.toml"
+        ],
+        "new_fallbacks": {
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/agent_launch.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part2.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/queue_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/session.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/git_ops.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/git_ops/tests/store_hook_tests.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/store_hooks.rs": [
+            "Opaque"
+          ],
+          "docs/agents/claude-bubblewrap-sandbox.md": [
+            "NotRust"
+          ],
+          "scripts/config-trust.toml": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2656,
+        "base": "672c12158b936102c7cad34691f2ba285a9284de",
+        "head": "2cc1095b5fd8c13ac130fd49862dde453302a4ca",
+        "full_ids": 60,
+        "old_ids": 57,
+        "new_ids": 59,
+        "new_ids_sha256": "45b1842ac63d604f4b58d759ae31903335acc72fe56f938f9e62cdb78bac25d8",
+        "old_fallbacks": [
+          ".github/workflows/ci.yml",
+          "scripts/check-ci-gates.py",
+          "scripts/ci-gate-tiers.toml",
+          "tests/test_bug_2135_sccache_tmpdir.py"
+        ],
+        "new_fallbacks": {
+          ".github/workflows/ci.yml": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/dev_build.rs": [
+            "ExternalSource"
+          ],
+          "scripts/check-ci-gates.py": [
+            "NotRust"
+          ],
+          "scripts/ci-gate-tiers.toml": [
+            "NotRust"
+          ],
+          "tests/test_bug_2135_sccache_tmpdir.py": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2654,
+        "base": "efd3bba8de3e098599e85dd29c381d4066961994",
+        "head": "1e5dd25bbe4a459d42c9529baf8004768e1c6254",
+        "full_ids": 34,
+        "old_ids": 34,
+        "new_ids": 34,
+        "new_ids_sha256": "f802dba8c52732bb930cd12d74a27bc4af542d987b19e8b17c405d73fb138614",
+        "old_fallbacks": [
+          "aida-cli-lib/src/maintenance_schedule.rs",
+          "aida-cli-lib/src/schedule_driver.rs",
+          "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/maintenance_schedule.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/schedule_driver.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs": [
+            "Opaque"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2655,
+        "base": "92763a125a7b2ac062064c6324063723a02a80ad",
+        "head": "a55d76553bbbdb791e76ef36dae7ac5bb4155676",
+        "full_ids": 280,
+        "old_ids": 198,
+        "new_ids": 244,
+        "new_ids_sha256": "0e2283201fc8ab7eaa757de54dd39f867b4449aa1bd8b9a832b424b39bde0d25",
+        "old_fallbacks": [
+          "aida-cli-lib/src/phase_driver.rs",
+          "aida-cli-lib/src/status_sections.rs",
+          "aida-cli-lib/src/tests/bug_2133_contained_drain_children_tests.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/phase_driver.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/session.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/tests/bug_2133_contained_drain_children_tests.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2652,
+        "base": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+        "head": "53548583acbfc53a30149900edf75e3e15d47a7c",
+        "full_ids": 71,
+        "old_ids": 71,
+        "new_ids": 71,
+        "new_ids_sha256": "8a2546be69835f29d65374f631a4256e49d162ca27767d7670fb1810c5c10e4b",
+        "old_fallbacks": [
+          "aida-core/src/git_ops.rs"
+        ],
+        "new_fallbacks": {
+          "aida-core/src/git_ops.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2541,
+        "base": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+        "head": "148dc79429c949ab96a425b5ddebc24190ecb47f",
+        "full_ids": 748,
+        "old_ids": 498,
+        "new_ids": 709,
+        "new_ids_sha256": "9fa06ffd955371b7a51ba9cd69812a391f22e39c04f664ed4caf5791bec6114b",
+        "old_fallbacks": [
+          "AGENTS.md",
+          "OVERVIEW.md",
+          "aida-cli-lib/src/contained_boundary.rs",
+          "aida-cli-lib/src/doctor_cmd.rs",
+          "aida-cli-lib/src/history_cache.rs",
+          "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+          "aida-cli/tests/bug_1929_embedded_repo_store.rs",
+          "aida-cli/tests/fixtures/task_1717_git_observer.sh",
+          "aida-core/src/db/cache.rs",
+          "aida-core/src/db/cached_git_backend.rs",
+          "aida-core/src/db/mod.rs",
+          "aida-core/src/git_ops.rs",
+          "aida-core/src/git_ops/tests/store_hook_tests.rs",
+          "aida-core/src/lib.rs",
+          "aida-core/src/store_hooks.rs",
+          "aida-core/templates/hooks/aida-commit-msg",
+          "aida-core/templates/hooks/aida-pre-commit.sh",
+          "aida-core/templates/hooks/aida-store-pre-push.sh",
+          "tests/test_bug_1929_hook_templates.py"
+        ],
+        "new_fallbacks": {
+          "AGENTS.md": [
+            "NotRust"
+          ],
+          "OVERVIEW.md": [
+            "NotRust"
+          ],
+          "aida-cli-lib/src/contained_boundary.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/criteria_coverage.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/db_block.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/doctor_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/doctor_root.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/history.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/history_cache.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/history_views.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/lib_part2.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/metrics_cycle_time.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/remote_create.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/report_cmd.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/schedule_ledger.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/session.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/status_cmd.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/status_sections.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/store_push_pull.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/store_sync.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/test_home.rs": [
+            "MacroName"
+          ],
+          "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/upgrade_release.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/worktree_gc.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli/tests/bug_1929_embedded_repo_store.rs": [
+            "Uncovered"
+          ],
+          "aida-cli/tests/fixtures/task_1717_git_observer.sh": [
+            "NotRust"
+          ],
+          "aida-cli/tests/task_1717_store_writer_lock.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/cache.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/cache_lock.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/db/cached_git_backend.rs": [
+            "Opaque"
+          ],
+          "aida-core/src/db/git_backend.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/git_ops.rs": [
+            "Opaque",
+            "MacroName"
+          ],
+          "aida-core/src/git_ops/tests/store_hook_tests.rs": [
+            "Opaque"
+          ],
+          "aida-core/src/store_hooks.rs": [
+            "MacroName"
+          ],
+          "aida-core/src/team.rs": [
+            "MacroName"
+          ],
+          "aida-core/templates/hooks/aida-commit-msg": [
+            "NotRust"
+          ],
+          "aida-core/templates/hooks/aida-pre-commit.sh": [
+            "NotRust"
+          ],
+          "aida-core/templates/hooks/aida-store-pre-push.sh": [
+            "NotRust"
+          ],
+          "tests/test_bug_1929_hook_templates.py": [
+            "NotRust"
+          ]
+        },
+        "named_refusal": true,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2650,
+        "base": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+        "head": "01bc7eb75fe2681e1cc45efa0ea34bc29b34423f",
+        "full_ids": 159,
+        "old_ids": 107,
+        "new_ids": 143,
+        "new_ids_sha256": "2c40304818ba2566111b3a8adff46f24f32a1c85d5dd9e6ce27d80a5cdb4bea1",
+        "old_fallbacks": [
+          "aida-core/src/mailbox.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/mcp.rs": [
+            "Opaque"
+          ],
+          "aida-cli-lib/src/punt_done.rs": [
+            "ExternalSource"
+          ],
+          "aida-core/src/mailbox.rs": [
+            "MacroName"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      },
+      {
+        "pr": 2647,
+        "base": "403be14eddc78e845f636fc5ae366fe2b9e53d75",
+        "head": "825ebd7102699a00708fa1f316945b1186d593b1",
+        "full_ids": 83,
+        "old_ids": 51,
+        "new_ids": 83,
+        "new_ids_sha256": "0e6c65e535a1401e186842271917b9d634c693e2d2bc637cba821688107cfe9e",
+        "old_fallbacks": [
+          "aida-cli-lib/src/review_verdict.rs"
+        ],
+        "new_fallbacks": {
+          "aida-cli-lib/src/lib_part5.rs": [
+            "ExternalSource"
+          ],
+          "aida-cli-lib/src/review_verdict.rs": [
+            "ExternalSource"
+          ]
+        },
+        "named_refusal": false,
+        "old_refused": true,
+        "new_refused": true
+      }
+    ],
+    "rejected_variants": {
+      "note": "Measured with temporary switches, not shipped: dropping the #[path]/include! file rule (nopath), and also the macro-name rule (nopath,nomacro).",
+      "nopath": {
+        "fallback_case_paths": {
+          "new": 327,
+          "old": 290
+        },
+        "audit_pairs": {
+          "full-only/incidental": {
+            "new_kept": 13,
+            "old_kept": 0,
+            "total": 24
+          },
+          "full-only/true-touch": {
+            "new_kept": 1,
+            "old_kept": 0,
+            "total": 2
+          },
+          "full-only/unresolved": {
+            "new_kept": 5,
+            "old_kept": 0,
+            "total": 7
+          },
+          "scoped/incidental": {
+            "new_kept": 99,
+            "old_kept": 102,
+            "total": 102
+          },
+          "scoped/true-touch": {
+            "new_kept": 28,
+            "old_kept": 29,
+            "total": 29
+          },
+          "scoped/unresolved": {
+            "new_kept": 29,
+            "old_kept": 30,
+            "total": 30
+          }
+        },
+        "refusals": {
+          "named": 22,
+          "new": 49,
+          "old": 49
+        },
+        "lost": [
+          "PR 2697: unresolved TASK-140",
+          "PR 2697: true-touch TASK-963"
+        ]
+      },
+      "nopath,nomacro": {
+        "fallback_case_paths": {
+          "new": 172,
+          "old": 290
+        },
+        "audit_pairs": {
+          "full-only/incidental": {
+            "new_kept": 6,
+            "old_kept": 0,
+            "total": 24
+          },
+          "full-only/true-touch": {
+            "new_kept": 1,
+            "old_kept": 0,
+            "total": 2
+          },
+          "full-only/unresolved": {
+            "new_kept": 1,
+            "old_kept": 0,
+            "total": 7
+          },
+          "scoped/incidental": {
+            "new_kept": 88,
+            "old_kept": 102,
+            "total": 102
+          },
+          "scoped/true-touch": {
+            "new_kept": 28,
+            "old_kept": 29,
+            "total": 29
+          },
+          "scoped/unresolved": {
+            "new_kept": 24,
+            "old_kept": 30,
+            "total": 30
+          }
+        },
+        "refusals": {
+          "named": 22,
+          "new": 49,
+          "old": 49
+        },
+        "lost": [
+          "PR 2697: unresolved TASK-140",
+          "PR 2697: true-touch TASK-963",
+          "PR 2652: unresolved BUG-1-051",
+          "PR 2652: unresolved BUG-1-069",
+          "PR 2652: unresolved EPIC-1-052",
+          "PR 2652: unresolved FR-1-071",
+          "PR 2652: unresolved FR-1-074"
+        ]
+      }
+    }
   }
 }
