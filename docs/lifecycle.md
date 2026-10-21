@@ -740,8 +740,10 @@ does **not** auto-release; releasing is a deliberate, separate act.
 
 - Command: `make release-minor` (or `scripts/release.sh {major|minor|patch}`)
   — bumps the workspace version, generates tag notes from the commit log,
-  commits, tags, and pushes, which triggers the release workflow to build and
-  publish Linux tarballs. Releases do not require any cross-platform CI run
+  commits the bump on `release/vX.Y.Z`, opens and squash-merges that PR once
+  its checks pass, then tags the merged commit and pushes the tag, which
+  triggers the release workflow to build and publish Linux tarballs. Main is
+  never pushed directly (TASK-1721). Releases do not require any cross-platform CI run
   (AIDA is Linux-only).
 
 Better phrasing, in practice:
