@@ -1,0 +1,27 @@
+id: 01a160e1-e28d-72e3-9d28-cbef89472737
+spec_id: TASK-1-419
+title: 'minor: no TASK-1721.acXXXX criterion anchors on any test; aida criteria reports…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: no TASK-1721.acXXXX criterion anchors on any test; aida criteria reports all 6 ACs untraced although tests/test_release_pr_flow.sh Tests 0/1/1b/2/2c/5 and release_verb_tests.rs cover them. Add per-criterion trace anchors.
+  Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T23:52:58.765329209Z
+modified_at: 2026-10-21T23:52:58.765329209Z
+req_type: Task
+tags:
+- carried-from:TASK-1721
+- finding-hash:46e5f90d
+- from-review:TASK-1721
+- kind:carried-forward
+filed_at:
+  code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
