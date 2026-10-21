@@ -755,6 +755,7 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
     std::fs::write(&marker, serde_json::to_vec_pretty(&hold).unwrap()).unwrap();
 
     let (pid, identity) = dead_pid_with_identity();
+    let pr_head = git_out(&review, &["rev-parse", "HEAD"]);
     let lease = lease_json(
         "01a15ac30007",
         &review,
@@ -764,6 +765,7 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
             "branch": "review/pr-7",
             "role": "reviewer",
             "review_verb": true,
+            "pr_head_sha": pr_head,
             "started_at": (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339(),
             "creator_pid": pid,
             "creator_pid_start_time": identity,
@@ -776,6 +778,20 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
         unknown.reapable.iter().all(|r| r.session != lease.id),
         "an unknown PR state never reaps"
     );
+    // TASK-2095: an unpushed commit past the recorded PR head keeps it.
+    // trace:TASK-1955 | ai:claude (TASK-2095)
+    std::fs::write(review.join("fix.txt"), "fix-forward\n").unwrap();
+    git(&review, &["add", "fix.txt"]);
+    git(&review, &["commit", "-q", "-m", "fix-forward"]);
+    assert!(
+        scan_reapable_with(&root, |_| Some(true))
+            .reapable
+            .iter()
+            .all(|r| r.session != lease.id),
+        "a commit past the PR head is never reaped away"
+    );
+    git(&review, &["reset", "-q", "--hard", &pr_head]);
+
     let report = scan_reapable_with(&root, |pr| Some(pr == 7));
     let row = report
         .reapable
@@ -789,4 +805,41 @@ fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
     assert!(!lease_path(&root, &lease.id).exists(), "lease released");
     let adopted = crate::merge_hold::read_hold_record(&root, 7).expect("hold adopted");
     assert_eq!(adopted.spec.as_deref(), Some("BUG-9"));
+}
+
+fn git_out(repo: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .current_dir(repo)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}");
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// TASK-2098: `aida session leases` agrees with `aida ps`: a dead creator
+/// pid is not the row's process.
+// trace:TASK-1955 | ai:claude (TASK-2098)
+#[cfg(unix)]
+#[test]
+fn session_leases_row_never_names_a_dead_creator_pid() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let worktree = root.join("aida-pr-9");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let (pid, identity) = dead_pid_with_identity();
+    let lease = lease_json(
+        "01a15ac30009",
+        &worktree,
+        serde_json::json!({
+            "scope": "PR-9",
+            "role": "reviewer",
+            "review_verb": true,
+            "started_at": chrono::Utc::now().to_rfc3339(),
+            "creator_pid": pid,
+            "creator_pid_start_time": identity,
+        }),
+    );
+    let rows = crate::leases::classify_session_leases(&root, &[lease]);
+    assert_eq!(rows[0].2, None, "the dead creator is not the row's pid");
 }

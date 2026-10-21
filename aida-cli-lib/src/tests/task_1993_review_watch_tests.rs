@@ -832,6 +832,7 @@ exit 3
             interval: 1,
             max_concurrent: 2,
             vendor: None,
+            release: None,
             launch_reservation: None,
         };
         // The watcher resolves its real cwd through sanitized Git, not the
@@ -1614,8 +1615,13 @@ fn task1993_stale_notice_names_the_base_without_resending_old_notices() {
     assert!(!notice.message.body.contains("default branch"));
     // A notice pending from before the wording change is re-delivered as is.
     let old = change(2, 2, true);
-    let legacy = stale_message_for(&store.repository, "PR-2", &old, None);
-    assert_eq!(legacy.id, stale_message(&store.repository, "PR-2", &old).id);
+    // Recorded before recipients were mapped: addressed to the forge login.
+    // trace:TASK-1955 | ai:claude (TASK-1-410)
+    let legacy = stale_message_for(&store.repository, "PR-2", &old, None, &old.author);
+    assert_eq!(
+        legacy.id,
+        stale_message(&store.repository, "PR-2", &old, "advisor").id
+    );
     for sent in [false, true] {
         store
             .transaction("PR-2", |state| {

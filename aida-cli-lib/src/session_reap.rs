@@ -77,7 +77,8 @@ pub(crate) struct ReapFacts {
     /// pass has no completion signal for it and leaves it alone.
     pub spec_finished: bool,
     /// BUG-2206: true for an attested-reviewer lease (scope `PR-N`) whose PR
-    /// the forge reports MERGED or CLOSED. A PR scope has no spec, so this is
+    /// the forge reports MERGED or CLOSED, and whose review branch holds no
+    /// commit past the recorded PR head (TASK-2095). A PR scope has no spec, so this is
     /// its completion signal; the review branch is a local copy of the PR
     /// head, so the merge gate does not apply to it.
     // trace:TASK-1955 | ai:claude (BUG-2206)
@@ -984,7 +985,12 @@ pub(crate) fn scan_reapable_with(
 
         // BUG-2206: a dead attested reviewer's PR is asked about only once its
         // process is gone. trace:TASK-1955 | ai:claude (BUG-2206)
+        // TASK-2095: and only when the review branch holds nothing past the
+        // PR head the review recorded (an unpushed fix-forward would be lost
+        // with the branch), so the skipped merge gate loses no commit.
+        // trace:TASK-1955 | ai:claude (TASK-2095)
         let review_pr_terminal = process_exited
+            && review_branch_within_pr_head(project_root, branch_tip.as_deref(), lease)
             && review_lease_pr(lease)
                 .and_then(|pr| u32::try_from(pr).ok())
                 .is_some_and(|pr| pr_terminal(pr) == Some(true));
@@ -1047,15 +1053,6 @@ pub(crate) fn scan_reapable_with(
     report
 }
 
-/// Execute the reap for ONE session: remove the worktree, delete the lease (and
-/// its activity log / manifest companions), then delete the now-unused local
-/// branch. Returns the human-readable outcome.
-///
-/// Re-checks dirtiness immediately before removal — anything that appeared since
-/// the scan is salvaged to a patch and the worktree is left in place. The
-/// removal itself goes through the shared teardown (pre-destroy cargo-clean hook
-/// + worktree-pool deregistration) that the worktree-GC heal uses.
-// trace:TASK-1177 | ai:claude
 /// BUG-2206: the PR an attested-reviewer lease reviews — a `PR-N`/`MR-N`
 /// scope on a review-verb or reviewer-role lease.
 // trace:TASK-1955 | ai:claude (BUG-2206)
@@ -1065,6 +1062,29 @@ fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
         .flatten()
 }
 
+// trace:TASK-1955 | ai:claude (TASK-2095)
+fn review_branch_within_pr_head(
+    project_root: &std::path::Path,
+    branch_tip: Option<&str>,
+    lease: &SessionLease,
+) -> bool {
+    match (branch_tip, lease.pr_head_sha.as_deref()) {
+        (Some(tip), Some(pr_head)) => {
+            aida_core::git_ops::is_ancestor(project_root, tip, pr_head).unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+/// Execute the reap for ONE session: remove the worktree, delete the lease (and
+/// its activity log / manifest companions), then delete the now-unused local
+/// branch. Returns the human-readable outcome.
+///
+/// Re-checks dirtiness immediately before removal — anything that appeared since
+/// the scan is salvaged to a patch and the worktree is left in place. The
+/// removal itself goes through the shared teardown (pre-destroy cargo-clean hook
+/// + worktree-pool deregistration) that the worktree-GC heal uses.
+// trace:TASK-1177 | ai:claude
 fn reap_one(
     project_root: &std::path::Path,
     lease: &SessionLease,
