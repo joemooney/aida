@@ -8,17 +8,26 @@ description: |
   Two possible fixes: a bounded retry on the dirty-store error, or taking the before/after snapshots under with_store_write_lock. Keep it fail-closed after the bound.
 
   Raised in review of PR-2776: https://github.com/joemooney/aida/pull/2776#issuecomment-6299542117
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T19:32:05.487861700Z
-modified_at: 2026-10-20T19:32:05.487861700Z
+modified_at: 2026-10-21T05:48:26.990969529Z
 req_type: Task
 tags:
 - from-review:PR-2776
 - mandate
 - severity:minor
+history:
+- id: 01a15d00-f7ee-78e0-8213-9d602808fffe
+  author: joe
+  timestamp: 2026-10-21T05:48:26.990959152Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: bae947dfe86601ba4ba22d367597eb232b841337
   branch: pr-2776
