@@ -294,7 +294,8 @@ this case is not fully resolved.
 ## Evidence and limits
 
 The data pins each base/head, every changed path's diff hash, each blocker’s
-policy reason and mode membership, exact trace lines and blob hashes, and the
+policy reason and mode membership, trace line numbers with their trimmed text,
+exact blob hashes, and the
 shared installer call, scorer/control consumers and launcher environment/OS-wrap
 decisions outside the changed hunks. The new cases also pin full frozen spec
 object hashes, including the advisor comments that define shared contract scope.

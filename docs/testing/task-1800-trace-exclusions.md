@@ -75,38 +75,127 @@ fallback pairs and reviews the selected refusal reasons. Its incidental-witness
 counts are not PR-level false-positive rates; the exhaustive measurement gate
 remains open.
 
-## AC2 slice 1: item-level Rust attribution
+## AC2 slice 1: item-level Rust attribution (measured and rejected)
 
 <!-- trace:TASK-1800 | ai:claude -->
 
-**Result: no case-level change. Refusals stay at 49/50 (22 named + 27
-additional) before and after.** The item-level collector loses no
-true-touch or unresolved pair, but as signed off it widens rather than narrows
-the evidence. It falls back on **414** case/path pairs against 290 for the
-fn/impl collector, and its scoped set grows in 34/50 cases and shrinks in none.
+**Decision: rejected. The production collector is unchanged.** Item-level
+attribution was measured twice on the 50 frozen endpoints: once as signed
+off, and once after one bounded advisor iteration (A). Both runs left
+case-level refusals at 49/50 (22 named + 27 additional), lost no true-touch or
+unresolved pair, and widened the evidence instead of narrowing it.
 
-Slice 1 makes every syn item a unit (struct, enum, union, const, static, type,
+| Collector | fallback case/paths | already-scoped paths grown | scoped incidental kept | refusals |
+|---|---:|---:|---:|---|
+| fn/impl (production, unchanged) | 290 | n/a | 102/102 | 49 |
+| item-level as signed off (`e7b8013bcd`) | 414 | not measured per path (sets grew in 34 cases) | 102/102 | 49 |
+| iteration A (`e86375ebf3`) | 333 | 109 paths in 34 cases | 101/102 | 49 |
+
+The advisor's keep criterion was full-file fallback below 290 and no growth of
+an already-scoped set. Iteration A met neither, so the collector was removed.
+The measured code remains in the PR branch history. Further mandate-coverage
+work moves to resolving unresolved trace IDs through store history and aliases,
+filed as its own spec. Markdown scoping is dropped.
+
+Slice 1 made every syn item a unit (struct, enum, union, const, static, type,
 trait and its items, use, extern crate, foreign block, item macro,
 `macro_rules!`, mod), with an inline module counted only as its shell. A
-same-file reference closure then selects every unit that mentions a name a
-selected unit defines, repeating to a fixpoint. Module-comment ownership is
-still decided over fn/impl alone. A file falls back to its full-file union, as
-in sketch §3, when any of these holds: a parse fails; a changed line is in no
-unit; a selected unit holds or overlaps an item macro, `macro_rules!`, an
-unparsed item or a glob import; a closure name appears in a macro invocation;
-`#[path]` or `include!` is present; or the change is mode-only. Markdown is
-unchanged (not in slice 1).
+same-file reference closure then selected every unit that mentions a name a
+selected unit defines, repeating to a fixpoint. Module-comment ownership stayed
+on fn/impl. A file fell back to its full-file union, as in sketch §3, when any
+of these held: a parse failed; a changed line was in no unit; a selected unit
+held or overlapped an item macro, `macro_rules!`, an unparsed item or a glob
+import; a closure name appeared in a macro invocation; `#[path]` or `include!`
+was present; or the change was mode-only. Iteration A treated test-only
+out-of-line modules as ordinary units and ignored std/core macros. It also
+added fail-closed fallbacks for changed `use` lines, non-doc attributes,
+`cfg_attr` paths and plain `mod m;`.
 
-`make task-1800-replay` reproduces this. It replays the fn/impl collector
-(`ChangedItemsV1`), the item-level collector and the full file on all 50 frozen
-endpoints. The fn/impl and full-file sets reproduce every recorded digest and
-fallback set above, and every audited blob hash matches, so there is no corpus
-or collector drift. Per changed path, the new set is within the full file and,
-where the fn/impl collector did not fall back, contains its set. Case-level
-refusals use the frozen per-ID policy classes (local relay evidence, not
-published; passed as `POLICY=`).
+Both runs used the same replay. It compared the fn/impl collector, the
+item-level collector and the full file on all 50 frozen endpoints. The fn/impl
+and full-file sets reproduced every recorded digest and fallback set above,
+and every audited blob hash matched, so there was no corpus or collector drift.
+Per changed path, the new set was within the full file and, where the fn/impl
+collector did not fall back, contained its set. Case-level refusals use the
+frozen per-ID policy classes (local relay evidence, not published).
+`make task-1800-replay` keeps the drift and zero-loss checks for the production
+collector, so any future attribution change must pass them.
 
-### The 18 audited cases
+### Iteration A: all 50 frozen endpoints
+
+The table lists ID counts (fn/impl → iteration A), fallback paths, and
+already-scoped paths whose set grew.
+
+| PR | IDs | fallback paths | scoped paths grown | refusal |
+|---|---:|---:|---:|---|
+| #2705 | 93 → 165 | 2 → 4 | 3 | refused → refused |
+| #2707 | 74 → 138 | 2 → 5 | 2 | refused → refused |
+| #2679 | 53 → 53 | 5 → 7 | 1 | refused → refused |
+| #2701 | 16 → 16 | 2 → 3 | 0 | refused → refused |
+| #2692 | 396 → 395 | 4 → 3 | 16 | refused → refused |
+| #2683 | 936 → 954 | 18 → 20 | 6 | refused → refused |
+| #2691 | 739 → 747 | 8 → 9 | 2 | refused → refused |
+| #2698 | 88 → 116 | 4 → 4 | 2 | refused → refused |
+| #2673 | 83 → 83 | 7 → 7 | 1 | refused → refused |
+| #2695 | 121 → 131 | 7 → 8 | 3 | refused → refused |
+| #2696 | 87 → 87 | 2 → 2 | 0 | refused → refused |
+| #2684 | 189 → 270 | 16 → 18 | 4 | refused → refused |
+| #2697 | 92 → 92 | 3 → 3 | 0 | refused → refused |
+| #2693 | 345 → 345 | 3 → 3 | 0 | refused → refused |
+| #2678 | 686 → 686 | 6 → 6 | 0 | refused → refused |
+| #2690 | 191 → 197 | 6 → 6 | 2 | refused → refused |
+| #2687 | 839 → 851 | 10 → 11 | 2 | refused → refused |
+| #2686 | 16 → 16 | 1 → 3 | 3 | refused → refused |
+| #2688 | 276 → 414 | 5 → 5 | 3 | refused → refused |
+| #2685 | 5 → 7 | 1 → 3 | 1 | refused → refused |
+| #2689 | 175 → 144 | 5 → 4 | 0 | refused → refused |
+| #2677 | 685 → 685 | 9 → 10 | 1 | refused → refused |
+| #2681 | 5 → 12 | 1 → 2 | 1 | refused → refused |
+| #2680 | 477 → 476 | 5 → 5 | 1 | refused → refused |
+| #2674 | 125 → 125 | 18 → 18 | 0 | refused → refused |
+| #2671 | 664 → 666 | 7 → 8 | 1 | refused → refused |
+| #2672 | 96 → 96 | 3 → 3 | 0 | refused → refused |
+| #2676 | 120 → 121 | 4 → 4 | 1 | refused → refused |
+| #2667 | 681 → 681 | 7 → 8 | 1 | refused → refused |
+| #2666 | 42 → 42 | 4 → 5 | 0 | refused → refused |
+| #2664 | 684 → 684 | 10 → 10 | 0 | refused → refused |
+| #2675 | 191 → 217 | 1 → 4 | 2 | refused → refused |
+| #2660 | 680 → 680 | 10 → 10 | 0 | refused → refused |
+| #2485 | 1026 → 1088 | 21 → 18 | 8 | refused → refused |
+| #2657 | 222 → 370 | 3 → 3 | 3 | refused → refused |
+| #2451 | 749 → 749 | 18 → 18 | 1 | refused → refused |
+| #2670 | 47 → 83 | 1 → 3 | 3 | refused → refused |
+| #2669 | 20 → 20 | 1 → 2 | 0 | refused → refused |
+| #2668 | 0 → 0 | 1 → 1 | 0 | allowed → allowed |
+| #2665 | 861 → 913 | 3 → 3 | 5 | refused → refused |
+| #2653 | 51 → 51 | 3 → 4 | 0 | refused → refused |
+| #2658 | 769 → 782 | 6 → 6 | 1 | refused → refused |
+| #2663 | 228 → 421 | 5 → 7 | 5 | refused → refused |
+| #2656 | 57 → 58 | 4 → 5 | 1 | refused → refused |
+| #2654 | 34 → 34 | 3 → 3 | 0 | refused → refused |
+| #2655 | 198 → 204 | 3 → 2 | 1 | refused → refused |
+| #2652 | 71 → 71 | 1 → 1 | 0 | refused → refused |
+| #2541 | 498 → 612 | 19 → 29 | 16 | refused → refused |
+| #2650 | 107 → 159 | 1 → 5 | 4 | refused → refused |
+| #2647 | 51 → 54 | 1 → 2 | 2 | refused → refused |
+
+Iteration A's audited pairs (total / fn-impl / iteration A):
+
+| Pairs | Total | fn/impl | iteration A |
+|---|---:|---:|---:|
+| scoped/true-touch | 29 | 29 | 29 |
+| scoped/unresolved | 30 | 30 | 30 |
+| scoped/incidental | 102 | 102 | 101 |
+| full-only/true-touch | 2 | 0 | 1 |
+| full-only/unresolved | 7 | 0 | 2 |
+| full-only/incidental | 24 | 0 | 6 |
+
+Iteration A's fallback reasons: ChangedAttribute 109, ChangedUse 72, ExternalSource 25, MacroName 28, NotRust 116, Opaque 9, Uncovered 3.
+A fallback for one reason can hide another, so these counts overlap.
+
+The sections below are the measurement as signed off (`e7b8013bcd`).
+
+### As signed off: the 18 audited cases
 
 Audited (case, ID) pairs, counted as total / kept by fn-impl / kept by item-level:
 
@@ -143,7 +232,7 @@ pair is dropped, and 15 of the 24 full-only incidental pairs are added.
 | #2698 | 2/2 | 7/7 | 1/1 | 4 → 6 | refused → refused |
 | #2701 | 1/1 | 3/3 | 0/0 | 2 → 2 | refused → refused |
 
-### All 50 frozen endpoints
+### As signed off: all 50 frozen endpoints
 
 The table lists ID counts (full file / fn-impl / item-level) and fallback paths
 (fn-impl → item-level). The JSON `ac2_item_level.rows` holds the full pins, the
@@ -225,6 +314,5 @@ that fallback carries are reached by cross-file or macro-mediated use that a
 same-file syntactic closure cannot prove. Within this design, the
 incidental rate cannot fall without losing true touches.
 
-Under signoff condition 3, case-level refusals did not change across the 50, so
-markdown scoping is dropped. Further mandate-coverage work belongs to resolving
-the unresolved IDs (store history and aliases) as its own spec.
+Iteration A (above) removed most of these two triggers safely, but its new
+fail-closed rules and the closure's own growth kept fallback above 290.
