@@ -97,15 +97,14 @@ impl YamlBackend {
     /// Attempts to create a git tag for a baseline
     /// Returns the tag name if successful, None if git is not available or fails
     fn create_git_tag_for_baseline(&self, baseline: &crate::models::Baseline) -> Option<String> {
-        use std::process::Command;
-
         // Get the directory containing the YAML file
         let dir = self.path.parent()?;
 
-        // Check if we're in a git repository
-        let git_check = Command::new("git")
+        // Check if we're in a git repository. BUG-2154: every git call here
+        // goes through the host hardening (a store tree's planted config and
+        // hooks never run). trace:TASK-1952 | trace:BUG-2154 | ai:claude
+        let git_check = crate::git_ops::host_git_command(dir)
             .args(["rev-parse", "--git-dir"])
-            .current_dir(dir)
             .output()
             .ok()?;
 
@@ -117,9 +116,8 @@ impl YamlBackend {
         let message = baseline.description.as_deref().unwrap_or(&baseline.name);
 
         // Create an annotated tag
-        let result = Command::new("git")
+        let result = crate::git_ops::host_git_command(dir)
             .args(["tag", "-a", &tag_name, "-m", message])
-            .current_dir(dir)
             .output()
             .ok()?;
 
@@ -134,15 +132,12 @@ impl YamlBackend {
     /// Lists git tags that match the baseline pattern
     #[allow(dead_code)]
     pub fn list_git_baseline_tags(&self) -> Vec<String> {
-        use std::process::Command;
-
         let Some(dir) = self.path.parent() else {
             return Vec::new();
         };
 
-        let output = Command::new("git")
+        let output = crate::git_ops::host_git_command(dir)
             .args(["tag", "-l", "baseline-*"])
-            .current_dir(dir)
             .output()
             .ok();
 
@@ -160,6 +155,21 @@ impl YamlBackend {
 mod tests {
     use super::*;
     use tempfile::{NamedTempFile, TempDir};
+
+    /// BUG-2154: the baseline-tag git calls are built through the host
+    /// hardening, never as a raw `git` command.
+    // trace:TASK-1952 | trace:BUG-2154 | ai:claude
+    #[test]
+    fn baseline_tag_git_calls_use_host_git_command() {
+        let src = include_str!("yaml_backend.rs");
+        let production = &src[..src.find("#[cfg(test)]").unwrap()];
+        let raw = ["Command::", "new(\"git\")"].concat();
+        assert!(
+            !production.contains(&raw),
+            "raw git builder in yaml_backend.rs"
+        );
+        assert_eq!(production.matches("host_git_command(dir)").count(), 3);
+    }
 
     #[test]
     fn test_yaml_backend_create_and_load() {
