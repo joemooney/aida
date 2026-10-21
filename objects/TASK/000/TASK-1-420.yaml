@@ -1,0 +1,27 @@
+id: 01a160e1-f001-7383-8975-fcaf38998bf8
+spec_id: TASK-1-420
+title: 'minor: scripts/release.sh retakes the lease after the confirm prompt (~line 642…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: scripts/release.sh retakes the lease after the confirm prompt (~line 642) without re-checking HEAD == the commit the bump, cargo check, CHANGELOG and tag notes were computed on. A ship that fast-forwards the primary checkout during the prompt makes release/vX cut from a different base, with stale CHANGELOG/tag notes. Re-verify HEAD (and origin/main) after the retake and abort with the restore hint if it moved.
+  Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T23:53:02.209865910Z
+modified_at: 2026-10-21T23:53:02.209865910Z
+req_type: Task
+tags:
+- carried-from:TASK-1721
+- finding-hash:54e7e56a
+- from-review:TASK-1721
+- kind:carried-forward
+filed_at:
+  code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
