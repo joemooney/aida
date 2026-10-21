@@ -139,7 +139,11 @@ pub(crate) fn auto_bump_evidence_is_stale(
 
 /// STORY-1663: true when `req` carries a `[aida:non-completing-rebase]` marker
 /// comment matching `sha` or the commit subject of `sha` in `project_root`.
+/// A marker's `landed:` lines name the rebased commits exactly; its
+/// `subject:` lines are kept only for subjects ship could not find on the
+/// base (and in markers written before landed shas were recorded).
 // trace:STORY-1663 | ai:antigravity
+// trace:TASK-1951 trace:TASK-1620 | ai:claude
 pub(crate) fn spec_ignores_non_completing_rebase_commit(
     project_root: &std::path::Path,
     req: &Requirement,
@@ -156,13 +160,15 @@ pub(crate) fn spec_ignores_non_completing_rebase_commit(
     if !has_marker {
         return false;
     }
-    let sha_line = format!("sha: {sha}");
+    let sha_lines = [format!("sha: {sha}"), format!("landed: {sha}")];
     if req.comments.iter().any(|c| {
         c.content
             .contains(crate::pr_ship::NON_COMPLETING_REBASE_MARKER)
-            && c.content
-                .lines()
-                .any(|l| l.trim().eq_ignore_ascii_case(&sha_line))
+            && c.content.lines().any(|l| {
+                sha_lines
+                    .iter()
+                    .any(|want| l.trim().eq_ignore_ascii_case(want))
+            })
     }) {
         return true;
     }

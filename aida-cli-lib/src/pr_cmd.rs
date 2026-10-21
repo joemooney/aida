@@ -3730,6 +3730,13 @@ pub(crate) fn pr_ship_with_method(
     // trace:BUG-1423 | ai:claude
     if merged_this_run {
         emit_ship_pr_merged(&main_worktree, pr_number as u32, &pr_merged_spec_ids);
+    }
+    // TASK-1621: the slice bookkeeping also runs on a re-run that finds the PR
+    // already merged, so a crash between the merge and this step is repaired
+    // by re-running `aida pr ship N`. Both writers are idempotent.
+    // trace:TASK-1951 trace:TASK-1621 | ai:claude
+    let mut slice_marker_failed = false;
+    if rebase_slice_bookkeeping_due(merged_this_run, already_merged) {
         // STORY-1663: rebase merges have no squash subject, so `aida pull`'s
         // commit-subject auto-bump cannot distinguish a final-slice rebase merge
         // from an intermediate slice. Explicitly mark the resolved specs Completed
@@ -3746,15 +3753,23 @@ pub(crate) fn pr_ship_with_method(
                     &pr_merged_spec_ids,
                     merged_head_sha.as_deref(),
                 );
-            } else {
-                record_non_completing_rebase_slice(
-                    &main_worktree,
-                    &project_root,
-                    pr_number,
-                    &retarget_base,
-                    merged_head_sha.as_deref(),
-                    &ship_branch,
+            } else if let Err(e) = record_non_completing_rebase_slice(
+                &main_worktree,
+                &project_root,
+                pr_number,
+                &retarget_base,
+                merged_head_sha.as_deref(),
+                &ship_branch,
+            ) {
+                // TASK-1622: without the marker, the pull below could complete
+                // the spec from a rebased `(SPEC-ID)` subject. Skip it; a re-run
+                // records the marker on the already-merged path.
+                // trace:TASK-1951 trace:TASK-1622 | ai:claude
+                eprintln!(
+                    "  {} could not record the non-completing slice marker for PR-{pr_number}: {e:#}\n    skipping `aida pull` so no spec completes; re-run `aida pr ship {pr_number}`",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
+                slice_marker_failed = true;
             }
         }
     }
@@ -3767,6 +3782,13 @@ pub(crate) fn pr_ship_with_method(
             Some(pr_number),
             &ShipStep::Pull,
             &StepOutcome::Skipped("--no-pull".into()),
+        );
+    } else if slice_marker_failed {
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Pull,
+            &StepOutcome::Skipped("non-completing slice marker not recorded".into()),
         );
     } else {
         eprintln!(
@@ -4743,9 +4765,10 @@ pub(crate) fn ship_completion_trailer_for_method(
 }
 
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
-/// Reads `scripts/split-lib/verify_stack.py` from `origin/main` (falling back to
-/// `main_worktree/scripts/split-lib/verify_stack.py` only when `origin/main` is
-/// absent in a local-only repository). When the verifier is present, fails
+/// Reads `scripts/split-lib/verify_stack.py` from `base_ref`, the base the PR
+/// merges into. The `main_worktree` copy is used only when `base_ref` does not
+/// resolve (a local-only repository); a base that resolves without the script
+/// has no verifier. When the verifier is present, fails
 /// closed if the commit range `base_ref..head_ref` cannot be inspected, and
 /// invokes `python3 <verifier> <base_ref> <head_ref>` when any commit in the
 /// range matches `refactor(cli-lib): extract|extend <m>.rs`.
@@ -4757,13 +4780,34 @@ pub(crate) fn run_optional_slice_stack_verifier(
     base_ref: &str,
     head_ref: &str,
 ) -> Result<()> {
-    let origin_blob = std::process::Command::new("git")
+    // trace:TASK-1951 trace:TASK-1619 | ai:claude
+    let base_present = std::process::Command::new("git")
         .current_dir(project_root)
-        .args(["show", "origin/main:scripts/split-lib/verify_stack.py"])
-        .output()
-        .ok()
-        .filter(|out| out.status.success() && !out.stdout.is_empty())
-        .map(|out| out.stdout);
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{base_ref}^{{commit}}"),
+        ])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let origin_blob = if base_present {
+        let out = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args([
+                "show",
+                &format!("{base_ref}:scripts/split-lib/verify_stack.py"),
+            ])
+            .output()
+            .with_context(|| format!("could not read verify_stack.py from `{base_ref}`"))?;
+        if !out.status.success() || out.stdout.is_empty() {
+            return Ok(());
+        }
+        Some(out.stdout)
+    } else {
+        None
+    };
     let fallback_path = main_worktree.join("scripts/split-lib/verify_stack.py");
     if origin_blob.is_none() && !fallback_path.is_file() {
         return Ok(());
@@ -4836,11 +4880,11 @@ pub(crate) fn run_optional_slice_stack_verifier(
             .prefix("aida-verify-stack-")
             .suffix(".py")
             .tempfile()
-            .context("could not create temporary file for origin/main verify_stack.py")?;
+            .context("could not create temporary file for the base's verify_stack.py")?;
         tmp.write_all(&bytes)
-            .context("could not write origin/main verify_stack.py")?;
+            .context("could not write the base's verify_stack.py")?;
         tmp.flush()
-            .context("could not flush origin/main verify_stack.py")?;
+            .context("could not flush the base's verify_stack.py")?;
         let path = tmp.path().to_path_buf();
         temp_verifier = Some(tmp);
         path
@@ -4874,11 +4918,26 @@ pub(crate) fn run_optional_slice_stack_verifier(
     Ok(())
 }
 
+/// TASK-1621: whether the rebase slice bookkeeping (final-slice completion or
+/// the non-completing marker) runs: for a merge this run made, and for a
+/// re-run that finds the PR already merged.
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+pub(crate) fn rebase_slice_bookkeeping_due(merged_this_run: bool, already_merged: bool) -> bool {
+    merged_this_run || already_merged
+}
+
 /// STORY-1663: record a `[aida:non-completing-rebase]` marker comment on any
 /// spec referenced by a rebase-merged slice PR when `--final-slice` was not
 /// passed, so `aida pull` and `aida db reconcile-status` leave the spec's
 /// status unchanged even if a commit subject carried `(SPEC-ID)`.
+///
+/// The marker names the commits as they LANDED on the base (`landed: <sha>`):
+/// a rebase merge rewrites them, so the PR head's sha never reaches main, and
+/// a subject alone would also suppress a later commit that reuses it. Only a
+/// subject that cannot be found on the base is recorded as a `subject:` line.
+/// Every failure is returned, never swallowed.
 // trace:STORY-1663 | ai:antigravity
+// trace:TASK-1951 trace:TASK-1620 trace:TASK-1622 | ai:claude
 pub(crate) fn record_non_completing_rebase_slice(
     main_worktree: &std::path::Path,
     project_root: &std::path::Path,
@@ -4886,7 +4945,7 @@ pub(crate) fn record_non_completing_rebase_slice(
     base_branch: &str,
     merged_head_sha: Option<&str>,
     ship_branch: &str,
-) {
+) -> Result<()> {
     let head_ref = merged_head_sha
         .filter(|s| !s.trim().is_empty())
         .unwrap_or(ship_branch);
@@ -4934,35 +4993,51 @@ pub(crate) fn record_non_completing_rebase_slice(
         }
     }
     if candidate_specs.is_empty() {
-        return;
+        return Ok(());
+    }
+    if range_subjects.is_empty() {
+        anyhow::bail!("could not read the commit subjects of `{head_ref}`");
     }
 
     let store_path = main_worktree.join(".aida-store");
-    let Ok(backend) = aida_core::CachedGitBackend::open(
+    if !store_path.is_dir() {
+        anyhow::bail!("no store at {}", store_path.display());
+    }
+    let backend = aida_core::CachedGitBackend::open(
         &store_path,
         &aida_core::CachedGitBackend::default_cache_path(&store_path),
-    ) else {
-        return;
-    };
+    )
+    .with_context(|| format!("could not open the store at {}", store_path.display()))?;
     use aida_core::DatabaseBackend;
+    let landed = landed_commits_for_subjects(project_root, base_branch, &range_subjects);
     let mut comment_lines = vec![format!(
         "{} PR #{} rebase-merged without --final-slice; status stays unchanged until the final slice completes.",
         pr_ship::NON_COMPLETING_REBASE_MARKER,
         pr_number
     )];
     if let Some(sha) = merged_head_sha.filter(|s| !s.trim().is_empty()) {
-        comment_lines.push(format!("sha: {}", sha.trim()));
+        comment_lines.push(format!("head: {}", sha.trim()));
     }
     for subj in &range_subjects {
-        comment_lines.push(format!("subject: {subj}"));
+        match landed.get(subj) {
+            Some(sha) => comment_lines.push(format!("landed: {sha}")),
+            None => comment_lines.push(format!("subject: {subj}")),
+        }
     }
     let body = comment_lines.join("\n");
     let now = chrono::Utc::now();
+    let mut failures: Vec<String> = Vec::new();
     for spec_id in candidate_specs {
-        let Ok(Some(req)) = backend.get_requirement_unambiguous(&spec_id) else {
-            continue;
+        let req = match backend.get_requirement_unambiguous(&spec_id) {
+            Ok(Some(req)) => req,
+            // A branch or subject token that names no spec has nothing to mark.
+            Ok(None) => continue,
+            Err(e) => {
+                failures.push(format!("{spec_id}: {e}"));
+                continue;
+            }
         };
-        let _ = backend.update_spec_atomically(&req, |r| {
+        if let Err(e) = backend.update_spec_atomically(&req, |r| {
             let already = r.comments.iter().any(|c| c.content == body);
             if !already {
                 r.add_comment(aida_core::Comment::new(
@@ -4971,8 +5046,61 @@ pub(crate) fn record_non_completing_rebase_slice(
                 ));
                 r.modified_at = now;
             }
-        });
+        }) {
+            failures.push(format!("{spec_id}: {e}"));
+        }
     }
+    if !failures.is_empty() {
+        anyhow::bail!("marker not written for {}", failures.join("; "));
+    }
+    Ok(())
+}
+
+/// TASK-1620: the sha each subject landed as on `base_branch`: the remote
+/// tracking ref after a best-effort fetch first, then the local branch,
+/// searched in the recent first-parent history the merge just extended.
+// trace:TASK-1951 trace:TASK-1620 | ai:claude
+fn landed_commits_for_subjects(
+    project_root: &std::path::Path,
+    base_branch: &str,
+    subjects: &[String],
+) -> std::collections::BTreeMap<String, String> {
+    let _ = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["fetch", "--quiet", "origin", base_branch])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
+        .output();
+    let mut landed = std::collections::BTreeMap::new();
+    for base in [format!("origin/{base_branch}"), base_branch.to_string()] {
+        let Some(out) = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args([
+                "log",
+                "--first-parent",
+                "-n",
+                "500",
+                "--format=%H%x09%s",
+                &base,
+            ])
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+        else {
+            continue;
+        };
+        for line in String::from_utf8_lossy(&out.stdout).lines() {
+            let Some((sha, subject)) = line.split_once('\t') else {
+                continue;
+            };
+            if subjects.iter().any(|s| s == subject.trim()) {
+                landed
+                    .entry(subject.trim().to_owned())
+                    .or_insert_with(|| sha.to_owned());
+            }
+        }
+    }
+    landed
 }
 
 /// STORY-1663: transition resolved specs to `Completed` when a rebase merge
@@ -7167,6 +7295,170 @@ mod story_1663_rebase_ship_tests {
     use super::*;
     use clap::Parser;
 
+    // trace:TASK-1951 | ai:claude
+    fn task_1951_repo() -> (tempfile::TempDir, impl Fn(&[&str]) -> String) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let git = move |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(), "git {args:?} failed");
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "Test"]);
+        git(&["config", "user.email", "test@example.com"]);
+        std::fs::write(tmp.path().join("README.md"), "init\n").unwrap();
+        git(&["add", "README.md"]);
+        git(&["commit", "-q", "-m", "chore: initial"]);
+        (tmp, git)
+    }
+
+    // trace:TASK-1951 trace:TASK-1619 | ai:claude
+    fn commit_stub_verifier(root: &std::path::Path, git: &dyn Fn(&[&str]) -> String, body: &str) {
+        let dir = root.join("scripts/split-lib");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("verify_stack.py"), body).unwrap();
+        git(&["add", "scripts/split-lib/verify_stack.py"]);
+        git(&["commit", "-q", "-m", "chore: verifier"]);
+    }
+
+    /// TASK-1619: the verifier is read from the base the PR merges into, not
+    /// from origin/main, and a passing verifier lets the ship proceed. A base
+    /// that resolves without the script never falls back to the local copy.
+    // trace:TASK-1951 trace:TASK-1619 | ai:claude
+    #[test]
+    fn task_1951_slice_verifier_reads_the_merge_base_and_passes() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let ran = root.join("release-verifier-ran");
+        commit_stub_verifier(
+            root,
+            &git,
+            "import sys\nprint('FAIL main verifier')\nsys.exit(1)\n",
+        );
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        commit_stub_verifier(
+            root,
+            &git,
+            &format!(
+                "import sys\nopen({:?}, 'w').write(' '.join(sys.argv[1:]))\nprint('PASS')\n",
+                ran.display().to_string()
+            ),
+        );
+        git(&["update-ref", "refs/remotes/origin/release", "HEAD"]);
+        std::fs::write(root.join("x.txt"), "moved\n").unwrap();
+        git(&["add", "x.txt"]);
+        git(&["commit", "-q", "-m", "refactor(cli-lib): extract foo.rs"]);
+
+        run_optional_slice_stack_verifier(root, root, 7, "origin/release", "HEAD")
+            .expect("the release base's passing verifier admits the slice");
+        assert_eq!(
+            std::fs::read_to_string(&ran).unwrap(),
+            "origin/release HEAD"
+        );
+
+        // A resolvable base without the script: no verifier, even though the
+        // local checkout has a failing one.
+        let bare = git(&["rev-parse", "HEAD~3"]);
+        git(&["update-ref", "refs/remotes/origin/bare", &bare]);
+        run_optional_slice_stack_verifier(root, root, 7, "origin/bare", "HEAD")
+            .expect("a base without verify_stack.py has no verifier");
+    }
+
+    /// TASK-1620: the marker names the commit as it landed on the base after
+    /// the rebase rewrote it, and a later commit reusing the subject is not
+    /// suppressed. TASK-1622: an unopenable store is an error, not silence.
+    // trace:TASK-1951 trace:TASK-1620 trace:TASK-1622 | ai:claude
+    #[test]
+    fn task_1951_non_completing_marker_matches_landed_shas_only_and_reports_failures() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
+        req.spec_id = Some("STORY-77".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+
+        git(&["switch", "-q", "-c", "claude/story-77-part1"]);
+        std::fs::write(root.join("slice.txt"), "one\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        // The rebase merge: main moved on, then the slice lands rewritten.
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("other.txt"), "other\n").unwrap();
+        git(&["add", "other.txt"]);
+        git(&["commit", "-q", "-m", "chore: unrelated"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+        git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
+        assert_ne!(landed, pr_head);
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            77,
+            "main",
+            Some(&pr_head),
+            "claude/story-77-part1",
+        )
+        .expect("marker recorded");
+        let stored = || {
+            backend
+                .get_requirement_unambiguous("STORY-77")
+                .unwrap()
+                .unwrap()
+        };
+        let ignores = |sha: &str| {
+            crate::db_reconcile::spec_ignores_non_completing_rebase_commit(root, &stored(), sha)
+        };
+        assert!(ignores(&landed), "the landed commit is the slice");
+
+        std::fs::write(root.join("slice.txt"), "re-land\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let relanded = git(&["rev-parse", "HEAD"]);
+        assert!(
+            !ignores(&relanded),
+            "a later commit reusing the subject is not the recorded slice"
+        );
+
+        let no_store = tempfile::tempdir().unwrap();
+        let err = record_non_completing_rebase_slice(
+            no_store.path(),
+            root,
+            77,
+            "main",
+            Some(&pr_head),
+            "claude/story-77-part1",
+        )
+        .expect_err("a missing store must be reported");
+        assert!(err.to_string().contains("store"), "{err:#}");
+    }
+
+    /// TASK-1621: the bookkeeping runs on the already-merged re-run too.
+    // trace:TASK-1951 trace:TASK-1621 | ai:claude
+    #[test]
+    fn task_1951_rebase_bookkeeping_runs_on_an_already_merged_rerun() {
+        assert!(rebase_slice_bookkeeping_due(true, false));
+        assert!(rebase_slice_bookkeeping_due(false, true));
+        assert!(!rebase_slice_bookkeeping_due(false, false));
+        let src = include_str!("pr_cmd.rs");
+        let gate = src
+            .find("if rebase_slice_bookkeeping_due(merged_this_run, already_merged) {")
+            .expect("ship gates the slice bookkeeping on the helper");
+        let record = src[gate..]
+            .find("record_non_completing_rebase_slice(")
+            .expect("marker write follows the gate");
+        assert!(record < 2_000, "the marker write sits inside the gate");
+    }
+
     #[test]
     fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
         // trace:STORY-1663.ac5970a5 | ai:antigravity
@@ -7479,7 +7771,8 @@ mod story_1663_rebase_ship_tests {
             "main",
             Some(&slice_sha),
             "claude/story-1663-part1",
-        );
+        )
+        .expect("marker recorded");
 
         std::fs::write(root.join("README.md"), "slice 1 + bug 999\n").unwrap();
         run_git(&["add", "README.md"]);
