@@ -6,18 +6,27 @@ description: |-
 
   cosmetic: lease temp files (main.XXXXXX) are created inside .aida/merge-locks/. merge_lock::status read_dir lists them as leases, and a SIGKILL between mktemp and rm orphans one; the EXIT trap does not clean it. Use a dot-prefixed name that status skips, or create the temp file outside the dir on the same filesystem.
   Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T23:53:08.442182048Z
-modified_at: 2026-10-21T23:53:08.442182048Z
+modified_at: 2026-10-21T23:54:21.912897098Z
 req_type: Task
 tags:
 - carried-from:TASK-1721
 - finding-hash:e922962b
 - from-review:TASK-1721
 - kind:carried-forward
+history:
+- id: 01a160e3-2758-7e22-98d4-cfe0e77b2c5e
+  author: joe
+  timestamp: 2026-10-21T23:54:21.912893675Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
   branch: main
