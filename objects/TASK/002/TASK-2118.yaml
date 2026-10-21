@@ -6,16 +6,25 @@ description: |-
   review_watch.rs:624 notice_recipient uses known_mailbox_recipients, which maps an alias to its own spelling (mailbox_root.rs:417-421); mailbox delivery does not resolve aliases, so a forge login registered only as an alias (joemooney -> joe) still opens a phantom inbox. Resolve via AliasRegistry to the canonical identity before mapping; test it.
 
   Raised in review of PR-2814 (TASK-1955 slice 5) at f18a4cd93b: https://github.com/joemooney/aida/pull/2814
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T23:29:04.869952607Z
-modified_at: 2026-10-21T23:29:04.869952607Z
+modified_at: 2026-10-21T23:30:14.297058175Z
 req_type: Task
 tags:
 - from-review:PR-2814
 - severity:minor
+history:
+- id: 01a160cd-1099-7df3-a9f0-9c7f87b034aa
+  author: joe
+  timestamp: 2026-10-21T23:30:14.297055583Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f18a4cd93b32b2c844b33d1a1278caa43c07fb73
   branch: pr-2814
