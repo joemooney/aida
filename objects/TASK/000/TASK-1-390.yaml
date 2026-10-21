@@ -1,5 +1,6 @@
 id: 01a15d47-09df-7c61-87f1-00d3db476ab4
 spec_id: TASK-1-390
+agreed_id: TASK-1662
 title: '[non-blocking, perf] mandate.rs store_history_alias_ids runs an unbounded ''git …'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1800, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,11 @@ history:
 - id: 01a15d54-2636-7283-a666-bbbd67627fcc
   author: joe
   timestamp: 2026-10-21T07:19:18.326583093Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15d6e-3e1c-74d3-b53b-47180dca938e
+  author: joe
+  timestamp: 2026-10-21T07:47:48.380089699Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

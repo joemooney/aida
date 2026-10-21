@@ -1,5 +1,6 @@
 id: 01a15d47-302c-7950-8eed-f2b35e9adb1d
 spec_id: TASK-1-394
+agreed_id: TASK-1660
 title: '[cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct un…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1800, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,11 @@ history:
 - id: 01a15d54-db34-7ff1-ae1a-3af76acbca94
   author: joe
   timestamp: 2026-10-21T07:20:04.660542233Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15d6e-3dee-7d03-811f-e8cafbdb6143
+  author: joe
+  timestamp: 2026-10-21T07:47:48.334974871Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

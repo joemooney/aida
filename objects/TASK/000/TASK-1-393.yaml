@@ -1,5 +1,6 @@
 id: 01a15d47-270c-7820-9ebe-04ce2a681947
 spec_id: TASK-1-393
+agreed_id: TASK-1661
 title: '[cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after class…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1800, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -37,6 +38,11 @@ history:
 - id: 01a15d54-b442-71f2-a2b3-fafcd843947b
   author: joe
   timestamp: 2026-10-21T07:19:54.690795312Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15d6e-3e03-73b0-a502-4f6d17a9b2a7
+  author: joe
+  timestamp: 2026-10-21T07:47:48.355776383Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
