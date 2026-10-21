@@ -269,12 +269,16 @@ jobs:
       # arm with AIDA_REQUIRE_BWRAP_LIVE=1, which FAILS the job rather than
       # degrading to the fail-closed branch. This is the gate the PR's merge is
       # blocked on. trace:STORY-612 | ai:claude
+      # BUG-2169 S2: the same gate runs the contained seat-clone attacks
+      # (`bug_2169_bwrap_`): each must succeed against the frozen PR #2694
+      # layout and fail against the clone layout, and a skip fails here.
+      # trace:BUG-2169 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib \
-            bwrap_write_confinement_live_or_fail_closed -- --nocapture
+          AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction
