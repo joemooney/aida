@@ -6,17 +6,26 @@ description: |
   make_targets_skip_cargo counts an unknown prerequisite as a plain file, even when a pattern rule (%.html:) or old-style suffix rule (.md.html:) in the same Makefile would build it with cargo. Fix: fail closed when such a rule exists and a prerequisite is unknown.
 
   Raised in review of PR-2801: https://github.com/joemooney/aida/pull/2801#issuecomment-6322555279
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:41:58.211063753Z
-modified_at: 2026-10-21T17:41:58.211063753Z
+modified_at: 2026-10-21T18:00:32.713822946Z
 req_type: Task
 tags:
 - from-review:PR-2801
 - hooks
 - severity:minor
+history:
+- id: 01a15f9f-38c9-7141-8b82-1c9a49902f5c
+  author: joe
+  timestamp: 2026-10-21T18:00:32.713816252Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 57c220717cc5190b1d8e90ec39fdd0b0d1ee6197
   branch: pr-2801
