@@ -1,0 +1,19 @@
+{
+  "id": "f8e41b91-ba83-4a03-bebc-059a06536cc7",
+  "thread_id": "f8e41b91-ba83-4a03-bebc-059a06536cc7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792548204747,
+  "body": "",
+  "subject": "PR-2788 ready (BUG-2192 root)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": true,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

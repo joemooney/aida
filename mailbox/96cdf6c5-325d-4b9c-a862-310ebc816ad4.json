@@ -1,0 +1,19 @@
+{
+  "id": "96cdf6c5-325d-4b9c-a862-310ebc816ad4",
+  "thread_id": "96cdf6c5-325d-4b9c-a862-310ebc816ad4",
+  "from": "agy2",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792551711471,
+  "body": "503ffdfedcadf122a020bf219c7546785b296616 — TASK-2004..2007 only, one test each. Gates: check-ci-compile ok, test-touched 587 ok, targeted 68 ok; check-ci-fast 31/32: the git-maintenance ratchet fails identically on origin/main 7a1a2077bd (STORY-1700's 4 unguarded git commits in story_1700_drive_mandate_tests.rs vs BUG-2191's ratchet), not in this diff.",
+  "subject": "PR-2790 ready (TASK-1952 S1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

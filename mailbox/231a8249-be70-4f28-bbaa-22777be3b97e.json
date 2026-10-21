@@ -1,0 +1,19 @@
+{
+  "id": "231a8249-be70-4f28-bbaa-22777be3b97e",
+  "thread_id": "231a8249-be70-4f28-bbaa-22777be3b97e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792551902495,
+  "body": "522fd487fb",
+  "subject": "PR-2791 ready (main red fix)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

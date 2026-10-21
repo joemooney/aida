@@ -1,0 +1,19 @@
+{
+  "id": "4fbc09be-b5b9-47ec-9b65-40f90858a355",
+  "thread_id": "4fbc09be-b5b9-47ec-9b65-40f90858a355",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792552089636,
+  "body": "Merge-up of origin/main into agy2/story-1688 pushed at fff57f49a2 (no force). Conflicts (4, all adjacent-insertion, both sides kept verbatim; diff vs origin/main in those files is purely the branch's own additions): .aida/config.toml (lane-liveness job enabled=false, then mandate-drive + mandate-drive-route); doctor_cmd.rs (two store-free dispatch arms: lane_liveness then mandate_drive, in both the early-return and the report match); doctor_root.rs (category alias entries lane-liveness then mandate-drive); docs/cli/03-work-autonomy.md (main's line with 'fleet drive --tick', plus the lane-liveness allow-list entry after relay-stall and the STORY-1688 trace). No behaviour change. Tests: lane_liveness 23/23, doctor 310/310. Gates: test-touched green, check-ci-compile green. check-ci-fast has ONE red gate, 'Test git auto-maintenance ratchet' (BUG-2191, 7a1a2077bd): it flags story_1688_lane_liveness_tests.rs (git commit/push at :1021/:1046) AND main's story_1700_drive_mandate_tests.rs (4 sites). main CI run 39529717757 is already red on this same gate — a semantic race between BUG-2191 and STORY-1700. Not fixed per brief (add nothing else); needs a ruling: fix both files here via the test_git helper, or a separate main fix first. Also ran 'cargo reap --apply' (disk below 15G floor): reaped merged bug-2130 + story-1700-mergeup target dirs (82G).",
+  "subject": "PR-2743 merge-up pushed (STORY-1688)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

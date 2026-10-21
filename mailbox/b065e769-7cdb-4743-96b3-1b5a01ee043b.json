@@ -1,0 +1,19 @@
+{
+  "id": "b065e769-7cdb-4743-96b3-1b5a01ee043b",
+  "thread_id": "b065e769-7cdb-4743-96b3-1b5a01ee043b",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792548931346,
+  "body": "MAIN RED: run 39529717757 @7a1a2077bd (BUG-2191) fails gates lane 'git auto-maintenance ratchet': story_1700_drive_mandate_tests.rs has 4 unguarded 'git commit' sites (L547,568,603,1763) > baseline 0. Semantic conflict: STORY-1700 (2241f23360) merged first, then BUG-2191's ratchet landed without counting them (STORY-1690 class). Fix = guard those 4 sites (preferred) or set that baseline to 4. target/worktrees/fix-main-ratchet appeared 19:09, so someone may already have it. STORY-1853 measurement waits on the 3rd green run after #2785 (2/3 so far: 39527203901, 39529179840). LEASES: none released. 01a0c96c and abf9f7f0 are harness-worktree markers on the primary checkout with no recorded pid; listing resolves them to my own live session (pid 3300764), so they count as live -> compact. adad1e08 records dead pid 3699188 (Oct 3), but no supported command releases a primary-checkout harness lease: 'session end' removes the worktree (the primary), reap skips it, prune-stale is cross-clone only. Left in place; tool gap. BUG-1987: aida-bug1987 is NOT a git worktree (no .git), an 867-file scratch copy of main@28dbd53b (Oct 12) with 8 edited history/session files. BUG-1987 shipped via #2561 (84ff1cf0ab). Recommend ARCHIVE: diff saved to /tmp/claude-1000/-home-joe-ai-aida/f91fd366-4181-4735-8802-dfc810a1c42e/scratchpad/aida-bug1987-vs-28dbd53b.patch (829 lines); dir is safe to remove (67M). ps calling it 'uncommitted work' is a misdiagnosis of a non-git dir. DISK: /dev/sdd1 469G, 379G used, 91G free (81%). No orphaned target/worktrees dirs: all 14 map to existing worktrees, hence cargo reap=0. Reclaim candidates once their owners confirm: aida-pr-2748 34G (PR MERGED), fix-2762 18G (PR MERGED, detached), aida-batch-goal 14G (no PR), aida-pool-aida-0 27G (warm pool). Note: fix-2735 (agy/bug-2130, PR #2735 open) has 235 staged changes, which looks like an in-progress merge of main. Nothing deleted.",
+  "subject": "integrator hygiene (interim) — main RED at 7a1a2077bd",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

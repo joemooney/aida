@@ -1,0 +1,19 @@
+{
+  "id": "fbd0168f-52fd-4720-8793-e6c8c60ebd12",
+  "thread_id": "fbd0168f-52fd-4720-8793-e6c8c60ebd12",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792552469383,
+  "body": "Merge-up caf7268fac pushed (no force). One conflict: relay_stall.rs — #2725 moved updated_at/owner_alive/parse_status/acknowledgement_marker into fleet_lanes.rs. Took main's relay_stall.rs; ported #2735's reader change (process_start_time instead of RFC3339 parse of process_start_identity, trace:BUG-2130) into fleet_lanes::owner_alive; repointed bug_2130_liveness_identity_tests.rs from crate::relay_stall:: to crate::fleet_lanes:: (path only). No other main-side identity readers. Gates: check-ci-compile ok, test-touched ok, bug_2130/relay_stall/story_1700/doctor lib tests 387 ok, aida-core liveness 82 ok. check-ci-fast: all green EXCEPT 'Test git auto-maintenance ratchet' which is RED ON origin/main itself (story_1700_drive_mandate_tests.rs: 4 unguarded git commit vs baseline 0 — #2725 vs BUG-2191 ratchet race); reproduced on a pristine origin/main snapshot; not fixed here per brief. Needs a main-side fix (test_git helper or baseline) before CI goes green.",
+  "subject": "PR-2735 merge-up pushed (BUG-2130)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

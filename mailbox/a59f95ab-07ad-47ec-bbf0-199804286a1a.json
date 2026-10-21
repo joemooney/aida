@@ -1,0 +1,19 @@
+{
+  "id": "a59f95ab-07ad-47ec-bbf0-199804286a1a",
+  "thread_id": "a59f95ab-07ad-47ec-bbf0-199804286a1a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792556209335,
+  "body": "TASK-1332: items 1/2/4 are met on main, except pieces owned by TASK-1981 (PR-2778 + local slice 2). Items 3 (the A2 store-CAS/hijack-marker owner-join; no signoff, no owner) and 5 (TASK-1333, deferred) are open and not in TASK-1981's scope. Posted the evidence table plus a SKETCH (needs advisor signoff) proposing option (A): file A2 as a new task, unlink TASK-1333, and close after TASK-1981 ships. Comment 01a15cac-99ad-7621-91ac-494c2f63ba22. Stopped; awaiting your ruling.",
+  "subject": "TASK-1332 analysis",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

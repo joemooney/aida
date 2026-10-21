@@ -1,0 +1,19 @@
+{
+  "id": "95838de9-5246-400f-ad01-ae6d69e5c8a2",
+  "thread_id": "95838de9-5246-400f-ad01-ae6d69e5c8a2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792548184667,
+  "body": "PR-2788 at 2f2d54bd57 (stacked on #2786; review only the last commit). Per-process memo of the three per-call lookups, keyed on file stamps. No failure is memoised, refusal order unchanged. Spawns per show: main 40 / #2786 32 / PR 18 / 95f15a20d4 15. Median of 10, interleaved, load 2.5-2.7, wall/CPU: 95f15a20d4 327/508, main 694/846, PR 358/511 ms. AC2 met, so the commit uses the bare ID. Gates: check-ci-fast, test-touched and check-ci-compile all green. Side finding in the PR body: on git 2.43 the HEAD:.gitmodules fallback is never reached (exit 1, not 128); this predates the PR.",
+  "subject": "PR-2788 ready (BUG-2192 root)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
