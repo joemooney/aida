@@ -1,0 +1,31 @@
+id: 01a15d60-dd40-74a1-aeea-b4b0ce06364e
+spec_id: TASK-2045
+agreed_id: TASK-2045
+title: 'Main CI red: backlog-triage TSV quotes removed ''aida graph <ID> --tree'' spelling, failing check-removed-flags'
+description: |
+  scripts/check-removed-flags.sh fails on docs/plans/2026-10-19-backlog-triage.tsv:78. That file came from d29b69c35c (TASK-1944), and its BUG-2175 row quotes the removed `aida graph <ID> --tree` spelling.
+
+  The gate step "Removed mode-flag spelling guard" runs only on full-CI runs, so docs-only main pushes skip it. Main CI runs b381e35218 (39548100807) and 88430e08c6 (39547249440) failed this step, and every full-CI PR inherits the failure (CI (gates) red, Build (ubuntu-latest) red).
+
+  Fix: reword the TSV row so it no longer contains the literal removed spelling, or exclude docs/plans/*.tsv in check-removed-flags.sh, the same way BUG-1665 handled CHANGELOG history lines.
+
+  Seen while reviewing PR-2778: https://github.com/joemooney/aida/pull/2778
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T07:33:11.616222524Z
+modified_at: 2026-10-21T07:33:11.616222524Z
+req_type: Task
+tags:
+- ci
+- main-red
+- severity:major
+filed_at:
+  code_sha: 750c8ec44282d94af78996d3d73ac9b0791da837
+  branch: pr-2778
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 01a15d57eabc
