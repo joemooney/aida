@@ -3,12 +3,12 @@ spec_id: BUG-2130
 agreed_id: BUG-2130
 title: Process start-identity (rfc3339 via sysinfo btime) shifts on a wall-clock step, so live lock holders read as dead
 description: 'From the advisor review of #2627/#2628 (TASK-1750). liveness::process_start_time (aida-core/src/liveness.rs:389) uses sysinfo, which derives start time from /proc/stat btime plus ticks at whole-second resolution. An NTP step or a VM resume shifts btime, so the recomputed identity differs from the recorded one, and process_identity_is_alive returns dead for a LIVE holder. Worst case: the drain double-run guard (drain_cmd.rs:1029; its comment says ''any doubt resolves to alive'') plus solo locks, merge_lock and review markers. Fix: compare the exact linux-starttime:<ticks> identity (cache_lock already records it). This is step 3 of the TASK-1750 consolidation sketch, gated on steps 1 and 2 shipping first (N-1 readers). Acceptance: a simulated btime shift leaves a live holder alive; records written before the change still read correctly.'
-status: NeedsAttention
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T23:34:04.554872418Z
-modified_at: 2026-10-20T13:40:10.498893073Z
+modified_at: 2026-10-21T08:23:00.926904487Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -88,6 +88,21 @@ history:
   timestamp: 2026-10-18T21:04:56.778483438Z
   session_id: 01a150cb7abe
   changes: []
+- id: 01a15d8e-7a38-7c93-b525-004b1e4bffda
+  author: aida-auto-bump
+  timestamp: 2026-10-21T08:23:00.920113563Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15d8e-7a3e-7c41-8ab8-bf36270fd7c5
+  timestamp: 2026-10-21T08:23:00.926895773Z
+  agent: aida
+  commit_sha: 5be3319c9bf9f3b38bd4998ca5f79638af23bf12
+  summary: 'Writer switch to exact linux-starttime identity: btime-shift simulation keeps a live holder alive (liveness.rs bug_2130_exact_start_identity_survives_btime_shift); legacy rfc3339 records still read live across strictly_alive, solo/drain locks, adopt-lease, worktree_gc, phase-child, seat scope and review tokens (bug_2130_liveness_identity_tests.rs); reader 3f7bcd28fd is in v0.16.0 per ruling (c); /tmp literal fixed; full PR CI green, CLEAN.'
+  review_verdict: approved
 filed_at:
   code_sha: b6ba49699119e94ef5204b90c4bcc9c23f055d83
   branch: main
@@ -96,11 +111,7 @@ filed_at:
   aida_build_sha: 84a4942786
   vendor: claude
   session: d76a5eea-b887-4bfd-a51d-eeb54ce0dc94
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Acceptance criteria met and CI tests pass at a927ac74, but CI is red because of this PR (portability ratchet on a /tmp literal), and the advisor's release-ordering condition (c) for the writer switch is unmet
-  recovery_hint: address the review findings, move BUG-2130 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T21:04:55.417114703Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T08:23:00.920108584Z
+  completion_sha: 5be3319c9bf9f3b38bd4998ca5f79638af23bf12
