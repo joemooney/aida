@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T14:38:09.556119969Z
-modified_at: 2026-10-20T14:38:09.556119969Z
+modified_at: 2026-10-21T04:32:52.288383077Z
 req_type: Task
+tags:
+- operator-held
+history:
+- id: 01a15cbb-c7d0-7dc3-a435-75753d7955bb
+  author: joe
+  timestamp: 2026-10-21T04:32:52.688364748Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:52.288383077Z
+deferred_until: Ship step 1 already ~48 s (BUG-2179). Revisit if ship time exceeds 60 s or the mandate tick needs it faster.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 12d4692052cd272c5b7f75ff289b84bdb2e49f65
   branch: main
