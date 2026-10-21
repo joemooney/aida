@@ -1315,9 +1315,10 @@ pub(crate) fn plan_session_args(spec: &str, headless: bool) -> Vec<String> {
 /// and slice 1's `aida plan promote <spec>` Approved→Planned transition, in
 /// that order (decided by [`auto_complete::plan_prelude_steps`]). The drain
 /// itself is entered unchanged after this returns `Ok`; the Phase enum is
-/// untouched (the prelude is NOT a renumbered phase). Each step shells out to the current
-/// `aida` binary; a non-zero exit aborts the prelude so the caller skips the
-/// drain. trace:STORY-265 | ai:claude
+/// untouched (the prelude is NOT a renumbered phase). Each step shells out to
+/// the current `aida` binary; a non-zero exit aborts the prelude so the caller
+/// skips the drain.
+// trace:STORY-265 | ai:claude
 // trace:TASK-1953 | ai:claude — doc moved back above run_plan_prelude.
 pub(crate) fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
     use auto_complete::PlanPreludeStep;

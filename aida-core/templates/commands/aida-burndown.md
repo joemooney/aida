@@ -20,9 +20,10 @@ Follow the workflow in `.claude/skills/aida-burndown/SKILL.md`:
 4. Integrate (you do NOT implement): review each PR in a separate reviewer
    process launched from Bash
    (`aida queue work PR-<n> --role reviewer --no-human --vendor claude`; codex
-   refuses under `AIDA_CONTAINED`), never an Agent-tool reviewer, never a
-   verdict you record), then ship approved green+clean PRs with
-   `aida pr ship <n>`, reconcile to Completed, pull. HOLD any `review:draft-only` spec as a draft for the operator.
+   refuses under `AIDA_CONTAINED`). Never use an Agent-tool reviewer, never
+   record a verdict yourself. Then ship approved green+clean PRs with
+   `aida pr ship <n>`, reconcile to Completed, pull. HOLD any
+   `review:draft-only` spec as a draft for the operator.
 5. Punt-and-continue: a blocker parks ONE spec, never halts the wave. Never stop
    to ask; never down tools.
 6. Re-run `aida burndown plan`, launch the next wave, loop until `ready` empty;

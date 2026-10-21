@@ -12,9 +12,11 @@ Follow `.claude/skills/aida-fire/SKILL.md`:
 3. Fan out fixers in one message, and review each PR in a separate reviewer
    process launched from Bash
    (`aida queue work PR-<n> --role reviewer --no-human --vendor claude`; codex
-   refuses under `AIDA_CONTAINED`), never an Agent-tool reviewer; about 10 agents at most.
+   refuses under `AIDA_CONTAINED`), never an Agent-tool reviewer; about 10
+   agents at most.
 4. Ship PRs the reviewer process approved with `aida pr ship`, one at a time,
-   each freshly updated from main; never record a verdict yourself. Cap review at two rounds; file follow-ups.
+   each freshly updated from main; never record a verdict yourself. Cap review
+   at two rounds; file follow-ups.
 5. Watch CI in the background; stop shipping while main is red.
 6. Route merge-hold clears to the operator, honour spec-level gates, capture,
    and hand off.

@@ -738,8 +738,43 @@ struct FileGapsOutcome {
     filed: Vec<String>,
     parent_linked: Vec<(String, String)>,
     parent_conflicts: Vec<String>,
+    // A draft already linked to its mapped parent among others: a no-op, so
+    // it is never reported as a conflict.
+    // trace:TASK-1953 | ai:claude
+    parent_notices: Vec<String>,
     // trace:TASK-0446 | ai:claude
     link_failures: Vec<String>,
+}
+
+impl FileGapsOutcome {
+    // The `--file` report lines, one per filed draft, link, notice, conflict
+    // and failure.
+    // trace:TASK-1953 | ai:claude
+    fn render(&self) -> String {
+        let mut lines = vec![format!("Draft amendment tasks filed: {}", self.filed.len())];
+        lines.extend(self.filed.iter().map(|id| format!("  {id}")));
+        lines.extend(
+            self.parent_linked
+                .iter()
+                .map(|(draft, parent)| format!("Linked existing draft {draft} to parent {parent}")),
+        );
+        lines.extend(
+            self.parent_notices
+                .iter()
+                .map(|notice| format!("Parent already linked: {notice}")),
+        );
+        lines.extend(
+            self.parent_conflicts
+                .iter()
+                .map(|conflict| format!("Parent conflict: {conflict}")),
+        );
+        lines.extend(
+            self.link_failures
+                .iter()
+                .map(|failure| format!("Parent link failed: {failure}")),
+        );
+        lines.join("\n")
+    }
 }
 
 // Revalidate a corpus-resolved check mapping against the live RequirementsStore
@@ -811,12 +846,16 @@ fn link_existing_draft(
     // notice, not a conflict with the mapping.
     // trace:TASK-1953 | ai:claude
     if parents.contains(&resolved.spec_uuid) {
-        outcome.parent_conflicts.push(format!(
-            "{label} ({}): already linked to mapped parent {} ({}) alongside other parents {:?}; left unchanged",
+        let others: Vec<&Uuid> = parents
+            .iter()
+            .filter(|p| **p != resolved.spec_uuid)
+            .collect();
+        outcome.parent_notices.push(format!(
+            "{label} ({}): mapped parent {} ({}) is already linked, alongside other parents {:?}; left unchanged",
             check.escape_debug(),
             resolved.display_id,
             resolved.spec_uuid,
-            parents
+            others
         ));
         return;
     }
@@ -950,19 +989,7 @@ pub(super) fn handle(store: &Path, ids: &[Uuid], file: bool) -> Result<()> {
     println!("{}", consensus.render());
     if file {
         let outcome = file_gaps(store, &consensus)?;
-        println!("Draft amendment tasks filed: {}", outcome.filed.len());
-        for id in outcome.filed {
-            println!("  {id}");
-        }
-        for (draft, parent) in outcome.parent_linked {
-            println!("Linked existing draft {draft} to parent {parent}");
-        }
-        for conflict in outcome.parent_conflicts {
-            println!("Parent conflict: {conflict}");
-        }
-        for failure in outcome.link_failures {
-            println!("Parent link failed: {failure}");
-        }
+        println!("{}", outcome.render());
     }
     Ok(())
 }
@@ -1627,13 +1654,24 @@ mod tests {
         let outcome = sc.file();
         assert_eq!(head(sc.fx.path()).unwrap(), before);
         assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
-        assert_eq!(outcome.parent_conflicts.len(), 1);
         assert!(
-            outcome.parent_conflicts[0].contains("already linked to mapped parent STORY-900"),
+            outcome.parent_conflicts.is_empty(),
             "{:?}",
             outcome.parent_conflicts
         );
-        assert!(!outcome.parent_conflicts[0].contains("conflicts with"));
+        assert_eq!(outcome.parent_notices.len(), 1);
+        let rendered = outcome.render();
+        assert!(
+            rendered.contains("Parent already linked: ")
+                && rendered.contains("mapped parent STORY-900"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("Parent conflict:"), "{rendered}");
+        assert!(!rendered.contains("conflicts with"), "{rendered}");
+        // The mapped parent is not listed among the "other" parents.
+        let others = rendered.split("other parents").nth(1).unwrap();
+        assert!(!others.contains(&sc.owner.to_string()), "{rendered}");
+        assert!(others.contains(&sc.other.to_string()), "{rendered}");
     }
 
     // trace:TASK-0446.acf44f1a | ai:claude
