@@ -1,0 +1,27 @@
+id: 01a15e26-62bc-7001-b3e2-228cfcaf8ab2
+spec_id: TASK-2057
+agreed_id: TASK-2057
+title: Decide whether PR-2796 completes TASK-1981 (commit trailers vs PR title disagree)
+description: |
+  In PR-2796, commits 8fda1ce07d and cbb9f66bec carry the completing (TASK-1981) trailer, while the PR title and commit 65a0c9c6e2 use (Refs TASK-1981). The task's comments describe this F6/F7 slice as the final completing PR, and the rest of the scope shipped in PR-2778. The advisor should decide whether the merge completes TASK-1981 and make the ship subject match. BUG-2194 is tracked separately.
+
+  Raised in review of PR-2796: https://github.com/joemooney/aida/pull/2796#issuecomment-6314454810
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T11:08:56.380867870Z
+modified_at: 2026-10-21T11:08:56.380867870Z
+req_type: Task
+tags:
+- from-review:PR-2796
+- process
+- severity:cosmetic
+filed_at:
+  code_sha: 65a0c9c6e292918f408f0c7e9f91697b611c9dc3
+  branch: pr-2796
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66e4d93b8
+  vendor: claude
+  session: 01a15e1fe4a9
