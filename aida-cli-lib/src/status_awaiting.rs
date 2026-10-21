@@ -3036,8 +3036,9 @@ pub(crate) fn print_aida_dev_context(project_root: &std::path::Path) {
 
     println!();
     println!("  Helpful:");
+    // trace:TASK-1721 | ai:claude
     println!(
-        "    {}    — bump version + tag + push",
+        "    {}    — bump version via a release PR, tag the merged commit",
         "scripts/release.sh".cyan()
     );
     println!(

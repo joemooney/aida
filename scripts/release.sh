@@ -202,13 +202,20 @@ lease_acquire() {
     deadline=$(( $(date +%s) + wait_secs ))
     mkdir -p "$(dirname "$lease_file")"
     while :; do
-        if ( set -o noclobber; : > "$lease_file" ) 2>/dev/null; then
-            printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
-                "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
-                "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$lease_file"
+        # Write the full record to a temp file in the same directory, then
+        # hard-link it into place: link(2) fails if the lease exists, so the
+        # claim is atomic and a reader never sees a partial or empty lease.
+        local tmp
+        tmp=$(mktemp "$lease_file.XXXXXX")
+        printf 'host=%s\npid=%s\npid_start=%s\npr=%s\nnote=%s\nacquired_at=%s\nttl_secs=%s\n' \
+            "$lease_host" "$$" "$(lease_pid_start "$$")" "${2:-}" \
+            "scripts/release.sh v$new" "$(date +%s)" "$lease_ttl" > "$tmp"
+        if ln "$tmp" "$lease_file" 2>/dev/null; then
+            rm -f "$tmp"
             lease_held=1
             return 0
         fi
+        rm -f "$tmp"
         if ! lease_is_live; then
             rm -f "$lease_file"
             continue
@@ -261,15 +268,16 @@ if [ "$dry_run" = "1" ]; then
     echo "dry run: v$current -> v$new. Nothing will be changed, committed, or pushed."
     echo
     echo "Planned release sequence:"
-    echo "  1. take the '$release_base' merge-lease ($lease_file)"
+    echo "  1. take the '$release_base' merge-lease ($lease_file) after any ecosystem-watch prompt"
     echo "  2. bump the workspace version, dependency pins, Cargo.lock and CHANGELOG.md; run cargo check and the docs gate"
-    echo "  3. commit the bump on branch $release_branch (AIDA_RELEASE=1)"
-    echo "  4. push branch: git push $release_remote $release_branch"
-    echo "  5. open the PR: gh pr create --base $release_base --head $release_branch --title \"chore: release v$new\""
-    echo "  6. wait for checks: gh pr checks <PR> --watch"
-    echo "  7. squash-merge: gh pr merge <PR> --squash --match-head-commit <release-branch-sha>"
-    echo "  8. tag the merged SHA: git tag -a v$new <merged-sha>"
-    echo "  9. push the tag: git push $release_remote v$new"
+    echo "  3. release the lease, then ask for confirmation"
+    echo "  4. retake the lease; commit the bump on branch $release_branch (AIDA_RELEASE=1)"
+    echo "  5. push branch: git push $release_remote $release_branch; release the lease"
+    echo "  6. open the PR: gh pr create --base $release_base --head $release_branch --title \"chore: release v$new\""
+    echo "  7. wait for checks: gh pr checks <PR> --watch"
+    echo "  8. retake the lease; squash-merge: gh pr merge <PR> --squash --match-head-commit <release-branch-sha>"
+    echo "  9. tag the merged SHA: git tag -a v$new <merged-sha>"
+    echo " 10. push the tag: git push $release_remote v$new"
     echo
     echo "Main is never pushed directly; only the tag is pushed."
     exit 0
@@ -309,13 +317,6 @@ EOM
         echo "error: tag v$new already exists" >&2
         exit 1
     fi
-fi
-
-# Hold the lease while the working tree is being bumped, so a concurrent ship
-# cannot fast-forward this checkout mid-bump. trace:TASK-1721 | ai:claude
-if ! lease_acquire 0; then
-    echo "error: the '$release_base' merge-lease was taken by $(lease_describe); re-run once it finishes" >&2
-    exit 1
 fi
 
 # Verify the ecosystem review has been performed recently for major/minor releases.
@@ -413,6 +414,15 @@ if [ "$is_major_or_minor" = "1" ]; then
             fi
             ;;
     esac
+fi
+
+# Hold the lease while the working tree is being bumped, so a concurrent ship
+# cannot fast-forward this checkout mid-bump. It is taken after the ecosystem
+# prompt and released before the confirmation prompt, so no prompt waits on a
+# human while holding it. trace:TASK-1721 | ai:claude
+if ! lease_acquire 0; then
+    echo "error: the '$release_base' merge-lease was taken by $(lease_describe); re-run once it finishes" >&2
+    exit 1
 fi
 
 echo "bumping workspace from v$current -> v$new"
@@ -569,6 +579,8 @@ EOM
     exit 0
 fi
 
+lease_release  # trace:TASK-1721 | ai:claude
+
 if [ "$auto_yes" = "1" ]; then
     echo "auto-confirm: --yes (or AIDA_RELEASE_YES=1) — proceeding without prompt."
     answer=y
@@ -626,6 +638,16 @@ esac
 # is unaffected — release commits still can't sneak intermediate build products in.
 # trace:TASK-488 | ai:claude
 export AIDA_RELEASE=1
+# Retake the lease for the commit and branch push. trace:TASK-1721 | ai:claude
+if ! lease_acquire "${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"; then
+    cat <<EOM >&2
+error: the '$release_base' merge-lease is held by $(lease_describe).
+The version bump is still in your working tree; re-run the publish steps once it
+finishes, or discard with: git restore ${manifest_paths[*]}
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
 # TASK-1721: the bump is committed on release/vX, not on main, so the
 # STORY-1647 primary-checkout gate only warns and no override is needed.
 # trace:TASK-1721 | ai:claude

@@ -150,6 +150,7 @@ TOML
         cat > .git/hooks/commit-msg <<HOOK
 #!/usr/bin/env bash
 echo "AIDA_RELEASE=\${AIDA_RELEASE:-}" >> "$root/state/commit-env"
+cp "$root/work/.aida/merge-locks/main" "$root/state/lease-at-commit" 2>/dev/null || true
 HOOK
         chmod +x .git/hooks/commit-msg
     )
@@ -315,6 +316,30 @@ chmod +x "$TEST_DIR/bin-lease/cargo"
 grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-during-check" 2>/dev/null \
     || fail "the main merge-lease was not held during cargo check"
 pass "release.sh holds the main merge-lease during the bump"
+grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-at-commit" 2>/dev/null \
+    || fail "the main merge-lease was not retaken for the release commit"
+pass "release.sh retakes the main merge-lease for the release commit"
+
+info "Test 4d: no prompt runs while the lease is held"
+first_acquire=$(grep -n '^if ! lease_acquire 0; then' "$RELEASE" | head -n1 | cut -d: -f1)
+last_eco_prompt=$(grep -n 'read -r -p ".*\[y/N\]: " eco_answer' "$RELEASE" | tail -n1 | cut -d: -f1)
+pre_confirm_release=$(grep -nE '^lease_release( |$)' "$RELEASE" | head -n1 | cut -d: -f1)
+confirm_prompt=$(grep -n 'read -r -p "Open release PR' "$RELEASE" | head -n1 | cut -d: -f1)
+second_acquire=$(grep -n 'lease_acquire "\${AIDA_RELEASE_LEASE_WAIT_SECS:-180}"' "$RELEASE" | head -n1 | cut -d: -f1)
+for v in "$first_acquire" "$last_eco_prompt" "$pre_confirm_release" "$confirm_prompt" "$second_acquire"; do
+    [ -n "$v" ] || fail "could not locate the lease/prompt lines in release.sh"
+done
+[ "$last_eco_prompt" -lt "$first_acquire" ] || fail "lease is taken before the ecosystem-watch prompt"
+[ "$first_acquire" -lt "$pre_confirm_release" ] && [ "$pre_confirm_release" -lt "$confirm_prompt" ] \
+    || fail "lease is not released before the confirmation prompt"
+[ "$confirm_prompt" -lt "$second_acquire" ] || fail "lease is retaken before the confirmation prompt"
+pass "lease is taken after the ecosystem prompt, dropped before confirmation, retaken after"
+
+info "Test 4e: the lease is claimed atomically, never visible empty"
+if grep -n 'noclobber' "$RELEASE"; then fail "lease is still created empty via noclobber"; fi
+grep -q 'ln "\$tmp" "\$lease_file"' "$RELEASE" || fail "lease is not hard-linked into place from a full temp file"
+[ -z "$(ls "$F5/work/.aida/merge-locks/" 2>/dev/null)" ] || fail "lease temp files left behind: $(ls "$F5/work/.aida/merge-locks/")"
+pass "lease is written to a temp file and linked into place; no temp files remain"
 
 # ─── 6. gh pr create fails after the branch push ──────────────────────────
 info "Test 6: a failed gh pr create prints recovery, and a re-run names the leftover branch"
