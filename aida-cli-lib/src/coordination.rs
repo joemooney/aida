@@ -75,7 +75,7 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +97,10 @@ const MAX_CAS_RETRIES: u32 = 5;
 /// trace:STORY-637 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct Claim {
+    // Invocation identity; old records remain readable but cannot authorize launch rollback.
+    // trace:BUG-2188 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claim_id: Option<String>,
     /// Raw scope string (a SPEC-ID like `FR-1`, or a worktree scope).
     pub scope: String,
     /// Which clone/node holds it (from `.aida-store/.aida/node.toml`).
@@ -367,47 +371,50 @@ pub(crate) fn claim_staleness(
 /// what BUG-1764 clause 2 asks for: an unverifiable claim must not be trusted
 /// as live.
 ///
-/// | recorded start | live start | verdict |
+/// | recorded start | live start (matching format) | verdict |
 /// |---|---|---|
 /// | (pid not alive) | — | dead |
 /// | absent | — | **unverifiable → not live** |
-/// | present | unreadable | **unverifiable → not live** |
+/// | present | unreadable / unparseable | **unverifiable → not live** |
 /// | present | differs | dead (the PID-collision case) |
 /// | present | equal | alive |
 ///
 /// Use for display and for the opt-in `--prune-stale` clear only. Do NOT reuse
 /// as a reclaim predicate for the drain/solo locks.
 // trace:BUG-1764 | ai:claude
+// trace:BUG-2130 | ai:agy
 pub(crate) fn strictly_alive(pid: u32, recorded_start: Option<&str>) -> bool {
     strictly_alive_with(
         pid,
         recorded_start,
-        aida_core::liveness::pid_is_alive,
-        aida_core::liveness::process_start_identity,
+        crate::process_probe::pid_is_alive,
+        aida_core::liveness::process_start_identity_legacy,
+        aida_core::liveness::process_start_identity_exact,
     )
 }
 
 /// Injectable core of [`strictly_alive`], so the collision case is reproducible
 /// in a unit test without root and without a real pid 2.
 // trace:BUG-1764 | ai:claude
-fn strictly_alive_with(
+// trace:BUG-2130 | ai:agy
+pub(crate) fn strictly_alive_with(
     pid: u32,
     recorded_start: Option<&str>,
     is_pid_alive: impl FnOnce(u32) -> bool,
     live_start: impl FnOnce(u32) -> Option<String>,
+    live_exact_start: impl FnOnce(u32) -> Option<String>,
 ) -> bool {
-    if !is_pid_alive(pid) {
-        return false;
-    }
     // No recorded identity → nothing to compare → unverifiable, not live.
     let Some(recorded) = recorded_start else {
         return false;
     };
-    // Kernel start time unreadable → unverifiable, not live.
-    match live_start(pid) {
-        Some(actual) => recorded == actual,
-        None => false,
-    }
+    aida_core::liveness::process_identity_matches_strict_with(
+        pid,
+        recorded,
+        is_pid_alive,
+        live_start,
+        live_exact_start,
+    )
 }
 
 /// BUG-1765: the real verified-live probe for a session-lease claim, injected
@@ -651,6 +658,7 @@ fn build_claim(
 ) -> Claim {
     let now = Utc::now().to_rfc3339();
     Claim {
+        claim_id: Some(uuid::Uuid::new_v4().to_string()),
         scope: scope.to_string(),
         node_id: node_id_for_clone(store_root, clone_path),
         clone_path: canonical_clone_path(clone_path),
@@ -675,7 +683,7 @@ fn build_claim(
     }
 }
 
-/// Outcome of [`acquire_claim`], so the call site can print the right note.
+/// Outcome of [`acquire_claim_receipted`], so the call site can print the right note.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AcquireOutcome {
     /// Claimed cleanly (no prior claim, or our own clone re-claiming).
@@ -697,6 +705,9 @@ pub(crate) enum AcquireOutcome {
 /// **Best-effort:** with no `origin` remote, or if the store can't be reached,
 /// returns `Ok(AcquireOutcome::Unavailable(..))` rather than erroring — the
 /// caller WARNs and proceeds local-only. trace:STORY-637 | ai:claude
+// Legacy test entrypoint; production retains the acquisition receipt.
+// trace:BUG-2188 | ai:codex
+#[cfg(test)]
 pub(crate) fn acquire_claim(
     store_root: &Path,
     scope: &str,
@@ -705,16 +716,31 @@ pub(crate) fn acquire_claim(
     review_verb: bool,
     force: bool,
 ) -> Result<AcquireOutcome> {
+    acquire_claim_receipted(store_root, scope, clone_path, agent, review_verb, force)
+        .map(|(outcome, _)| outcome)
+}
+
+// trace:BUG-2188 | ai:codex
+pub(crate) fn acquire_claim_receipted(
+    store_root: &Path,
+    scope: &str,
+    clone_path: &Path,
+    agent: &str,
+    review_verb: bool,
+    force: bool,
+) -> Result<(AcquireOutcome, Option<Claim>)> {
     if !store_root.exists() {
-        return Ok(AcquireOutcome::Unavailable(
-            "no .aida-store worktree attached".to_string(),
+        return Ok((
+            AcquireOutcome::Unavailable("no .aida-store worktree attached".to_string()),
+            None,
         ));
     }
     // Cross-clone coordination only matters when clones SHARE a remote store.
     // A solo clone (no origin) has nothing to coordinate against — proceed.
     if !aida_core::git_ops::has_remote(store_root, "origin") {
-        return Ok(AcquireOutcome::Unavailable(
-            "store has no origin remote (solo clone)".to_string(),
+        return Ok((
+            AcquireOutcome::Unavailable("store has no origin remote (solo clone)".to_string()),
+            None,
         ));
     }
     let branch =
@@ -724,131 +750,144 @@ pub(crate) fn acquire_claim(
     let path = claim_path(store_root, scope);
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // trace:TASK-1930 | ai:agy
-        enum ClaimStep {
-            Unavailable(String),
-            Refused(String),
-            Ready {
-                outcome_note: Option<String>,
-                committed_sha: Option<String>,
-            },
-        }
-        let step = aida_core::db::with_store_write_lock(store_root, || -> Result<ClaimStep> {
-            // Step 1: refresh the store so we see other clones' claims. A failed
-            // pull (offline) is NOT fatal — fall through to local-only behavior.
-            if let Err(e) = refresh_store(store_root, &branch)? {
-                return Ok(ClaimStep::Unavailable(format!("store unreachable ({e})")));
-            }
-
-            // Step 2: decide against the freshly-pulled claim.
-            let existing = read_claim(&path);
-            let outcome_note = if force {
-                // --force: skip the decision, but still report what we overrode.
-                existing
+        let (outcome, committed, written, adopted, commit_sha) =
+            aida_core::db::with_store_write_lock(store_root, || {
+                // Keep refresh, decision and write under main's shared writer lock.
+                // trace:BUG-2188 | ai:codex
+                if let Err(e) = refresh_store(store_root, &branch)? {
+                    return Ok((
+                        AcquireOutcome::Unavailable(format!("store unreachable ({e})")),
+                        false,
+                        None,
+                        false,
+                        None,
+                    ));
+                }
+                // Step 2: decide against the freshly-pulled claim.
+                let existing = read_claim(&path);
+                // A same-clone re-claim refreshes started_at/heartbeat/pid/
+                // session/agent (the TTL and BUG-1765 liveness probe read
+                // them) but keeps the existing claim_id: the claim is adopted,
+                // so it never yields a rollback receipt.
+                // trace:BUG-2188 | ai:claude
+                let adopted_id = existing
                     .as_ref()
-                    .filter(|h| h.node_id != ours.node_id)
-                    .map(|h| format!("--force overriding {}'s claim ({})", h.host, h.clone_path))
-            } else {
-                match decide_claim(
-                    existing.as_ref(),
-                    &ours,
-                    Utc::now(),
-                    &our_host,
-                    crate::process_probe::process_identity_is_alive,
-                    // BUG-1765: a same-host holder whose session is verifiably
-                    // live keeps its claim past the TTL. trace:BUG-1765 | ai:claude
-                    |c: &Claim| probe_session_liveness(c, &our_host),
-                ) {
-                    ClaimDecision::Refuse { holder } => {
-                        return Ok(ClaimStep::Refused(refusal_message(scope, &holder, &path)));
+                    .filter(|c| c.clone_path == ours.clone_path)
+                    .map(|c| c.claim_id.clone());
+                let adopted = adopted_id.is_some();
+                let mine = Claim {
+                    claim_id: adopted_id.unwrap_or_else(|| ours.claim_id.clone()),
+                    ..ours.clone()
+                };
+                let outcome_note = if force {
+                    // --force: skip the decision, but still report what we overrode.
+                    existing
+                        .as_ref()
+                        .filter(|h| h.node_id != ours.node_id)
+                        .map(|h| {
+                            format!("--force overriding {}'s claim ({})", h.host, h.clone_path)
+                        })
+                } else {
+                    match decide_claim(
+                        existing.as_ref(),
+                        &ours,
+                        Utc::now(),
+                        &our_host,
+                        crate::process_probe::process_identity_is_alive,
+                        // BUG-1765: a same-host holder whose session is verifiably
+                        // live keeps its claim past the TTL. trace:BUG-1765 | ai:claude
+                        |c: &Claim| probe_session_liveness(c, &our_host),
+                    ) {
+                        ClaimDecision::Refuse { holder } => {
+                            anyhow::bail!("{}", refusal_message(scope, &holder, &path));
+                        }
+                        ClaimDecision::Acquire => None,
+                        ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
                     }
-                    ClaimDecision::Acquire => None,
-                    ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
-                }
-            };
+                };
 
-            // Step 3: write our claim, commit, push. On non-ff → pull + retry.
-            std::fs::create_dir_all(leases_dir(store_root)).ok();
-            let toml = toml::to_string_pretty(&ours)
-                .map_err(|e| anyhow::anyhow!("could not serialize lease claim: {e}"))?;
-            std::fs::write(&path, toml).map_err(|e| {
-                anyhow::anyhow!("could not write lease claim {}: {e}", path.display())
+                // Step 3: write our claim, commit, push. On non-ff → pull + retry.
+                std::fs::create_dir_all(leases_dir(store_root)).ok();
+                let toml = toml::to_string_pretty(&mine)
+                    .map_err(|e| anyhow::anyhow!("could not serialize lease claim: {e}"))?;
+                std::fs::write(&path, toml).map_err(|e| {
+                    anyhow::anyhow!("could not write lease claim {}: {e}", path.display())
+                })?;
+
+                let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
+                aida_core::git_ops::add(store_root, &[&rel])?;
+                let msg = format!(
+                    "chore(coordination): claim lease {scope} (node {})",
+                    ours.node_id
+                );
+                // `commit` returns Ok(false) for "nothing to commit" — treat as a
+                // successful no-op (our claim already matched what was on disk).
+                // Preserve main's error cleanup; a failed commit supplies no receipt.
+                let committed = match aida_core::git_ops::commit(store_root, &msg) {
+                    Ok(committed) => committed,
+                    Err(error) => {
+                        let _ = aida_core::git_ops::host_git_command(store_root)
+                            .args(["reset", "-q", "HEAD", "--", &rel])
+                            .status();
+                        return Err(error);
+                    }
+                };
+                let outcome = match outcome_note {
+                    Some(reason) => AcquireOutcome::Reclaimed(reason),
+                    None => AcquireOutcome::Acquired,
+                };
+                Ok((
+                    outcome,
+                    committed,
+                    Some(mine),
+                    adopted,
+                    Some(aida_core::git_ops::head_sha(store_root)?),
+                ))
             })?;
+        let receipt = written.clone().filter(|_| !adopted);
+        if !committed {
+            return Ok((outcome, receipt));
+        }
+        let written = written.context("missing written claim identity")?;
 
-            let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
-            aida_core::git_ops::add(store_root, &[&rel])?;
-            let msg = format!(
-                "chore(coordination): claim lease {scope} (node {})",
-                ours.node_id
-            );
-            // `commit` returns Ok(false) for "nothing to commit" — treat as a
-            // successful no-op (our claim already matched what was on disk).
-            // A real commit error unstages `&rel` and propagates as Err so we
-            // never record a pre-existing HEAD as `committed_sha` or leave the
-            // store index dirty. trace:TASK-1930 | ai:agy
-            let committed = match aida_core::git_ops::commit(store_root, &msg) {
-                Ok(c) => c,
-                Err(e) => {
-                    let _ = aida_core::git_ops::host_git_command(store_root)
-                        .args(["reset", "-q", "HEAD", "--", &rel])
-                        .status();
-                    return Err(e);
-                }
-            };
-            let committed_sha = if committed {
-                Some(aida_core::git_ops::head_sha(store_root)?)
-            } else {
-                None
-            };
-            Ok(ClaimStep::Ready {
-                outcome_note,
-                committed_sha,
-            })
-        })?;
-
-        let (outcome_note, committed_sha) = match step {
-            ClaimStep::Unavailable(msg) => return Ok(AcquireOutcome::Unavailable(msg)),
-            ClaimStep::Refused(msg) => anyhow::bail!("{msg}"),
-            ClaimStep::Ready {
-                outcome_note,
-                committed_sha: None,
-            } => {
-                return Ok(match outcome_note {
-                    Some(reason) => AcquireOutcome::Reclaimed(reason),
-                    None => AcquireOutcome::Acquired,
-                });
-            }
-            ClaimStep::Ready {
-                outcome_note,
-                committed_sha: Some(sha),
-            } => (outcome_note, sha),
-        };
-
-        match aida_core::git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
+        let committed_sha = commit_sha
+            .as_deref()
+            .context("missing claim commit identity")?;
+        match aida_core::git_ops::push_exact(store_root, "origin", committed_sha, &branch) {
             Ok(true) => {
-                return Ok(match outcome_note {
-                    Some(reason) => AcquireOutcome::Reclaimed(reason),
-                    None => AcquireOutcome::Acquired,
-                });
+                return Ok((outcome, receipt));
             }
             Ok(false) => {
                 // Push rejected — another clone wrote first. Discard our local
-                // commit + working-tree change if HEAD is still our commit so
-                // the next iteration's pull --rebase has a clean tree, then
-                // re-decide. Mirrors register_node_full's BUG-1-069 reset.
-                let _ =
-                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
+                // commit + working-tree change so the next iteration's
+                // pull --rebase has a clean tree, then re-decide. Mirrors
+                // register_node_full's BUG-1-069 reset.
+                rollback_claim_commit(
+                    store_root,
+                    commit_sha
+                        .as_deref()
+                        .context("missing claim commit identity")?,
+                    &written,
+                )?;
                 let _ = attempt; // loop continues
                 continue;
             }
             Err(e) => {
                 // Push errored for a non-contention reason (network mid-flight).
                 // Roll back our commit and proceed local-only rather than wedge.
-                let _ =
-                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
-                return Ok(AcquireOutcome::Unavailable(format!(
-                    "could not push lease claim ({e})"
-                )));
+                rollback_claim_commit(
+                    store_root,
+                    commit_sha
+                        .as_deref()
+                        .context("missing claim commit identity")?,
+                    &written,
+                )?;
+                return Ok((
+                    AcquireOutcome::Unavailable(format!("could not push lease claim ({e})")),
+                    // The remote may have accepted before the connection failed.
+                    // Retain the exact identity for later conditional cleanup.
+                    receipt,
+                ));
             }
         }
     }
@@ -857,6 +896,78 @@ pub(crate) fn acquire_claim(
         "could not claim lease for `{scope}` after {MAX_CAS_RETRIES} attempts — \
          too much contention on the shared lease registry"
     )
+}
+
+// Drop only the exact clean commit this acquisition just made. A concurrent
+// local writer or changed claim requires recovery, never a blanket HEAD~1 reset.
+// trace:BUG-2188 | ai:codex
+fn rollback_claim_commit(store_root: &Path, expected_head: &str, expected: &Claim) -> Result<()> {
+    aida_core::db::with_store_write_lock(store_root, || {
+        anyhow::ensure!(aida_core::git_ops::head_sha(store_root)? == expected_head
+            && read_claim(&claim_path(store_root, &expected.scope)).as_ref() == Some(expected),
+            "claim rollback identity changed; inspect `aida session leases --all` and the store history");
+        let status = aida_core::git_ops::host_git_command(store_root)
+            .args(["status", "--porcelain"])
+            .output()?;
+        anyhow::ensure!(
+            status.status.success() && status.stdout.is_empty(),
+            "claim rollback kept concurrent store changes; inspect the store history"
+        );
+        let output = aida_core::git_ops::host_git_command(store_root)
+            .args(["reset", "--hard", "HEAD~1"])
+            .output()?;
+        anyhow::ensure!(
+            output.status.success(),
+            "claim rollback failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        Ok(())
+    })
+}
+
+/// Compare-and-delete only this invocation's persisted identity. Legacy and
+/// adopted claims never produce a rollback receipt.
+// trace:BUG-2188 | ai:codex
+pub(crate) fn release_claim_receipt(store_root: &Path, expected: &Claim) -> Result<bool> {
+    let branch = aida_core::git_ops::current_branch(store_root)?;
+    let committed_sha = aida_core::db::with_store_write_lock(store_root, || {
+        if let Err(error) = refresh_store(store_root, &branch)? {
+            anyhow::bail!("cannot refresh claim before rollback: {error}");
+        }
+        if delete_claim_receipt_locked(store_root, expected)? {
+            Ok(Some(aida_core::git_ops::head_sha(store_root)?))
+        } else {
+            Ok(None)
+        }
+    })?;
+    if let Some(sha) = committed_sha {
+        if !aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch)? {
+            anyhow::bail!("claim rollback committed locally; push rejected; run `aida pull` and inspect the shared claim");
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+// trace:BUG-2188 | ai:codex
+fn delete_claim_receipt_locked(store_root: &Path, expected: &Claim) -> Result<bool> {
+    let path = claim_path(store_root, &expected.scope);
+    let Some(current) = read_claim(&path) else {
+        return Ok(false);
+    };
+    if expected.claim_id.is_none() || current.claim_id != expected.claim_id || current != *expected
+    {
+        return Ok(false);
+    }
+    std::fs::remove_file(&path)?;
+    let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(&expected.scope));
+    aida_core::git_ops::add(store_root, &[&rel])?;
+    aida_core::git_ops::commit(
+        store_root,
+        &format!("chore(coordination): rollback lease {}", expected.scope),
+    )?;
+    Ok(true)
 }
 
 /// Compose the refusal message naming the holder, mirroring `drain_lock`'s.
@@ -1122,6 +1233,7 @@ fn build_lock_claim(
 ) -> Claim {
     let now = Utc::now().to_rfc3339();
     Claim {
+        claim_id: None,
         scope: kind.label().to_string(),
         node_id: node_id_for_clone(store_root, clone_path),
         clone_path: canonical_clone_path(clone_path),
@@ -1347,6 +1459,7 @@ pub(crate) fn live_foreign_lock_claim(
 ) -> Option<Claim> {
     let holder = read_claim(&lock_claim_path(store_root, kind))?;
     let ours = Claim {
+        claim_id: None,
         scope: kind.label().to_string(),
         node_id: String::new(),
         clone_path: canonical_clone_path(clone_path),
@@ -1513,6 +1626,7 @@ mod tests {
     /// faithfully tracks liveness, so the same-host pid probe is exact.
     fn claim(node_id: &str, host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            claim_id: None,
             scope: "FR-1".to_string(),
             node_id: node_id.to_string(),
             clone_path: "/home/joe/ai/aida-b".to_string(),
@@ -1540,6 +1654,7 @@ mod tests {
 
     fn ours(node_id: &str, host: &str) -> Claim {
         Claim {
+            claim_id: None,
             scope: "FR-1".to_string(),
             node_id: node_id.to_string(),
             clone_path: "/home/joe/ai/aida-a".to_string(),
@@ -1896,6 +2011,7 @@ ttl_secs = 1800
     /// A foreign process-lock claim on `host`/`pid`, heartbeat now-ish.
     fn lock_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            claim_id: None,
             scope: "drain".to_string(),
             node_id: "2".to_string(),
             clone_path: "/home/joe/ai/aida-b".to_string(),
@@ -2071,6 +2187,7 @@ ttl_secs = 1800
     /// recorded pid is the ephemeral `aida session start` shell.
     fn lease_claim(host: &str, pid: u32, heartbeat_at: &str) -> Claim {
         Claim {
+            claim_id: None,
             scope: "BUG-1817".to_string(),
             node_id: "4".to_string(),
             clone_path: "/home/joe.mooney/ai/aida".to_string(),
@@ -2157,19 +2274,25 @@ ttl_secs = 1800
     #[test]
     fn bug_1764_strict_probe_rejects_a_recycled_pid() {
         let boot = |_| Some("2026-09-04T00:00:00+00:00".to_string());
+        let exact = |_| Some("linux-starttime:42".to_string());
         // Recorded Sep 28, kernel says Sep 4 → mismatch → dead.
         assert!(
-            !strictly_alive_with(2, Some("2026-09-28T12:26:18+00:00"), |_| true, boot),
+            !strictly_alive_with(2, Some("2026-09-28T12:26:18+00:00"), |_| true, boot, exact),
             "a recorded start time that differs from the kernel's must read dead"
         );
         // Recorded == actual → alive.
         assert!(
-            strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| true, boot),
+            strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| true, boot, exact),
             "a matching start time must read alive"
+        );
+        // Exact tick record matches exact probe without relying on legacy btime.
+        assert!(
+            strictly_alive_with(2, Some("linux-starttime:42"), |_| true, |_| None, exact),
+            "an exact tick identity must read alive against the exact probe"
         );
         // Pid not alive at all → dead, regardless of the recorded identity.
         assert!(
-            !strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| false, boot),
+            !strictly_alive_with(2, Some("2026-09-04T00:00:00+00:00"), |_| false, boot, exact),
             "a dead pid must read dead"
         );
     }
@@ -2189,13 +2312,20 @@ ttl_secs = 1800
                 202,
                 None,
                 |_| true,
-                |_| Some("2026-09-04T00:00:00+00:00".to_string())
+                |_| Some("2026-09-04T00:00:00+00:00".to_string()),
+                |_| Some("linux-starttime:42".to_string()),
             ),
             "no recorded pid_start_time must read NOT live, even for a live pid"
         );
         // And a kernel that cannot report a start time is equally unverifiable.
         assert!(
-            !strictly_alive_with(202, Some("2026-09-28T00:00:00+00:00"), |_| true, |_| None),
+            !strictly_alive_with(
+                202,
+                Some("2026-09-28T00:00:00+00:00"),
+                |_| true,
+                |_| None,
+                |_| None,
+            ),
             "an unreadable kernel start time must read NOT live"
         );
         // Guard the contrast with the reclaim predicate we deliberately did
@@ -2773,3 +2903,168 @@ ttl_secs = 1800
 #[cfg(test)]
 #[path = "tests/bug_2162_evidence_refusal_tests.rs"]
 mod bug_2162_evidence_refusal_tests;
+
+// trace:BUG-2188 | ai:codex
+#[cfg(test)]
+mod bug2188_claim_rollback_tests {
+    use super::*;
+    #[test]
+    fn bug2188_acquisition_receipt_adoption_and_conditional_release() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let hub = temp.path().join("hub.git");
+        let root = temp.path().join("project");
+        let store = root.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let run = |cwd: &Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(
+            temp.path(),
+            &["init", "-q", "--bare", hub.to_str().unwrap()],
+        );
+        run(&store, &["init", "-q", "-b", "aida-store"]);
+        run(&store, &["config", "user.name", "fixture"]);
+        run(&store, &["config", "user.email", "fixture@test"]);
+        run(&store, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        run(&store, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        run(&store, &["push", "-q", "-u", "origin", "aida-store"]);
+        let (_, receipt) =
+            acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false).unwrap();
+        let expected = receipt.expect("fresh acquisition has an invocation receipt");
+        assert!(expected.claim_id.is_some());
+        let (_, adopted) =
+            acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false).unwrap();
+        assert!(adopted.is_none(), "same-clone adoption owns no rollback");
+        let mut successor = expected.clone();
+        successor.claim_id = Some(uuid::Uuid::new_v4().to_string());
+        aida_core::db::with_store_write_lock(&store, || {
+            std::fs::write(claim_path(&store, "TASK-1"), toml::to_string(&successor)?)?;
+            let rel = format!("coordination/leases/{}.toml", sanitize_scope("TASK-1"));
+            aida_core::git_ops::add(&store, &[&rel])?;
+            aida_core::git_ops::commit(&store, "successor")?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", "aida-store").unwrap());
+        assert!(!release_claim_receipt(&store, &expected).unwrap());
+        assert_eq!(
+            read_claim(&claim_path(&store, "TASK-1")).unwrap(),
+            successor
+        );
+        let (_, receipt) =
+            acquire_claim_receipted(&store, "TASK-2", &root, "implementer", false, false).unwrap();
+        assert!(release_claim_receipt(&store, &receipt.unwrap()).unwrap());
+        assert!(!claim_path(&store, "TASK-2").exists());
+    }
+
+    // Review round 1: a same-clone re-claim must rewrite the claim's
+    // freshness/identity metadata (TTL and liveness read it) while keeping
+    // the claim_id and granting no rollback authority.
+    // trace:BUG-2188.ac41d009 | ai:claude
+    #[test]
+    fn bug2188_same_clone_reacquire_refreshes_metadata_without_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let hub = temp.path().join("hub.git");
+        let root = temp.path().join("project");
+        let store = root.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let run = |cwd: &Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(cwd)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(
+            temp.path(),
+            &["init", "-q", "--bare", hub.to_str().unwrap()],
+        );
+        run(&store, &["init", "-q", "-b", "aida-store"]);
+        run(&store, &["config", "user.name", "fixture"]);
+        run(&store, &["config", "user.email", "fixture@test"]);
+        run(&store, &["commit", "-q", "--allow-empty", "-m", "seed"]);
+        run(&store, &["remote", "add", "origin", hub.to_str().unwrap()]);
+        run(&store, &["push", "-q", "-u", "origin", "aida-store"]);
+        let (_, receipt) =
+            acquire_claim_receipted(&store, "TASK-1", &root, "implementer", false, false).unwrap();
+        let first = receipt.expect("fresh acquisition has an invocation receipt");
+        // Age the stored claim as an earlier session's would be.
+        let mut aged = first.clone();
+        aged.started_at = "2026-01-01T00:00:00+00:00".into();
+        aged.heartbeat_at = aged.started_at.clone();
+        aged.pid = 1;
+        aida_core::db::with_store_write_lock(&store, || {
+            std::fs::write(claim_path(&store, "TASK-1"), toml::to_string(&aged)?)?;
+            let rel = format!("coordination/leases/{}.toml", sanitize_scope("TASK-1"));
+            aida_core::git_ops::add(&store, &[&rel])?;
+            aida_core::git_ops::commit(&store, "aged")?;
+            Ok(())
+        })
+        .unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", "aida-store").unwrap());
+
+        let (outcome, adopted) =
+            acquire_claim_receipted(&store, "TASK-1", &root, "reviewer", true, false).unwrap();
+        assert_eq!(outcome, AcquireOutcome::Acquired);
+        assert!(adopted.is_none(), "same-clone adoption owns no rollback");
+        let refreshed = read_claim(&claim_path(&store, "TASK-1")).unwrap();
+        assert_eq!(refreshed.claim_id, first.claim_id, "claim_id is kept");
+        assert_ne!(refreshed.started_at, aged.started_at);
+        assert_ne!(refreshed.heartbeat_at, aged.heartbeat_at);
+        assert_eq!(refreshed.pid, std::process::id());
+        assert_eq!(refreshed.agent, "reviewer");
+        assert!(refreshed.review_verb);
+        // The refresh reached the shared store, not just the local file.
+        run(&store, &["fetch", "-q", "origin"]);
+        let remote = crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["rev-parse", "HEAD", "origin/aida-store"])
+            .output()
+            .unwrap();
+        let shas = String::from_utf8_lossy(&remote.stdout);
+        let mut lines = shas.lines();
+        assert_eq!(lines.next(), lines.next());
+        // The refreshed claim now belongs to the re-claiming session: the
+        // first invocation's receipt no longer authorizes deleting it.
+        assert!(!release_claim_receipt(&store, &first).unwrap());
+        assert!(claim_path(&store, "TASK-1").exists());
+    }
+
+    #[test]
+    fn bug2188_successor_claim_survives_exact_rollback() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(leases_dir(dir.path())).unwrap();
+        let expected = build_claim(dir.path(), "TASK-1", dir.path(), "implementer", false);
+        let mut successor = expected.clone();
+        successor.claim_id = Some(uuid::Uuid::new_v4().to_string());
+        let path = claim_path(dir.path(), "TASK-1");
+        let body = toml::to_string(&successor).unwrap();
+        std::fs::write(&path, &body).unwrap();
+        assert!(!delete_claim_receipt_locked(dir.path(), &expected).unwrap());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        let mut legacy = expected;
+        legacy.claim_id = None;
+        std::fs::write(&path, toml::to_string(&legacy).unwrap()).unwrap();
+        assert!(!delete_claim_receipt_locked(dir.path(), &legacy).unwrap());
+    }
+}

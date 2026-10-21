@@ -2,7 +2,6 @@
 # Counts may only go down: migrate fixtures to test_git and rerun
 # `python3 tests/test_git_maintenance_ratchet.py --write-baseline`.
 1 aida-cli-lib/src/regen.rs
-2 aida-cli-lib/src/regen/consensus.rs
 5 aida-cli-lib/src/regen/score.rs
 1 aida-cli-lib/src/regen/score/adapter.rs
 7 aida-cli-lib/src/regen/score/controls.rs

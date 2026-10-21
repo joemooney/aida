@@ -26,7 +26,14 @@ handoff. Repo-local rulings go in `.aida/standing-orders/advisor.md` via
    locally. Briefs say so: they never order `make check-ci`, `make check`,
    `cargo test --workspace` or an unfiltered `--lib`, and never set
    `AIDA_CARGO_NO_SLOT` (see `rework-brief-craft.md` step 6).
-8. When launching another agent or relay from the advisor seat, scrub the
-   seat env: `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE
-   AIDA_SESSION_ROLE=implementer ...`. Otherwise the child inherits the
-   advisor role and grant (it refuses to implement, and it leaks authority).
+8. Use `aida agent new <vendor> --role implementer ...` for a delegated
+   child. In the advisor's human terminal, first run
+   `eval "$(aida role enter advisor --delegate-seat implementer)"`;
+   retain that shell's `AIDA_SESSION_GRANT`
+   when invoking AIDA, and scrub `AIDA_SESSION_PURPOSE`. The launcher validates
+   delegation and replaces the parent grant with a child-specific grant.
+   For a direct vendor or relay launch, scrub the seat env instead:
+   `env -u AIDA_SESSION_GRANT -u AIDA_SESSION_PURPOSE
+   AIDA_SESSION_ROLE=implementer ...`. Direct children must not inherit the
+   advisor grant. An ambient role alone does not authorize AIDA delegation.
+   <!-- trace:BUG-2188 | ai:codex -->

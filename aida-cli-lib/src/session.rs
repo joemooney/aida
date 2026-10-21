@@ -1069,7 +1069,18 @@ pub(crate) fn build_claude_exec_command(
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
     use std::process::Command;
-    let mut cmd = Command::new("claude");
+    let (program, args) = interactive_claude_program_and_args(
+        contained,
+        claude_session_args(
+            permission_mode,
+            name,
+            initial_prompt,
+            session_id,
+            contained,
+            model,
+        )?,
+    )?;
+    let mut cmd = Command::new(program);
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant);
     }
@@ -1078,15 +1089,24 @@ pub(crate) fn build_claude_exec_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.args(claude_session_args(
-        permission_mode,
-        name,
-        initial_prompt,
-        session_id,
-        contained,
-        model,
-    )?);
+    cmd.args(args);
     Ok(cmd)
+}
+
+/// BUG-2169 S2: an interactive contained `claude` runs inside the
+/// `[contained] os_wrap` OS boundary like the headless and foreground
+/// `agent new` launches, scoped to the git root of the session's cwd. With
+/// os_wrap off, or for an uncontained launch, the program stays `claude`.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn interactive_claude_program_and_args(
+    contained: bool,
+    args: Vec<String>,
+) -> Result<(String, Vec<String>)> {
+    if !contained {
+        return Ok(("claude".to_string(), args));
+    }
+    let cwd = contained_session_cwd().unwrap_or_else(|| PathBuf::from("."));
+    os_wrapped_program_and_args(&cwd, "claude", args)
 }
 
 // trace:TASK-1594 | ai:claude
@@ -1151,20 +1171,25 @@ pub(crate) fn build_run_claude_session_command(
     contained: bool,
     model: Option<&str>,
 ) -> Result<std::process::Command> {
-    let mut cmd = std::process::Command::new("claude");
+    // trace:BUG-2169 | ai:claude
+    let (program, args) = interactive_claude_program_and_args(
+        contained,
+        claude_session_args(
+            permission_mode,
+            name,
+            initial_prompt,
+            session_id,
+            contained,
+            model,
+        )?,
+    )?;
+    let mut cmd = std::process::Command::new(program);
     if contained {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.args(claude_session_args(
-        permission_mode,
-        name,
-        initial_prompt,
-        session_id,
-        contained,
-        model,
-    )?);
+    cmd.args(args);
     Ok(cmd)
 }
 
@@ -1443,6 +1468,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1621,6 +1648,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
+        // trace:BUG-2187 | ai:claude
+        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1819,6 +1848,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2187 | ai:claude
+    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -2849,13 +2880,59 @@ pub(crate) fn claude_contained_settings_json(write_roots: &[PathBuf]) -> Result<
         }
         None => Vec::new(),
     };
-    Ok(contained_settings_json_with_boundary(
+    // BUG-2169 S2: a seat clone the host recorded also writes its own cargo
+    // target directory, builds with no compiler wrapper, and may never
+    // rewrite the host leases that vouch for it.
+    // trace:BUG-2169 | ai:claude
+    let clone = write_roots
+        .first()
+        .and_then(|root| crate::seat_clone::host_recorded_clone(root));
+    let (mut store_paths, mut extra_deny) = (store_paths, main_git_deny);
+    if let Some(clone) = &clone {
+        store_paths.extend(crate::seat_clone::seat_extra_write_paths(clone));
+        for main in crate::contained_boundary::contained_write_roots(&clone.main) {
+            let sessions = main.join(".aida").join("sessions");
+            if !extra_deny.contains(&sessions) {
+                extra_deny.push(sessions);
+            }
+        }
+    }
+    let json = contained_settings_json_with_boundary(
         &allowed_hosts,
         managed_only,
         write_roots,
         &store_paths,
-        &main_git_deny,
-    ))
+        &extra_deny,
+    );
+    let Some(clone) = clone else {
+        return Ok(json);
+    };
+    let mut settings: serde_json::Value = serde_json::from_str(&json)?;
+    // The clone's `.aida/sessions` is a symlink into main. A tool write to
+    // that spelling follows it, so the tool rules deny it too. The sandbox
+    // layer already denies main's real directory, and a symlink is not a
+    // path it can bind.
+    if let Some(deny) = settings["permissions"]["deny"].as_array_mut() {
+        for root in write_roots {
+            let sessions = root.join(".aida").join("sessions");
+            if let Some(abs) = crate::contained_boundary::root_rule_path(&sessions) {
+                for tool in crate::contained_boundary::WRITE_TOOLS {
+                    for rule in [format!("{tool}(/{abs})"), format!("{tool}(/{abs}/**)")] {
+                        let rule = serde_json::Value::String(rule);
+                        if !deny.contains(&rule) {
+                            deny.push(rule);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let env: serde_json::Map<String, serde_json::Value> = crate::seat_clone::seat_build_env(&clone)
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), serde_json::Value::String(v)))
+        .collect();
+    settings["env"] = serde_json::Value::Object(env);
+    Ok(settings.to_string())
 }
 
 /// Every spelling of `<main>/.git` a tool or sandbox path may resolve to: the
@@ -3382,6 +3459,54 @@ pub(crate) fn bwrap_confinement_args_inner(
     args
 }
 
+/// The read-WRITE binds `os_wrap` adds beside the code worktree: the store
+/// worktree, the cargo/npm caches and Claude Code's own state. Cargo/npm
+/// registry + build caches must stay writable or cargo/npm fail mid-build;
+/// `~/.claude` + `~/.claude.json` hold Claude Code's session state and auth,
+/// which it writes during a run.
+///
+/// BUG-2169 S2: for a seat clone the host recorded, the main checkout's
+/// store and cache files and the seat's own cargo target directory instead
+/// of `<clone>/.aida-store` (a symlink into main). Main's `.git` is never
+/// bound: the seat commits in its own clone and pushes to origin.
+// trace:STORY-612 | ai:claude
+// trace:BUG-2169 | ai:claude
+pub(crate) fn os_wrap_rw_paths(worktree_root: &Path) -> Vec<PathBuf> {
+    let mut rw_paths = match crate::seat_clone::host_recorded_clone(worktree_root) {
+        Some(clone) => {
+            let mut paths = crate::contained_boundary::contained_store_write_paths(&clone.main);
+            paths.extend(crate::seat_clone::seat_extra_write_paths(&clone));
+            paths
+        }
+        None => vec![worktree_root.join(".aida-store")],
+    };
+    if let Some(home) = crate::home_dir() {
+        let cargo_home = std::env::var_os("CARGO_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".cargo"));
+        rw_paths.push(cargo_home);
+        rw_paths.push(home.join(".npm"));
+        rw_paths.push(home.join(".claude"));
+        rw_paths.push(home.join(".claude.json"));
+    }
+    rw_paths
+}
+
+/// `--setenv` pairs for a seat clone the host recorded: the same build
+/// environment its `--settings` carry ([`crate::seat_clone::seat_build_env`]),
+/// so a build the OS layer runs never reaches the shared sccache either.
+/// Empty for any other tree.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn os_wrap_seat_env_args(worktree_root: &Path) -> Vec<String> {
+    let Some(clone) = crate::seat_clone::host_recorded_clone(worktree_root) else {
+        return Vec::new();
+    };
+    crate::seat_clone::seat_build_env(&clone)
+        .into_iter()
+        .flat_map(|(key, value)| ["--setenv".to_string(), key.to_string(), value])
+        .collect()
+}
+
 /// The single resolver for the PROGRAM a HEADLESS agent spawn actually invokes.
 /// Every headless spawn site (drain phase, headless resume, advisor tier, the
 /// `claude agents --json` liveness query) passes the vendor binary name it would
@@ -3473,24 +3598,13 @@ pub(crate) fn os_wrapped_program_and_args(
     // restriction — SPIKE-61 §7.7). Catch it here with an actionable message
     // instead of letting the drain die on a cryptic `uid map: Permission denied`.
     bwrap_preflight()?;
-    let store = worktree_root.join(".aida-store");
-    let mut rw_paths = vec![store];
-    if let Some(home) = crate::home_dir() {
-        // Cargo/npm registry + build caches must stay writable or cargo/npm fail
-        // mid-build; `~/.claude` + `~/.claude.json` hold Claude Code's session
-        // state and auth, which it writes during a run.
-        let cargo_home = std::env::var_os("CARGO_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".cargo"));
-        rw_paths.push(cargo_home);
-        rw_paths.push(home.join(".npm"));
-        rw_paths.push(home.join(".claude"));
-        rw_paths.push(home.join(".claude.json"));
-    }
+    let rw_paths = os_wrap_rw_paths(worktree_root);
     // STORY-617: opt-in strict read-confinement. Default-ABSENT => empty =>
     // `bwrap_confinement_args_inner` falls back to the unchanged `--ro-bind / /`.
     let read_allowlist = contained_read_allowlist(worktree_root);
     let mut full = bwrap_confinement_args_inner(worktree_root, &rw_paths, &read_allowlist);
+    // trace:BUG-2169 | ai:claude
+    full.extend(os_wrap_seat_env_args(worktree_root));
     // TASK-809: when `[contained] managed_domains_only` is on, deliver the hard
     // default-deny egress via the MANAGED-settings tier — Claude Code only
     // blocks-without-prompt when the flag arrives there, not via the project
@@ -3709,6 +3823,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     // grant minted for this launch, or `""` for a baseline child — never
     // inherited from the launcher, whose grant may carry delegable seats.
     apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut child_cmd, vendor, seat);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3777,6 +3893,21 @@ pub(crate) fn apply_headless_child_seat_env(
     cmd.env("AIDA_SESSION_ROLE", seat)
         .env(crate::seat_authority::GRANT_ENV, grant_env);
     scrub_launcher_session_env(cmd);
+}
+
+/// Attribution comes from this launch's vendor and seat, never the launcher
+/// (headless and interactive child launches alike).
+/// These labels confer no authority: recording still requires its existing
+/// reviewer grant and independent-session attestation.
+// trace:BUG-2187 | ai:codex
+fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
+    let agent_type = match vendor {
+        HeadlessVendor::Claude => "claude",
+        HeadlessVendor::Codex => "codex",
+        HeadlessVendor::Agy => "antigravity",
+    };
+    cmd.env("AIDA_AGENT_TYPE", agent_type)
+        .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
 }
 
 /// BUG-2139: strip the launcher-session env a child must not inherit.
@@ -4230,6 +4361,9 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value);
+    // A resume launches Claude even when the launcher is another harness.
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -5587,16 +5721,20 @@ pub(crate) fn build_claude_resume_exec_command(
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
     use std::process::Command;
-    let mut cmd = Command::new("claude");
-    if let Some(grant) = grant_id {
-        cmd.env(crate::seat_authority::GRANT_ENV, grant);
-    }
-    cmd.args(["--resume", id]);
+    let mut args = vec!["--resume".to_string(), id.to_string()];
     if let Some(m) = permission_mode {
-        cmd.args(["--permission-mode", m]);
+        args.extend(["--permission-mode".to_string(), m.to_string()]);
     }
     if contained {
-        cmd.args(claude_contained_flags()?);
+        args.extend(claude_contained_flags()?);
+    }
+    // BUG-2169 S2: a contained interactive resume runs inside os_wrap too.
+    // trace:BUG-2169 | ai:claude
+    let (program, args) = interactive_claude_program_and_args(contained, args)?;
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    if let Some(grant) = grant_id {
+        cmd.env(crate::seat_authority::GRANT_ENV, grant);
     }
     if contained {
         cmd.env("AIDA_CONTAINED", "1");

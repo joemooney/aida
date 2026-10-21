@@ -1,3 +1,15 @@
+Agent launch setup validates delegation before allocation, honors explicit
+working directories in launch and preview paths, and retains an invocation-owned
+setup receipt until foreground spawn or successful background dispatch. Fresh
+worktrees allocate under a private name and publish with an atomic no-replace
+rename followed by Git admin repair. Rollback verifies the `.git` pointer,
+retains the original branch start SHA for compare-and-delete, and releases only
+the exact newly acquired shared claim ID under the store lock. Claims adopted
+from a prior invocation carry no rollback authority. Changed or occupied resources
+are retained with recovery instructions; failed children revoke only the grant
+issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
 CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
 run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
@@ -1108,6 +1120,33 @@ Verdict collection validates metadata and reads bytes from the same opened
 regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
+
+Verdict reads use a held `review-verdicts` directory descriptor and `openat`
+with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use
+`O_NOFOLLOW|O_NONBLOCK`; metadata and bounded reads use the same handle and
+reject `st_nlink != 1`. Every production verdict reader shares this path: record,
+archive and adoption; the ship approval and corpus merge gates; the orchestrator
+phase-3/4 handshake; drain, burndown, rework-release and status readers. A
+present but refused current file contributes no evidence, archived rounds included.
+Only the reads are anchored. Before `review record` (or a merge close) rewrites
+the current file or a per-commit archive entry, it reads the existing one through
+this path; a refused file fails the record before anything is written, so its
+rounds are never replaced by a shorter history. The writes themselves still go by
+path (`create_dir_all`, then rename) and do not refuse links on their own.
+Archive enumeration reads the held directory descriptor with `fdopendir`, so it
+does not depend on `/proc`.
+Retained-history enumeration also pins the archive directory, including empty
+archives; linked archives or linked/non-regular JSON entries refuse rework release.
+The no-replace publication fallback briefly creates a second hard link before
+unlinking the temporary name. Concurrent readers fail closed during that window;
+a successful unlink restores ordinary reads.
+Reviewer coexistence also verifies that the anchor resolves to a requirement
+credited by the change's title trailer or branch; unavailable metadata refuses
+the exception. Direct `session start --role reviewer` has no coexistence input
+and keeps ordinary conflict handling (headless live-lease refusal, terminal
+conflict prompt). See [sessions](docs/cli/06-roles-sessions.md).
+<!-- trace:TASK-1801 | ai:codex -->
+<!-- trace:TASK-1801 | ai:claude -->
 
 Store writer follow-up (TASK-1981): store config and compaction history
 rewrites retain `store-write.lock` across their read-modify-write window. GC

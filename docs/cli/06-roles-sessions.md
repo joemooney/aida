@@ -115,6 +115,15 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **Gotchas.** The `leases` ≠ `conversations` split is the one that bites: `aida session conversations` (formerly `session list`) will *not* show the scoped leases that `aida session start` created — they're different substrates. `aida session show` defaults to the lease covering your cwd (or matched by ancestor PID), so running it from inside a worktree "just works." And `end` leaves the branch untouched by design — ending a session is *not* merging or discarding the work. Note the split between `end` and `reap` on branches too: `end` leaves the branch for you to merge or discard, while `reap` only ever runs *after* the branch has already merged, so deleting it there loses nothing.
 
+A direct `aida session start --role reviewer` keeps ordinary source-branch
+conflict handling: a live implementer lease refuses headless callers and retains
+the conflict prompt at a terminal. Automatic coexistence requires an explicit
+reviewer pickup through `aida queue work PR-N --role reviewer` (or `MR-N`),
+with the backing spec verified against the change's title trailer or branch.
+An inherited reviewer route, an unrelated anchor, or unavailable change metadata
+does not authorize coexistence.
+<!-- trace:TASK-1801 | ai:codex -->
+
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.
 
 ---
@@ -128,6 +137,23 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 **Reach for it when** — you want to *dispatch* a bounded agent run: `aida agent new claude --role implementer --spec <spec-id>` spins the worktree+lease and launches Claude already pointed at the work. `aida agent ls` (alias `status`) to see what's running; `pause` / `resume` to mark an agent budget-exhausted/rate-limited so brief-time dispatch and `aida status` flag it (without stopping the process).
 
 **Don't reach for it when** — you want the full lifecycle driven for you (CI, review, merge) — that's `aida queue work --auto-complete`, not `agent new`. And `pause` does **not** stop a process — it's a *status marker* for dispatch logic; use `aida agent stop` to actually terminate one.
+
+**Cwd and failed setup.** An explicit `--cwd` is used for the child and the
+preview. With `--spec`, an inactive lease for that exact directory and role is
+re-entered; `--force` does not authorize taking over live work. A fresh explicit
+path bypasses pooling. Worktree errors name the requested path, underlying
+cause and recovery commands. A refused launch rolls back this attempt's
+allocations; existing leases and directories are preserved, and cleanup refuses
+a tree with live users. A failed spawn revokes only its newly issued grant.
+
+For AIDA delegation, keep the advisor shell's validated parent grant and clear
+`AIDA_SESSION_PURPOSE`; the launcher issues the child's own grant. If the grant
+was scrubbed, enter the advisor role in a human terminal by evaluating the
+output of `aida role enter advisor --delegate-seat implementer` (wrap it in
+`eval "$(...)"`), then retry the original launch in that shell. Direct vendor/relay launches still scrub the
+advisor grant. An ambient `AIDA_SESSION_ROLE=implementer` alone does not authorize
+a delegated launch.
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
 **Key options (rationale only).**
 - `new <claude|codex|antigravity>` — the tool is a subcommand, not a flag, because each agent has a slightly different spawn shape. `list-roles` enumerates the supported role taxonomy.
@@ -291,3 +317,14 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+
+Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
+materialize at a private staging path and publish to the requested absent path
+only after checkout succeeds. Even a failing post-checkout hook triggers cleanup.
+Cleanup verifies the worktree's `.git` pointer and deletes a newly created branch
+only while its ref still equals the recorded start commit. Pre-existing paths,
+branches, adopted leases, and changed identities are retained with recovery
+instructions. Shared claims carry optional invocation IDs; rollback compares the
+exact acquired claim under the store lock and publishes outside that lock.
+Legacy claims remain readable and are never adopted as rollback authority.
+<!-- trace:BUG-2188 | ai:codex -->

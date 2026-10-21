@@ -75,6 +75,16 @@ fn run_mock_reviewer(
     tmp: &std::path::Path,
     setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
 ) -> (Result<()>, std::path::PathBuf) {
+    run_mock_reviewer_mode(tmp, false, setup)
+}
+
+// trace:BUG-2187 | ai:codex
+#[cfg(unix)]
+fn run_mock_reviewer_mode(
+    tmp: &std::path::Path,
+    no_human: bool,
+    setup: impl Fn(&Launch<'_>, &mut crate::test_env::EnvVarsGuard) -> String,
+) -> (Result<()>, std::path::PathBuf) {
     let (home, project) = codex_only_project(tmp);
     let worktree = tmp.join("reviewer-worktree");
     std::fs::create_dir_all(worktree.join(".aida")).unwrap();
@@ -100,6 +110,23 @@ fn run_mock_reviewer(
         ("AIDA_TEST_PR_HEAD_SHA", Some(HEAD)),
         (crate::seat_authority::GRANT_ENV, None),
     ]);
+    // Headless launch resolves its grant root independently of the arguments
+    // passed to the standalone collector; pin that root to this fixture too.
+    // trace:BUG-2187 | ai:codex
+    struct RestoreAmbient(Option<crate::test_ambient::Ambient>);
+    impl Drop for RestoreAmbient {
+        fn drop(&mut self) {
+            crate::test_ambient::replace(self.0.take());
+        }
+    }
+    let _ambient = RestoreAmbient(crate::test_ambient::replace(Some(
+        crate::test_ambient::Ambient {
+            project_root: project.clone(),
+            stdin_is_terminal: false,
+            stdout_is_terminal: false,
+            stderr_is_terminal: false,
+        },
+    )));
     let launcher_grant = crate::seat_authority::test_support::mint_grant_for(
         &project,
         &crate::current_user_id(None),
@@ -136,7 +163,7 @@ fn run_mock_reviewer(
         "pr-59",
         "reviewer",
         &worktree,
-        false,
+        no_human,
         true,
         &verdict_path,
         false,
@@ -640,7 +667,7 @@ fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
 // trace:TASK-1786 | ai:codex
 #[test]
 fn queue_work_coexistence_input_preserves_explicit_intent() {
-    use crate::queue_cmd::QueueWorkRoleInput;
+    use crate::queue_cmd::{rework_role_input, QueueWorkRoleInput};
 
     let mut spec = aida_core::Requirement::new("Fix the widget".into(), String::new());
     spec.spec_id = Some("STORY-77".into());
@@ -661,17 +688,17 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         ),
         (
             "rework inherited reviewer route, no --for",
-            QueueWorkRoleInput::rework(None, Some("reviewer")),
+            rework_role_input(None, Some("reviewer")),
             LeaseConflictDecision::Refuse,
         ),
         (
             "rework explicit --for reviewer",
-            QueueWorkRoleInput::rework(Some("reviewer"), Some("reviewer")),
+            rework_role_input(Some("reviewer"), Some("reviewer")),
             LeaseConflictDecision::Coexist,
         ),
         (
             "rework explicit --for any",
-            QueueWorkRoleInput::rework(Some("any"), None),
+            rework_role_input(Some("any"), None),
             LeaseConflictDecision::Refuse,
         ),
     ] {
@@ -697,4 +724,337 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         None,
         "an ordinary work plan cannot authorize review coexistence",
     );
+}
+
+// trace:BUG-2187 | ai:codex
+// trace:BUG-2187.ac2db2c6 | ai:claude
+// trace:BUG-2187.ac63597b | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_mock_reviewer_mode(tmp.path(), true, |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        env.set_key("AIDA_OS_WRAP", "0");
+        env.unset_key("AIDA_CONTAINED");
+        std::fs::write(
+            l.project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "")
+            .replacen("#!/bin/sh\n", "#!/bin/sh\n[ \"$AIDA_AGENT_TYPE\" = claude ] || exit 73\n[ \"$AIDA_AGENT_NAME\" = claude-reviewer ] || exit 73\n", 1)
+    });
+    result.expect("a scrubbed launcher must still identify its actual child vendor");
+    let body = std::fs::read_to_string(project.join(".aida/review-verdicts/PR-59.json")).unwrap();
+    let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
+    assert!(verdict.attestation.is_some());
+    assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
+}
+
+/// BUG-2187: a scrubbed parent and a headless Claude reviewer, as the
+/// production launch sees it. `script` is the mock reviewer's body.
+// trace:BUG-2187 | ai:claude
+#[cfg(unix)]
+fn run_scrubbed_headless_claude(
+    tmp: &std::path::Path,
+    script: impl Fn(&Launch<'_>) -> String,
+) -> (Result<()>, std::path::PathBuf) {
+    run_mock_reviewer_mode(tmp, true, |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        env.set_key("AIDA_OS_WRAP", "0");
+        env.unset_key("AIDA_CONTAINED");
+        std::fs::write(
+            l.project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        script(l)
+    })
+}
+
+/// A Claude reviewer killed before its result event: stream-json lines with
+/// an assistant draft, and no `aida review record` attempt.
+#[cfg(unix)]
+fn unrecorded_claude_draft(exit: i32) -> String {
+    let init = serde_json::json!({"type":"system","subtype":"init","session_id":"s"});
+    let draft = serde_json::json!({"type":"assistant","message":{"content":[
+        {"type":"text","text":"Verdict draft: request-changes, the leak is unfixed."}
+    ]}});
+    format!("#!/bin/sh\ncat <<'EOF'\n{init}\n{draft}\nEOF\nexit {exit}\n")
+}
+
+/// BUG-2187 AC2: the reviewer exits cleanly without recording. The launch
+/// still fails with the no-verdict code, and even under `--quiet` its error
+/// carries the reviewer's final draft, the retained log and a ready `aida
+/// review record` command filled with the PR's spec, number and head.
+// trace:BUG-2187.aca06f8e | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_unrecorded_headless_review_surfaces_draft_and_record_command() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) =
+        run_scrubbed_headless_claude(tmp.path(), |_| unrecorded_claude_draft(0));
+    let err = result.expect_err("an unrecorded review is never a success");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        NO_REVIEW_VERDICT_EXIT_CODE
+    );
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        "{msg}"
+    );
+    assert!(
+        msg.contains(&format!(
+            "aida review record STORY-77 --pr 59 --sha {HEAD} --verdict"
+        )),
+        "{msg}"
+    );
+    assert!(msg.contains(".aida/headless-logs/"), "{msg}");
+    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+}
+
+/// BUG-2187 AC2: a reviewer that exits non-zero without recording keeps its
+/// own exit code, and the recovery text is returned rather than lost to a
+/// bare `process::exit`.
+// trace:BUG-2187.aca06f8e | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_failed_headless_reviewer_keeps_exit_code_and_draft() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, _) = run_scrubbed_headless_claude(tmp.path(), |_| unrecorded_claude_draft(3));
+    let err = result.expect_err("a failed reviewer with no verdict is an error");
+    assert_eq!(crate::exit_code_for_error(&err), 3);
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        "{msg}"
+    );
+    assert!(msg.contains("aida review record STORY-77 --pr 59"), "{msg}");
+}
+
+/// BUG-2187 AC1, interactive arm: the launch-plan reviewer is identified by
+/// its own vendor and seat, and its prompt carries no headless-only
+/// recovery appendix.
+// trace:BUG-2187.ac2db2c6 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_interactive_reviewer_gets_identity_without_headless_appendix() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let argv = tmp.path().join("argv.txt");
+    let (result, _) = run_mock_reviewer(tmp.path(), |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "").replacen(
+            "#!/bin/sh\n",
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n[ \"$AIDA_AGENT_TYPE\" = codex ] || exit 0\n[ \"$AIDA_AGENT_NAME\" = codex-reviewer ] || exit 0\n",
+                argv.display()
+            ),
+            1,
+        )
+    });
+    result.expect("the interactive reviewer must carry its recording identity");
+    let argv = std::fs::read_to_string(&argv).unwrap();
+    assert!(argv.contains("/aida-review --pr 59"), "{argv}");
+    assert!(!argv.contains("If recording the verdict fails"), "{argv}");
+}
+
+/// BUG-2187 AC1, interactive resume: a granted Claude resume carries the
+/// reviewer identity even when the launcher's env has none.
+// trace:BUG-2187.ac2db2c6 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_granted_reviewer_resume_sets_identity() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mock = tmp.path().join("claude");
+    crate::test_exec::write_executable(
+        &mock,
+        "#!/bin/sh\n[ \"$AIDA_AGENT_TYPE\" = claude ] && [ \"$AIDA_AGENT_NAME\" = claude-reviewer ]\n",
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let status = crate::session::spawn_claude_resume_with_grant(
+        "019e0000-0000-7000-8000-0000000000cc",
+        None,
+        false,
+        Some("grant-id"),
+    )
+    .unwrap();
+    assert!(status.success(), "the resumed reviewer saw no identity");
+}
+
+/// The behavioral input test above must cover the adapter actually used by
+/// rework's --work chain. Pin that dispatch seam too: replacing it with direct
+/// would otherwise leave the adapter's unit tests green.
+// trace:TASK-1801 | ai:codex
+#[test]
+fn rework_work_dispatch_uses_intent_preserving_adapter() {
+    let source = include_str!("../queue_cmd.rs");
+    let handler = source
+        .split("pub(crate) fn handle_queue_rework(")
+        .nth(1)
+        .unwrap();
+    let body = handler.split("/// Keep route inheritance").next().unwrap();
+    assert!(body.contains("rework_role_input(for_role, for_role_resolved.as_deref())"));
+    assert!(!body.contains("QueueWorkRoleInput::direct("));
+}
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_review_anchor_must_be_credited_by_change() {
+    use crate::session_start::review_anchor_matches_change;
+    let mut backing = aida_core::Requirement::new("backing".into(), String::new());
+    backing.spec_id = Some("STORY-77".into());
+    backing.agreed_id = Some("STORY-1-77".into());
+    let mut other = aida_core::Requirement::new("unrelated".into(), String::new());
+    other.spec_id = Some("TASK-88".into());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![backing, other],
+        ..Default::default()
+    };
+    for anchor in ["STORY-77", "STORY-1-77"] {
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix (STORY-77)",
+            "widget"
+        ));
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix",
+            "codex/story-77"
+        ));
+    }
+    assert!(!review_anchor_matches_change(
+        &store,
+        "TASK-88",
+        "Fix (STORY-77)",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Mentions STORY-77 but fixes other (TASK-88)",
+        "story-77"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Unidentified",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-99",
+        "Fix (STORY-99)",
+        "widget"
+    ));
+}
+
+/// The live coexistence branch: unavailable or uncrediting change metadata
+/// refuses a headless reviewer beside a live implementer lease, and the forge
+/// is only asked once every other coexistence condition already holds.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_pickup_decision_refuses_without_credited_metadata() {
+    use crate::session_start::review_pickup_conflict_decision;
+    let mut backing = aida_core::Requirement::new("backing".into(), String::new());
+    backing.spec_id = Some("STORY-77".into());
+    let mut other = aida_core::Requirement::new("unrelated".into(), String::new());
+    other.spec_id = Some("TASK-88".into());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![backing, other],
+        ..Default::default()
+    };
+    let pickup = Some(("reviewer", "STORY-77"));
+    let decide = |title: anyhow::Result<String>| {
+        review_pickup_conflict_decision(
+            true,
+            true,
+            Some("implementer"),
+            pickup,
+            Some(&store),
+            "widget",
+            || title,
+        )
+    };
+    assert_eq!(
+        decide(Ok("Fix (STORY-77)".into())),
+        LeaseConflictDecision::Coexist
+    );
+    assert_eq!(
+        decide(Err(anyhow::anyhow!("forge unreachable"))),
+        LeaseConflictDecision::Refuse,
+        "unavailable metadata"
+    );
+    assert_eq!(
+        decide(Ok("Fix (TASK-88)".into())),
+        LeaseConflictDecision::Refuse,
+        "metadata credits another spec"
+    );
+    // The already-resolved source branch can credit the anchor on its own.
+    assert_eq!(
+        review_pickup_conflict_decision(
+            true,
+            true,
+            Some("implementer"),
+            pickup,
+            Some(&store),
+            "codex/story-77",
+            || Ok("Untitled".into()),
+        ),
+        LeaseConflictDecision::Coexist
+    );
+
+    // Lazy: no forge read when coexistence is already impossible.
+    let unreachable = || -> anyhow::Result<String> { panic!("forge must not be queried") };
+    for (live, holder, pickup, store) in [
+        (false, Some("implementer"), pickup, Some(&store)),
+        (true, Some("reviewer"), pickup, Some(&store)),
+        (
+            true,
+            Some("implementer"),
+            Some(("implementer", "STORY-77")),
+            Some(&store),
+        ),
+        (true, Some("implementer"), None, Some(&store)),
+        (true, Some("implementer"), pickup, None),
+    ] {
+        assert_ne!(
+            review_pickup_conflict_decision(
+                true,
+                live,
+                holder,
+                pickup,
+                store,
+                "widget",
+                unreachable
+            ),
+            LeaseConflictDecision::Coexist
+        );
+    }
 }

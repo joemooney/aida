@@ -64,6 +64,26 @@ Three cross-cutting truths the tree assumes:
 **Pickup checks before setup.** Role precedence is `--role`, queue routing, then scope default; a conflicting shell role is reported with the chosen source before acting. Interactive pickup checks branch occupancy and validates child-seat delegation before persisting an implicit queue row, calibration, lease, worktree, or status change. An occupied branch can be retired manually only when its checkout is idle, clean, unlocked, and unleased; pickup never removes it automatically. If setup succeeds but launch fails, the error prints `aida worktree enter <ID>` and the guided continuation `claude "/aida-guided-implement <ID>"` (ordinary pickup uses `/aida-pickup`).
 <!-- trace:TASK-1337 | ai:codex -->
 
+**A standalone reviewer receives recording attribution before launch.**
+`queue work PR-N --role reviewer` sets the selected vendor's
+`AIDA_AGENT_TYPE` and a vendor/reviewer `AIDA_AGENT_NAME` in the child, for
+headless (`--no-human`) and interactive launches, resumes included. It does
+not require the reviewer to export those variables. The existing reviewer
+grant and recorder attestation checks still apply; these labels confer no
+authority.
+
+If recording or collection fails, the launcher keeps its failure exit (30, or
+the reviewer's own non-zero code) and names the retained worktree and full
+log, even with `--quiet`. It also prints the end of the reviewer's final
+draft, the attempted record command when there was one, and a ready
+`aida review record <SPEC> --pr N --sha <HEAD> --verdict ...` command filled
+in with the PR's spec, number and head. Claude result events (or the last
+assistant text of a cut-off run), Codex completed agent messages and plain
+Antigravity output are retained as diagnostic evidence. Inspect the complete
+artifacts before running the command from an attested reviewer session. The
+launcher never records or accepts a verdict from log text.
+<!-- trace:BUG-2187 | ai:codex -->
+
 **`aida worktree add <ID>` re-enters only a live linked worktree.** A session lease is re-entered only when its path is a linked git worktree that still exists; a lease recorded at the project root (or any other path that is not a linked worktree) is no longer re-entered — `worktree add` refuses, names that session, and tells you to end it with `aida session end <id>`. If you deleted the spec's worktree by hand (`rm -rf`), `worktree add` ends the dead session (its lease and stale git registration; the branch is kept) and mints a fresh worktree on the same branch. <!-- trace:TASK-1784 | ai:claude -->
 
 **A drain phase failure is a comment on the parent spec, not a new spec.** When `queue work --auto-complete` fails a phase, the narrative record — the phase that failed, the seat, the branch and commit under test, the captured failure text, the recovery hint, the phase durations and the telemetry line — is appended as a comment on the spec the drain was driving. It does not file a draft spec, because a draft demands a disposition from a human while a comment simply informs the next reader. A re-drive that hits the same `(phase, failure-kind)` signature bumps that comment's `Attempts:` counter instead of stacking a second one. Everything else is unchanged: the drain still exits non-zero, still writes its `~/.aida/auto-complete.jsonl` line, and still routes to the due seat. Read the record with `aida comment list <SPEC>`.
@@ -370,7 +390,9 @@ When `os_wrap = true`, a headless `claude` launch is spawned as `bwrap <confinem
 
 It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not on `PATH`, or it is installed but the host blocks unprivileged user namespaces, the launch **errors with remediation** rather than silently running the agent unconfined.
 
-> **Current scope: headless drains only.** Today `os_wrap` wraps the **headless** drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches). The interactive `aida agent new` launch is **not** yet wrapped — that's tracked separately (deferred until userns confinement is reliable on the dev host). So enabling `os_wrap` confines unattended drains, not your keyboard-driven sessions.
+> **Scope.** `os_wrap` wraps the headless drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches), a foreground `aida agent new claude`, and a contained interactive `claude` launch or resume. A contained `aida agent new claude --bg` is **refused** under `os_wrap` before it claims, leases or creates anything: Claude Code's background supervisor starts that session itself, outside any sandbox around the launcher, so it cannot be confined. Run it in the foreground instead.
+
+> **Contained seats in a private clone** (`[contained] seat_tree = "clone"`, still a development switch). The seat's write boundary is its own clone (including its own `.git`), the main checkout's `.aida-store` and cache files, and its own cargo target directory under the main checkout's `target/worktrees/`. The main checkout's `.git` stays read-only, so the seat commits in its clone and pushes to origin. Cargo builds there run with `RUSTC_WRAPPER` empty, so a configured `sccache` is bypassed: a compile cache shared with the host and other seats is never writable from a contained seat.
 
 > **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
 
