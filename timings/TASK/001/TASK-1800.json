@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1800",
+  "publishes": [
+    {
+      "at": "2026-10-21T07:04:57.598860762Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-17T01:05:40.455694107Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-17T01:22:42.929371843Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1800",
+        "branch": "codex/task-1800",
+        "first_seen": "2026-10-17T01:22:42.926796809+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-17T02:05:06.844693255Z",
+      "spec": "TASK-1800",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T05:59:41.692917371Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1800",
+        "branch": "pr-2711",
+        "first_seen": "2026-10-18T05:59:41.690202495+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T20:34:15.173049178Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2741
+      }
+    },
+    {
+      "ts": "2026-10-19T01:26:01.649959019Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T05:32:54.163907401Z",
+      "spec": "TASK-1800",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T05:34:26.356544075Z",
+      "spec": "TASK-1800",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:34:26.357219827Z",
+      "spec": "TASK-1800",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T07:04:57.452106421Z",
+      "spec": "TASK-1800",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "befc5a2e236ee7b20164f52c22d62a7058613203",
+        "pr": 2732,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
