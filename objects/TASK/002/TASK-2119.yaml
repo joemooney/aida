@@ -1,0 +1,26 @@
+id: 01a160cc-1398-7cc1-a5d3-a3a6ff269cbf
+spec_id: TASK-2119
+agreed_id: TASK-2119
+title: session reap runs reviewer-branch git checks before the cheap PR-scope check
+description: |-
+  session_reap.rs:992-996: review_branch_within_pr_head (git merge-base --is-ancestor plus rev-list --not --remotes=origin) is evaluated for every exited lease before review_lease_pr; put the scope check first so non-review leases spawn no git.
+
+  Raised in review of PR-2814 (TASK-1955 slice 5) at f18a4cd93b: https://github.com/joemooney/aida/pull/2814
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:29:09.528241110Z
+modified_at: 2026-10-21T23:29:09.528241110Z
+req_type: Task
+tags:
+- from-review:PR-2814
+- severity:minor
+filed_at:
+  code_sha: f18a4cd93b32b2c844b33d1a1278caa43c07fb73
+  branch: pr-2814
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160c91205

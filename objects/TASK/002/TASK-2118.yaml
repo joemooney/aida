@@ -1,0 +1,26 @@
+id: 01a160cc-0165-7dc0-9244-737b9a8a75fd
+spec_id: TASK-2118
+agreed_id: TASK-2118
+title: review-watch notice_recipient maps an aliased forge login to the alias, not the canonical identity
+description: |-
+  review_watch.rs:624 notice_recipient uses known_mailbox_recipients, which maps an alias to its own spelling (mailbox_root.rs:417-421); mailbox delivery does not resolve aliases, so a forge login registered only as an alias (joemooney -> joe) still opens a phantom inbox. Resolve via AliasRegistry to the canonical identity before mapping; test it.
+
+  Raised in review of PR-2814 (TASK-1955 slice 5) at f18a4cd93b: https://github.com/joemooney/aida/pull/2814
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:29:04.869952607Z
+modified_at: 2026-10-21T23:29:04.869952607Z
+req_type: Task
+tags:
+- from-review:PR-2814
+- severity:minor
+filed_at:
+  code_sha: f18a4cd93b32b2c844b33d1a1278caa43c07fb73
+  branch: pr-2814
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160c91205

@@ -1,0 +1,26 @@
+id: 01a160cc-33d5-7e82-b3a0-35cc955c582a
+spec_id: TASK-2121
+agreed_id: TASK-2121
+title: 'review-watch probe-ref sweep: legacy all-digit uuid groups read as pids; other pid namespaces'
+description: |-
+  review_watch_forge.rs:383 sweep_probe_refs: a legacy pid-less <uuid> whose first group is all decimal parses as a pid and is kept while that pid is alive; refs from a prober in another pid namespace can be swept mid-probe. Optional age floor (declined in r1).
+
+  Raised in review of PR-2814 (TASK-1955 slice 5) at f18a4cd93b: https://github.com/joemooney/aida/pull/2814
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:29:17.781900239Z
+modified_at: 2026-10-21T23:29:17.781900239Z
+req_type: Task
+tags:
+- from-review:PR-2814
+- severity:cosmetic
+filed_at:
+  code_sha: f18a4cd93b32b2c844b33d1a1278caa43c07fb73
+  branch: pr-2814
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160c91205
