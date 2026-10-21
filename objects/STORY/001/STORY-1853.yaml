@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-21T04:33:14.243484275Z
+modified_at: 2026-10-21T04:48:55.295131146Z
 req_type: Story
 tags:
 - architecture
@@ -250,6 +250,12 @@ comments:
   created_at: 2026-10-21T04:33:14.243484275Z
   modified_at: 2026-10-21T04:33:14.243484275Z
   session_id: f91fd366-4181-4735-8802-dfc810a1c42e
+- id: 01a15cca-77ff-7a41-b9b3-a3eb52e6ad5d
+  author: joe
+  content: 'ADVISOR 2026-10-20 21:52: AC1 MET per the integrator''s table (median slowest test lane 5:42 vs 6:00; runs 39527203901, 39529179840, 39543779263). Remaining before completion: AC2 (full local workspace run <=10 min on an IDLE 6-core box) is unmeasured; the host is loaded (~40) tonight, so measure it in a quiet window (with no fixers running: `cargo test --workspace --profile agent` or the nextest equivalent, record wall time + passed/ignored counts here). AC3 (docs/skills say full suite is not pre-push; no template sets AIDA_CARGO_NO_SLOT), AC4 (CI enforces the per-test budget; no unbudgeted test >10 s) and AC5 (passed+ignored >= pre-change count, recorded) need a one-line evidence each. Owner: integrator seat. Back to in-progress.'
+  created_at: 2026-10-21T04:48:55.295131146Z
+  modified_at: 2026-10-21T04:48:55.295131146Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
