@@ -401,12 +401,7 @@ fn hunk_scope_unions_both_committed_headers_and_retains_item_traces() {
     );
     let head = r.commit();
     let got = collect(r.path(), &base, &head, Scope::ChangedItems).unwrap();
-    // The edited header falls back under the fn/impl unit set; with every item
-    // a unit it is the `use` item's leading prefix, and both committed headers
-    // are module evidence either way.
-    let v1 = collect(r.path(), &base, &head, Scope::ChangedItemsV1).unwrap();
-    assert!(v1.full_file_fallbacks.contains("a.rs"));
-    assert!(got.full_file_fallbacks.is_empty());
+    assert!(got.full_file_fallbacks.contains("a.rs")); // edited header remains fail closed
     assert!(ids(&["SUP-1", "SUP-3", "LOCAL-2"]).is_subset(&got.ids));
     // An unchanged header also applies to a body-only hunk, without fallback.
     let base = head;
@@ -527,11 +522,21 @@ fn ac2_const_change_selects_the_traced_fn_that_reads_it() {
 
 // trace:TASK-1800 | ai:claude
 #[test]
-fn ac2_use_line_change_selects_the_users_of_what_it_imports() {
+fn ac2_use_line_change_falls_back() {
     let source = "use std::fmt;\n// trace:U-1\nuse std::collections::{BTreeMap as Map, btree_set::{self}};\n// trace:USE-2\nfn build() -> Map<u8, u8> {\n    Map::new()\n}\n// trace:SET-3\nfn set() -> btree_set::BTreeSet<u8> {\n    Default::default()\n}\n// trace:OTHER-9\nfn other() {}\n";
+    // A changed import can change trait-mediated method resolution that no
+    // name mention shows (a trait, `as _`): it fails closed.
     assert_eq!(
-        shape(source, "BTreeMap as Map"),
-        (ids(&["U-1", "USE-2", "SET-3"]), None)
+        shape(source, "BTreeMap as Map").1,
+        Some(Fallback::ChangedUse)
+    );
+    assert_eq!(
+        shape(
+            "use std::fmt;\nuse std::io::Write as _;\n// trace:F-1\nfn f() {}\n",
+            "as _"
+        )
+        .1,
+        Some(Fallback::ChangedUse)
     );
 }
 
@@ -544,27 +549,42 @@ fn ac2_change_inside_a_mod_tests_block_stays_within_its_users() {
     // T-2 sits on a const, which no fn/impl owns: module evidence, as before.
     assert_eq!(shape(source, "mod tests {"), (ids(&["T-2"]), None));
     // A glob import's names are unknowable: changing it fails closed.
-    assert_eq!(shape(source, "use super::*;").1, Some(Fallback::Opaque));
+    assert_eq!(shape(source, "use super::*;").1, Some(Fallback::ChangedUse));
 }
 
 // trace:TASK-1800 | ai:claude
 #[test]
-fn ac2_attribute_only_change_selects_the_item_and_its_users() {
+fn ac2_attribute_change_falls_back() {
     let source = "use std::fmt;\n// trace:A-1\n#[derive(Debug)]\nstruct Shape;\n// trace:USE-2\nfn make() -> Shape {\n    Shape\n}\n// trace:OTHER-9\nfn other() {}\n";
+    // A derive or attribute macro expands to code the closure cannot see.
     assert_eq!(
-        shape(source, "#[derive(Debug)]"),
+        shape(source, "#[derive(Debug)]").1,
+        Some(Fallback::ChangedAttribute)
+    );
+    // The item itself is still attributable when its attributes are untouched.
+    assert_eq!(
+        shape(source, "struct Shape;"),
         (ids(&["A-1", "USE-2"]), None)
     );
 }
 
 // trace:TASK-1800 | ai:claude
 #[test]
-fn ac2_closure_name_inside_a_macro_invocation_falls_back() {
+fn ac2_closure_name_inside_a_non_std_macro_invocation_falls_back() {
     let source = "use std::fmt;\n// trace:C-1\nconst LIMIT: u32 = 3;\n// trace:USE-2\nfn show() -> String {\n    format!(\"{}\", LIMIT)\n}\n// trace:OTHER-9\nfn other() {}\n";
-    assert_eq!(
-        shape(source, "LIMIT: u32"),
-        (ids(&["C-1", "USE-2", "OTHER-9"]), Some(Fallback::MacroName))
-    );
+    // A std macro only expands its arguments, which the closure sees.
+    assert_eq!(shape(source, "LIMIT: u32"), (ids(&["C-1", "USE-2"]), None));
+    // Any other macro may be crate-local and expand to unseen references,
+    // including one that shadows a std name.
+    for call in ["my_macro!(LIMIT)", "crate::log!(LIMIT)"] {
+        let source = source.replace("format!(\"{}\", LIMIT)", call);
+        assert_eq!(
+            shape(&source, "LIMIT: u32"),
+            (ids(&["C-1", "USE-2", "OTHER-9"]), Some(Fallback::MacroName))
+        );
+    }
+    let shadow = format!("macro_rules! format {{ ($e:expr) => {{ $e }} }}\n{source}");
+    assert_eq!(shape(&shadow, "LIMIT: u32").1, Some(Fallback::MacroName));
 }
 
 // trace:TASK-1800 | ai:claude
@@ -592,6 +612,16 @@ fn ac2_item_macros_path_attributes_and_include_fall_back() {
             Fallback::ExternalSource,
         ),
         (
+            "use std::fmt;\n#[cfg_attr(unix, path = \"u.rs\")]\nmod other;\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n// trace:OTHER-9\nfn g() {}\n",
+            "let a = 1",
+            Fallback::ExternalSource,
+        ),
+        (
+            "use std::fmt;\nmod other;\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n// trace:OTHER-9\nfn g() {}\n",
+            "let a = 1",
+            Fallback::ExternalSource,
+        ),
+        (
             "use std::fmt;\ninclude!(\"gen.rs\");\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n// trace:OTHER-9\nfn g() {}\n",
             "let a = 1",
             Fallback::ExternalSource,
@@ -614,4 +644,23 @@ fn ac2_unchanged_old_scope_is_kept_and_only_grown_by_references() {
         shape(source, "        1"),
         (ids(&["I-1", "M-2", "CALL-3"]), None)
     );
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn ac2_test_only_out_of_line_modules_are_ordinary_units() {
+    for module in [
+        "#[cfg(test)]\n#[path = \"tests/a_tests.rs\"]\nmod tests;",
+        "#[cfg(test)]\nmod tests;",
+    ] {
+        let source = format!("use std::fmt;\n// trace:F-1\nfn f() {{\n    let a = 1;\n}}\n// trace:OTHER-9\nfn g() {{}}\n{module}\n");
+        assert_eq!(
+            shape(&source, "let a = 1"),
+            (ids(&["F-1"]), None),
+            "{module}"
+        );
+    }
+    // Test-only, but under a cfg_attr path the condition can re-path it.
+    let source = "use std::fmt;\n// trace:F-1\nfn f() {\n    let a = 1;\n}\n#[cfg(all(test, unix))]\n#[path = \"t.rs\"]\nmod tests;\n";
+    assert_eq!(shape(source, "let a = 1").1, Some(Fallback::ExternalSource));
 }

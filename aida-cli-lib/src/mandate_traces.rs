@@ -357,16 +357,84 @@ struct Unit {
     /// fn, impl and impl fn: the TASK-1790 unit set. Module-comment ownership
     /// is still decided over this set alone.
     v1: bool,
+    /// A `use`: changing it can change trait-mediated method resolution (a
+    /// trait import, `as _`) that no name mention shows, so it fails closed.
+    import: bool,
 }
 
 #[derive(Default)]
 struct Items {
     units: Vec<Unit>,
     module_opens: BTreeSet<(usize, usize)>,
-    /// Every identifier inside any macro invocation's token stream.
-    macro_idents: BTreeSet<String>,
-    /// `#[path]` or `include!`: source the parse of this file cannot see.
+    /// Each macro invocation: its name and every identifier in its tokens.
+    macro_calls: Vec<(String, BTreeSet<String>)>,
+    /// Names this file defines with `macro_rules!`.
+    local_macros: BTreeSet<String>,
+    /// Lines of every non-doc attribute. A derive or attribute macro expands
+    /// to code the closure cannot see, so a change on them fails closed.
+    attr_lines: Vec<std::ops::Range<usize>>,
+    /// Source the parse of this file cannot see: `include!`, or an out-of-line
+    /// module (`mod m;`, `#[path]`, `#[cfg_attr(.., path = ..)]`) that is not
+    /// test-only.
     external_source: bool,
+}
+
+/// std/core/alloc macros. They only expand their arguments, whose names the
+/// closure already sees; any other macro may be crate-local and count.
+// trace:TASK-1800 | ai:claude
+const STD_MACROS: &[&str] = &[
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "cfg",
+    "column",
+    "compile_error",
+    "concat",
+    "dbg",
+    "debug_assert",
+    "debug_assert_eq",
+    "debug_assert_ne",
+    "env",
+    "eprint",
+    "eprintln",
+    "file",
+    "format",
+    "format_args",
+    "line",
+    "matches",
+    "module_path",
+    "option_env",
+    "panic",
+    "print",
+    "println",
+    "stringify",
+    "todo",
+    "unimplemented",
+    "unreachable",
+    "vec",
+    "write",
+    "writeln",
+];
+
+/// `#[cfg(test)]` exactly: a test-only module carries no production code.
+fn cfg_test(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path().is_ident("cfg")
+            && matches!(&a.meta, syn::Meta::List(l) if l.tokens.to_string() == "test")
+    })
+}
+
+/// `#[path = ..]`, or `path` anywhere inside a `#[cfg_attr(..)]`.
+fn path_attr(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path().is_ident("path")
+            || (a.path().is_ident("cfg_attr")
+                && matches!(&a.meta, syn::Meta::List(l) if {
+                    let mut idents = BTreeSet::new();
+                    macro_idents(l.tokens.clone(), &mut idents);
+                    idents.contains("path")
+                }))
+    })
 }
 
 fn name(ident: &syn::Ident) -> String {
@@ -479,10 +547,16 @@ impl<'ast> Visit<'ast> for Items {
             I::ExternCrate(i) => own(i.rename.as_ref().map_or(&i.ident, |(_, r)| r)),
             I::Macro(i) => {
                 i.ident.iter().for_each(own);
+                self.local_macros.extend(i.ident.iter().map(name));
                 opaque = true;
             }
             I::Mod(i) => {
                 own(&i.ident);
+                // A test-only module is a unit like any other; any other
+                // out-of-line or re-pathed module hides source.
+                if (i.content.is_none() || path_attr(&i.attrs)) && !cfg_test(&i.attrs) {
+                    self.external_source = true;
+                }
                 if let Some((brace, _)) = &i.content {
                     let open = brace.span.open().start();
                     self.module_opens.insert((open.line, open.column));
@@ -526,6 +600,7 @@ impl<'ast> Visit<'ast> for Items {
             names,
             opaque,
             v1,
+            import: matches!(node, I::Use(_)),
         });
         syn::visit::visit_item(self, node);
     }
@@ -554,12 +629,17 @@ impl<'ast> Visit<'ast> for Items {
         {
             self.external_source = true;
         }
-        macro_idents(node.tokens.clone(), &mut self.macro_idents);
+        let mut idents = BTreeSet::new();
+        macro_idents(node.tokens.clone(), &mut idents);
+        let called = node.path.segments.last().map(|s| name(&s.ident));
+        self.macro_calls.push((called.unwrap_or_default(), idents));
         syn::visit::visit_macro(self, node);
     }
     fn visit_attribute(&mut self, node: &'ast syn::Attribute) {
-        if node.path().is_ident("path") {
-            self.external_source = true;
+        if !node.path().is_ident("doc") {
+            let span = node.span();
+            self.attr_lines
+                .push(span.start().line.saturating_sub(1)..span.end().line);
         }
         syn::visit::visit_attribute(self, node);
     }
@@ -577,6 +657,7 @@ impl Items {
             names: ident.map(name).into_iter().collect(),
             opaque,
             v1,
+            import: false,
         });
     }
 }
@@ -645,9 +726,13 @@ pub(crate) enum Fallback {
     /// A changed or selected unit holds an item macro, `macro_rules!`, an
     /// unparsed item or a glob import.
     Opaque,
-    /// A closure name appears inside a macro invocation.
+    /// A closure name appears inside a non-std macro invocation.
     MacroName,
-    /// `#[path]` or `include!` is present.
+    /// A changed line is in a `use` (trait imports, `as _`).
+    ChangedUse,
+    /// A changed line is in a non-doc attribute (derive, attribute macros).
+    ChangedAttribute,
+    /// `include!` or a non-test out-of-line module is present.
     ExternalSource,
 }
 
@@ -732,6 +817,19 @@ fn source_evidence(
             if !attributed {
                 return (full(), Some(Fallback::Uncovered));
             }
+            // trace:TASK-1800 | ai:claude
+            if !v1 {
+                if items.attr_lines.iter().any(|r| r.contains(&line)) {
+                    return (full(), Some(Fallback::ChangedAttribute));
+                }
+                let import = items
+                    .units
+                    .iter()
+                    .any(|unit| unit.import && unit.ranges.iter().any(|r| r.contains(&line)));
+                if import {
+                    return (full(), Some(Fallback::ChangedUse));
+                }
+            }
         }
     }
     let tokens = text.parse::<proc_macro2::TokenStream>().unwrap();
@@ -795,7 +893,7 @@ fn source_evidence(
 /// Grow `selected` over every unit that mentions a name a selected unit
 /// defines, to a fixpoint. `Some` when the closure cannot be trusted: a
 /// selected unit holds or overlaps an opaque unit, or a closure name appears
-/// inside a macro invocation, whose expansion the parse cannot see.
+/// inside a non-std macro invocation, whose expansion the parse cannot see.
 // trace:TASK-1800 | ai:claude
 fn reference_closure(
     items: &Items,
@@ -869,7 +967,14 @@ fn reference_closure(
             return Some(Fallback::Opaque);
         }
     }
-    if names.iter().any(|n| items.macro_idents.contains(*n)) {
+    let hidden = items
+        .macro_calls
+        .iter()
+        .filter(|(called, _)| {
+            !STD_MACROS.contains(&called.as_str()) || items.local_macros.contains(called)
+        })
+        .any(|(_, idents)| names.iter().any(|n| idents.contains(*n)));
+    if hidden {
         return Some(Fallback::MacroName);
     }
     None

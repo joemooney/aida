@@ -57,6 +57,9 @@ fn task_1800_corpus_replay() {
     let mut evidence: BTreeMap<u64, (Evidence, Evidence)> = BTreeMap::new();
     let (mut old_refused, mut new_refused, mut named_refused) = (0, 0, 0);
     let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
+    // Paths the fn/impl collector scoped (no fallback) whose set the new
+    // collector grows: the closure widening evidence that was already scoped.
+    let mut grown: BTreeMap<u64, Vec<String>> = BTreeMap::new();
     for row in frozen["rows"].as_array().unwrap() {
         let pr = row["pr"].as_u64().unwrap();
         let base = row["base"].as_str().unwrap();
@@ -87,6 +90,9 @@ fn task_1800_corpus_replay() {
             }
             if old_why.is_empty() && !old_ids.is_subset(new_ids) {
                 invariant.push(format!("PR {pr} {path}: an old scoped ID was dropped"));
+            }
+            if old_why.is_empty() && new_ids.len() > old_ids.len() {
+                grown.entry(pr).or_default().push(path.clone());
             }
             for why in new_why {
                 *reasons.entry(format!("{why:?}")).or_default() += 1;
@@ -184,6 +190,7 @@ fn task_1800_corpus_replay() {
         "audit_pairs": pairs.iter().map(|(k, [total, old, new])| (k.clone(), json!({"total": total, "old_kept": old, "new_kept": new}))).collect::<BTreeMap<_, _>>(),
         "audit_cases": per_case,
         "fallback_case_paths": {"old": old_paths, "new": new_paths},
+        "grown_scoped_paths": grown,
         "new_fallback_reasons": reasons,
         "refusals": policy.as_ref().map(|_| json!({"named": named_refused, "old": old_refused, "new": new_refused})),
         "lost": lost,
@@ -198,6 +205,11 @@ fn task_1800_corpus_replay() {
         println!("  {k}: {total} / {old} / {new}");
     }
     println!("fallback case/paths: {old_paths} -> {new_paths}; new reasons {reasons:?}");
+    println!(
+        "scoped paths grown: {} paths in {} cases",
+        grown.values().map(Vec::len).sum::<usize>(),
+        grown.len()
+    );
     if policy.is_some() {
         println!("refusals over 50: {old_refused} -> {new_refused} ({named_refused} named)");
     }
