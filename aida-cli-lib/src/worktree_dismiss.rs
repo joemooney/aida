@@ -43,6 +43,15 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
     let now = chrono::Utc::now().to_rfc3339();
 
     for target in targets {
+        // TASK-2053: a seat clone is not in `git worktree list` and host git
+        // never runs in it; it has its own teardown.
+        // trace:TASK-2053 | ai:claude
+        if crate::seat_clone::seat_clone_root(&target).as_deref() == Some(target.as_path())
+            || crate::seat_clone::is_seat_clone_location(&project_root, &target)
+        {
+            dismiss_seat_clone(&project_root, &target, &actor, &now);
+            continue;
+        }
         eprintln!("Dismissing worktree: {}", target.display());
         // 1. Find branch tip SHA
         // We can get branch from git worktree list
@@ -136,4 +145,75 @@ pub fn handle_dismiss(path: Option<&str>, category: Option<&str>) -> Result<()> 
     }
 
     Ok(())
+}
+
+/// Dismiss a contained seat's private clone: salvage whatever origin does not
+/// have, remove the clone, its cargo target directory and its base pin, then
+/// release any `clone` lease naming it. There is no archive ref: the clone's
+/// commits are not in main, so the salvage patch is the archive.
+// trace:TASK-2053 | ai:claude
+fn dismiss_seat_clone(project_root: &Path, target: &Path, actor: &str, now: &str) {
+    eprintln!("Dismissing seat clone: {}", target.display());
+    if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(target) {
+        eprintln!(
+            "  Skipping: {}. Stop those processes, then re-run.",
+            in_use.summary()
+        );
+        return;
+    }
+    let salvage = match crate::seat_clone::destroy(
+        project_root,
+        target,
+        crate::seat_clone::DestroyMode::SalvageUnshipped,
+        None,
+    ) {
+        Ok(crate::seat_clone::Destroyed::Removed { salvage }) => salvage,
+        Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => {
+            eprintln!("  Skipping: {reason}");
+            return;
+        }
+        Err(error) => {
+            eprintln!("  Skipping: {error:#}");
+            return;
+        }
+    };
+    if let Some(path) = &salvage {
+        eprintln!("  Salvaged unshipped work to {}", path.display());
+    }
+    eprintln!("  Removed the clone and released its base pin");
+    let leases: Vec<_> = crate::list_leases(project_root)
+        .into_iter()
+        .filter(|lease| {
+            lease.tree_kind == crate::seat_clone::TreeKind::Clone
+                && lease.worktree_path.file_name() == target.file_name()
+        })
+        .collect();
+    let branch = leases
+        .first()
+        .map(|lease| lease.branch.clone())
+        .unwrap_or_default();
+    for lease in &leases {
+        crate::session_reap::release_lease_files(project_root, &lease.id);
+        eprintln!("  Released lease {}", lease.id);
+    }
+    let ledger_line = serde_json::json!({
+        "timestamp": now,
+        "actor": actor,
+        "action": "seat_clone_dismiss",
+        "worktree": target.display().to_string(),
+        "branch": branch,
+        "salvage": salvage.map(|p| p.display().to_string()),
+    });
+    let ledger_path = project_root.join(".aida/discipline/worktree_dismiss_ledger.jsonl");
+    if let Some(parent) = ledger_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&ledger_path)
+    {
+        let _ = writeln!(f, "{ledger_line}");
+    }
 }

@@ -26,8 +26,9 @@ use anyhow::{Context, Result};
 // trace:BUG-2169 | ai:claude
 pub(crate) use aida_core::seat_clone_detect::{CLONE_DIR_PREFIX, MARKER_RELATIVE};
 
-/// Until slice S3 moves the host's status, reap and end paths off plain git,
-/// `seat_tree = "clone"` is a development switch: it works under test or with
+/// Until slice S4 moves the host's status and listing paths off plain git
+/// (S3 moved session end, reap and dismiss), `seat_tree = "clone"` is a
+/// development switch: it works under test or with
 /// this variable set to `1`, and refuses otherwise (advisor ruling on #2699).
 // trace:BUG-2169 | ai:claude
 pub(crate) const DEV_ENABLE_ENV: &str = "AIDA_DEV_SEAT_CLONE";
@@ -121,9 +122,8 @@ pub(crate) fn tree_kind_for_launch(project_root: &Path, contained_seat: bool) ->
     let dev_switch = std::env::var(DEV_ENABLE_ENV).ok();
     if kind == TreeKind::Clone && !clone_seats_enabled(cfg!(test), dev_switch.as_deref()) {
         anyhow::bail!(
-            "[contained] seat_tree = \"clone\" is not available yet: host status, reap and \
-             session-end paths still run git in a seat's tree, which is unsafe for a private \
-             clone. Set seat_tree = \"worktree\", or {DEV_ENABLE_ENV}=1 for development only."
+            "[contained] seat_tree = \"clone\" is not available yet: host status and listing \
+             paths still run git in a seat's tree, which is unsafe for a private clone. Set seat_tree = \"worktree\", or {DEV_ENABLE_ENV}=1 for development only."
         );
     }
     Ok(kind)
@@ -659,9 +659,465 @@ pub(crate) fn seat_build_env(clone: &HostRecordedClone) -> Vec<(&'static str, St
     env
 }
 
+/// How long one sandboxed git run in a seat clone may take. A seat-planted
+/// filter or hook that never exits is killed and the probe reads "unknown".
+// trace:TASK-2053 | ai:claude
+const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// What the host learned about a seat clone from [`probe`].
+// trace:TASK-2053 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Probe {
+    /// The sandboxed git runs succeeded.
+    Known(ProbeFacts),
+    /// No answer (no bwrap, a timeout, a git failure). Every caller treats
+    /// the clone as holding unshipped work and keeps it: fail closed.
+    Unknown(String),
+}
+
+/// A seat clone's state, parsed from the output of git run inside the probe
+/// sandbox. The clone is seat-controlled, so this is untrusted data: it can
+/// only make the host keep or salvage MORE, never reach outside the clone.
+// trace:TASK-2053 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct ProbeFacts {
+    /// HEAD's commit; `None` for an unborn HEAD.
+    pub(crate) head: Option<String>,
+    /// The checked-out branch; `None` when HEAD is detached.
+    pub(crate) branch: Option<String>,
+    /// `git status --porcelain=v2` entries: changed and untracked files.
+    pub(crate) dirty: Vec<String>,
+    /// Commits reachable from HEAD that are on no `origin/*` ref and not in
+    /// the clone's base.
+    pub(crate) unpushed: u64,
+}
+
+impl ProbeFacts {
+    /// Whether removing the clone now would lose work origin does not have.
+    pub(crate) fn unshipped(&self) -> bool {
+        !self.dirty.is_empty() || self.unpushed > 0
+    }
+}
+
+/// The bwrap argv that runs a program against `clone` for the host: the
+/// whole file system read-only, a private `/tmp`, no network, no other
+/// namespace, a fresh session, and torn down with the host process. The clone
+/// and main's `.git` (which the clone borrows objects from) are bound again
+/// after the `/tmp` mount, so a clone or main under `/tmp` stays visible. The
+/// environment is cleared: no user or system git config, and command-scope
+/// config that disables hooks and fsmonitor, which outranks the clone's own.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn probe_sandbox_args(clone: &Path, main: &Path) -> Vec<std::ffi::OsString> {
+    let mut args: Vec<std::ffi::OsString> = [
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--ro-bind",
+        "/",
+        "/",
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/tmp",
+    ]
+    .iter()
+    .map(Into::into)
+    .collect();
+    for path in [clone.to_path_buf(), main.join(".git")] {
+        args.extend(["--ro-bind".into(), path.clone().into(), path.into()]);
+    }
+    args.extend([
+        "--chdir".into(),
+        clone.as_os_str().to_os_string(),
+        "--clearenv".into(),
+    ]);
+    let host_path = std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into());
+    let env: [(&str, std::ffi::OsString); 13] = [
+        ("PATH", host_path),
+        ("HOME", "/nonexistent".into()),
+        ("LC_ALL", "C".into()),
+        ("GIT_CONFIG_NOSYSTEM", "1".into()),
+        ("GIT_CONFIG_GLOBAL", "/dev/null".into()),
+        ("GIT_TERMINAL_PROMPT", "0".into()),
+        ("GIT_OPTIONAL_LOCKS", "0".into()),
+        ("GIT_CONFIG_COUNT", "2".into()),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath".into()),
+        ("GIT_CONFIG_VALUE_0", "/dev/null".into()),
+        ("GIT_CONFIG_KEY_1", "core.fsmonitor".into()),
+        ("GIT_CONFIG_VALUE_1", "false".into()),
+        (ACCESSOR_ENV, "1".into()),
+    ];
+    for (name, value) in env {
+        args.extend(["--setenv".into(), name.into(), value]);
+    }
+    args.push("--".into());
+    args
+}
+
+/// Run `program args…` in the probe sandbox for `clone`. `Err` carries why
+/// there is no answer: no bwrap, a spawn failure, a timeout or a non-zero exit.
+// trace:TASK-2053 | ai:claude
+fn run_sandboxed(
+    clone: &Path,
+    main: &Path,
+    program: &str,
+    args: &[&std::ffi::OsStr],
+) -> std::result::Result<String, String> {
+    let mut cmd = std::process::Command::new("bwrap");
+    cmd.args(probe_sandbox_args(clone, main))
+        .arg(program)
+        .args(args)
+        .stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_detail(cmd, PROBE_TIMEOUT) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
+            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        }
+        crate::BoundedCommandOutput::Completed(out) => Err(format!(
+            "the sandboxed {program} exited with {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        )),
+        crate::BoundedCommandOutput::SpawnFailed => {
+            Err("bwrap is not available to sandbox the probe".to_string())
+        }
+        crate::BoundedCommandOutput::TimedOut => Err(format!(
+            "the sandboxed {program} did not finish within {}s",
+            PROBE_TIMEOUT.as_secs()
+        )),
+    }
+}
+
+/// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
+/// from main (host-owned), never from the clone.
+// trace:TASK-2053 | ai:claude
+fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
+    let pin = pin_ref(clone)?;
+    let mut cmd = git(main);
+    cmd.args([
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        crate::git_arg_guard::END_OF_OPTIONS,
+        &format!("{pin}^{{commit}}"),
+    ]);
+    run(cmd, "read the seat's base pin")
+        .ok()
+        .filter(|sha| !sha.is_empty())
+}
+
+/// Read a seat clone's state for the host. Git runs only inside the probe
+/// sandbox ([`probe_sandbox_args`]); a seat-planted hook, fsmonitor or filter
+/// that still runs there can read but not write, and has no network.
+/// `main` is the main checkout from the LEASE, never from the clone's marker.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
+    if !aida_core::seat_clone_detect::has_real_git_dir(clone) {
+        return Probe::Unknown(format!(
+            "{} has no .git directory of its own",
+            clone.display()
+        ));
+    }
+    let status = match run_sandboxed(
+        clone,
+        main,
+        "git",
+        &[
+            "status".as_ref(),
+            "--porcelain=v2".as_ref(),
+            "--branch".as_ref(),
+            "--untracked-files=all".as_ref(),
+        ],
+    ) {
+        Ok(out) => out,
+        Err(why) => return Probe::Unknown(why),
+    };
+    let mut facts = parse_status_v2(&status);
+    if let Some(head) = facts.head.clone() {
+        let mut args: Vec<std::ffi::OsString> = vec![
+            "rev-list".into(),
+            "--count".into(),
+            head.into(),
+            "--not".into(),
+            "--remotes=origin".into(),
+        ];
+        if let Some(base) = pinned_base(main, clone) {
+            args.push(base.into());
+        }
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(|a| a.as_os_str()).collect();
+        match run_sandboxed(clone, main, "git", &args) {
+            Ok(out) => match out.trim().parse() {
+                Ok(n) => facts.unpushed = n,
+                Err(_) => {
+                    return Probe::Unknown(format!("unreadable commit count `{}`", out.trim()))
+                }
+            },
+            Err(why) => return Probe::Unknown(why),
+        }
+    }
+    Probe::Known(facts)
+}
+
+/// Parse `git status --porcelain=v2 --branch`. Only a full 40/64-hex
+/// `branch.oid` counts as a HEAD.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn parse_status_v2(out: &str) -> ProbeFacts {
+    let mut facts = ProbeFacts::default();
+    for line in out.lines() {
+        if let Some(oid) = line.strip_prefix("# branch.oid ") {
+            let oid = oid.trim();
+            let hex =
+                (oid.len() == 40 || oid.len() == 64) && oid.chars().all(|c| c.is_ascii_hexdigit());
+            facts.head = hex.then(|| oid.to_string());
+        } else if let Some(head) = line.strip_prefix("# branch.head ") {
+            let head = head.trim();
+            facts.branch = (head != "(detached)" && !head.is_empty()).then(|| head.to_string());
+        } else if !line.starts_with('#') && !line.trim().is_empty() {
+            facts.dirty.push(line.to_string());
+        }
+    }
+    facts
+}
+
+/// Inside the probe sandbox: the clone's commits origin does not have (as
+/// `format-patch`), its uncommitted changes and its untracked files' content
+/// (as new-file diffs), all on stdout. `$1` is the pinned base, or empty.
+// trace:TASK-2053 | ai:claude
+const SALVAGE_SCRIPT: &str = r#"set -u
+printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n\n' "$PWD"
+printf '# Commits not on origin:\n'
+git format-patch --stdout --binary HEAD --not --remotes=origin ${1:+"$1"} || exit 1
+printf '\n# Uncommitted changes:\n'
+git diff --binary --no-ext-diff --no-textconv HEAD || exit 1
+printf '\n# Untracked files:\n'
+git ls-files --others --exclude-standard | while IFS= read -r f; do
+  printf '#   %s\n' "$f"
+  git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$f"
+done
+exit 0
+"#;
+
+/// Write what [`SALVAGE_SCRIPT`] captures to
+/// `<main>/.aida/salvage/<clone dir>/<UTC stamp>.patch`. The host never fetches
+/// from the clone: that would run upload-pack in a repository the seat
+/// controls.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
+    let base = pinned_base(main, clone).unwrap_or_default();
+    let body = run_sandboxed(
+        clone,
+        main,
+        "sh",
+        &[
+            "-c".as_ref(),
+            SALVAGE_SCRIPT.as_ref(),
+            "aida-seat-salvage".as_ref(),
+            base.as_ref(),
+        ],
+    )
+    .map_err(|why| anyhow::anyhow!("could not salvage {}: {why}", clone.display()))?;
+    let name = clone
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("a seat clone path has a directory name")?;
+    let dir = main.join(".aida").join("salvage").join(name);
+    std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
+    let path = dir.join(format!(
+        "{}.patch",
+        chrono::Utc::now().format("%Y-%m-%dT%H%M%S%.3fZ")
+    ));
+    std::fs::write(&path, body).with_context(|| format!("write {}", path.display()))?;
+    Ok(path)
+}
+
+/// Whether `clone` is where [`clone_path`] puts a seat clone of `main`: an
+/// `aida-seat-*` directory that can be pinned, directly under main's
+/// `[worktree_pool] worktree_parent`, and neither inside main nor holding it.
+/// The lease is seat-writable through the store, so [`destroy`] refuses any
+/// other path rather than delete what a forged lease names.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn is_seat_clone_location(main: &Path, clone: &Path) -> bool {
+    let Some(name) = clone.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    if !name.starts_with(CLONE_DIR_PREFIX) || pin_ref(clone).is_none() {
+        return false;
+    }
+    let parent = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
+    let expected = aida_core::worktree_pool::worktree_placement_path(main, name, parent.as_deref());
+    let canon_dir = |p: &Path| p.parent().and_then(|d| d.canonicalize().ok());
+    let Some(dir) = canon_dir(clone) else {
+        return false;
+    };
+    if canon_dir(&expected).as_ref() != Some(&dir) {
+        return false;
+    }
+    let clone = dir.join(name);
+    let main = main.canonicalize().unwrap_or_else(|_| main.to_path_buf());
+    !clone.starts_with(&main) && !main.starts_with(&clone)
+}
+
+/// How [`destroy`] treats a clone holding work origin does not have.
+// trace:TASK-2053 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DestroyMode {
+    /// Reap: salvage a patch and KEEP the clone.
+    KeepUnshipped,
+    /// Session end and dismiss, after their own confirmation: salvage a
+    /// patch, then remove the clone.
+    SalvageUnshipped,
+}
+
+/// What [`destroy`] did.
+// trace:TASK-2053 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Destroyed {
+    /// The clone, its cargo target directory and its base pin are gone.
+    Removed { salvage: Option<PathBuf> },
+    /// Nothing was removed; `reason` says why.
+    Kept {
+        reason: String,
+        salvage: Option<PathBuf>,
+    },
+}
+
+/// Tear down the seat clone at `clone` of the main checkout `main`:
+///
+/// 1. refuse unless `clone` is at a seat-clone location of `main`;
+/// 2. [`probe`] it: unknown keeps it (fail closed), and so does a HEAD other
+///    than `expect_head` when the caller pinned one;
+/// 3. salvage unpushed or uncommitted work, then keep or go on per `mode`;
+/// 4. `remove_dir_all` the clone (it does not follow symlinks);
+/// 5. remove `<main>/target/worktrees/<clone dir>`;
+/// 6. release `refs/aida/seats/<clone dir>` in main.
+///
+/// A clone directory that is already gone skips straight to steps 5 and 6.
+/// The caller releases the lease.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn destroy(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+) -> Result<Destroyed> {
+    if !is_seat_clone_location(main, clone) {
+        anyhow::bail!(
+            "{} is not a seat clone of {} (it must be an `{CLONE_DIR_PREFIX}*` directory in the \
+             worktree parent); it was not removed",
+            clone.display(),
+            main.display()
+        );
+    }
+    let mut salvaged = None;
+    if std::fs::symlink_metadata(clone).is_ok() {
+        let facts = match probe(main, clone) {
+            Probe::Known(facts) => facts,
+            Probe::Unknown(why) => {
+                return Ok(Destroyed::Kept {
+                    reason: format!("its state could not be read ({why}), so it is kept"),
+                    salvage: None,
+                })
+            }
+        };
+        if let Some(expected) = expect_head {
+            if facts.head.as_deref() != Some(expected) {
+                return Ok(Destroyed::Kept {
+                    reason: "its HEAD moved since the scan".to_string(),
+                    salvage: None,
+                });
+            }
+        }
+        if facts.unshipped() {
+            salvaged = Some(salvage(main, clone)?);
+            if mode == DestroyMode::KeepUnshipped {
+                return Ok(Destroyed::Kept {
+                    reason: "it holds work origin does not have".to_string(),
+                    salvage: salvaged,
+                });
+            }
+        }
+        std::fs::remove_dir_all(clone)
+            .with_context(|| format!("remove the seat clone {}", clone.display()))?;
+    }
+    let name = clone.file_name().context("a seat clone has a name")?;
+    let target = main.join("target").join("worktrees").join(name);
+    match std::fs::symlink_metadata(&target) {
+        Ok(meta) if meta.file_type().is_dir() => {
+            if let Err(error) = std::fs::remove_dir_all(&target) {
+                eprintln!(
+                    "could not remove the seat's cargo target {}: {error}",
+                    target.display()
+                );
+            }
+        }
+        Ok(_) => {
+            let _ = std::fs::remove_file(&target);
+        }
+        Err(_) => {}
+    }
+    if let Some(pin) = pin_ref(clone) {
+        if let Err(error) = release_pin(main, &pin) {
+            eprintln!("{error:#}");
+        }
+    }
+    Ok(Destroyed::Removed { salvage: salvaged })
+}
+
+/// A base pin in main that no `clone` lease accounts for.
+// trace:TASK-2053 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct OrphanPin {
+    /// `refs/aida/seats/<clone dir>`.
+    pub(crate) pin: String,
+    /// Where that clone would be.
+    pub(crate) clone: PathBuf,
+    /// The directory still exists: an unleased clone, kept for the operator
+    /// (`aida worktree dismiss <path>`). A pin whose clone is gone is safe to
+    /// release.
+    pub(crate) clone_exists: bool,
+}
+
+/// Every `refs/aida/seats/*` pin in `main` with no `clone` lease naming its
+/// clone (signoff condition 4: reap enumerates orphan pins).
+// trace:TASK-2053 | ai:claude
+pub(crate) fn orphan_pins(main: &Path) -> Vec<OrphanPin> {
+    let mut cmd = git(main);
+    cmd.args(["for-each-ref", "--format=%(refname)", PIN_PREFIX]);
+    let Ok(listing) = run(cmd, "list seat-clone pins") else {
+        return Vec::new();
+    };
+    let leased: Vec<std::ffi::OsString> = crate::list_leases(main)
+        .into_iter()
+        .filter(|lease| lease.tree_kind == TreeKind::Clone)
+        .filter_map(|lease| lease.worktree_path.file_name().map(|n| n.to_os_string()))
+        .collect();
+    let parent = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
+    listing
+        .lines()
+        .filter_map(|pin| {
+            let name = pin.strip_prefix(PIN_PREFIX)?;
+            if name.is_empty() || leased.iter().any(|l| l.as_os_str() == name) {
+                return None;
+            }
+            let clone =
+                aida_core::worktree_pool::worktree_placement_path(main, name, parent.as_deref());
+            Some(OrphanPin {
+                pin: pin.to_string(),
+                clone_exists: std::fs::symlink_metadata(&clone).is_ok(),
+                clone,
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 #[path = "tests/bug_2169_seat_clone_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/task_2053_seat_clone_lifecycle_tests.rs"]
+mod lifecycle_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_2169_contained_clone_bwrap_tests.rs"]

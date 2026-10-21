@@ -1,7 +1,7 @@
 # BUG-2169: give each contained seat a private clone (architecture sketch)
 
-Status: APPROVED 2026-10-16 (option A, slices S1-S4). S1 landed in 2177eaad8f. S2 (sandbox
-boundary) is the next slice; see "S2 as built" at the end.
+Status: APPROVED 2026-10-16 (option A, slices S1-S4). S1 landed in 2177eaad8f, S2 in b66e4d93b8.
+S3 (host-safe lifecycle) is tracked on TASK-2053; see "S2 as built" and "S3 as built" at the end.
 Owning spec: BUG-2169. Supersedes the PR #2694 approach, which the round-2 ruling rejected.
 Code references are to `main` at fc39d8f0bc. Paths are relative to `aida-cli-lib/src/` unless they
 start with `aida-core/`.
@@ -429,3 +429,55 @@ slices S1-S4. Most of the change is turning silent-skip paths into explicit clon
   modelled Claude Code sandbox and the os_wrap argv. The attack tests also run against the frozen
   #2694 layout, where the attacks must succeed. The tests join the GitHub live-bwrap gate, where
   `AIDA_REQUIRE_BWRAP_LIVE=1` turns a skip into a failure. T4's probe check and T6/T7 belong to S3.
+
+## S3 as built
+
+Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
+
+- **`seat_clone::probe(main, clone)`.** Two git runs (`status --porcelain=v2 --branch
+  --untracked-files=all`, then `rev-list --count HEAD --not --remotes=origin <base>`) inside
+  `bwrap --unshare-all --die-with-parent --new-session --ro-bind / / --dev /dev --proc /proc
+  --tmpfs /tmp`, with the clone and `<main>/.git` bound read-only again after the `/tmp` mount (a
+  clone or main under `/tmp` stays visible). The environment is cleared; `GIT_CONFIG_NOSYSTEM=1`,
+  `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_OPTIONAL_LOCKS=0`, and command-scope config
+  `core.hooksPath=/dev/null` and `core.fsmonitor=false` (via `GIT_CONFIG_COUNT`, which outranks the
+  clone's own config). Each run is killed after 120 s. `<base>` is the commit the pin in MAIN names,
+  never read from the clone. No bwrap, a timeout, a non-zero exit or an unparsable answer is
+  `Probe::Unknown`, and every caller keeps the clone.
+- **"Unpushed"** means commits reachable from HEAD that no `refs/remotes/origin/*` in the clone
+  holds. Those refs are seat-writable, so a seat can make its own work look pushed; that only
+  loses its own work (no host or cross-seat effect), and session end still requires `--force` for
+  uncommitted files.
+- **`seat_clone::salvage`.** One fixed `sh -c` script in the same sandbox prints `format-patch
+  --stdout --binary HEAD --not --remotes=origin <base>`, `diff --binary HEAD`, and a new-file diff
+  per untracked file (BUG-696 shape). The host writes stdout to
+  `<main>/.aida/salvage/<clone dir>/<UTC stamp>.patch`. No fetch from the clone.
+- **`seat_clone::destroy(main, clone, mode, expect_head)`.** Refuses unless the path is an
+  `aida-seat-*` directory directly in main's worktree parent, neither inside main nor containing it
+  (the lease is seat-writable through the store). Then: probe (unknown keeps; a HEAD other than
+  `expect_head` keeps), salvage when dirty or unpushed (`KeepUnshipped` stops there, for reap),
+  `remove_dir_all`, remove `<main>/target/worktrees/<clone dir>`, release the pin. A clone
+  directory that is already gone goes straight to the target and pin steps.
+- **Session end.** Probes first (unknown refuses, nothing changed). Unpushed commits count as dirty
+  entries, so they need `--force` like uncommitted files. Teardown calls
+  `destroy(SalvageUnshipped)` in place of `git worktree remove`; the lease is deleted at the usual
+  point.
+- **Reap.** A `clone` lease is classified by `classify_clone_reap` (probe unknown, dirty, off its
+  branch, unpushed, process alive, spec not finished, no merged PR on the forge: each keeps it). The
+  row's `branch_tip` is the probed HEAD; `reap_one` calls `destroy(KeepUnshipped, Some(tip))` and
+  releases the lease only when the clone is gone. No branch in main is touched.
+- **Orphan pins (condition 4).** `seat_clone::orphan_pins` lists `refs/aida/seats/*` that no clone
+  lease names. `aida session reap` (and the quiet night-shift reap) release those whose clone
+  directory is gone and report the ones whose clone still exists.
+- **Dismiss.** `aida worktree dismiss <clone>` runs the holder check, `destroy(SalvageUnshipped)`,
+  releases any clone lease naming the directory, and writes a `seat_clone_dismiss` ledger line. The
+  salvage patch is the archive (the clone's commits are not in main, so there is no
+  `refs/archive/*`).
+- **Tests.** `tests/task_2053_seat_clone_lifecycle_tests.rs`. T7 plants `core.fsmonitor`, a clean
+  filter and hooks, runs probe, the reap scan, salvage and destroy with a logging `git` first on
+  PATH, and asserts no canary fired on the host and no untagged git ran in the clone; a negative
+  control shows the plant fires under plain host git. T6 is S1's refusal tests plus a stale
+  pin-lock variant. T4's probe check points the seat's alternates at `/`. The `task_2053_bwrap_`
+  tests join the live-bwrap CI gate.
+- **Still gated.** `seat_tree = "clone"` stays a development switch until S4 moves status and the
+  other listing paths off plain git.

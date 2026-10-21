@@ -273,12 +273,15 @@ jobs:
       # (`bug_2169_bwrap_`): each must succeed against the frozen PR #2694
       # layout and fail against the clone layout, and a skip fails here.
       # trace:BUG-2169 | ai:claude
+      # TASK-2053 S3: the seat-clone probe/destroy lifecycle (`task_2053_bwrap_`,
+      # including T7: seat-planted hooks never run on the host) joins the gate.
+      # trace:TASK-2053 | ai:claude
       - name: Live bwrap OS-wrap confinement gate
         if: ${{ matrix.shard == 'gates' && (steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
           AIDA_REQUIRE_BWRAP_LIVE=1 cargo test -p aida-cli-lib --lib -- --nocapture \
-            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_
+            bwrap_write_confinement_live_or_fail_closed bug_2169_bwrap_ task_2053_bwrap_
 
       # MCP stdio compatibility suite — black-box tests against `aida mcp-serve`.
       # Runs the FULL roundtrip: descriptors + CLI->MCP read direction

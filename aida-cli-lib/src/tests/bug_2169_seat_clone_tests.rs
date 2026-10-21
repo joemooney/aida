@@ -8,7 +8,7 @@ use super::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn git_ok(dir: &Path, args: &[&str]) -> String {
+pub(super) fn git_ok(dir: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
@@ -24,7 +24,7 @@ fn git_ok(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-fn ref_exists(dir: &Path, name: &str) -> bool {
+pub(super) fn ref_exists(dir: &Path, name: &str) -> bool {
     crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
@@ -37,14 +37,14 @@ fn ref_exists(dir: &Path, name: &str) -> bool {
 
 /// A main checkout with one commit, a bare `origin` it pushed to, and
 /// `origin/main` fetched. Paths are canonical.
-struct Fixture {
+pub(super) struct Fixture {
     _tmp: tempfile::TempDir,
-    root: PathBuf,
-    main: PathBuf,
-    origin: PathBuf,
+    pub(super) root: PathBuf,
+    pub(super) main: PathBuf,
+    pub(super) origin: PathBuf,
 }
 
-fn fixture() -> Fixture {
+pub(super) fn fixture() -> Fixture {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     let main = root.join("aida");
@@ -575,7 +575,7 @@ fn no_git_runs_in_a_seat_clone_outside_the_accessor_module() {
 /// The logged git invocations whose effective directory is inside `clone`:
 /// `(tagged_by_accessor, raw line)`. The effective directory starts at the
 /// logged `$PWD` and follows every `-C`, `--git-dir` and `--work-tree`.
-fn clone_invocations(log: &str, clone: &Path) -> Vec<(bool, String)> {
+pub(super) fn clone_invocations(log: &str, clone: &Path) -> Vec<(bool, String)> {
     let mut hits = Vec::new();
     for line in log.lines() {
         let mut parts = line.splitn(3, '\t');

@@ -1043,22 +1043,24 @@ pub(crate) fn session_end(
     }
 
     let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
-    // BUG-2169: ending a seat clone (probe, salvage, remove, unpin) is slice
-    // S3. Everything below runs git in the session's tree, which for a clone
-    // would execute seat-controlled config on the host, so refuse first.
-    // trace:BUG-2169 | ai:claude
-    if target.tree_kind == crate::seat_clone::TreeKind::Clone {
-        anyhow::bail!(
-            "session {} works in a contained seat's private clone ({}). `session end` cannot \
-             end a seat clone yet; the clone and its base pin are left in place. Push its branch \
-             from inside the seat, then remove the directory and run `git update-ref -d {}` in \
-             the main checkout.",
-            &target.id[..target.id.len().min(8)],
-            target.worktree_path.display(),
-            crate::seat_clone::pin_ref(&target.worktree_path)
-                .unwrap_or_else(|| format!("{}<seat>", crate::seat_clone::PIN_PREFIX)),
-        );
-    }
+    // TASK-2053: a seat clone's git state comes only from the sandboxed probe;
+    // host git never runs in the clone (seat-written config and hooks would
+    // run outside the sandbox). An unreadable clone is kept: fail closed.
+    // trace:TASK-2053 | ai:claude
+    let is_clone = target.tree_kind == crate::seat_clone::TreeKind::Clone;
+    let clone_facts = if is_clone {
+        match crate::seat_clone::probe(&project_root, &target.worktree_path) {
+            crate::seat_clone::Probe::Known(facts) => Some(facts),
+            crate::seat_clone::Probe::Unknown(why) => anyhow::bail!(
+                "session {} works in the seat clone {}, whose state could not be read ({why}). \
+                 The session was NOT ended: its lease, clone and base pin are unchanged.",
+                &target.id[..target.id.len().min(8)],
+                target.worktree_path.display(),
+            ),
+        }
+    } else {
+        None
+    };
 
     // BUG-361: visibility-first guard for the ceiling variant where an agent
     // commits locally and exits without any lifecycle command (`queue done`,
@@ -1067,8 +1069,12 @@ pub(crate) fn session_end(
     // the operator's next sweep sees the unshipped branch. This only fires when
     // GH confirms no open PR; unknown GH states never assert "missing PR".
     // trace:BUG-361
-    let commits_ahead = branch_unshipped_patch_count_default(&project_root, &target.branch)
-        .or_else(|| branch_commits_ahead_main(&project_root, &target.branch));
+    // TASK-2053: a clone's branch is not in main; its count is the probe's.
+    let commits_ahead = match &clone_facts {
+        Some(facts) => Some(u32::try_from(facts.unpushed).unwrap_or(u32::MAX)),
+        None => branch_unshipped_patch_count_default(&project_root, &target.branch)
+            .or_else(|| branch_commits_ahead_main(&project_root, &target.branch)),
+    };
     let pr_state =
         session_end_pr_state_for_scope_or_branch(&project_root, &target.scope, &target.branch);
     // BUG-367: if the spec the lease owns has auto-bumped to Completed, or if the PR
@@ -1308,7 +1314,15 @@ pub(crate) fn session_end(
         lease_path(&project_root, &target.id).display()
     );
     // BUG-734: only promise a worktree removal when there is one.
-    if has_worktree {
+    if is_clone {
+        // trace:TASK-2053 | ai:claude
+        eprintln!(
+            "  - remove seat clone {} and its cargo target dir; salvage any work origin does \
+             not have to {}; release its base pin",
+            target.worktree_path.display(),
+            project_root.join(".aida").join("salvage").display()
+        );
+    } else if has_worktree {
         eprintln!(
             "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
             target.worktree_path.display(),
@@ -1382,7 +1396,20 @@ pub(crate) fn session_end(
     // trace:BUG-1986 | ai:claude
     // BUG-734: no worktree ⇒ no dirty gate — `git -C ""` would report the
     // caller's cwd, refusing on unrelated dirt. trace:BUG-734 | ai:claude
-    let dirty_entries = if has_worktree {
+    // TASK-2053: a seat clone's entries come from the probe. Its branch lives
+    // only in the clone, so commits origin lacks are lost with it as surely
+    // as uncommitted files: they need `--force` too (both are salvaged).
+    // trace:TASK-2053 | ai:claude
+    let dirty_entries = if let Some(facts) = &clone_facts {
+        let mut entries = facts.dirty.clone();
+        if facts.unpushed > 0 {
+            entries.push(format!(
+                "{} commit(s) on `{}` that origin does not have",
+                facts.unpushed, target.branch
+            ));
+        }
+        entries
+    } else if has_worktree {
         dirty_entries_ignoring_runtime_links(
             &target.worktree_path,
             worktree_dirty_entries(&target.worktree_path),
@@ -1402,23 +1429,39 @@ pub(crate) fn session_end(
     // trace:BUG-652 trace:STORY-714 trace:TASK-985 | ai:claude
     let returning_pool_tree = !remove
         && has_worktree
+        && !is_clone
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path);
     let salvage_before_return =
         match dirty_gate_outcome(!dirty_entries.is_empty(), force, returning_pool_tree) {
             DirtyGateOutcome::Proceed => false,
             DirtyGateOutcome::Salvage => true,
             DirtyGateOutcome::Refuse => {
-                let mut msg = format!(
-                    "worktree {} has uncommitted changes:\n",
-                    target.worktree_path.display()
-                );
+                let mut msg = if is_clone {
+                    // trace:TASK-2053 | ai:claude
+                    format!(
+                        "seat clone {} holds work origin does not have:\n",
+                        target.worktree_path.display()
+                    )
+                } else {
+                    format!(
+                        "worktree {} has uncommitted changes:\n",
+                        target.worktree_path.display()
+                    )
+                };
                 for line in &dirty_entries {
                     msg.push_str(&format!("  {}\n", line));
                 }
-                msg.push_str(
+                if is_clone {
+                    msg.push_str(
+                        "\nPush the branch from inside the seat, or pass `--force` to `aida \
+                         session end` to save this work as a salvage patch and remove the clone.",
+                    );
+                } else {
+                    msg.push_str(
                 "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
                  (Gitignored files like target/ and .aida/cache.db never require --force.)",
             );
+                }
                 anyhow::bail!(msg);
             }
         };
@@ -1683,6 +1726,44 @@ pub(crate) fn session_end(
             peer.id.yellow(),
             peer.scope
         );
+    } else if is_clone {
+        // TASK-2053: the only teardown for a seat clone. The dirty gate above
+        // already required `--force` for unshipped work; destroy salvages it.
+        // trace:TASK-2053 | ai:claude
+        let dismiss_hint = format!(
+            "run `aida worktree dismiss {}` once it is readable",
+            target.worktree_path.display()
+        );
+        match crate::seat_clone::destroy(
+            &project_root,
+            &target.worktree_path,
+            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            None,
+        ) {
+            Ok(crate::seat_clone::Destroyed::Removed { salvage }) => {
+                if let Some(path) = salvage {
+                    eprintln!(
+                        "{} salvaged the clone's unshipped work to {}",
+                        crate::glyph(crate::glyphs::Glyph::Check).green(),
+                        path.display().to_string().dimmed()
+                    );
+                }
+                eprintln!(
+                    "{} seat clone removed and its base pin released",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+            }
+            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => eprintln!(
+                "{} seat clone {} left in place: {reason}; {dismiss_hint}",
+                "Warning:".yellow().bold(),
+                target.worktree_path.display()
+            ),
+            Err(error) => eprintln!(
+                "{} seat clone {} left in place: {error:#}; {dismiss_hint}",
+                "Warning:".yellow().bold(),
+                target.worktree_path.display()
+            ),
+        }
     } else if !remove
         && aida_core::worktree_pool::is_pool_worktree(&project_root, &target.worktree_path)
     {
@@ -1813,7 +1894,8 @@ pub(crate) fn session_end(
 
     // BUG-734: the branch-retained hint only makes sense when a worktree
     // (with its checked-out branch) was actually removed. trace:BUG-734 | ai:claude
-    if has_worktree {
+    // A seat clone's branch was never in main. trace:TASK-2053 | ai:claude
+    if has_worktree && !is_clone {
         eprintln!(
             "  branch {} retained — merge or `git branch -D {}` when ready",
             target.branch.cyan(),
