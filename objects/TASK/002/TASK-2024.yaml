@@ -11,13 +11,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T22:16:59.228646183Z
-modified_at: 2026-10-20T22:16:59.228646183Z
+modified_at: 2026-10-21T04:33:01.652695006Z
 req_type: Task
 tags:
 - bwrap
 - from-review:PR-2787
+- operator-held
 - severity:minor
 - test
+history:
+- id: 01a15cbb-ec9b-7022-a771-f3d5363f29ff
+  author: joe
+  timestamp: 2026-10-21T04:33:02.107164797Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:01.652695006Z
+deferred_until: 'Test fidelity for PR #2787 (open). Revisit when #2787 merges; then fold into TASK-1952 or the next BUG-2169 slice.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 6aba8c7a6b09a04570a3dd5929e8a299a3ab9224
   branch: pr-2787
