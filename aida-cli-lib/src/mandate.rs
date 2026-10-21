@@ -1017,9 +1017,10 @@ pub(crate) fn store_history_versions_optional(
 /// than the ID itself. This is how a DELETED spec named by its agreed_id
 /// (stored under a different spec_id path) is still found and judged. One
 /// `-G` walk serves every ID; each matching added or removed line is
-/// attributed to the ID it names. `Err` when an ID is not searchable or the
-/// history cannot be searched; the caller refuses rather than treating an ID
-/// as dangling.
+/// attributed to the ID it names. `Err` when an ID is not searchable, the
+/// history cannot be searched, or a match is in a file that is not at its
+/// canonical object path (whose versions the history read cannot find); the
+/// caller refuses rather than treating an ID as dangling.
 // trace:TASK-1800 | ai:claude
 // trace:BUG-2179 | ai:claude
 pub(crate) fn store_history_alias_map(
@@ -1076,16 +1077,30 @@ pub(crate) fn store_history_alias_map(
         let Some(body) = line.strip_prefix('+').or_else(|| line.strip_prefix('-')) else {
             continue;
         };
-        let (Some(caps), Some(path)) = (line_re.captures(body), file.as_deref()) else {
+        let Some(caps) = line_re.captures(body) else {
             continue;
         };
-        let Some(stem) = Path::new(path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .and_then(|n| n.strip_suffix(".yaml"))
-        else {
-            continue;
-        };
+        // TASK-1800 (comment 24): the history read below finds versions only
+        // at an object's canonical path. A hit anywhere else would read as no
+        // history and drop the ID as dangling, so it refuses instead.
+        // trace:TASK-1800 | ai:claude
+        let stem = file
+            .as_deref()
+            .and_then(|path| {
+                let stem = Path::new(path)
+                    .file_name()?
+                    .to_str()?
+                    .strip_suffix(".yaml")?;
+                let canonical = aida_core::object_store::relative_object_path(stem).ok()?;
+                (canonical == path).then_some(stem)
+            })
+            .ok_or_else(|| {
+                format!(
+                    "store history carries {} outside a canonical object path ({})",
+                    &caps[2],
+                    file.as_deref().unwrap_or("no file")
+                )
+            })?;
         let id = caps[2].to_ascii_uppercase();
         let stem = stem.to_ascii_uppercase();
         if let Some(aliases) = found.get_mut(&id) {
