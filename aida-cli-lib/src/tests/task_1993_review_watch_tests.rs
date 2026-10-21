@@ -485,6 +485,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         std::fs::create_dir(&bin).unwrap();
         let git_run = |cwd: &Path, args: &[&str]| -> String {
             let out = Command::new("/usr/bin/git")
+                .args(crate::test_git::git_command().get_args())
                 .current_dir(cwd)
                 .args(args)
                 .output()
@@ -550,7 +551,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         std::fs::write(&view, serde_json::to_vec(&row).unwrap()).unwrap();
         let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
         crate::test_exec::write_executable(&bin.join("git"), &format!(
-            "#!/bin/sh\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then printf '%s\\n' '{origin}'; exit 0; fi\nif [ \"$1\" = fetch ]; then shift 5; exec /usr/bin/git fetch --no-write-fetch-head --no-tags -- '{}' \"$@\"; fi\nif [ -f '{}/bad-count' ] && [ \"$1\" = rev-list ]; then echo not-a-count; exit 0; fi\nexec /usr/bin/git \"$@\"\n", q(&hub), q(temp.path())));
+            "#!/bin/sh\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then printf '%s\\n' '{origin}'; exit 0; fi\nif [ \"$1\" = fetch ]; then shift 5; exec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 fetch --no-write-fetch-head --no-tags -- '{}' \"$@\"; fi\nif [ -f '{}/bad-count' ] && [ \"$1\" = rev-list ]; then echo not-a-count; exit 0; fi\nexec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 \"$@\"\n", q(&hub), q(temp.path())));
         let script = if gitlab {
             format!("#!/bin/sh\n[ \"$GITLAB_HOST\" = gitlab.example.test ] || exit 81\n[ \"$1 $2 $3\" = 'api -X GET' ] || exit 82\ncase \"$4\" in projects/group%2Fsub%2Frepo/merge_requests) cat '{}' ;; projects/group%2Fsub%2Frepo/merge_requests/1) cat '{}' ;; *) exit 83 ;; esac\n", q(&list), q(&view))
         } else {
@@ -865,6 +866,7 @@ fn task1993_initial_root_ignores_ambient_git_routing() {
     for root in [&requested, &other] {
         std::fs::create_dir(root).unwrap();
         assert!(Command::new("/usr/bin/git")
+            .args(crate::test_git::git_command().get_args())
             .args(["init", "-q"])
             .arg(root)
             .status()
