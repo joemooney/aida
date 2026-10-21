@@ -1,0 +1,34 @@
+id: 01a15cc3-22f6-74b0-b9cc-caa85650cffd
+spec_id: TASK-2040
+agreed_id: TASK-2040
+title: Headless reviewer sandbox mounts primary .aida/review-verdicts read-only, so the phase-3 handshake cannot be written
+description: |
+  During the headless review of PR-2757 (launched with AIDA_REVIEW_VERDICT_FILE=/home/joe/ai/aida/.aida/review-verdicts/PR-2757.json), `aida review record TASK-1944 --pr 2757 --verdict approved --sha 960fbf0421...` recorded the per-spec verdict in the review worktree (.aida/review-verdicts/TASK-1944.json), then failed with: "the phase-3 handshake was NOT written to /home/joe/ai/aida/.aida/review-verdicts/PR-2757.json".
+
+  Cause: the reviewer's Bash sandbox write allow-list covers /home/joe/ai/aida/.git, .aida-store and .aida/cache.db*, but not /home/joe/ai/aida/.aida/review-verdicts/. `touch` there returns "Read-only file system". So no sandboxed reviewer can write the verdict anchor its launcher sets, and a finished review becomes invisible to the orchestrator.
+
+  Also observed: the first record attempt hit BUG-2187 (no AIDA_AGENT_TYPE set); it succeeded after setting AIDA_AGENT_TYPE=claude.
+
+  Fix: add the primary's .aida/review-verdicts (and probably .aida/merge-holds) to the reviewer seat's sandbox write roots. Add a test that a contained reviewer can write AIDA_REVIEW_VERDICT_FILE.
+
+  Raised in review of PR-2757: https://github.com/joemooney/aida/pull/2757
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T04:40:54.774379717Z
+modified_at: 2026-10-21T04:40:54.774379717Z
+req_type: Task
+tags:
+- from-review:PR-2757
+- reviewer
+- sandbox
+- severity:major
+filed_at:
+  code_sha: 960fbf042155a097c1f0f4cd419575cb777cd702
+  branch: pr-2757
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15cbf49a6
