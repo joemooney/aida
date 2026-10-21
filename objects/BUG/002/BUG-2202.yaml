@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T06:21:08.011528246Z
-modified_at: 2026-10-21T12:34:12.624594548Z
+modified_at: 2026-10-21T12:34:19.136530127Z
 req_type: Bug
 tags:
 - ci
@@ -32,6 +32,12 @@ comments:
   content: 'Another data point (take-2781, 05:33): in-process ''make test-touched'' (one cargo test process) intermittently failed bug_1983 one_rejection_table... and bug_1918 unrecognised_agent_is_bound_by_its_session_leader; both pass alone. Suspected race on AIDA_HOME or shared global state between tests in one process. Per-process nextest in CI does not show it.'
   created_at: 2026-10-21T12:34:12.624594548Z
   modified_at: 2026-10-21T12:34:12.624594548Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e74-8d80-7203-9c4b-8621537af841
+  author: joe
+  content: 'Correction (advisor): the comment above is a DIFFERENT flake (in-process test isolation on AIDA_HOME), not this git auto-maintenance race. Ignore it for this bug; it is tracked under TASK-1955 (test coverage sweep).'
+  created_at: 2026-10-21T12:34:19.136530127Z
+  modified_at: 2026-10-21T12:34:19.136530127Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 filed_at:
   code_sha: f687736aa0674af02c12031f315b4ac882106c18
