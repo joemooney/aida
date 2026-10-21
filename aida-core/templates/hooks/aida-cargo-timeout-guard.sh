@@ -12,9 +12,16 @@
 #
 # Non-cargo timeouts (`timeout 540 gh pr checks ...`) are left alone. Prose
 # that only mentions the pattern (a quoted argument, heredoc body or comment)
-# is not a command and is not flagged.
+# is not a command and is not flagged. A `timeout <N> bash -c "..."` (or sh,
+# zsh, dash) is flagged when the quoted body runs cargo or make. A make target
+# is passed over only when the Makefile in the command's directory shows that
+# it and every prerequisite run only known-inert commands (echo, cp, ...);
+# anything it cannot resolve still gets the hint, and so does a line where any
+# other timeout-wrapped segment runs cargo. Known misses: cargo reached
+# through `eval`, an alias or a function.
 #
 # trace:STORY-1854 | ai:claude
+# trace:TASK-1967 | ai:claude
 
 set -Euo pipefail
 
@@ -149,17 +156,213 @@ SCAN=$(strip_shell_literals "$COMMAND") || SCAN=$COMMAND
 WORD='[^[:space:];&|()]'
 OPT="(-[ks][[:space:]]*${WORD}+|--(kill-after|signal)(=|[[:space:]]+)${WORD}+|--foreground|--preserve-status|-v|--verbose)"
 ASSIGN="(env|[A-Za-z_][A-Za-z0-9_]*=${WORD}*)"
-PATTERN="(^|[[:space:];&|(\`])(${WORD}*/)?g?timeout[[:space:]]+(${OPT}[[:space:]]+)*([0-9]+(\.[0-9]+)?[smhd]?)[[:space:]]+(${ASSIGN}[[:space:]]+)*(${WORD}*/)?(cargo|g?make)([[:space:];&|)]|$)"
+TIMEOUT_PREFIX="(^|[[:space:];&|(\`])(${WORD}*/)?g?timeout[[:space:]]+(${OPT}[[:space:]]+)*([0-9]+(\.[0-9]+)?[smhd]?)[[:space:]]+(${ASSIGN}[[:space:]]+)*"
+TOOL_TAIL="(${WORD}*/)?(cargo|g?make)([[:space:];&|)]|$)"
+PATTERN="${TIMEOUT_PREFIX}${TOOL_TAIL}"
+# `timeout <N> bash -c "<body>"`: the body is a quoted literal, so the
+# stripped scan sees only its quote; it is read from the raw command.
+# trace:TASK-1967 | ai:claude
+SHELL_C="(${WORD}*/)?(ba|da|z|k)?sh[[:space:]]+((-[A-Za-z]+|[-+]o[[:space:]]+${WORD}+)[[:space:]]+)*-[A-Za-z]*c[[:space:]]*"
+DQ_BODY='"(([^"\\]|\\.)*)"'
+SQ_BODY="'([^']*)'"
+SHELL_RAW="${TIMEOUT_PREFIX}${SHELL_C}(${DQ_BODY}|${SQ_BODY})"
+# Inside a body: cargo or make at a command position, after optional env
+# assignments, wrappers such as `nice -n 10`, and shell keywords.
+WRAPPER="((exec|time|command|nohup|nice|if|then|else|elif|while|until|do|\{|!)[[:space:]]+(-n[[:space:]]*-?[0-9]+[[:space:]]+)?)"
+BODY_PATTERN="(^|[;&|(\`])[[:space:]]*${WRAPPER}*(${ASSIGN}[[:space:]]+)*${TOOL_TAIL}"
+CD_PATTERN='(^|[;&|(`])[[:space:]]*(cd|pushd)([[:space:]]|$)'
 
+# The directory the command runs in: the payload's cwd, else this process's.
+RUN_DIR=$(printf '%s' "$INPUT" | __aida_json_field cwd)
+[ -n "$RUN_DIR" ] && [ -d "$RUN_DIR" ] || RUN_DIR=$PWD
+
+# True (0) only when every named make target, resolved through the Makefile
+# in RUN_DIR, runs only known-inert commands (echo, printf, ls, cp ...), and
+# so cannot reach cargo. Anything else is not shown safe: an unknown target,
+# a make variable or command substitution, an include anywhere in the
+# Makefile, or a prerequisite list naming a variable. trace:TASK-1967 | ai:claude
+make_targets_skip_cargo() {
+    local makefile=""
+    local f
+    for f in GNUmakefile makefile Makefile; do
+        if [ -f "$RUN_DIR/$f" ]; then makefile=$RUN_DIR/$f; break; fi
+    done
+    [ -n "$makefile" ] && [ "$#" -gt 0 ] || return 1
+    awk -v wanted="$*" '
+    function inert(cmd,   c, parts, n, k, w) {
+        c = cmd
+        gsub(/\$\$\{[A-Za-z_][A-Za-z0-9_]*\}/, "", c)
+        gsub(/\$\$[A-Za-z_][A-Za-z0-9_]*/, "", c)
+        gsub(/\$[@<^*?]/, "", c)
+        if (c ~ /[$`]/) return 0
+        gsub(/\047[^\047]*\047/, "\047\047", c)
+        gsub(/"[^"]*"/, "\"\"", c)
+        n = split(c, parts, /;|&&|\|\||\||&/)
+        for (k = 1; k <= n; k++) {
+            w = parts[k]
+            sub(/^[ \t@+-]*/, "", w)
+            sub(/[ \t<>].*$/, "", w)
+            if (w == "") continue
+            if (w !~ /^(echo|printf|true|false|:|ls|cat|grep|awk|sed|mkdir|rm|cp|mv|touch|test|\[)$/) return 0
+        }
+        return 1
+    }
+    BEGIN { owner = ""; incont = 0; indef = 0 }
+    indef { if ($0 ~ /^[ \t]*endef/) indef = 0; next }
+    /^\t/ || incont {
+        # A recipe line, or the continuation of one, whatever its indent.
+        incont = ($0 ~ /\\$/)
+        line = $0
+        sub(/\\$/, "", line)
+        if (owner != "") {
+            n = split(owner, os, " ")
+            for (k = 1; k <= n; k++) if (!inert(line)) bad[os[k]] = 1
+        }
+        next
+    }
+    /^[ \t]*(#|$)/ { next }
+    /^[ \t]*(override[ \t]+)?define[ \t]/ { indef = 1; owner = ""; next }
+    # An include can add prerequisites or recipes to any target.
+    /^[ \t]*-?s?include[ \t]/ { exit 1 }
+    {
+        line = $0
+        while (line ~ /\\$/ && (getline nxt) > 0) line = substr(line, 1, length(line) - 1) " " nxt
+        sub(/[ \t]#.*$/, "", line)
+        c = index(line, ":")
+        head = substr(line, 1, c - 1)
+        if (c == 0 || head ~ /[=$]/ || substr(line, c + 1, 1) == "=") { owner = ""; next }
+        body = substr(line, c + 1)
+        sub(/^:/, "", body)
+        if (body ~ /=/) { owner = ""; next }
+        inline = ""
+        s = index(body, ";")
+        if (s > 0) { inline = substr(body, s + 1); body = substr(body, 1, s - 1) }
+        gsub(/\|/, " ", body)
+        owner = ""
+        n = split(head, ts, /[ \t]+/)
+        for (k = 1; k <= n; k++) {
+            if (ts[k] == "") continue
+            known[ts[k]] = 1
+            deps[ts[k]] = deps[ts[k]] " " body
+            # A pattern rule or a variable prerequisite cannot be resolved here.
+            if (head ~ /%/ || body ~ /[$%]/) bad[ts[k]] = 1
+            if (inline != "" && !inert(inline)) bad[ts[k]] = 1
+            owner = owner " " ts[k]
+        }
+    }
+    END {
+        n = split(wanted, queue, " ")
+        for (i = 1; i <= n; i++) {
+            t = queue[i]
+            if (t == "" || seen[t]++) continue
+            if (!(t in known)) {
+                # A plain file prerequisite is fine; a top-level target is not.
+                if (i <= top) exit 1
+                continue
+            }
+            if (t in bad) exit 1
+            m = split(deps[t], ds, /[ \t]+/)
+            for (k = 1; k <= m; k++) if (ds[k] != "") queue[++n] = ds[k]
+        }
+        exit 0
+    }' top="$#" "$makefile"
+}
+
+# The make targets named after the matched `make` word, up to the end of that
+# simple command. Prints nothing, and fails, when the arguments cannot be
+# resolved here (a -C/-f directory or file switch, a quoted target).
+make_targets_from() {
+    local args=${1%%[;&|)]*}
+    local -a words targets=()
+    local w
+    read -r -a words <<< "$args"
+    for w in "${words[@]}"; do
+        case "$w" in
+            -C*|-f*|-I*|-o*|-W*|--directory*|--file*|--makefile*|--include-dir*|--old-file*|--what-if*|--new-file*|--assume*) return 1 ;;
+            *[\"\'\\\$\`]*) return 1 ;;
+            -*|*=*) ;;
+            *) [[ "$w" =~ ^[0-9.]+$ ]] || targets+=("$w") ;;
+        esac
+    done
+    [ "${#targets[@]}" -gt 0 ] || return 1
+    printf '%s\n' "${targets[*]}"
+}
+
+# Every timeout-wrapped cargo/make on the line is a segment. The hint is
+# skipped only when every segment is a make target shown not to reach cargo;
+# the first other segment names the hint. A `cd` anywhere means RUN_DIR's
+# Makefile may not be the one that runs. trace:TASK-1967 | ai:claude
 duration=""
 tool=""
-while IFS= read -r line; do
-    if [[ "$line" =~ $PATTERN ]]; then
-        duration=${BASH_REMATCH[7]}
-        tool=${BASH_REMATCH[12]}
-        break
+shown=""
+moved=0
+[[ "$SCAN" =~ $CD_PATTERN ]] && moved=1
+
+# Record one segment: $1 duration, $2 tool, $3 the text after the tool word
+# (empty when the arguments end at a separator), $4 how the hint shows it.
+consider() {
+    [ -z "$duration" ] || return 0
+    if [ "$2" != cargo ] && [ "$moved" = 0 ]; then
+        local targets
+        if targets=$(make_targets_from "$3") && make_targets_skip_cargo $targets; then
+            return 0
+        fi
     fi
+    duration=$1
+    tool=$2
+    shown=$4
+}
+
+# What follows the matched text, or nothing when the match ended on a
+# separator (so the command's arguments are already over).
+after_match() {
+    local text=$1 match=$2
+    [[ "$match" =~ [[:space:]]$ ]] || return 0
+    printf '%s' "${text#*"$match"}"
+}
+
+while IFS= read -r line; do
+    rem=$line
+    while [[ "$rem" =~ $PATTERN ]]; do
+        m=${BASH_REMATCH[0]}
+        consider "${BASH_REMATCH[7]}" "${BASH_REMATCH[12]}" "$(after_match "$rem" "$m")" \
+            "timeout ${BASH_REMATCH[7]} ${BASH_REMATCH[12]}"
+        rem=${rem#*"$m"}
+    done
 done <<< "$SCAN"
+
+# Each `timeout <N> sh -c` with its own body. An occurrence inside a quoted
+# argument, heredoc or comment is prose: appending a marker to the raw text
+# before it and stripping must leave the marker intact.
+rem=$COMMAND
+seen_text=""
+while [[ "$rem" =~ $SHELL_RAW ]]; do
+    m=${BASH_REMATCH[0]}
+    sh_duration=${BASH_REMATCH[7]}
+    before=${rem%%"$m"*}
+    seen_text+=$before
+    rem=${rem#*"$m"}
+    probe=$(strip_shell_literals "${seen_text}__AIDA_AT__") || probe=""
+    seen_text+=$m
+    [[ "$probe" == *__AIDA_AT__ ]] || continue
+    body=""
+    if [[ "$m" =~ ${DQ_BODY}$ ]] || [[ "$m" =~ ${SQ_BODY}$ ]]; then
+        body=${BASH_REMATCH[1]}
+    fi
+    body_scan=$(strip_shell_literals "$body") || body_scan=$body
+    [[ "$body_scan" =~ $CD_PATTERN ]] && body_moved=1 || body_moved=0
+    while IFS= read -r body_line; do
+        brem=$body_line
+        while [[ "$brem" =~ $BODY_PATTERN ]]; do
+            bm=${BASH_REMATCH[0]}
+            btool=${BASH_REMATCH[8]}
+            bafter=$(after_match "$brem" "$bm")
+            [ "$body_moved" = 1 ] && bafter=""
+            consider "$sh_duration" "$btool" "$bafter" "timeout ${sh_duration} sh -c \"${btool} ...\""
+            brem=${brem#*"$bm"}
+        done
+    done <<< "$body_scan"
+done
 [ -n "$duration" ] || exit 0
 
 case "$tool" in
@@ -167,7 +370,7 @@ case "$tool" in
     *) replacement="AIDA_CARGO_TIMEOUT=${duration} ${tool} <target>" ;;
 esac
 
-MESSAGE="Cargo time budget: \`timeout ${duration} ${tool}\` starts its clock before the cargo slot queue, so a long wait for a build slot can kill the run partway through. Write \`${replacement}\` instead, and run anything that can take more than about 10 minutes in the tool's background mode. Once the host cargo wrapper supports AIDA_CARGO_TIMEOUT (aida-host STORY-100), it starts that budget when the slot is acquired; until then it ignores the variable, and background mode is the only protection. After a timeout or KILLED, check \`cargo ps\` before retrying; never retry blindly."
+MESSAGE="Cargo time budget: \`${shown}\` starts its clock before the cargo slot queue, so a long wait for a build slot can kill the run partway through. Write \`${replacement}\` instead, and run anything that can take more than about 10 minutes in the tool's background mode. Once the host cargo wrapper supports AIDA_CARGO_TIMEOUT (aida-host STORY-100), it starts that budget when the slot is acquired; until then it ignores the variable, and background mode is the only protection. After a timeout or KILLED, check \`cargo ps\` before retrying; never retry blindly."
 
 # JSON-escape the message (it holds backticks and quotes, no newlines).
 escaped=${MESSAGE//\\/\\\\}

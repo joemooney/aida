@@ -79,6 +79,11 @@ inherits = "release"
 opt-level = 1
 debug = false
 # Release leaves incremental off, which made every local rebuild after a merge
-# recompile aida-cli-lib from scratch. CI exports CARGO_INCREMENTAL=0, so it is
-# unaffected. trace:TASK-1985 | ai:claude
+# recompile aida-cli-lib from scratch (measured on TASK-1986: median 25s vs
+# 159s for a one-line edit). CI never builds with --profile agent (only the dev
+# profile and --release), so this cannot reach CI. Trade-off: sccache does not
+# cache incremental crates ("cannot cache: incremental"), so a fresh worktree's
+# first build compiles the workspace crates without cross-worktree hits; only
+# third-party dependencies stay cached. trace:TASK-1985 | ai:claude
+# trace:TASK-1967 | ai:claude
 incremental = true
