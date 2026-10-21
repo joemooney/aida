@@ -185,7 +185,7 @@ fn baseline_allows_no_ref_or_remote_writing_git() {
         "git push --delete origin main",
         "git push origin :main",
         "git -c core.hooksPath=/x push --force",
-        "git -C /tmp push -f",
+        "git -C ../other push -f",
         "git reset --hard HEAD~1",
         "git update-ref refs/heads/main HEAD",
         "git branch -D main",

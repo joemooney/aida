@@ -3556,6 +3556,7 @@ mod story_1405_review_marker_tests {
     // boundary) writes the handshake into its own worktree for the launcher
     // to collect, and leaves the anchor alone. Uncontained, the same refusal
     // is still an error. trace:BUG-2201 | ai:claude
+    #[cfg(unix)]
     #[test]
     fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
         use std::os::unix::fs::PermissionsExt;
