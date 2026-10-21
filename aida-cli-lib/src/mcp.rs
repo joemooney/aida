@@ -2750,12 +2750,16 @@ impl<'a> McpServer<'a> {
             if let Some(why) = aida_core::mailbox::recipient_id_rejection(a) {
                 return Err(format!("send refused: `to` {why}"));
             }
-            // Same stored-spelling rule as the CLI `--to`.
-            // trace:TASK-1955 | ai:claude (TASK-1928)
-            Recipient::Agent(crate::deliverable_recipient_spelling(
-                &self.mailbox_store_root(),
-                a,
-            ))
+            // Same stored-spelling rule as the CLI `--to` (a known identity
+            // is delivered under its stored spelling; `addressed_to` is
+            // case-sensitive). trace:TASK-1955 | ai:claude (TASK-1928)
+            let known = crate::known_mailbox_recipients(&self.mailbox_store_root());
+            Recipient::Agent(
+                known
+                    .get(&a.to_lowercase())
+                    .cloned()
+                    .unwrap_or_else(|| a.to_string()),
+            )
         } else {
             return Err("specify `to` (an agent) or `broadcast: true`".to_string());
         };

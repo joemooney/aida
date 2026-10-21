@@ -151,8 +151,13 @@ pub(crate) fn handle_mailbox_command(
                 }
                 // trace:TASK-1766 | ai:claude — deliver a known identity under
                 // its stored spelling, exactly as an `@mention` of it is.
-                // trace:TASK-1955 | ai:claude (TASK-1928)
-                Recipient::Agent(crate::deliverable_recipient_spelling(store_root, agent))
+                let known = crate::known_mailbox_recipients(store_root);
+                Recipient::Agent(
+                    known
+                        .get(&agent.to_lowercase())
+                        .cloned()
+                        .unwrap_or_else(|| agent.to_string()),
+                )
             } else {
                 anyhow::bail!("specify --to <agent> or --broadcast");
             };
