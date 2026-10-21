@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-21T18:04:10.602433002Z
+modified_at: 2026-10-21T19:05:05.223501099Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -135,6 +135,16 @@ comments:
   created_at: 2026-10-21T18:04:10.602433002Z
   modified_at: 2026-10-21T18:04:10.602433002Z
   relayed_from: advisor
+- id: 01a15fda-4fc7-72b2-8209-cc172acc0486
+  author: ai:codex:joe
+  content: |
+    PR1 published: https://github.com/joemooney/aida/pull/2808 at e85d432ebaf8eb399c9b373df6a368c77bafd4b7. Non-completing Refs STORY-1843 slice per advisor ruling.
+
+    Current-head local evidence:65 mailbox tests,2 mention tests,33 fast gates passed. Workspace test targets compiled at parent201f64a889 before the private historical-catalog precedence followup (no public signatures changed). No independent approval or CI-green claim yet.
+
+    Auto-queue skipped Refs-only trailers; manually filed STORY-1890, linked it to this story and routed it to reviewer. Its requested approval correctly requires advisor authority, so it is Draft pending advisor promotion. Advisor has PR URL/SHA/evidence and request for independent attested review/current-head CI/ship. Parent remains In Progress through all four slices.
+  created_at: 2026-10-21T19:05:05.223501099Z
+  modified_at: 2026-10-21T19:05:05.223501099Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
