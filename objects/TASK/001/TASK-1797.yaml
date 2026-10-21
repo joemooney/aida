@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T14:21:29.287594158Z
-modified_at: 2026-10-16T14:21:29.287594158Z
+modified_at: 2026-10-21T05:48:45.128346147Z
 req_type: Task
+tags:
+- operator-held
+history:
+- id: 01a15d01-40d1-7a43-adec-7707074a8246
+  author: joe
+  timestamp: 2026-10-21T05:48:45.649388746Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T05:48:45.128346147Z
+deferred_until: the operator sets the v* tag ruleset in GitHub settings
+deferred_reason: Operator-only GitHub settings change; no agent can do it
 filed_at:
   code_sha: fc39d8f0bc76504a62b5733ebcc61ab9677f5121
   branch: main
