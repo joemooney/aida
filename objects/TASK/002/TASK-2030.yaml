@@ -3,12 +3,12 @@ spec_id: TASK-2030
 agreed_id: TASK-2030
 title: 'lane-liveness follow-ups: required-checks-only readiness rollup; test lane-liveness-<seat> delivery via due_seat_jobs and schedule done'
 description: From PR-2743 round 2 (f118728675) minors 3 and 4. (a) rollup_green_at (lane_liveness.rs:1162-1189) should treat only REQUIRED checks as the ready signal, per the approved sketch, so a failing optional check doesn't block pickup forever. (b) Add a test that a routed lane-liveness-<seat> job surfaces through due_seat_jobs/collect_due and clears with 'aida schedule done lane-liveness-<seat>'.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T22:39:15.991856363Z
-modified_at: 2026-10-21T08:15:47.764506651Z
+modified_at: 2026-10-21T17:36:39.096694408Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -88,6 +88,14 @@ history:
   timestamp: 2026-10-21T08:15:45.030855884Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15f89-58b8-72f1-a4e1-028a12896367
+  author: joe
+  timestamp: 2026-10-21T17:36:39.096688508Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
   branch: main
