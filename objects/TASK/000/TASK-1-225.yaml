@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-21T04:16:17.837082345Z
+modified_at: 2026-10-21T04:49:47.100763140Z
 req_type: Task
 tags:
 - closure-pending
@@ -734,6 +734,12 @@ comments:
   created_at: 2026-10-21T04:16:17.837082345Z
   modified_at: 2026-10-21T04:16:17.837082345Z
   session_id: 5153cc4c-e6fe-439d-b2b2-dc09e14e43cb
+- id: 01a15ccb-425c-7e02-96c7-33e1f2661d4d
+  author: joe
+  content: 'ADVISOR RULING 2026-10-20 21:55: option (A) adopted from the task-1332 analysis. Items 1, 2, 4 are met on main except the pieces owned by TASK-1981 (PR-2778, then its slice-2 PR). Item 3 (A2 store-CAS private-candidate design) moves to TASK-2041, gated on an A2 V3 signoff. Item 5 (TASK-1333) is no longer a closure prerequisite; it stays its own deferred spec, linked as a reference. TASK-1332 closes as satisfied by TASK-1717 + TASK-1930 + TASK-1981 when TASK-1981''s last slice merges. Status: approved, deferred until then.'
+  created_at: 2026-10-21T04:49:47.100763140Z
+  modified_at: 2026-10-21T04:49:47.100763140Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
