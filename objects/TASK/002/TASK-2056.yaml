@@ -1,0 +1,27 @@
+id: 01a15e1e-9b63-7ed0-ac55-25320065a9a5
+spec_id: TASK-2056
+agreed_id: TASK-2056
+title: Strengthen task_1981_release_status_failure_prevents_publication to prove no push
+description: |
+  aida-cli-lib/src/upgrade_release.rs (mod task_1981_release_status_tests): the test sets up no origin remote and only asserts `.git/refs/heads/main` is absent. That is always true in a repo with no commits. It proves the git-status error propagates out of sync_dev_release_store, but not that publication is skipped. Add a bare origin, as the shared task_1981_publication_tests.rs Fixture does, and assert its refs stay empty.
+
+  Raised in review of PR-2796: https://github.com/joemooney/aida/pull/2796#issuecomment-6314305681
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T11:00:26.595911722Z
+modified_at: 2026-10-21T11:00:26.595911722Z
+req_type: Task
+tags:
+- from-review:PR-2796
+- severity:minor
+- tests
+filed_at:
+  code_sha: cbb9f66bec7f9459fd817a8e9c8d221a991e135d
+  branch: pr-2796
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66e4d93b8
+  vendor: claude
+  session: 01a15e1545ad
