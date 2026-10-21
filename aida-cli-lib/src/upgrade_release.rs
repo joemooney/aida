@@ -1871,47 +1871,10 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
             )
             .bold()
         );
-        let branch =
-            aida_core::git_ops::current_branch(sp).unwrap_or_else(|_| "aida-store".to_string());
-
-        // Commit any pending store changes (e.g., block pointer updates)
-        // trace:TASK-1930 | ai:agy
-        if let Err(e) = aida_core::db::with_store_write_lock(sp, || -> Result<()> {
-            if aida_core::git_ops::has_changes(sp).unwrap_or(false) {
-                let msg = format!("chore: sync store for release {}", new_tag);
-                let _ = aida_core::git_ops::add_all(sp, "objects");
-                let _ = aida_core::git_ops::add_all(sp, "registry");
-                if sp.join("metadata.yaml").exists() {
-                    let _ = aida_core::git_ops::add(sp, &["metadata.yaml"]);
-                }
-                if let Err(e) = aida_core::git_ops::commit(sp, &msg) {
-                    eprintln!("  Warning: could not commit store changes: {}", e);
-                } else {
-                    println!("  Committed store changes: {}", msg);
-                }
-            }
-            Ok(())
-        }) {
-            eprintln!("  Warning: could not commit store changes: {}", e);
-        }
-
-        match aida_core::git_ops::push(sp, "origin", &branch) {
-            Ok(true) => println!("  Store push complete."),
-            Ok(false) => {
-                println!("  Push rejected. Pulling and retrying...");
-                let pull_res = aida_core::db::with_store_write_lock(sp, || {
-                    aida_core::git_ops::pull_rebase(sp, "origin", &branch)
-                });
-                if let Err(e) = pull_res {
-                    eprintln!("  Warning: store pull-rebase failed: {}", e);
-                } else {
-                    match aida_core::git_ops::push(sp, "origin", &branch) {
-                        Ok(_) => println!("  Store push complete after rebase."),
-                        Err(e) => eprintln!("  Warning: store push failed after rebase: {}", e),
-                    }
-                }
-            }
-            Err(e) => eprintln!("  Warning: store push failed: {}", e),
+        match sync_dev_release_store(sp, &new_tag) {
+            Ok(false) => println!("  Store push complete."),
+            Ok(true) => println!("  Store push complete after rebase."),
+            Err(e) => eprintln!("  Warning: store sync failed: {e}"),
         }
     }
 
@@ -1922,6 +1885,71 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
         new_tag
     );
     Ok(())
+}
+
+// Stage/commit and capture under one lock. A failed stage or commit prevents
+// publication; do not publish a moving branch after swallowing a write error.
+// trace:TASK-1981 | ai:codex
+fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(String, String)> {
+    use aida_core::git_ops;
+    aida_core::db::with_store_write_lock(store, || {
+        // Resolve the publish target before committing, so a detached store
+        // fails closed with nothing written. trace:TASK-1981 | ai:claude
+        let branch = git_ops::attached_branch(store)?;
+        if git_ops::has_changes_checked(store)? {
+            for dir in ["objects", "registry"] {
+                if store.join(dir).exists() {
+                    git_ops::add_all(store, dir)?;
+                }
+            }
+            if store.join("metadata.yaml").exists() {
+                git_ops::add(store, &["metadata.yaml"])?;
+            }
+            git_ops::commit(store, &format!("chore: sync store for release {tag}"))?;
+        }
+        Ok((branch, git_ops::head_sha(store)?))
+    })
+}
+
+// trace:TASK-1981 | ai:codex
+fn rebase_dev_release_store_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
+    aida_core::db::with_store_write_lock(store, || {
+        aida_core::git_ops::pull_rebase(store, "origin", branch)?;
+        aida_core::git_ops::head_sha(store)
+    })
+}
+
+// trace:TASK-1981 | ai:codex
+fn publish_dev_release_store_snapshot(
+    store: &std::path::Path,
+    branch: &str,
+    sha: &str,
+) -> Result<bool> {
+    use aida_core::git_ops::{self, PushFailure, PushOutcome};
+    match git_ops::push_exact_outcome(store, "origin", sha, branch)? {
+        PushOutcome::Pushed => Ok(false),
+        PushOutcome::Failed {
+            kind: PushFailure::NonFastForward,
+            ..
+        } => {
+            let retry_sha = rebase_dev_release_store_snapshot(store, branch)?;
+            match git_ops::push_exact_outcome(store, "origin", &retry_sha, branch)? {
+                PushOutcome::Pushed => Ok(true),
+                PushOutcome::Failed { kind, stderr } => {
+                    anyhow::bail!("store push failed after rebase ({kind:?}): {stderr}")
+                }
+            }
+        }
+        PushOutcome::Failed { kind, stderr } => {
+            anyhow::bail!("store push failed ({kind:?}): {stderr}")
+        }
+    }
+}
+
+// trace:TASK-1981 | ai:codex
+fn sync_dev_release_store(store: &std::path::Path, tag: &str) -> Result<bool> {
+    let (branch, sha) = capture_dev_release_store(store, tag)?;
+    publish_dev_release_store_snapshot(store, &branch, &sha)
 }
 
 pub(crate) fn read_workspace_version(root: &std::path::Path) -> Option<String> {
@@ -2277,3 +2305,81 @@ pub(crate) static RELEASE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_release),
     };
+
+#[cfg(test)]
+mod task_1981_publication_tests {
+    use super::*;
+    fn capture_snapshot(store: &std::path::Path) -> Result<(String, String)> {
+        capture_dev_release_store(store, "v-test")
+    }
+    fn publish_snapshot(store: &std::path::Path, branch: &str, sha: &str) -> Result<bool> {
+        publish_dev_release_store_snapshot(store, branch, sha)
+    }
+    fn retry_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
+        rebase_dev_release_store_snapshot(store, branch)
+    }
+    fn sync_snapshot(store: &std::path::Path) -> Result<bool> {
+        sync_dev_release_store(store, "v-test")
+    }
+    include!("tests/task_1981_publication_tests.rs");
+
+    // Seed the bare origin with one published commit and leave a pending store
+    // change behind it, so a sync that got past status would commit and push.
+    fn seeded_with_pending_change(fixture: &Fixture) -> String {
+        let seeded = fixture.advance("seed.txt");
+        assert!(git_ops::push(&fixture.store, "origin", "main").unwrap());
+        assert_eq!(fixture.remote_head(), seeded);
+        std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+        seeded
+    }
+
+    fn remote_refs(fixture: &Fixture) -> String {
+        git_at(
+            &fixture.bare,
+            &["for-each-ref", "--format=%(refname) %(objectname)"],
+        )
+    }
+
+    // trace:TASK-1981 | ai:claude
+    #[test]
+    fn task_1981_release_status_failure_prevents_publication() {
+        let fixture = Fixture::new();
+        let seeded = seeded_with_pending_change(&fixture);
+        let refs_before = remote_refs(&fixture);
+        let objects_before = git_at(&fixture.bare, &["rev-list", "--all"]);
+        // A truncated index makes status fail, rather than look clean.
+        std::fs::write(fixture.store.join(".git/index"), "not a git index").unwrap();
+        let error = sync_snapshot(&fixture.store).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("git status failed"),
+            "{error:#}"
+        );
+        assert_eq!(remote_refs(&fixture), refs_before);
+        assert_eq!(
+            git_at(&fixture.bare, &["rev-list", "--all"]),
+            objects_before
+        );
+        assert_eq!(fixture.remote_head(), seeded);
+        assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), seeded);
+    }
+
+    // Positive control for the test above: the same setup with a readable index
+    // does commit the pending change and advance the origin.
+    // trace:TASK-1981 | ai:claude
+    #[test]
+    fn task_1981_release_status_success_publishes_pending_change() {
+        let fixture = Fixture::new();
+        let seeded = seeded_with_pending_change(&fixture);
+        assert!(!sync_snapshot(&fixture.store).unwrap());
+        let published = git_ops::head_sha(&fixture.store).unwrap();
+        assert_ne!(published, seeded);
+        assert_eq!(fixture.remote_head(), published);
+        assert_eq!(
+            git_at(
+                &fixture.bare,
+                &["rev-list", "--count", &format!("{seeded}..{published}")]
+            ),
+            "1"
+        );
+    }
+}
