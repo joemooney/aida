@@ -3191,27 +3191,256 @@ pub fn list_worktree_paths(repo_root: &Path) -> Vec<PathBuf> {
 // means the pool never reshells `git worktree` itself and the `--detach` add /
 // classified remove live next to AIDA's other managed-worktree primitives.
 
+/// Publish an invocation-private worktree without replacing or nesting into a
+/// destination created concurrently. Repair the admin back-pointer after the
+/// atomic filesystem rename; callers retain their receipt even on repair error.
+// trace:BUG-2188 | ai:codex
+pub fn publish_worktree_noreplace(
+    repo_root: &Path,
+    stage: &Path,
+    destination: &Path,
+) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let marker = std::fs::read(stage.join(".git"))?;
+    let from = std::ffi::CString::new(stage.as_os_str().as_bytes())?;
+    let to = std::ffi::CString::new(destination.as_os_str().as_bytes())?;
+    // SAFETY: both C strings remain alive, are NUL terminated, and AT_FDCWD
+    // resolves their paths. RENAME_NOREPLACE never replaces an existing entry.
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result != 0 {
+        let error = std::io::Error::last_os_error();
+        // NFS and older OpenZFS reject RENAME_NOREPLACE (EINVAL); kernels
+        // without renameat2 report ENOSYS. trace:BUG-2188 | ai:claude
+        if matches!(
+            error.raw_os_error(),
+            Some(libc::EINVAL) | Some(libc::ENOSYS)
+        ) {
+            publish_dir_reserved(stage, destination).with_context(|| {
+                format!(
+                    "publish worktree at {} without replacing an existing path \
+                     (this filesystem does not support RENAME_NOREPLACE: {error})",
+                    destination.display()
+                )
+            })?;
+        } else {
+            return Err(error).with_context(|| {
+                format!(
+                    "publish worktree at {} without replacing an existing path",
+                    destination.display()
+                )
+            });
+        }
+    }
+    anyhow::ensure!(
+        std::fs::symlink_metadata(destination.join(".git"))?
+            .file_type()
+            .is_file()
+            && std::fs::read(destination.join(".git"))? == marker,
+        "published worktree identity changed; inspect `git worktree list --porcelain`"
+    );
+    let repaired = git(
+        repo_root,
+        &["worktree", "repair", "--", &destination.to_string_lossy()],
+    )?;
+    anyhow::ensure!(
+        repaired.success,
+        "worktree published at {} but admin repair failed: {}; run `git worktree repair -- '{}'`",
+        destination.display(),
+        repaired.stderr,
+        destination.display()
+    );
+    Ok(())
+}
+
+/// No-replace publication for filesystems without `RENAME_NOREPLACE`. The
+/// exclusive `mkdir` reserves the destination (it fails if anything exists
+/// there), and a directory rename only replaces an EMPTY directory: a writer
+/// that fills the reservation meanwhile makes the rename fail (ENOTEMPTY),
+/// never get replaced or nested into. A failed rename releases only a
+/// still-empty reservation.
+// trace:BUG-2188 | ai:claude
+fn publish_dir_reserved(stage: &Path, destination: &Path) -> Result<()> {
+    std::fs::create_dir(destination)
+        .with_context(|| format!("reserve {}", destination.display()))?;
+    if let Err(error) = std::fs::rename(stage, destination) {
+        let _ = std::fs::remove_dir(destination);
+        return Err(error).with_context(|| {
+            format!(
+                "move {} onto reserved {}",
+                stage.display(),
+                destination.display()
+            )
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod bug2188_publish_fallback_tests {
+    use super::*;
+
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn reserved_publish_moves_into_an_absent_destination() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        std::fs::create_dir(&stage).unwrap();
+        std::fs::write(stage.join(".git"), "gitdir: x\n").unwrap();
+        let destination = tmp.path().join("published");
+        publish_dir_reserved(&stage, &destination).unwrap();
+        assert!(!stage.exists());
+        assert_eq!(
+            std::fs::read_to_string(destination.join(".git")).unwrap(),
+            "gitdir: x\n"
+        );
+    }
+
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn reserved_publish_never_replaces_or_nests_into_an_existing_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        std::fs::create_dir(&stage).unwrap();
+        std::fs::write(stage.join(".git"), "gitdir: x\n").unwrap();
+        for existing_is_dir in [true, false] {
+            let destination = tmp.path().join(format!("taken-{existing_is_dir}"));
+            if existing_is_dir {
+                std::fs::create_dir(&destination).unwrap();
+                std::fs::write(destination.join("keep"), "kept").unwrap();
+            } else {
+                std::fs::write(&destination, "kept").unwrap();
+            }
+            assert!(publish_dir_reserved(&stage, &destination).is_err());
+            assert!(stage.join(".git").exists(), "stage stays put");
+            if existing_is_dir {
+                assert_eq!(std::fs::read_dir(&destination).unwrap().count(), 1);
+                assert_eq!(
+                    std::fs::read_to_string(destination.join("keep")).unwrap(),
+                    "kept"
+                );
+            } else {
+                assert_eq!(std::fs::read_to_string(&destination).unwrap(), "kept");
+            }
+        }
+    }
+}
+
 /// Add a new worktree at `path` with a **detached HEAD** pointing at `ref_`.
 /// The pool always hands out detached trees — the worker creates its own
 /// branch — so a reused tree never stacks one spec's branch on another's
 /// (the structural dissolution of BUG-553).
 // trace:STORY-714 trace:BUG-553 | ai:claude
+// Partial Git failures are allocations too. A unique staging name pins the
+// expected admin directory before add; a failed hook cannot leave a pool orphan.
+// trace:BUG-2188 | ai:codex
 pub fn add_detached_worktree(repo_root: &Path, path: &Path, ref_: &str) -> Result<()> {
-    // Drop stale registrations first — same rationale as create_store_worktree
-    // (a manually-deleted dir leaves a dangling registration). trace:BUG-39
+    // Preserve stale-registration cleanup before allocating a new pool tree.
     let _ = git(repo_root, &["worktree", "prune"]);
-    let path_str = path.to_string_lossy();
-    // trace:BUG-1622 | ai:claude
-    let result = git(
+    anyhow::ensure!(
+        matches!(std::fs::symlink_metadata(path), Err(ref e) if e.kind() == std::io::ErrorKind::NotFound),
+        "pool worktree path {} already exists or is unreadable",
+        path.display()
+    );
+    let name = format!("aida-pool-allocation-{}", uuid::Uuid::new_v4());
+    let stage = path
+        .parent()
+        .context("pool worktree has no parent")?
+        .join(&name);
+    let common = git(
         repo_root,
-        &["worktree", "add", "--detach", "--", &path_str, ref_],
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )?;
-    if !result.success {
-        anyhow::bail!(
+    anyhow::ensure!(
+        common.success,
+        "cannot resolve pool worktree administration directory"
+    );
+    let admin = PathBuf::from(common.stdout.trim())
+        .join("worktrees")
+        .join(&name);
+    anyhow::ensure!(
+        !admin.exists() && !stage.exists(),
+        "pool allocation identity already exists"
+    );
+    let pointer_matches = |tree: &Path| -> bool {
+        let marker = tree.join(".git");
+        if !std::fs::symlink_metadata(&marker).is_ok_and(|m| m.file_type().is_file()) {
+            return false;
+        }
+        std::fs::read_to_string(marker)
+            .ok()
+            .and_then(|text| {
+                let pointer = PathBuf::from(text.trim().strip_prefix("gitdir: ")?);
+                (if pointer.is_absolute() {
+                    pointer
+                } else {
+                    tree.join(pointer)
+                })
+                .canonicalize()
+                .ok()
+            })
+            .as_deref()
+            == Some(admin.as_path())
+    };
+    let result = (|| -> Result<()> {
+        let add = git(
+            repo_root,
+            &[
+                "worktree",
+                "add",
+                "--detach",
+                "--",
+                &stage.to_string_lossy(),
+                ref_,
+            ],
+        )?;
+        anyhow::ensure!(
+            add.success,
             "failed to add pool worktree at {}: {}",
             path.display(),
-            result.stderr
+            add.stderr
         );
+        anyhow::ensure!(
+            pointer_matches(&stage),
+            "pool allocation admin identity changed"
+        );
+        publish_worktree_noreplace(repo_root, &stage, path)?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        for candidate in [&stage, &path.to_path_buf()] {
+            if pointer_matches(candidate) {
+                if let Err(in_use) = crate::worktree_holders::check_worktree_removal(candidate) {
+                    eprintln!(
+                        "pool allocation kept {}: {}; inspect `git worktree list --porcelain`",
+                        candidate.display(),
+                        in_use.summary()
+                    );
+                } else {
+                    let removed = git(
+                        repo_root,
+                        &[
+                            "worktree",
+                            "remove",
+                            "--force",
+                            "--",
+                            &candidate.to_string_lossy(),
+                        ],
+                    );
+                    if !matches!(removed, Ok(ref r) if r.success) {
+                        eprintln!("pool allocation cleanup failed for {}; inspect `git worktree list --porcelain`", candidate.display());
+                    }
+                }
+            }
+        }
+        return Err(error);
     }
     warn_worktree_container_gitdir(repo_root, path);
     Ok(())
@@ -11287,3 +11516,52 @@ mod task_1981_node_writer_tests;
 #[cfg(test)]
 #[path = "tests/task_1981_gc_config_tests.rs"]
 mod task_1981_gc_config_tests;
+
+// trace:BUG-2188 | ai:codex
+#[cfg(test)]
+mod bug2188_partial_pool_tests {
+    use super::*;
+    #[test]
+    fn bug2188_pool_partial_checkout_is_rolled_back() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec![
+                "-c",
+                "user.name=fixture",
+                "-c",
+                "user.email=fixture@test",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "init",
+            ],
+        ] {
+            assert!(std::process::Command::new("git")
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let hook = root.join(".git/hooks/post-checkout");
+        std::fs::write(&hook, "#!/bin/sh\necho pool-hook-failure >&2\nexit 73\n").unwrap();
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let requested = temp.path().join("pool-tree");
+        let error = add_detached_worktree(&root, &requested, "main").unwrap_err();
+        assert!(error.to_string().contains("pool-hook-failure"));
+        assert!(!requested.exists());
+        assert_eq!(std::fs::read_dir(temp.path()).unwrap().count(), 1);
+        std::fs::create_dir(&requested).unwrap();
+        std::fs::write(requested.join("keep"), "kept").unwrap();
+        assert!(add_detached_worktree(&root, &requested, "main").is_err());
+        assert_eq!(
+            std::fs::read_to_string(requested.join("keep")).unwrap(),
+            "kept"
+        );
+    }
+}

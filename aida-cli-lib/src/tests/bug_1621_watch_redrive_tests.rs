@@ -819,6 +819,8 @@ fn watch_redrive_real_floors_merge_hold_breaker_drain_lock_and_shift_lock() {
 
     // 3d. A live drain claim held by another clone in the shared store.
     let claim = crate::coordination::Claim {
+        // trace:BUG-2188 | ai:codex
+        claim_id: None,
         scope: "drain".to_string(),
         node_id: "2".to_string(),
         clone_path: "/elsewhere/other-clone".to_string(),

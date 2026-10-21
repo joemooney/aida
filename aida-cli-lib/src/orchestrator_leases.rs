@@ -867,6 +867,10 @@ pub(crate) fn exit_code_for_error(err: &anyhow::Error) -> i32 {
     if err.downcast_ref::<queue_cmd::NoReviewVerdict>().is_some() {
         return queue_cmd::NO_REVIEW_VERDICT_EXIT_CODE;
     }
+    // trace:BUG-2187 | ai:claude
+    if let Some(exit) = err.downcast_ref::<queue_cmd::ReviewerVendorExit>() {
+        return exit.code;
+    }
     err.downcast_ref::<pr_rebase::RebaseFailureExit>()
         .map(|sig| sig.code)
         .unwrap_or(1)

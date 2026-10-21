@@ -1119,6 +1119,7 @@ pub(crate) fn clear_worktree_session_leases(
 pub(crate) fn acquire_session_pool_worktree(
     project_root: &std::path::Path,
     branch_name: &str,
+    rollback: &mut Option<SessionStartCleanup>,
 ) -> Result<std::path::PathBuf> {
     let opts = aida_core::worktree_pool::AcquireOptions {
         lease_holder: Some(branch_name.to_string()),
@@ -1129,6 +1130,15 @@ pub(crate) fn acquire_session_pool_worktree(
         parent_dir: worktree_pool_config_worktree_parent(project_root),
     };
     let acquired = aida_core::worktree_pool::acquire(project_root, &opts)?;
+    // Record ownership before checkout: a failing post-checkout hook may
+    // already have created the branch. trace:BUG-2188 | ai:codex
+    if let Some(cleanup) = rollback.as_mut() {
+        cleanup.own_tree(&acquired, None);
+        if rollback_branch_absent(project_root, branch_name)? {
+            cleanup.branch = Some(branch_name.into());
+            cleanup.branch_sha = rollback_ref_sha(&acquired, "HEAD");
+        }
+    }
 
     // BUG-669: reset the lease on reuse — drop any stale session lease the prior
     // occupant left pointing at this recycled tree, so `aida ps` attributes the
@@ -1153,9 +1163,14 @@ pub(crate) fn acquire_session_pool_worktree(
     let _ = std::io::stderr().write_all(&co.stdout);
     let _ = std::io::stderr().write_all(&co.stderr);
     if !co.status.success() {
-        // Hand the tree back so a failed branch-create doesn't pin it.
-        let _ = aida_core::worktree_pool::return_to_pool(project_root, &acquired);
-        anyhow::bail!("failed to create branch `{branch_name}` on the pooled worktree");
+        if rollback.is_none() {
+            let _ = aida_core::worktree_pool::return_to_pool(project_root, &acquired);
+        }
+        anyhow::bail!(
+            "failed to create branch `{branch_name}` on pooled worktree {}: {}",
+            acquired.display(),
+            String::from_utf8_lossy(&co.stderr)
+        );
     }
     eprintln!(
         "{} using warm-pool worktree {} (recycled — build cache kept)",
@@ -1204,6 +1219,426 @@ mod dirty_gate_tests;
 #[path = "tests/worktree_pool_resolve_tests.rs"]
 mod worktree_pool_resolve_tests;
 
+/// An invocation-owned receipt: re-entry has no allocation to undo. The
+/// launcher retains a fresh allocation until its child has actually started.
+// trace:BUG-2188 | ai:codex
+pub(crate) struct SessionStartReceipt {
+    pub(crate) lease_id: Option<String>,
+    cleanup: Option<SessionStartCleanup>,
+}
+impl SessionStartReceipt {
+    fn existing(lease_id: Option<String>) -> Self {
+        Self {
+            lease_id,
+            cleanup: None,
+        }
+    }
+    pub(crate) fn owns_setup(&self) -> bool {
+        self.cleanup.is_some()
+    }
+    pub(crate) fn disarm(&mut self) {
+        if let Some(cleanup) = self.cleanup.as_mut() {
+            cleanup.armed = false;
+        }
+        self.cleanup = None;
+    }
+}
+// trace:BUG-2188 | ai:codex
+pub(crate) struct SessionStartCleanup {
+    root: std::path::PathBuf,
+    scope: String,
+    claim: Option<coordination::Claim>,
+    tree: Option<std::path::PathBuf>,
+    branch: Option<String>,
+    branch_sha: Option<String>,
+    gitdir: Option<std::path::PathBuf>,
+    clone: Option<crate::seat_clone::CreatedClone>,
+    clone_git_identity: Option<(u64, u64)>,
+    lease_id: Option<String>,
+    // The spec this invocation moved Approved → InProgress, if it did.
+    // trace:BUG-2188 | ai:claude
+    status_bump: Option<String>,
+    armed: bool,
+}
+impl SessionStartCleanup {
+    fn new(root: &std::path::Path, scope: &str) -> Self {
+        Self {
+            root: root.into(),
+            scope: scope.into(),
+            claim: None,
+            tree: None,
+            branch: None,
+            branch_sha: None,
+            gitdir: None,
+            clone: None,
+            clone_git_identity: None,
+            lease_id: None,
+            status_bump: None,
+            armed: true,
+        }
+    }
+    fn own_tree(&mut self, path: &std::path::Path, branch: Option<String>) {
+        self.tree = Some(path.into());
+        self.gitdir = worktree_pointer(path);
+        self.branch_sha = branch
+            .as_deref()
+            .and_then(|b| rollback_ref_sha(&self.root, b));
+        self.branch = branch;
+    }
+    /// Undo only this invocation's tree allocation (and the branch created on
+    /// it), leaving claim and lease ownership in place, so the warm-pool path
+    /// can fall back to a fresh worktree under the same receipt. False means
+    /// the tree was refused (identity changed or in use) and was kept.
+    // trace:BUG-2188 | ai:claude
+    fn release_allocation(&mut self) -> bool {
+        if !self.release_tree() {
+            return false;
+        }
+        let _ = self.release_branch();
+        self.tree = None;
+        self.gitdir = None;
+        self.branch = None;
+        self.branch_sha = None;
+        true
+    }
+    fn release_tree(&self) -> bool {
+        let tree = self
+            .tree
+            .as_deref()
+            .or_else(|| self.clone.as_ref().map(|c| c.path.as_path()));
+        if let Some(path) = tree.filter(|p| std::fs::symlink_metadata(p).is_ok()) {
+            if self.clone.is_some() && clone_git_identity(path) != self.clone_git_identity {
+                eprintln!("launch cleanup refused changed private clone identity at {}; inspect `aida session leases --all`", path.display());
+                return false;
+            }
+            if self.clone.is_none()
+                && path.try_exists().unwrap_or(true)
+                && (self.gitdir.is_none() || worktree_pointer(path) != self.gitdir)
+            {
+                eprintln!("launch cleanup refused changed worktree identity at {}; inspect `git -C '{}' worktree list --porcelain` and `aida session leases --all`", path.display(), self.root.display());
+                return false;
+            }
+            if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(path) {
+                eprintln!(
+                    "launch cleanup kept {}: {}; inspect `aida session leases --all`",
+                    path.display(),
+                    in_use.summary()
+                );
+                return false;
+            }
+            let removed = if let Some(clone) = &self.clone {
+                std::fs::remove_dir_all(&clone.path)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|_| {
+                        let out = std::process::Command::new("git")
+                            .current_dir(&self.root)
+                            .args(["update-ref", "-d", &clone.pin, &clone.base_sha])
+                            .output()?;
+                        anyhow::ensure!(
+                            out.status.success(),
+                            "private clone pin identity changed; inspect `git show-ref {}`",
+                            clone.pin
+                        );
+                        Ok(())
+                    })
+            } else if aida_core::worktree_pool::is_pool_worktree(&self.root, path) {
+                aida_core::worktree_pool::return_to_pool(&self.root, path)
+            } else {
+                std::process::Command::new("git")
+                    .current_dir(&self.root)
+                    .args(["worktree", "remove", "--force", "--"])
+                    .arg(path)
+                    .output()
+                    .map_err(anyhow::Error::from)
+                    .and_then(|out| {
+                        if out.status.success() {
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("{}", String::from_utf8_lossy(&out.stderr)))
+                        }
+                    })
+            };
+            if let Err(error) = removed {
+                eprintln!("launch cleanup could not remove {}: {error:#}; inspect `aida session leases --all`", path.display());
+                return false;
+            }
+        }
+        true
+    }
+    /// Put back the Approved → InProgress bump this invocation made, so a
+    /// refused launch leaves the spec pickable. Only an InProgress status is
+    /// reverted: anything a later writer set is left alone.
+    // trace:BUG-2188 | ai:claude
+    fn revert_status_bump(&self) {
+        let Some(spec) = &self.status_bump else {
+            return;
+        };
+        let storage = Storage::new(self.root.join(".aida-store"));
+        let reverted = storage.load().and_then(|mut store| {
+            let Some(req) = store.get_requirement_unambiguous_mut(spec)? else {
+                return Ok(false);
+            };
+            if !matches!(req.status, RequirementStatus::InProgress) {
+                return Ok(false);
+            }
+            aida_core::conflict::set_status_recorded(
+                req,
+                RequirementStatus::Approved,
+                aida_core::conflict::SESSION_START_AUTHOR,
+            );
+            req.modified_at = chrono::Utc::now();
+            storage.save(&store)?;
+            Ok::<bool, anyhow::Error>(true)
+        });
+        match reverted {
+            Ok(true) => {}
+            Ok(false) => eprintln!("launch cleanup kept {spec}'s status: it changed after this launch set InProgress"),
+            Err(error) => eprintln!("launch cleanup could not restore {spec} to Approved: {error:#}; run `aida edit {spec} --status approved`"),
+        }
+    }
+    /// Compare-and-delete the branch this invocation created. True when the
+    /// branch is gone: deleted here, or never created (a setup that failed
+    /// before Git made it is already clean, not "kept").
+    // trace:BUG-2188 | ai:claude
+    fn release_branch(&self) -> bool {
+        let (Some(branch), Some(expected)) = (&self.branch, &self.branch_sha) else {
+            return true;
+        };
+        if matches!(rollback_branch_absent(&self.root, branch), Ok(true)) {
+            return true;
+        }
+        let reference = format!("refs/heads/{branch}");
+        let out = std::process::Command::new("git")
+            .current_dir(&self.root)
+            .args(["update-ref", "-d", &reference, expected])
+            .output();
+        if matches!(out, Ok(ref out) if out.status.success()) {
+            return true;
+        }
+        eprintln!(
+            "launch cleanup kept branch {branch}; inspect `git branch --list` before retrying"
+        );
+        false
+    }
+}
+impl Drop for SessionStartCleanup {
+    fn drop(&mut self) {
+        if !self.armed || !self.release_tree() {
+            return;
+        }
+        if let Some(id) = &self.lease_id {
+            if !remove_session_lease_record_only(&self.root, id) {
+                eprintln!("launch cleanup could not remove lease {id}; inspect `aida session leases --all`");
+                return;
+            }
+        }
+        self.revert_status_bump();
+        let _ = self.release_branch();
+        if let Some(claim) = &self.claim {
+            match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim) {
+                Ok(true) => {},
+                Ok(false) => eprintln!("launch cleanup kept changed shared claim for {}; inspect `aida session leases --all`", self.scope),
+                Err(error) => eprintln!("launch cleanup could not release shared claim for {}: {error:#}; inspect `aida session leases --all`", self.scope),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod bug2188_release_branch_tests {
+    use super::*;
+
+    // An absent branch is clean; a branch whose tip moved is kept.
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn release_branch_treats_an_absent_ref_as_clean_and_keeps_a_moved_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec![
+                "-c",
+                "user.name=f",
+                "-c",
+                "user.email=f@t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "a",
+            ],
+        ] {
+            assert!(crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let head = rollback_ref_sha(root, "HEAD").unwrap();
+        let mut cleanup = SessionStartCleanup::new(root, "TASK-1");
+        cleanup.armed = false;
+        cleanup.branch = Some("never-created".into());
+        cleanup.branch_sha = Some(head.clone());
+        assert!(cleanup.release_branch(), "absent branch is already clean");
+
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(["branch", "moved", "HEAD"])
+            .status()
+            .unwrap()
+            .success());
+        cleanup.branch = Some("moved".into());
+        cleanup.branch_sha = Some("1".repeat(40));
+        assert!(!cleanup.release_branch(), "changed identity is kept");
+        assert!(!rollback_branch_absent(root, "moved").unwrap());
+
+        cleanup.branch_sha = Some(head);
+        assert!(cleanup.release_branch());
+        assert!(rollback_branch_absent(root, "moved").unwrap());
+    }
+}
+
+// trace:BUG-2188 | ai:codex
+fn clone_git_identity(path: &std::path::Path) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    let metadata = std::fs::symlink_metadata(path.join(".git")).ok()?;
+    metadata.is_dir().then(|| (metadata.dev(), metadata.ino()))
+}
+
+// trace:BUG-2188 | ai:codex
+fn rollback_branch_absent(root: &std::path::Path, branch: &str) -> Result<bool> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ])
+        .output()?;
+    match out.status.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        _ => anyhow::bail!(
+            "cannot establish branch pre-state for {branch}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ),
+    }
+}
+
+// trace:BUG-2188 | ai:codex
+fn rollback_ref_sha(root: &std::path::Path, reference: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "--verify", &format!("{reference}^{{commit}}")])
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+// trace:BUG-2188 | ai:codex
+fn worktree_pointer(path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let marker = path.join(".git");
+    if !std::fs::symlink_metadata(&marker)
+        .ok()?
+        .file_type()
+        .is_file()
+    {
+        return None;
+    }
+    let text = std::fs::read_to_string(marker).ok()?;
+    let gitdir = std::path::Path::new(text.trim().strip_prefix("gitdir: ")?);
+    let resolved = if gitdir.is_absolute() {
+        gitdir.to_path_buf()
+    } else {
+        path.join(gitdir)
+    };
+    resolved.canonicalize().ok()
+}
+
+/// Git can materialize a worktree even when post-checkout exits nonzero.
+/// Allocate at an invocation-private path, recording absent pre-state and the
+/// exact admin directory before Git runs. Publish to the requested absent path
+/// only after success; never infer ownership from a failed add at a shared path.
+// trace:BUG-2188 | ai:codex
+fn transactional_worktree_add(
+    root: &std::path::Path,
+    args: &[&str],
+    requested: &std::path::Path,
+    branch: &str,
+    rollback: &mut Option<SessionStartCleanup>,
+) -> Result<std::process::Output> {
+    let Some(cleanup) = rollback.as_mut() else {
+        return Ok(std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .output()?);
+    };
+    if std::fs::symlink_metadata(requested).is_ok() {
+        anyhow::bail!("worktree path {} already exists; kept it unchanged; inspect `git worktree list --porcelain`", requested.display());
+    }
+    let name = format!("aida-launch-{}", uuid::Uuid::new_v4());
+    let staging = requested
+        .parent()
+        .context("worktree path has no parent")?
+        .join(&name);
+    let common = std::process::Command::new("git")
+        .current_dir(root)
+        .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
+        .output()?;
+    anyhow::ensure!(
+        common.status.success(),
+        "cannot resolve worktree administration directory"
+    );
+    let gitdir = std::path::PathBuf::from(String::from_utf8_lossy(&common.stdout).trim())
+        .join("worktrees")
+        .join(&name);
+    anyhow::ensure!(
+        std::fs::symlink_metadata(&staging).is_err() && std::fs::symlink_metadata(&gitdir).is_err(),
+        "private worktree allocation already exists"
+    );
+    let path_index = args
+        .iter()
+        .position(|arg| std::path::Path::new(arg) == requested)
+        .context("missing worktree path in Git arguments")?;
+    let base = args.get(path_index + 1).copied().unwrap_or("HEAD");
+    if rollback_branch_absent(root, branch)? {
+        cleanup.branch = Some(branch.into());
+        cleanup.branch_sha = rollback_ref_sha(root, base)
+            .or_else(|| rollback_ref_sha(root, &format!("origin/{base}")));
+        anyhow::ensure!(
+            cleanup.branch_sha.is_some(),
+            "cannot pin initial commit for branch {branch}"
+        );
+    }
+    cleanup.tree = Some(staging.clone());
+    cleanup.gitdir = Some(gitdir);
+    let mut staged_args = args.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    staged_args[path_index] = staging.to_string_lossy().into_owned();
+    let out = std::process::Command::new("git")
+        .current_dir(root)
+        .args(&staged_args)
+        .output()?;
+    if !out.status.success() {
+        return Ok(out);
+    }
+    anyhow::ensure!(worktree_pointer(&staging) == cleanup.gitdir, "worktree admin identity changed during allocation; inspect `git worktree list --porcelain`");
+    let published = aida_core::git_ops::publish_worktree_noreplace(root, &staging, requested);
+    // Atomic rename may succeed even if the subsequent admin repair fails.
+    if worktree_pointer(requested) == cleanup.gitdir {
+        cleanup.tree = Some(requested.into());
+    }
+    published?;
+    anyhow::ensure!(
+        worktree_pointer(requested) == cleanup.gitdir,
+        "published worktree pointer differs from the allocation receipt"
+    );
+    Ok(out)
+}
+
 pub(crate) fn session_start(
     owns: &str,
     branch: Option<&str>,
@@ -1238,6 +1673,69 @@ pub(crate) fn session_start(
     // `[contained] seat_tree = "clone"` it gets a private clone, not a worktree.
     contained_seat: bool,
 ) -> Result<()> {
+    session_start_with_receipt(
+        owns,
+        branch,
+        base,
+        reuse_branch,
+        explicit_path,
+        forge_override,
+        branch_style,
+        launch_claude,
+        launch_title,
+        launch_set_title,
+        launch_name,
+        launch_permission_mode,
+        launch_contained,
+        launch_role,
+        force_claim,
+        use_pool,
+        self_claim,
+        review_coexistence,
+        contained_seat,
+        false,
+    )
+    .map(|mut receipt| receipt.disarm())
+}
+
+// trace:BUG-2188 | ai:codex
+// why: mirrors session_start so the launcher can retain this invocation's allocation receipt.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn session_start_with_receipt(
+    owns: &str,
+    branch: Option<&str>,
+    base: Option<&str>,
+    reuse_branch: bool,
+    explicit_path: Option<&str>,
+    forge_override: Option<&str>,
+    branch_style: &str,
+    launch_claude: bool,
+    launch_title: Option<String>,
+    launch_set_title: bool,
+    launch_name: Option<String>,
+    // STORY-495: `None` → faithful native launch (no `--permission-mode`).
+    launch_permission_mode: Option<&str>,
+    launch_contained: bool,
+    launch_role: Option<String>,
+    // BUG-379: claim a spec stuck in InProgress (no local lease) or
+    // NeedsAttention. Done/Completed/Rejected/Draft still refuse.
+    // trace:BUG-379 | ai:claude
+    force_claim: bool,
+    // STORY-714: pool the session's worktree? Some(true)=--pool,
+    // Some(false)=--no-pool, None=resolve from [worktree_pool] enabled config.
+    use_pool: Option<bool>,
+    // BUG-2010: true when caller is working the lease itself (self-claim).
+    // false when launching/spawning another agent (agent new, session start --launch).
+    self_claim: bool,
+    // Only a caller with an explicit role flag and resolved backing spec may
+    // request reviewer coexistence; a resolved/inferred role is insufficient.
+    // trace:TASK-1786 | ai:codex
+    review_coexistence: Option<(&str, &str)>,
+    // BUG-2169: the seat this session is for runs contained, so under
+    // `[contained] seat_tree = "clone"` it gets a private clone, not a worktree.
+    contained_seat: bool,
+    rollback_failed_setup: bool,
+) -> Result<SessionStartReceipt> {
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
     // inside a linked worktree, find_project_root() returns the linked
@@ -1267,7 +1765,8 @@ pub(crate) fn session_start(
             launch_name,
             launch_contained,
             launch_set_title,
-        );
+        )
+        .map(|_| SessionStartReceipt::existing(None));
     }
     // BUG-2169: decide the tree kind before any claim or lease is written, so
     // a malformed knob refuses with nothing to undo.
@@ -1421,9 +1920,11 @@ pub(crate) fn session_start(
                 // eval. trace:BUG-1624 | ai:claude
                 println!("export AIDA_SESSION_ID='{}'", sh_single_quote(&existing.id));
             }
-            return Ok(());
+            return Ok(SessionStartReceipt::existing(Some(existing.id.clone())));
         }
     }
+
+    let mut rollback = rollback_failed_setup.then(|| SessionStartCleanup::new(&project_root, owns));
 
     // STORY-637: cross-clone lease claim on the shared store. The intra-clone
     // check above only sees THIS clone's `.aida/sessions/`; this consults the
@@ -1440,7 +1941,7 @@ pub(crate) fn session_start(
             .clone()
             .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
             .unwrap_or_default();
-        match coordination::acquire_claim(
+        match coordination::acquire_claim_receipted(
             &store_root,
             owns,
             &project_root,
@@ -1448,14 +1949,24 @@ pub(crate) fn session_start(
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
         ) {
-            Ok(coordination::AcquireOutcome::Acquired) => {}
-            Ok(coordination::AcquireOutcome::Reclaimed(reason)) => {
+            Ok((coordination::AcquireOutcome::Acquired, claim)) => {
+                if let Some(cleanup) = rollback.as_mut() {
+                    cleanup.claim = claim;
+                }
+            }
+            Ok((coordination::AcquireOutcome::Reclaimed(reason), claim)) => {
+                if let Some(cleanup) = rollback.as_mut() {
+                    cleanup.claim = claim;
+                }
                 eprintln!(
                     "  {} reclaiming a stale cross-clone lease on `{owns}` ({reason})",
                     crate::glyph(crate::glyphs::Glyph::InfoAlt)
                 );
             }
-            Ok(coordination::AcquireOutcome::Unavailable(reason)) => {
+            Ok((coordination::AcquireOutcome::Unavailable(reason), claim)) => {
+                if let Some(cleanup) = rollback.as_mut() {
+                    cleanup.claim = claim;
+                }
                 eprintln!(
                     "  {} cross-clone coordination unavailable: {reason}, proceeding",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow()
@@ -1635,6 +2146,13 @@ pub(crate) fn session_start(
             &project_root,
             &created,
         ));
+        if let Some(cleanup) = rollback.as_mut() {
+            cleanup.clone_git_identity = clone_git_identity(&created.path);
+            cleanup.clone = Some(created);
+            if let Some(guard) = clone_cleanup.as_mut() {
+                guard.disarm();
+            }
+        }
     } else if reuse_existing_worktree_path {
         let current = current_branch_at(&worktree_path);
         if current.as_deref() != Some(branch_name.as_str()) {
@@ -1857,23 +2375,27 @@ pub(crate) fn session_start(
                 n
             );
         }
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            // `--` ends options: the path and branch that follow are
-            // positional even when dash-led. trace:BUG-1622 | ai:claude
-            .args([
+        let res = transactional_worktree_add(
+            &project_root,
+            &[
                 "worktree",
                 "add",
                 "--",
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
-            ])
-            .output()?;
+            ],
+            &worktree_path,
+            &branch_name,
+            &mut rollback,
+        )?;
         let _ = std::io::stderr().write_all(&res.stdout);
         let _ = std::io::stderr().write_all(&res.stderr);
         if !res.status.success() {
-            anyhow::bail!("`git worktree add` failed");
+            anyhow::bail!(
+                "`git worktree add` failed for {}: {}",
+                worktree_path.display(),
+                String::from_utf8_lossy(&res.stderr).trim()
+            );
         }
         aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
             format!("exclude AIDA runtime files in {}", worktree_path.display())
@@ -1939,27 +2461,29 @@ pub(crate) fn session_start(
         // `git worktree add <path> <branch>` checks out an existing
         // local branch, or DWIM-creates a local tracking branch from a
         // unique `origin/<branch>` — no `-b`, no base.
-        let res = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&project_root)
-            // `--` ends options: the path and branch that follow are
-            // positional even when dash-led. trace:BUG-1622 | ai:claude
-            .args([
+        let res = transactional_worktree_add(
+            &project_root,
+            &[
                 "worktree",
                 "add",
                 "--",
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
-            ])
-            .output()?;
+            ],
+            &worktree_path,
+            &branch_name,
+            &mut rollback,
+        )?;
         use std::io::Write;
         let _ = std::io::stderr().write_all(&res.stdout);
         let _ = std::io::stderr().write_all(&res.stderr);
         if !res.status.success() {
             anyhow::bail!(
                 "`git worktree add` (reuse existing branch `{}`) failed — \
-                 the branch may already be checked out in another worktree",
-                branch_name
+                 the branch may already be checked out in another worktree (path {}): {}",
+                branch_name,
+                worktree_path.display(),
+                String::from_utf8_lossy(&res.stderr).trim()
             );
         }
         aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(|| {
@@ -2022,9 +2546,20 @@ pub(crate) fn session_start(
         // trace:STORY-714 | ai:claude
         let pool_enabled = resolve_worktree_pool_enabled(use_pool, &project_root);
         let pooled = if pool_enabled && base.is_none() {
-            match acquire_session_pool_worktree(&project_root, &branch_name) {
+            match acquire_session_pool_worktree(&project_root, &branch_name, &mut rollback) {
                 Ok(acquired) => Some(acquired),
                 Err(e) => {
+                    // A full pool must not fail an `agent new --spec` launch:
+                    // undo whatever pool tree/branch this receipt took, then
+                    // fall back to a fresh worktree under the same receipt.
+                    // trace:BUG-2188 | ai:claude
+                    if let Some(cleanup) = rollback.as_mut() {
+                        if !cleanup.release_allocation() {
+                            return Err(e.context(
+                                "warm-pool setup failed and its pooled tree was kept; inspect `aida session leases --all`",
+                            ));
+                        }
+                    }
                     eprintln!(
                         "{} warm-pool acquire failed ({e}); falling back to a fresh worktree",
                         "Warning:".yellow().bold()
@@ -2073,16 +2608,22 @@ pub(crate) fn session_start(
             // otherwise contaminate session_start's stdout (where the wrapper
             // expects only `export AIDA_SESSION_ID=...` for eval).
             // trace:STORY-73 | ai:claude
-            let res = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&project_root)
-                .args(&args)
-                .output()?;
+            let res = transactional_worktree_add(
+                &project_root,
+                &args,
+                &worktree_path,
+                &branch_name,
+                &mut rollback,
+            )?;
             use std::io::Write;
             let _ = std::io::stderr().write_all(&res.stdout);
             let _ = std::io::stderr().write_all(&res.stderr);
             if !res.status.success() {
-                anyhow::bail!("`git worktree add` failed");
+                anyhow::bail!(
+                    "`git worktree add` failed for {}: {}",
+                    worktree_path.display(),
+                    String::from_utf8_lossy(&res.stderr).trim()
+                );
             }
             aida_core::git_ops::ensure_aida_runtime_excluded(&worktree_path).with_context(
                 || format!("exclude AIDA runtime files in {}", worktree_path.display()),
@@ -2338,6 +2879,9 @@ pub(crate) fn session_start(
     // trace:BUG-2169 | ai:claude
     crate::seat_clone::failpoint::check_before_lease()?;
     aida_core::write_atomic(&lease_file, toml::to_string_pretty(&lease)?)?;
+    if let Some(cleanup) = rollback.as_mut() {
+        cleanup.lease_id = Some(id.clone());
+    }
     if let Some(guard) = clone_cleanup.as_mut() {
         guard.disarm();
     }
@@ -2385,7 +2929,12 @@ pub(crate) fn session_start(
             }
             Ok::<bool, anyhow::Error>(bumped)
         }) {
-            Ok(b) => b,
+            Ok(b) => {
+                if let Some(cleanup) = rollback.as_mut().filter(|_| b) {
+                    cleanup.status_bump = Some(owns.to_string());
+                }
+                b
+            }
             Err(e) => {
                 eprintln!(
                     "{} couldn't bump spec status for `{}` (stays at Approved): {} — `aida doctor` will heal",
@@ -2618,7 +3167,8 @@ pub(crate) fn session_start(
             derived_name,
             launch_contained,
             launch_set_title,
-        );
+        )
+        .map(|_| SessionStartReceipt::existing(None));
     }
 
     if std::env::var_os("AIDA_SUPPRESS_SESSION_NEXT").is_none() {
@@ -2649,7 +3199,10 @@ pub(crate) fn session_start(
         let _eval = crate::shell_eval::EvalBlock::open();
         println!("export AIDA_SESSION_ID='{}'", id);
     }
-    Ok(())
+    Ok(SessionStartReceipt {
+        lease_id: Some(id),
+        cleanup: rollback,
+    })
 }
 
 /// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
