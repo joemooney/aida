@@ -4,14 +4,14 @@ use tempfile::TempDir;
 
 fn init_repo() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(tmp.path())
         .args(["init", "--initial-branch=main", "--quiet"])
         .status()
         .unwrap();
     // Need at least one commit so subsequent branch creates work.
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(tmp.path())
         .args(["commit", "--allow-empty", "-m", "init", "--quiet"])
@@ -25,7 +25,7 @@ fn init_repo() -> TempDir {
 }
 
 fn create_branch(repo: &std::path::Path, name: &str) {
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(["branch", name])

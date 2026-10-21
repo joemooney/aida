@@ -1259,7 +1259,7 @@ mod git_integration_tests {
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(dir)
             .args(args)
             .output()
@@ -1443,7 +1443,7 @@ mod git_integration_tests {
             !root.join(".gitignore").exists(),
             "pool acquire must not touch the product .gitignore"
         );
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(&path)
             .args(["status", "--short"])
             .output()
@@ -1509,7 +1509,7 @@ mod git_integration_tests {
         // Re-acquire the same warm tree: must be detached at base, NOT stacked.
         let p2 = acquire(root, &opts()).unwrap();
         assert_eq!(p1, p2);
-        let head_branch = Command::new("git")
+        let head_branch = crate::test_git::git_command()
             .current_dir(&p2)
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
@@ -1517,7 +1517,7 @@ mod git_integration_tests {
         let head = String::from_utf8_lossy(&head_branch.stdout);
         assert_eq!(head.trim(), "HEAD", "acquire must hand out a detached HEAD");
 
-        let log = Command::new("git")
+        let log = crate::test_git::git_command()
             .current_dir(&p2)
             .args(["log", "--oneline"])
             .output()
@@ -1830,7 +1830,7 @@ mod git_integration_tests {
         // 1. acquire — pool hands out a detached tree at the base.
         let path = acquire(root, &opts()).unwrap();
         let head_branch = |p: &Path| -> String {
-            let o = Command::new("git")
+            let o = crate::test_git::git_command()
                 .current_dir(p)
                 .args(["rev-parse", "--abbrev-ref", "HEAD"])
                 .output()
@@ -1858,7 +1858,7 @@ mod git_integration_tests {
             "HEAD",
             "return must leave the tree detached at the base, not on the session branch"
         );
-        let log = Command::new("git")
+        let log = crate::test_git::git_command()
             .current_dir(&path)
             .args(["log", "--oneline"])
             .output()

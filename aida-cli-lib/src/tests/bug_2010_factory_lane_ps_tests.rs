@@ -77,28 +77,28 @@ fn agent_entry(
 
 // trace:BUG-2010 | ai:antigravity
 fn init_git_repo(path: &Path) {
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["init", "-q", "-b", "main"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["config", "user.email", "test@example.com"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["config", "user.name", "AIDA Test"])
         .status();
     std::fs::write(path.join("README.md"), "seed\n").unwrap();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["add", "README.md"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["commit", "-qm", "seed"])

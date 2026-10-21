@@ -7,6 +7,9 @@
 //!   the distributed-store dispatch instead of exiting "not yet supported".
 // trace:TASK-1487 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -71,7 +74,7 @@ fn text(out: &Output) -> String {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)

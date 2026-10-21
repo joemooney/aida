@@ -37,7 +37,7 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
 }
 
 fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

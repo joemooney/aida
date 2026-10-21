@@ -170,7 +170,7 @@ mod tests {
             self.dir.path()
         }
         fn git(&self, args: &[&str]) {
-            let ok = Command::new("git")
+            let ok = crate::test_git::git_command()
                 .arg("-C")
                 .arg(self.path())
                 .args(args)
@@ -197,7 +197,7 @@ mod tests {
         // Point origin/HEAD at main so default_branch_of resolves without a
         // remote: create a fake remote ref mirroring main.
         let main_sha = String::from_utf8(
-            Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(r.path())
                 .args(["rev-parse", "HEAD"])
@@ -238,7 +238,7 @@ mod tests {
         r.git(&["add", "-A"]);
         r.git(&["commit", "-q", "-m", "no config"]);
         let head = String::from_utf8(
-            Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(r.path())
                 .args(["rev-parse", "HEAD"])

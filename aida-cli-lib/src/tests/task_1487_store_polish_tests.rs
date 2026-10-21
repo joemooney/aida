@@ -19,7 +19,7 @@ use std::process::Command as StdCommand;
 use tempfile::TempDir;
 
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let ok = StdCommand::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)

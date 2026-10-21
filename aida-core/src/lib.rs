@@ -187,6 +187,9 @@ pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(()
 // trace:TASK-1532 | ai:agy
 #[cfg(test)]
 pub(crate) mod test_env;
+// trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
+#[cfg(test)]
+pub(crate) mod test_git;
 
 // Re-export commonly used types
 pub use ai::{

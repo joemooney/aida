@@ -89,7 +89,7 @@ fn format_default_branch_ship_refusal_renders_expected_formats() {
 
 fn create_test_repo_on_branch(branch: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("tempdir");
-    let init_ok = std::process::Command::new("git")
+    let init_ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir.path())
         .args(["init", "-q", "-b", branch])
@@ -100,7 +100,7 @@ fn create_test_repo_on_branch(branch: &str) -> tempfile::TempDir {
     );
 
     std::fs::write(dir.path().join("file.txt"), "hello").unwrap();
-    let add_ok = std::process::Command::new("git")
+    let add_ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir.path())
         .args(["add", "file.txt"])
@@ -110,7 +110,7 @@ fn create_test_repo_on_branch(branch: &str) -> tempfile::TempDir {
         "git add failed"
     );
 
-    let commit_ok = std::process::Command::new("git")
+    let commit_ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir.path())
         .args([
@@ -205,7 +205,7 @@ fn pr_ship_handler_bypasses_default_branch_guard_when_pr_number_provided() {
 fn pr_ship_handler_bypasses_default_branch_guard_on_feature_branch() {
     let dir = create_test_repo_on_branch("main");
     // Create feature branch
-    let ok = std::process::Command::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir.path())
         .args(["checkout", "-qb", "feature-work"])
@@ -240,7 +240,7 @@ fn set_origin_head(root: &std::path::Path, default: &str) {
         vec!["update-ref", target.as_str(), "HEAD"],
         vec!["symbolic-ref", "refs/remotes/origin/HEAD", target.as_str()],
     ] {
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)
@@ -305,7 +305,7 @@ fn task_1795_origin_head_custom_mainline_skips_gh() {
             "refs/remotes/origin/release/mainline",
         ],
     ] {
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(dir.path())
             .args(args)
@@ -399,7 +399,7 @@ fn task_1795_unknown_local_default_uses_forge_fallback() {
 #[test]
 fn task_1795_leftover_main_ref_is_not_default_branch_evidence() {
     let dir = create_test_repo_on_branch("develop");
-    assert!(std::process::Command::new("git")
+    assert!(crate::test_git::git_command()
         .arg("-C")
         .arg(dir.path())
         .args(["update-ref", "refs/remotes/origin/main", "HEAD"])
@@ -477,7 +477,7 @@ fn task_1795_probe_errors_and_bad_answers_remain_unknown() {
 fn task_1803_gitlab_feature_branch_without_origin_head_proceeds_via_ls_remote() {
     let origin = create_test_repo_on_branch("trunk");
     let work = create_test_repo_on_branch("feature-work");
-    assert!(std::process::Command::new("git")
+    assert!(crate::test_git::git_command()
         .arg("-C")
         .arg(work.path())
         .args(["remote", "add", "origin", origin.path().to_str().unwrap()])

@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args([
@@ -49,7 +49,7 @@ fn clone(src: &Path, dest: &Path, extra: &[&str]) {
     args.extend_from_slice(extra);
     args.push(src.to_str().unwrap());
     args.push(dest.to_str().unwrap());
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(&args)
         .output()
         .expect("clone");

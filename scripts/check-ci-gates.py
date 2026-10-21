@@ -83,6 +83,11 @@ RUN_ONLY_REDIRECT = ["<", "/dev/null"]
 # CI tees the run into a log for the per-binary timings (STORY-1853 S1); a
 # compile-only run has nothing to log. trace:STORY-1853 | ai:claude
 RUN_ONLY_TEE = ["2>&1", "|", "tee"]
+# CI's `Run tests` body: every test lane through one planner, under nextest.
+# Locally it runs all lanes on the agent profile, with the same runner.
+# trace:TASK-1988 | ai:claude
+CI_TEST_LANES = ('python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" '
+                 '< /dev/null 2>&1 | tee target/test-run.log')
 
 
 class GateError(RuntimeError):
@@ -153,7 +158,9 @@ def derive_compile_command(source_name: str, source_command: str) -> str:
     """
     # The workflow's matrix selector covers four disjoint lanes. Compile their
     # workspace union through the very same planner. trace:TASK-1949 | ai:codex
-    if source_command.strip() == 'python3 scripts/ci-test-shards.py --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log':
+    # Under nextest (TASK-1988) the compile set is the same test targets, so
+    # the planner's `cargo test --no-run` still covers it. trace:TASK-1988 | ai:claude
+    if source_command.strip() == CI_TEST_LANES:
         return "python3 scripts/ci-test-shards.py --compile --profile agent"
     try:
         argv = shlex.split(source_command.strip())
@@ -191,7 +198,7 @@ def local_test_command(command: str) -> str:
     """CI's step body with every `cargo test` moved to the local test profile."""
     # Resolve the CI-only matrix context to all lanes for explicit local full
     # runs; the compile tier uses --compile instead. trace:TASK-1949 | ai:codex
-    if command.startswith('python3 scripts/ci-test-shards.py --shard '):
+    if command.strip() == CI_TEST_LANES:
         return command.replace('"${{ matrix.shard }}"', 'all --profile agent')
     return CARGO_TEST_RE.sub(f"cargo test --profile {LOCAL_TEST_PROFILE}", command)
 

@@ -253,7 +253,7 @@ fn draft_backlog_statusline_segment_uses_drafts_label() {
 #[test]
 fn statusline_drift_segment_contract_for_clean_and_drifted_checkouts() {
     fn run_git(root: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
@@ -582,7 +582,7 @@ fn fixture_local_origin(
     let tmp = tempfile::TempDir::new().unwrap();
     let p = tmp.path();
     let run = |args: &[&str]| {
-        let r = Command::new("git")
+        let r = crate::test_git::git_command()
             .arg("-C")
             .arg(p)
             .args(args)
@@ -613,7 +613,7 @@ fn fixture_local_origin(
         ]);
     }
     let local = String::from_utf8(
-        Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(p)
             .args(["rev-parse", "--short", "HEAD"])
@@ -646,7 +646,7 @@ fn fixture_local_origin(
         run(&["checkout", "-q", "main"]);
     }
     let origin = String::from_utf8(
-        Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(p)
             .args(["rev-parse", "--short", "refs/remotes/origin/main"])
@@ -842,7 +842,7 @@ fn bg_worker_records_error_on_missing_remote() {
     let store = project.join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
     let run = |args: &[&str]| {
-        Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(&store)
             .args(args)

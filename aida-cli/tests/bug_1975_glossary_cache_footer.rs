@@ -3,6 +3,9 @@
 //! footer used to be glued onto its last line.
 // trace:BUG-1975 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -22,7 +25,7 @@ fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let out = run(Command::new("git").args(args).current_dir(repo));
+    let out = run(test_git::git_command().args(args).current_dir(repo));
     assert!(out.status.success(), "git {args:?}: {out:?}");
 }
 

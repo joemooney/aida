@@ -1,34 +1,42 @@
 #!/usr/bin/env python3
-"""Per-binary test timings from a `cargo test` log, and the slow-test budget gate.
+"""Per-test timings from nextest JUnit reports, per-binary timings from a
+`cargo test` log, and the slow-test budget gate.
 
-CI's `Run tests` step tees `cargo test --workspace` into a log. This script
-reads it: every test binary prints `Running <src> (target/<profile>/deps/<stem>-<hash>)`
+CI's `Run tests` step runs each lane under cargo-nextest, which writes one
+JUnit report per invocation (target/nextest/ci/junit-<lane>-<n>.xml), and tees
+the step into a log. With `--junit`, every test in the reports is one row,
+keyed `<binary id> <test name>` as nextest prints it
+(`aida-cli::journey task_1417_relationship_collapse_declares_view_limit_at_threshold`,
+`aida-cli-lib cli::tests::source_doc_comments_carry_no_spec_id_provenance`).
+Doctests stay on `cargo test`, so their rows still come from the log.
+trace:TASK-1988 | ai:claude
+
+Without `--junit` the log is read as a `cargo test` log, one row per binary:
+every test binary prints `Running <src> (target/<profile>/deps/<stem>-<hash>)`
 (or `Doc-tests <crate>`) and then libtest's `test result: ... finished in <s>s`.
-That gives one row per binary: its key, tests passed/failed/ignored, and wall
-seconds. Stable libtest has no per-test timings; per-test rows arrive with
-cargo-nextest (STORY-1853 S2).
-
-Binary keys are `<stem>:<src>` (`aida_cli_lib:src/lib.rs`,
-`agent_error_channel:tests/agent_error_channel.rs`) or `doctests:<crate>`.
+Binary keys are `<stem>:<src>` (`agent_error_channel:tests/agent_error_channel.rs`)
+or `doctests:<crate>`. Local `cargo test` runs use this.
 
 The budget file (scripts/test-time-budget.toml) maps a key to its allowed
 seconds on CI's ubuntu-latest runner. With `--budget` the script fails when:
-- a binary over `default_limit` seconds has no entry (a new slow binary must be
+- a row over `default_limit` seconds has no entry (a new slow test must be
   budgeted, or made faster, in the PR that slows it down);
-- a budgeted binary runs over its entry.
-An entry whose binary did not run (a filtered or partial run) is a note.
-`--lane NAME` overlays the file's `[lane_budget.NAME]` entries, for a binary
-that runs split across lanes (the aida-cli-lib halves, lib-0 and lib-1).
-trace:TASK-1979 | ai:claude
+- a budgeted row runs over its entry.
+An entry for a test whose binary ran but which did not run itself (renamed or
+removed) is a note; entries for binaries that did not run (another lane's, or
+the other aida-cli-lib half's) are not mentioned. Over-budget tests whose JUnit
+time spans overlap each other are a runner stall: a CI warning, not a failure.
 
 Usage:
-  scripts/test-timings.py LOG [--step NAME] [--budget FILE [--lane NAME]] [--json OUT] [--summary OUT] [--top N]
+  scripts/test-timings.py LOG [--junit XML...] [--step NAME] [--budget FILE] [--json OUT] [--summary OUT] [--top N]
 
-`LOG` may be a raw `cargo test` log or a `gh run view --log` download (the
+`LOG` may be a raw step log or a `gh run view --log` download (the
 job/step/timestamp prefixes and ANSI colors are stripped; pass `--step 'Run
-tests'` so other steps' cargo runs are not counted). `--summary` appends
-a Markdown table (CI passes $GITHUB_STEP_SUMMARY). Exit 0 within budget, 1 a
-budget violation, 2 an unreadable log or budget, or a log with no test results.
+tests'` so other steps' cargo runs are not counted). A `--junit` path that does
+not exist (a run that failed before nextest wrote it) is skipped with a note.
+`--summary` appends a Markdown table (CI passes $GITHUB_STEP_SUMMARY). Exit 0
+within budget, 1 a budget violation, 2 an unreadable log, report or budget, or
+nothing measured.
 
 trace:STORY-1853 | ai:claude
 """
@@ -36,10 +44,12 @@ trace:STORY-1853 | ai:claude
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
@@ -62,6 +72,7 @@ class Binary:
     failed: int
     ignored: int
     seconds: float
+    started: str = ""  # JUnit start timestamp (ISO 8601); empty for log rows
 
 
 def clean(line: str) -> str:
@@ -122,25 +133,73 @@ def parse_log(lines) -> list[Binary]:
     ]
 
 
+
+def parse_junit(path: str) -> list[Binary]:
+    """One row per test case in a nextest JUnit report: `<binary id> <test name>`.
+
+    nextest leaves #[ignore]d tests out of the report, so every row ran;
+    a `failure` or `error` child (a failed, timed-out or crashed test) makes
+    it a failed row.
+    """
+    rows = []
+    for suite in ET.parse(path).getroot().iter("testsuite"):
+        for case in suite.iter("testcase"):
+            failed = case.find("failure") is not None or case.find("error") is not None
+            rows.append(Binary(f"{suite.get('name')} {case.get('name')}", int(not failed), int(failed), 0,
+                               float(case.get("time") or 0), case.get("timestamp") or ""))
+    return rows
+
+
+def binary_of(key: str) -> str:
+    """The binary a row key belongs to: a per-test key's binary id, else the key."""
+    return key.split(" ", 1)[0]
+
+
 @dataclass
 class Budget:
     default_limit: float
     entries: dict[str, float]
 
 
-def load_budget(path: str, lane: str | None = None) -> Budget:
+def load_budget(path: str) -> Budget:
     with open(path, "rb") as fh:
         table = tomllib.load(fh)
     limit = float(table.get("default_limit", 10))
     entries = {str(k): float(v) for k, v in table.get("budget", {}).items()}
-    if lane:
-        entries.update({str(k): float(v) for k, v in table.get("lane_budget", {}).get(lane, {}).items()})
     return Budget(limit, entries)
+
+
+def span(row: Binary):
+    """(start, end) of a JUnit row, or None for a row without a timestamp."""
+    try:
+        start = datetime.datetime.fromisoformat(row.started)
+    except ValueError:
+        return None
+    return start, start + datetime.timedelta(seconds=row.seconds)
+
+
+def stalled(over: list[Binary]) -> set[str]:
+    """Keys of over-budget rows that ran at the same time as another over-budget row.
+
+    A runner stall (shared-runner I/O or CPU starvation) slows every test
+    running through it at once: on PR-2785 run 39492854022 three unrelated
+    lib tests that take 1-2 s went to 18 s together. A regression slows one
+    test whenever it runs, so an over-budget test that overlaps no other
+    over-budget test still fails the gate. trace:TASK-1988 | ai:claude
+    """
+    spans = {r.key: span(r) for r in over}
+    keys = set()
+    for a in over:
+        for b in over:
+            sa, sb = spans[a.key], spans[b.key]
+            if a is not b and sa and sb and sa[0] < sb[1] and sb[0] < sa[1]:
+                keys.add(a.key)
+    return keys
 
 
 def check(rows: list[Binary], budget: Budget) -> tuple[list[str], list[str]]:
     """(violations, notes) for the rows against the budget."""
-    violations: list[str] = []
+    found: list[tuple[Binary, str]] = []
     notes: list[str] = []
     seen = set()
     for r in rows:
@@ -148,18 +207,26 @@ def check(rows: list[Binary], budget: Budget) -> tuple[list[str], list[str]]:
         allowed = budget.entries.get(r.key)
         if allowed is None:
             if r.seconds > budget.default_limit:
-                violations.append(
+                found.append((r,
                     f"{r.key}: {r.seconds:.1f}s with no budget entry (limit {budget.default_limit:g}s "
-                    "for an unbudgeted binary). Make it faster, or add it to scripts/test-time-budget.toml "
+                    "for an unbudgeted test). Make it faster, or add it to scripts/test-time-budget.toml "
                     "with the measured time plus headroom and say why in the PR."
-                )
+                ))
         elif r.seconds > allowed:
-            violations.append(
+            found.append((r,
                 f"{r.key}: {r.seconds:.1f}s is over its budget of {allowed:g}s. "
                 "Find what slowed it down; raise the entry only with a reason in the PR."
-            )
+            ))
+    stall = stalled([r for r, _ in found])
+    violations = [message for r, message in found if r.key not in stall]
+    notes += [f"runner stall (overlaps another over-budget test, not failing): {message}"
+              for r, message in found if r.key in stall]
+    # The aida-cli-lib unit binary runs split across lib-0 and lib-1, so the
+    # other half's entries never run in a lane; only other binaries get notes.
+    ran = {binary_of(key) for key in seen} - {"aida-cli-lib"}
     for key in sorted(set(budget.entries) - seen):
-        notes.append(f"{key}: budgeted but did not run in this log")
+        if binary_of(key) in ran:
+            notes.append(f"{key}: budgeted but did not run in this log")
     return violations, notes
 
 
@@ -167,11 +234,12 @@ def summary_markdown(rows: list[Binary], budget: Budget | None, top: int) -> str
     total = sum(r.seconds for r in rows)
     counted = sum(r.passed + r.ignored for r in rows)
     lines = [
-        "### Test binary timings",
+        "### Test timings",
         "",
-        f"{len(rows)} binaries, {total:.0f}s summed (serial), {counted} tests passed+ignored.",
+        f"{len(rows)} rows (tests, or binaries from a cargo test log), {total:.0f}s summed, "
+        f"{counted} tests passed+ignored.",
         "",
-        "| Binary | Seconds | Tests | Budget |",
+        "| Test or binary | Seconds | Tests | Budget |",
         "|---|---:|---:|---:|",
     ]
     for r in sorted(rows, key=lambda r: -r.seconds)[:top]:
@@ -181,11 +249,12 @@ def summary_markdown(rows: list[Binary], budget: Budget | None, top: int) -> str
 
 
 def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(description="Per-binary cargo test timings and the slow-test budget gate.")
+    ap = argparse.ArgumentParser(description="Per-test (JUnit) or per-binary (cargo test log) timings and the slow-test budget gate.")
     ap.add_argument("log")
+    ap.add_argument("--junit", nargs="+", default=[], metavar="XML",
+                    help="nextest JUnit reports: one row per test; the log then adds only its doctest rows")
     ap.add_argument("--step", help="with a `gh run view --log` download: read only this step (e.g. 'Run tests')")
     ap.add_argument("--budget", help="budget TOML; fail on a violation")
-    ap.add_argument("--lane", help="CI lane: apply its [lane_budget.LANE] entries over [budget]")
     ap.add_argument("--json", help="write the rows as JSON here")
     ap.add_argument("--summary", help="append a Markdown table here")
     ap.add_argument("--top", type=int, default=25, help="rows in the printed and Markdown tables")
@@ -193,21 +262,28 @@ def main(argv: list[str]) -> int:
     try:
         with open(a.log, encoding="utf-8", errors="replace") as fh:
             rows = parse_log(step_lines(fh, a.step) if a.step else fh)
-        budget = load_budget(a.budget, a.lane) if a.budget else None
-    except (OSError, tomllib.TOMLDecodeError, ValueError) as e:
+        if a.junit:
+            rows = [r for r in rows if r.key.startswith("doctests:")]
+            for path in a.junit:
+                try:
+                    rows += parse_junit(path)
+                except FileNotFoundError:
+                    print(f"test-timings: note: {path}: no such report", file=sys.stderr)
+        budget = load_budget(a.budget) if a.budget else None
+    except (OSError, tomllib.TOMLDecodeError, ET.ParseError, ValueError) as e:
         print(f"test-timings: {e}", file=sys.stderr)
         return 2
     if not rows:
-        print(f"test-timings: no `test result:` lines in {a.log}; nothing was measured", file=sys.stderr)
+        print(f"test-timings: no test results in {a.log} {' '.join(a.junit)}; nothing was measured", file=sys.stderr)
         return 2
     total = sum(r.seconds for r in rows)
-    print(f"test-timings: {len(rows)} binaries, {total:.1f}s summed, "
+    print(f"test-timings: {len(rows)} rows, {total:.1f}s summed, "
           f"{sum(r.passed + r.ignored for r in rows)} tests passed+ignored")
     for r in sorted(rows, key=lambda r: -r.seconds)[:a.top]:
         print(f"  {r.seconds:8.2f}s  {r.passed + r.ignored:6d} tests  {r.key}")
     if a.json:
         with open(a.json, "w", encoding="utf-8") as fh:
-            json.dump({"total_seconds": total, "binaries": [asdict(r) for r in rows]}, fh, indent=1)
+            json.dump({"total_seconds": total, "rows": [asdict(r) for r in rows]}, fh, indent=1)
     if a.summary:
         with open(a.summary, "a", encoding="utf-8") as fh:
             fh.write(summary_markdown(rows, budget, a.top))
@@ -215,7 +291,8 @@ def main(argv: list[str]) -> int:
         return 0
     violations, notes = check(rows, budget)
     for n in notes:
-        print(f"test-timings: note: {n}")
+        # A stall shows as a CI warning annotation, so it is seen, not buried.
+        print(f"{'::warning::' if n.startswith('runner stall') else ''}test-timings: note: {n}")
     for v in violations:
         print(f"test-timings: BUDGET: {v}", file=sys.stderr)
     return 1 if violations else 0

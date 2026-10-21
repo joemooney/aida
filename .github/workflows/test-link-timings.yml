@@ -1,0 +1,63 @@
+# STORY-1853 S3, PR 1 (measurement only): build aida-cli's test targets with
+# `--timings` and upload the report, to size the per-binary compile+link cost
+# of the separate aida-cli/tests/*.rs binaries before they are merged into one
+# harness. NON-GATING and kept out of ci.yml: it runs on a PR that edits this
+# file, or on demand, and nothing needs it. trace:TASK-1958 | ai:claude
+name: Test link timings
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/test-link-timings.yml
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  timings:
+    name: aida-cli test build timings
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash --noprofile --norc -e -o pipefail {0}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Pin stable toolchain & verify cargo
+        run: |
+          mkdir -p target
+          rustup default stable
+          cargo --version | grep -q '^cargo '
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev
+
+      # The cli lanes' cache: dependencies come back warm, so the report's
+      # units are the workspace crates and the test binaries being measured.
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-dev-profile-cli
+          save-if: false
+
+      - name: Build aida-cli tests with timings
+        run: cargo build --tests --timings -p aida-cli
+
+      - name: Upload cargo timings
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: cargo-timings-aida-cli-tests
+          path: target/cargo-timings/
+          if-no-files-found: error
