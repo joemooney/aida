@@ -140,15 +140,21 @@ fn task1993_failed_preflight_reconciles_without_starting_review() {
 
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
-fn task1993_lost_completion_and_pid_reuse_remain_ambiguous() {
+fn task1993_lost_completion_waits_while_live_and_frees_on_proven_exit() {
     let (_temp, store) = fixture();
     let c = change(1, 1, false);
     let attempt = dispatch(select(&store, &c, None, 2).unwrap());
-    // The dispatcher claimed its receipt and then vanished without observing
-    // queue work's exit: no completion or exit is ever recorded.
+    // The dispatcher claimed its receipt and has not recorded an outcome.
     store
         .transition(&c.key(), &attempt.token, Phase::Running)
         .unwrap();
+    // While its exact process lives, a new head waits.
+    assert!(matches!(
+        select(&store, &change(1, 2, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    // A reused PID with another start identity is proof the dispatcher is
+    // gone: it can no longer complete, and the slot is freed terminally.
     store
         .transaction(&c.key(), |state| {
             state.entries.get_mut(&c.key()).unwrap().attempts[0]
@@ -162,13 +168,14 @@ fn task1993_lost_completion_and_pid_reuse_remain_ambiguous() {
     assert!(store
         .transition(&c.key(), &attempt.token, Phase::Completed)
         .is_err());
-    assert!(matches!(
-        select(&store, &change(1, 2, false), None, 2).unwrap(),
-        Action::Skip(_)
-    ));
-    assert_eq!(
-        store.load().unwrap().entries[&c.key()].attempts[0].phase,
-        Phase::Running
+    dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+    let state = store.load().unwrap();
+    assert!(
+        state.entries[&c.key()]
+            .attempts
+            .iter()
+            .all(|a| a.head != c.head),
+        "terminal attempt replaced by the new head"
     );
 }
 
@@ -1483,4 +1490,137 @@ fn task1993_launch_revalidation_precedes_verdict_reset() {
         check < clear,
         "the verdict is cleared before the watch launch is revalidated"
     );
+}
+
+// A terminal receipt waits through lock contention like the claim does; one
+// whose lock stays busy past the deadline leaves the attempt Running, and the
+// next pass frees it once the dispatcher's exact process is gone.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_terminal_receipt_lock_timeout_is_recovered_next_pass() {
+    let hold = |store: &Store, millis: u64| {
+        let lock = store.dir.lock("PR-1.lock").unwrap();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(millis));
+            drop(lock);
+        })
+    };
+    // Brief contention: the completion still lands.
+    let (_temp, store) = fixture();
+    let a = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let mut holder = None;
+    execute_reservation(
+        &store,
+        "PR-1",
+        &a.token,
+        |_| Ok(()),
+        |_| {
+            holder = Some(hold(&store, 400));
+            Ok(())
+        },
+    )
+    .unwrap();
+    holder.unwrap().join().unwrap();
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Completed
+    );
+    // Contention past the deadline: the receipt is lost, the attempt stays
+    // Running, and the slot is still held while the dispatcher lives.
+    let (_temp, store) = fixture();
+    let a = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let mut holder = None;
+    let lost = execute_reservation(
+        &store,
+        "PR-1",
+        &a.token,
+        |_| Ok(()),
+        |_| {
+            holder = Some(hold(&store, 2500));
+            Ok(())
+        },
+    );
+    assert!(lost.is_err(), "the completion should have timed out");
+    holder.unwrap().join().unwrap();
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Running
+    );
+    assert!(matches!(
+        select(&store, &change(2, 2, false), None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    // The dispatcher then exits (here: its receipt names a process now gone).
+    let mut gone = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+    let identity = Identity::of(gone.id()).unwrap();
+    gone.kill().unwrap();
+    gone.wait().unwrap();
+    store
+        .transaction("PR-1", |state| {
+            state.entries.get_mut("PR-1").unwrap().attempts[0].identity = Some(identity.clone());
+            Ok(())
+        })
+        .unwrap();
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+    let recorded = &store.load().unwrap().entries["PR-1"].attempts[0];
+    assert_eq!(recorded.phase, Phase::Exited);
+    assert!(
+        recorded
+            .diagnostic
+            .as_deref()
+            .unwrap()
+            .contains("after claiming"),
+        "{recorded:?}"
+    );
+}
+
+// Notices name the change's base. A pending notice recorded with the earlier
+// default-branch wording keeps it (same ID, idempotent retry), and a sent one
+// is never re-sent, so the wording change re-sends nothing.
+// trace:TASK-1993.acb96f0d | ai:claude
+#[test]
+fn task1993_stale_notice_names_the_base_without_resending_old_notices() {
+    let (_temp, store) = fixture();
+    let mut c = change(1, 1, true);
+    c.base = "release/2".into();
+    let Action::Notify(notice) = select(&store, &c, None, 2).unwrap() else {
+        panic!("missing notice");
+    };
+    assert!(
+        notice.message.body.contains("`release/2`"),
+        "{}",
+        notice.message.body
+    );
+    assert!(!notice.message.body.contains("default branch"));
+    // A notice pending from before the wording change is re-delivered as is.
+    let old = change(2, 2, true);
+    let legacy = stale_message_for(&store.repository, "PR-2", &old, None);
+    assert_eq!(legacy.id, stale_message(&store.repository, "PR-2", &old).id);
+    for sent in [false, true] {
+        store
+            .transaction("PR-2", |state| {
+                state
+                    .entries
+                    .entry("PR-2".into())
+                    .or_default()
+                    .notices
+                    .insert(
+                        old.head.clone(),
+                        Notice {
+                            message: legacy.clone(),
+                            sent,
+                        },
+                    );
+                Ok(())
+            })
+            .unwrap();
+        match select(&store, &old, None, 2).unwrap() {
+            Action::Notify(retry) if !sent => {
+                assert_eq!(retry.message.body, legacy.body);
+                assert_eq!(retry.message.id, legacy.id);
+            }
+            Action::Skip(reason) if sent => assert!(reason.contains("already notified")),
+            other => panic!("unexpected action for sent={sent}: {other:?}"),
+        }
+    }
 }

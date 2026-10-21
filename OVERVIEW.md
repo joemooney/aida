@@ -1,10 +1,11 @@
 Review watch discovers open non-draft GitHub/GitLab changes against pinned
-origin/default-branch evidence and dispatches ordinary attested reviewers before
+origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
 global cap of two, and the two-round limit. PID/start/boot receipts precede queue
-work; lost completion remains ambiguous rather than releasing capacity. Stale
-overlap notices publish idempotently to the exact forge author's local mailbox.
+work; capacity is released only by a terminal receipt or proof that the
+dispatcher's exact process is gone. Stale overlap notices name the change's
+base branch and publish idempotently to the exact forge author's local mailbox.
 S1 waits for old reviews and never terminates reviewers, updates branches,
 reports readiness, or merges. See [review watch](docs/cli/06-roles-sessions.md#watching-for-new-review-heads).
 <!-- trace:TASK-1993 | ai:codex -->

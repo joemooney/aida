@@ -320,7 +320,7 @@ private temporary refs. It fetches by remote name, so a credential stored in
 the origin URL never appears in process arguments. A missing or invalid base,
 unknown metadata, head movement, or unreadable base evidence refuses dispatch.
 A stale base with overlapping changed paths receives a local mailbox request to
-merge the default branch; a stale non-overlapping head remains reviewable. The
+merge the change's base branch, named in the notice; a stale non-overlapping head remains reviewable. The
 recipient is the exact forge author login/username, with no inferred mapping to
 an agent seat. Read that identity's mailbox with `aida mailbox inbox <login>`.
 The watcher never updates a branch.
@@ -339,7 +339,9 @@ each dispatcher's process identity; if a dispatcher exits before claiming its
 reservation (a refused grant, an unusable store, a timed-out claim), any
 watcher, including a restarted one, records the reservation as exited and
 frees its slot. Only a dispatcher lost after claiming, before recording an
-outcome, stays ambiguous. The capacity refusal names each
+outcome, stays reserved until its exact process (start identity and boot ID)
+is gone; then it is recorded as exited and its slot freed. Terminal receipts
+retry through lock contention for the same window as the claim. The capacity refusal names each
 holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
 and `aida session leases --all` before operator recovery. Do not delete lock
@@ -356,7 +358,7 @@ Stale-head notifications have deterministic IDs and retry without overwriting
 mailbox reader flags. Delivery is recorded only after successful publication.
 A head is launched once. Rounds follow the ordinary review policy: only
 request-changes or rejected verdicts (the reviews that leave a findings block)
-consume a round, so an approved head later merged with the default branch is
+consume a round, so an approved head later merged with its base branch is
 re-reviewed at round 1 with the full-sweep contract, and a third blocking
 round is refused. Existing manual/drain verdicts and their retained archives
 count the same way; current/archive

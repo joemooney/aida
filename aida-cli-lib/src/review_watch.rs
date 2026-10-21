@@ -393,29 +393,36 @@ impl Store {
         }
         Ok(removed)
     }
-    /// A reservation whose recorded dispatcher is gone without claiming its
-    /// receipt can never start a review: record it exited and free its slot.
-    /// Callers hold the global lock.
+    /// An attempt whose dispatcher is provably gone (its exact kernel start
+    /// identity no longer runs) can never record its own outcome: record it
+    /// exited and free its slot. That covers a reservation never claimed and
+    /// a claimed review whose terminal receipt was lost (a crash, or a lock
+    /// that stayed busy past the deadline). Callers hold the global lock.
     // trace:TASK-1993 | ai:claude
     fn reconcile_lost_dispatchers(&self, state: &mut State) {
         for (key, entry) in state.entries.iter_mut() {
             for attempt in entry.attempts.iter_mut() {
-                let Some(dispatcher) = attempt.dispatcher.as_ref() else {
-                    continue;
-                };
-                if attempt.phase != Phase::Reserved
-                    || attempt.identity.is_some()
-                    || dispatcher.alive()
+                let (process, when) = match (&attempt.phase, &attempt.identity, &attempt.dispatcher)
                 {
+                    (Phase::Reserved, None, Some(dispatcher)) => {
+                        (dispatcher, "before claiming its launch receipt")
+                    }
+                    (Phase::Running, Some(identity), _) => {
+                        (identity, "after claiming, without a terminal receipt")
+                    }
+                    _ => continue,
+                };
+                if process.alive() {
                     continue;
                 }
                 let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
-                attempt.phase = Phase::Exited;
-                attempt.diagnostic = Some(bounded_diagnostic(&format!(
-                    "dispatcher {} exited before claiming its launch receipt: {}",
-                    dispatcher.pid,
+                let diagnostic = bounded_diagnostic(&format!(
+                    "dispatcher {} exited {when}: {}",
+                    process.pid,
                     tail.as_deref().unwrap_or("no log output")
-                )));
+                ));
+                attempt.phase = Phase::Exited;
+                attempt.diagnostic = Some(diagnostic);
             }
         }
     }
@@ -754,10 +761,20 @@ fn select(
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
                 message: stale_message(&repository, &key, change), sent: false,
             });
-            let mut expected = stale_message(&repository, &key, change);
-            expected.timestamp = notice.message.timestamp;
-            anyhow::ensure!(serde_json::to_value(&expected)? == serde_json::to_value(&notice.message)?, "notification identity changed; pending message retained");
-            return Ok(if notice.sent { Action::Skip("stale overlapping head already notified".into()) } else { Action::Notify(notice.clone()) });
+            // A sent receipt is final: never re-validated or re-sent. A pending
+            // notice keeps the wording it was recorded with (same deterministic
+            // ID), so a retry re-delivers that exact message idempotently; one
+            // recorded before notices named the base still matches its
+            // template. trace:TASK-1993 | ai:claude
+            if notice.sent { return Ok(Action::Skip("stale overlapping head already notified".into())); }
+            let recorded = serde_json::to_value(&notice.message)?;
+            let matches = |base: Option<&str>| -> Result<bool> {
+                let mut expected = stale_message_for(&repository, &key, change, base);
+                expected.timestamp = notice.message.timestamp;
+                Ok(serde_json::to_value(&expected)? == recorded)
+            };
+            anyhow::ensure!(matches(Some(&change.base))? || matches(None)?, "notification identity changed; pending message retained");
+            return Ok(Action::Notify(notice.clone()));
         }
         if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase == Phase::Exited) {
             // trace:TASK-1993 | ai:claude
@@ -810,15 +827,42 @@ fn stale_message(
     key: &str,
     change: &forge::Change,
 ) -> aida_core::mailbox::Message {
+    stale_message_for(repository, key, change, Some(&change.base))
+}
+
+/// The stale-head notice naming the change's own base. `None` renders the
+/// original default-branch wording, accepted only for a pending notice
+/// recorded before the base was named. The ID never depends on the wording.
+// trace:TASK-1993 | ai:claude
+fn stale_message_for(
+    repository: &str,
+    key: &str,
+    change: &forge::Change,
+    base: Option<&str>,
+) -> aida_core::mailbox::Message {
     use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
+    let (behind, merge) = match base {
+        Some(base) => (
+            format!("is behind its base branch `{base}`"),
+            format!("Merge `{base}`"),
+        ),
+        None => (
+            "is behind the default branch".into(),
+            "Merge the default branch".into(),
+        ),
+    };
+    let subject = match base {
+        Some(base) => format!("{key}: merge `{base}` before review"),
+        None => format!("{key}: merge the default branch before review"),
+    };
     let id = format!(
         "review-watch-{:x}",
         Sha256::digest(format!("{repository}\0{key}\0{}\0stale", change.head))
     );
     Message { id: id.clone(), thread_id: id, from: "review-watch".into(), to: Recipient::Agent(change.author.clone()),
         timestamp: chrono::Utc::now().timestamp(), in_reply_to: None,
-        body: format!("{key} at {} is behind the default branch with overlapping paths. Merge the default branch into the branch and push before review. The watcher did not update the branch.", change.head),
-        subject: Some(format!("{key}: merge the default branch before review")), urgent: false, intent: Intent::Request,
+        body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
+        subject: Some(subject), urgent: false, intent: Intent::Request,
         retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,
         from_role: None, relayed_from: None }
 }
@@ -955,41 +999,42 @@ fn execute_reservation(
     preflight: impl FnOnce(&Attempt) -> Result<()>,
     work: impl FnOnce(&Attempt) -> Result<()>,
 ) -> Result<()> {
-    // No work begins before the durable, process-bound receipt. A lost
-    // dispatcher without a completion receipt stays ambiguous even if its
-    // PID disappeared or was reused; an orphan reviewer must not free a slot.
-    let deadline = std::time::Instant::now() + CLAIM_DEADLINE;
-    let attempt = loop {
-        match store.transition(key, token, Phase::Running) {
-            Ok(attempt) => break attempt,
-            Err(e)
-                if e.chain().any(|e| {
-                    e.downcast_ref::<std::io::Error>()
-                        .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock)
-                }) && std::time::Instant::now() < deadline =>
-            {
-                std::thread::sleep(std::time::Duration::from_millis(20))
-            }
-            Err(e) => return Err(e),
-        }
-    };
+    // No work begins before the durable, process-bound receipt. If this
+    // dispatcher dies before a terminal receipt, the attempt stays Running
+    // until a watcher proves the receipt's process identity is gone.
+    let attempt = retry_busy(|| store.transition(key, token, Phase::Running))?;
     if let Err(error) = preflight(&attempt) {
         // No queue-work process was started, so this reservation can retry
         // without consuming a review round or claiming reviewer completion.
-        store.transition(key, token, Phase::Failed)?;
+        retry_busy(|| store.transition(key, token, Phase::Failed))?;
         return Err(error);
     }
     if let Err(error) = work(&attempt) {
         // The exit was observed in-process, so it is not ambiguous: record it
         // terminally with its reason. Only a lost dispatcher stays Running.
         // trace:TASK-1993 | ai:claude
-        store
-            .transition_with(key, token, Phase::Exited, Some(format!("{error:#}")))
+        retry_busy(|| store.transition_with(key, token, Phase::Exited, Some(format!("{error:#}"))))
             .with_context(|| format!("{error:#}"))?;
         return Err(error);
     }
-    store.transition(key, token, Phase::Completed)?;
+    retry_busy(|| store.transition(key, token, Phase::Completed))?;
     Ok(())
+}
+
+/// Retry a state transition through lock contention for the claim deadline:
+/// terminal receipts get the same patience as the claim, so a finished review
+/// is not left Running by a briefly busy lock.
+// trace:TASK-1993 | ai:claude
+fn retry_busy<T>(mut f: impl FnMut() -> Result<T>) -> Result<T> {
+    let deadline = std::time::Instant::now() + CLAIM_DEADLINE;
+    loop {
+        match f() {
+            Err(e) if is_busy(&e) && std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            result => return result,
+        }
+    }
 }
 
 /// The last non-empty line of a dispatcher log: queue work's refusal reason.
@@ -1170,7 +1215,7 @@ fn watch_change(
                 pending.sent = true;
                 Ok(())
             })?;
-            eprintln!("{key}: merge-main notice delivered to {}", change.author);
+            eprintln!("{key}: merge-base notice delivered to {}", change.author);
         }
         Action::Dispatch(attempt) => {
             use std::os::unix::process::CommandExt;
