@@ -446,7 +446,7 @@ mod tests {
     // ── preserve-on-fail: a recoverable failure preserves work, no loss ───────
 
     fn git(dir: &std::path::Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)

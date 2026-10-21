@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn git(repo: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

@@ -229,7 +229,7 @@ fn bare_plan(dir: std::path::PathBuf) -> crate::init_bootstrap::BootstrapPlan {
 // ───────────────────────── fake forge harness ─────────────────────────
 
 fn git(dir: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args([

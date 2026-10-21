@@ -3512,7 +3512,7 @@ host = \"should.not.count\"
 
     /// Run git in `repo`, panicking (with stderr) on failure. Test helper.
     fn git(repo: &Path, args: &[&str]) {
-        let out = Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(args)

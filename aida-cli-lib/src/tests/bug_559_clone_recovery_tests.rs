@@ -2,7 +2,7 @@ use super::*;
 use std::process::Command;
 
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let ok = Command::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -87,7 +87,7 @@ fn try_attach_recovers_when_aida_store_is_default_branch() {
     git(&seed, &["config", "user.name", "t"]);
     git(&seed, &["commit", "--allow-empty", "-qm", "main commit"]);
     git(&seed, &["checkout", "-q", "--orphan", "aida-store"]);
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(&seed)
         .args(["rm", "-rfq", "--cached", "."])

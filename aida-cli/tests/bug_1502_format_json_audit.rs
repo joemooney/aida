@@ -4,6 +4,9 @@
 // trace:BUG-1502 | ai:codex
 #![cfg(target_os = "linux")]
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::{Command, Output};
@@ -67,7 +70,7 @@ fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()
@@ -498,6 +501,8 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ("aida history events", &["history", "events"]),
         // trace:STORY-1673 | ai:claude
         ("aida verify constraints", &["verify", "constraints"]),
+        // trace:STORY-1700 | ai:claude
+        ("aida fleet drive", &["fleet", "drive"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();

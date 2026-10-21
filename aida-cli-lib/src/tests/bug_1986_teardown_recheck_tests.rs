@@ -129,7 +129,7 @@ fn the_dirty_gate_ignores_only_the_sessions_own_runtime_links() {
 }
 
 fn git_in(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)

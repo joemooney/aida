@@ -988,7 +988,7 @@ mod tests {
         let store = tmp.path().join(".aida-store");
         std::fs::create_dir_all(&store).unwrap();
         let git = |args: &[&str]| {
-            let ok = std::process::Command::new("git")
+            let ok = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)

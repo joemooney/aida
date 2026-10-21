@@ -430,7 +430,7 @@ fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
     .unwrap();
     let storage = Storage::new(root.join("requirements.db"));
     let git = |args: &[&str]| {
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .env("GIT_AUTHOR_NAME", "test")
@@ -444,7 +444,7 @@ fn probe_resume_facts_resolves_open_pr_without_lease_from_forge_surface() {
     git(&["init", "--initial-branch=main", "--quiet"]);
     git(&["commit", "--allow-empty", "-m", "root", "--quiet"]);
     let head = String::from_utf8(
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["rev-parse", "HEAD"])
             .output()
@@ -561,7 +561,7 @@ fn progress_signature_changes_when_a_file_is_edited_then_committed() {
     let tmp = tempfile::tempdir().unwrap();
     let wt = tmp.path();
     let git = |args: &[&str]| {
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(wt)
             .args(args)

@@ -54,6 +54,11 @@ pub(crate) enum Field {
     FindingsOpen,
     /// `escalations.open` — specs parked `NeedsAttention` for a human (count).
     EscalationsOpen,
+    /// `mandate.drive_active` — an unexpired, unstopped DRIVE mandate record
+    /// exists in the AIDA home (flag). Gates the `mandate-drive` tick; the
+    /// tick itself re-checks the principal and every other floor.
+    // trace:STORY-1700 | ai:claude
+    MandateDriveActive,
 }
 
 /// The literal type each field carries; the parser refuses a mismatch.
@@ -66,7 +71,7 @@ pub(crate) enum FieldType {
 
 impl Field {
     /// Every field, in documentation order.
-    pub(crate) const ALL: [Field; 9] = [
+    pub(crate) const ALL: [Field; 10] = [
         Field::MailUnread,
         Field::MailOldestUnreadAge,
         Field::DrainLockFree,
@@ -76,6 +81,7 @@ impl Field {
         Field::CiRedPrs,
         Field::FindingsOpen,
         Field::EscalationsOpen,
+        Field::MandateDriveActive,
     ];
 
     /// The dotted name used in config.
@@ -90,13 +96,14 @@ impl Field {
             Field::CiRedPrs => "ci.red_prs",
             Field::FindingsOpen => "findings.open",
             Field::EscalationsOpen => "escalations.open",
+            Field::MandateDriveActive => "mandate.drive_active",
         }
     }
 
     pub(crate) fn field_type(self) -> FieldType {
         match self {
             Field::MailOldestUnreadAge => FieldType::Duration,
-            Field::DrainLockFree => FieldType::Flag,
+            Field::DrainLockFree | Field::MandateDriveActive => FieldType::Flag,
             _ => FieldType::Count,
         }
     }
@@ -192,6 +199,8 @@ pub(crate) struct Snapshot {
     pub ci_red_prs: i64,
     pub findings_open: i64,
     pub escalations_open: i64,
+    // trace:STORY-1700 | ai:claude
+    pub mandate_drive_active: bool,
 }
 
 impl Snapshot {
@@ -206,6 +215,7 @@ impl Snapshot {
             Field::CiRedPrs => Value::Count(self.ci_red_prs),
             Field::FindingsOpen => Value::Count(self.findings_open),
             Field::EscalationsOpen => Value::Count(self.escalations_open),
+            Field::MandateDriveActive => Value::Flag(self.mandate_drive_active),
         }
     }
 }

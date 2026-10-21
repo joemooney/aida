@@ -425,7 +425,7 @@ mod git_integration_tests {
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(dir)
             .args(args)
             .output()

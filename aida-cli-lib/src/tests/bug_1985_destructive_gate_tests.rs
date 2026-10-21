@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(["-c", "protocol.file.allow=always"])
         .args(args)

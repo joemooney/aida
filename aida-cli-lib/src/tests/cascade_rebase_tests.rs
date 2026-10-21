@@ -6,7 +6,7 @@
 use super::*;
 
 fn run_git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
-    std::process::Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -34,14 +34,14 @@ fn init_repo_with_remote() -> (tempfile::TempDir, std::path::PathBuf, std::path:
     let origin = tmp.path().join("origin.git");
     let work = tmp.path().join("work");
 
-    assert!(std::process::Command::new("git")
+    assert!(crate::test_git::git_command()
         .args(["init", "-q", "--bare", "-b", "main"])
         .arg(&origin)
         .status()
         .unwrap()
         .success());
 
-    assert!(std::process::Command::new("git")
+    assert!(crate::test_git::git_command()
         .args(["init", "-q", "-b", "main"])
         .arg(&work)
         .status()
