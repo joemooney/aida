@@ -86,6 +86,15 @@ fn process_kind_class(kind: &str) -> &str {
 /// recycled pid of a long-dead process is not mistaken for it, while a legacy
 /// record without a start identity keeps the historical pid-only match.
 pub(crate) fn tokens_match(a: &str, b: &str) -> bool {
+    tokens_match_with(a, b, aida_core::liveness::process_identity_matches_strict)
+}
+
+// trace:BUG-2130 | ai:agy
+pub(crate) fn tokens_match_with(
+    a: &str,
+    b: &str,
+    mut strict_match: impl FnMut(u32, &str) -> bool,
+) -> bool {
     let (Some((ka, va)), Some((kb, vb))) = (a.split_once(':'), b.split_once(':')) else {
         return false;
     };
@@ -94,7 +103,15 @@ pub(crate) fn tokens_match(a: &str, b: &str) -> bool {
     }
     match (va.split_once('@'), vb.split_once('@')) {
         (Some((pa, sa)), Some((pb, sb))) => {
-            !pa.is_empty() && pa == pb && (sa.is_empty() || sb.is_empty() || sa == sb)
+            !pa.is_empty()
+                && pa == pb
+                && (sa.is_empty()
+                    || sb.is_empty()
+                    || sa == sb
+                    || pa
+                        .parse::<u32>()
+                        .ok()
+                        .is_some_and(|pid| strict_match(pid, sa) && strict_match(pid, sb)))
         }
         (None, None) => va == vb,
         _ => false,

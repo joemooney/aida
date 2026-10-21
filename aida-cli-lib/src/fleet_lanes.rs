@@ -50,8 +50,8 @@ pub(crate) fn owner_alive(run_dir: &Path, status: &BTreeMap<String, String>) -> 
     if !crate::process_probe::pid_is_alive(pid) {
         return Some(false);
     }
-    let identity = crate::process_probe::process_start_identity(pid)?;
-    let started = DateTime::parse_from_rfc3339(&identity).ok()?;
+    // trace:BUG-2130 | ai:agy
+    let started = aida_core::liveness::process_start_time(pid)?;
     // Current relay.status has no start-time field. Its write timestamp bounds
     // the original process start, so a later recycled PID cannot mask death.
     Some(started.with_timezone(&Utc) <= updated_at(status)?)

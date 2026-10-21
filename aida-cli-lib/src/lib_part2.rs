@@ -63,28 +63,29 @@ pub(crate) fn handle_retire_legacy_ids(
         return Ok(());
     }
 
-    // Apply: load the mutable store, update each affected req, save once.
-    // The save() path (post-BUG-1-040) writes only changed YAMLs and deletes
-    // files that fell out of the store, so renames are handled automatically.
-    let mut mutable = store;
-    for req in mutable.requirements.iter_mut() {
-        let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
-            (Some(s), Some(a)) if s != a => Some(a.to_string()),
-            _ => None,
-        };
-        if let Some(new_spec) = needs {
-            req.spec_id = Some(new_spec);
-            req.agreed_id = None;
+    // update_atomically reloads canonical state and holds store-write.lock
+    // through rename persistence and cache refresh. trace:TASK-1981 | ai:codex
+    let mut retired_count = 0usize;
+    backend.update_atomically(|mutable| {
+        for req in mutable.requirements.iter_mut() {
+            let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
+                (Some(s), Some(a)) if s != a => Some(a.to_string()),
+                _ => None,
+            };
+            if let Some(new_spec) = needs {
+                req.spec_id = Some(new_spec);
+                req.agreed_id = None;
+                retired_count += 1;
+            }
         }
-    }
-    backend.save(&mutable)?;
+    })?;
 
     println!();
     println!(
         "{} Retired {} legacy spec_id{}. Canonical id now lives in spec_id alone.",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
-        renames.len(),
-        if renames.len() == 1 { "" } else { "s" }
+        retired_count,
+        if retired_count == 1 { "" } else { "s" }
     );
     Ok(())
 }
@@ -997,3 +998,7 @@ pub(crate) fn ambiguous_id_in_chain(
 // predicates back the two guards — a spawn-time assertion (`aida agent new`) and
 // a stranded-primary alarm (`aida status` / `aida ps`). Kept side-effect-free so
 // both are unit-testable without git/leases.
+
+#[cfg(test)]
+#[path = "tests/task_1981_retire_tests.rs"]
+mod task_1981_retire_tests;
