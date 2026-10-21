@@ -22,6 +22,15 @@ req_type: Story
 tags:
 - pr:2808
 - review
+relationships:
+- rel_type: Child
+  target_id: 01a15037-319b-7e92-850d-affbbac2a99d
+  created_at: 2026-10-21T19:03:42.395860882Z
+history:
+- id: 01a15fd9-1125-75f3-b972-71e2ded69f55
+  author: ai:codex:joe
+  timestamp: 2026-10-21T19:03:43.653766062Z
+  changes: []
 filed_at:
   code_sha: 3df0a4c73dccd81e6defc0be0bf89595d846dbda
   branch: main
