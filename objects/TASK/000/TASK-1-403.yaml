@@ -1,5 +1,6 @@
 id: 01a15ee8-0ba6-7d03-9dc0-dce8598bfe89
 spec_id: TASK-1-403
+agreed_id: TASK-1673
 title: 'non-blocking/minor: review_record_template uses only the first covered spec (pr…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2187, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15eef-3e84-7f83-a472-a6dc4b2814b9
   author: joe
   timestamp: 2026-10-21T14:48:19.844460179Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f32-bfc7-70f0-aec7-c23db746600f
+  author: joe
+  timestamp: 2026-10-21T16:02:03.847499331Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

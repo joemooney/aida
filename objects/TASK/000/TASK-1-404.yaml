@@ -1,5 +1,6 @@
 id: 01a15ee8-16a1-7e60-bb26-620d30486e92
 spec_id: TASK-1-404
+agreed_id: TASK-1672
 title: 'non-blocking/minor: apply_child_agent_identity is applied for every seat in spa…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2187, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15eef-5b3a-7a73-830c-1bf692831ca8
   author: joe
   timestamp: 2026-10-21T14:48:27.194027014Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f32-bf7a-7701-821b-301ed335dce0
+  author: joe
+  timestamp: 2026-10-21T16:02:03.770270439Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
