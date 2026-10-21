@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-21T07:19:19.415941968Z
+modified_at: 2026-10-21T07:19:23.791073288Z
 req_type: Task
 tags:
 - reconcile
@@ -169,6 +169,12 @@ comments:
   content: 'ADVISOR 22:48 backlog burndown: folded TASK-2035 (""''(Refs X)'' title trailer is not recognized by aida pr ship, so the branch-name fallback silently completes X"") into this spec; treat it as an item here.'
   created_at: 2026-10-21T05:48:06.625005316Z
   modified_at: 2026-10-21T05:48:06.625005316Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15d54-3b8f-7610-88b4-b32395d4d93e
+  author: joe
+  content: 'ADVISOR 00:20 burndown: folded TASK-1-390 (""[non-blocking, perf] mandate.rs store_history_alias_ids runs an unbounded ''git …"") into this spec as an item.'
+  created_at: 2026-10-21T07:19:23.791073288Z
+  modified_at: 2026-10-21T07:19:23.791073288Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
