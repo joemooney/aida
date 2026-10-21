@@ -6,18 +6,27 @@ description: |-
 
   non-blocking (cosmetic): inert allowlist includes awk/sed/cat, which can run commands after quoted-body stripping (awk 'BEGIN{system("cargo build")}', GNU sed e, cat <(cargo ...)); .RECIPEPREFIX and top-level $(eval ...) rule generation are also not seen. All are silent. Drop awk/sed from the allowlist or treat '<(' as non-inert; list the remaining misses next to the existing 'Known misses' header line.
   Reviewed sha: 57c220717cc5190b1d8e90ec39fdd0b0d1ee6197
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T17:51:34.167591829Z
-modified_at: 2026-10-21T17:51:34.167591829Z
+modified_at: 2026-10-21T18:01:04.348015650Z
 req_type: Task
 tags:
 - carried-from:TASK-1967
 - finding-hash:9889bdcb
 - from-review:TASK-1967
 - kind:carried-forward
+history:
+- id: 01a15f9f-b45b-7a91-af3a-a442721d9d14
+  author: joe
+  timestamp: 2026-10-21T18:01:04.348009308Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 72eb713535c20e95002f05dc71cbf2e34193e3c3
   branch: main
