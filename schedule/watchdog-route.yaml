@@ -8,6 +8,6 @@ result: done
 due_since: 2026-10-20T06:56:23.440307551Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-10-20T06:44:10.012461070Z
+  trip_id: watchdog@2026-10-21T23:48:04.284361821Z
   job: watchdog
   error: 'exit 1: '
