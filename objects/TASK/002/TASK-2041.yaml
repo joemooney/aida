@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:49:29.555327066Z
-modified_at: 2026-10-21T04:49:29.555327066Z
+modified_at: 2026-10-21T04:49:58.878179497Z
 req_type: Task
+tags:
+- operator-held
+history:
+- id: 01a15ccb-72f4-7783-a198-95f97998dce9
+  author: joe
+  timestamp: 2026-10-21T04:49:59.540069512Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:49:58.878179497Z
+deferred_until: the advisor schedules the A2 V3 signoff review on BUG-1808
+deferred_reason: Needs an independent A2 V3 signoff first (BUG-1808 proposal)
 filed_at:
   code_sha: d29b69c35cafa137e15d5935aefc4f79837996e3
   branch: main
