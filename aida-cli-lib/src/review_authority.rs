@@ -475,7 +475,7 @@ impl RecorderIdentity {
     /// whose cwd IS the main checkout still is; harness leases there do not
     /// author, see [`is_authoring_lease`].)
     // trace:BUG-2199 | ai:claude
-    pub(crate) fn current(_project_root: &Path, leases: &[SessionLease]) -> Self {
+    pub(crate) fn current(leases: &[SessionLease]) -> Self {
         let dirs: Vec<PathBuf> = std::env::current_dir()
             .ok()
             .into_iter()

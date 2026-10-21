@@ -191,6 +191,20 @@ fn refs_subject_names_authorship_ids_but_never_completion_ids() {
         crate::pr_ship::extract_authorship_spec_ids_from_subject("fix(x): (Refsy BUG-1)")
             .is_empty()
     );
+    // The BUG-2203 Refs grammar: singular `Ref` and a spaced colon bind too.
+    for subject in ["fix(x): y (Ref BUG-1)", "fix(x): y (Refs : BUG-1)"] {
+        assert!(crate::pr_ship::extract_trailing_spec_ids_from_subject(subject).is_empty());
+        assert_eq!(
+            crate::pr_ship::extract_authorship_spec_ids_from_subject(subject),
+            vec!["BUG-1".to_string()],
+            "{subject}"
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject),
+            vec!["BUG-1".to_string()],
+            "{subject}"
+        );
+    }
 }
 
 /// The PR-2791 shape: a Refs-only PR, a stale `harness-worktree` lease pinned
@@ -251,9 +265,7 @@ fn refs_only_pr_still_refuses_the_refs_specs_author() {
     with_identity_source(source(100, 200, 300), || {
         record_authoring_lease(root.path(), &author)
     });
-    let recorder = with_identity_source(source(101, 201, 300), || {
-        RecorderIdentity::current(root.path(), &[])
-    });
+    let recorder = with_identity_source(source(101, 201, 300), || RecorderIdentity::current(&[]));
     let v = [reviewer_approval(recorder.tokens.clone())];
 
     let (_, policy) = crate::with_review_pr_subject(refs_only_subject(), || {
@@ -284,7 +296,7 @@ fn recorder_binds_leases_by_cwd_not_project_root() {
         root.path().canonicalize().unwrap(),
         "main",
     );
-    let recorder = RecorderIdentity::current(root.path(), std::slice::from_ref(&claim));
+    let recorder = RecorderIdentity::current(std::slice::from_ref(&claim));
     assert!(
         !recorder.tokens.contains(&format!("lease:{}", claim.id)),
         "{recorder:?}"
@@ -335,9 +347,8 @@ fn spec_less_pr_refuses_the_harness_lease_on_its_head_branch() {
         with_identity_source(source(100, 200, 300), || {
             record_authoring_lease(root.path(), &author)
         });
-        let recorder = with_identity_source(source(101, 201, 300), || {
-            RecorderIdentity::current(root.path(), &[])
-        });
+        let recorder =
+            with_identity_source(source(101, 201, 300), || RecorderIdentity::current(&[]));
         let v = [reviewer_approval(recorder.tokens)];
         let policy = ship_policy(spec_less_subject(), root.path());
         assert!(!policy.author_sessions.is_empty(), "live={live}");

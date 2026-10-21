@@ -2013,7 +2013,6 @@ pub(crate) fn ship_approval_policy(
         // BUG-1918: who is merging — `--override-stale-approval` is refused
         // to an author. trace:BUG-1918 | ai:claude
         shipper: crate::review_authority::RecorderIdentity::current(
-            main_worktree,
             &crate::review_authority::visible_leases(main_worktree),
         )
         .tokens,

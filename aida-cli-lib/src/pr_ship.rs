@@ -919,18 +919,9 @@ pub(crate) fn extract_authorship_spec_ids_from_subject(subject: &str) -> Vec<Str
     let mut out = extract_trailing_spec_ids_from_subject(subject);
     let mut rest = subject.trim();
     while let Some((head, inner)) = trailing_paren_group(rest) {
-        let inner = inner.trim();
-        let refs = inner
-            .get(..4)
-            .filter(|w| w.eq_ignore_ascii_case("refs"))
-            .map(|_| &inner[4..])
-            .and_then(|r| match r.strip_prefix(':') {
-                Some(after_colon) => Some(after_colon),
-                None => r.starts_with(char::is_whitespace).then_some(r),
-            });
-        if let Some(ids) = refs.map(parse_spec_id_group) {
-            out.extend(ids);
-        }
+        // One Refs grammar for authorship and completion (BUG-2203).
+        // trace:BUG-2199 BUG-2203 | ai:claude
+        out.extend(refs_group_spec_ids(inner));
         rest = head.trim_end();
     }
     out
