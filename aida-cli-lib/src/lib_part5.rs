@@ -2378,6 +2378,47 @@ pub(crate) fn review_pr_handshake_path(
     review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
 }
 
+/// BUG-2201 / TASK-2040: where a contained reviewer writes the phase-3
+/// handshake when `handshake` (the launcher's anchor, usually in the primary
+/// checkout) is not writable: the same file name under the reviewer's own
+/// `<project_root>/.aida/review-verdicts/`, which the launcher's BUG-2149
+/// collection reads. `None` uncontained (a failed write there is a real
+/// failure) or when the anchor already is that file.
+// trace:BUG-2201 | ai:claude
+pub(crate) fn contained_handshake_fallback(
+    project_root: &std::path::Path,
+    handshake: &std::path::Path,
+    contained: bool,
+) -> Option<std::path::PathBuf> {
+    if !contained {
+        return None;
+    }
+    let fallback = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(handshake.file_name()?);
+    (fallback != handshake).then_some(fallback)
+}
+
+#[cfg(test)]
+mod bug_2201_handshake_fallback_tests {
+    use super::contained_handshake_fallback;
+    use std::path::Path;
+
+    #[test]
+    fn contained_reviewer_falls_back_to_its_worktree() {
+        let wt = Path::new("/w/relay-pr-96");
+        let anchor = Path::new("/w/relay/.aida/review-verdicts/PR-96.json");
+        assert_eq!(
+            contained_handshake_fallback(wt, anchor, true).as_deref(),
+            Some(Path::new("/w/relay-pr-96/.aida/review-verdicts/PR-96.json"))
+        );
+        assert_eq!(contained_handshake_fallback(wt, anchor, false), None);
+        let same = Path::new("/w/relay-pr-96/.aida/review-verdicts/PR-96.json");
+        assert_eq!(contained_handshake_fallback(wt, same, true), None);
+    }
+}
+
 /// `aida review record` — emit the seat-tagged `ReviewVerdictRecorded` event
 /// naming the spec (as `Event.spec`), PR, verdict and reviewed sha. Split out
 /// for direct unit testing, same rationale as BUG-1423's `emit_ship_pr_merged`
@@ -3329,12 +3370,40 @@ pub(crate) fn handle_review_record_at(
                 serde_json::Value::String(recorded_at.to_string()),
             );
         }
-        review_verdict::write_verdict_object(&handshake, &handshake_obj).with_context(|| {
-            format!(
-                "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
-                handshake.display()
-            )
-        })?;
+        // BUG-2201 / TASK-2040: a contained reviewer cannot write the
+        // launcher's anchor in the primary checkout. Its launcher collects
+        // the handshake from the reviewer's worktree (BUG-2149), so land it
+        // there instead of failing the record. trace:BUG-2201 | ai:claude
+        let handshake = match review_verdict::write_verdict_object(&handshake, &handshake_obj) {
+            Ok(()) => handshake,
+            Err(err) => {
+                let contained = crate::session::aida_contained_env().unwrap_or(false);
+                let Some(fallback) =
+                    contained_handshake_fallback(&project_root, &handshake, contained)
+                else {
+                    return Err(anyhow::Error::new(err).context(format!(
+                        "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                        handshake.display()
+                    )));
+                };
+                review_verdict::write_verdict_object(&fallback, &handshake_obj).with_context(
+                    || {
+                        format!(
+                            "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                            handshake.display(),
+                            fallback.display()
+                        )
+                    },
+                )?;
+                println!(
+                    "  {} {} is outside this contained session's write boundary ({err}); \
+                     wrote the handshake in the worktree for the launcher to collect",
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                    handshake.display()
+                );
+                fallback
+            }
+        };
         // Belt-and-suspenders: only ever print a path this process has just
         // confirmed exists. `write_verdict_object` already verified the
         // content by reading it back, but a missing/unreadable file at this
