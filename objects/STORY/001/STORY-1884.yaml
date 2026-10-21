@@ -17,12 +17,12 @@ description: |
   - Generate a structured review prompt with `aida review prompt --pr 2786` and verify each spec's acceptance criteria.
   - Approve and merge, or request changes by spec id.
   - Mark this story `completed` once the PR is merged.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:27:39.401454713Z
-modified_at: 2026-10-20T21:28:02.328868492Z
+modified_at: 2026-10-21T05:23:26.194619679Z
 req_type: Story
 relationships:
 - rel_type:
@@ -30,12 +30,27 @@ relationships:
   target_id: 01a158ad-5d9d-7861-a864-6ef97dc52f10
   created_at: 2026-10-20T21:28:02.328865377Z
   created_by: joe
+comments:
+- id: 01a15cea-1172-7351-aab6-e71b68ba71a6
+  author: aida-auto-bump
+  content: 'Auto-rejected: PR #2786 closed on the forge without merging.'
+  created_at: 2026-10-21T05:23:26.194763796Z
+  modified_at: 2026-10-21T05:23:26.194763796Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15b36-d899-7b20-beb9-8e9021215ded
   author: joe
   timestamp: 2026-10-20T21:28:03.481525801Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15cea-1172-7351-aab6-e72ca18c3992
+  author: aida-auto-bump
+  timestamp: 2026-10-21T05:23:26.194770414Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Rejected
 filed_at:
   code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
   branch: main
