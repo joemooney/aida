@@ -6,17 +6,26 @@ description: |
   PR-2815's ship side carries the non-completing declaration only in MergeOptions.squash_body. GitHubForge passes it to gh pr merge --body. GitLabForge (forge.rs ~3176) sends only squash_commit_message, and PureGitForge (forge.rs ~2935) commits with the subject only, so on those forges the marker never reaches main. Either carry the body on those forges or document that the declaration is GitHub-only.
 
   Raised in review of PR-2815: https://github.com/joemooney/aida/pull/2815#issuecomment-6328724758
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T23:19:06.618990797Z
-modified_at: 2026-10-21T23:19:06.618990797Z
+modified_at: 2026-10-21T23:19:54.380308944Z
 req_type: Task
 tags:
 - from-review:PR-2815
 - reconcile
 - severity:minor
+history:
+- id: 01a160c3-9b0c-7042-9aac-c09b6391a994
+  author: joe
+  timestamp: 2026-10-21T23:19:54.380306044Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 25fd68b5ddd776e8395a3ab4e4c91d5eed5e1e1c
   branch: pr-2815
