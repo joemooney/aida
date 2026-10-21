@@ -982,9 +982,12 @@ pub(crate) fn format_ttl(ttl: Duration) -> String {
 fn issuance_roster_store(project_root: &Path, principal: &str, seat: &str) -> Result<PathBuf> {
     let store = roster_store(project_root)
         .map_err(|why| anyhow::anyhow!("cannot check seat `{seat}` for `{principal}`: {why}"))?;
+    // Name the roster file read, so a refusal is checkable against `aida team`.
+    // trace:TASK-1953 | ai:claude
     if !roster_allows(project_root, principal, seat) {
         bail!(
-            "seat `{seat}` is not allowed by the team roster for `{principal}`; an interactive human must update the roster with `aida team allow-seat`"
+            "seat `{seat}` is not allowed by the team roster (`{}`) for `{principal}`; an interactive human must update the roster with `aida team allow-seat`",
+            roster_path(&store).display()
         );
     }
     Ok(store)
@@ -1058,11 +1061,14 @@ pub(crate) fn validate_child_delegation(
         );
     }
     // trace:BUG-2200 | ai:claude
-    if let Err(why) = roster_store(project_root) {
-        bail!("cannot check child seat `{requested_seat}`: {why}");
-    }
+    // trace:TASK-1953 | ai:claude — the refusal names the roster file read.
+    let store = roster_store(project_root)
+        .map_err(|why| anyhow::anyhow!("cannot check child seat `{requested_seat}`: {why}"))?;
     if !roster_allows(project_root, &parent.principal, requested_seat) {
-        bail!("requested child seat is no longer allowed by the team roster");
+        bail!(
+            "requested child seat `{requested_seat}` is no longer allowed by the team roster (`{}`)",
+            roster_path(&store).display()
+        );
     }
     Ok(parent)
 }

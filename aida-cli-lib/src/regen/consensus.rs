@@ -807,6 +807,19 @@ fn link_existing_draft(
         return;
     }
     let label = draft_label(graph, &existing_uuid);
+    // Several parents that already include the mapped one are a multi-parent
+    // notice, not a conflict with the mapping.
+    // trace:TASK-1953 | ai:claude
+    if parents.contains(&resolved.spec_uuid) {
+        outcome.parent_conflicts.push(format!(
+            "{label} ({}): already linked to mapped parent {} ({}) alongside other parents {:?}; left unchanged",
+            check.escape_debug(),
+            resolved.display_id,
+            resolved.spec_uuid,
+            parents
+        ));
+        return;
+    }
     if !parents.is_empty() {
         outcome.parent_conflicts.push(format!(
             "{label} ({}): existing parent {:?} conflicts with mapped parent {} ({}); kept existing parent",
@@ -1498,6 +1511,8 @@ mod tests {
         }
     }
 
+    // trace:TASK-0446.acf44f1a | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn valid_mapping_from_trusted_default_branch_parents_draft_idempotently() {
@@ -1540,6 +1555,7 @@ mod tests {
         assert_eq!(sc.storage().load().unwrap().requirements.len(), 3);
     }
 
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn existing_deduplicated_draft_gains_parent_add_only_and_keeps_different_parent() {
@@ -1594,9 +1610,34 @@ mod tests {
         assert_eq!(head(sc.fx.path()).unwrap(), before);
         assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
         assert_eq!(outcome.parent_conflicts.len(), 1);
+        assert!(outcome.parent_conflicts[0].contains("conflicts with mapped parent"));
         assert_eq!(sc.parents_of_draft(), [sc.other]);
+
+        // Several parents that include the mapped one: a multi-parent notice,
+        // never a "conflicts with mapped parent" claim, and nothing written.
+        // trace:TASK-1953 | ai:claude
+        sc.storage()
+            .update_atomically(|graph| {
+                graph
+                    .add_relationship(&draft_id, RelationshipType::Child, &sc.owner, true)
+                    .unwrap();
+            })
+            .unwrap();
+        let before = head(sc.fx.path()).unwrap();
+        let outcome = sc.file();
+        assert_eq!(head(sc.fx.path()).unwrap(), before);
+        assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
+        assert_eq!(outcome.parent_conflicts.len(), 1);
+        assert!(
+            outcome.parent_conflicts[0].contains("already linked to mapped parent STORY-900"),
+            "{:?}",
+            outcome.parent_conflicts
+        );
+        assert!(!outcome.parent_conflicts[0].contains("conflicts with"));
     }
 
+    // trace:TASK-0446.acf44f1a | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn remapped_display_alias_still_parents_by_uuid_and_titles_render_single_line() {
@@ -1633,6 +1674,8 @@ mod tests {
         assert!(!draft.description.contains("Mapped contract target"));
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn missing_mapping_names_absent_file_or_absent_check() {
@@ -1660,6 +1703,8 @@ mod tests {
         assert_unparented_with(&sc, "Contract mapping missing (check not listed");
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn untrusted_or_unresolvable_oracle_commit_is_unavailable_never_missing() {
@@ -1740,6 +1785,8 @@ mod tests {
         assert_unparented_with(&sc, "Contract mapping unavailable (");
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn invalid_map_blob_at_oracle_commit_is_explicit() {
@@ -1785,6 +1832,8 @@ mod tests {
         assert_unparented_with(&sc, "Contract mapping invalid (");
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn stale_references_against_the_selected_corpus_are_explicit() {
@@ -1866,6 +1915,8 @@ mod tests {
         );
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn live_graph_drift_between_trial_and_file_leaves_draft_unparented() {
@@ -1891,6 +1942,8 @@ mod tests {
         }
     }
 
+    // trace:TASK-0446.acdc6aeb | ai:claude
+    // trace:TASK-0446.acb58cb4 | ai:claude
     // trace:TASK-0446 | ai:claude
     #[test]
     fn failed_parent_links_surface_and_never_claim_a_mapped_target() {

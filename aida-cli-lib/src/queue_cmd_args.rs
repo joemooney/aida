@@ -141,12 +141,13 @@ pub enum QueueCommand {
         /// Narrow the listing to items whose spec is in this epic's
         /// TRANSITIVE descendant tree — the epic itself plus all its
         /// children and grandchildren, computed in-process from the
-        /// requirement graph (the same hierarchy closure `aida graph
-        /// <ID> --tree` walks). Filters the single queue; it does NOT
+        /// requirement graph (the same hierarchy closure
+        /// `aida graph tree <ID>` walks). Filters the single queue; it does NOT
         /// create a per-epic queue. ANDs with the role / scope filters
         /// (`--for`, `--all`, `--global`, `--local`). `--parent` is an
         /// alias.
         // trace:TASK-923 | ai:claude
+        // trace:TASK-1953 | ai:claude — names the current `aida graph tree` spelling.
         #[clap(long, visible_alias = "parent", value_name = "ID")]
         epic: Option<String>,
         /// Ignore the active focus for this listing — show the whole queue
@@ -583,8 +584,10 @@ pub enum QueueCommand {
         /// (Approved -> Planned). Lets you plan work ahead while another spec
         /// is being implemented (the parallel-pipelining workflow). Headless
         /// auto-complete plan-phase is separate; this flag is interactive
-        /// only, so it conflicts with --auto-complete for now.
+        /// only, so it conflicts with --auto-complete, --drain and
+        /// --no-human (--headless, --unattended).
         // trace:STORY-265 | ai:claude
+        // trace:TASK-1953 | ai:claude — help names every conflicting flag.
         // trace:TASK-1794 | ai:codex — the headless launcher owns a separate
         // permission posture; plan-only is the documented interactive lane.
         #[clap(long, conflicts_with_all = ["autonomous", "no_human"])]

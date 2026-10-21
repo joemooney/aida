@@ -19307,7 +19307,7 @@ Options:
       --epic <ID>
           Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the
           epic itself plus all its children and grandchildren, computed in-process from the
-          requirement graph (the same hierarchy closure `aida graph <ID> --tree` walks). Filters the
+          requirement graph (the same hierarchy closure `aida graph tree <ID>` walks). Filters the
           single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters
           (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias
           
@@ -19819,7 +19819,7 @@ Options:
           plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets
           you plan work ahead while another spec is being implemented (the parallel-pipelining
           workflow). Headless auto-complete plan-phase is separate; this flag is interactive only,
-          so it conflicts with --auto-complete for now
+          so it conflicts with --auto-complete, --drain and --no-human (--headless, --unattended)
 
       --guided
           Guided keystone-implementation mode: launch a structured, step-by-step decision dialog for
@@ -42744,7 +42744,7 @@ Working on aida itself
       {
         "name": "epic",
         "takes_value": true,
-        "help": "Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the epic itself plus all its children and grandchildren, computed in-process from the requirement graph (the same hierarchy closure `aida graph <ID> --tree` walks). Filters the single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias"
+        "help": "Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the epic itself plus all its children and grandchildren, computed in-process from the requirement graph (the same hierarchy closure `aida graph tree <ID>` walks). Filters the single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias"
       },
       {
         "name": "for",
@@ -43530,7 +43530,7 @@ Working on aida itself
       {
         "name": "plan-only",
         "takes_value": false,
-        "help": "Plan-only mode: launch a PLANNING session for the spec instead of an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`) and defaults the permission mode to `plan` (read-only) so the session writes a `docs/plans/` file without touching code. After the plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets you plan work ahead while another spec is being implemented (the parallel-pipelining workflow). Headless auto-complete plan-phase is separate; this flag is interactive only, so it conflicts with --auto-complete for now"
+        "help": "Plan-only mode: launch a PLANNING session for the spec instead of an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`) and defaults the permission mode to `plan` (read-only) so the session writes a `docs/plans/` file without touching code. After the plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets you plan work ahead while another spec is being implemented (the parallel-pipelining workflow). Headless auto-complete plan-phase is separate; this flag is interactive only, so it conflicts with --auto-complete, --drain and --no-human (--headless, --unattended)"
       },
       {
         "name": "plan-phase",
