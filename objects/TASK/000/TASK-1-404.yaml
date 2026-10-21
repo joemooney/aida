@@ -6,18 +6,27 @@ description: |-
 
   non-blocking/minor: apply_child_agent_identity is applied for every seat in spawn_vendor_headless_with_seat_granted and build_exec_vendor_headless_command, so implementer children launched from an 'aida agent new' lane now get AIDA_AGENT_NAME=<vendor>-implementer instead of inheriting the lane name; BUG-2010 lease attribution is skipped for non-self-claim children so impact appears nil, but the broadening beyond reviewer is undocumented and untested — aida-cli-lib/src/session.rs:1471,3826
   Reviewed sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T14:40:30.881120447Z
-modified_at: 2026-10-21T14:40:30.881120447Z
+modified_at: 2026-10-21T14:48:24.191610692Z
 req_type: Task
 tags:
 - carried-from:BUG-2187
 - finding-hash:4d6281c6
 - from-review:BUG-2187
 - kind:carried-forward
+history:
+- id: 01a15eef-4f7f-73c2-bd57-65dc11f0a784
+  author: joe
+  timestamp: 2026-10-21T14:48:24.191607357Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
