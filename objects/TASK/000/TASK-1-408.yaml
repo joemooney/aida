@@ -6,18 +6,27 @@ description: |-
 
   non-blocking/minor: TASK-2054 (AIDA_STORE-divergence part), TASK-2055 and TASK-1667 were declined as behaviour changes but are 'superseded' by TASK-1953; completing TASK-1953 would close them silently. Re-open them, or file follow-ups, so the work is not lost.
   Reviewed sha: 48a6ce159419528992b224d29a7486b78348a256
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T17:17:52.458807506Z
-modified_at: 2026-10-21T17:17:52.458807506Z
+modified_at: 2026-10-21T17:18:55.688551024Z
 req_type: Task
 tags:
 - carried-from:TASK-1953
 - finding-hash:1e9b98be
 - from-review:TASK-1953
 - kind:carried-forward
+history:
+- id: 01a15f79-1ec8-7a20-a546-445afd8bc631
+  author: joe
+  timestamp: 2026-10-21T17:18:55.688544747Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
   branch: main
