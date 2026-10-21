@@ -27,7 +27,15 @@ fn dispatch(action: Action) -> Attempt {
 fn complete(store: &Store, c: &forge::Change, attempt: &Attempt) {
     execute_reservation(store, &c.key(), &attempt.token, |_| Ok(()), |_| Ok(())).unwrap();
 }
+fn verdict_json(head: &str, verdict: &str) -> serde_json::Value {
+    serde_json::json!({"reviewed_sha": head, "recorded_by": "reviewer seat", "verdict": verdict})
+}
+fn write_verdict(path: &Path, value: &serde_json::Value) {
+    std::fs::write(path, serde_json::to_vec(value).unwrap()).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).unwrap();
+}
 
+// trace:TASK-1993.ac9ef854 | ai:claude
 #[test]
 fn task1993_pending_ci_dispatches_with_receipt_before_work() {
     let (_temp, store) = fixture();
@@ -75,6 +83,7 @@ fn task1993_pending_ci_dispatches_with_receipt_before_work() {
     );
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_restart_and_duplicate_child_cannot_repeat_a_head() {
     let (temp, store) = fixture();
@@ -100,6 +109,7 @@ fn task1993_restart_and_duplicate_child_cannot_repeat_a_head() {
     ));
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_failed_preflight_reconciles_without_starting_review() {
     let (_temp, store) = fixture();
@@ -127,19 +137,17 @@ fn task1993_failed_preflight_reconciles_without_starting_review() {
     .unwrap_err();
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_lost_completion_and_pid_reuse_remain_ambiguous() {
     let (_temp, store) = fixture();
     let c = change(1, 1, false);
     let attempt = dispatch(select(&store, &c, None, 2).unwrap());
-    execute_reservation(
-        &store,
-        &c.key(),
-        &attempt.token,
-        |_| Ok(()),
-        |_| anyhow::bail!("dispatcher died after work began"),
-    )
-    .unwrap_err();
+    // The dispatcher claimed its receipt and then vanished without observing
+    // queue work's exit: no completion or exit is ever recorded.
+    store
+        .transition(&c.key(), &attempt.token, Phase::Running)
+        .unwrap();
     store
         .transaction(&c.key(), |state| {
             state.entries.get_mut(&c.key()).unwrap().attempts[0]
@@ -163,9 +171,30 @@ fn task1993_lost_completion_and_pid_reuse_remain_ambiguous() {
     );
 }
 
+// trace:TASK-1993.ac1e5827 | ai:claude
 #[test]
 fn task1993_new_head_waits_without_signalling_then_obeys_two_round_cap() {
-    let (_temp, store) = fixture();
+    let (temp, store) = fixture();
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir(&verdicts).unwrap();
+    let mut rounds = Vec::new();
+    // Each watcher review lands an ordinary request-changes verdict.
+    let review = |c: &forge::Change, a: &Attempt, rounds: &mut Vec<serde_json::Value>| {
+        execute_reservation(
+            &store,
+            &c.key(),
+            &a.token,
+            |_| Ok(()),
+            |_| {
+                let mut current = verdict_json(&c.head, "request-changes");
+                current["rounds"] = serde_json::Value::Array(rounds.clone());
+                write_verdict(&verdicts.join("PR-1.json"), &current);
+                rounds.push(verdict_json(&c.head, "request-changes"));
+                Ok(())
+            },
+        )
+        .unwrap();
+    };
     let first = change(1, 1, false);
     let a = dispatch(select(&store, &first, None, 2).unwrap());
     let second = change(1, 2, false);
@@ -173,15 +202,16 @@ fn task1993_new_head_waits_without_signalling_then_obeys_two_round_cap() {
         select(&store, &second, None, 2).unwrap(),
         Action::Skip(_)
     ));
-    complete(&store, &first, &a);
+    review(&first, &a, &mut rounds);
     let b = dispatch(select(&store, &second, None, 2).unwrap());
-    complete(&store, &second, &b);
+    review(&second, &b, &mut rounds);
     let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
         panic!("third round dispatched")
     };
     assert!(reason.contains("two-round"));
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() {
     let (_temp, store) = fixture();
@@ -201,6 +231,7 @@ fn task1993_global_capacity_includes_ambiguous_reservations_and_configuration() 
     ));
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_concurrent_watchers_admit_only_one_change_head() {
     let (temp, store) = fixture();
@@ -236,6 +267,7 @@ fn task1993_concurrent_watchers_admit_only_one_change_head() {
     assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
 }
 
+// trace:TASK-1993.acb96f0d | ai:claude
 #[test]
 fn task1993_stale_notice_retry_is_idempotent_and_preserves_reader_state() {
     let (temp, store) = fixture();
@@ -290,6 +322,7 @@ fn task1993_stale_notice_retry_is_idempotent_and_preserves_reader_state() {
     ));
 }
 
+// trace:TASK-1993.acb96f0d | ai:claude
 #[test]
 fn task1993_notification_payload_drift_refuses_delivery() {
     let (_temp, store) = fixture();
@@ -312,6 +345,7 @@ fn task1993_notification_payload_drift_refuses_delivery() {
     assert!(select(&store, &c, None, 2).is_err());
 }
 
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_missing_corrupt_and_unsafe_state_refuse_reinitialization() {
     use std::os::unix::fs::symlink;
@@ -340,6 +374,7 @@ fn task1993_missing_corrupt_and_unsafe_state_refuse_reinitialization() {
     );
 }
 
+// trace:TASK-1993.ac4fdc2a | ai:claude
 #[test]
 fn task1993_strict_discovery_handles_gitlab_and_refuses_unknown_evidence() {
     let mut row = serde_json::json!({"iid": 4, "state": "opened", "draft": false,
@@ -360,7 +395,12 @@ fn task1993_strict_discovery_handles_gitlab_and_refuses_unknown_evidence() {
 // Spawn the production child boundary in another test process, then hold its
 // queue-work executable at a barrier while inspecting its persisted receipt.
 // trace:TASK-1993 | ai:codex
-fn process_dispatch_barrier(root: &Path, repo: &forge::Repository, change: &forge::Change) {
+fn process_dispatch_barrier(
+    root: &Path,
+    repo: &forge::Repository,
+    change: &forge::Change,
+    at_barrier: impl FnOnce(),
+) {
     let store = Store::open(root, &repo.identity).unwrap();
     let attempt = dispatch(select(&store, change, Some("claude".into()), 2).unwrap());
     let ticket = root.join(".aida/task1993-process-ticket");
@@ -440,6 +480,7 @@ while not (root / 'queue-release').exists():
         select(&store, change, None, 2).unwrap(),
         Action::Skip(_)
     ));
+    at_barrier();
     std::fs::write(root.join("queue-release"), "continue").unwrap();
     while child.try_wait().unwrap().is_none() {
         if std::time::Instant::now() > deadline {
@@ -459,6 +500,10 @@ while not (root / 'queue-release').exists():
 
 // Exercise the production discovery/probe argv against fake forge CLIs and
 // real local Git refs, rather than returning a preclassified overlap boolean.
+// trace:TASK-1993.ac4fdc2a | ai:claude
+// trace:TASK-1993.ac9ef854 | ai:claude
+// trace:TASK-1993.acb96f0d | ai:claude
+// trace:TASK-1993.acab7994 | ai:claude
 #[test]
 fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads() {
     if crate::test_env::run_path_isolated_test() {
@@ -593,7 +638,33 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "a stale non-overlapping head remains reviewable"
         );
         assert_eq!(repo.change(&root, 1).unwrap().head, head);
-        process_dispatch_barrier(&root, &repo, &changes[0]);
+        // The reviewer launch boundary: outside a watch launch it is inert;
+        // inside one it revalidates head and reservation before any review.
+        // trace:TASK-1993 | ai:claude
+        assert!(reviewer_launch_prompt(&root, 1, "P").unwrap().is_none());
+        env.set_key(WATCH_HEAD, &head);
+        let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
+        assert!(
+            format!("{refused:#}").contains("missing watcher reservation"),
+            "{refused:#}"
+        );
+        env.set_key(WATCH_HEAD, "f".repeat(40));
+        let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
+        assert!(
+            format!("{refused:#}").contains("head changed"),
+            "{refused:#}"
+        );
+        env.unset_key(WATCH_HEAD);
+        process_dispatch_barrier(&root, &repo, &changes[0], || {
+            env.set_key(WATCH_HEAD, &head);
+            let prompt = reviewer_launch_prompt(&root, 1, "/aida-review --pr 1")
+                .unwrap()
+                .expect("a reserved watch launch gets the watch prompt");
+            assert!(prompt.starts_with("/aida-review --pr 1"));
+            assert!(prompt.contains("do not run Cargo"));
+            assert!(prompt.contains("Never merge or update the branch"));
+            env.unset_key(WATCH_HEAD);
+        });
         std::fs::write(temp.path().join("bad-count"), "").unwrap();
         assert!(
             repo.probe(&root, &mut changes[0]).is_err(),
@@ -626,12 +697,58 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         renamed_row[if gitlab { "sha" } else { "headRefOid" }] = renamed_head.clone().into();
         std::fs::write(&list, serde_json::to_vec(&vec![&renamed_row]).unwrap()).unwrap();
         std::fs::write(&view, serde_json::to_vec(&renamed_row).unwrap()).unwrap();
-        changes[0].head = renamed_head;
+        changes[0].head = renamed_head.clone();
+        // A real queue-work process refusing (here a held reviewer lease) is
+        // an observed exit: recorded terminally with the reason from its log.
+        // trace:TASK-1993 | ai:claude
+        {
+            let store = Store::open(&root, &repo.identity).unwrap();
+            let attempt = dispatch(select(&store, &changes[0], None, 2).unwrap());
+            let key = changes[0].key();
+            let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+            logs.file(&format!("{key}-{}.log", attempt.token), true)
+                .unwrap();
+            let refusing = temp.path().join("bin/queue-refusing");
+            crate::test_exec::write_executable(
+                &refusing,
+                r#"#!/bin/sh
+for log in .aida/review-watch/logs/*.log; do echo "reviewer lease is already held by session 01a15dfa" >> "$log"; done
+exit 3
+"#,
+            );
+            let error =
+                child_with_program(&root, &repo, &format!("{key}:{}", attempt.token), &refusing)
+                    .unwrap_err();
+            assert!(
+                format!("{error:#}").contains("lease is already held"),
+                "{error:#}"
+            );
+            let recorded = &store.load().unwrap().entries[&key].attempts[0];
+            assert_eq!(recorded.phase, Phase::Exited);
+            assert!(recorded
+                .diagnostic
+                .as_deref()
+                .unwrap()
+                .contains("lease is already held"));
+            assert!(store
+                .load()
+                .unwrap()
+                .entries
+                .values()
+                .flat_map(|e| &e.attempts)
+                .all(|a| !active(a)));
+        }
         std::fs::write(root.join("own.rs"), "overlapping main advance").unwrap();
         git_run(&root, &["commit", "-qam", "overlapping main advance"]);
         git_run(&root, &["push", "-q", "origin", "main"]);
         repo.probe(&root, &mut changes[0]).unwrap();
         assert_eq!(changes[0].overlap, Some(true));
+        env.set_key(WATCH_HEAD, &renamed_head);
+        assert!(
+            reviewer_launch_prompt(&root, 1, "P").is_err(),
+            "an overlap appearing before the vendor launch refuses the review"
+        );
+        env.unset_key(WATCH_HEAD);
         let args = ReviewWatchArgs {
             once: true,
             interval: 1,
@@ -667,6 +784,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
     }
 }
 
+// trace:TASK-1993.ac4fdc2a | ai:claude
 #[test]
 fn task1993_review_subcommand_parser_enforces_bounded_settings() {
     use clap::Parser;
@@ -694,6 +812,7 @@ fn task1993_review_subcommand_parser_enforces_bounded_settings() {
 }
 
 // trace:TASK-1993 | ai:codex
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_existing_and_mixed_review_rounds_share_the_cap() {
     let (temp, store) = fixture();
@@ -742,10 +861,11 @@ fn task1993_existing_and_mixed_review_rounds_share_the_cap() {
         select(&reopened, &change(2, 8, false), None, 2).unwrap(),
         Action::Skip(_)
     ));
-    assert!(reopened.load().unwrap().entries["PR-2"].attempts.is_empty());
+    assert!(!reopened.load().unwrap().entries.contains_key("PR-2"));
 }
 
 // trace:TASK-1993 | ai:codex
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_history_deduplicates_archives_and_refuses_unsafe_evidence() {
     let (temp, store) = fixture();
@@ -769,6 +889,7 @@ fn task1993_history_deduplicates_archives_and_refuses_unsafe_evidence() {
 }
 
 // trace:TASK-1993 | ai:codex
+// trace:TASK-1993.acb96f0d | ai:claude
 #[test]
 fn task1993_file_directory_collisions_are_stale_overlap() {
     let paths = |names: &[&str]| names.iter().map(|s| s.to_string()).collect();
@@ -787,6 +908,7 @@ fn task1993_file_directory_collisions_are_stale_overlap() {
 }
 
 // trace:TASK-1993 | ai:codex
+// trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
     let (temp, store) = fixture();
@@ -855,6 +977,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
 }
 
 // trace:TASK-1993 | ai:codex
+// trace:TASK-1993.ac4fdc2a | ai:claude
 #[test]
 fn task1993_initial_root_ignores_ambient_git_routing() {
     if crate::test_env::run_path_isolated_test() {
@@ -886,4 +1009,244 @@ fn task1993_initial_root_ignores_ambient_git_routing() {
         forge::main_root(&requested).unwrap(),
         other.canonicalize().unwrap()
     );
+}
+
+// Queue work's deterministic refusals (STORY-281 stale-overlap bail, TASK-480
+// intermediate-only gate, a reviewer lease already held, the launch-boundary
+// revalidation) are observed exits: terminal, capacity freed, never relaunched
+// for that head, and a later head still dispatches.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_observed_queue_work_refusals_are_terminal_and_free_capacity() {
+    for (id, refusal) in [
+        (
+            1,
+            "refusing review: PR-1 is behind main and overlaps changed files (STORY-281)",
+        ),
+        (
+            2,
+            "refusing review: PR-2 contains only intermediate commits (TASK-480)",
+        ),
+        (
+            3,
+            "reviewer lease for PR-3 is already held by session 01a15dfa",
+        ),
+        (
+            4,
+            "review-watch head changed before reviewer launch; no review started",
+        ),
+    ] {
+        let (_temp, store) = fixture();
+        let c = change(id, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        let error = execute_reservation(
+            &store,
+            &c.key(),
+            &attempt.token,
+            |_| Ok(()),
+            |_| anyhow::bail!("queue work exited exit status: 1: {refusal}"),
+        )
+        .unwrap_err();
+        assert!(format!("{error:#}").contains(refusal));
+        let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+        assert_eq!(recorded.phase, Phase::Exited);
+        assert!(recorded.diagnostic.as_deref().unwrap().contains(refusal));
+        let Action::Skip(reason) = select(&store, &c, None, 1).unwrap() else {
+            panic!("an observed refusal relaunched the same head");
+        };
+        assert!(
+            reason.contains("exited") && reason.contains(refusal),
+            "{reason}"
+        );
+        // The single global slot is free again for another change...
+        let other = dispatch(select(&store, &change(id + 10, 1, false), None, 1).unwrap());
+        complete(&store, &change(id + 10, 1, false), &other);
+        // ...and a later head of the refused change dispatches.
+        dispatch(select(&store, &change(id, 2, false), None, 1).unwrap());
+    }
+}
+
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
+    let (_temp, store) = fixture();
+    // One live review holds the only slot; thousands of skipped changes
+    // persist nothing.
+    let live = change(1, 1, false);
+    dispatch(select(&store, &live, None, 1).unwrap());
+    for id in 2..=2500 {
+        assert!(matches!(
+            select(&store, &change(id, id, false), None, 1).unwrap(),
+            Action::Skip(_)
+        ));
+    }
+    assert_eq!(store.load().unwrap().entries.len(), 1);
+    let open: BTreeSet<String> = ["PR-1".to_string()].into();
+    assert_eq!(store.prune(&open).unwrap(), 0);
+    // Reviewed changes that close are pruned; the live attempt survives even
+    // when its change leaves the open set.
+    let (_temp, store) = fixture();
+    let live = dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    store
+        .transition("PR-1", &live.token, Phase::Running)
+        .unwrap();
+    for id in 2..=1200 {
+        let c = change(id, id, false);
+        let a = dispatch(select(&store, &c, None, 2).unwrap());
+        complete(&store, &c, &a);
+        if id % 100 == 0 {
+            store.prune(&BTreeSet::from([c.key()])).unwrap();
+        }
+    }
+    store.prune(&BTreeSet::new()).unwrap();
+    let state = store.load().unwrap();
+    assert_eq!(state.entries.keys().collect::<Vec<_>>(), ["PR-1"]);
+    dispatch(select(&store, &change(5000, 1, false), None, 2).unwrap());
+}
+
+// The round is the ordinary one (TASK-1291): only verdicts that block done
+// (the durable findings blocks) consume it, so an approval followed by main
+// merges gets a round-1 full-sweep re-review, and two blocking rounds cap.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_approved_head_merged_with_main_is_rereviewed_at_round_one() {
+    let (temp, store) = fixture();
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir(&verdicts).unwrap();
+    let path = verdicts.join("PR-1.json");
+    let head = |n: u64| format!("{n:040x}");
+    write_verdict(&path, &verdict_json(&head(1), "approved"));
+    let mut history = vec![verdict_json(&head(1), "approved")];
+    for n in [2, 3] {
+        let c = change(1, n, false);
+        let a = dispatch(select(&store, &c, None, 2).unwrap());
+        execute_reservation(
+            &store,
+            "PR-1",
+            &a.token,
+            |a| {
+                assert_eq!(store.round_for("PR-1", a)?, 1, "approval consumed a round");
+                Ok(())
+            },
+            |_| {
+                let mut current = verdict_json(&c.head, "approved");
+                current["rounds"] = serde_json::Value::Array(history.clone());
+                write_verdict(&path, &current);
+                Ok(())
+            },
+        )
+        .unwrap();
+        history.push(verdict_json(&c.head, "approved"));
+    }
+    assert_eq!(
+        crate::queue_cmd::reviewer_prompt_for_round(1, 1).contains("ROUND 1 FULL-SWEEP"),
+        true
+    );
+    // Blocking reviews advance the round and cap at two.
+    for (n, expected) in [(4, 1), (5, 2)] {
+        let c = change(1, n, false);
+        let a = dispatch(select(&store, &c, None, 2).unwrap());
+        execute_reservation(
+            &store,
+            "PR-1",
+            &a.token,
+            |a| {
+                assert_eq!(store.round_for("PR-1", a)?, expected);
+                Ok(())
+            },
+            |_| {
+                let mut current = verdict_json(&c.head, "request-changes");
+                current["rounds"] = serde_json::Value::Array(history.clone());
+                write_verdict(&path, &current);
+                Ok(())
+            },
+        )
+        .unwrap();
+        history.push(verdict_json(&c.head, "request-changes"));
+    }
+    let Action::Skip(reason) = select(&store, &change(1, 6, false), None, 2).unwrap() else {
+        panic!("third blocking round dispatched");
+    };
+    assert!(reason.contains("two-round"));
+}
+
+// trace:TASK-1993.ac4fdc2a | ai:claude
+#[test]
+fn task1993_continuous_mode_continues_past_change_errors_and_stops_on_corrupt_state() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, true);
+    select(&store, &c, None, 2).unwrap();
+    store
+        .transaction(&c.key(), |state| {
+            let notice = state.entries.get_mut(&c.key()).unwrap();
+            notice.notices.get_mut(&c.head).unwrap().message.from = "advisor".into();
+            Ok(())
+        })
+        .unwrap();
+    let drift = select(&store, &c, None, 2).unwrap_err();
+    assert!(
+        !stops_watcher(&drift, false),
+        "one change's drift stopped the daemon"
+    );
+    assert!(
+        stops_watcher(&drift, true),
+        "--once still reports the refusal"
+    );
+    // Other changes still dispatch.
+    dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    let path = store.dir.path().join(STATE);
+    std::fs::write(&path, b"{\"version\":999}").unwrap();
+    let corrupt = select(&store, &change(3, 3, false), None, 2).unwrap_err();
+    assert!(
+        stops_watcher(&corrupt, false),
+        "corrupt state must stop the watcher"
+    );
+}
+
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_capacity_refusal_names_holders_and_recovery() {
+    let (_temp, store) = fixture();
+    let a = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
+        panic!("capacity exceeded");
+    };
+    for needle in [
+        "PR-1 at",
+        &a.token,
+        "Reserved",
+        "aida session leases --all",
+        "review-watch/logs",
+    ] {
+        assert!(reason.contains(needle), "{needle} missing from {reason}");
+    }
+}
+
+// S1 has no process signalling, merge, branch update or Cargo execution; the
+// reviewer it launches is told the same.
+// trace:TASK-1993.acab7994 | ai:claude
+#[test]
+fn task1993_watcher_never_signals_merges_or_runs_cargo() {
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    for file in ["review_watch.rs", "review_watch_forge.rs"] {
+        let text = std::fs::read_to_string(src.join(file)).unwrap();
+        for forbidden in [
+            "libc::kill",
+            ".kill()",
+            "killpg",
+            "nix::sys::signal",
+            "\"merge\"",
+            "update-branch",
+            "\"cargo\"",
+            "\"ship\"",
+        ] {
+            assert!(!text.contains(forbidden), "{file} contains {forbidden}");
+        }
+    }
+    for policy in ["do not run Cargo", "Never merge or update the branch"] {
+        assert!(REVIEWER_POLICY.contains(policy));
+    }
+    assert!(!queue_args("PR-1", Some("claude"))
+        .iter()
+        .any(|a| a.contains("merge")));
 }

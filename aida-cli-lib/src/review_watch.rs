@@ -36,6 +36,35 @@ pub struct ReviewWatchArgs {
 const LIMIT: u64 = 2 * 1024 * 1024;
 const STATE: &str = "state.json";
 const WATCH_HEAD: &str = "AIDA_REVIEW_WATCH_HEAD";
+const MAX_ENTRIES: usize = 2000;
+const DIAGNOSTIC_LIMIT: usize = 512;
+
+/// Marks a failure of the whole watcher state (missing, corrupt, unsafe), the
+/// only error that stops a continuous watcher; per-change errors are logged.
+// trace:TASK-1993 | ai:claude
+#[derive(Debug)]
+struct GlobalState;
+impl std::fmt::Display for GlobalState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("review-watch state is unusable; inspect .aida/review-watch/state.json")
+    }
+}
+
+fn bounded_diagnostic(text: &str) -> String {
+    let mut out: String = text
+        .chars()
+        .filter(|c| !c.is_control() || *c == ' ')
+        .collect();
+    if out.len() > DIAGNOSTIC_LIMIT {
+        let mut cut = DIAGNOSTIC_LIMIT - 3;
+        while !out.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        out.truncate(cut);
+        out.push_str("...");
+    }
+    out
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -64,6 +93,10 @@ enum Phase {
     Running,
     Completed,
     Failed,
+    // The dispatcher observed queue work exit unsuccessfully. Terminal: it
+    // frees capacity and lets a later head dispatch, but never relaunches
+    // this head. trace:TASK-1993 | ai:claude
+    Exited,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +107,8 @@ struct Attempt {
     vendor: Option<String>,
     phase: Phase,
     identity: Option<Identity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -258,6 +293,9 @@ impl Store {
         })
     }
     fn load(&self) -> Result<State> {
+        self.load_unchecked().context(GlobalState)
+    }
+    fn load_unchecked(&self) -> Result<State> {
         let state = match self.dir.read(STATE)? {
             Some(bytes) => serde_json::from_slice::<State>(&bytes)
                 .context("invalid review-watch state; inspect .aida/review-watch/state.json")?,
@@ -284,6 +322,12 @@ impl Store {
         let initialized = self.dir.read("initialized")?.is_some();
         let before = serde_json::to_vec(&state)?;
         let result = f(&mut state)?;
+        // A change seen only to be skipped leaves no durable entry, so state
+        // tracks reviewed/notified changes rather than every PR ever polled.
+        // trace:TASK-1993 | ai:claude
+        state.entries.retain(|_, e| {
+            !(e.attempts.is_empty() && e.notices.is_empty() && e.historical_keys.is_empty())
+        });
         validate_state(&state, &self.repository)?;
         if before != serde_json::to_vec(&state)? || !initialized {
             self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
@@ -293,6 +337,27 @@ impl Store {
             self.dir.handle.sync_all()?;
         }
         Ok(result)
+    }
+    /// Drop state for changes no longer open and non-draft. Discovery is
+    /// complete or refused, so an absent key is closed, merged or draft. Live
+    /// or ambiguous attempts are kept: their capacity is never released here.
+    /// A re-opened change re-reads canonical history; a repeated notice reuses
+    /// its deterministic mailbox ID and is not duplicated.
+    // trace:TASK-1993 | ai:claude
+    fn prune(&self, open: &BTreeSet<String>) -> Result<usize> {
+        // Every writer takes the global lock first, so it alone excludes them.
+        let _global = self.dir.lock("admission.lock")?;
+        let mut state = self.load()?;
+        let before = state.entries.len();
+        state
+            .entries
+            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        let removed = before - state.entries.len();
+        if removed > 0 {
+            validate_state(&state, &self.repository)?;
+            self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
+        }
+        Ok(removed)
     }
     fn history(&self, key: &str) -> Result<History> {
         let mut history = History {
@@ -316,7 +381,7 @@ impl Store {
             if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes)?;
             }
-            if history.keys.len() >= 2 {
+            if history.blocking() >= 2 {
                 return Ok(history);
             }
             if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
@@ -341,7 +406,7 @@ impl Store {
                         .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes)?;
-                    if history.keys.len() >= 2 {
+                    if history.blocking() >= 2 {
                         return Ok(history);
                     }
                 }
@@ -367,16 +432,25 @@ impl Store {
                 !history.contains(&attempt.head),
                 "head already has a recorded review; route further work to the advisor"
             );
-            let used = history.used(entry);
+            let used = history.blocking();
             anyhow::ensure!(
-                used <= 2,
+                used < 2,
                 "two-round review cap reached outside watcher; route further work to the advisor"
             );
-            entry.historical_keys.extend(history.keys);
-            Ok(used)
+            entry.historical_keys.extend(history.blocking_keys());
+            Ok(used + 1)
         })
     }
     fn transition(&self, key: &str, token: &str, phase: Phase) -> Result<Attempt> {
+        self.transition_with(key, token, phase, None)
+    }
+    fn transition_with(
+        &self,
+        key: &str,
+        token: &str,
+        phase: Phase,
+        diagnostic: Option<String>,
+    ) -> Result<Attempt> {
         let me = Identity::current()?;
         self.transaction(key, |state| {
             let attempt = state
@@ -397,6 +471,7 @@ impl Store {
                 );
             }
             attempt.phase = phase;
+            attempt.diagnostic = diagnostic.map(|d| bounded_diagnostic(&d));
             Ok(attempt.clone())
         })
     }
@@ -446,13 +521,19 @@ impl History {
                 .is_some_and(|sha| crate::review_verdict::same_reviewed_sha(sha, head))
         })
     }
-    fn used(&self, entry: &Entry) -> usize {
-        self.keys.len()
-            + entry
-                .attempts
-                .iter()
-                .filter(|a| a.phase != Phase::Failed && !self.contains(&a.head))
-                .count()
+    // The ordinary round (queue_cmd::review_round_from_comments) counts the
+    // durable findings blocks, which the hand-off writes exactly for
+    // verdicts that block done. Approvals never consume a round, so a head
+    // approved and then merged with main still gets its re-review at round 1.
+    // trace:TASK-1993 | ai:claude
+    fn blocking_keys(&self) -> impl Iterator<Item = crate::review_verdict::RecordingKey> + '_ {
+        self.keys
+            .iter()
+            .filter(|key| crate::review_verdict::VerdictKind::parse(&key.2).blocks_done())
+            .cloned()
+    }
+    fn blocking(&self) -> usize {
+        self.blocking_keys().count()
     }
 }
 
@@ -470,7 +551,9 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
         state.version == 1
             && state.repository == repository
             && (1..=2).contains(&state.max_concurrent)
-            && state.entries.len() <= 1000,
+            // Pruning keeps this to open changes plus live attempts; the
+            // forge discovery bound is 1000 rows. trace:TASK-1993 | ai:claude
+            && state.entries.len() <= MAX_ENTRIES,
         "unsupported or mismatched review-watch state"
     );
     for (key, entry) in &state.entries {
@@ -497,13 +580,20 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
             anyhow::ensure!(
                 match attempt.phase {
                     Phase::Reserved => attempt.identity.is_none(),
-                    Phase::Running | Phase::Completed => attempt
+                    Phase::Running | Phase::Completed | Phase::Exited => attempt
                         .identity
                         .as_ref()
                         .is_some_and(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
                     Phase::Failed => true,
                 },
                 "invalid review-watch process receipt"
+            );
+            anyhow::ensure!(
+                attempt
+                    .diagnostic
+                    .as_ref()
+                    .is_none_or(|d| d.len() <= DIAGNOSTIC_LIMIT),
+                "invalid review-watch diagnostic"
             );
         }
         anyhow::ensure!(
@@ -557,6 +647,7 @@ fn select(
         if total == 0 { state.max_concurrent = max; }
         anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
         let repository = state.repository.clone();
+        let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();
         let history = store.history(&key)?;
         if overlap {
@@ -568,6 +659,10 @@ fn select(
             anyhow::ensure!(serde_json::to_value(&expected)? == serde_json::to_value(&notice.message)?, "notification identity changed; pending message retained");
             return Ok(if notice.sent { Action::Skip("stale overlapping head already notified".into()) } else { Action::Notify(notice.clone()) });
         }
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase == Phase::Exited) {
+            // trace:TASK-1993 | ai:claude
+            return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head or route it to the advisor", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
+        }
         if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase != Phase::Failed) {
             return Ok(Action::Skip(format!("head already reserved ({:?}); inspect .aida/review-watch/state.json and `aida session leases --all` for unfinished attempts", attempt.phase)));
         }
@@ -575,14 +670,40 @@ fn select(
             return Ok(Action::Skip("prior head still active or ambiguous; S1 waits without signalling processes".into()));
         }
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
-        if history.used(entry) >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
-        if total >= usize::from(max) { return Ok(Action::Skip("global reviewer capacity is occupied or reserved".into())); }
-        entry.historical_keys.extend(history.keys);
-        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None };
-        if let Some(failed) = entry.attempts.iter_mut().find(|a| a.phase == Phase::Failed) { *failed = attempt.clone(); }
-        else { entry.attempts.push(attempt.clone()); }
+        if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
+        entry.historical_keys.extend(history.blocking_keys());
+        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None };
+        // Nothing is active here, so earlier terminal attempts are history only:
+        // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
+        entry.attempts.clear();
+        entry.attempts.push(attempt.clone());
         Ok(Action::Dispatch(attempt))
     })
+}
+
+// trace:TASK-1993 | ai:claude
+fn capacity_holders(state: &State) -> String {
+    let holders: Vec<String> = state
+        .entries
+        .iter()
+        .flat_map(|(key, entry)| {
+            entry
+                .attempts
+                .iter()
+                .filter(|a| active(a))
+                .map(move |a| (key, a))
+        })
+        .map(|(key, a)| {
+            format!(
+                "{key} at {} ({:?}, token {})",
+                &a.head[..12],
+                a.phase,
+                a.token
+            )
+        })
+        .collect();
+    holders.join(", ")
 }
 
 fn stale_message(
@@ -717,7 +838,12 @@ fn child_with_program(
                 .env(WATCH_HEAD, &attempt.head)
                 .env("AIDA_REVIEW_ROUND", round.get().to_string());
             let status = crate::process_retry::RetryEtxtbsy::status_retrying_etxtbsy(&mut cmd)?;
-            anyhow::ensure!(status.success(), "attested review exited {status}; receipt retained; inspect .aida/review-watch/state.json and `aida session leases --all`");
+            if !status.success() {
+                // trace:TASK-1993 | ai:claude
+                let log = format!("{key}-{token}.log");
+                let reason = log_tail(&store, &log).unwrap_or_default();
+                anyhow::bail!("queue work exited {status}: {reason} (full log: .aida/review-watch/logs/{log})");
+            }
             Ok(())
         },
     )
@@ -754,14 +880,48 @@ fn execute_reservation(
         store.transition(key, token, Phase::Failed)?;
         return Err(error);
     }
-    work(&attempt)?;
+    if let Err(error) = work(&attempt) {
+        // The exit was observed in-process, so it is not ambiguous: record it
+        // terminally with its reason. Only a lost dispatcher stays Running.
+        // trace:TASK-1993 | ai:claude
+        store
+            .transition_with(key, token, Phase::Exited, Some(format!("{error:#}")))
+            .with_context(|| format!("{error:#}"))?;
+        return Err(error);
+    }
     store.transition(key, token, Phase::Completed)?;
     Ok(())
 }
 
-/// Called at the ordinary standalone-review launch boundary. The context
-/// restricts the head and prompt; it supplies no seat or verdict authority.
-pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
+/// The last non-empty line of a dispatcher log: queue work's refusal reason.
+// trace:TASK-1993 | ai:claude
+fn log_tail(store: &Store, name: &str) -> Option<String> {
+    use std::io::{Seek, SeekFrom};
+    let logs = Directory::existing(&store.dir.path().join("logs")).ok()??;
+    let mut file = logs.file(name, false).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(4096))).ok()?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    text.lines()
+        .map(str::trim)
+        .rfind(|line| !line.is_empty())
+        .map(bounded_diagnostic)
+}
+
+const REVIEWER_POLICY: &str = "Review-watch policy: do not run Cargo or local test/build commands. Inspect source and existing CI evidence; record the ordinary attested verdict. Never merge or update the branch.";
+
+/// Called at the ordinary standalone-review launch boundary: outside a watch
+/// launch, `None`; inside one, the prompt with the watch policy appended,
+/// after revalidating head, overlap and reservation. The context restricts
+/// the head and prompt; it supplies no seat or verdict authority.
+// trace:TASK-1993 | ai:claude
+pub(crate) fn reviewer_launch_prompt(root: &Path, id: u64, prompt: &str) -> Result<Option<String>> {
+    Ok(reviewer_launch_context(root, id)?.then(|| format!("{prompt}\n\n{REVIEWER_POLICY}")))
+}
+
+fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
     let Some(head) = std::env::var_os(WATCH_HEAD) else {
         return Ok(false);
     };
@@ -806,87 +966,21 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
             }
             Err(error) => return Err(error),
         };
-        for mut change in changes {
+        let open: BTreeSet<String> = changes.iter().map(forge::Change::key).collect();
+        match store.prune(&open) {
+            Ok(_) => {}
+            Err(error) if is_busy(&error) => eprintln!("review-watch prune deferred: busy"),
+            Err(error) => return Err(error),
+        }
+        for change in changes {
             let key = change.key();
-            if let Err(error) = repo.probe(&root, &mut change) {
-                eprintln!("{key}: base evidence refused: {error:#}");
-                if args.once {
-                    return Err(error);
+            match watch_change(&root, &repo, &store, args, &mut children, change) {
+                Ok(()) => {}
+                Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+                Err(error) if stops_watcher(&error, args.once) => {
+                    return Err(error.context(format!("{key}: review watch refused")))
                 }
-                continue;
-            }
-            let action = match select(&store, &change, args.vendor.clone(), args.max_concurrent) {
-                Ok(action) => action,
-                Err(error)
-                    if error.chain().any(|e| {
-                        e.downcast_ref::<std::io::Error>()
-                            .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock)
-                    }) =>
-                {
-                    eprintln!("{key}: watcher admission is busy");
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-            match action {
-                Action::Skip(reason) => eprintln!("{key}: {reason}"),
-                Action::Notify(notice) => {
-                    deliver(&root, &notice)?;
-                    store.transaction(&key, |state| {
-                        let pending = state
-                            .entries
-                            .get_mut(&key)
-                            .and_then(|e| e.notices.get_mut(&change.head))
-                            .context("notification receipt disappeared")?;
-                        anyhow::ensure!(
-                            pending.message.id == notice.message.id,
-                            "notification receipt changed"
-                        );
-                        pending.sent = true;
-                        Ok(())
-                    })?;
-                    eprintln!("{key}: merge-main notice delivered to {}", change.author);
-                }
-                Action::Dispatch(attempt) => {
-                    use std::os::unix::process::CommandExt;
-                    let logs = Directory::open(&store.dir.path().join("logs"))?;
-                    let log = logs.file(&format!("{key}-{}.log", attempt.token), true)?;
-                    let mut command = watch_command(&repo, &root, &crate::aida_exe_path());
-                    command
-                        .args([
-                            "review",
-                            "watch",
-                            "--launch-reservation",
-                            &format!("{key}:{}", attempt.token),
-                        ])
-                        .stdout(Stdio::from(log.try_clone()?))
-                        .stderr(Stdio::from(log))
-                        .process_group(0);
-                    match crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut command) {
-                        Ok(child) => {
-                            children.push(child);
-                            eprintln!("{key}: review admitted for {}", change.head);
-                        }
-                        Err(error) => {
-                            store.transaction(&key, |state| {
-                                let a = state
-                                    .entries
-                                    .get_mut(&key)
-                                    .and_then(|e| {
-                                        e.attempts.iter_mut().find(|a| a.token == attempt.token)
-                                    })
-                                    .context("launch reservation disappeared")?;
-                                anyhow::ensure!(
-                                    a.phase == Phase::Reserved && a.identity.is_none(),
-                                    "launch reservation already claimed"
-                                );
-                                a.phase = Phase::Failed;
-                                Ok(())
-                            })?;
-                            return Err(error).context("could not spawn review dispatcher");
-                        }
-                    }
-                }
+                Err(error) => eprintln!("{key}: refused: {error:#}"),
             }
         }
         if args.once {
@@ -894,6 +988,98 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
+}
+
+/// Only whole-state failure stops a continuous watcher; one change's refusal
+/// must not stall every other change. `--once` reports any refusal.
+// trace:TASK-1993 | ai:claude
+fn stops_watcher(error: &anyhow::Error, once: bool) -> bool {
+    once || error.downcast_ref::<GlobalState>().is_some()
+}
+
+fn is_busy(error: &anyhow::Error) -> bool {
+    error.chain().any(|e| {
+        e.downcast_ref::<std::io::Error>()
+            .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock)
+    })
+}
+
+// trace:TASK-1993 | ai:claude
+fn watch_change(
+    root: &Path,
+    repo: &forge::Repository,
+    store: &Store,
+    args: &ReviewWatchArgs,
+    children: &mut Vec<Child>,
+    mut change: forge::Change,
+) -> Result<()> {
+    let key = change.key();
+    repo.probe(root, &mut change)
+        .context("base evidence refused")?;
+    match select(store, &change, args.vendor.clone(), args.max_concurrent)? {
+        Action::Skip(reason) => eprintln!("{key}: {reason}"),
+        Action::Notify(notice) => {
+            deliver(root, &notice)?;
+            store.transaction(&key, |state| {
+                let pending = state
+                    .entries
+                    .get_mut(&key)
+                    .and_then(|e| e.notices.get_mut(&change.head))
+                    .context("notification receipt disappeared")?;
+                anyhow::ensure!(
+                    pending.message.id == notice.message.id,
+                    "notification receipt changed"
+                );
+                pending.sent = true;
+                Ok(())
+            })?;
+            eprintln!("{key}: merge-main notice delivered to {}", change.author);
+        }
+        Action::Dispatch(attempt) => {
+            use std::os::unix::process::CommandExt;
+            let spawned = (|| {
+                let logs = Directory::open(&store.dir.path().join("logs"))?;
+                let log = logs.file(&format!("{key}-{}.log", attempt.token), true)?;
+                let mut command = watch_command(repo, root, &crate::aida_exe_path());
+                command
+                    .args([
+                        "review",
+                        "watch",
+                        "--launch-reservation",
+                        &format!("{key}:{}", attempt.token),
+                    ])
+                    .stdout(Stdio::from(log.try_clone()?))
+                    .stderr(Stdio::from(log))
+                    .process_group(0);
+                Ok::<_, anyhow::Error>(crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(
+                    &mut command,
+                )?)
+            })();
+            match spawned {
+                Ok(child) => {
+                    children.push(child);
+                    eprintln!("{key}: review admitted for {}", change.head);
+                }
+                Err(error) => {
+                    store.transaction(&key, |state| {
+                        let a = state
+                            .entries
+                            .get_mut(&key)
+                            .and_then(|e| e.attempts.iter_mut().find(|a| a.token == attempt.token))
+                            .context("launch reservation disappeared")?;
+                        anyhow::ensure!(
+                            a.phase == Phase::Reserved && a.identity.is_none(),
+                            "launch reservation already claimed"
+                        );
+                        a.phase = Phase::Failed;
+                        Ok(())
+                    })?;
+                    return Err(error).context("could not spawn review dispatcher");
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

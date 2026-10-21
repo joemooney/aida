@@ -319,15 +319,30 @@ Permanent admission and per-change lock files coordinate watcher instances.
 Each launch is reserved before spawn, and its dispatcher records PID, process
 start identity and boot ID before calling `queue work ... --role reviewer
 --no-human`. Pending/running receipts count toward global capacity, even after
-a PID disappears or is reused. A missing/corrupt/unsafe state file refuses
+a PID disappears or is reused. When the dispatcher observes queue work exit
+unsuccessfully (a stale-base or intermediate-only refusal, a reviewer lease
+already held, or a launch-boundary revalidation failure), it records the
+attempt as exited with the last line of its log. That frees the slot, the head
+is not relaunched, and a later head dispatches normally. Only a dispatcher lost
+before recording an outcome stays ambiguous. The capacity refusal names each
+holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
 and `aida session leases --all` before operator recovery. Do not delete lock
 files or clear ambiguous receipts while a reviewer may still be running.
+Changes that are skipped leave no state, and state for changes no longer open
+and non-draft is pruned on each complete discovery pass unless an attempt is
+still live. In the continuous loop a refusal for one change is logged and the
+pass continues; only an unusable state file stops the watcher. `--once`
+reports any refusal.
 
 Stale-head notifications have deterministic IDs and retry without overwriting
 mailbox reader flags. Delivery is recorded only after successful publication.
-A head is launched once. Existing manual/drain verdicts and their retained
-archives share the two-round cap with watcher reservations; current/archive
+A head is launched once. Rounds follow the ordinary review policy: only
+request-changes or rejected verdicts (the reviews that leave a findings block)
+consume a round, so an approved head later merged with the default branch is
+re-reviewed at round 1 with the full-sweep contract, and a third blocking
+round is refused. Existing manual/drain verdicts and their retained archives
+count the same way; current/archive
 copies deduplicate using the verdict writer's recording identity. Admission
 retains those identities in private watcher state before queue work clears the
 current verdict, including legacy rounds without an archive. Canonical history

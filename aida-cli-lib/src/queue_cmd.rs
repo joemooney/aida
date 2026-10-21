@@ -13212,13 +13212,8 @@ pub(crate) fn run_standalone_reviewer(
 ) -> Result<()> {
     // Watch context only restricts an ordinary attested launch; it cannot
     // authorize a verdict or a reviewer seat. trace:TASK-1993 | ai:codex
-    let watch_prompt;
-    let prompt = if crate::review_watch::reviewer_launch_context(project_root, pr)? {
-        watch_prompt = format!("{prompt}\n\nReview-watch policy: do not run Cargo or local test/build commands. Inspect source and existing CI evidence; record the ordinary attested verdict. Never merge or update the branch.");
-        watch_prompt.as_str()
-    } else {
-        prompt
-    };
+    let watch_prompt = crate::review_watch::reviewer_launch_prompt(project_root, pr, prompt)?;
+    let prompt = watch_prompt.as_deref().unwrap_or(prompt);
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
