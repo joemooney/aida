@@ -67,6 +67,7 @@
 "Run git-guardrails parse test" = "fast"
 # trace:STORY-1854 | ai:claude
 "Run cargo-timeout hook test" = "fast"
+"Run release PR-flow fixtures" = "fast"  # trace:TASK-1721 | ai:claude
 "Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
 "Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"

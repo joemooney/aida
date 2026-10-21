@@ -170,9 +170,10 @@ Commands:
                 ahead-only / behind-only / diverged-safe / diverged-risky), execute (auto for safe
                 cases, prompt for risky), report (structured, --json). Stateless — safe to invoke
                 anywhere
-  release       One-verb release: sync the store, run the version bump + tag + push, wait for the
-                published tarballs, and upgrade sibling installs. Wraps the whole sequence so you
-                don't have to remember it. Use `release check` first to preview without acting
+  release       One-verb release: sync the store, run the version bump through a release PR and tag
+                the merged commit, wait for the published tarballs, and upgrade sibling installs.
+                Wraps the whole sequence so you don't have to remember it. Use `release check` first
+                to preview without acting
   burndown      Plan an autonomous burn-down: list which specs are ready to fan out vs parked, via
                 the pickability gate. The run itself is the /aida-burndown skill in Claude Code, not
                 a CLI subcommand — `burndown plan` is the read-only foundation it drives its
@@ -7665,9 +7666,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida release
-One-verb release: sync the store, run the version bump + tag + push, wait for the published
-tarballs, and upgrade sibling installs. Wraps the whole sequence so you don't have to remember it.
-Use `release check` first to preview without acting
+One-verb release: sync the store, run the version bump through a release PR and tag the merged
+commit, wait for the published tarballs, and upgrade sibling installs. Wraps the whole sequence so
+you don't have to remember it. Use `release check` first to preview without acting
 
 Usage: aida release [OPTIONS] [COMMAND]
 
@@ -9366,9 +9367,10 @@ Commands:
   ps1         Print the compact PS1 staleness marker for the active dev binary
   shell-init  Print shell helper functions (aida-on, aida-off) suitable for pasting into ~/.bashrc
               or ~/.zshrc. Pass --install to append them directly
-  release     One-command release: bump version + tag + push (via scripts/release.sh), wait for the
-              GitHub Actions workflow to publish binary tarballs, then upgrade your sibling installs
-              to the new version. Default bump: patch
+  release     One-command release: bump the version through a release PR, tag the merged commit and
+              push the tag (via scripts/release.sh), wait for the GitHub Actions workflow to publish
+              binary tarballs, then upgrade your sibling installs to the new version. Default bump:
+              patch
   patch       Alias for `aida dev release patch` — the most common case
   help        Print this message or the help of the given subcommand(s)
 
@@ -9638,9 +9640,9 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida dev release
-One-command release: bump version + tag + push (via scripts/release.sh), wait for the GitHub Actions
-workflow to publish binary tarballs, then upgrade your sibling installs to the new version. Default
-bump: patch
+One-command release: bump the version through a release PR, tag the merged commit and push the tag
+(via scripts/release.sh), wait for the GitHub Actions workflow to publish binary tarballs, then
+upgrade your sibling installs to the new version. Default bump: patch
 
 Usage: aida dev release [OPTIONS] [BUMP]
 
@@ -31273,7 +31275,7 @@ Working on aida itself
       "aida",
       "release"
     ],
-    "about": "One-verb release: sync the store, run the version bump + tag + push, wait for the published tarballs, and upgrade sibling installs. Wraps the whole sequence so you don't have to remember it. Use `release check` first to preview without acting",
+    "about": "One-verb release: sync the store, run the version bump through a release PR and tag the merged commit, wait for the published tarballs, and upgrade sibling installs. Wraps the whole sequence so you don't have to remember it. Use `release check` first to preview without acting",
     "flags": [
       {
         "name": "after-pr",
@@ -33180,7 +33182,7 @@ Working on aida itself
       "dev",
       "release"
     ],
-    "about": "One-command release: bump version + tag + push (via scripts/release.sh), wait for the GitHub Actions workflow to publish binary tarballs, then upgrade your sibling installs to the new version. Default bump: patch",
+    "about": "One-command release: bump the version through a release PR, tag the merged commit and push the tag (via scripts/release.sh), wait for the GitHub Actions workflow to publish binary tarballs, then upgrade your sibling installs to the new version. Default bump: patch",
     "flags": [
       {
         "name": "format",
