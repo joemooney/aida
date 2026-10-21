@@ -221,7 +221,7 @@ fn doctor_category_aliases_normalize() {
 }
 
 fn git(root: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.email=t@example.com", "-c", "user.name=t"])
@@ -307,7 +307,7 @@ fn probe_outside_a_repository_is_none() {
     std::fs::create_dir_all(&not_repo).unwrap();
     // A temp dir may sit under some ancestor repo; only assert when git
     // itself agrees there is no repository here.
-    let inside = std::process::Command::new("git")
+    let inside = crate::test_git::git_command()
         .arg("-C")
         .arg(&not_repo)
         .args(["rev-parse", "--is-inside-work-tree"])

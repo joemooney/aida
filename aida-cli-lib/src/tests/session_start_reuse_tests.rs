@@ -4,7 +4,7 @@ use super::{
 use std::process::Command;
 
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let output = Command::new("git")
+    let output = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -94,7 +94,7 @@ fn diverged_pr_branch_refuses_before_creating_worktree_or_side_branch() {
     let msg = err.to_string();
     assert!(msg.contains("git fetch origin pr-branch && git branch -f pr-branch origin/pr-branch"));
     assert!(!worktree.exists(), "refusal must precede worktree creation");
-    let side = Command::new("git")
+    let side = crate::test_git::git_command()
         .arg("-C")
         .arg(&repo)
         .args([

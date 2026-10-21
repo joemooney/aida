@@ -14,9 +14,19 @@ pub enum MandateAction {
     /// forges files in the AIDA home is outside the threat model (the same
     /// as session grants).
     Start {
-        /// Cover shipping held PRs (the only scope today; required).
+        /// Cover shipping held PRs (required unless --drive).
         #[clap(long)]
         ship_held: bool,
+        /// A DRIVE mandate: also covers advisor signoff of sketches
+        /// and dispatching fixers, and turns on the 15-minute drive tick that
+        /// routes every stalled lane. Implies --ship-held and covers sensitive
+        /// specs unless --exclude-supervised.
+        // trace:STORY-1700 | ai:claude
+        #[clap(long)]
+        drive: bool,
+        /// With --drive: keep sensitive specs human-only.
+        #[clap(long, requires = "drive", conflicts_with = "include_supervised")]
+        exclude_supervised: bool,
         /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
         /// A mandate cannot be extended; stop it and start another.
         #[clap(long)]
@@ -36,5 +46,9 @@ pub enum MandateAction {
         /// Print JSON.
         #[clap(long)]
         json: bool,
+        /// Print one line while a mandate is active, nothing otherwise.
+        // trace:STORY-1700 | ai:claude
+        #[clap(long, conflicts_with = "json")]
+        line: bool,
     },
 }

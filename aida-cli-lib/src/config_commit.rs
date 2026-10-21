@@ -169,7 +169,7 @@ mod tests {
     use super::*;
 
     fn git(root: &Path, args: &[&str]) {
-        let st = Command::new("git")
+        let st = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)
@@ -179,7 +179,7 @@ mod tests {
     }
 
     fn git_out(root: &Path, args: &[&str]) -> String {
-        let out = Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)

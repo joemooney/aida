@@ -2970,7 +2970,7 @@ mod tests {
         // reachable from the new HEAD. Change the message so the amended commit
         // gets a DIFFERENT sha (an identical-tree/message/author amend is
         // byte-identical and git reuses the same hash).
-        let amend = Command::new("git")
+        let amend = crate::test_git::git_command()
             .current_dir(&store_root)
             .args(["commit", "--amend", "-m", "rewritten root"])
             .output()
@@ -4460,13 +4460,13 @@ mod tests {
                     )
                     .unwrap();
                 }
-                assert!(std::process::Command::new("git")
+                assert!(crate::test_git::git_command()
                     .args(["add", "."])
                     .current_dir(&store)
                     .status()
                     .unwrap()
                     .success());
-                assert!(std::process::Command::new("git")
+                assert!(crate::test_git::git_command()
                     .args(["commit", "-qm", "bulk"])
                     .current_dir(&store)
                     .status()
@@ -4486,17 +4486,17 @@ mod tests {
                 crate::git_ops::init(&other).unwrap();
                 crate::git_ops::configure_user(&other, "T", "t@t.test").unwrap();
                 std::fs::write(other.join("file"), "other").unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .args(["add", "."])
                     .current_dir(&other)
                     .output()
                     .unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .args(["commit", "-m", "other"])
                     .current_dir(&other)
                     .output()
                     .unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .arg("fetch")
                     .arg(&other)
                     .arg("HEAD")

@@ -6,7 +6,7 @@ use tempfile::TempDir;
 // trace:BUG-1434 | ai:claude
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -62,7 +62,7 @@ fn build_stale_repo() -> TempDir {
     git(dir, &["commit", "-q", "-m", "main touches b.txt too"]);
 
     let head = String::from_utf8(
-        Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(["rev-parse", "main"])

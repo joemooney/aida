@@ -900,7 +900,7 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         let p = dir.path();
         let git = |args: &[&str]| {
-            ProcessCommand::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(p)
                 .args(args)

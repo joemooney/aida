@@ -203,7 +203,7 @@ fn is_terminal_status_str_excludes_done() {
 /// success, panics otherwise — these are setup helpers, not the
 /// thing under test, so we want failures to be loud.
 fn run_git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -4626,7 +4626,7 @@ fn task_1338_legacy_human_reopen_survives_live_and_reconcile_replay() {
         // A later merge remains valid evidence. Set a distinct committer time
         // rather than sleeping or depending on wall-clock second boundaries.
         let future = (chrono::Utc::now() + chrono::Duration::seconds(10)).to_rfc3339();
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .env("GIT_COMMITTER_DATE", &future)

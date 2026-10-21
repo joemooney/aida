@@ -779,7 +779,7 @@ fn a_second_reviewer_at_the_same_head_does_not_destroy_the_first_verdict() {
 // ── BUG-1516 criteria 2 + 3: normalize + backfill abbreviated shas ─────────
 
 fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
-    std::process::Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

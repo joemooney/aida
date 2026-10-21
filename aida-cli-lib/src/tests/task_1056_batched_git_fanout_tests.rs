@@ -1,7 +1,7 @@
 use super::*;
 
 fn git_run(root: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(root)
         .args(args)
         .output()
@@ -14,7 +14,7 @@ fn git_run(root: &std::path::Path, args: &[&str]) {
 }
 
 fn git_stdout(root: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(root)
         .args(args)
         .output()
@@ -97,7 +97,7 @@ fn remote_branch_set_matches_rev_parse_verify() {
 
     let set = collect_remote_branch_name_set(root);
     for name in &names {
-        let verify_ok = std::process::Command::new("git")
+        let verify_ok = crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "rev-parse",

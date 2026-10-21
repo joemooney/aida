@@ -74,7 +74,7 @@ fn open_pr_refuses_even_when_branch_is_merged() {
 #[test]
 fn squash_merged_branch_is_allowed_where_ancestry_would_refuse() {
     fn git(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)

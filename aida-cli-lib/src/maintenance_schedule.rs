@@ -2817,6 +2817,10 @@ pub(crate) fn collect_snapshot(
     if fields.contains(&Field::DrainLockFree) {
         snap.drain_lock_free = crate::drain_lock::read_pid_live_lock(project_root).is_none();
     }
+    // trace:STORY-1700 | ai:claude
+    if fields.contains(&Field::MandateDriveActive) {
+        snap.mandate_drive_active = crate::mandate_drive::drive_record_active(now);
+    }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;
     }
@@ -3104,6 +3108,17 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                     "--json",
                     "--fail-on-findings",
                 ],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1700: the drive-mandate tick. Model-free and grant-free; a
+        // no-op unless a drive mandate is active (the job's `when` gate).
+        // trace:STORY-1700 | ai:claude
+        (
+            &["fleet drive --tick"],
+            ScheduledCommand {
+                display: "fleet drive --tick",
+                args: &["fleet", "drive", "--tick"],
                 hook_allowed: false,
             },
         ),

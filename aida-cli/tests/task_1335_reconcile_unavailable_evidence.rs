@@ -13,6 +13,9 @@
 //! concurrent edit the write seam must honour.
 // trace:TASK-1335 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 mod support;
 
 use std::os::unix::fs::PermissionsExt;
@@ -89,7 +92,7 @@ exit 97
 "#;
 
 fn git_in(dir: &Path, args: &[&str], date: Option<&str>) -> String {
-    let mut cmd = Command::new("git");
+    let mut cmd = test_git::git_command();
     cmd.current_dir(dir)
         .args(args)
         .env_clear()
@@ -125,7 +128,7 @@ fn twin_script(twin: &str, display: &str) -> String {
          modified_at: 2026-09-01T00:00:00Z\\nreq_type: Task\\n' > \
          \"$FIXTURE_STORE/objects/{prefix}/000/{twin}.yaml\" && \
          git -C \"$FIXTURE_STORE\" add -A && \
-         git -C \"$FIXTURE_STORE\" commit -qm 'peer adds {display} twin'",
+         git -c maintenance.auto=false -c gc.auto=0 -C \"$FIXTURE_STORE\" commit -qm 'peer adds {display} twin'",
         uuid = uuid::Uuid::new_v4()
     )
 }
@@ -346,7 +349,7 @@ impl Fx {
             }
             stream.push('\n');
         }
-        let mut child = Command::new("git")
+        let mut child = test_git::git_command()
             .current_dir(&self.repo)
             .args(["fast-import", "--quiet"])
             .env_clear()
@@ -944,7 +947,7 @@ fn write_seam_rechecks_reopen_closure_and_covers() {
         "TASK-75",
         "sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000aa/' \
          \"$FIXTURE_STORE/objects/TASK/000/TASK-75.yaml\" && \
-         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-75'\n",
+         git -c maintenance.auto=false -c gc.auto=0 -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-75'\n",
     );
     fx.barrier_script(
         "TASK-76",
@@ -954,7 +957,7 @@ fn write_seam_rechecks_reopen_closure_and_covers() {
          created_at: 2026-09-01T00:00:00Z\\nmodified_at: 2026-09-01T00:00:00Z\\n\
          req_type: Task\\n' > \"$FIXTURE_STORE/objects/TASK/000/TASK-1-76.yaml\" && \
          git -C \"$FIXTURE_STORE\" add -A && \
-         git -C \"$FIXTURE_STORE\" commit -qm 'peer adds TASK-76 twin'\n",
+         git -c maintenance.auto=false -c gc.auto=0 -C \"$FIXTURE_STORE\" commit -qm 'peer adds TASK-76 twin'\n",
     );
     fx.barrier("TASK-70", "edit TASK-70 --status approved");
     fx.barrier("TASK-71", "rel add TASK-71 TASK-72 --type blocked-by");
@@ -1117,7 +1120,7 @@ fn unavailable_forge_classification_is_not_empty() {
 
     let refuse = |provider: &str, origin: Option<&str>, want: &str| {
         fx.set_provider(provider);
-        let _ = Command::new("git")
+        let _ = test_git::git_command()
             .current_dir(&fx.repo)
             .args(["remote", "remove", "origin"])
             .output();
@@ -1149,7 +1152,7 @@ fn unavailable_forge_classification_is_not_empty() {
 
     // Stale pure-git config + GitHub origin: GitHub, config bytes untouched.
     fx.set_provider("pure-git");
-    let _ = Command::new("git")
+    let _ = test_git::git_command()
         .current_dir(&fx.repo)
         .args(["remote", "remove", "origin"])
         .output();
@@ -1396,7 +1399,7 @@ fn stale_review_path_is_decided_at_the_live_seam() {
              \"$FIXTURE_AIDA\" edit STORY-22 --status rejected && \
              sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000cc/' \
              \"$FIXTURE_STORE/objects/STORY/000/STORY-23.yaml\" && \
-             git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces STORY-23' && \
+             git -c maintenance.auto=false -c gc.auto=0 -C \"$FIXTURE_STORE\" commit -qam 'peer replaces STORY-23' && \
              AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
              \"$FIXTURE_AIDA\" edit STORY-24 --status done --force && \
              AIDA_SESSION_ROLE=advisor AIDA_SESSION_GRANT={grant} \
@@ -1679,7 +1682,7 @@ fn held_candidates_are_redecided_live() {
         "TASK-65",
         "sed -i 's/^id: .*/id: 01a11c00-0000-7000-8000-0000000000dd/' \
          \"$FIXTURE_STORE/objects/TASK/000/TASK-65.yaml\" && \
-         git -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-65'\n",
+         git -c maintenance.auto=false -c gc.auto=0 -C \"$FIXTURE_STORE\" commit -qam 'peer replaces TASK-65'\n",
     );
     fx.barrier_script(
         "TASK-66",
