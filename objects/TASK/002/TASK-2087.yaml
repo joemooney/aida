@@ -6,16 +6,25 @@ description: |
   task_1915_mandate_ship_failure_ledger_tests.rs:52 counts only 'return Err(' and 'bail!(' exits. A ? propagation added between the mandate release decision and the merge would skip the MandateDriveAction ledger and leave the pin green. Extend the scan, or assert that the window contains no ? exits.
 
   Raised in review of PR-2802: https://github.com/joemooney/aida/pull/2802#issuecomment-6324517265
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T19:20:36.528091389Z
-modified_at: 2026-10-21T19:20:36.528091389Z
+modified_at: 2026-10-21T19:28:11.453955526Z
 req_type: Task
 tags:
 - from-review:PR-2802
 - severity:minor
+history:
+- id: 01a15fef-76bd-7071-a734-e01bcca42514
+  author: joe
+  timestamp: 2026-10-21T19:28:11.453949627Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4c4ac461aff5426fbc6e374a2e5a0fc21d739fbd
   branch: pr-2802
