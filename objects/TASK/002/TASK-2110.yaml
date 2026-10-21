@@ -6,16 +6,25 @@ description: |
   seat_clone::probe counts commits reachable from any ref in the clone that are on no refs/remotes/origin/* and not in the pinned base (UNPUSHED_COUNT_SCRIPT, aida-cli-lib/src/seat_clone.rs). Take the normal flow: the PR is squash-merged, GitHub deletes the branch, and the seat runs `git fetch --prune`. Every branch commit then reads as unpushed. classify_clone_reap never reaps the clone ("holds N commits origin does not have"), and session end demands --force plus a salvage. The worktree path avoids this with patch-id logic (branch_unshipped_patch_count). This fails safe (it keeps work), but it is noisy. Consider treating a merged PR on the forge for lease.branch, at a head the forge confirms, as shipped. Or document the limitation.
 
   Raised in review of PR-2806: https://github.com/joemooney/aida/pull/2806#issuecomment-6328262097
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T22:48:33.828855881Z
-modified_at: 2026-10-21T22:48:33.828855881Z
+modified_at: 2026-10-21T22:49:17.241626935Z
 req_type: Task
 tags:
 - from-review:PR-2806
 - severity:minor
+history:
+- id: 01a160a7-92b9-7342-9bf8-a3da23694aaa
+  author: joe
+  timestamp: 2026-10-21T22:49:17.241621726Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: ac9f489fce0f4d858740404863519537667bd38b
   branch: pr-2806
