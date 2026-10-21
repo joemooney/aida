@@ -15,13 +15,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:08:53.636602769Z
-modified_at: 2026-10-21T10:48:36.673692409Z
+modified_at: 2026-10-21T10:48:38.310677232Z
 req_type: Task
 tags:
 - from-review:PR-2745
 - regenerability
 - severity:minor
 - tests
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e3-64e4-7382-95bb-b3c95fdf7c34
+  created_at: 2026-10-21T10:48:38.310673699Z
+  created_by: joe
 history:
 - id: 01a15e13-c641-7082-a3fb-377ac6e609b0
   author: joe
@@ -31,6 +36,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a15e13-d0e3-7ca2-afcb-de36e42137c8
+  author: joe
+  timestamp: 2026-10-21T10:48:39.395729136Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 180cd721f3d7ff2a39b596dd19286e3710b0144d
   branch: pr-2745
