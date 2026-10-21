@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-21T04:30:23.434127500Z
+modified_at: 2026-10-21T04:30:27.901818224Z
 req_type: Task
 tags:
 - contained
@@ -212,6 +212,12 @@ comments:
   content: 'Advisor triage 2026-10-20 21:30: folded TASK-2001 into this spec (Credential-routing argv/ratchet coverage; TASK-1952 already owns host-git credential hardening (TASK-1924).). Its open acceptance items now belong here.'
   created_at: 2026-10-21T04:30:10.294486213Z
   modified_at: 2026-10-21T04:30:10.294486213Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15cb9-923d-7970-b3e9-360df3ce81a9
+  author: joe
+  content: 'Advisor triage 2026-10-20 21:30: folded TASK-2009 into this spec (Duplicate of TASK-1652 (same child_store_commit pathspec finding), which was folded into TASK-1952 on 2026-10-20 11:52.). Its open acceptance items now belong here.'
+  created_at: 2026-10-21T04:30:27.901818224Z
+  modified_at: 2026-10-21T04:30:27.901818224Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
