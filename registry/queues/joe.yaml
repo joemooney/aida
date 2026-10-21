@@ -13,21 +13,6 @@
   added_at: 2026-10-08T04:16:06.248375109Z
   for_role: implementer
 - user_id: joe
-  requirement_id: 01a1401c-8094-78f0-a33c-2f7182346f70
-  position: 56000
-  added_by: joe
-  note: Promoted from finding TASK-0446 via `aida findings promote`
-  added_at: 2026-10-15T15:41:13.925835954Z
-  for_role: implementer
-- user_id: joe
-  requirement_id: 01a150cc-e7e6-78c3-9f4b-3dddaed4e639
-  position: 109000
-  added_by: joe
-  note: auto-queued by `aida pr` (abf9f7f0); covers 1 spec
-  added_at: 2026-10-18T20:56:31.074060530Z
-  for_role: reviewer
-  added_by_machine: imac
-- user_id: joe
   requirement_id: 01a14869-cedb-7e33-8f90-69fc44534d9c
   position: 125000
   added_by: joe
