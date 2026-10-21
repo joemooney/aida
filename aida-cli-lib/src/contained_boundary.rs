@@ -197,7 +197,14 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// followed to its directory or gitfile. No seat-clone name or marker exempts
 /// a main checkout's real `.git`: those markers are writable by the contained
 /// session.
+///
+/// BUG-2169 S2: the one exemption is a seat clone the HOST recorded
+/// ([`crate::seat_clone::host_recorded_clone`]: a `clone` lease in the main
+/// checkout's `.aida/sessions`, outside every granted root). That `.git` is
+/// the seat's own repository, which it must write to commit; no host git ever
+/// runs in it.
 // trace:BUG-2012 | ai:antigravity
+// trace:BUG-2169 | ai:claude
 pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut denied = Vec::new();
     let mut push_unique = |p: PathBuf| {
@@ -210,6 +217,10 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
         let Ok(meta) = std::fs::symlink_metadata(&git_entry) else {
             continue;
         };
+        // trace:BUG-2169 | ai:claude
+        if crate::seat_clone::host_recorded_clone(root).is_some() {
+            continue;
+        }
         if meta.is_dir() || git_entry.is_dir() {
             if git_entry.join("commondir").exists() {
                 continue;
