@@ -1,0 +1,29 @@
+id: 01a15f78-85a5-7c40-af5f-70a896b3f6a8
+spec_id: TASK-2072
+agreed_id: TASK-2072
+title: Roster-store behaviour follow-ups declined from the TASK-1953 docs sweep (TASK-2054 AIDA_STORE part, TASK-2055, TASK-1667)
+description: |-
+  PR-2800 (TASK-1953, merged 2026-10-21) declined three items because they are behaviour changes, not docs. The reviewer asked that they not be lost.
+  - TASK-2054 (AIDA_STORE-divergence part): when AIDA_STORE points somewhere other than the store aida resolves, the seat-check roster refusal should name both stores. The roster-path part already shipped in PR-2800.
+  - TASK-2055: RosterStoreError::NotDetected should say whether .aida/config.toml was missing or named a store that does not exist.
+  - TASK-1667: issuance_roster_store and validate_child_delegation resolve the store differently; unify them.
+  seat_authority.rs is a mandate-protected file, so this needs a human merge. Full original texts: aida show TASK-2054 / TASK-2055 / TASK-1667.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:18:16.485453920Z
+modified_at: 2026-10-21T17:18:16.485453920Z
+req_type: Task
+tags:
+- follow-up
+- roster
+- seat
+filed_at:
+  code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
