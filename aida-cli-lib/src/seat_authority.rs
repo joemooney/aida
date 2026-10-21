@@ -85,13 +85,73 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
     Ok(())
 }
 
-fn store_root(project_root: &Path) -> Option<PathBuf> {
-    let store = crate::detect_distributed_store_from(project_root)?;
-    store.join("objects").is_dir().then_some(store)
+/// Why the seat check could not reach a team roster. Distinct from a roster
+/// that was read and does not list the seat, so a refusal never blames the
+/// roster (or suggests `aida team allow-seat`) when it was never consulted.
+// trace:BUG-2200 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RosterStoreError {
+    /// No `.aida/config.toml` at or above `probed` names an existing store.
+    NotDetected { probed: PathBuf },
+    /// The store resolved but holds no `registry/team.toml`.
+    NoRoster { store: PathBuf },
 }
 
+impl std::fmt::Display for RosterStoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NotDetected { probed } => {
+                write!(
+                    f,
+                    "no AIDA store was found from `{}`: no `.aida/config.toml` at or above it names an existing store directory",
+                    probed.display()
+                )?;
+                if std::env::var_os("AIDA_STORE").is_some_and(|v| !v.is_empty()) {
+                    write!(
+                        f,
+                        " (AIDA_STORE is set, but seat checks read the roster from the project's own store, never from an environment override)"
+                    )?;
+                }
+                Ok(())
+            }
+            Self::NoRoster { store } => write!(
+                f,
+                "the AIDA store at `{}` has no team roster (`{}` is missing); an interactive human can create it with `aida team allow-seat`",
+                store.display(),
+                roster_path(store).display()
+            ),
+        }
+    }
+}
+
+fn roster_path(store: &Path) -> PathBuf {
+    store.join("registry").join("team.toml")
+}
+
+/// The store whose `registry/team.toml` is the seat authority for
+/// `project_root`. Resolves through `detect_distributed_store_from`, the same
+/// cwd walk-up the command dispatcher uses to hand `aida team` its store, so
+/// the two always read one roster. The roster file itself is the authority:
+/// a fresh solo store with no `objects/` yet is still a valid roster source.
+/// `AIDA_STORE` is deliberately not honored here — an environment variable
+/// must not be able to redirect the seat authority to another roster.
+// trace:BUG-2200 | ai:claude
+pub(crate) fn roster_store(project_root: &Path) -> std::result::Result<PathBuf, RosterStoreError> {
+    let store = crate::detect_distributed_store_from(project_root).ok_or_else(|| {
+        RosterStoreError::NotDetected {
+            probed: project_root.to_path_buf(),
+        }
+    })?;
+    if !roster_path(&store).is_file() {
+        return Err(RosterStoreError::NoRoster { store });
+    }
+    Ok(store)
+}
+
+/// Fail-closed: an unreachable store or missing roster never allows a seat.
 pub(crate) fn roster_allows(project_root: &Path, principal: &str, seat: &str) -> bool {
-    store_root(project_root)
+    roster_store(project_root)
+        .ok()
         .and_then(|store| aida_core::team::TeamRoster::load(&store).seats_for(principal))
         .map(|seats| {
             seats
@@ -266,7 +326,7 @@ pub(crate) fn ensure_commit_authority_resolver_registered() {
 }
 
 /// Resolve the project root that owns a `store_root` (`<project_root>/.aida-store`)
-/// without changing the shared `store_root()` helper or reading process cwd.
+/// without changing the shared `roster_store()` helper or reading process cwd.
 // trace:TASK-1737 | ai:antigravity
 fn project_root_for_store_root(store_root: &Path) -> PathBuf {
     store_root
@@ -915,6 +975,21 @@ pub(crate) fn format_ttl(ttl: Duration) -> String {
     }
 }
 
+/// The roster store that authorizes `principal` for `seat`, or the refusal.
+/// An unreachable store or missing roster is named as such (with the path
+/// probed) before the roster's contents are ever blamed.
+// trace:BUG-2200 | ai:claude
+fn issuance_roster_store(project_root: &Path, principal: &str, seat: &str) -> Result<PathBuf> {
+    let store = roster_store(project_root)
+        .map_err(|why| anyhow::anyhow!("cannot check seat `{seat}` for `{principal}`: {why}"))?;
+    if !roster_allows(project_root, principal, seat) {
+        bail!(
+            "seat `{seat}` is not allowed by the team roster for `{principal}`; an interactive human must update the roster with `aida team allow-seat`"
+        );
+    }
+    Ok(store)
+}
+
 // trace:STORY-1473, TASK-1592 | ai:antigravity
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn issue_direct(
@@ -927,20 +1002,13 @@ pub(crate) fn issue_direct(
     // trace:TASK-1594 | ai:claude
     let subject = crate::current_user_id(None);
     let principal = subject.clone();
-    if !roster_allows(project_root, &principal, seat) {
-        bail!(
-            "seat `{seat}` is not allowed by the team roster for `{principal}`; an interactive human must update the roster with `aida team allow-seat`"
-        );
-    }
-    let allowed = aida_core::team::TeamRoster::load(
-        &store_root(project_root)
-            .context("session grants require an available AIDA team roster")?,
-    )
-    .seats_for(&principal)
-    .unwrap_or_default()
-    .into_iter()
-    .map(|value| aida_core::team::canonical_role(&value))
-    .collect::<std::collections::BTreeSet<_>>();
+    let store = issuance_roster_store(project_root, &principal, seat)?;
+    let allowed = aida_core::team::TeamRoster::load(&store)
+        .seats_for(&principal)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|value| aida_core::team::canonical_role(&value))
+        .collect::<std::collections::BTreeSet<_>>();
     let mut delegable_seats = delegable_seats
         .into_iter()
         .map(|seat| aida_core::team::canonical_role(&seat))
@@ -988,6 +1056,10 @@ pub(crate) fn validate_child_delegation(
             parent.seat,
             parent.seat
         );
+    }
+    // trace:BUG-2200 | ai:claude
+    if let Err(why) = roster_store(project_root) {
+        bail!("cannot check child seat `{requested_seat}`: {why}");
     }
     if !roster_allows(project_root, &parent.principal, requested_seat) {
         bail!("requested child seat is no longer allowed by the team roster");
@@ -1859,3 +1931,8 @@ mod task_1787_grant_ttl_tests;
 #[cfg(test)]
 #[path = "tests/task_1752_grant_env_guard_tests.rs"]
 mod task_1752_grant_env_guard_tests;
+
+// trace:BUG-2200 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2200_roster_store_tests.rs"]
+mod bug_2200_roster_store_tests;
