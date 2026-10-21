@@ -1,0 +1,27 @@
+id: 01a15fd7-ab30-79b3-8247-ca6f4944b794
+spec_id: TASK-2085
+agreed_id: TASK-2085
+title: mailbox gc --phantoms skips unpadded case-mismatched known recipients (stranded ADVISOR mail)
+description: |
+  aida-cli-lib/src/mailbox_cmd.rs:899-913: archive_phantom_inboxes re-addresses a known recipient only when the stored `to` is whitespace-padded. Mail stored unpadded to a known id with the wrong case (e.g. `ADVISOR`, which MCP send_message wrote before PR-2805's TASK-1928 fix) is skipped. Message::addressed_to is case-sensitive, so that mail stays stranded and `gc --phantoms` never cleans it. Fix: re-address whenever known_spelling is Some and differs from r, and add a test.
+
+  Raised in review of PR-2805: https://github.com/joemooney/aida/pull/2805#issuecomment-6324144115
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:02:12.016423555Z
+modified_at: 2026-10-21T19:02:12.016423555Z
+req_type: Task
+tags:
+- from-review:PR-2805
+- mailbox
+- severity:minor
+filed_at:
+  code_sha: a328146f0cdcc73138624ae6be354c064728d9a0
+  branch: pr-2805
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fd574c3
