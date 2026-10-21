@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T23:54:35.875241998Z
+modified_at: 2026-10-21T23:55:04.639700860Z
 req_type: Task
 tags:
 - launch
@@ -546,6 +546,12 @@ comments:
   created_at: 2026-10-21T23:36:40.360733292Z
   modified_at: 2026-10-21T23:36:40.360733292Z
   session_id: b4f9fa57-6efa-415c-9329-ade8b4373c55
+- id: 01a160e3-ce3f-73c0-9396-7b84ae871070
+  author: joe
+  content: 'ADVISOR 16:56: folded TASK-2122 (from PR-2817''s advisory: gc --phantoms case re-addressing) and the PR-2807 merge-lock notes TASK-1-421 (merge_lock::acquire round-1 finding only half fixed) and TASK-1-422 (lease temp files inside .aida/merge-locks). Slice 7.'
+  created_at: 2026-10-21T23:55:04.639700860Z
+  modified_at: 2026-10-21T23:55:04.639700860Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
