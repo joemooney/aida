@@ -244,12 +244,21 @@ fn task1993_stale_notice_retry_is_idempotent_and_preserves_reader_state() {
         panic!("missing notice")
     };
     assert!(store.load().unwrap().entries[&c.key()].attempts.is_empty());
+    let mailbox = aida_core::mailbox::local_mailbox_dir(temp.path());
+    std::fs::create_dir(&mailbox).unwrap();
+    let shared_directory_mode = 0o775;
+    std::fs::set_permissions(
+        &mailbox,
+        std::fs::Permissions::from_mode(shared_directory_mode),
+    )
+    .unwrap();
     deliver(temp.path(), &notice).unwrap();
     let path = aida_core::mailbox::local_mailbox_dir(temp.path())
         .join(format!("{}.json", notice.message.id));
     let mut archived = notice.message.clone();
     archived.archived = true;
     std::fs::write(&path, serde_json::to_vec(&archived).unwrap()).unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o664)).unwrap();
     // Simulate a crash after delivery but before persisting sent=true.
     let Action::Notify(retried) = select(&store, &c, None, 2).unwrap() else {
         panic!("pending delivery lost")
@@ -387,8 +396,8 @@ while not (root / 'queue-release').exists():
     );
     let mut command = Command::new(std::env::current_exe().unwrap());
     command.current_dir(root).args([
-        "--exact", "review_watch::tests::task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads",
-        "--nocapture", "--test-threads=1",
+        "--exact", "--nocapture", "--test-threads=1",
+        "review_watch::tests::task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads",
     ]);
     for name in [
         "AIDA_REVIEW_VERDICT_FILE",
@@ -629,8 +638,12 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             vendor: None,
             launch_reservation: None,
         };
+        // The watcher resolves its real cwd through sanitized Git, not the
+        // test-only ambient root used by authority helpers.
+        std::env::set_current_dir(&root).unwrap();
         super::run(&args).unwrap();
         super::run(&args).unwrap();
+        std::env::set_current_dir(&cwd).unwrap();
         let messages = aida_core::mailbox::read_local_messages(&root).unwrap();
         assert_eq!(
             messages.len(),
@@ -770,4 +783,105 @@ fn task1993_file_directory_collisions_are_stale_overlap() {
         &paths(&["config"]),
         &paths(&["config-backup/settings"])
     ));
+}
+
+// trace:TASK-1993 | ai:codex
+#[test]
+fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
+    let (temp, store) = fixture();
+    // Directory search bits model the canonical layout, not executable fixtures.
+    let shared_directory_mode = 0o775;
+    std::fs::set_permissions(
+        temp.path().join(".aida"),
+        std::fs::Permissions::from_mode(shared_directory_mode),
+    )
+    .unwrap();
+    let store = Store::open(temp.path(), &store.repository).unwrap();
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir(&verdicts).unwrap();
+    std::fs::set_permissions(
+        &verdicts,
+        std::fs::Permissions::from_mode(shared_directory_mode),
+    )
+    .unwrap();
+    let path = verdicts.join("PR-1.json");
+    let body = |head: u64| {
+        serde_json::json!({"reviewed_sha": format!("{head:040x}"),
+        "recorded_by":"manual-reviewer", "verdict":"request-changes"})
+        .to_string()
+    };
+    for mode in [0o644, 0o664] {
+        crate::review_verdict::write_verdict_atomic(&path, &body(1)).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert_eq!(store.history("PR-1").unwrap().keys.len(), 1);
+    }
+    // Current-only legacy evidence has no archive. Production admission must
+    // persist it before the ordinary queue-work reset deletes this file.
+    let second = change(1, 2, false);
+    let attempt = dispatch(select(&store, &second, None, 2).unwrap());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].historical_keys.len(),
+        1
+    );
+    crate::queue_cmd::clear_standalone_reviewer_verdict(&path);
+    assert!(!path.exists());
+    execute_reservation(
+        &store,
+        "PR-1",
+        &attempt.token,
+        |a| {
+            assert_eq!(store.round_for("PR-1", a)?, 2);
+            Ok(())
+        },
+        |_| {
+            crate::review_verdict::write_verdict_atomic(&path, &body(2))?;
+            Ok(())
+        },
+    )
+    .unwrap();
+    let reopened = Store::open(temp.path(), &store.repository).unwrap();
+    let Action::Skip(reason) = select(&reopened, &change(1, 3, false), None, 2).unwrap() else {
+        panic!("third head bypassed the historical two-round cap after verdict reset")
+    };
+    assert!(reason.contains("two-round"));
+    // Canonical history accepts ordinary writer modes; runtime state stays private.
+    std::fs::set_permissions(
+        store.dir.path().join(STATE),
+        std::fs::Permissions::from_mode(0o644),
+    )
+    .unwrap();
+    assert!(store.load().is_err());
+}
+
+// trace:TASK-1993 | ai:codex
+#[test]
+fn task1993_initial_root_ignores_ambient_git_routing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let requested = temp.path().join("requested");
+    let other = temp.path().join("other");
+    for root in [&requested, &other] {
+        std::fs::create_dir(root).unwrap();
+        assert!(Command::new("/usr/bin/git")
+            .args(["init", "-q"])
+            .arg(root)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let mut env =
+        crate::test_env::EnvVarsGuard::snapshot(&["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]);
+    env.set_key("GIT_DIR", other.join(".git"));
+    env.set_key("GIT_WORK_TREE", &other);
+    env.set_key("GIT_COMMON_DIR", other.join(".git"));
+    assert_eq!(
+        forge::main_root(&requested).unwrap(),
+        requested.canonicalize().unwrap()
+    );
+    assert_ne!(
+        forge::main_root(&requested).unwrap(),
+        other.canonicalize().unwrap()
+    );
 }

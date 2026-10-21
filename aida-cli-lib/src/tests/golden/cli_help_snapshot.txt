@@ -16708,6 +16708,7 @@ The `prompt` / `assemble` subcommands are the review-prompt helpers.
 Usage: aida review [OPTIONS] [SPEC] [COMMAND]
 
 Commands:
+  watch           Discover new heads and dispatch attested reviews without waiting for CI
   prompt          Generate a markdown review prompt from a set of linked requirements' acceptance
                   criteria. Specs come either from an explicit `--specs` list (CSV) or from the
                   commit-range of a PR/MR (parsed `(REQ-ID)` trailers in commit messages)
@@ -16753,6 +16754,36 @@ Options:
           (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a
           GitLab project's default branch became the feature branch itself because remote `main` was
           never pushed
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review watch
+Discover new heads and dispatch attested reviews without waiting for CI
+
+Usage: aida review watch [OPTIONS]
+
+Options:
+      --once
+          Discover and dispatch once, then leave admitted reviews running
+
+      --interval <INTERVAL>
+          Seconds between discovery passes (default 10)
+
+      --max-concurrent <MAX_CONCURRENT>
+          Maximum watcher-launched reviews across instances: one or two (default two)
+
+      --vendor <VENDOR>
+          Vendor: claude, codex, or agy; omit for ordinary queue-work selection
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -40215,6 +40246,52 @@ Working on aida itself
         "name": "target-branch",
         "takes_value": true,
         "help": "Explicit base branch to target when AC-5 offers to open a change from a branch with no open PR/MR. Always wins over any base saved from a previous offer (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a GitLab project's default branch became the feature branch itself because remote `main` was never pushed"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "watch"
+    ],
+    "about": "Discover new heads and dispatch attested reviews without waiting for CI",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "interval",
+        "takes_value": true,
+        "help": "Seconds between discovery passes (default 10)"
+      },
+      {
+        "name": "launch-reservation",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "max-concurrent",
+        "takes_value": true,
+        "help": "Maximum watcher-launched reviews across instances: one or two (default two)"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Discover and dispatch once, then leave admitted reviews running"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor: claude, codex, or agy; omit for ordinary queue-work selection"
       }
     ],
     "hidden": false

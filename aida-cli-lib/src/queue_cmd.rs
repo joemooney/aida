@@ -12846,11 +12846,7 @@ pub(crate) fn handle_queue_work(
                 None
             };
         if let Some((_, verdict_path)) = &standalone_reviewer {
-            if let Some(dir) = verdict_path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            // Clear any stale verdict so the summary can't read a prior run's.
-            let _ = std::fs::remove_file(verdict_path);
+            clear_standalone_reviewer_verdict(verdict_path);
             // The `/aida-review` skill writes the verdict here — it keys off
             // this env var. Setting it for standalone runs too is what makes
             // the skill "always write the verdict file" (BUG-226 acceptance).
@@ -16781,4 +16777,15 @@ fn queue_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdP
         skip_role_restore_prompt: false,
         team_identity_write: true,
     }
+}
+
+// Keep the queue's reset boundary available to admission-history regressions.
+// The watcher retains consumed canonical identities before reaching this point.
+// trace:TASK-1993 | ai:codex
+pub(crate) fn clear_standalone_reviewer_verdict(path: &std::path::Path) {
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    // Clear any stale verdict so the summary cannot read a prior run's.
+    let _ = std::fs::remove_file(path);
 }

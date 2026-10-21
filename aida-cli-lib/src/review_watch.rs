@@ -85,6 +85,9 @@ struct Notice {
 #[serde(deny_unknown_fields)]
 struct Entry {
     attempts: Vec<Attempt>,
+    // Preserve observed canonical rounds before queue work clears its current verdict.
+    #[serde(default)]
+    historical_keys: BTreeSet<crate::review_verdict::RecordingKey>,
     notices: BTreeMap<String, Notice>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -125,6 +128,17 @@ impl Directory {
         );
         Ok(Self { handle })
     }
+    // The shared .aida root and canonical history use the repository's ordinary
+    // group-writable directory policy. Watch-owned subdirectories stay strict.
+    // trace:TASK-1993 | ai:codex
+    fn shared(path: &Path) -> Result<Self> {
+        match std::fs::DirBuilder::new().mode(0o700).create(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
+        }
+        Self::existing(path)?.context("shared review runtime directory disappeared")
+    }
     fn existing(path: &Path) -> Result<Option<Self>> {
         let handle = match OpenOptions::new()
             .read(true)
@@ -137,7 +151,7 @@ impl Directory {
         };
         let meta = handle.metadata()?;
         anyhow::ensure!(
-            meta.is_dir() && meta.uid() == effective_uid() && meta.mode() & 0o022 == 0,
+            meta.is_dir() && meta.uid() == effective_uid() && meta.mode() & 0o002 == 0,
             "unsafe review history directory {}",
             path.display()
         );
@@ -148,6 +162,9 @@ impl Directory {
         PathBuf::from(format!("/proc/self/fd/{}", self.handle.as_raw_fd()))
     }
     fn file(&self, name: &str, create: bool) -> Result<File> {
+        self.open_file(name, create, false)
+    }
+    fn open_file(&self, name: &str, create: bool, history: bool) -> Result<File> {
         let file = OpenOptions::new()
             .read(true)
             .write(create)
@@ -161,14 +178,21 @@ impl Directory {
         anyhow::ensure!(
             meta.is_file()
                 && meta.nlink() == 1
-                && meta.mode() & 0o777 == 0o600
+                && if history {
+                    matches!(meta.mode() & 0o777, 0o600 | 0o640 | 0o644 | 0o660 | 0o664)
+                } else {
+                    meta.mode() & 0o777 == 0o600
+                }
                 && meta.uid() == effective_uid(),
             "unsafe review-watch file {name}"
         );
         Ok(file)
     }
     fn read(&self, name: &str) -> Result<Option<Vec<u8>>> {
-        let file = match self.file(name, false) {
+        self.read_file(name, false)
+    }
+    fn read_file(&self, name: &str, history: bool) -> Result<Option<Vec<u8>>> {
+        let file = match self.open_file(name, false, history) {
             Ok(file) => file,
             Err(e)
                 if e.downcast_ref::<std::io::Error>()
@@ -213,7 +237,7 @@ struct Store {
 }
 impl Store {
     fn open(root: &Path, repository: &str) -> Result<Self> {
-        let runtime = Directory::open(&root.join(".aida"))?;
+        let runtime = Directory::shared(&root.join(".aida"))?;
         let dir = Directory::open(&runtime.path().join("review-watch"))?;
         Ok(Self {
             runtime,
@@ -259,7 +283,14 @@ impl Store {
         Ok(result)
     }
     fn history(&self, key: &str) -> Result<History> {
-        let mut history = History::default();
+        let mut history = History {
+            keys: self
+                .load()?
+                .entries
+                .get(key)
+                .map(|e| e.historical_keys.clone())
+                .unwrap_or_default(),
+        };
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
         };
@@ -270,7 +301,7 @@ impl Store {
             vec![key.to_string()]
         };
         for alias in aliases {
-            if let Some(bytes) = dir.read(&format!("{alias}.json"))? {
+            if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
                 history.add(&bytes)?;
             }
             if history.keys.len() >= 2 {
@@ -295,7 +326,7 @@ impl Store {
                 names.sort();
                 for name in names {
                     let bytes = archive
-                        .read(&name)?
+                        .read_file(&name, true)?
                         .context("review history disappeared during admission")?;
                     history.add(&bytes)?;
                     if history.keys.len() >= 2 {
@@ -310,7 +341,7 @@ impl Store {
         self.transaction(key, |state| {
             let entry = state
                 .entries
-                .get(key)
+                .get_mut(key)
                 .context("review reservation disappeared")?;
             anyhow::ensure!(
                 entry
@@ -329,6 +360,7 @@ impl Store {
                 used <= 2,
                 "two-round review cap reached outside watcher; route further work to the advisor"
             );
+            entry.historical_keys.extend(history.keys);
             Ok(used)
         })
     }
@@ -388,13 +420,7 @@ impl History {
             );
             let key = crate::review_verdict::recording_key(object);
             anyhow::ensure!(
-                key.0
-                    .as_deref()
-                    .is_some_and(|sha| (7..=64).contains(&sha.len())
-                        && sha.bytes().all(|b| b.is_ascii_hexdigit()))
-                    && !key.1.is_empty()
-                    && crate::review_verdict::VerdictKind::parse(&key.2)
-                        != crate::review_verdict::VerdictKind::Unknown,
+                valid_recording_key(&key),
                 "unidentifiable historical review requires advisor reconciliation"
             );
             self.keys.insert(key);
@@ -418,6 +444,15 @@ impl History {
     }
 }
 
+// trace:TASK-1993 | ai:codex
+fn valid_recording_key(key: &crate::review_verdict::RecordingKey) -> bool {
+    key.0.as_deref().is_some_and(|sha| {
+        (7..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+    }) && !key.1.is_empty()
+        && crate::review_verdict::VerdictKind::parse(&key.2)
+            != crate::review_verdict::VerdictKind::Unknown
+}
+
 fn validate_state(state: &State, repository: &str) -> Result<()> {
     anyhow::ensure!(
         state.version == 1
@@ -429,7 +464,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
     for (key, entry) in &state.entries {
         parse_key(key)?;
         anyhow::ensure!(
-            entry.attempts.len() <= 2 && entry.notices.len() <= 256,
+            entry.attempts.len() <= 2
+                && entry.notices.len() <= 256
+                && entry.historical_keys.len() <= 2
+                && entry.historical_keys.iter().all(valid_recording_key),
             "invalid review-watch attempt/notice count"
         );
         let mut heads = BTreeSet::new();
@@ -527,6 +565,7 @@ fn select(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.used(entry) >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip("global reviewer capacity is occupied or reserved".into())); }
+        entry.historical_keys.extend(history.keys);
         let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None };
         if let Some(failed) = entry.attempts.iter_mut().find(|a| a.phase == Phase::Failed) { *failed = attempt.clone(); }
         else { entry.attempts.push(attempt.clone()); }
@@ -555,8 +594,8 @@ fn stale_message(
 /// A deterministic mailbox ID and no-clobber publication close the
 /// delivery-before-sent-receipt crash window without overwriting reader state.
 fn deliver(root: &Path, notice: &Notice) -> Result<()> {
-    let runtime = Directory::open(&root.join(".aida"))?;
-    let mailbox = Directory::open(&runtime.path().join("mailbox"))?;
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let mailbox = Directory::shared(&runtime.path().join("mailbox"))?;
     let name = format!("{}.json", notice.message.id);
     let mut temp = tempfile::NamedTempFile::new_in(mailbox.path())?;
     temp.write_all(&serde_json::to_vec_pretty(&notice.message)?)?;
@@ -568,7 +607,7 @@ fn deliver(root: &Path, notice: &Notice) -> Result<()> {
         }
         Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
             let bytes = mailbox
-                .read(&name)?
+                .read_file(&name, true)?
                 .context("notification disappeared during retry")?;
             let old: aida_core::mailbox::Message = serde_json::from_slice(&bytes)?;
             anyhow::ensure!(
@@ -736,7 +775,7 @@ pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
 }
 
 pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
-    let root = crate::find_main_worktree_root()?.canonicalize()?;
+    let root = forge::main_root(&std::env::current_dir()?)?;
     let repo = forge::Repository::load(&root)?;
     crate::seat_authority::validate_child_delegation(&root, "reviewer")?;
     if let Some(reservation) = args.launch_reservation.as_deref() {

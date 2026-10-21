@@ -67,6 +67,28 @@ fn output(root: &Path, program: &str, args: &[&str]) -> Result<Vec<u8>> {
 fn git(root: &Path, args: &[&str]) -> Result<String> {
     String::from_utf8(output(root, "git", args)?).context("non-UTF8 Git probe output")
 }
+// Resolve the initial root with the same bounded, sanitized Git probes as all
+// later operations. Ambient Git routing cannot select another repository.
+// trace:TASK-1993 | ai:codex
+pub(super) fn main_root(start: &Path) -> Result<PathBuf> {
+    let root = PathBuf::from(git(start, &["rev-parse", "--show-toplevel"])?.trim());
+    match crate::seat_clone::main_for(&root) {
+        crate::seat_clone::MainFor::Verified(main) => return Ok(main.canonicalize()?),
+        crate::seat_clone::MainFor::Unverified(clone) => {
+            return Err(crate::seat_clone::unverified_refusal(&clone))
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
+    let listing = git(&root, &["worktree", "list", "--porcelain", "-z"])?;
+    let main = listing
+        .split('\0')
+        .next()
+        .and_then(|s| s.strip_prefix("worktree "))
+        .filter(|s| !s.is_empty())
+        .context("cannot resolve review-watch main worktree")?;
+    Ok(PathBuf::from(main).canonicalize()?)
+}
+
 impl Repository {
     pub fn load(root: &Path) -> Result<Self> {
         let remote = git(root, &["remote", "get-url", "origin"])?;
