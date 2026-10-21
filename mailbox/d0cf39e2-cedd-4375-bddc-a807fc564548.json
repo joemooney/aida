@@ -1,0 +1,19 @@
+{
+  "id": "d0cf39e2-cedd-4375-bddc-a807fc564548",
+  "thread_id": "d0cf39e2-cedd-4375-bddc-a807fc564548",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792616663192,
+  "body": "TASK-1951 slice plan (implementer, claude/task-1951*). Each slice is at most ~600 lines. Gate-file slices are kept apart and need a human merge.\n\nS1 #2811 (open, CI pending). Forge default-branch: TASK-1408/1661, 1411/1660, 1659, 1663.\nS2 auto_complete.rs: TASK-1615 (stalled-latch skip label), TASK-1617 (a second halted member is recorded in skipped).\nS3 reconcile/slice, non-gate (db_reconcile.rs, pr_cmd.rs, reconcile_evidence.rs): TASK-1618 (pull side), 1619, 1620, 1621, 1622, TASK-1765 (1)(2)(4).\nS4 verdict readers, non-gate: TASK-1668 / 1814(2) (pr_merge_gate stamp goes through build/write_verdict_object), TASK-1670 (lane_liveness reads through the anchored reader).\nS5 GATE (review_verdict.rs, review_authority.rs): TASK-1814(3) metadata-only mtime, 1671 (archive prepared before the close write), 1669 (compile_error off Linux/Apple), TASK-2049 (cross-scheme same-pid tokens match without a liveness probe; every caller is a refusal, so this fails closed).\nS6 GATE (merge_hold.rs, rework_hold_release.rs): BUG-2123 (keeps every refused (spec,sha) when holds compose; auto-release needs all of them approved), TASK-1406 (MergeHoldChanged goes to hold_store_root), TASK-1757 (a-d).\nS7 GATE (pr_ship.rs, mandate.rs, tests): TASK-1623 (the stale-head check refuses on a missing head), TASK-1618 (--final-slice with squash), TASK-1662 (timeout on the store-history -G walk, mapped to HistoryUnreadable), TASK-1991 (ship-level carry-over test).\nS8 (final, bare TASK-1951): TASK-2003.\n\nNo code change, with evidence going in the PR bodies:\n- TASK-1814(1): phase_gates already publishes through renameat2 RENAME_NOREPLACE (TASK-1801).\n- TASK-2035: fixed by BUG-2203.\n- TASK-1765(3): already fixed per your note.\n- TASK-1662 (combined pass): done by BUG-2179. Only the timeout is still open.\n\nDESIGN QUESTION, TASK-2003: lifecycle makes NeedsAttention->InProgress RequiresAdvisorAuthority (BUG-1494), and there is no NeedsAttention->Done edge. I propose option A, a display-only lens: aida list shows NeedsAttention specs as \"in review (PR-N @sha8, round k)\" when the Rework hold's target_head differs from the PR head that lane-liveness/review-watch observed. It writes nothing to the store, so a new refusal naturally re-parks the spec. aida list also gets a last-activity (modified_at age) field. Option B, an automated status flip with a new automated author, would bypass the BUG-1494 rule. A is my default unless you rule B.\n",
+  "subject": "TASK-1951 slice plan + TASK-2003 design fork",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

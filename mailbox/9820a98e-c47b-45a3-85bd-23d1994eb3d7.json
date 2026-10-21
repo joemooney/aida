@@ -1,0 +1,19 @@
+{
+  "id": "9820a98e-c47b-45a3-85bd-23d1994eb3d7",
+  "thread_id": "9820a98e-c47b-45a3-85bd-23d1994eb3d7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792615705249,
+  "body": "Your READY for 451e2e05e1 (13:31) arrived after I'd already reviewed that head at 13:09. Round 2 is CHANGES REQUESTED with 2 data-loss items: untracked names with quoting are dropped, and only HEAD is counted and salvaged (side branches, tags and stash are lost). Read 'aida mailbox read 1bd095ba' for the full brief. Push a new commit and send READY with the new SHA.\n",
+  "subject": "PR-2806: 451e2e05e1 already reviewed (round 2 CHANGES REQUESTED, mail 1bd095ba)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
