@@ -669,3 +669,124 @@ fn dead_creator_only_lease_is_unknown_owner_on_every_surface() {
     assert!(pins.is_empty());
     assert_eq!(unknown.len(), 1);
 }
+
+/// BUG-2206: an attested-reviewer lease (review verb, its own review
+/// worktree, minted minutes ago) whose creator is provably dead is Stale in
+/// `aida ps`, not Dormant; a live session in its worktree or a live creator
+/// keeps it from being called over.
+// trace:TASK-1955 | ai:claude (BUG-2206)
+#[cfg(unix)]
+#[test]
+fn dead_creator_reviewer_lease_with_a_worktree_is_stale() {
+    let tmp = tempfile::tempdir().unwrap();
+    let worktree = tmp.path().canonicalize().unwrap().join("aida-pr-2776");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let now = chrono::Utc::now();
+    let reviewer = |creator: u32, identity: Option<String>| {
+        lease_json(
+            "01a15ac34759",
+            &worktree,
+            serde_json::json!({
+                "scope": "PR-2776",
+                "role": "reviewer",
+                "review_verb": true,
+                "started_at": now.to_rfc3339(),
+                "creator_pid": creator,
+                "creator_pid_start_time": identity,
+            }),
+        )
+    };
+    let (pid, identity) = dead_pid_with_identity();
+    let dead = reviewer(pid, identity);
+    assert_eq!(lease_state_for(&dead, &[], now), LeaseState::Stale);
+    // A reviewer session still sitting in the worktree is live.
+    assert_eq!(
+        lease_state_for(&dead, &[live(4_000_001, &worktree)], now),
+        LeaseState::Live
+    );
+    // A live creator is never called over.
+    let me = std::process::id();
+    let alive = reviewer(me, process_probe::process_start_identity(me));
+    assert_ne!(lease_state_for(&alive, &[], now), LeaseState::Stale);
+}
+
+/// BUG-2206: `aida session reap` reaps a dead attested reviewer whose PR is
+/// merged or closed (a PR scope has no spec to finish), adopting its
+/// worktree merge-hold marker into the primary checkout first (BUG-2176).
+/// An unknown PR state reaps nothing. Fixture repo only; never the live root.
+// trace:TASK-1955 | ai:claude (BUG-2206)
+#[cfg(unix)]
+#[test]
+fn dead_reviewer_of_a_merged_pr_is_reaped_and_its_hold_adopted() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let root = base.join("repo");
+    std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.name", "Test"]);
+    git(&root, &["config", "user.email", "test@example.com"]);
+    git(&root, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(root.join("README.md"), "base\n").unwrap();
+    git(&root, &["add", "README.md"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    // Like the real clone: per-checkout `.aida/` state is not tracked.
+    std::fs::write(root.join(".git/info/exclude"), "/.aida/\n").unwrap();
+    let review = base.join("aida-pr-7");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "review/pr-7",
+            review.to_str().unwrap(),
+        ],
+    );
+    let mut hold = crate::merge_hold::typed_hold(
+        7,
+        crate::merge_hold::HoldReasonKind::Rework,
+        "CHANGES REQUESTED for BUG-9 at 1111111",
+        Some("1111111aaaa".into()),
+    );
+    hold.spec = Some("BUG-9".into());
+    let marker = crate::merge_hold::local_hold_path(&review, 7);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, serde_json::to_vec_pretty(&hold).unwrap()).unwrap();
+
+    let (pid, identity) = dead_pid_with_identity();
+    let lease = lease_json(
+        "01a15ac30007",
+        &review,
+        serde_json::json!({
+            "scope": "PR-7",
+            "slug": "pr-7",
+            "branch": "review/pr-7",
+            "role": "reviewer",
+            "review_verb": true,
+            "started_at": (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339(),
+            "creator_pid": pid,
+            "creator_pid_start_time": identity,
+        }),
+    );
+    write_lease(&root, &lease);
+
+    let unknown = scan_reapable_with(&root, |_| None);
+    assert!(
+        unknown.reapable.iter().all(|r| r.session != lease.id),
+        "an unknown PR state never reaps"
+    );
+    let report = scan_reapable_with(&root, |pr| Some(pr == 7));
+    let row = report
+        .reapable
+        .iter()
+        .find(|r| r.session == lease.id)
+        .unwrap_or_else(|| panic!("reviewer lease is reapable: {report:?}"));
+    assert!(row.spec_finished, "not listed as an unfinished spec");
+
+    let outcome = reap_one(&root, &lease, row.branch_tip.as_deref());
+    assert!(!review.exists(), "review worktree removed: {outcome}");
+    assert!(!lease_path(&root, &lease.id).exists(), "lease released");
+    let adopted = crate::merge_hold::read_hold_record(&root, 7).expect("hold adopted");
+    assert_eq!(adopted.spec.as_deref(), Some("BUG-9"));
+}

@@ -5108,21 +5108,8 @@ pub(crate) fn classify_ship_default_branch(
     // Only origin/HEAD is local evidence, never a guess from leftover refs.
     // A stale origin/HEAD still wins over the forge, so refresh it when the
     // remote default changes (git remote set-head origin --auto).
-    let local = std::process::Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args([
-            "symbolic-ref",
-            "--quiet",
-            "--short",
-            "refs/remotes/origin/HEAD",
-        ])
-        .output()
-        .ok()
-        .filter(|out| out.status.success())
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
-        .filter(|name| !name.is_empty());
+    // trace:TASK-1951 | ai:claude
+    let local = crate::forge::local_origin_head_branch(project_root);
     match local.or_else(|| crate::forge::probe_default_branch(project_root)) {
         Some(default) if branch == default => ShipDefaultBranchDisposition::OnDefaultBranch,
         Some(_) => ShipDefaultBranchDisposition::FeatureBranch,
@@ -5130,7 +5117,10 @@ pub(crate) fn classify_ship_default_branch(
     }
 }
 
+// Test-only since classify_ship_default_branch replaced it on the ship path.
 // trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+// trace:TASK-1951 trace:TASK-1408 | ai:claude
+#[cfg(test)]
 pub(crate) fn ship_is_default_branch(project_root: &std::path::Path, branch: &str) -> bool {
     !matches!(
         classify_ship_default_branch(project_root, branch),
