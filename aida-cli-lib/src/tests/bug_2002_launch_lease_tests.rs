@@ -486,6 +486,7 @@ fn bug2168_explicit_cwd_without_spec_is_the_actual_launch_directory() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac04cda8 | ai:claude
 #[test]
 fn bug2188_scrubbed_delegation_refuses_before_any_setup() {
     if crate::test_env::run_path_isolated_test() {
@@ -526,7 +527,7 @@ fn receipt_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathB
         vec!["config", "user.email", "launch@example.test"],
         vec!["commit", "-q", "--allow-empty", "-m", "init"],
     ] {
-        assert!(std::process::Command::new("/usr/bin/git")
+        assert!(crate::test_git::git_command()
             .current_dir(&root)
             .args(args)
             .status()
@@ -537,6 +538,7 @@ fn receipt_project() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathB
 }
 
 // trace:BUG-2188 BUG-2168 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_fresh_receipt_owns_exact_lease_and_rolls_back_requested_tree() {
     if crate::test_env::run_path_isolated_test() {
@@ -566,6 +568,8 @@ fn bug2188_fresh_receipt_owns_exact_lease_and_rolls_back_requested_tree() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.acb9bbb7 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_prelease_failure_removes_materialized_tree_and_names_cause() {
     if crate::test_env::run_path_isolated_test() {
@@ -596,6 +600,7 @@ fn bug2188_prelease_failure_removes_materialized_tree_and_names_cause() {
 }
 
 // trace:BUG-2188 BUG-2168 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_adopted_receipt_never_deletes_an_existing_lease() {
     if crate::test_env::run_path_isolated_test() {
@@ -624,6 +629,7 @@ fn bug2188_adopted_receipt_never_deletes_an_existing_lease() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_failed_command_revokes_only_its_issued_grant() {
     if crate::test_env::run_path_isolated_test() {
@@ -649,6 +655,7 @@ fn bug2188_failed_command_revokes_only_its_issued_grant() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_pool_cleanup_keeps_the_lease_when_a_live_process_holds_the_tree() {
     if crate::test_env::run_path_isolated_test() {
@@ -692,6 +699,7 @@ fn bug2188_pool_cleanup_keeps_the_lease_when_a_live_process_holds_the_tree() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_private_clone_cleanup_removes_the_clone_pin_and_lease() {
     if crate::test_env::run_path_isolated_test() {
@@ -743,6 +751,8 @@ fn bug2188_private_clone_cleanup_removes_the_clone_pin_and_lease() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.acb9bbb7 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_post_checkout_partial_materialization_rolls_back() {
     if crate::test_env::run_path_isolated_test() {
@@ -778,6 +788,7 @@ fn bug2188_post_checkout_partial_materialization_rolls_back() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_preexisting_path_and_branch_survive_failed_setup() {
     if crate::test_env::run_path_isolated_test() {
@@ -825,6 +836,7 @@ fn bug2188_preexisting_path_and_branch_survive_failed_setup() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_changed_worktree_identity_is_kept() {
     if crate::test_env::run_path_isolated_test() {
@@ -851,6 +863,7 @@ fn bug2188_changed_worktree_identity_is_kept() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_changed_branch_identity_survives_cleanup() {
     if crate::test_env::run_path_isolated_test() {
@@ -868,7 +881,7 @@ fn bug2188_changed_branch_identity_survives_cleanup() {
         false,
     )
     .unwrap();
-    assert!(std::process::Command::new("/usr/bin/git")
+    assert!(crate::test_git::git_command()
         .current_dir(&tree)
         .args([
             "-c",
@@ -890,6 +903,7 @@ fn bug2188_changed_branch_identity_survives_cleanup() {
 // Exercise actual entrypoints, including issuance after setup and the
 // foreground spawn / background dispatcher refusal edges.
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
     if crate::test_env::run_path_isolated_test() {
@@ -991,6 +1005,8 @@ fn bug2188_production_failed_launches_rollback_setup_and_child_grant() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.acb9bbb7 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_checkout_created_destination_is_never_nested_or_removed() {
     if crate::test_env::run_path_isolated_test() {
@@ -1027,6 +1043,7 @@ fn bug2188_checkout_created_destination_is_never_nested_or_removed() {
 }
 
 // trace:BUG-2188 | ai:codex
+// trace:BUG-2188.ac41d009 | ai:claude
 #[test]
 fn bug2188_pool_hook_commit_keeps_original_branch_receipt() {
     if crate::test_env::run_path_isolated_test() {
@@ -1034,7 +1051,7 @@ fn bug2188_pool_hook_commit_keeps_original_branch_receipt() {
     }
     let (_tmp, root, _tree) = receipt_project();
     let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
-    crate::test_exec::write_executable(&root.join(".git/hooks/post-checkout"), "#!/bin/sh\nif /usr/bin/git symbolic-ref --quiet HEAD >/dev/null; then /usr/bin/git -c user.name=fixture -c user.email=fixture@test commit -q --allow-empty -m hook-created-work; fi\n");
+    crate::test_exec::write_executable(&root.join(".git/hooks/post-checkout"), "#!/bin/sh\nif /usr/bin/git symbolic-ref --quiet HEAD >/dev/null; then /usr/bin/git -c maintenance.auto=false -c gc.auto=0 -c user.name=fixture -c user.email=fixture@test commit -q --allow-empty -m hook-created-work; fi\n");
     let (plan, receipt) = prepare_agent_launch_attempt(
         &root,
         Some("implementer".into()),
@@ -1066,4 +1083,273 @@ fn bug2188_pool_hook_commit_keeps_original_branch_receipt() {
             .stdout,
         before
     );
+}
+
+// Standing order 8 (template master and the repository mirror) must name the
+// exact recovery command the launcher prints, so the two cannot drift apart.
+// trace:BUG-2188 | ai:claude
+// trace:BUG-2188.ac04cda8 | ai:claude
+#[test]
+fn bug2188_standing_order_8_names_the_launchers_delegation_command() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, _lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), Some("implementer"));
+    let error = preflight_agent_new_delegation(tmp.path(), Some("implementer"))
+        .unwrap_err()
+        .to_string();
+    let command = "eval \"$(aida role enter advisor --delegate-seat implementer)\"";
+    assert!(error.contains(command), "{error}");
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap();
+    for copy in [
+        "aida-core/templates/.aida/discipline/standing-orders/advisor.md",
+        ".aida/discipline/standing-orders/advisor.md",
+    ] {
+        let text = std::fs::read_to_string(repo.join(copy)).unwrap();
+        let order = text
+            .split("\n8. ")
+            .nth(1)
+            .and_then(|rest| rest.split("\n9. ").next())
+            .unwrap_or_else(|| panic!("{copy} has no standing order 8"));
+        let order = order.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(order.contains(command), "{copy}: {order}");
+        // Delegation keeps the grant; only the purpose is scrubbed, exactly
+        // as the launcher's refusal instructs.
+        assert!(error.contains("AIDA_SESSION_GRANT intact"), "{error}");
+        assert!(
+            error.contains("remove only AIDA_SESSION_PURPOSE"),
+            "{error}"
+        );
+        assert!(
+            order.contains("retain that shell's `AIDA_SESSION_GRANT`"),
+            "{copy}: {order}"
+        );
+        assert!(
+            order.contains("scrub `AIDA_SESSION_PURPOSE`"),
+            "{copy}: {order}"
+        );
+    }
+}
+
+// The dry previews (--show-context / --show-prompt / --no-exec) report the
+// explicit --cwd, and refuse a non-directory or Git-metadata path, exactly as
+// a real launch does.
+// trace:BUG-2168 | ai:claude
+#[test]
+fn bug2168_dry_preview_reports_explicit_cwd_and_refuses_bad_paths() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+    let plan = prepare_agent_launch_dry_at(
+        tmp.path(),
+        None,
+        None,
+        "claude",
+        Some("preview-cwd".into()),
+        Some(&lease.worktree_path),
+    )
+    .unwrap();
+    let cwd = lease.worktree_path.canonicalize().unwrap();
+    assert_eq!(plan.launch_cwd, cwd);
+    let config = AgentLaunchConfig {
+        agent_type: "claude",
+        binary: "/usr/bin/true",
+        default_args: vec![],
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let body = render_agent_launch_context(&config, &plan, "preview-token").unwrap();
+    assert!(
+        body.contains(&format!("- Working directory: {}\n", cwd.display())),
+        "{body}"
+    );
+
+    let file = lease.worktree_path.join("not-a-dir");
+    std::fs::write(&file, "x").unwrap();
+    let error = prepare_agent_launch_dry_at(tmp.path(), None, None, "claude", None, Some(&file))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("is not a directory"), "{error}");
+    let git = lease.worktree_path.join(".git");
+    let error = prepare_agent_launch_dry_at(tmp.path(), None, None, "claude", None, Some(&git))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("Git metadata directory"), "{error}");
+    assert!(!tmp.path().join(".aida/agents").exists());
+}
+
+// Both entrypoints route --cwd into every dry preview: a Git-metadata --cwd is
+// refused by --show-context, --show-prompt and --no-exec, foreground and --bg.
+// trace:BUG-2168 | ai:claude
+#[test]
+fn bug2168_preview_entrypoints_honor_explicit_cwd() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (tmp, lease) = fixture();
+    let _env = crate::test_env::AmbientGuard::hermetic(tmp.path(), None);
+    // `--bg` always carries bypass; the human's opt-out lets the hermetic
+    // (non-terminal) run reach the preview. The home is the test's temp HOME.
+    let user_config = crate::aida_home_dir().unwrap().join(".aida/config.toml");
+    std::fs::create_dir_all(user_config.parent().unwrap()).unwrap();
+    std::fs::write(&user_config, "[agents]\nconfirm_bypass = false\n").unwrap();
+    let git = lease.worktree_path.join(".git");
+    for background in [false, true] {
+        for (show_context, show_prompt, noexec) in [
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
+            let config = AgentLaunchConfig {
+                agent_type: "claude",
+                binary: "/usr/bin/true",
+                default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
+                prompt_style: AgentPromptStyle::Positional,
+                contained: false,
+            };
+            let launch = if background {
+                agent_new_bg_dispatch
+            } else {
+                agent_new_with_config
+            };
+            let error = launch(
+                config,
+                None,
+                None,
+                false,
+                Some(&git),
+                AgentContextOptions::new(show_context, false),
+                false,
+                noexec,
+                show_prompt,
+                false,
+                AgentPromptOptions::new(Some("preview".into()), false),
+                AgentResumeOptions::new(false, None, false, false),
+                AgentDefaultFlagOptions::new(false, Vec::new(), None),
+                Some("preview-entry".into()),
+                None,
+                false,
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(
+                error.contains("Git metadata directory"),
+                "bg={background} ctx={show_context} prompt={show_prompt} noexec={noexec}: {error}"
+            );
+        }
+    }
+    assert!(list_leases(tmp.path()).len() == 1);
+    assert!(!tmp.path().join(".aida/agents").exists());
+}
+
+// Review round 1: a full warm pool must not fail `agent new --spec`; the
+// launch falls back to a fresh worktree under the same receipt, and that
+// receipt still rolls the fresh allocation back.
+// trace:BUG-2188 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
+#[test]
+fn bug2188_full_pool_falls_back_to_a_fresh_worktree_and_rolls_it_back() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[worktree_pool]\nenabled = true\nmax_trees = 1\n",
+    )
+    .unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    let (first, first_receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("pool-holder".into()),
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(aida_core::worktree_pool::is_pool_worktree(
+        &root,
+        &first.launch_cwd
+    ));
+    let (second, second_receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture-two".into()),
+        "claude",
+        Some("pool-full".into()),
+        None,
+        false,
+    )
+    .expect("a full pool falls back to a fresh worktree");
+    assert!(!aida_core::worktree_pool::is_pool_worktree(
+        &root,
+        &second.launch_cwd
+    ));
+    assert!(second.launch_cwd.join(".git").is_file());
+    let second_receipt = second_receipt.unwrap();
+    assert!(second_receipt.owns_setup());
+    let second_branch = current_branch_at(&second.launch_cwd).unwrap();
+    drop(second_receipt);
+    assert!(!second.launch_cwd.exists());
+    assert!(!branch_exists_anywhere(&root, &second_branch));
+    assert!(!lease_path(&root, second.lease_id.as_deref().unwrap()).exists());
+    // The pool holder is untouched by the second launch's rollback.
+    assert!(first.launch_cwd.exists());
+    assert!(lease_path(&root, first.lease_id.as_deref().unwrap()).exists());
+    drop(first_receipt);
+    assert!(list_leases(&root).is_empty());
+}
+
+// A pool tree the receipt took (its branch checkout failed) is returned and
+// its branch deleted before the fresh-worktree fallback, so neither leaks.
+// trace:BUG-2188 | ai:claude
+// trace:BUG-2188.acb9bbb7 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
+#[test]
+fn bug2188_failed_pool_checkout_rolls_back_the_pool_tree_then_falls_back() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _tree) = receipt_project();
+    let _env = crate::test_env::AmbientGuard::hermetic(&root, Some("implementer"));
+    // Fail only `git checkout -b` inside an existing tree: a real previous
+    // HEAD (a fresh `worktree add` reports the null one) and an attached HEAD
+    // (the pool's return-time detach leaves HEAD detached).
+    crate::test_exec::write_executable(
+        &root.join(".git/hooks/post-checkout"),
+        "#!/bin/sh\ncase \"$1\" in 0000000000000000000000000000000000000000) exit 0;; esac\n/usr/bin/git symbolic-ref -q HEAD >/dev/null || exit 0\necho injected-pool-checkout-failure >&2\nexit 74\n",
+    );
+    let (plan, receipt) = prepare_agent_launch_attempt(
+        &root,
+        Some("implementer".into()),
+        Some("launch-fixture".into()),
+        "claude",
+        Some("pool-checkout".into()),
+        None,
+        false,
+    )
+    .expect("a failed pool checkout falls back to a fresh worktree");
+    assert!(!aida_core::worktree_pool::is_pool_worktree(
+        &root,
+        &plan.launch_cwd
+    ));
+    let pool = aida_core::worktree_pool::read_state(&root).unwrap();
+    assert_eq!(pool.entries.len(), 1, "the pool tree was created");
+    assert!(
+        pool.entries.iter().all(|entry| !entry.leased),
+        "and returned"
+    );
+    assert_eq!(list_leases(&root).len(), 1, "only the fresh launch's lease");
+    let branch = current_branch_at(&plan.launch_cwd).unwrap();
+    drop(receipt);
+    assert!(!plan.launch_cwd.exists());
+    assert!(!branch_exists_anywhere(&root, &branch));
+    assert!(list_leases(&root).is_empty());
 }

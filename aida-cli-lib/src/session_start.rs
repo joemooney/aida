@@ -1222,12 +1222,23 @@ impl SessionStartCleanup {
             .and_then(|b| rollback_ref_sha(&self.root, b));
         self.branch = branch;
     }
-}
-impl Drop for SessionStartCleanup {
-    fn drop(&mut self) {
-        if !self.armed {
-            return;
+    /// Undo only this invocation's tree allocation (and the branch created on
+    /// it), leaving claim and lease ownership in place, so the warm-pool path
+    /// can fall back to a fresh worktree under the same receipt. False means
+    /// the tree was refused (identity changed or in use) and was kept.
+    // trace:BUG-2188 | ai:claude
+    fn release_allocation(&mut self) -> bool {
+        if !self.release_tree() {
+            return false;
         }
+        self.release_branch();
+        self.tree = None;
+        self.gitdir = None;
+        self.branch = None;
+        self.branch_sha = None;
+        true
+    }
+    fn release_tree(&self) -> bool {
         let tree = self
             .tree
             .as_deref()
@@ -1235,14 +1246,14 @@ impl Drop for SessionStartCleanup {
         if let Some(path) = tree.filter(|p| std::fs::symlink_metadata(p).is_ok()) {
             if self.clone.is_some() && clone_git_identity(path) != self.clone_git_identity {
                 eprintln!("launch cleanup refused changed private clone identity at {}; inspect `aida session leases --all`", path.display());
-                return;
+                return false;
             }
             if self.clone.is_none()
                 && path.try_exists().unwrap_or(true)
                 && (self.gitdir.is_none() || worktree_pointer(path) != self.gitdir)
             {
                 eprintln!("launch cleanup refused changed worktree identity at {}; inspect `git -C '{}' worktree list --porcelain` and `aida session leases --all`", path.display(), self.root.display());
-                return;
+                return false;
             }
             if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(path) {
                 eprintln!(
@@ -1250,7 +1261,7 @@ impl Drop for SessionStartCleanup {
                     path.display(),
                     in_use.summary()
                 );
-                return;
+                return false;
             }
             let removed = if let Some(clone) = &self.clone {
                 std::fs::remove_dir_all(&clone.path)
@@ -1286,15 +1297,12 @@ impl Drop for SessionStartCleanup {
             };
             if let Err(error) = removed {
                 eprintln!("launch cleanup could not remove {}: {error:#}; inspect `aida session leases --all`", path.display());
-                return;
+                return false;
             }
         }
-        if let Some(id) = &self.lease_id {
-            if !remove_session_lease_record_only(&self.root, id) {
-                eprintln!("launch cleanup could not remove lease {id}; inspect `aida session leases --all`");
-                return;
-            }
-        }
+        true
+    }
+    fn release_branch(&self) {
         if let (Some(branch), Some(expected)) = (&self.branch, &self.branch_sha) {
             let reference = format!("refs/heads/{branch}");
             let out = std::process::Command::new("git")
@@ -1305,6 +1313,20 @@ impl Drop for SessionStartCleanup {
                 eprintln!("launch cleanup kept branch {branch}; inspect `git branch --list` before retrying");
             }
         }
+    }
+}
+impl Drop for SessionStartCleanup {
+    fn drop(&mut self) {
+        if !self.armed || !self.release_tree() {
+            return;
+        }
+        if let Some(id) = &self.lease_id {
+            if !remove_session_lease_record_only(&self.root, id) {
+                eprintln!("launch cleanup could not remove lease {id}; inspect `aida session leases --all`");
+                return;
+            }
+        }
+        self.release_branch();
         if let Some(claim) = &self.claim {
             match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim) {
                 Ok(true) => {},
@@ -2361,12 +2383,18 @@ pub(crate) fn session_start_with_receipt(
         let pooled = if pool_enabled && base.is_none() {
             match acquire_session_pool_worktree(&project_root, &branch_name, &mut rollback) {
                 Ok(acquired) => Some(acquired),
-                Err(e) if rollback_failed_setup => {
-                    return Err(
-                        e.context("warm-pool setup failed; invocation-owned cleanup retained")
-                    )
-                }
                 Err(e) => {
+                    // A full pool must not fail an `agent new --spec` launch:
+                    // undo whatever pool tree/branch this receipt took, then
+                    // fall back to a fresh worktree under the same receipt.
+                    // trace:BUG-2188 | ai:claude
+                    if let Some(cleanup) = rollback.as_mut() {
+                        if !cleanup.release_allocation() {
+                            return Err(e.context(
+                                "warm-pool setup failed and its pooled tree was kept; inspect `aida session leases --all`",
+                            ));
+                        }
+                    }
                     eprintln!(
                         "{} warm-pool acquire failed ({e}); falling back to a fresh worktree",
                         "Warning:".yellow().bold()

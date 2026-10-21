@@ -2576,8 +2576,6 @@ pub(crate) fn agent_new_with_config(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
-    // An adopted lease belongs to earlier work and is never rolled back.
-    // trace:BUG-2188 | ai:codex
 
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
@@ -2846,8 +2844,6 @@ pub(crate) fn agent_new_bg_dispatch(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
-    // An adopted lease belongs to earlier work and is never rolled back.
-    // trace:BUG-2188 | ai:codex
 
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
