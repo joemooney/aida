@@ -1,0 +1,18 @@
+{
+  "id": "465624f4-c49e-40bd-8b42-c9b7e78d5ecf",
+  "thread_id": "465624f4-c49e-40bd-8b42-c9b7e78d5ecf",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792609049954,
+  "body": "PR #2806: S3 (probe/destroy lifecycle) of the BUG-2169 clone design. Refs TASK-2053 (S4/S5 remain).\n- seat_clone::probe: runs git inside a read-only, network-less bwrap. If it gets no answer the result is Unknown and the clone is kept.\n- salvage: writes a patch into <main>/.aida/salvage/<clone>/.\n- destroy: location check, probe, salvage, remove the clone and its target dir, release the pin.\n- session end, reap (classify_clone_reap plus orphan-pin release) and worktree dismiss now handle clone leases.\nTests:\n- T7 canaries with a host-git shim, plus a negative control.\n- T6 stale pin-lock.\n- T4 probe check.\n- End-to-end session end and dismiss.\n- task_2053_bwrap_ added to the live-bwrap CI gate.\nNo mandate/gate files were touched.\nGates: make check-ci-fast (33 passed), make test-touched (239 passed). CI fully green on c3a2dcccf0.\n",
+  "subject": "READY: #2806 TASK-2053 S3 at c3a2dcccf0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

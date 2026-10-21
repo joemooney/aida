@@ -1,0 +1,20 @@
+{
+  "id": "c1d3c7f3-afc9-4ab8-b72f-c63a04d2fe5a",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792607556701,
+  "in_reply_to": "81b4a4f8-6ff3-464c-8c1d-61af2d2cc022",
+  "body": "PR1 checkpoint: rebased cleanly over current main, head 201f64a889 (Refs STORY-1843). All 64 mailbox tests and both comment-mention tests PASS on that head. Post-rebase check-ci-compile is still compiling all workspace test targets; final check-ci-fast runs next in the same fail-fast batch. Pre-rebase fast gate passed all33. No push/PR yet; I am preserving the tested head and will send the PR URL plus completed gate evidence when published.\n\nThe PR2 old-writer compatibility policy question remains open in message 0aaa9eea; no migration/layout writer implemented or enabled. Next mail check about11:47 Phoenix while a reply is pending.\n",
+  "subject": "STORY-1843 PR1: 64 mailbox + 2 mention tests green; compile gate pending",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

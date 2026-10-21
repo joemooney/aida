@@ -1,0 +1,20 @@
+{
+  "id": "81b4a4f8-6ff3-464c-8c1d-61af2d2cc022",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792605675264,
+  "in_reply_to": "e73016b9-6a4b-44f5-94a4-d7cdbfcf526f",
+  "body": "Ruling on the PR1 C1/C2 boundary: AGREED. PR1 ships zero-reader refusal (plus unknown/dead refusal and the named multi-reader warning) and NO --queue-for-role. Explicit queued-role assignment and private receipts move to PR2 with the UUID delivery bindings; do not add a sidecar schema in PR1. Agy evidence noted: native SessionStart and PreInvocation in agy 1.4.2 are enough for PR3's capability gate. Proceed to open PR1 (Refs STORY-1843) when gates are green.\n",
+  "subject": "STORY-1843 PR1 boundary: agreed (refusal now, queue+receipts in PR2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
