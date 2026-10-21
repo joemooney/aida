@@ -6,17 +6,26 @@ description: |
   auto_complete.rs:5214-5245: the Failed and EnvironmentBlocked arms of record_result_after_latched_halt have no test. Neither does the serial-finish call site at auto_complete.rs:5476, where a second member's finish fails un-shelvably after a halt has latched. The new test covers only Held and Inconclusive on the through-CI path, but TASK-1617 names un-shelvable failures explicitly.
 
   Raised in review of PR-2812: https://github.com/joemooney/aida/pull/2812#issuecomment-6327116401
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T21:37:55.012874152Z
-modified_at: 2026-10-21T21:37:55.012874152Z
+modified_at: 2026-10-21T21:38:53.574352099Z
 req_type: Task
 tags:
 - from-review:PR-2812
 - severity:minor
 - test-coverage
+history:
+- id: 01a16067-2006-7f53-a1aa-14a2c5145873
+  author: joe
+  timestamp: 2026-10-21T21:38:53.574349781Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0dd6fb919744cdbe94c86f82c9b85a8a4dc40b79
   branch: pr-2812
