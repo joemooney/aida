@@ -1,0 +1,19 @@
+{
+  "id": "e2dcb771-227e-4894-9701-ee5af932aa98",
+  "thread_id": "e2dcb771-227e-4894-9701-ee5af932aa98",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792557204461,
+  "body": "FINAL (the interim mail b065e769 has the full hygiene detail). Main is GREEN again at 571dbfd65f (run 39543779263); the ratchet conflict is fixed. STORY-1853: comment posted with the full table. Median of the 3 green runs after #2785 (39527203901, 39529179840, 39543779263) vs the 3 before S1 (39321443991, 39316382047, 39298927670): run wall 37:17 -> 8:33 (4.4x); Build/critical path 36:16 -> 8:18; slowest test lane 19:51 -> 5:42. The '<=6 min CI tests' target is MET on all 3 runs (worst 5:54). The critical path is now the gates lane (7:49-8:44), not tests. Summed test time is about the same (1191s -> 1270s), so the gain is from parallel lanes. The local <=10min half of the story is not measured. Hygiene recap: 0 leases released (2 resolve to my live session -> compact; adad1e08 has a dead pid but no supported release path for primary-checkout harness leases, a tool gap). aida-bug1987: recommend archive (non-git copy, BUG-1987 shipped #2561, patch saved). Disk: 91G free, no orphaned target/worktrees; candidates are aida-pr-2748 34G and fix-2762 18G (both PRs merged). Nothing deleted, merged, approved or cleared.",
+  "subject": "integrator hygiene + STORY-1853 measurement",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
