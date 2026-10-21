@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-21T15:07:04.931355421Z
+modified_at: 2026-10-21T17:22:53.444683218Z
 req_type: Story
 comments:
 - id: 01a15f00-6963-7640-93e7-f043fd18b5ff
@@ -31,6 +31,61 @@ comments:
   created_at: 2026-10-21T15:07:04.931355421Z
   modified_at: 2026-10-21T15:07:04.931355421Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15f7c-bf84-7940-bbe5-af50f432755f
+  author: ai:codex:joe
+  content: |
+    SKETCH v1: STORY-1843 — addressable agent handles
+
+    Design-only; advisor signoff required before implementation. No status change, child specs, worktree, or implementation is part of this pass. Source reviewed 2026-10-21: AIDA d2990a214a; aida-relay 2a20090. Confirmed operator decisions from the seat handoff are incorporated below.
+
+    1. Current source map
+
+    - Registry: aida-cli-lib/src/agent_registry.rs:83 AgentRegistryEntry, :437 registry_path, :481 agent_id (vendor/PID), :497 touch_mcp_agent (launcher-ancestor folding), :656 register_spawned_agent, :934 register_existing_agent, :1083 gc_dead_agents, :1641 write_entry (atomic replacement), :1731 registry_entry_is_live (ended/PID/start checks). Atomic row writes do not provide atomic namespace allocation. agent_registry_root.rs:8 agent_ls and :374 agent_register are the presentation/manual-registration seams; ls can run GC.
+    - Launcher: agent_launch.rs:4490 render_launch_mailbox_section, :5140 build_agent_new_bg_command, :5386 run_tracked_agent_after_spawn already propagate name/type and mailbox identity; foreground registration follows spawn. Relay bypasses these paths.
+    - Mail: mailbox_root.rs:292 inbox_identities unions user/name/role/vendor; :362 known_identity_spellings includes dead registry entries; :395 known_mailbox_recipients adds people. mailbox_cmd.rs:143–184 accepts unknown valid explicit recipients with a warning; :325 onward already reads the identity union. Shared identity-string watermarks let one role/vendor reader clear another's notice. mailbox_store.rs:48 write_message, :137 digest_snapshot_to_canonical, :180 read_watermark, :234 read_receipts and aida-core/src/mailbox.rs:515 inbox_for are reuse seams. punt_done.rs:385 resolve_comment_mentions already rejects unknown mentions.
+    - Hooks: aida-core/templates/settings.json:65/86 and codex-hooks.json:65/86 wire SessionStart/UserPromptSubmit context/mail. hooks/aida-session-context.sh:73 onward detects shared Codex daemon identity leakage; hooks/aida-mail-notice.sh:60 onward resolves root and emits non-marking notices. antigravity-hooks.json:1 currently provides only a named expiry PreInvocation handler; scaffolding/codex_hooks.rs:283 scaffold_antigravity_hooks merges that handler. No Agy SessionStart/mail contract is established by this source.
+    - Display: statusline_cmd.rs:22 handle_statusline_command and statusline_contract.rs share the stable AIDA segment; :753 codex_statusline_setup_text documents the tmux/title integration, not an executable native footer item.
+    - Relay: ~/ai/aida-relay/bin/relay.sh:3095 SESSION_ENV, :3238 label validation, :3343 label persistence, :3573 AIDA_RELAY_RUN, :3841 agent_command, :4509 driver_register/:4533 driver_deregister, :4750 startup/handoff protocol, :4852/:4866/:4877 vendor launches. Current labels allow uppercase/dot/underscore; controller registration is best-effort and cannot itself guarantee mail ownership.
+
+    2. Identity and lifetime
+
+    One project/common-root-scoped logical recipient UUID owns one handle. Sibling worktrees share it; unrelated projects do not. Launcher, hook, MCP and registry rows bind to that recipient instead of becoming duplicate readers. Role/spec/liveness remain explicit metadata; handles confer no grant, author, reviewer or completion authority. Do not change principal AIDA_USER globally to repair delivery.
+
+    Confirmed naming: explicit launch -n wins; otherwise <vendor>-<role>-<NN>. Relay handle is its label, e.g. codex-task-2053. Only lowercase [a-z0-9-]; reject invalid explicit names/labels with a suggested valid spelling, never silently normalize. Explicit live collisions refuse. Proposed additional bounds: first character alphanumeric, maximum 63 characters; reserve role/vendor/person aliases against ambiguous handles. Display vendor alias agy while retaining existing canonical vendor metadata. Unlabelled relays receive a displayed generated valid handle, persisted as their label. Generated suffixes start with two digits and grow beyond 99.
+
+    Add a permanent common-root allocation lock and atomic reservation/native-session binding before managed spawn; startup ensures the same binding idempotently. Commit only owned reservations, and compare-release only the matching failed launch. Native session ID plus supported process/start/boot identity distinguishes sessions; a shared daemon PID or inherited environment never identifies a recipient. Hooks cannot export to their parent: later commands must resolve persisted session bindings. Missing/ambiguous evidence reports unresolved rather than borrowing another session's handle. Managed startup must not proceed claiming delivery if binding fails.
+
+    Standalone end retires the live alias but retains resumable history/mail. GC uses process identity and ended state; it must not delete delivery history. Resume of the same logical session reconnects its UUID; a different session gets a different UUID even when a retired spelling is reused.
+
+    3. Routing, reading and compatibility
+
+    One shared typed resolver serves CLI/MCP/mentions/notices/inbox. Direct handles resolve atomically against a live session or an accepting relay reservation; unknown/dead handles refuse before writing, with agent-list/role hints. Known humans and explicit legacy aliases remain valid without a live agent. Unknown mentions warn/drop as today. Namespace ambiguity refuses rather than choosing the first match. Revalidate acceptance and persist delivery under the same lifecycle boundary so send/end races cannot strand an accepted message unnoticed.
+
+    Extend existing messages additively with immutable recipient binding and delivery metadata; keep original to/from, IDs, threads, tombstones and receipts. Notices/statusline never acknowledge. Explicit inbox reading acknowledges only that UUID's deliveries. Preserve operator-wide/explicit inspection without letting it acknowledge another recipient accidentally. No second mailbox transport.
+
+    Proposed role/vendor group policy: snapshot the live logical recipients at send; print names, warning at zero or multiple readers. Zero-reader mail remains queued for the first subsequent eligible cohort, whose assignment is persisted once. Each recipient gets independent receipt state; later role changes do not silently inherit a prior cohort's mail. Advisor should approve this audience policy explicitly. Warn with the same reader names used by delivery.
+
+    Migration preserves human inboxes and existing read watermarks/receipts. Legacy group unread mail receives explicit cohort binding; ambiguous old names stay inspectable with a reconciliation report, never guessed onto a new UUID. Do not copy joe's inbox into children. Existing phantom cleanup remains explicit/idempotent. Gate new-format rollout on old-reader compatibility: unsupported readers/writers must refuse affected delivery/ack operations rather than erase metadata or report success. Existing local/canonical digest and store lock remain authoritative.
+
+    4. Relay gaps, end and reuse
+
+    The controller owns one UUID/label across child rotations and accepts mail during inter-session gaps. Each child receives that binding; startup emits pending mail context and the handoff instructs it to read its handle inbox. Paused/waiting while the owning controller is valid remains accepting; terminal end/stop/crash retires it.
+
+    Confirmed operator policy: unread mail stays with the original run. On end/stop, notify each sender AND advisor explicitly: "undelivered: run ended". Preserve original mail and history; bounce notification is not recipient acknowledgement. Use a durable pending-notification outbox and unique (original delivery, destination, end event) receipt keys; replay after crashes, suppress duplicate destinations, and never bounce a bounce. Reconciliation on lifecycle/send/start/maintenance entry must handle killed controllers without relying on EXIT traps. Report pending bounce failures visibly until retried.
+
+    A different run reusing a finished label warns with the exact old-run unread count and offers explicit handover. Headless startup requires an explicit handover or leave-with-old selection/flag when unread mail exists. No silent transfer. Handover adds provenance-linked delivery to the new UUID, records the decision, and preserves originals, acknowledgements and bounce history. Same-run resume remains distinct from label reuse.
+
+    5. Vertical PRs and proof
+
+    1) Managed cross-vendor delivery: reservation/binding, resolver, safe migration/receipts, role warnings, agent ls and statusline together. Demonstrate sender -> named recipient -> notice -> inbox -> private acknowledgement.
+    2) Raw client coverage: idempotent startup registration and next-turn delivery using each actual client's lifecycle/payload. Verify Agy's supported startup path; do not invent Claude-shaped SessionStart. Launcher injection can cover managed first prompts, but a first-tool fallback cannot satisfy raw first-prompt acceptance. Capture supported versions/payloads and resolve any acceptance adjustment with advisor before claiming completion.
+    3) Relay delivery across rotations: stable label, gap queue, startup/handoff, end/crash bounces, reuse warning and explicit handover, with coordinated AIDA/relay version gating.
+
+    Named black-box cases: Claude-to-Agy next-turn notice/body/private-ack using actual Agy payload plus a supported-client smoke run; raw/MCP/no-MCP startup; shared Codex daemon isolation; concurrent allocation/collision and PID reuse; role 0/1/2 reader snapshots; legacy human/group/thread/tombstone migration; unrelated-project isolation; relay rotation/gap/send-end race; stop/crash recovery and exactly-once bounce visibility; label reuse exact counts/headless explicit selection/provenance-preserving handover; no bounce loops or authority escalation. CLI/hook tests use isolated homes/projects and independent vendor fixtures. BUG-2204's current-head verdict truth check remains separate: handles do not prove approval.
+
+    Advisor signoff requested on identity/lifecycle/schema approach, proposed role audience/migration policy, namespace/bounds/unlabelled defaults, and Agy capability gate. No implementation tests or builds run for this design-only review.
+  created_at: 2026-10-21T17:22:53.444683218Z
+  modified_at: 2026-10-21T17:22:53.444683218Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
