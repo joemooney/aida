@@ -6,16 +6,25 @@ description: |
   rework_hold_release.rs auto_release_with writes a release-rework-hold MandateDriveAction only on success; a release_with Err under a mandate leaves no ledger row (emit_session_ship ledgers both outcomes for ships).
 
   Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T18:35:57.490665172Z
-modified_at: 2026-10-21T18:35:57.490665172Z
+modified_at: 2026-10-21T18:48:31.588563900Z
 req_type: Task
 tags:
 - from-review:PR-2804
 - severity:minor
+history:
+- id: 01a15fcb-2664-7721-bd45-3da362b394db
+  author: joe
+  timestamp: 2026-10-21T18:48:31.588557512Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
   branch: pr-2804
