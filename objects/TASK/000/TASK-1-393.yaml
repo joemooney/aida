@@ -1,0 +1,30 @@
+id: 01a15d47-270c-7820-9ebe-04ce2a681947
+spec_id: TASK-1-393
+title: '[cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after class…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1800, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic] pr_cmd.rs ship_is_default_branch has no non-test callers after classify_ship_default_branch replaced it, so non-test builds get a dead_code warning. Gate it #[cfg(test)], as was done for store_history_versions.
+
+  PR: #2732
+  Reviewed sha: f6b41c05706350bc7fb9c6700b0831247855dfa9
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T07:05:06.572883004Z
+modified_at: 2026-10-21T07:05:06.572883004Z
+req_type: Task
+tags:
+- carried-from:TASK-1800
+- finding-hash:377e83e6
+- from-review:PR-2732
+- kind:carried-forward
+filed_at:
+  code_sha: a0cd26e972397f9de83689fa274a91df2a6413ac
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
