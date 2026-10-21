@@ -1058,3 +1058,37 @@ fn task1801_pickup_decision_refuses_without_credited_metadata() {
         );
     }
 }
+
+/// TASK-1674: the exit-30 message names at most five denials and counts the
+/// rest, so a run with dozens of denials stays one readable line.
+// trace:TASK-1955 | ai:claude (TASK-1674)
+#[test]
+fn no_verdict_message_caps_the_denial_list() {
+    let denials: Vec<String> = (1..=12).map(|n| format!("Bash(denied-{n})")).collect();
+    let err = crate::queue_cmd::standalone_reviewer_outcome(
+        7,
+        Some("no verdict".into()),
+        std::path::Path::new("/v/PR-7.json"),
+        &denials,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.contains("denied 12 of the reviewer's tool call(s)"),
+        "{err}"
+    );
+    assert!(err.contains("Bash(denied-5); …7 more."), "{err}");
+    assert!(!err.contains("Bash(denied-6)"), "{err}");
+
+    let few = &denials[..2];
+    let err = crate::queue_cmd::standalone_reviewer_outcome(
+        7,
+        Some("no verdict".into()),
+        std::path::Path::new("/v/PR-7.json"),
+        few,
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(err.contains("Bash(denied-1); Bash(denied-2)."), "{err}");
+    assert!(!err.contains("more"), "{err}");
+}
