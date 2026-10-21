@@ -1,0 +1,26 @@
+id: 01a15e11-f4ac-73f2-865c-2f7885accba3
+spec_id: TASK-2055
+agreed_id: TASK-2055
+title: RosterStoreError::NotDetected should say whether config.toml was missing or named a non-existent store dir
+description: |
+  aida-cli-lib/src/seat_authority.rs RosterStoreError::NotDetected Display: BUG-2200 acceptance (1) asks for "which path was probed and why it was rejected". The message names the probed start dir but collapses two causes (no .aida/config.toml found in the walk-up, versus a config whose store_path names a directory that does not exist, or a walk-up stopped at a temp root). Naming the config file found and the store path it pointed at would make the diagnosis one step shorter.
+
+  Raised in review of PR-2795: https://github.com/joemooney/aida/pull/2795
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T10:46:37.484611907Z
+modified_at: 2026-10-21T10:46:37.484611907Z
+req_type: Task
+tags:
+- from-review:PR-2795
+- severity:cosmetic
+filed_at:
+  code_sha: 0066ef3ffe1a6abce8b9e1b07214917c4896c689
+  branch: pr-2795
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66e4d93b8
+  vendor: claude
+  session: 01a15e082a7a
