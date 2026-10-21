@@ -543,6 +543,16 @@ pub(crate) struct RefsCompletionFilter {
 }
 
 impl RefsCompletionFilter {
+    /// The subject names spec ids, and every one only inside a `(Refs …)`
+    /// group: a reference merge that completes nothing (BUG-2203).
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    pub(crate) fn subject_only_references(&self, subject: &str) -> bool {
+        !self.subject_refs.is_empty()
+            && extract_spec_ids_from_commit(subject)
+                .iter()
+                .all(|id| self.subject(id))
+    }
+
     pub(crate) fn subject(&self, id: &str) -> bool {
         self.subject_refs.iter().any(|r| r.eq_ignore_ascii_case(id))
     }
@@ -2212,6 +2222,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
             pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
             if commit_declares_non_completing(message)
                 || slice_subject_withholds_completion(subject)
+                || refs_completion_filter(subject, message).subject_only_references(subject)
             {
                 non_completing_prs.insert(pr_n);
             }

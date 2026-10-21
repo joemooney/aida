@@ -4916,18 +4916,31 @@ fn non_completing_merge_does_not_complete_review_story_covered_specs() {
     let (_tmp, project_root, store_path) = init_test_project();
     seed_cluster_pr_review_story(&store_path, "STORY-9201", 41, &["TASK-9201"]);
     seed_cluster_pr_review_story(&store_path, "STORY-9202", 42, &["TASK-9202"]);
+    seed_cluster_pr_review_story(&store_path, "STORY-9203", 43, &["TASK-9203"]);
+    seed_cluster_pr_review_story(&store_path, "STORY-9204", 44, &["TASK-9204"]);
 
     let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
-    for (file, pr, body) in [
-        ("a.txt", 41, "Non-completing slice."),
-        ("b.txt", 42, "Ordinary merge."),
+    // PR-44 is merged the way `aida pr ship --no-complete` now writes it: the
+    // commit bullets plus the appended declaration.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    let shipped_body = crate::pr_cmd::non_completing_squash_body("* fix: part one\n\nDetail.");
+    assert!(
+        shipped_body.ends_with("\n\naida: no-complete"),
+        "{shipped_body}"
+    );
+    for (file, subject, body) in [
+        ("a.txt", "fix: cluster (#41)", "Non-completing slice."),
+        ("b.txt", "fix: cluster (#42)", "Ordinary merge."),
+        (
+            "c.txt",
+            "fix: cluster (Refs TASK-9203) (#43)",
+            "Reference only.",
+        ),
+        ("d.txt", "fix: cluster (#44)", shipped_body.as_str()),
     ] {
         std::fs::write(project_root.join(file), "x\n").unwrap();
         run_git(&project_root, &["add", file]);
-        run_git(
-            &project_root,
-            &["commit", "-m", &format!("fix: cluster (#{pr})"), "-m", body],
-        );
+        run_git(&project_root, &["commit", "-m", subject, "-m", body]);
     }
 
     let storage = Storage::new(&store_path);
@@ -4939,6 +4952,12 @@ fn non_completing_merge_does_not_complete_review_story_covered_specs() {
     assert_eq!(status("TASK-9201"), RequirementStatus::Done);
     assert!(has_flip(&flips, "TASK-9202"), "control: flips: {flips:?}");
     assert_eq!(status("TASK-9202"), RequirementStatus::Completed);
+    // A `(Refs X)`-only squash subject and a `--no-complete` ship body are
+    // non-completing too. trace:TASK-1951 trace:TASK-1765 | ai:claude
+    for id in ["TASK-9203", "TASK-9204"] {
+        assert!(!has_flip(&flips, id), "{id}: flips: {flips:?}");
+        assert_eq!(status(id), RequirementStatus::Done, "{id}");
+    }
 }
 
 /// TASK-1618: the slice-subject exclusion applies to rebased slice commits
