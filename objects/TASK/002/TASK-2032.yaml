@@ -11,12 +11,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T23:41:45.676543397Z
-modified_at: 2026-10-20T23:41:45.676543397Z
+modified_at: 2026-10-21T04:33:05.600081188Z
 req_type: Task
 tags:
 - contained
 - from-review:PR-2787
+- operator-held
 - severity:minor
+history:
+- id: 01a15cbb-fc05-7050-907c-e1e0d5b0996b
+  author: joe
+  timestamp: 2026-10-21T04:33:06.053048666Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:05.600081188Z
+deferred_until: 'Defense in depth on PR #2787 code (open); no host path found. Revisit when #2787 merges; fold into TASK-1952.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
