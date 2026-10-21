@@ -137,7 +137,8 @@ pub(crate) fn latest_review_comment_verdict(
 pub(crate) fn verdict_file_written_at(
     path: &std::path::Path,
 ) -> Option<chrono::DateTime<chrono::Utc>> {
-    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    // trace:TASK-1801 | ai:claude
+    let modified = review_verdict::verdict_file_modified(path)?;
     Some(chrono::DateTime::<chrono::Utc>::from(modified))
 }
 
@@ -188,7 +189,8 @@ pub(crate) fn spec_review_approved(
         .map(|id| review_verdict::verdict_path(project_root, id))
         .filter(|p| p.is_file())
     {
-        let record = std::fs::read_to_string(&path)
+        // trace:TASK-1801 | ai:claude
+        let record = review_verdict::read_verdict_body(&path)
             .ok()
             .and_then(|body| review_verdict::parse_recorded_verdict(&body));
         if record.as_ref().is_some_and(|v| v.is_closed()) {
