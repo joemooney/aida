@@ -3,13 +3,22 @@ spec_id: BUG-2199
 agreed_id: BUG-2199
 title: 'Refs-only PRs are unshippable while main-checkout harness-worktree leases live: fail-closed author set and recorder identity both bind them'
 description: 'Seen 2026-10-20 21:00 on PR-2791 (Refs BUG-2191): aida pr ship refused an independent reviewer''s approval as AuthorSession. Cause: (1) a ''(Refs X)'' subject parses to no spec IDs and the branch carries none, so ship_approval_policy falls back to all_author_sessions (fail-closed), and is_authoring_lease accepts scope=harness-worktree leases on the main checkout (review_verb false, scope not PR-*). (2) RecorderIdentity::current adds project_root to dirs, so lease_bound_by_context binds every main-checkout lease into every recorder''s identity. The three stale leases abf9f7f087dbb254e-c3a7f12a9af4d18b (2026-06-26), 01a0c96c2f117c239cfd2acf11a8f59a-3716d304824b58e5 (no pid) and adad1e083ece1fe50-b7d818ea6397d66a (dead pid 3699188) therefore overlap on both sides. Affects every Refs-only PR (#2778 #2786 #2787 #2790). Code: pr_cmd.rs ~1756-1812/1972-1984, review_authority.rs ~456-499/808-845, pr_ship.rs ~855-916. Fix direction: exclude harness-worktree scope from is_authoring_lease (at least in fail-closed mode); bind leases by the recorder''s actual cwd only, not project_root; parse ''(Refs X)'' IDs for authorship (not completion). Related: BUG-1772 (harness-worktree leases never reaped, marked completed but leases persist), BUG-2197. AC: a Refs-only PR approved by a non-author reviewer launched from the main checkout ships while main-checkout harness leases exist; a regression test covers each of the two binding paths.'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:09:33.757932560Z
-modified_at: 2026-10-21T04:09:33.757932560Z
+modified_at: 2026-10-21T04:09:48.003710477Z
 req_type: Bug
+history:
+- id: 01a15ca6-a6e3-7441-ab58-520125142a08
+  author: joe
+  timestamp: 2026-10-21T04:09:48.003704278Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
   branch: main
