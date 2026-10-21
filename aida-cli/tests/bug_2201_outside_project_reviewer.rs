@@ -274,9 +274,21 @@ fn contained_reviewer_in_outside_project_records_its_verdict() {
     let log = text(&out);
     let argv = std::fs::read_to_string(fx.base.join("child-argv")).expect("the fake vendor ran");
     assert!(argv.contains("\"Bash(aida *)\""), "{argv}\n{log}");
+    let lines: Vec<&str> = argv.lines().collect();
+    let settings_at = lines
+        .iter()
+        .position(|a| *a == "--settings")
+        .expect("contained launch passes --settings");
+    let settings: serde_json::Value = serde_json::from_str(lines[settings_at + 1]).unwrap();
+    let allow: Vec<&str> = settings["permissions"]["allow"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r.as_str())
+        .collect();
     assert!(
-        !argv.contains("\"Bash(git"),
-        "no git allow rule: {argv}\n{log}"
+        !allow.iter().any(|r| r.starts_with("Bash(git")),
+        "no git allow rule: {allow:?}"
     );
     assert!(
         child_env(&fx)
