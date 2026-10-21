@@ -3733,7 +3733,10 @@ pub(crate) fn pr_ship_with_method(
     }
     // TASK-1621: the slice bookkeeping also runs on a re-run that finds the PR
     // already merged, so a crash between the merge and this step is repaired
-    // by re-running `aida pr ship N`. Both writers are idempotent.
+    // by re-running `aida pr ship N --rebase`. On that path the head branch,
+    // base and head sha come from the merged PR itself, never from the
+    // current checkout. Completion and the marker are both idempotent (the
+    // marker dedups per PR).
     // trace:TASK-1951 trace:TASK-1621 | ai:claude
     let mut slice_marker_failed = false;
     if rebase_slice_bookkeeping_due(merged_this_run, already_merged) {
@@ -3753,20 +3756,30 @@ pub(crate) fn pr_ship_with_method(
                     &pr_merged_spec_ids,
                     merged_head_sha.as_deref(),
                 );
-            } else if let Err(e) = record_non_completing_rebase_slice(
-                &main_worktree,
-                &project_root,
+            } else if let Err(e) = rebase_slice_inputs(
+                already_merged,
                 pr_number,
+                &ship_branch,
                 &retarget_base,
                 merged_head_sha.as_deref(),
-                &ship_branch,
-            ) {
+                || fetch_merged_pr_refs_via_gh(&project_root, pr_number),
+            )
+            .and_then(|inputs| {
+                record_non_completing_rebase_slice(
+                    &main_worktree,
+                    &project_root,
+                    pr_number,
+                    &inputs.base,
+                    inputs.head_sha.as_deref(),
+                    &inputs.branch,
+                )
+            }) {
                 // TASK-1622: without the marker, the pull below could complete
                 // the spec from a rebased `(SPEC-ID)` subject. Skip it; a re-run
                 // records the marker on the already-merged path.
                 // trace:TASK-1951 trace:TASK-1622 | ai:claude
                 eprintln!(
-                    "  {} could not record the non-completing slice marker for PR-{pr_number}: {e:#}\n    skipping `aida pull` so no spec completes; re-run `aida pr ship {pr_number}`",
+                    "  {} could not record the non-completing slice marker for PR-{pr_number}: {e:#}\n    skipping `aida pull` so no spec completes; re-run `aida pr ship {pr_number} --rebase`",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow()
                 );
                 slice_marker_failed = true;
@@ -3783,12 +3796,13 @@ pub(crate) fn pr_ship_with_method(
             &ShipStep::Pull,
             &StepOutcome::Skipped("--no-pull".into()),
         );
-    } else if slice_marker_failed {
+    } else if let Some(reason) = post_merge_pull_skip_reason(slice_marker_failed) {
+        eprintln!("  step 4: skipping `aida pull` ({reason})");
         log_ship_activity(
             &main_worktree,
             Some(pr_number),
             &ShipStep::Pull,
-            &StepOutcome::Skipped("non-completing slice marker not recorded".into()),
+            &StepOutcome::Skipped(reason.into()),
         );
     } else {
         eprintln!(
@@ -4926,6 +4940,111 @@ pub(crate) fn rebase_slice_bookkeeping_due(merged_this_run: bool, already_merged
     merged_this_run || already_merged
 }
 
+/// TASK-1622: why step 4 skips `aida pull` after the merge, beyond
+/// `--no-pull`: an unrecorded non-completing marker would let the pull
+/// complete the slice's spec from a rebased `(SPEC-ID)` subject.
+// trace:TASK-1951 trace:TASK-1622 | ai:claude
+pub(crate) fn post_merge_pull_skip_reason(slice_marker_failed: bool) -> Option<&'static str> {
+    slice_marker_failed.then_some("non-completing slice marker not recorded")
+}
+
+/// The head branch, base and head sha a merged PR was shipped from.
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RebaseSliceInputs {
+    pub(crate) branch: String,
+    pub(crate) base: String,
+    pub(crate) head_sha: Option<String>,
+}
+
+/// TASK-1621: the slice bookkeeping inputs. A merge made in this run uses the
+/// values ship resolved for the open PR. An already-merged re-run resolves
+/// them from the merged PR (`merged_refs`), because the open-PR lookup misses
+/// a merged PR and the checkout ship runs from is usually `main`; when they
+/// cannot be resolved it refuses rather than guess.
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+pub(crate) fn rebase_slice_inputs(
+    already_merged: bool,
+    pr_number: u64,
+    ship_branch: &str,
+    retarget_base: &str,
+    merged_head_sha: Option<&str>,
+    merged_refs: impl FnOnce() -> Result<RebaseSliceInputs>,
+) -> Result<RebaseSliceInputs> {
+    if !already_merged {
+        return Ok(RebaseSliceInputs {
+            branch: ship_branch.to_owned(),
+            base: retarget_base.to_owned(),
+            head_sha: merged_head_sha.map(str::to_owned),
+        });
+    }
+    merged_refs().with_context(|| {
+        format!("could not resolve the merged PR-{pr_number}'s head branch, base and head sha")
+    })
+}
+
+/// `headRefName`, `baseRefName` and `headRefOid` of a MERGED PR, from
+/// `gh pr view N`.
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+pub(crate) fn parse_merged_pr_refs(stdout: &[u8]) -> Result<RebaseSliceInputs> {
+    let json: serde_json::Value =
+        serde_json::from_slice(stdout).context("`gh pr view` returned non-JSON output")?;
+    let field = |k: &str| {
+        json.get(k)
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+    };
+    let state = field("state").unwrap_or_default();
+    anyhow::ensure!(
+        state.eq_ignore_ascii_case("MERGED"),
+        "the PR is not merged (state `{state}`)"
+    );
+    let (Some(branch), Some(base), Some(sha)) = (
+        field("headRefName"),
+        field("baseRefName"),
+        field("headRefOid"),
+    ) else {
+        anyhow::bail!("`gh pr view` lacks headRefName, baseRefName or headRefOid");
+    };
+    anyhow::ensure!(
+        crate::git_arg_guard::is_shell_safe_branch_name(&branch)
+            && crate::git_arg_guard::is_shell_safe_branch_name(&base)
+            && crate::git_arg_guard::is_hex_sha(&sha),
+        "`gh pr view` returned an unsafe branch name or sha"
+    );
+    Ok(RebaseSliceInputs {
+        branch,
+        base,
+        head_sha: Some(sha),
+    })
+}
+
+// trace:TASK-1951 trace:TASK-1621 | ai:claude
+fn fetch_merged_pr_refs_via_gh(
+    project_root: &std::path::Path,
+    n: u64,
+) -> Result<RebaseSliceInputs> {
+    let gh = crate::kernel::resolve_gh_binary().context("`gh` not found")?;
+    let mut cmd = std::process::Command::new(gh);
+    cmd.current_dir(project_root).args([
+        "pr",
+        "view",
+        &n.to_string(),
+        "--json",
+        "state,headRefName,baseRefName,headRefOid",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)
+        .context("`gh pr view` failed or timed out")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "`gh pr view {n}` exited {}",
+        out.status
+    );
+    parse_merged_pr_refs(&out.stdout)
+}
+
 /// STORY-1663: record a `[aida:non-completing-rebase]` marker comment on any
 /// spec referenced by a rebase-merged slice PR when `--final-slice` was not
 /// passed, so `aida pull` and `aida db reconcile-status` leave the spec's
@@ -5010,11 +5129,12 @@ pub(crate) fn record_non_completing_rebase_slice(
     .with_context(|| format!("could not open the store at {}", store_path.display()))?;
     use aida_core::DatabaseBackend;
     let landed = landed_commits_for_subjects(project_root, base_branch, &range_subjects);
-    let mut comment_lines = vec![format!(
+    let header = format!(
         "{} PR #{} rebase-merged without --final-slice; status stays unchanged until the final slice completes.",
         pr_ship::NON_COMPLETING_REBASE_MARKER,
         pr_number
-    )];
+    );
+    let mut comment_lines = vec![header.clone()];
     if let Some(sha) = merged_head_sha.filter(|s| !s.trim().is_empty()) {
         comment_lines.push(format!("head: {}", sha.trim()));
     }
@@ -5038,7 +5158,12 @@ pub(crate) fn record_non_completing_rebase_slice(
             }
         };
         if let Err(e) = backend.update_spec_atomically(&req, |r| {
-            let already = r.comments.iter().any(|c| c.content == body);
+            // One marker per PR: a re-run that resolves slightly different
+            // lines never appends a second one. trace:TASK-1951 | ai:claude
+            let already = r
+                .comments
+                .iter()
+                .any(|c| c.content.lines().next() == Some(header.as_str()));
             if !already {
                 r.add_comment(aida_core::Comment::new(
                     "aida-pr-ship".to_string(),
@@ -7442,21 +7567,96 @@ mod story_1663_rebase_ship_tests {
         assert!(err.to_string().contains("store"), "{err:#}");
     }
 
-    /// TASK-1621: the bookkeeping runs on the already-merged re-run too.
-    // trace:TASK-1951 trace:TASK-1621 | ai:claude
+    /// TASK-1621: an already-merged re-run, from a `main` checkout whose tip
+    /// names another spec, resolves the merged PR's own branch, base and head
+    /// and marks only the PR's spec, once, however often it re-runs. When the
+    /// merged PR cannot be resolved it refuses, and the pull is skipped
+    /// (TASK-1622).
+    // trace:TASK-1951 trace:TASK-1621 trace:TASK-1622 | ai:claude
     #[test]
-    fn task_1951_rebase_bookkeeping_runs_on_an_already_merged_rerun() {
-        assert!(rebase_slice_bookkeeping_due(true, false));
+    fn task_1951_already_merged_rerun_marks_only_the_merged_prs_spec() {
         assert!(rebase_slice_bookkeeping_due(false, true));
         assert!(!rebase_slice_bookkeeping_due(false, false));
-        let src = include_str!("pr_cmd.rs");
-        let gate = src
-            .find("if rebase_slice_bookkeeping_due(merged_this_run, already_merged) {")
-            .expect("ship gates the slice bookkeeping on the helper");
-        let record = src[gate..]
-            .find("record_non_completing_rebase_slice(")
-            .expect("marker write follows the gate");
-        assert!(record < 2_000, "the marker write sits inside the gate");
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = aida_core::db::GitBackend::new(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        for (id, status) in [
+            ("STORY-77", aida_core::RequirementStatus::InProgress),
+            ("STORY-88", aida_core::RequirementStatus::Done),
+        ] {
+            let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+            req.spec_id = Some(id.to_string());
+            req.status = status;
+            backend.add_requirement(req).unwrap();
+        }
+        git(&["switch", "-q", "-c", "claude/story-77-part1"]);
+        std::fs::write(root.join("slice.txt"), "one\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&["cherry-pick", &pr_head]);
+        std::fs::write(root.join("other.txt"), "other\n").unwrap();
+        git(&["add", "other.txt"]);
+        git(&["commit", "-q", "-m", "fix: other work (STORY-88)"]);
+
+        let merged_json = format!(
+            r#"{{"state":"MERGED","headRefName":"claude/story-77-part1","baseRefName":"main","headRefOid":"{pr_head}"}}"#
+        );
+        for _ in 0..2 {
+            // The checkout is `main`, as when the advisor re-runs ship.
+            let inputs = rebase_slice_inputs(true, 77, "main", "main", None, || {
+                parse_merged_pr_refs(merged_json.as_bytes())
+            })
+            .expect("merged PR resolves");
+            assert_eq!(inputs.branch, "claude/story-77-part1");
+            assert_eq!(inputs.head_sha.as_deref(), Some(pr_head.as_str()));
+            record_non_completing_rebase_slice(
+                root,
+                root,
+                77,
+                &inputs.base,
+                inputs.head_sha.as_deref(),
+                &inputs.branch,
+            )
+            .expect("marker recorded");
+        }
+        let markers = |id: &str| {
+            backend
+                .get_requirement_unambiguous(id)
+                .unwrap()
+                .unwrap()
+                .comments
+                .iter()
+                .filter(|c| c.content.contains(pr_ship::NON_COMPLETING_REBASE_MARKER))
+                .count()
+        };
+        assert_eq!(markers("STORY-77"), 1, "one marker for the PR's spec");
+        assert_eq!(markers("STORY-88"), 0, "main's tip spec is untouched");
+
+        let unresolved = rebase_slice_inputs(true, 77, "main", "main", None, || {
+            anyhow::bail!("gh unavailable")
+        })
+        .expect_err("an unresolvable merged PR refuses");
+        assert!(unresolved.to_string().contains("PR-77"), "{unresolved:#}");
+        assert_eq!(
+            post_merge_pull_skip_reason(true),
+            Some("non-completing slice marker not recorded")
+        );
+        assert_eq!(post_merge_pull_skip_reason(false), None);
+        for bad in [
+            r#"{"state":"OPEN","headRefName":"b","baseRefName":"main","headRefOid":"0123456789abcdef0123456789abcdef01234567"}"#,
+            r#"{"state":"MERGED","headRefName":"b","baseRefName":"main"}"#,
+            r#"{"state":"MERGED","headRefName":"-x","baseRefName":"main","headRefOid":"0123456789abcdef0123456789abcdef01234567"}"#,
+        ] {
+            assert!(parse_merged_pr_refs(bad.as_bytes()).is_err(), "{bad}");
+        }
+        // The operator hint names --rebase, so the re-run takes the rebase path.
+        assert!(include_str!("pr_cmd.rs").contains("re-run `aida pr ship {pr_number} --rebase`"));
     }
 
     #[test]
