@@ -3926,7 +3926,7 @@ mod task_631_init_self_commit_tests {
     }
 
     fn git_in(root: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .output()
@@ -4006,7 +4006,7 @@ mod task_631_init_self_commit_tests {
         );
 
         // The committed tree carries the non-ignored paths but NOT .claude.
-        let tree = std::process::Command::new("git")
+        let tree = crate::test_git::git_command()
             .current_dir(root)
             .args(["ls-tree", "-r", "--name-only", "HEAD"])
             .output()
@@ -4050,7 +4050,7 @@ mod task_631_init_self_commit_tests {
     }
 
     fn git_head(root: &std::path::Path) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(root)
             .args(["rev-parse", "HEAD"])
             .output()
@@ -4102,7 +4102,7 @@ mod task_631_init_self_commit_tests {
             root.join("CLAUDE.md").exists(),
             "scaffold files should be written locally even when the commit is suppressed"
         );
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(&root)
             .args(["status", "--porcelain"])
             .output()
@@ -6190,12 +6190,12 @@ mod init_roster_tests {
         let prev_cwd = std::env::current_dir().unwrap();
         std::env::set_current_dir(root).unwrap();
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .current_dir(root)
             .status()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .args(["commit", "--allow-empty", "-m", "init"])
             .current_dir(root)
             .status()

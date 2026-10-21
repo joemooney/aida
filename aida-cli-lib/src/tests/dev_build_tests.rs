@@ -300,7 +300,7 @@ fn worktree_never_promotes_even_with_allow_dirty() {
 // --- probe against real temp git repos ----------------------------------------
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
@@ -384,7 +384,7 @@ fn probe_behind_and_diverged_refuse() {
     let (tmp, origin, clone) = git_fixture();
     // A second clone pushes a commit; fetching it leaves `clone` behind.
     let other = tmp.path().join("other");
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
         .args([

@@ -6,6 +6,9 @@
 //! child was told it was the advisor.
 // trace:BUG-2007 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -31,7 +34,7 @@ fn aida(repo: &Path, home: &Path, path: &str, args: &[&str]) -> Output {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

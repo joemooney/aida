@@ -282,7 +282,7 @@ fn a_refusal_for_an_unrelated_spec_does_not_gate_this_pr() {
 // ── the chokepoint itself ────────────────────────────────────────────────────
 
 fn git(root: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(args)
@@ -308,7 +308,7 @@ fn temp_repo_with_branch(branch: &str) -> (tempfile::TempDir, String) {
     std::fs::write(root.join("b.txt"), "change\n").unwrap();
     git(root, &["add", "."]);
     git(root, &["commit", "-m", "change"]);
-    let head = std::process::Command::new("git")
+    let head = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "HEAD"])
@@ -354,7 +354,7 @@ fn merge_change_refuses_a_hand_written_refusal_then_merges_on_release() {
     let err = merge_via_forge(root, "bug-9-work").expect_err("the chokepoint must refuse");
     assert!(err.to_string().contains("request-changes"), "{err:#}");
     // The base is untouched by the refused merge.
-    let main_tip = std::process::Command::new("git")
+    let main_tip = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["log", "--oneline", "main"])

@@ -393,7 +393,7 @@ mod tests {
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)

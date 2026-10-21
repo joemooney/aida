@@ -608,7 +608,7 @@ mod git_integration_tests {
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(dir)
             .args(args)
             .output()
@@ -784,7 +784,7 @@ mod git_integration_tests {
         let pool = worktree_pool::read_state(&root).unwrap();
         assert!(pool.entries[0].leased && pool.entries[0].leased_at.is_none());
         // The branch's commit is untouched — adopt never resets.
-        let log = Command::new("git")
+        let log = crate::test_git::git_command()
             .current_dir(&sib)
             .args(["log", "--oneline"])
             .output()

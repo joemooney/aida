@@ -17,6 +17,9 @@
 //!     unchanged (still Approved, never bumped to In Progress).
 // trace:TASK-1053
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::Command;
 
@@ -48,7 +51,7 @@ fn aida(repo: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()
@@ -530,7 +533,7 @@ fn no_launch_with_custom_base_populates_submodules() {
     git(&repo, &["config", "user.name", "t"]);
     git(&repo, &["config", "protocol.file.allow", "always"]);
     let submodule_path = submodule_src.to_string_lossy().to_string();
-    let add_submodule = Command::new("git")
+    let add_submodule = test_git::git_command()
         .current_dir(&repo)
         .args([
             "-c",

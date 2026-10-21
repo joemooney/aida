@@ -12,6 +12,9 @@
 // trace:BUG-1995 | ai:antigravity
 #![cfg(target_os = "linux")]
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -59,7 +62,7 @@ fn aida_command(repo: &Path, home: &Path, gh: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

@@ -19,6 +19,9 @@
 //! deterministic without changing the code under test.
 // trace:TASK-1561 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -46,7 +49,7 @@ fn aida(repo: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()
@@ -164,7 +167,7 @@ fn previewed_worktree(repo: &Path, home: &Path, spec: &str) -> String {
 /// The worktree `aida queue work` actually registers, read back from git rather
 /// than from AIDA's own report — the report is what the defect made plausible.
 fn registered_worktrees(repo: &Path) -> Vec<PathBuf> {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(["worktree", "list", "--porcelain"])
         .output()

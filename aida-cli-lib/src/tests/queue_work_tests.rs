@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// non-repo tempdir no longer exercises the real decision.
 // trace:BUG-1515 | ai:claude
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -33,7 +33,7 @@ fn git(repo: &std::path::Path, args: &[&str]) {
 
 // trace:BUG-1515 | ai:claude
 fn git_head(repo: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "HEAD"])

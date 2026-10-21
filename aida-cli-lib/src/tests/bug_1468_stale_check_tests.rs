@@ -74,7 +74,7 @@ fn fixture() -> (TempDir, &'static str) {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path();
     let run = |args: &[&str]| {
-        let r = Command::new("git")
+        let r = crate::test_git::git_command()
             .arg("-C")
             .arg(p)
             .args(args)
@@ -100,7 +100,7 @@ fn fixture() -> (TempDir, &'static str) {
 }
 
 fn run_git(p: &std::path::Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(args)

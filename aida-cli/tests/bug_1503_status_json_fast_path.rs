@@ -7,6 +7,9 @@
 // trace:BUG-1503 | ai:claude
 #![cfg(target_os = "linux")]
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -42,7 +45,7 @@ fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

@@ -2,11 +2,14 @@
 //! Black-box regression for terminal specs still owned by a live drain.
 // trace:TASK-163 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
 fn git(repo: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

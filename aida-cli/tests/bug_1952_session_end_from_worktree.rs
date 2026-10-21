@@ -13,6 +13,9 @@
 //! only an on-disk assertion after a real end shows which root was used.
 // trace:BUG-1952 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -61,7 +64,7 @@ fn aida(cwd: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let mut cmd = Command::new("git");
+    let mut cmd = test_git::git_command();
     isolate(&mut cmd, &home_of(repo));
     let status = cmd.current_dir(repo).args(args).status().expect("run git");
     assert!(status.success(), "git {args:?} failed");
@@ -227,7 +230,7 @@ fn session_end(cwd: &Path, home: &Path, id: &str) -> Output {
 }
 
 fn registered_worktrees(repo: &Path) -> Vec<PathBuf> {
-    let mut cmd = Command::new("git");
+    let mut cmd = test_git::git_command();
     isolate(&mut cmd, &home_of(repo));
     let out = cmd
         .current_dir(repo)

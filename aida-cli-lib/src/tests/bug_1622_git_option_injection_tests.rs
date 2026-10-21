@@ -8,7 +8,7 @@
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.email=t@example.com", "-c", "user.name=Test"])
@@ -126,7 +126,7 @@ fn rebase_branch_refuses_an_option_like_value_before_fetching() {
     let bad = "--upload-pack=touch pwned;false/.";
     // The payload is live: run the pre-fix argv directly and see it fire.
     let (remote, branch) = bad.split_once('/').unwrap();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["fetch", remote, branch])
@@ -187,7 +187,7 @@ fn harness_worktree_register_refuses_an_option_like_branch() {
 }
 
 fn head_sha(root: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["rev-parse", "HEAD"])
@@ -218,7 +218,7 @@ fn filing_drift_hint_ignores_a_store_code_sha_that_is_not_a_commit_id() {
     // A real commit ID still yields a hint: `b.txt` was committed after
     // the first commit, and it is a traced file here.
     let first = {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["rev-parse", "feat"])

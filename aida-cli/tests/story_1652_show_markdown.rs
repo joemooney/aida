@@ -9,6 +9,9 @@
 //!   byte-for-byte, with or without `--raw`.
 // trace:STORY-1652 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -28,7 +31,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()
