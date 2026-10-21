@@ -535,3 +535,35 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   logging `git` first on PATH and requires that no untagged git ran in the clone (negative
   control included); `task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first`
   covers heal/cleanup.
+
+## S4b as built (seat clones visible to the host)
+
+- **`seat_trees` enumerator** (`status_prs.rs`): the linked worktrees from `git worktree list`
+  (now run through `host_git_command`), then one record per `clone` lease whose directory exists
+  (`clone_seat_trees`), carrying the lease branch and `clone: true`. Destructive sweeps (gc, doctor
+  orphan/merged heals, reclaim, dismiss, reap) keep enumerating linked worktrees only, so a clone
+  is never their candidate; its removal stays `seat_clone::destroy`.
+- **Visibility.** `aida status`'s worktree pane and `aida awaiting`'s uncommitted-WIP detector list
+  clones, with branch, dirty count and unpushed count from the sandboxed probe (an unreadable clone
+  reads dirty). The unshipped-work detector adds `clone_unshipped_work_items`: a clone with commits
+  on no `origin/*` ref, attributed to its lease's spec, or an unreadable clone with an unknown
+  count; never dropped. Pushed work flows through the existing `origin/` path.
+- **Branch ownership.** `aida brief` resolves a spec branch held by a clone to a new
+  `SeatClone` target ("continue it in that seat"), `aida show` linkage falls back to a clone lease
+  for the spec, and `aida queue work` preflight refuses a branch a clone holds without suggesting
+  `git worktree remove`.
+- **Other sources.** Runaway-seat transcripts, `aida merge-hold list`'s stray markers (only through
+  real directories, never a symlinked `.aida`) and `aida worktree list` (kind `clone`, its focus
+  marker unread) include clones; doctor's trust-breadth count skips `aida-seat-*`.
+- **Post-ship pull.** `aida pr ship` from a seat clone skips step 4 with a note: main is read-only
+  to the seat and is synced from outside it.
+- **Hardening.** `teardown_worktree_path` refuses a clone before any `pre_destroy` hook runs; the
+  phase driver's failed-attempt teardown keeps a clone (its session end or reap removes it);
+  `local_commits_not_on_branch`, `worktree_reclaim`'s git and review-watch's root probe no longer
+  run raw git in a clone.
+- **Not changed (by design §2d):** `branch_in_sibling_worktree`, `pr_gc_branch_checked_out` and
+  `session_reap`'s checked-out-elsewhere check key off main's or origin's refs.
+- **Tests.** `tests/task_2053_s4b_seat_trees_tests.rs`: enumerator, brief, show, pickup,
+  runaway, teardown refusal with no untagged git in the clone; stray markers with a symlinked
+  `.aida`; under live bwrap, a status row and an unshipped item for a clone with a commit and a
+  dirty file.

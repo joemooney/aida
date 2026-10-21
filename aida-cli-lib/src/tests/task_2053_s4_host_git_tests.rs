@@ -12,7 +12,7 @@ use super::*;
 use std::path::{Path, PathBuf};
 
 /// A logging `git` shim first on PATH; returns (shim dir, log, real git).
-fn git_shim(fx: &Fixture) -> (PathBuf, PathBuf, String) {
+pub(super) fn git_shim(fx: &Fixture) -> (PathBuf, PathBuf, String) {
     let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
         .map(|dir| dir.join("git"))
         .find(|candidate| candidate.is_file())
@@ -37,16 +37,21 @@ fn git_shim(fx: &Fixture) -> (PathBuf, PathBuf, String) {
 
 /// A seat clone at its real location (a sibling of main) and its `clone`
 /// lease.
-fn leased_clone(fx: &Fixture, name: &str, id: &str) -> PathBuf {
+pub(super) fn leased_clone(fx: &Fixture, name: &str, id: &str) -> PathBuf {
+    leased_clone_on(fx, name, id, "feat")
+}
+
+/// [`leased_clone`] on `branch`.
+pub(super) fn leased_clone_on(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
     let clone = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-{name}"));
-    create(&fx.main, &clone, "feat", "origin/main").unwrap();
+    create(&fx.main, &clone, branch, "origin/main").unwrap();
     let path = crate::lease_path(&fx.main, id);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(
         path,
         format!(
             "id = \"{id}\"\nscope = \"TASK-2053\"\nslug = \"task-2053\"\nowner = \"test\"\n\
-             worktree_path = {}\nbranch = \"feat\"\nstarted_at = \"2026-10-21T00:00:00Z\"\n\
+             worktree_path = {}\nbranch = \"{branch}\"\nstarted_at = \"2026-10-21T00:00:00Z\"\n\
              hostname = \"h\"\ntree_kind = \"clone\"\n",
             aida_core::toml_quote::toml_string(&clone.display().to_string())
         ),
@@ -55,7 +60,7 @@ fn leased_clone(fx: &Fixture, name: &str, id: &str) -> PathBuf {
     clone.canonicalize().unwrap()
 }
 
-fn untagged_in(log: &Path, clone: &Path) -> Vec<String> {
+pub(super) fn untagged_in(log: &Path, clone: &Path) -> Vec<String> {
     let body = std::fs::read_to_string(log).unwrap();
     clone_invocations(&body, clone)
         .into_iter()

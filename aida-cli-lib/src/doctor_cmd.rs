@@ -2435,7 +2435,12 @@ fn count_unrelated_child_dirs(
         .filter_map(Result::ok)
         .filter(|entry| {
             let entry_path = normalize_path_lexically(&entry.path());
-            !entry.file_name().to_string_lossy().starts_with('.')
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            // TASK-2053: seat clones are this project's own trees.
+            // trace:TASK-2053 | ai:claude
+            !name.starts_with('.')
+                && !name.starts_with(aida_core::seat_clone_detect::CLONE_DIR_PREFIX)
                 && entry.file_type().is_ok_and(|kind| kind.is_dir())
                 && entry_path != project_root
                 && entry_path != worktree_parent
