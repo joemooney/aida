@@ -6,16 +6,25 @@ description: |
   session_reap.rs review_branch_within_pr_head only reaps when the review branch tip equals, or is an ancestor of, the lease's recorded pr_head_sha. A reviewer that pushed a fix-forward (tip past the recorded head) and a lease with no pr_head_sha are never reaped, so BUG-2206's leak persists for them. TASK-2095 allowed the remote PR head as an alternative.
 
   Raised in review of PR-2814: https://github.com/joemooney/aida/pull/2814#issuecomment-6327894451
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T22:25:09.004658218Z
-modified_at: 2026-10-21T22:25:09.004658218Z
+modified_at: 2026-10-21T22:25:57.137250612Z
 req_type: Task
 tags:
 - from-review:PR-2814
 - severity:minor
+history:
+- id: 01a16092-3591-7f71-afba-8fdec3b6a221
+  author: joe
+  timestamp: 2026-10-21T22:25:57.137244902Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a59fbfeeffbfbfe0a063d2334a46566e2ce9634
   branch: pr-2814
