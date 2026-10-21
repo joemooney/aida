@@ -1,0 +1,20 @@
+id: 01a15cca-fdd3-7eb3-9954-1d6cb78b0d91
+spec_id: TASK-2041
+agreed_id: TASK-2041
+title: Store-CAS private-candidate publication and hijack marker lifecycle (A2)
+description: 'Carved out of TASK-1332 item 3 by advisor ruling 2026-10-20 21:55 (option A). The CAS writers still commit on canonical HEAD, push_exact, and roll back with rollback_commit_if_head_matches (git_ops.rs ~2407); hijack_node (~4996) is the ordinary S/L shape, not the A2 private-candidate algorithm (private-candidate publication, family authority at remote acceptance, accepted-remote/failed-local-install, ambiguous transport, HIJACKED.toml ordering). First gate: an independent signoff of the A2 V3 proposal relayed on BUG-1808 (see TASK-1332 comments [7] and [10] and the task-1332 analysis comment of 2026-10-20). Code it would touch once signed: aida-core/src/git_ops.rs (push_exact_outcome, rollback_commit_if_head_matches, hijack_node, node writers), aida-cli-lib/src/coordination.rs, aida-core/src/team.rs, aida-core/src/alias.rs. AC: (1) A2 V3 signed on this spec; (2) every CAS writer publishes through a private candidate per the signed design, with a barrier test per writer family; (3) hijack marker lifecycle ordering tested.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T04:49:29.555327066Z
+modified_at: 2026-10-21T04:49:29.555327066Z
+req_type: Task
+filed_at:
+  code_sha: d29b69c35cafa137e15d5935aefc4f79837996e3
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
