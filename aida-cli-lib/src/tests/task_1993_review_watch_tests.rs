@@ -1687,14 +1687,15 @@ fn task1993_orphaned_reviewer_keeps_its_slot_until_it_exits() {
             .success());
     };
     // dispatcher -> queue work -> reviewer, as real processes.
-    let script = format!(
-        "sh -c 'sleep 60 & echo $! > {dir}/reviewer; wait' & echo $! > {dir}/queue; wait",
-        dir = temp.path().display()
+    let tree = temp.path().join("dispatcher");
+    crate::test_exec::write_executable(
+        &tree,
+        &format!(
+            "#!/bin/sh\nsh -c 'sleep 60 & echo $! > {dir}/reviewer; wait' & echo $! > {dir}/queue; wait\n",
+            dir = temp.path().display()
+        ),
     );
-    let mut dispatcher = Command::new("/bin/sh")
-        .args(["-c", &script])
-        .spawn()
-        .unwrap();
+    let mut dispatcher = Command::new(&tree).spawn().unwrap();
     let dispatcher_id = Identity::of(dispatcher.id()).unwrap();
     let queue_id = Identity::of(pid_of("queue")).unwrap();
     let reviewer_id = Identity::of(pid_of("reviewer")).unwrap();
@@ -1781,11 +1782,7 @@ fn task1993_queue_work_records_the_reviewer_it_launches() {
         })
         .unwrap();
     LAUNCH.with(|l| *l.borrow_mut() = None);
-    let exit = || {
-        let mut cmd = Command::new("/bin/sh");
-        cmd.args(["-c", "exit 0"]);
-        cmd
-    };
+    let exit = || Command::new("/bin/true");
     assert!(reviewer_status(&mut exit()).unwrap().success());
     assert!(store.load().unwrap().entries["PR-1"].attempts[0]
         .reviewer
