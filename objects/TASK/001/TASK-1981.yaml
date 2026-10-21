@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-21T11:18:45.658592107Z
+modified_at: 2026-10-21T13:05:04.183423201Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -156,6 +156,11 @@ history:
   timestamp: 2026-10-21T11:18:47.194313201Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15e90-b56c-7612-bea1-7474037e31a4
+  author: joe
+  timestamp: 2026-10-21T13:05:04.364545018Z
+  session_id: 01a15e88d1e6
+  changes: []
 filed_at:
   code_sha: 3c7e184d14f171218ad70453efee47cd99730122
   branch: main
@@ -168,7 +173,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: F6/F7 slice is otherwise sound and CI is green (7/7 lanes), but the new exact-SHA store publication pushes to refs/heads/HEAD when the store is on a detached HEAD, creating a stray branch on the shared remote and reporting success where the old push failed loudly.
+  detail: 'Round-1 detached-HEAD blocker is fixed and tested and CI is green (7/7 lanes + Build), but the advisor-folded TASK-2056 test strengthening was not done: task_1981_release_status_failure_prevents_publication still has no origin and asserts a tautology.'
   recovery_hint: address the review findings, move TASK-1981 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T11:08:31.745086443Z
+  shelved_at: 2026-10-21T13:05:04.183423201Z
