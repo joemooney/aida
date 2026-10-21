@@ -6,18 +6,27 @@ description: |-
 
   non-blocking/minor: review_record_template uses only the first covered spec (pr_spec_ids.first()); a multi-spec PR gets a recovery command naming one spec — aida-cli-lib/src/reviewer_summary.rs review_record_template
   Reviewed sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T14:40:28.070179264Z
-modified_at: 2026-10-21T14:40:28.070179264Z
+modified_at: 2026-10-21T14:48:17.235425012Z
 req_type: Task
 tags:
 - carried-from:BUG-2187
 - finding-hash:48e3e4b8
 - from-review:BUG-2187
 - kind:carried-forward
+history:
+- id: 01a15eef-3453-7041-99d6-7b35429d067f
+  author: joe
+  timestamp: 2026-10-21T14:48:17.235418871Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
