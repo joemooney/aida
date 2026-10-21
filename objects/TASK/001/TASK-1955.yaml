@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T18:01:10.503180081Z
+modified_at: 2026-10-21T18:37:11.301808865Z
 req_type: Task
 tags:
 - launch
@@ -341,6 +341,12 @@ comments:
     - non-blocking (cosmetic): inert allowlist includes awk/sed/cat, which can run commands after quoted-body stripping (awk 'BEGIN{system("cargo build")}', GNU sed e, cat <(cargo ...)); .RECIPEPREFIX and top-level $(eval ...) rule generation are also not seen. All are silent. Drop awk/sed from the allowlist or treat '<(' as non-inert; list the remaining misses next to the existing 'Known misses' header line.
   created_at: 2026-10-21T17:48:32.678559458Z
   modified_at: 2026-10-21T17:48:32.678559458Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15fc0-c505-7971-b919-c2976b51f666
+  author: joe
+  content: 'ADVISOR 11:40: drive follow-ups from the PR-2804 (TASK-1915) review, which the advisor chose not to block on. (a) F8 DISPATCH_STALE re-opens a dispatch epoch every 2h while a spec stays unowned, sending a new MandateDriveDue plus mail per spec for the life of the mandate. Add backoff or a cap. (b) PerMandate.dispatch is never pruned, and specs routed before the change (key ''approved'', no routed_at) never get an epoch bump. (c) emit_due_with reads the whole event log on every due emission to dedup: index it or bound the scan. File:line refs are in the PR-2804 verdict.'
+  created_at: 2026-10-21T18:37:11.301808865Z
+  modified_at: 2026-10-21T18:37:11.301808865Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
