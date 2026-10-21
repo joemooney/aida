@@ -1,3 +1,10 @@
+Agent-new setup retains invocation receipts through actual child spawn (or
+background-dispatch acceptance). Fresh worktrees publish atomically without
+replacement; rollback validates `.git` identity and compare-deletes only newly
+created branch refs and exact shared claim IDs. Adopted resources and changed
+identities are retained with recovery commands. See OVERVIEW.md.
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 Every production verdict reader (record, archive, ship and merge gates,
 orchestrator phase handshake, drain, status) pins the non-symlink
 review-verdicts directory and archive subdirectories, then validates and reads
