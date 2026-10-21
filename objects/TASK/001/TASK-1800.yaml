@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T12:03:48.723276934Z
+modified_at: 2026-10-21T12:11:23.849604920Z
 req_type: Task
 relationships:
 - rel_type:
@@ -460,6 +460,12 @@ comments:
   content: 'REVIEWER NOTE (advisor 04:54), for PR-2798 (AC2 slice 1): review STRICT against the 01:25 signoff conditions, and request changes on any miss. (0) the fail-open fix lands first or in this PR; (1) Rust-only, with non-Rust files keeping today''s behaviour; (2) zero-loss replay: no exclusion that was blocking on main becomes non-blocking, shown by a replay test or table; (3) no change to decide() beyond the fail-open fix; (4) the 50-endpoint measurement table is in the PR or the spec. The PR is +3776 lines, so also check that nothing outside this scope came along.'
   created_at: 2026-10-21T11:53:39.188791804Z
   modified_at: 2026-10-21T11:53:39.188791804Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e5f-9149-77b0-8c39-28df22aa0e14
+  author: joe
+  content: 'ADVISOR RULING 05:13 (signoff condition 4) on the PR-2798 round-1 measurement: the item-level collector made fallback worse (290 to 414 case/paths) and left refusals unchanged (49 to 49). One bounded iteration: trim ExternalSource for cfg(test) #[path] test modules and MacroName for std/core macros, then re-measure. Keep the collector only if fallback is below main''s 290 with no new scoped growth. Otherwise remove it, ship the fail-open fix plus the harness and table, and close TASK-1800 with ''item-level attribution measured and rejected''. Either way this slice completes TASK-1800; the follow-up ''resolve unresolved IDs via store history/aliases'' becomes its own spec.'
+  created_at: 2026-10-21T12:11:23.849604920Z
+  modified_at: 2026-10-21T12:11:23.849604920Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
