@@ -1,0 +1,18 @@
+{
+  "id": "f8d9da39-d927-4c3c-ba16-cee3e7a0dcaa",
+  "thread_id": "f8d9da39-d927-4c3c-ba16-cee3e7a0dcaa",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792625551411,
+  "body": "PR-2806 (TASK-2053 S3) round 3 fixed at 5a601abd80. CI green; merge-hold-gate fails only on the review hold. origin/main had no new commits, so no merge was needed.\n1. [MAJOR] session_end skips the .aida runtime-link strip AND the .aida/session-env.sh read (cargo-target removal) for clone leases. The env read had the same redirect issue, plus a FIFO hang. destroy removes the clone whole. Test: <clone>/.aida points at a decoy holding a sessions symlink, cache.db, session-env.sh and target/. Session end --force leaves all of them intact. Red-checked: reverting the strip guard fails the test.\n2. The same test runs end_session(id, true) and handle_dismiss under the logging git shim, and asserts no untagged git ran in either clone.\n3. probe_repo_config carries extensions.refStorage=reftable from the clone. It reads the config as a regular file only, parses a host-side copy with `git config --file`, and accepts only the allowlisted value. Other values are dropped, so the probe fails closed. Test: task_2053_bwrap_probe_reads_a_reftable_clone. It skips where git can't `refs migrate` (local git is 2.43).\n5. The quoted-names salvage test adds \"new\\nline.txt\".\nItem 4 (TASK-2110) is implemented on the S4b branch: probe_with_shipped / destroy_with_shipped exclude commits that a forge-confirmed merged-PR head reaches. Reap and session end use them.\nGates: check-ci-fast (33 gates) and test-touched (851 passed).\n",
+  "subject": "READY: #2806 at 5a601abd80",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

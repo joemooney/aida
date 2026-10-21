@@ -1,0 +1,19 @@
+{
+  "id": "fc421944-34c7-42f3-9177-c5f80d4e6886",
+  "thread_id": "fc421944-34c7-42f3-9177-c5f80d4e6886",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792625972849,
+  "body": "PR #2815 (TASK-1951 slice 3, reconcile) round-1 fixes are in. Head 25fd68b5ddd776e8395a3ab4e4c91d5eed5e1e1c, CI green. (1) aida pr ship now appends 'aida: no-complete' to the squash body when it withholds completion (--no-complete or a PR-body marker). If the identity gate leaves the body to the forge, ship rebuilds it from the commit messages first. (2) A squash subject whose ids sit only in a (Refs …) group now counts as non-completing for the covers path, through refs_completion_filter. The test covers the body marker, a Refs-only subject, and the exact body ship writes. The PR body claim is corrected. PR #2816 round-1 fix pushed at c60de4a0db, CI pending.",
+  "subject": "TASK-1951 READY: #2815 at 25fd68b5dd",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
