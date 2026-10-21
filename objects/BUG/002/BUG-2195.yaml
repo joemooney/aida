@@ -3,12 +3,12 @@ spec_id: BUG-2195
 agreed_id: BUG-2195
 title: Mandate store snapshot fingerprints every ref of the shared repo, so any code push forces re-collection
 description: 'Observed 2026-10-20 timing the PR-2776 mandate scan. mandate_traces::store_snapshot (mandate_traces.rs:79) compares ''git show-ref --head'' over ALL refs. .aida-store is a worktree of the code repo, so that is ~5,369 refs, and any agent''s code push or fetch changes it. On #2725 (402 specs) a single collection attempt took 24-31 s (agent profile), but runs took 60 s, 106 s (refused ''store changed'' after 3 attempts) and 107 s, because every attempt saw an unrelated ref move. Proposed exact, fail-closed fix: on a snapshot mismatch, treat the attempt as stable iff HEAD is unchanged and no changed or added ref brings a new objects/ version (''git log --all --not <old tips> -- objects'' is empty). A deleted ref only removes versions, so the evidence already gathered stays a superset. This touches a mandate gate (STRICT tier), so it needs a sketch and advisor signoff. Related: BUG-2179 (PR #2776), TASK-2019 (the dirty-store snapshot).'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T19:49:43.999048649Z
-modified_at: 2026-10-21T05:48:41.312923107Z
+modified_at: 2026-10-21T17:37:37.083049288Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -28,6 +28,14 @@ history:
   timestamp: 2026-10-21T05:48:36.414715526Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15f8a-3b3b-72f0-93d9-afa36384f0ae
+  author: joe
+  timestamp: 2026-10-21T17:37:37.083043797Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
   branch: main
