@@ -1619,6 +1619,18 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "relay-stall",
     ),
+    // STORY-1688: lane liveness (dead lanes, stale logs, green PRs with no
+    // review at their head, stale gate waits, and orphaned work leases).
+    // trace:STORY-1688 | ai:antigravity
+    (
+        &[
+            "lane-liveness",
+            "lane-liveness-guard",
+            "stalled-lanes",
+            "dead-lanes",
+        ],
+        "lane-liveness",
+    ),
     // STORY-1700: an active drive mandate the drive tick would not act on
     // (no schedule driver, or a driver resolving another principal).
     // trace:STORY-1700 | ai:claude

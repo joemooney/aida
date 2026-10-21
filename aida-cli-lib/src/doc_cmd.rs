@@ -102,8 +102,9 @@ pub(crate) fn handle_doc_command(
                 }
             }
 
-            // CR-8: stamp filing provenance up front — the object is written
-            // directly below from this in-memory copy. trace:CR-8 | ai:claude
+            // CR-8: stamp filing provenance up front — update_atomically
+            // persists the stamped object under store-write.lock. trace:CR-8 | ai:claude
+            // trace:TASK-1981 | ai:agy
             aida_core::provenance::stamp_if_absent(&mut doc);
 
             // Allocate spec_id via the same path `aida add` uses — keeps
@@ -116,7 +117,6 @@ pub(crate) fn handle_doc_command(
             let written = store.requirements.last().cloned().ok_or_else(|| {
                 anyhow::anyhow!("add_requirement_with_id produced no requirement")
             })?;
-            aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
 
             // Append References edges to each --about target. Done after the
             // initial save so the doc has its uuid + spec_id.

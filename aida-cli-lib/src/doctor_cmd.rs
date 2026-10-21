@@ -103,6 +103,20 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-1688: lane liveness substrate check reads `.aida/` state
+            // without loading the spec store.
+            // trace:STORY-1688 | ai:antigravity
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::lane_liveness::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::lane_liveness::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-1700: the drive-mandate check reads the AIDA home and the
             // schedule driver only. trace:STORY-1700 | ai:claude
             if !all
@@ -748,6 +762,16 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
+    // since it inspects open PRs via gh and session leases via git).
+    // trace:STORY-1688 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::lane_liveness::CATEGORY)?
+    {
+        findings.extend(crate::lane_liveness::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
@@ -1120,6 +1144,13 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1699 | ai:claude
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
+        // Only the scheduled tick routes; findings it routed are not a job
+        // failure, so the tick's command passes no --fail-on-findings.
+        // trace:STORY-1688 | ai:claude
+        crate::lane_liveness::CATEGORY => {
+            let route = std::env::var_os("AIDA_SCHEDULE_CHILD").is_some_and(|v| v == "1");
+            DoctorReport::from_findings(crate::lane_liveness::scan_and_route(&project_root, route))
         }
         // trace:STORY-1700 | ai:claude
         crate::mandate_drive::DOCTOR_CATEGORY => {
@@ -7394,27 +7425,33 @@ pub(crate) fn heal_doctor_parent_tag_drift(
     project_root: &std::path::Path,
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
-    let storage = Storage::new(project_root.join(".aida-store"));
-    let mut store = storage.load()?;
-    let req_id = store
-        .get_requirement_by_spec_id(&finding.id)
-        .context("parent-tag-drift requirement disappeared")?
-        .id;
-    let expected: Vec<String> = store
-        .get_requirement_by_id(&req_id)
-        .into_iter()
-        .flat_map(|req| req.relationships.iter())
-        .filter(|rel| rel.rel_type == aida_core::models::RelationshipType::Child)
-        .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
-        .filter_map(|parent| parent.spec_id.as_deref())
-        .map(|id| format!("parent:{id}"))
-        .collect();
-    let req = store
-        .get_requirement_by_id_mut(&req_id)
-        .context("requirement disappeared")?;
-    req.tags.retain(|tag| !tag.starts_with("parent:"));
-    req.tags.extend(expected);
-    storage.save(&store)?;
+    let store_path = project_root.join(".aida-store");
+    let storage = Storage::new(&store_path);
+    // Read, validate and save under the existing writer lock. The save's inner
+    // acquisition is reentrant on this thread. trace:TASK-1981 | ai:codex
+    aida_core::db::with_store_write_lock(&store_path, || -> Result<()> {
+        let mut store = storage.load()?;
+        let req_id = store
+            .get_requirement_by_spec_id(&finding.id)
+            .context("parent-tag-drift requirement disappeared")?
+            .id;
+        let expected: Vec<String> = store
+            .get_requirement_by_id(&req_id)
+            .into_iter()
+            .flat_map(|req| req.relationships.iter())
+            .filter(|rel| rel.rel_type == aida_core::models::RelationshipType::Child)
+            .filter_map(|rel| store.requirements.iter().find(|r| r.id == rel.target_id))
+            .filter_map(|parent| parent.spec_id.as_deref())
+            .map(|id| format!("parent:{id}"))
+            .collect();
+        let req = store
+            .get_requirement_by_id_mut(&req_id)
+            .context("requirement disappeared")?;
+        req.tags.retain(|tag| !tag.starts_with("parent:"));
+        req.tags.extend(expected);
+        storage.save(&store)?;
+        Ok(())
+    })?;
     Ok(DoctorHealResult {
         category: finding.category.clone(),
         id: finding.id.clone(),
@@ -7940,79 +7977,82 @@ fn heal_doctor_store_tracked_runtime(
     let store_worktree = project_root.join(".aida-store");
     let path = &finding.id;
 
-    // Re-confirm the file is still tracked on the orphan branch before removing —
-    // between scan and heal another heal (or a manual `git rm`) may have already
-    // dropped it.
-    let still_tracked = aida_core::git_ops::host_git_command(&store_worktree)
-        .args(["ls-files", "--error-unmatch", path])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    // trace:TASK-1981 | ai:agy
+    aida_core::db::with_store_write_lock(&store_worktree, || {
+        // Re-confirm the file is still tracked on the orphan branch before removing —
+        // between scan and heal another heal (or a manual `git rm`) may have already
+        // dropped it.
+        let still_tracked = aida_core::git_ops::host_git_command(&store_worktree)
+            .args(["ls-files", "--error-unmatch", path])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
 
-    if !still_tracked {
-        // Still make sure the gitignore guard is in place (idempotent).
-        let gi = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
-        return Ok(DoctorHealResult {
+        if !still_tracked {
+            // Still make sure the gitignore guard is in place (idempotent).
+            let gi = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: "already untracked".to_string(),
+                status: "skipped".to_string(),
+                detail: gi.then(|| "appended gitignore guard".to_string()),
+            });
+        }
+
+        // Untrack but KEEP the working copy — this clone still needs its own
+        // per-clone runtime file; only the orphan branch must stop carrying it.
+        let status = aida_core::git_ops::host_git_command(&store_worktree)
+            .args(["rm", "--cached", "--quiet", "--"])
+            .arg(path)
+            .status()
+            .with_context(|| format!("git rm --cached {path} in store worktree"))?;
+        if !status.success() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "failed".to_string(),
+                detail: Some(format!("git rm --cached {path} failed")),
+            });
+        }
+
+        let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+
+        // Stage the gitignore (if we touched it) and commit the untrack on the
+        // store worktree so the orphan branch stops carrying the per-clone file.
+        if appended {
+            let _ = aida_core::git_ops::host_git_command(&store_worktree)
+                .args(["add", ".gitignore"])
+                .status();
+        }
+        let commit = aida_core::git_ops::host_git_command(&store_worktree)
+            .args([
+                "commit",
+                "--quiet",
+                "-m",
+                "chore(store): stop tracking per-clone runtime file (BUG-563)",
+            ])
+            .status()
+            .with_context(|| "committing untrack on store worktree".to_string())?;
+        if !commit.success() {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "failed".to_string(),
+                detail: Some("commit on store worktree failed".to_string()),
+            });
+        }
+
+        Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
-            action: "already untracked".to_string(),
-            status: "skipped".to_string(),
-            detail: gi.then(|| "appended gitignore guard".to_string()),
-        });
-    }
-
-    // Untrack but KEEP the working copy — this clone still needs its own
-    // per-clone runtime file; only the orphan branch must stop carrying it.
-    let status = aida_core::git_ops::host_git_command(&store_worktree)
-        .args(["rm", "--cached", "--quiet", "--"])
-        .arg(path)
-        .status()
-        .with_context(|| format!("git rm --cached {path} in store worktree"))?;
-    if !status.success() {
-        return Ok(DoctorHealResult {
-            category: finding.category.clone(),
-            id: finding.id.clone(),
-            action: finding.action.clone(),
-            status: "failed".to_string(),
-            detail: Some(format!("git rm --cached {path} failed")),
-        });
-    }
-
-    let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
-
-    // Stage the gitignore (if we touched it) and commit the untrack on the
-    // store worktree so the orphan branch stops carrying the per-clone file.
-    if appended {
-        let _ = aida_core::git_ops::host_git_command(&store_worktree)
-            .args(["add", ".gitignore"])
-            .status();
-    }
-    let commit = aida_core::git_ops::host_git_command(&store_worktree)
-        .args([
-            "commit",
-            "--quiet",
-            "-m",
-            "chore(store): stop tracking per-clone runtime file (BUG-563)",
-        ])
-        .status()
-        .with_context(|| "committing untrack on store worktree".to_string())?;
-    if !commit.success() {
-        return Ok(DoctorHealResult {
-            category: finding.category.clone(),
-            id: finding.id.clone(),
-            action: finding.action.clone(),
-            status: "failed".to_string(),
-            detail: Some("commit on store worktree failed".to_string()),
-        });
-    }
-
-    Ok(DoctorHealResult {
-        category: finding.category.clone(),
-        id: finding.id.clone(),
-        action: "git rm --cached + gitignore + commit on store worktree (per-clone runtime stays untracked)"
-            .to_string(),
-        status: "healed".to_string(),
-        detail: appended.then(|| "appended gitignore guard".to_string()),
+            action: "git rm --cached + gitignore + commit on store worktree (per-clone runtime stays untracked)"
+                .to_string(),
+            status: "healed".to_string(),
+            detail: appended.then(|| "appended gitignore guard".to_string()),
+        })
     })
 }
 
@@ -8043,61 +8083,64 @@ fn ensure_store_tracked_runtime_gitignore_with_patterns(
     store_worktree: &std::path::Path,
     staging_patterns: &[&str],
 ) -> Result<bool> {
-    use std::io::Write;
-    let gitignore_path = store_worktree.join(".gitignore");
-    let existing_bytes = std::fs::read(&gitignore_path).unwrap_or_default();
-    let existing = String::from_utf8_lossy(&existing_bytes);
-    let lines: Vec<&str> = existing.lines().map(str::trim).collect();
-    let mut blocks = String::new();
+    // trace:TASK-1981 | ai:agy
+    aida_core::db::with_store_write_lock(store_worktree, || {
+        use std::io::Write;
+        let gitignore_path = store_worktree.join(".gitignore");
+        let existing_bytes = std::fs::read(&gitignore_path).unwrap_or_default();
+        let existing = String::from_utf8_lossy(&existing_bytes);
+        let lines: Vec<&str> = existing.lines().map(str::trim).collect();
+        let mut blocks = String::new();
 
-    // Check every line in the runtime block so new rules cannot be hidden
-    // behind a one-pattern sentinel.
-    let missing_runtime_patterns: Vec<_> = STORE_RUNTIME_GITIGNORE_PATTERNS
-        .iter()
-        .filter(|pattern| !lines.contains(pattern))
-        .collect();
-    if !missing_runtime_patterns.is_empty() {
-        blocks.push_str(
-            "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n",
-        );
-        for pattern in missing_runtime_patterns {
-            blocks.push_str(pattern);
-            blocks.push('\n');
+        // Check every line in the runtime block so new rules cannot be hidden
+        // behind a one-pattern sentinel.
+        let missing_runtime_patterns: Vec<_> = STORE_RUNTIME_GITIGNORE_PATTERNS
+            .iter()
+            .filter(|pattern| !lines.contains(pattern))
+            .collect();
+        if !missing_runtime_patterns.is_empty() {
+            blocks.push_str(
+                "\n# Per-clone runtime state — must never be tracked on the orphan aida-store branch\n",
+            );
+            for pattern in missing_runtime_patterns {
+                blocks.push_str(pattern);
+                blocks.push('\n');
+            }
         }
-    }
 
-    // BUG-1677 staging ignores are owned by fs_atomic. Keep them in this
-    // tracked store `.gitignore`, never the shared project `info/exclude`, so
-    // lock-free `git add -A .` cannot stage a temp file or hide user files.
-    // trace:TASK-1547 | ai:codex
-    // trace:TASK-1556 | ai:codex
-    let missing_staging_patterns: Vec<_> = staging_patterns
-        .iter()
-        .filter(|pattern| !lines.contains(pattern))
-        .collect();
-    if !missing_staging_patterns.is_empty() {
-        blocks.push_str("\n# Atomic-write staging files (temp+rename) — never tracked\n");
-        for pattern in missing_staging_patterns {
-            blocks.push_str(pattern);
-            blocks.push('\n');
+        // BUG-1677 staging ignores are owned by fs_atomic. Keep them in this
+        // tracked store `.gitignore`, never the shared project `info/exclude`, so
+        // lock-free `git add -A .` cannot stage a temp file or hide user files.
+        // trace:TASK-1547 | ai:codex
+        // trace:TASK-1556 | ai:codex
+        let missing_staging_patterns: Vec<_> = staging_patterns
+            .iter()
+            .filter(|pattern| !lines.contains(pattern))
+            .collect();
+        if !missing_staging_patterns.is_empty() {
+            blocks.push_str("\n# Atomic-write staging files (temp+rename) — never tracked\n");
+            for pattern in missing_staging_patterns {
+                blocks.push_str(pattern);
+                blocks.push('\n');
+            }
         }
-    }
-    if blocks.is_empty() {
-        return Ok(false);
-    }
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&gitignore_path)
-        .with_context(|| format!("opening {}", gitignore_path.display()))?;
-    if !existing_bytes.is_empty() {
-        f.write_all(b"\n").with_context(|| {
-            format!("separating appended rules in {}", gitignore_path.display())
-        })?;
-    }
-    f.write_all(blocks.trim_start_matches('\n').as_bytes())
-        .with_context(|| format!("appending to {}", gitignore_path.display()))?;
-    Ok(true)
+        if blocks.is_empty() {
+            return Ok(false);
+        }
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&gitignore_path)
+            .with_context(|| format!("opening {}", gitignore_path.display()))?;
+        if !existing_bytes.is_empty() {
+            f.write_all(b"\n").with_context(|| {
+                format!("separating appended rules in {}", gitignore_path.display())
+            })?;
+        }
+        f.write_all(blocks.trim_start_matches('\n').as_bytes())
+            .with_context(|| format!("appending to {}", gitignore_path.display()))?;
+        Ok(true)
+    })
 }
 
 // A git -C on a missing/non-repository store path walks upward. Require the
@@ -8204,43 +8247,46 @@ fn heal_doctor_store_staging_ignore(
             ),
         });
     }
-    let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
-    if appended {
-        let add = aida_core::git_ops::host_git_command(&store_worktree)
-            .args(["add", ".gitignore"])
-            .status()
-            .with_context(|| "staging store .gitignore".to_string())?;
-        if !add.success() {
-            anyhow::bail!("git add .gitignore failed in store worktree");
+    // trace:TASK-1981 | ai:agy
+    aida_core::db::with_store_write_lock(&store_worktree, || {
+        let appended = ensure_store_tracked_runtime_gitignore(&store_worktree)?;
+        if appended {
+            let add = aida_core::git_ops::host_git_command(&store_worktree)
+                .args(["add", ".gitignore"])
+                .status()
+                .with_context(|| "staging store .gitignore".to_string())?;
+            if !add.success() {
+                anyhow::bail!("git add .gitignore failed in store worktree");
+            }
+            let commit = aida_core::git_ops::host_git_command(&store_worktree)
+                .args([
+                    "commit",
+                    "--only",
+                    "--quiet",
+                    "-m",
+                    "chore(store): ignore atomic staging files (TASK-1547 TASK-1556)",
+                    "--",
+                    ".gitignore",
+                ])
+                .status()
+                .with_context(|| "committing staging ignores on store worktree".to_string())?;
+            if !commit.success() {
+                return Ok(DoctorHealResult {
+                    category: finding.category.clone(),
+                    id: finding.id.clone(),
+                    action: finding.action.clone(),
+                    status: "failed".to_string(),
+                    detail: Some("commit on store worktree failed".to_string()),
+                });
+            }
         }
-        let commit = aida_core::git_ops::host_git_command(&store_worktree)
-            .args([
-                "commit",
-                "--only",
-                "--quiet",
-                "-m",
-                "chore(store): ignore atomic staging files (TASK-1547 TASK-1556)",
-                "--",
-                ".gitignore",
-            ])
-            .status()
-            .with_context(|| "committing staging ignores on store worktree".to_string())?;
-        if !commit.success() {
-            return Ok(DoctorHealResult {
-                category: finding.category.clone(),
-                id: finding.id.clone(),
-                action: finding.action.clone(),
-                status: "failed".to_string(),
-                detail: Some("commit on store worktree failed".to_string()),
-            });
-        }
-    }
-    Ok(DoctorHealResult {
-        category: finding.category.clone(),
-        id: finding.id.clone(),
-        action: "append missing staging patterns and commit on store worktree".to_string(),
-        status: if appended { "healed" } else { "skipped" }.to_string(),
-        detail: None,
+        Ok(DoctorHealResult {
+            category: finding.category.clone(),
+            id: finding.id.clone(),
+            action: "append missing staging patterns and commit on store worktree".to_string(),
+            status: if appended { "healed" } else { "skipped" }.to_string(),
+            detail: None,
+        })
     })
 }
 
@@ -8253,28 +8299,32 @@ fn heal_doctor_orphan_queue_entry(
     finding: &DoctorFinding,
 ) -> Result<DoctorHealResult> {
     let user_id = current_user_id(None);
-    let storage = Storage::new(project_root.join(".aida-store"));
+    let store_path = project_root.join(".aida-store");
+    let storage = Storage::new(&store_path);
     let entry_uuid: uuid::Uuid = finding
         .id
         .parse()
         .with_context(|| format!("parsing queue entry id {}", finding.id))?;
-    let entries = storage.queue_list(&user_id, /* include_completed */ false)?;
-    if !entries.iter().any(|e| e.requirement_id == entry_uuid) {
-        return Ok(DoctorHealResult {
+    // trace:TASK-1981 | ai:agy
+    aida_core::db::with_store_write_lock(&store_path, || {
+        let entries = storage.queue_list(&user_id, /* include_completed */ false)?;
+        if !entries.iter().any(|e| e.requirement_id == entry_uuid) {
+            return Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: "orphan queue entry already removed".to_string(),
+                status: "skipped".to_string(),
+                detail: None,
+            });
+        }
+        storage.queue_remove(&user_id, &entry_uuid)?;
+        Ok(DoctorHealResult {
             category: finding.category.clone(),
             id: finding.id.clone(),
-            action: "orphan queue entry already removed".to_string(),
-            status: "skipped".to_string(),
+            action: "removed orphan queue entry".to_string(),
+            status: "healed".to_string(),
             detail: None,
-        });
-    }
-    storage.queue_remove(&user_id, &entry_uuid)?;
-    Ok(DoctorHealResult {
-        category: finding.category.clone(),
-        id: finding.id.clone(),
-        action: "removed orphan queue entry".to_string(),
-        status: "healed".to_string(),
-        detail: None,
+        })
     })
 }
 
@@ -12791,7 +12841,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         source_uuid: uuid::Uuid,
         source_spec: String,
         target_uuid: uuid::Uuid,
-        rel_type: String,
+        rel_type: aida_core::RelationshipType,
     }
     let mut dangling: Vec<Dangling> = Vec::new();
     for req in &reqs {
@@ -12802,7 +12852,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
                     source_uuid: req.id,
                     source_spec: source_spec.clone(),
                     target_uuid: rel.target_id,
-                    rel_type: format!("{:?}", rel.rel_type),
+                    rel_type: rel.rel_type.clone(),
                 });
             }
         }
@@ -12826,7 +12876,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         println!(
             "  {} → {}: target uuid {} not found",
             d.source_spec.bold(),
-            d.rel_type.dimmed(),
+            format!("{:?}", d.rel_type).dimmed(),
             d.target_uuid.to_string().yellow()
         );
     }
@@ -12855,9 +12905,20 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     // Repair: re-load canonical objects inside the store write lock so any
     // concurrent spec edit made while waiting for confirmation (or the lock) is
     // preserved rather than overwritten by the pre-prompt `reqs` snapshot.
-    // trace:TASK-58 trace:TASK-1930 | ai:agy
+    // When confirmed interactively (`!yes`), only strip edges that were in the
+    // user-confirmed preview set AND are still dangling under the lock.
+    // trace:TASK-58 trace:TASK-1930 trace:TASK-1981 | ai:agy
+    let confirmed_edges: Option<
+        std::collections::HashSet<(uuid::Uuid, uuid::Uuid, aida_core::RelationshipType)>,
+    > = (!yes).then(|| {
+        dangling
+            .iter()
+            .map(|d| (d.source_uuid, d.target_uuid, d.rel_type.clone()))
+            .collect()
+    });
     let _ = reqs;
-    let fixed = doctor_repair_dangling_relationships_in_store(&store_path)?;
+    let fixed =
+        doctor_repair_dangling_relationships_in_store(&store_path, confirmed_edges.as_ref())?;
     println!(
         "{} repaired {} requirement(s).",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
@@ -12868,10 +12929,14 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
 }
 
 /// Re-load canonical objects under `store_write_lock` and strip any relationship
-/// whose `target_id` does not resolve to an existing requirement in the store.
-// trace:TASK-1930 | ai:agy
+/// whose `target_id` does not resolve to an existing requirement in the store
+/// (and, when `confirmed_edges` is `Some`, belongs to the user-confirmed preview set).
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
 pub(crate) fn doctor_repair_dangling_relationships_in_store(
     store_path: &std::path::Path,
+    confirmed_edges: Option<
+        &std::collections::HashSet<(uuid::Uuid, uuid::Uuid, aida_core::RelationshipType)>,
+    >,
 ) -> Result<usize> {
     let objects_root = store_path.join("objects");
     let mut fixed = 0usize;
@@ -12882,9 +12947,19 @@ pub(crate) fn doctor_repair_dangling_relationships_in_store(
             fresh_reqs.iter().map(|r| r.id).collect();
         for mut req in fresh_reqs {
             let prior = req.clone(); // trace:STORY-1674 | ai:codex
+            let req_id = req.id;
             let before = req.relationships.len();
-            req.relationships
-                .retain(|r| fresh_uuids.contains(&r.target_id));
+            req.relationships.retain(|r| {
+                if fresh_uuids.contains(&r.target_id) {
+                    return true;
+                }
+                match confirmed_edges {
+                    Some(confirmed) => {
+                        !confirmed.contains(&(req_id, r.target_id, r.rel_type.clone()))
+                    }
+                    None => false,
+                }
+            });
             if req.relationships.len() != before {
                 stripped_edges += before - req.relationships.len();
                 aida_core::provenance::stamp_write(
@@ -13327,11 +13402,26 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
         }
     }
 
-    // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
+    // trace:TASK-1930 trace:TASK-1981 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
     // and re-load blocks.yaml + nodes.toml inside the lock so concurrent `next`
-    // advances or node registrations since the preview are preserved.
+    // advances or node registrations since the preview are preserved. When
+    // confirmed interactively (`!yes`), only tombstone blocks in the confirmed set.
+    let confirmed_blocks: Option<std::collections::HashSet<(String, String, u32, u32)>> = (!yes)
+        .then(|| {
+            stale
+                .iter()
+                .map(|(_, b)| {
+                    (
+                        b.node_id.clone(),
+                        b.type_prefix.clone(),
+                        b.range_start,
+                        b.range_end,
+                    )
+                })
+                .collect()
+        });
     let _ = blocks;
-    let count = doctor_tombstone_stale_blocks_in_store(&store_path)?;
+    let count = doctor_tombstone_stale_blocks_in_store(&store_path, confirmed_blocks.as_ref())?;
 
     println!(
         "{} tombstoned {} block(s).",
@@ -13344,10 +13434,12 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
 
 /// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
 /// `nodes.toml`, and tombstone any active block whose `node_id` is absent from
-/// `nodes.toml`.
-// trace:TASK-1930 | ai:agy
+/// `nodes.toml` (and, when `confirmed_blocks` is `Some`, belongs to the
+/// user-confirmed preview set).
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
 pub(crate) fn doctor_tombstone_stale_blocks_in_store(
     store_path: &std::path::Path,
+    confirmed_blocks: Option<&std::collections::HashSet<(String, String, u32, u32)>>,
 ) -> Result<usize> {
     use aida_core::{BlockRegistry, NodeRegistry};
     let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -13360,7 +13452,17 @@ pub(crate) fn doctor_tombstone_stale_blocks_in_store(
                 fresh_nodes.nodes.iter().map(|n| n.id.clone()).collect();
             let mut tombstoned = 0usize;
             for b in &mut fresh_blocks.blocks {
-                if !fresh_registered.contains(&b.node_id) && !b.is_exhausted() {
+                if !fresh_registered.contains(&b.node_id)
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(
+                            b.node_id.clone(),
+                            b.type_prefix.clone(),
+                            b.range_start,
+                            b.range_end,
+                        ))
+                    })
+                {
                     b.next = b.range_end + 1;
                     tombstoned += 1;
                 }
@@ -14070,15 +14172,23 @@ fn doctor_migrate_counter_scope(
 
     // Apply: acquire store_write_lock -> blocks.lock (A1), re-load blocks.yaml
     // and re-validate inside the lock so concurrent dispenses or block claims
-    // since the preview are preserved. Then mark our per-type blocks exhausted
-    // (next = range_end + 1) and append the new `*` block.
-    // trace:TASK-1930 | ai:agy
+    // since the preview are preserved. When confirmed interactively (`!yes`),
+    // only retire blocks that were in the user-confirmed preview set.
+    // trace:TASK-1930 trace:TASK-1981 | ai:agy
+    let confirmed_blocks: Option<std::collections::HashSet<(String, u32, u32)>> =
+        (!yes).then(|| {
+            our_blocks
+                .iter()
+                .map(|b| (b.type_prefix.clone(), b.range_start, b.range_end))
+                .collect()
+        });
     let _ = registry;
     let (new_start, new_end) = doctor_migrate_counter_scope_in_store(
         &project_root,
         &store_path,
         &node_id,
         new_block_size,
+        confirmed_blocks.as_ref(),
     )?;
 
     println!();
@@ -14101,14 +14211,16 @@ fn doctor_migrate_counter_scope(
 }
 
 /// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
-/// `config.toml`, exhaust `node_id`'s active per-type blocks, claim a new `*`
-/// global block above the fresh `highest_end`, update `config.toml`, and commit.
-// trace:TASK-1930 | ai:agy
+/// `config.toml`, exhaust `node_id`'s active per-type blocks (intersected with
+/// `confirmed_blocks` when `Some`), claim a new `*` global block above the fresh
+/// `highest_end`, update `config.toml`, and commit.
+// trace:TASK-1930 trace:TASK-1981 | ai:agy
 pub(crate) fn doctor_migrate_counter_scope_in_store(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
     node_id: &str,
     new_block_size: u32,
+    confirmed_blocks: Option<&std::collections::HashSet<(String, u32, u32)>>,
 ) -> Result<(u32, u32)> {
     use aida_core::BlockRegistry;
     let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -14119,11 +14231,26 @@ pub(crate) fn doctor_migrate_counter_scope_in_store(
                 anyhow::bail!("already on global counter_scope — nothing to migrate");
             }
             let mut fresh_registry = BlockRegistry::load(&blocks_path)?;
-            if !fresh_registry
-                .blocks
-                .iter()
-                .any(|b| b.node_id == node_id && !b.is_exhausted())
-            {
+            // Migration changes the node's entire allocation policy. Refuse a
+            // new unconfirmed active block rather than leave it usable under
+            // the new scope. trace:TASK-1981 | ai:codex
+            if confirmed_blocks.is_some_and(|confirmed| {
+                fresh_registry.blocks.iter().any(|b| {
+                    b.node_id == node_id
+                        && !b.is_exhausted()
+                        && !confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                })
+            }) {
+                anyhow::bail!("active blocks changed since confirmation; rerun counter migration");
+            }
+
+            if !fresh_registry.blocks.iter().any(|b| {
+                b.node_id == node_id
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                    })
+            }) {
                 anyhow::bail!(
                     "node {} has no active per-type blocks in blocks.yaml — \
                      either already migrated, or this clone hasn't been initialized",
@@ -14137,7 +14264,12 @@ pub(crate) fn doctor_migrate_counter_scope_in_store(
                 .max()
                 .unwrap_or(0);
             for b in fresh_registry.blocks.iter_mut() {
-                if b.node_id == node_id && !b.is_exhausted() {
+                if b.node_id == node_id
+                    && !b.is_exhausted()
+                    && confirmed_blocks.is_none_or(|confirmed| {
+                        confirmed.contains(&(b.type_prefix.clone(), b.range_start, b.range_end))
+                    })
+                {
                     b.next = b.range_end + 1;
                 }
             }
@@ -14493,3 +14625,7 @@ pub(crate) static DOCTOR: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/bug_1985_destructive_gate_tests.rs"]
 mod bug_1985_destructive_gate_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1981_writer_tests.rs"]
+mod task_1981_writer_tests;
