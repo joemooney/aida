@@ -16,11 +16,13 @@ checks that the shards' union is cargo test --workspace's target set.
 trace:TASK-1979 | ai:claude
 
 --runner nextest runs the same selections under cargo-nextest's `ci` profile
-(.config/nextest.toml) for the non-gating shadow lanes; doctests stay on
-cargo test. Each nextest invocation's JUnit report is kept as
-junit-<shard>-<n>.xml. --totals sums passed/failed/ignored from either
-runner's log, so a shadow lane is compared with its cargo-test lane by count.
-trace:TASK-1957 | ai:claude
+(.config/nextest.toml); doctests stay on cargo test. CI's test lanes gate on
+it (TASK-1988), after a shadow period in which it ran the same tests, by name,
+as cargo test. Each nextest invocation's JUnit report is kept as
+junit-<shard>-<n>.xml, for scripts/test-timings.py's per-test budget. Outside
+CI, a machine without cargo-nextest falls back to cargo test with a note; in
+CI a missing nextest fails the lane. --totals sums passed/failed/ignored from
+either runner's log. trace:TASK-1957 | ai:claude
 """
 from __future__ import annotations
 
@@ -30,10 +32,12 @@ import datetime
 import importlib.util
 import re
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tomllib
+import xml.etree.ElementTree as ET
 
 SHARDS = ('lib-0', 'lib-1', 'cli-0', 'cli-1', 'rest')
 _spec = importlib.util.spec_from_file_location('test_touched', Path(__file__).with_name('test-touched.py'))
@@ -306,16 +310,37 @@ def lib_test_seconds(log, threads):
             for k, name in enumerate(sorted(finish))}
 
 
+def junit_lib_seconds(path):
+    """Per-test seconds of the lib unit binary from a nextest JUnit report."""
+    return {case.get('name'): float(case.get('time') or 0)
+            for suite in ET.parse(path).getroot().iter('testsuite') if suite.get('name') == LIB_UNIT[1]
+            for case in suite.iter('testcase')}
+
+
 def lib_weights(paths, threads):
-    """TOML lines: each module's summed test seconds, the max over the logs."""
+    """TOML lines: each module's summed test seconds, the max over the logs.
+
+    A `.xml` path is a lib lane's nextest JUnit report, any other path a
+    timestamped cargo-test job log. trace:TASK-1988 | ai:claude
+    """
     best = collections.Counter()
     for path in paths:
         per_module = collections.Counter()
-        for name, secs in lib_test_seconds(Path(path).read_text(errors='replace'), threads).items():
+        tests = (junit_lib_seconds(path) if path.endswith('.xml') else
+                 lib_test_seconds(Path(path).read_text(errors='replace'), threads))
+        for name, secs in tests.items():
             per_module[module_of(name)] += secs
         for module, secs in per_module.items():
             best[module] = max(best[module], secs)
     return [f'"{m}" = {round(s, 1)}' for m, s in sorted(best.items()) if round(s, 1) >= 0.1]
+
+
+def nextest_installed(root):
+    try:
+        return subprocess.run(['cargo', 'nextest', '--version'], cwd=root,
+                              capture_output=True).returncode == 0
+    except OSError:
+        return False
 
 
 def check_root(root):
@@ -338,7 +363,8 @@ def main(argv=None):
     mode.add_argument('--check-root', action='store_true')
     mode.add_argument('--totals', metavar='LOG', nargs='+')
     mode.add_argument('--lib-weights', nargs='+', metavar='JOB_LOG',
-                      help='print [lib_module_seconds] entries from timestamped lib-lane job logs')
+                      help='print [lib_module_seconds] entries from lib-lane nextest JUnit reports '
+                           'or timestamped cargo-test job logs')
     parser.add_argument('--profile')
     parser.add_argument('--runner', choices=('cargo', 'nextest'), default='cargo')
     parser.add_argument('--summary', metavar='OUT', help='append a Markdown totals line (with --totals)')
@@ -379,6 +405,13 @@ def main(argv=None):
     if gaps or repeats:
         return 1
     profile = ['--profile', args.profile] if args.profile else []
+    if args.runner == 'nextest' and not nextest_installed(root):
+        if os.environ.get('CI'):
+            print('::error::cargo-nextest is not installed; the test lanes run under it', file=sys.stderr)
+            return 1
+        print('# cargo-nextest is not installed (cargo install cargo-nextest --locked); '
+              'running the same selections under cargo test', flush=True)
+        args.runner = 'cargo'
     status, reports = 0, 0
     for shard in SHARDS if args.shard == 'all' else [args.shard]:
         if shard == 'lib-1' and args.shard == 'all':

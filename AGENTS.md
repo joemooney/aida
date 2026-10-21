@@ -731,6 +731,13 @@ Rules:
 Set `AIDA_COMMIT_STRICT=true` (or commit through the `/aida-commit` skill) to
 enforce; otherwise the commit-msg hook just warns on non-conforming messages.
 
+## Where change notes go
+
+Do not add per-change notes to `AGENTS.md` or `OVERVIEW.md`; record them in
+the PR body and an `aida comment add` on the spec. Edit these files only for a
+real architecture change. A paragraph prepended by every PR makes each merge
+conflict with every other open PR.
+
 ## Capture proactively, not reactively
 
 The requirements DB is only valuable when it stays in sync with reality.
