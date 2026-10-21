@@ -58,10 +58,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:01:15.460127350Z
-modified_at: 2026-10-20T22:23:26.196472562Z
+modified_at: 2026-10-21T04:33:26.994624995Z
 req_type: Task
 tags:
 - cli
+- operator-held
 - sweep
 relationships:
 - rel_type: Supersedes
@@ -357,6 +358,15 @@ history:
   timestamp: 2026-10-20T10:57:07.760587617Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15cbc-4f9f-7eb1-bfb2-184934241f91
+  author: joe
+  timestamp: 2026-10-21T04:33:27.455662214Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:26.994624995Z
+deferred_until: P3 doctor/lint/cache nits. Revisit when the drain has capacity; pull BUG-2129 out if latency budgets need per-command telemetry.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
