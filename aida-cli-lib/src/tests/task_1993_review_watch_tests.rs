@@ -1416,9 +1416,14 @@ fn task1993_unclaimed_triggers_never_start_work() {
         store.load().unwrap().entries["PR-1"].attempts[0].phase,
         Phase::Reserved
     );
-    std::fs::set_permissions(store.dir.path(), std::fs::Permissions::from_mode(0o777)).unwrap();
+    // An unsafe watcher directory (here a symlink) makes Store::open refuse.
+    let dir = temp.path().join(".aida/review-watch");
+    let moved = temp.path().join("moved-review-watch");
+    std::fs::rename(&dir, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &dir).unwrap();
     assert!(Store::open(temp.path(), &store.repository).is_err());
-    std::fs::set_permissions(store.dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+    std::fs::remove_file(&dir).unwrap();
+    std::fs::rename(&moved, &dir).unwrap();
 }
 
 // Rounds survive pruning: a draft toggle or close/reopen cannot reset the
