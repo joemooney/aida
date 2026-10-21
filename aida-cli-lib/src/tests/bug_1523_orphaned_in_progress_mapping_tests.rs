@@ -140,7 +140,9 @@ fn live_process_case_is_not_reported_as_orphaned() {
         &specs,
         &leases,
         &[process_probe::LiveSession {
-            pid: std::process::id(),
+            // BUG-2197: another claude's pid, not the test's own: a pid-less
+            // lease is never attributed to the inspector. trace:BUG-2197 | ai:claude
+            pid: 4_000_123,
             cwd: live_dir.path().to_path_buf(),
             jsonl: None,
             stale_cwd: false,
