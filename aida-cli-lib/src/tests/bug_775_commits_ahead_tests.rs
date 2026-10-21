@@ -982,12 +982,26 @@ fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
         )
         .unwrap();
         let dest = root.join(".aida/review-verdicts/PR-31.json");
+        // The never-two-links watch holds only where the filesystem has a
+        // no-replace rename. The link-then-unlink fallback has a documented
+        // nlink=2 window, so the watch is skipped there (PR-2712 review F3).
+        // trace:TASK-1801 | ai:claude
+        let no_replace = {
+            let probe = parent.path().join("no-replace-probe");
+            std::fs::write(&probe, b"").unwrap();
+            let supported =
+                crate::review_verdict::rename_no_replace(&probe, &parent.path().join("probed"))
+                    .is_ok();
+            let _ = std::fs::remove_file(&probe);
+            let _ = std::fs::remove_file(parent.path().join("probed"));
+            supported
+        };
         let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
         let done = Arc::new(AtomicBool::new(false));
         let watcher = {
             let (dest, done) = (dest.clone(), done.clone());
             std::thread::spawn(move || {
-                while !done.load(Ordering::SeqCst) {
+                while no_replace && !done.load(Ordering::SeqCst) {
                     if let Ok(meta) = std::fs::symlink_metadata(&dest) {
                         assert_eq!(meta.nlink(), 1, "canonical verdict seen doubly linked");
                     }

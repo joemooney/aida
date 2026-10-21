@@ -1116,6 +1116,13 @@ reject `st_nlink != 1`. Every production verdict reader shares this path: record
 archive and adoption; the ship approval and corpus merge gates; the orchestrator
 phase-3/4 handshake; drain, burndown, rework-release and status readers. A
 present but refused current file contributes no evidence, archived rounds included.
+Only the reads are anchored. Before `review record` (or a merge close) rewrites
+the current file or a per-commit archive entry, it reads the existing one through
+this path; a refused file fails the record before anything is written, so its
+rounds are never replaced by a shorter history. The writes themselves still go by
+path (`create_dir_all`, then rename) and do not refuse links on their own.
+Archive enumeration reads the held directory descriptor with `fdopendir`, so it
+does not depend on `/proc`.
 Retained-history enumeration also pins the archive directory, including empty
 archives; linked archives or linked/non-regular JSON entries refuse rework release.
 The no-replace publication fallback briefly creates a second hard link before

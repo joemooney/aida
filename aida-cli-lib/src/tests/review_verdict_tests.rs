@@ -2518,3 +2518,137 @@ fn task1801_retained_history_rejects_linked_archive_entries_and_directories() {
     std::fs::rename(&moved, archive_dir).unwrap();
     assert!(RetainedHistory::beside(&file).unwrap().archived.is_empty());
 }
+
+// TASK-1801 (PR-2712 review F1): recording at a commit whose archive entry the
+// anchored reader refuses must fail closed. Before the fix the refused entry
+// read as empty, the record rewrote it without its earlier rounds, and
+// RetainedHistory then accepted the shorter history.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_record_refuses_to_rewrite_a_refused_archive_entry() {
+    use crate::rework_hold_release::RetainedHistory;
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("PR-77.json");
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let record = |summary: &str, by: &str| {
+        record_verdict_at_path(
+            tmp.path(),
+            &file,
+            Some("request-changes"),
+            Some(sha),
+            None,
+            Some(summary),
+            &[],
+            by,
+        )
+    };
+    record("first refusal", "reviewer-a").unwrap();
+    record("second refusal", "reviewer-b").unwrap();
+    let archive = archived_verdict_file_for_sha(&file, sha).unwrap();
+    let archive_before = std::fs::read(&archive).unwrap();
+    let current_before = std::fs::read(&file).unwrap();
+    let link = tmp.path().join("archive-link");
+    std::fs::hard_link(&archive, &link).unwrap();
+
+    let err = record("third refusal", "reviewer-c").unwrap_err();
+    assert!(err.to_string().contains("refusing to overwrite"), "{err}");
+    assert_eq!(std::fs::read(&archive).unwrap(), archive_before);
+    assert_eq!(std::fs::read(&file).unwrap(), current_before);
+
+    std::fs::remove_file(&link).unwrap();
+    record("third refusal", "reviewer-c").unwrap();
+    let history = RetainedHistory::beside(&file).unwrap();
+    assert_eq!(history.archived.len(), 3, "{:?}", history.archived);
+}
+
+// TASK-1801 (PR-2712 review F1): a current verdict the anchored reader refuses
+// (hard-linked or oversized) is not overwritten, so its inline rounds survive.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_record_refuses_to_rewrite_a_refused_current_verdict() {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("PR-78.json");
+    let record = || {
+        record_verdict_at_path(
+            tmp.path(),
+            &file,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &[],
+            "reviewer-b",
+        )
+    };
+    let held = r#"{"verdict":"request-changes","recorded_by":"reviewer-a","rounds":[{"verdict":"request-changes","recorded_by":"reviewer-0"}]}"#;
+    std::fs::write(&file, held).unwrap();
+    let link = tmp.path().join("current-link");
+    std::fs::hard_link(&file, &link).unwrap();
+    assert!(record().is_err());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), held);
+    std::fs::remove_file(&link).unwrap();
+
+    let oversized = format!(
+        r#"{{"verdict":"request-changes","pad":"{}"}}"#,
+        "x".repeat(1024 * 1024 + 1)
+    );
+    std::fs::write(&file, &oversized).unwrap();
+    assert!(record().is_err());
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), oversized);
+}
+
+// TASK-1801 (PR-2712 review F1): through a symlinked review-verdicts directory
+// the record fails before writing anything into the link target.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_record_through_linked_verdict_dir_writes_nothing() {
+    use std::os::unix::fs::symlink;
+    let tmp = TempDir::new().unwrap();
+    let target = tmp.path().join("elsewhere");
+    std::fs::create_dir_all(&target).unwrap();
+    std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+    symlink(&target, tmp.path().join(".aida/review-verdicts")).unwrap();
+    let file = tmp.path().join(".aida/review-verdicts/PR-79.json");
+    let result = record_verdict_at_path(
+        tmp.path(),
+        &file,
+        Some("approved"),
+        Some("0123456789abcdef0123456789abcdef01234567"),
+        None,
+        None,
+        &[],
+        "reviewer-a",
+    );
+    assert!(result.is_err());
+    assert_eq!(std::fs::read_dir(&target).unwrap().count(), 0);
+}
+
+// TASK-1801 (PR-2712 review F2): archive enumeration reads the held directory
+// descriptor without /proc, and lists every entry exactly once.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_archived_recordings_enumerates_every_entry_once() {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("PR-80.json");
+    for n in 0..5 {
+        let sha = format!("{n}123456789abcdef0123456789abcdef01234567");
+        record_verdict_at_path(
+            tmp.path(),
+            &file,
+            Some("request-changes"),
+            Some(&sha),
+            None,
+            None,
+            &[],
+            "reviewer-a",
+        )
+        .unwrap();
+    }
+    assert_eq!(archived_recordings(&file).unwrap().len(), 5);
+}

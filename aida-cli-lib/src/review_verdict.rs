@@ -506,7 +506,7 @@ pub(crate) fn publish_verdict_no_replace(temp: &Path, dest: &Path) -> std::io::R
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
     use std::os::unix::ffi::OsStrExt;
     let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
     let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
@@ -530,7 +530,7 @@ fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(target_vendor = "apple")]
-fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
     use std::os::unix::ffi::OsStrExt;
     let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
     let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
@@ -544,7 +544,7 @@ fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-fn rename_no_replace(_temp: &Path, _dest: &Path) -> std::io::Result<()> {
+pub(crate) fn rename_no_replace(_temp: &Path, _dest: &Path) -> std::io::Result<()> {
     Err(std::io::Error::from_raw_os_error(libc::ENOSYS))
 }
 
@@ -1343,11 +1343,7 @@ pub(crate) fn build_verdict_object(
             "review recording requires non-empty recorded_by provenance",
         ));
     }
-    let mut obj = read_verdict_body(path)
-        .ok()
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
+    let mut obj = read_existing_verdict_object(path)?;
     // BUG-1516 criterion 2: normalize AT THE WRITE BOUNDARY rather than
     // teaching every comparison site to tolerate an abbreviated sha. One
     // writer (the drain's forge-resolved head) already always writes full;
@@ -1523,6 +1519,10 @@ pub(crate) fn write_verdict_object(
             );
         }
     }
+    // TASK-1801: read the archive entry before writing anything, so a refused
+    // entry fails the whole record instead of being rewritten without the
+    // rounds it held. trace:TASK-1801 | ai:claude
+    let archive = prepare_archive_round(path, obj)?;
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(path, &format!("{body}\n"))?;
@@ -1532,7 +1532,10 @@ pub(crate) fn write_verdict_object(
     // and it is best-effort for the same reason — but loudly, because a
     // silently missing archive is exactly the invisible loss this fixes.
     // trace:BUG-1539 | ai:claude
-    if let Err(e) = archive_round_by_sha(path, obj) {
+    if let Err(e) = archive
+        .map(|(file, body)| write_verdict_atomic(&file, &body))
+        .unwrap_or(Ok(()))
+    {
         eprintln!(
             "warning: recorded {} but could not archive the round by reviewed commit: {e}",
             path.display()
@@ -1576,30 +1579,38 @@ fn archivable_sha(sha: &str) -> Option<&str> {
 /// overwrite.
 // trace:BUG-1539 | ai:claude
 fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
+    match prepare_archive_round(path, obj)? {
+        Some((archive, body)) => write_verdict_atomic(&archive, &body),
+        None => Ok(()),
+    }
+}
+
+/// The archive file and body [`archive_round_by_sha`] would write for `obj`,
+/// computed without writing. `None` when the round is not archivable. An
+/// existing archive entry the anchored reader refuses is an error: rewriting
+/// it from an empty object would drop the rounds it retained.
+// trace:TASK-1801 | ai:claude
+fn prepare_archive_round(path: &Path, obj: &JsonObj) -> std::io::Result<Option<(PathBuf, String)>> {
     let Some(sha) = round_sha(obj) else {
-        return Ok(());
+        return Ok(None);
     };
     let Some(sha) = archivable_sha(&sha) else {
-        return Ok(());
+        return Ok(None);
     };
     if obj
         .get("verdict")
         .and_then(|v| v.as_str())
         .is_none_or(|v| v.trim().is_empty())
     {
-        return Ok(());
+        return Ok(None);
     }
     let Some(dir) = verdict_archive_dir(path) else {
-        return Ok(());
+        return Ok(None);
     };
     let archive = dir.join(format!("{}.json", sha.to_ascii_lowercase()));
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
-    let mut existing: JsonObj = read_verdict_body(&archive)
-        .ok()
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
+    let mut existing = read_existing_verdict_object(&archive)?;
     archive_current_round(&mut existing, &recording_key(&snapshot));
     if let Some(rounds) = existing.remove("rounds") {
         snapshot.insert("rounds".to_string(), rounds);
@@ -1612,7 +1623,30 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
         .unwrap_or_else(|_| "{}".to_string());
-    write_verdict_atomic(&archive, &format!("{body}\n"))
+    Ok(Some((archive, format!("{body}\n"))))
+}
+
+/// The verdict object already at `path`, for a read-modify-write. A missing
+/// file is empty. A present file the anchored reader refuses (linked, too
+/// large, or reached through a linked directory) is an error, so a writer
+/// fails closed instead of replacing the history it could not read.
+/// Unparseable content is still treated as empty, as before.
+// trace:TASK-1801 | ai:claude
+fn read_existing_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
+    match read_verdict_body(path) {
+        Ok(body) => Ok(serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(JsonObj::new()),
+        Err(e) => Err(std::io::Error::new(
+            e.kind(),
+            format!(
+                "refusing to overwrite {}: the existing verdict could not be read safely: {e}",
+                path.display()
+            ),
+        )),
+    }
 }
 
 /// BUG-2186: every recording [`archive_round_by_sha`] kept for the verdict
@@ -1629,21 +1663,17 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
     };
     // Anchor even an empty archive before enumeration. Otherwise an empty
     // symlinked directory can silently erase the refusal history. Enumerate
-    // the held Linux directory descriptor rather than rediscovering its path.
+    // the held directory descriptor rather than rediscovering its path.
     // trace:TASK-1801 | ai:codex
-    use std::os::fd::AsRawFd;
     let anchor = match open_verdict_directory(&dir) {
         Ok(anchor) => anchor,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
     };
-    let entries = std::fs::read_dir(format!("/proc/self/fd/{}", anchor.as_raw_fd()))
+    let names = list_verdict_directory(&anchor)
         .map_err(|e| format!("could not read {}: {e}", dir.display()))?;
     let mut files = Vec::new();
-    for entry in entries {
-        let name = entry
-            .map_err(|e| format!("could not read {}: {e}", dir.display()))?
-            .file_name();
+    for name in names {
         let file = dir.join(name);
         if file.extension().is_some_and(|ext| ext == "json") {
             files.push(file);
@@ -1875,6 +1905,64 @@ fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
         dir = open_verdict_entry(&dir, name, libc::O_DIRECTORY)?;
     }
     Ok(dir)
+}
+
+/// The entry names in the held directory `dir`, read with `fdopendir` on a
+/// duplicate of its descriptor. Needs no `/proc`, so it works on macOS and in
+/// sandboxes without one.
+// trace:TASK-1801 | ai:claude
+fn list_verdict_directory(dir: &std::fs::File) -> std::io::Result<Vec<std::ffi::OsString>> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::ffi::OsStrExt;
+    // SAFETY: dup returns a new descriptor or -1. fdopendir takes ownership
+    // of it on success, and closedir releases it; on failure we close it.
+    let fd = unsafe { libc::fcntl(dir.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let dirp = unsafe { libc::fdopendir(fd) };
+    if dirp.is_null() {
+        let e = std::io::Error::last_os_error();
+        unsafe { libc::close(fd) };
+        return Err(e);
+    }
+    // The duplicate shares the original's offset; start from the beginning.
+    unsafe { libc::rewinddir(dirp) };
+    let mut names = Vec::new();
+    let result = loop {
+        set_errno_zero();
+        // SAFETY: dirp is a valid open DIR*; the entry is copied before the
+        // next readdir call can reuse it.
+        let entry = unsafe { libc::readdir(dirp) };
+        if entry.is_null() {
+            let e = std::io::Error::last_os_error();
+            break match e.raw_os_error() {
+                Some(0) | None => Ok(()),
+                Some(_) => Err(e),
+            };
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) };
+        let name = std::ffi::OsStr::from_bytes(name.to_bytes());
+        if name != "." && name != ".." {
+            names.push(name.to_os_string());
+        }
+    };
+    unsafe { libc::closedir(dirp) };
+    result.map(|()| names)
+}
+
+/// readdir reports end-of-directory and errors both as NULL; only errno,
+/// cleared beforehand, tells them apart.
+fn set_errno_zero() {
+    // SAFETY: each returns this thread's errno location.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        *libc::__errno_location() = 0
+    };
+    #[cfg(target_vendor = "apple")]
+    unsafe {
+        *libc::__error() = 0
+    };
 }
 
 // trace:TASK-1801 | ai:codex
