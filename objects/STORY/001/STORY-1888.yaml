@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-21T15:31:01.141415286Z
+modified_at: 2026-10-21T16:50:55.072359121Z
 req_type: Story
 tags:
 - authority
@@ -28,6 +28,13 @@ relationships:
   target_id: 01a142e2-d6c2-75a3-99dc-49b022a97612
   created_at: 2026-10-21T15:31:01.141411532Z
   created_by: joe
+comments:
+- id: 01a15f5f-79e0-7951-95ae-b01a8992b375
+  author: joe
+  content: 'ADVISOR 09:55 observation: the protected-path rule only applies to a mandate-RELEASED ship, i.e. a held PR. #2798 (mandate.rs) and #2792 (mandate_ship.rs, pr_ship.rs) were refused under the mandate at 06:25. Once the operator had cleared their holds with ''aida merge-hold clear'', the advisor shipped them as ordinary unheld PRs after a fresh independent PASS and green CI on the same SHA, and no path check ran. That matched operator intent (the operator ran clear+ship and the merges were then refused only as stale), but it means ''a human must merge gate files'' is enforced only while a hold exists. Decide in the sketch: should a non-mandate ''aida pr ship'' run by an agent seat also refuse GATE_PROTECTED_PATHS (e.g. require a human TTY like merge-hold clear), or is a human hold-clear an acceptable stand-in for the human merge?'
+  created_at: 2026-10-21T16:50:55.072359121Z
+  modified_at: 2026-10-21T16:50:55.072359121Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
   author: joe
