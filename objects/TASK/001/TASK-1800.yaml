@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T12:18:52.387990821Z
+modified_at: 2026-10-21T13:11:52.455388411Z
 req_type: Task
 relationships:
 - rel_type:
@@ -493,6 +493,12 @@ comments:
   created_at: 2026-10-21T12:18:52.387990821Z
   modified_at: 2026-10-21T12:18:52.387990821Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e96-ef87-7311-92bc-27334d043f9b
+  author: joe
+  content: 'AC2 slice 1 (PR #2798, head c8f7d054ba): the item-level trace attribution approach was MEASURED AND REJECTED. As signed off (e7b8013bcd): full-file fallback 290 -> 414, scoped sets grew in 34/50 cases, refusals 49 -> 49. After the advisor''s bounded iteration A (e86375ebf3: test-only out-of-line mods as units, std/core macros exempt, fail-closed on changed use/attributes, cfg_attr path, plain mod m;): fallback 290 -> 333, 109 already-scoped paths grew in 34 cases, refusals 49 -> 49, no true-touch/unresolved pair lost. Gate B failed, so the collector was removed and the production collector is unchanged. Shipped: the comment-24 fail-open fix (a history hit at a non-canonical object path now refuses instead of dropping the ID as dangling, with a regression test), the corpus replay as a drift/zero-loss guard (make task-1800-replay), the measured tables in docs/testing/task-1800-trace-exclusions.{md,json}, and the TASK-2042 wording fix. Markdown scoping is dropped. The follow-up is TASK-2067 (resolve unresolved trace IDs via store history and aliases).'
+  created_at: 2026-10-21T13:11:52.455388411Z
+  modified_at: 2026-10-21T13:11:52.455388411Z
+  session_id: 5a255452-d2b7-43de-a888-7bf28259e983
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
