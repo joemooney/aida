@@ -3,13 +3,22 @@ spec_id: BUG-2200
 agreed_id: BUG-2200
 title: aida role enter blames the team roster when the seat check cannot find a distributed store (objects/ missing), while aida team shows the seat allowed
 description: 'Seen 2026-10-20 by the operator in a second project (api-service on host spock, solo store registered 2026-09-04): `aida role enter advisor` failed with ''seat `advisor` is not allowed by the team roster for `joe.mooney`; an interactive human must update the roster with `aida team allow-seat`'', yet `aida team` in the same directory lists ''joe.mooney  advisor, implementer, product, reviewer (you)''. Both read registry/team.toml, but seat_authority::store_root (aida-cli-lib/src/seat_authority.rs:88) returns None unless detect_distributed_store_from(project_root) finds a store whose objects/ dir exists, and roster_allows then returns false without reading the roster; issue_direct (~line 930) reports that as a roster refusal. aida team resolves the store differently, so the two disagree. Suspected trigger: a solo store with no objects/ dir yet (or a store not detected as distributed from that cwd). Acceptance: (1) when the store cannot be resolved (or has no objects/), role enter/grant issuance says so explicitly (which path was probed and why it was rejected) instead of naming the roster or suggesting allow-seat; (2) a store that has registry/team.toml but no objects/ dir yet either works for seat checks or gets the explicit message from (1); (3) seat check and `aida team` resolve the same store from the same cwd (shared resolver), with a test pinning agreement; (4) regression tests for both the missing-objects and not-detected cases.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:53:01.235500315Z
-modified_at: 2026-10-21T04:53:01.235500315Z
+modified_at: 2026-10-21T04:53:25.607363666Z
 req_type: Bug
+history:
+- id: 01a15cce-97e7-7fb0-8a25-4759c9e47c98
+  author: joe
+  timestamp: 2026-10-21T04:53:25.607360852Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d29b69c35cafa137e15d5935aefc4f79837996e3
   branch: main
