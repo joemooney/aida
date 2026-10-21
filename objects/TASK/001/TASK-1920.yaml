@@ -3,13 +3,22 @@ spec_id: TASK-1920
 agreed_id: TASK-1920
 title: 'TASK-1800/1803 follow-ups: bound the deleted-alias history scan, respect user GIT_SSH_COMMAND, local origin/HEAD before network probe'
 description: 'From PR #2741 PASS (round 2) non-blocking findings: (1) PERF: mandate.rs store_history_alias_ids runs an unbounded ''git log --all -G'' over the whole store for every trace ID with no current record. On the live store (76k commits) that is 24.6s warm and 4m26s cold per ID, on the ship path. Index alias history (history_index) or bound the scan, keeping fail-closed. (2) forge.rs probe_origin_head_symref overwrites a user''s GIT_SSH_COMMAND/core.sshCommand; append BatchMode instead of replacing. (3) default_branch_of calls the network ls-remote probe (up to 3s) before local origin/HEAD, for all 15 callers; prefer local and probe only when it''s unknown. (4) Gate ship_is_default_branch with #[cfg(test)]. (5) Unit-test parse_ls_remote_symref_head on malformed lines, multiple HEADs, non-refs/heads targets and unsafe names.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T20:04:50.165130913Z
-modified_at: 2026-10-18T20:04:50.165130913Z
+modified_at: 2026-10-21T04:29:21.827615144Z
 req_type: Task
+history:
+- id: 01a15cb8-9023-78e2-bd24-52f40776b4d7
+  author: joe
+  timestamp: 2026-10-21T04:29:21.827611582Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 555237eca90547a58db236fc5ff333097c6ded8f
   branch: main
