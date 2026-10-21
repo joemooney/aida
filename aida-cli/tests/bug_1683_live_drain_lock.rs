@@ -1,6 +1,9 @@
 #![cfg(target_os = "linux")]
 //! Linux process fixtures: actual kernel PID/start identity, no simulated age waits.
 // trace:BUG-1683 | ai:codex
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
@@ -35,7 +38,7 @@ impl Drop for Holder {
     }
 }
 fn git(repo: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()
@@ -190,7 +193,7 @@ impl Fixture {
         }
         script(&f.bin.join("git"), "#!/bin/sh\ncase \" $* \" in *' merge '*|*' rebase '*|*' push '*) echo merge:$* >> \"$SENTINEL\"; exit 94;; esac\nexec /usr/bin/git \"$@\"\n");
         // No origin: shared acquisition must report unavailable, never mask the local gate.
-        assert!(!Command::new("git")
+        assert!(!test_git::git_command()
             .current_dir(f.repo.join(".aida-store"))
             .args(["remote", "get-url", "origin"])
             .output()

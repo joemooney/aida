@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "punt_done_args.rs"]
+pub(crate) mod punt_done_args;
+pub(crate) use punt_done_args::*;
+
 pub(crate) fn locate_for_status(
     reg: &advisor::AdvisorRegistration,
 ) -> Option<advisor::LiveAdvisor> {
@@ -1096,3 +1101,229 @@ pub(crate) fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
 
     Ok(())
 }
+
+/// Browse and analyze the local design-fork punt ledger.
+// trace:STORY-325 | ai:claude
+// trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "punts")]
+#[clap(hide = true)]
+pub(crate) struct PuntsArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PuntsCommand,
+}
+
+// STORY-325: punt ledger CLI command. Dispatched before storage init —
+// it reads only `.aida/punts.jsonl`, no requirement store.
+// trace:STORY-325 | ai:antigravity
+fn run_punts(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let punts_cmd = &args.inner;
+    return handle_punts_command(punts_cmd.clone());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUNTS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "punts",
+        help_after: "punt",
+        command: <PuntsArgs as clap::CommandFactory>::command,
+        policy: punts_cli_policy,
+        run: crate::command_registry::Handler::Early(run_punts),
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Write. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::PuntsCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            PuntsCommand::List { .. } | PuntsCommand::Read { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
+
+/// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
+/// A newcomer-friendly shortcut for completing a task without the
+/// `edit --status completed` jargon.
+// trace:TASK-727 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "done")]
+pub(crate) struct DoneArgs {
+    /// The spec to mark done.
+    pub spec: String,
+}
+
+fn run_done(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DoneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DoneArgs { spec } => {
+                    // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
+                    handle_done_command(spec, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // TASK-728: `aida done` is a distributed-mode (default) verb. Legacy
+                // --centralized mode keeps the explicit edit path. trace:TASK-727
+                DoneArgs { .. } => {
+                    anyhow::bail!(
+                        "`aida done` is available in the default (distributed) mode. In legacy \
+                     --centralized mode, use `aida edit <spec> --status completed`."
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DONE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "done",
+    help_after: "reconstitute",
+    command: <DoneArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_done),
+};
+
+/// Punt a spec to Needs Attention — pause it with a structured reason
+/// instead of guessing past a design-fork. The safety net an autonomous
+/// drain reaches for when it hits a decision it cannot safely make.
+// trace:STORY-332 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "punt")]
+pub(crate) struct PuntArgs {
+    /// The spec (UUID or SPEC-ID) to punt. Must currently be In Progress.
+    pub id: String,
+
+    /// The kind of obstacle. One of: design-fork, ambiguous-spec,
+    /// missing-context, blocked-dependency, other.
+    #[clap(long, short = 'c')]
+    pub category: String,
+
+    /// Human-readable description of the fork / obstacle that stopped you.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'r', allow_hyphen_values = true)]
+    pub reason: String,
+
+    /// Optional best-guess answer if forced to choose — recorded
+    /// distinctly from the reason so triage can see the agent's lean.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'l', allow_hyphen_values = true)]
+    pub lean: Option<String>,
+}
+
+fn run_punt(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <PuntArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                PuntArgs {
+                    id,
+                    category,
+                    reason,
+                    lean,
+                } => {
+                    handle_punt_command(
+                        id,
+                        category,
+                        reason,
+                        lean.as_deref(),
+                        backend,
+                        store_path,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                PuntArgs { .. } => {
+                    // `aida punt` writes the NeedsAttention status + structured punt
+                    // metadata; the deprecated SQLite backend does not persist it.
+                    // trace:STORY-332 | ai:claude
+                    anyhow::bail!(
+                        "aida punt requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUNT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "punt",
+    help_after: "advisor",
+    command: <PuntArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_punt),
+};

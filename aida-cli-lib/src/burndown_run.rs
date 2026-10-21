@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "burndown_run_args.rs"]
+pub(crate) mod burndown_run_args;
+pub(crate) use burndown_run_args::*;
+
 /// Install a per-invocation `--order` override by exporting
 /// `AIDA_BURNDOWN_ORDER`, the top tier of [`resolved_burndown_ready_order`].
 /// Exporting (rather than threading a parameter) means the headless drain
@@ -588,7 +593,7 @@ pub(crate) fn handle_burndown_run(
                 ceiling_key,
                 &ceiling_value,
                 contained,
-            )
+            )?
             .status()
             .map_err(|e| {
                 anyhow::anyhow!(
@@ -1404,7 +1409,8 @@ pub(crate) fn file_integration_wait_finding(
 /// drain's permission posture or control flow. The prompt stays the trailing
 /// positional. Pure + unit-tested. trace:TASK-804 | ai:claude
 pub(crate) fn burndown_verbose_claude_args(prompt: &str, mode: &str) -> Vec<String> {
-    burndown_verbose_claude_args_with_containment(prompt, mode, false)
+    // Uncontained: no contained settings are built, so nothing can refuse.
+    burndown_verbose_claude_args_with_containment(prompt, mode, false).unwrap_or_default()
 }
 
 // trace:TASK-804 trace:BUG-2171 | ai:antigravity
@@ -1412,7 +1418,7 @@ pub(crate) fn burndown_verbose_claude_args_with_containment(
     prompt: &str,
     mode: &str,
     contained: bool,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let mut args = vec![
         "-p".to_string(),
         "--permission-mode".to_string(),
@@ -1423,10 +1429,10 @@ pub(crate) fn burndown_verbose_claude_args_with_containment(
         "--include-partial-messages".to_string(),
     ];
     if contained {
-        args.extend(crate::session::claude_contained_flags());
+        args.extend(crate::session::claude_contained_flags()?);
     }
     args.push(prompt.to_string());
-    args
+    Ok(args)
 }
 
 /// TASK-804: the discoverable JSONL log path for a `--verbose` burndown drain:
@@ -2059,7 +2065,7 @@ pub(crate) fn run_burndown_verbose(
         ceiling_key,
         &ceiling_value,
         contained,
-    )
+    )?
     .stdout(std::process::Stdio::from(log))
     .status()
     .map_err(|e| {
@@ -2087,14 +2093,14 @@ pub(crate) fn build_burndown_quiet_command(
     ceiling_key: &str,
     ceiling_value: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     cmd.arg("-p")
         .arg(current_prompt)
         .arg("--permission-mode")
         .arg(mode);
     if contained {
-        cmd.args(crate::session::claude_contained_flags());
+        cmd.args(crate::session::claude_contained_flags()?);
     }
     cmd.env("AIDA_BURNDOWN_LOCK_HELD", "1")
         .env(ceiling_key, ceiling_value);
@@ -2104,7 +2110,7 @@ pub(crate) fn build_burndown_quiet_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 // trace:BUG-2124 | ai:antigravity
@@ -2117,11 +2123,11 @@ pub(crate) fn build_burndown_verbose_command(
     ceiling_key: &str,
     ceiling_value: &str,
     contained: bool,
-) -> std::process::Command {
+) -> Result<std::process::Command> {
     let mut cmd = std::process::Command::new("claude");
     cmd.args(burndown_verbose_claude_args_with_containment(
         prompt, mode, contained,
-    ))
+    )?)
     .env("AIDA_BURNDOWN_LOCK_HELD", "1")
     .env(ceiling_key, ceiling_value);
     crate::session::apply_headless_child_seat_env(&mut cmd, "implementer", child_grant_id);
@@ -2130,7 +2136,7 @@ pub(crate) fn build_burndown_verbose_command(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
 }
 
 /// STORY-547: build the [`burndown::OpenFacts`] for every OPEN spec in the store
@@ -2987,3 +2993,42 @@ pub(crate) fn handle_burndown_plan(
     }
     Ok(())
 }
+
+// trace:STORY-527 | ai:claude
+/// Plan an autonomous burn-down: list which specs are ready to fan out vs
+/// parked, via the pickability gate. The run itself is the /aida-burndown
+/// skill in Claude Code, not a CLI subcommand — `burndown plan` is the
+/// read-only foundation it drives its worktree fan-out from.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "burndown")]
+pub(crate) struct BurndownArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::BurndownCommand,
+}
+
+// STORY-527: `aida burndown` reads the requirement graph (like `graph` /
+// `plan`) — no shared storage handle needed. Dispatch early.
+// trace:STORY-527 | ai:claude
+fn run_burndown(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <BurndownArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let cmd = &args.inner;
+    return handle_burndown_command(cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static BURNDOWN: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "burndown",
+        help_after: "release",
+        command: <BurndownArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_burndown),
+    };

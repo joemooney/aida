@@ -1848,3 +1848,138 @@ mod tests {
         assert!(docs_prompt.contains("Documentation-only diff rule"));
     }
 }
+
+/// Harvest what a diff established into the spec: a headless agent proposes
+/// missing acceptance criteria / micro-decisions / ADRs, you confirm an
+/// opt-in checklist, confirmed items land on the spec, every run is ledgered.
+// trace:TASK-1247 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "harvest")]
+pub(crate) struct HarvestArgs {
+    /// Requirement ID (UUID or SPEC-ID) the diff implements.
+    pub spec: String,
+
+    /// Confirm candidates from a file (e.g. a `reconstitute` probe's
+    /// divergence output) instead of running the harvest agent.
+    #[clap(long, value_name = "FILE")]
+    pub from: Option<std::path::PathBuf>,
+
+    /// Harvest a PR's diff (`gh pr diff`) instead of the current branch.
+    #[clap(long)]
+    pub pr: Option<u64>,
+
+    /// Base ref for the branch diff (default: origin/main).
+    #[clap(long)]
+    pub base: Option<String>,
+
+    /// Accept every filtered candidate without the checklist (headless use).
+    #[clap(long)]
+    pub yes_all: bool,
+
+    /// Print the agent brief and exit without launching anything.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Emit the run summary as JSON.
+    #[clap(long)]
+    pub json: bool,
+}
+
+fn run_harvest(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <HarvestArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                HarvestArgs {
+                    spec,
+                    from,
+                    pr,
+                    base,
+                    yes_all,
+                    dry_run,
+                    json,
+                } => {
+                    let store = backend.load()?;
+                    let project_root = find_project_root()?;
+                    self::handle_harvest_command(
+                        &project_root,
+                        &store,
+                        spec,
+                        self::HarvestOptions {
+                            from: from.clone(),
+                            pr: *pr,
+                            base: base.clone(),
+                            yes_all: *yes_all,
+                            dry_run: *dry_run,
+                            json: *json,
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                HarvestArgs {
+                    spec,
+                    from,
+                    pr,
+                    base,
+                    yes_all,
+                    dry_run,
+                    json,
+                } => {
+                    let store = storage.load()?;
+                    let project_root = find_project_root()
+                        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+                    self::handle_harvest_command(
+                        &project_root,
+                        &store,
+                        spec,
+                        harvest::HarvestOptions {
+                            from: from.clone(),
+                            pr: *pr,
+                            base: base.clone(),
+                            yes_all: *yes_all,
+                            dry_run: *dry_run,
+                            json: *json,
+                        },
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static HARVEST: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "harvest",
+        help_after: "criteria",
+        command: <HarvestArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_harvest),
+    };

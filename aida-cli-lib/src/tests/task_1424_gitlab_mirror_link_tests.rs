@@ -10,7 +10,7 @@
 use super::*;
 
 fn git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()

@@ -14,7 +14,7 @@ fn project(temp: &tempfile::TempDir) -> std::path::PathBuf {
 }
 
 fn git(root: &std::path::Path, args: &[&str]) {
-    let status = std::process::Command::new("git")
+    let status = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])

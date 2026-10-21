@@ -1097,6 +1097,64 @@ pub(crate) fn emit_notice_time_line() {
             println!("{line}");
         }
     }
+    // STORY-1700: the mandate line, every turn for every seat, plus one line
+    // per seat when it expires or is stopped. The grant's turn stamp lets the
+    // drive tick tell whether an advisor seat is live. Fail-open.
+    // trace:STORY-1700 | ai:claude
+    let grant = crate::seat_authority::current_grant_id();
+    crate::mandate_drive::stamp_grant_turn(grant.as_deref(), now.with_timezone(&chrono::Utc));
+    if let Some(line) = mandate_notice_line(now.with_timezone(&chrono::Utc), session_id.as_deref())
+    {
+        println!("{line}");
+    }
+}
+
+/// STORY-1700: whose expired/stopped line a `.seen` marker records: the
+/// seat grant, else the harness session, else the role (else `default`), so
+/// two role-less sessions each see the line once.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn mandate_seen_key(
+    grant: Option<&str>,
+    session_id: Option<&str>,
+    role: Option<&str>,
+) -> String {
+    let some = |v: Option<&str>| {
+        v.map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+    };
+    if let Some(g) = some(grant).filter(|g| uuid::Uuid::parse_str(g).is_ok()) {
+        return format!("grant-{g}");
+    }
+    if let Some(s) = some(session_id) {
+        return format!("session-{s}");
+    }
+    some(role)
+        .map(|r| canonical_role_name(&r))
+        .unwrap_or_else(|| "default".to_string())
+}
+
+/// STORY-1700: the per-turn mandate line for this seat, if any. The gates
+/// are read only while a mandate is active (one `git show`).
+// trace:STORY-1700 | ai:claude
+pub(crate) fn mandate_notice_line(
+    now: chrono::DateTime<chrono::Utc>,
+    session_id: Option<&str>,
+) -> Option<String> {
+    let dir = crate::mandate::mandate_dir().ok()?;
+    let state = crate::mandate::current_state();
+    let seat = mandate_seen_key(
+        crate::seat_authority::current_grant_id().as_deref(),
+        session_id,
+        std::env::var("AIDA_SESSION_ROLE").ok().as_deref(),
+    );
+    let gates = match &state {
+        crate::mandate::MandateState::Active(_) => {
+            crate::mandate_gates::describe(crate::find_main_worktree_root().ok().as_deref())
+        }
+        _ => String::new(),
+    };
+    crate::mandate::notice_line(&dir, &state, now, &seat, &gates)
 }
 
 /// Enforce the per-turn notice's fail-open latency contract across the whole
@@ -1405,20 +1463,9 @@ mod bug415_status_count_tests;
 /// `AIDA_TEAM_REQUIRE_USER=1`. Conservative: anything not clearly a read is a
 /// write. trace:STORY-640 | ai:claude
 pub(crate) fn is_write_command(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::Do { .. }
-            | Command::Add { .. }
-            | Command::Edit { .. }
-            | Command::Comment(_)
-            | Command::Queue(_)
-            | Command::Session(_)
-            | Command::Defer { .. }
-            | Command::Undefer { .. }
-            | Command::Archive { .. }
-            | Command::Unarchive { .. }
-            | Command::Brief { .. }
-    )
+    // trace:STORY-1728 | ai:claude
+    let Command::Registered(invocation) = command;
+    invocation.policy().team_identity_write
 }
 
 /// STORY-640: the team distinct-identity guard + join-the-team onboarding hint.
@@ -1431,15 +1478,18 @@ pub(crate) fn maybe_team_identity_guard(
 ) -> Result<()> {
     // `aida team` surfaces the same facts; the JSON status path must stay clean
     // for machine consumers. Skip both so the guard never pollutes them.
-    if matches!(command, Command::Team { .. }) {
+    if command.name() == "team" {
         return Ok(());
     }
-    if let Command::Status { json: true, .. } = command {
+    if command
+        .args::<crate::status_cmd::StatusArgs>()
+        .is_some_and(|args| args.json)
+    {
         return Ok(());
     }
     // STORY-764: `--format json` pins the same machine surface; keep it clean too.
     // trace:STORY-764 | ai:claude
-    if matches!(command, Command::Status { .. }) && output_format_is_json() {
+    if command.name() == "status" && output_format_is_json() {
         return Ok(());
     }
 
@@ -3468,3 +3518,141 @@ pub(crate) fn format_ci_age(
 #[cfg(test)]
 #[path = "tests/task_486_cross_platform_ci_status_tests.rs"]
 mod task_486_cross_platform_ci_status_tests;
+
+/// The unified coordination inbox — every channel where YOU are the gate,
+/// in ONE place: mergeable PRs, unacked briefs, findings awaiting triage,
+/// reviewer verdicts, NeedsAttention escalations, unread mail, AND pending
+/// worker directives. The same
+/// "Awaiting you" report that leads `aida status`, promoted to a first-class
+/// command so the whole coordination inbox is a can't-miss signal — not just
+/// mail (which had its own per-turn hook while everything else stayed
+/// invisible mid-session).
+///
+/// `--notice` renders the COMPACT one-line form the per-turn hook injects
+/// (silent when nothing awaits). That path is cache/local-backed and makes
+/// NO network call — PRs (the one gh-backed channel) are omitted from the
+/// line; run the bare command to include them.
+// trace:STORY-741 | ai:claude
+// trace:TASK-1146 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "awaiting")]
+pub(crate) struct AwaitingArgs {
+    /// Compact one-line summary spanning every channel, for the per-turn
+    /// hook. SILENT when nothing awaits. Cache/local-backed, no network
+    /// (PRs are omitted from this line — run bare `aida awaiting` for them).
+    // trace:STORY-741 | ai:claude
+    #[clap(long)]
+    pub notice: bool,
+    /// Machine-readable JSON of the full report (same shape as
+    /// `aida status --awaiting --json`).
+    // trace:STORY-741 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Lift the 5-item cap and show every item.
+    // trace:STORY-741 | ai:claude
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
+    /// Skip the gh-backed PR lookup (offline / fast path). Implied by
+    /// `--notice`.
+    // trace:STORY-741 | ai:claude
+    #[clap(long)]
+    pub no_ci: bool,
+}
+
+fn run_awaiting(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <AwaitingArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // STORY-769: the `aida awaiting --notice` per-turn hook ALWAYS leads with a
+            // "Current date/time + Timing" line — a deliberate contract change from the
+            // old silent-when-empty behaviour. Emit it EARLY, before store init, so the
+            // hook still gets its time context even if the store/backend can't be
+            // resolved (offline, cache-locked, unattached), and so the last-human-input
+            // presence oracle is stamped every turn. The compact "Awaiting you" line
+            // still prints later from `handle_awaiting_command`; this only prepends the
+            // always-on time line. trace:STORY-769 | ai:claude
+            if let AwaitingArgs {
+                notice: true,
+                json: false,
+                ..
+            } = &args
+            {
+                // Arm before any notice-specific filesystem work. Session-start
+                // registration and the turn-clock stamp are intentionally fail-open,
+                // but can still stall on a contended filesystem.
+                arm_notice_deadline();
+                emit_notice_time_line();
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // STORY-741: `aida awaiting` — the unified coordination inbox as a
+                // first-class command (the same "Awaiting you" report that leads
+                // `aida status`, now including unread mail). `--notice` is the compact,
+                // cache/local-backed per-turn line the UserPromptSubmit hook injects.
+                // trace:STORY-741 | ai:claude
+                AwaitingArgs {
+                    notice,
+                    json,
+                    verbose,
+                    no_ci,
+                } => {
+                    // trace:BUG-1289 | ai:claude
+                    return crate::command_registry::returned(handle_awaiting_command(
+                        *notice,
+                        *json || output_format_is_json(),
+                        *verbose,
+                        *no_ci,
+                        backend,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-741: `aida awaiting` (the unified coordination inbox) is a
+                // distributed-mode surface — briefs, findings, escalations, reviewer
+                // verdicts and mail are all distributed-mode concepts. trace:STORY-741
+                AwaitingArgs { .. } => {
+                    anyhow::bail!(
+                        "`aida awaiting` is available in the default (distributed) mode."
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AWAITING: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "awaiting",
+        help_after: "status",
+        command: <AwaitingArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_awaiting),
+    };

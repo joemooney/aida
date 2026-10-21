@@ -18,6 +18,9 @@
 //!        signpost (no red `Error:`), even though it still exits non-zero.
 // trace:STORY-737
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::Command;
 
@@ -36,7 +39,7 @@ fn aida(repo: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

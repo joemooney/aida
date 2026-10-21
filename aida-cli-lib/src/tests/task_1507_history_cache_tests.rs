@@ -234,18 +234,44 @@ fn real_git() -> &'static Path {
     })
 }
 
-/// A hermetic fixture `git` command: pinned binary, no system/global config,
-/// no inherited repo-locating env, no background auto-maintenance.
+/// A hermetic fixture `git` command: pinned binary, explicit child cwd
+/// (general subprocess hygiene; `-C` also `chdir`s inside `git`), no
+/// system/global config, no inherited repo-locating env, no background
+/// auto-maintenance.
 // trace:BUG-1955 | ai:claude
+// trace:TASK-1970 | ai:antigravity
 fn fixture_git(dir: &Path, clock: i64) -> Command {
+    fixture_git_with(dir, clock, &NO_AUTO_MAINTENANCE)
+}
+
+/// Keeps every fixture `git` from starting auto-maintenance. This is the
+/// fix for the CI "unable to create temporary file / failed to write commit
+/// object" failures. Since git 2.54, every commit or merge runs
+/// `maintenance run --auto --detach` with the geometric strategy, so a
+/// background `repack -d` prunes loose objects and removes their emptied
+/// `.git/objects/<xx>` fanout dirs. Meanwhile the fixture's next `git` call
+/// writes an object: it `mkdir`s a fanout dir, the background prune removes
+/// it again, and the retried `mkstemp` gets ENOENT.
+// trace:BUG-2118 | ai:claude
+const NO_AUTO_MAINTENANCE: [&str; 4] = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
+
+/// `fixture_git` with explicit leading `-c` config. Only the auto-maintenance
+/// regression passes anything other than [`NO_AUTO_MAINTENANCE`]: it needs
+/// an unguarded control.
+// trace:BUG-2118 | ai:claude
+fn fixture_git_with(dir: &Path, clock: i64, config: &[&str]) -> Command {
     let date = format!("@{clock} +0000");
     let mut cmd = Command::new(real_git());
-    cmd.args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
+    if dir.is_dir() {
+        cmd.current_dir(dir);
+    }
+    cmd.args(config)
         .arg("-C")
         .arg(dir)
         .env("GIT_AUTHOR_DATE", &date)
         .env("GIT_COMMITTER_DATE", &date)
         .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("HOME", dir);
     for var in [
         "GIT_DIR",
@@ -261,11 +287,17 @@ fn fixture_git(dir: &Path, clock: i64) -> Command {
     cmd
 }
 
+// trace:TASK-1970 | ai:antigravity
 fn git_in(dir: &Path, args: &[&str], clock: i64) -> String {
     let out = fixture_git(dir, clock).args(args).output().unwrap();
     assert!(
         out.status.success(),
-        "git {args:?} failed: {}",
+        "git {args:?} failed (status={:?}, dir={}, dir_exists={}, objects_exists={}, cwd={:?}): {}",
+        out.status.code(),
+        dir.display(),
+        dir.is_dir(),
+        dir.join(".git/objects").is_dir(),
+        std::env::current_dir().ok(),
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8_lossy(&out.stdout).to_string()
@@ -632,6 +664,73 @@ fn history_cache_id_window_parity() {
             );
         }
     }
+}
+
+/// Repo config that makes auto-maintenance run on every commit, in the
+/// foreground: the loose-objects task packs the loose objects, then prunes
+/// them and their fanout dirs. These are the same deletions a detached
+/// background repack makes, but synchronous, so the probe is deterministic
+/// on every git version (the geometric default exists only on git 2.54+).
+// trace:BUG-2118 | ai:claude
+fn force_eager_auto_maintenance(fx: &Fixture) {
+    for (key, value) in [
+        ("maintenance.autoDetach", "false"),
+        ("gc.autoDetach", "false"),
+        ("maintenance.loose-objects.enabled", "true"),
+        ("maintenance.loose-objects.auto", "-1"),
+    ] {
+        fx.git(&["config", key, value]);
+    }
+}
+
+fn pack_count(store: &Path) -> usize {
+    std::fs::read_dir(store.join(".git/objects/pack"))
+        .map(|dir| {
+            dir.filter_map(Result::ok)
+                .filter(|e| e.path().extension().is_some_and(|x| x == "pack"))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// Regression for the fixture's "unable to create temporary file / failed
+/// to write commit object" CI failures: a fixture `git` must never start
+/// auto-maintenance. If it did, maintenance would prune loose objects and
+/// fanout dirs while the next fixture `git` call is writing to them. The
+/// test sets the repo up so any maintenance run leaves a pack, then checks
+/// that the merged-history build, the fixture that failed on CI, packs
+/// nothing.
+// trace:BUG-2118 | ai:claude
+#[test]
+fn fixture_git_never_starts_auto_maintenance() {
+    // Control: the same eager config with no guard does pack. Without this
+    // check, a git that never ran maintenance would pass vacuously.
+    let mut control = Fixture::new();
+    force_eager_auto_maintenance(&control);
+    for i in 0..3 {
+        control.put(&Spec::new("FR-1", "Functional", &format!("v{i}")));
+        control.clock += 60;
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "control"]] {
+            let out = fixture_git_with(&control.store, control.clock, &[])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "control git {args:?} failed: {out:?}");
+        }
+    }
+    assert!(
+        pack_count(&control.store) > 0,
+        "eager auto-maintenance did not run without the guard; the probe is vacuous"
+    );
+
+    let mut fx = Fixture::new();
+    force_eager_auto_maintenance(&fx);
+    build_merged(&mut fx);
+    assert_eq!(
+        pack_count(&fx.store),
+        0,
+        "a fixture git call ran auto-maintenance; keep NO_AUTO_MAINTENANCE on every fixture git"
+    );
 }
 
 #[test]

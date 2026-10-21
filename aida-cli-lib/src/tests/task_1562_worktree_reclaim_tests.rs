@@ -472,17 +472,20 @@ fn task_1562_reclaim_is_dry_run_by_default() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = Cli::try_parse_from(["aida", "worktree", "reclaim"])
+    let cli = crate::command_registry::try_parse_from(["aida", "worktree", "reclaim"])
         .expect("`aida worktree reclaim` should parse");
-    match cli.command {
-        Command::Worktree(WorktreeCommand::Reclaim {
-            apply,
-            min_age_mins,
-            target_pct,
-            include_live,
-            include_open_prs,
-            json,
-        }) => {
+    match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
+        crate::worktree_gc::WorktreeArgs {
+            inner:
+                WorktreeCommand::Reclaim {
+                    apply,
+                    min_age_mins,
+                    target_pct,
+                    include_live,
+                    include_open_prs,
+                    json,
+                },
+        } => {
             assert!(!apply, "reclaim must be DRY RUN by default");
             assert_eq!(min_age_mins, 60);
             assert_eq!(target_pct, None);
@@ -500,7 +503,7 @@ fn task_1562_reclaim_parses_every_rail_override() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "worktree",
         "reclaim",
@@ -514,15 +517,18 @@ fn task_1562_reclaim_parses_every_rail_override() {
         "--json",
     ])
     .expect("every reclaim flag should parse");
-    match cli.command {
-        Command::Worktree(WorktreeCommand::Reclaim {
-            apply,
-            min_age_mins,
-            target_pct,
-            include_live,
-            include_open_prs,
-            json,
-        }) => {
+    match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
+        crate::worktree_gc::WorktreeArgs {
+            inner:
+                WorktreeCommand::Reclaim {
+                    apply,
+                    min_age_mins,
+                    target_pct,
+                    include_live,
+                    include_open_prs,
+                    json,
+                },
+        } => {
             assert!(apply);
             assert_eq!(min_age_mins, 180);
             assert_eq!(target_pct, Some(80));

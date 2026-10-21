@@ -1922,6 +1922,9 @@ impl Forge for GitHubForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2498,6 +2501,9 @@ impl Forge for GitLabForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2866,6 +2872,9 @@ impl Forge for PureGitForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: the branch merges into `base`; there is no forge to
+            // read it from. trace:TASK-1968 | ai:claude
+            Some(base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -4003,6 +4012,7 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         // trace:TASK-1803 | ai:claude
         .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
     if !out.status.success() {
         return None;
@@ -4354,7 +4364,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
         let git = |dir: &std::path::Path, args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(dir)
                 .args(args)
                 .output()
@@ -4366,7 +4376,7 @@ mod tests {
                 String::from_utf8_lossy(&out.stderr)
             );
         };
-        let clone = std::process::Command::new("git")
+        let clone = crate::test_git::git_command()
             .args(["clone", &http, repo.to_str().unwrap()])
             .output()
             .unwrap();
@@ -4948,7 +4958,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -4962,7 +4972,7 @@ mod tests {
 
         assert_eq!(resolve_forge_kind(root), ForgeKind::None);
 
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -4983,7 +4993,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -4994,7 +5004,7 @@ mod tests {
             "[forge]\nprovider = \"pure-git\"\n",
         )
         .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -5015,12 +5025,12 @@ mod tests {
         // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
             .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -5048,7 +5058,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5123,7 +5133,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5172,7 +5182,7 @@ mod tests {
             "base HEAD must advance"
         );
         // working tree clean — committed, not left staged.
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(root)
             .args(["status", "--porcelain"])
             .output()
@@ -5259,7 +5269,7 @@ mod tests {
 
     fn pure_git_repo_with_feature(root: &Path) -> String {
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()

@@ -18,7 +18,7 @@ use uuid::Uuid;
 /// verdict's reviewed sha against the branch tip.
 // trace:TASK-1456 | ai:claude
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -36,7 +36,7 @@ fn git(repo: &std::path::Path, args: &[&str]) {
 }
 
 fn git_head(repo: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "HEAD"])

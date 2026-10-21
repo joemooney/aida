@@ -457,7 +457,7 @@ mod tests {
             vec!["aida", "comment", "add", "TASK-1", "CLI note"],
             vec!["aida", "edit", "TASK-1", "--title", "CLI edit"],
         ] {
-            let cli = Cli::try_parse_from(args).unwrap();
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
             crate::git_backend_cmd::handle_git_backend_command(&store_path, &cli.command).unwrap();
         }
         let disk =
@@ -489,10 +489,10 @@ mod tests {
             vec!["aida", "usage", "show", "TASK-1", "--provenance", "--json"],
             vec!["aida", "usage", "show", "TASK-1", "--provenance", "--toon"],
         ] {
-            let cli = Cli::try_parse_from(args).unwrap();
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
             assert!(matches!(
-                cli.command,
-                Command::Usage {
+                cli.command.registered::<crate::usage_cmd::UsageArgs>(),
+                crate::usage_cmd::UsageArgs {
                     action: Some(UsageCommand::Show {
                         provenance: true,
                         cost: false,
@@ -502,10 +502,12 @@ mod tests {
                 }
             ));
         }
-        let cli = Cli::try_parse_from(["aida", "usage", "show", "TASK-1", "--cost"]).unwrap();
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "usage", "show", "TASK-1", "--cost"])
+                .unwrap();
         assert!(matches!(
-            cli.command,
-            Command::Usage {
+            cli.command.registered::<crate::usage_cmd::UsageArgs>(),
+            crate::usage_cmd::UsageArgs {
                 action: Some(UsageCommand::Show {
                     provenance: false,
                     cost: true,
@@ -514,9 +516,14 @@ mod tests {
                 ..
             }
         ));
-        assert!(
-            Cli::try_parse_from(["aida", "usage", "show", "TASK-1", "--cost", "--provenance"])
-                .is_err()
-        );
+        assert!(crate::command_registry::try_parse_from([
+            "aida",
+            "usage",
+            "show",
+            "TASK-1",
+            "--cost",
+            "--provenance"
+        ])
+        .is_err());
     }
 }

@@ -300,7 +300,7 @@ fn worktree_never_promotes_even_with_allow_dirty() {
 // --- probe against real temp git repos ----------------------------------------
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
@@ -384,7 +384,7 @@ fn probe_behind_and_diverged_refuse() {
     let (tmp, origin, clone) = git_fixture();
     // A second clone pushes a commit; fetching it leaves `clone` behind.
     let other = tmp.path().join("other");
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
         .args([
@@ -882,10 +882,14 @@ fn live_status_notes_flag_differences_and_dirty_builds() {
 
 #[test]
 fn cli_parses_build_flags_and_rebuild_is_gone() {
-    use clap::Parser;
-    let parse = |args: &[&str]| crate::cli::Cli::try_parse_from(args);
-    let clean_of = |args: &[&str]| match parse(args).unwrap().command {
-        crate::cli::Command::Dev(crate::cli::DevCommand::Build { clean, .. }) => clean,
+    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let clean_of = |args: &[&str]| match parse(args)
+        .unwrap()
+        .command
+        .registered::<crate::dev_cmd::DevArgs>()
+        .inner
+    {
+        crate::cli::DevCommand::Build { clean, .. } => clean,
         other => panic!("unexpected parse: {other:?}"),
     };
     assert_eq!(clean_of(&["aida", "dev", "build"]), None);
@@ -1156,13 +1160,14 @@ fn refusal_says_the_gate_does_not_fetch() {
 
 #[test]
 fn cli_parses_rollback_flags() {
-    use clap::Parser;
-    let parse = |args: &[&str]| crate::cli::Cli::try_parse_from(args);
+    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
     match parse(&["aida", "dev", "rollback", "--force"])
         .unwrap()
         .command
+        .registered::<crate::dev_cmd::DevArgs>()
+        .inner
     {
-        crate::cli::Command::Dev(crate::cli::DevCommand::Rollback { force, after_wave }) => {
+        crate::cli::DevCommand::Rollback { force, after_wave } => {
             assert!(force && !after_wave)
         }
         other => panic!("unexpected parse: {other:?}"),

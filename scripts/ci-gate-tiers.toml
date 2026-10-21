@@ -47,11 +47,13 @@
 # trace:BUG-2014 | ai:codex
 "Grant expiry hook protocol" = "fast"
 "Build all packages" = "full"
+"Build aida binary for lib unit tests" = "full"
 # Check-only, like the TUI seam guard. trace:TASK-1601 | ai:codex
 "Check aida-cli without default features" = "fast"
 "TUI seam guard" = "fast"
 "Generated protobuf mirror drift guard" = "full"
 "Run tests" = "full"
+"STORY-1853 test-speed tooling tests" = "fast"
 "GitLab live-smoke workflow guard" = "fast"
 "External-prose classifier inventory" = "fast"
 "test-touched planner tests" = "fast"
@@ -63,6 +65,8 @@
 "Run merge-hold gate fixtures" = "fast"
 "Run advisor-code-guard hook test" = "full"
 "Run git-guardrails parse test" = "fast"
+# trace:STORY-1854 | ai:claude
+"Run cargo-timeout hook test" = "fast"
 "Run session-context drift test" = "fast"  # trace:STORY-1648 | ai:claude
 "Run session role grant banner test" = "fast"  # trace:BUG-1924 | ai:claude
 "Run shipped full-access launch refusal fixtures" = "fast"
@@ -95,6 +99,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude
 "Verify pure-move slice stack fixtures" = "fast"
 "Sccache tmpdir detection fixtures" = "fast"  # trace:BUG-2135 | ai:antigravity
 "Run clippy" = "full"
@@ -130,3 +135,6 @@
 "Report diff trace coverage (report-only)" = "report-only by its own name"
 "Validate commit SPEC-ID references (trace gate)" = "fetches origin and fast-forwards the shared `.aida-store` worktree; take that mutation through `aida pull`, not a pre-push gate"
 "Doc-intent gate (surface changes mark doc-impact)" = "same `.aida-store` fetch-and-fast-forward as the trace gate above"
+# trace:STORY-1853 | ai:claude
+"Test shard root hygiene" = "asserts an ephemeral CI checkout has no untracked root entries; local worktrees can contain operator scratch files"
+"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py <log> --junit <target dir>/nextest/ci/junit-*.xml` still prints local per-test timings"

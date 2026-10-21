@@ -5,6 +5,9 @@
 //! default run exits 0, and only `--fail-on unexplained` turns the finding
 //! into a non-zero exit. trace:TASK-1785 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -47,7 +50,7 @@ fn ok(f: &Fixture, role: &str, args: &[&str]) -> String {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()

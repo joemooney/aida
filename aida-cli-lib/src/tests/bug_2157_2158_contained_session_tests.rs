@@ -172,7 +172,7 @@ fn contained_resume_keeps_aida_contained_and_bounds_writes_to_the_session_worktr
     let settings = settings_value(&args);
     assert_eq!(
         settings,
-        settings_value(&crate::session::claude_contained_flags_for(&session_wt)),
+        settings_value(&crate::session::claude_contained_flags_for(&session_wt).unwrap()),
         "write roots must be the session's worktree"
     );
     assert!(
@@ -195,7 +195,7 @@ fn contained_resume_falls_back_to_the_launcher_cwd_when_the_session_checkout_is_
         assert_eq!(cmd.get_current_dir(), Some(launcher.as_path()));
         assert_eq!(
             settings_value(&args_of(&cmd)),
-            settings_value(&crate::session::claude_contained_flags_for(&launcher))
+            settings_value(&crate::session::claude_contained_flags_for(&launcher).unwrap())
         );
     }
 }

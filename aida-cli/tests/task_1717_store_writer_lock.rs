@@ -16,6 +16,9 @@
 //!
 //! trace:TASK-1717 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 mod support;
 
 use std::path::{Path, PathBuf};
@@ -50,7 +53,7 @@ fn git_env(cmd: &mut Command) -> &mut Command {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = git_env(Command::new("git").current_dir(dir).args(args))
+    let out = git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git");
     assert!(
@@ -63,7 +66,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn git_try(dir: &Path, args: &[&str]) -> Output {
-    git_env(Command::new("git").current_dir(dir).args(args))
+    git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git")
 }
@@ -401,6 +404,12 @@ fn has_lock_fd(child: &Child, store: &Path) -> bool {
 /// Wait until `child` is blocked on the store lock, then assert it stays
 /// blocked for [`PARKED`] (and has not exited).
 fn assert_parked_on_lock(child: &mut Child, store: &Path, what: &str) {
+    assert_all_parked_on_lock(&mut [(child, what)], store);
+}
+
+/// Wait until `child` has the store lock file open (it is inside
+/// `store_lock::acquire`), failing if it exits first.
+fn wait_on_lock(child: &mut Child, store: &Path, what: &str) {
     let start = Instant::now();
     while !has_lock_fd(child, store) {
         assert!(
@@ -413,11 +422,23 @@ fn assert_parked_on_lock(child: &mut Child, store: &Path, what: &str) {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// [`assert_parked_on_lock`] for several competitors at once: each must reach
+/// the lock, then all must stay blocked through ONE shared [`PARKED`] window
+/// (each was parked at least that long) instead of one window apiece.
+// trace:TASK-1959 | ai:claude
+fn assert_all_parked_on_lock(children: &mut [(&mut Child, &str)], store: &Path) {
+    for (child, what) in children.iter_mut() {
+        wait_on_lock(child, store, what);
+    }
     std::thread::sleep(PARKED);
-    assert!(
-        child.try_wait().unwrap().is_none(),
-        "{what} finished while the store lock was held by another writer"
-    );
+    for (child, what) in children.iter_mut() {
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "{what} finished while the store lock was held by another writer"
+        );
+    }
 }
 
 /// An external lock-respecting writer: `flock(1)` holds the store lock until
@@ -847,16 +868,26 @@ fn sync_vs_sync_queue_mailbox_and_merge_gate_share_one_lock() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    assert_parked_on_lock(&mut second, &fx.store, "second db sync (symlink path)");
     let mut queue = fx.spawn(&["queue", "add", "TASK-1"], false);
-    assert_parked_on_lock(&mut queue, &fx.store, "aida queue add");
     let mut gate = fx.spawn(&["db", "merge-gate"], false);
-    assert_parked_on_lock(&mut gate, &fx.store, "aida db merge-gate");
+    // As before: the three are waiting on the lock when the message lands.
+    wait_on_lock(&mut second, &fx.store, "second db sync (symlink path)");
+    wait_on_lock(&mut queue, &fx.store, "aida queue add");
+    wait_on_lock(&mut gate, &fx.store, "aida db merge-gate");
     let local = fx.repo.join(".aida/mailbox");
     std::fs::create_dir_all(&local).unwrap();
     std::fs::write(local.join("m-queued.json"), message_json("m-queued", false)).unwrap();
     let mut digest = fx.spawn(&["mailbox", "sync"], false);
-    assert_parked_on_lock(&mut digest, &fx.store, "aida mailbox sync");
+    // trace:TASK-1959 | ai:claude
+    assert_all_parked_on_lock(
+        &mut [
+            (&mut second, "second db sync (symlink path)"),
+            (&mut queue, "aida queue add"),
+            (&mut gate, "aida db merge-gate"),
+            (&mut digest, "aida mailbox sync"),
+        ],
+        &fx.store,
+    );
     assert!(
         !fx.store.join("mailbox/m-queued.json").exists(),
         "no canonical mailbox write before the lock"

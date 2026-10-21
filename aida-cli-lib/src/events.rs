@@ -483,6 +483,38 @@ pub enum EventKind {
         /// `false` for a pin/import that recorded the plan without verifying.
         verified: bool,
     },
+    /// STORY-1700: one mandate-driven action and how it ended — the audit
+    /// ledger `aida mandate status` and the digest read. `actor` is `tick`
+    /// (the drive tick) or `session` (a seat acting under the mandate);
+    /// `outcome` is done | routed | gated | refused | skipped.
+    /// **Not actionable**: it records an act already taken.
+    // trace:STORY-1700 | ai:claude
+    MandateDriveAction {
+        mandate_id: String,
+        actor: String,
+        lane: String,
+        subject: String,
+        action: String,
+        outcome: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+    },
+    /// STORY-1700: the drive tick routed a lane's next action to the advisor
+    /// seat — one event per (lane, action, head) key, deduplicated across
+    /// ticks. The `mandate-drive-route` seat job turns it into a due item.
+    /// **Actionable.**
+    // trace:STORY-1700 | ai:claude
+    MandateDriveDue {
+        mandate_id: String,
+        key: String,
+        lane: String,
+        action: String,
+        subject: String,
+        /// The exact command (or steps) that resolves it.
+        command: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        detail: String,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -548,6 +580,8 @@ impl EventKind {
             | EventKind::SpecRequeued { .. }
             // STORY-1480: a recorded plan is likewise an act already taken.
             | EventKind::PlanRecorded { .. }
+            // STORY-1700: the drive ledger records acts already taken.
+            | EventKind::MandateDriveAction { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
@@ -569,6 +603,7 @@ impl EventKind {
             | EventKind::PrMerged { .. }
             | EventKind::MergeHoldChanged { .. }
             | EventKind::MandateChanged { .. }
+            | EventKind::MandateDriveDue { .. }
             | EventKind::ReviewVerdictRecorded { .. }
             | EventKind::DispositionChanged { .. }
             | EventKind::ExecutionModeChanged { .. }
@@ -637,6 +672,8 @@ impl EventKind {
             EventKind::GateHeld { .. } => "GateHeld",
             EventKind::ShiftTick { .. } => "ShiftTick",
             EventKind::PlanRecorded { .. } => "PlanRecorded",
+            EventKind::MandateDriveAction { .. } => "MandateDriveAction",
+            EventKind::MandateDriveDue { .. } => "MandateDriveDue",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -676,6 +713,8 @@ impl EventKind {
             "ShiftTick",
             "SpecRequeued",
             "PlanRecorded",
+            "MandateDriveAction",
+            "MandateDriveDue",
         ]
     }
 }

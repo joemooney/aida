@@ -5,9 +5,13 @@ use clap::Parser;
 #[test]
 fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
     for flag in ["--comments", "--no-comments"] {
-        let cli = Cli::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
-        match cli.command {
-            Command::Show {
+        let cli =
+            crate::command_registry::try_parse_from(["aida", "show", "TASK-1", flag]).unwrap();
+        match cli
+            .command
+            .registered::<crate::requirements_cli::ShowArgs>()
+        {
+            crate::requirements_cli::ShowArgs {
                 comments,
                 no_comments,
                 ..
@@ -18,9 +22,14 @@ fn show_comment_flags_parse_on_both_output_surfaces_and_conflict() {
             other => panic!("unexpected command: {other:?}"),
         }
     }
-    assert!(
-        Cli::try_parse_from(["aida", "show", "TASK-1", "--comments", "--no-comments"]).is_err()
-    );
+    assert!(crate::command_registry::try_parse_from([
+        "aida",
+        "show",
+        "TASK-1",
+        "--comments",
+        "--no-comments"
+    ])
+    .is_err());
 }
 
 /// BUG-453: headless_log_len returns the byte length of the session's JSONL
@@ -225,16 +234,24 @@ fn pending_brief_sentinel_add_clear_lifecycle() {
 #[test]
 fn show_rels_flag_parses() {
     for arg in ["--rels", "--relations"] {
-        let cli = Cli::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
-        match cli.command {
-            Command::Show { rels, .. } => assert!(rels, "{arg} should set rels"),
+        let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1", arg]).unwrap();
+        match cli
+            .command
+            .registered::<crate::requirements_cli::ShowArgs>()
+        {
+            crate::requirements_cli::ShowArgs { rels, .. } => {
+                assert!(rels, "{arg} should set rels")
+            }
             other => panic!("unexpected command: {other:?}"),
         }
     }
     // default: off
-    let cli = Cli::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
-    match cli.command {
-        Command::Show { rels, .. } => assert!(!rels),
+    let cli = crate::command_registry::try_parse_from(["aida", "show", "TASK-1"]).unwrap();
+    match cli
+        .command
+        .registered::<crate::requirements_cli::ShowArgs>()
+    {
+        crate::requirements_cli::ShowArgs { rels, .. } => assert!(!rels),
         other => panic!("unexpected command: {other:?}"),
     }
 }
@@ -469,7 +486,7 @@ fn last_findings_round_trip_and_noop() {
 /// onto `Add`, and `--blocked-by` / `--remove-blocked-by` onto `Edit`.
 #[test]
 fn blocked_by_flags_parse_on_add_and_edit() {
-    let add = Cli::try_parse_from([
+    let add = crate::command_registry::try_parse_from([
         "aida",
         "add",
         "--title",
@@ -482,14 +499,14 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         "TASK-2",
     ])
     .unwrap();
-    match add.command {
-        Command::Add { blocked_by, .. } => {
+    match add.command.registered::<crate::requirements_cli::AddArgs>() {
+        crate::requirements_cli::AddArgs { blocked_by, .. } => {
             assert_eq!(blocked_by, vec!["TASK-1".to_string(), "TASK-2".to_string()]);
         }
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let edit = Cli::try_parse_from([
+    let edit = crate::command_registry::try_parse_from([
         "aida",
         "edit",
         "TASK-9",
@@ -499,8 +516,11 @@ fn blocked_by_flags_parse_on_add_and_edit() {
         "TASK-3",
     ])
     .unwrap();
-    match edit.command {
-        Command::Edit {
+    match edit
+        .command
+        .registered::<crate::requirements_cli::EditArgs>()
+    {
+        crate::requirements_cli::EditArgs {
             blocked_by,
             remove_blocked_by,
             ..
@@ -514,10 +534,12 @@ fn blocked_by_flags_parse_on_add_and_edit() {
 
 #[test]
 fn brief_cli_parses_canonical_create_shape() {
-    let cli =
-        Cli::try_parse_from(["aida", "brief", "codex", "TASK-492", "--note", "ship it"]).unwrap();
-    match cli.command {
-        Command::Brief {
+    let cli = crate::command_registry::try_parse_from([
+        "aida", "brief", "codex", "TASK-492", "--note", "ship it",
+    ])
+    .unwrap();
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             agent,
             spec,
             note,
@@ -539,7 +561,7 @@ fn brief_cli_parses_canonical_create_shape() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "codex",
@@ -548,8 +570,8 @@ fn brief_cli_parses_canonical_create_shape() {
         "TASK-492",
     ])
     .unwrap();
-    match cli.command {
-        Command::Brief { depends_on, .. } => {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { depends_on, .. } => {
             assert_eq!(depends_on.as_deref(), Some("TASK-492"));
         }
         other => panic!("unexpected command: {other:?}"),
@@ -560,7 +582,7 @@ fn brief_cli_parses_canonical_create_shape() {
 // trace:TASK-1140 | ai:claude
 #[test]
 fn brief_cli_parses_authorized_by_flag() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "codex",
@@ -569,17 +591,18 @@ fn brief_cli_parses_authorized_by_flag() {
         "advisor-a",
     ])
     .unwrap();
-    match cli.command {
-        Command::Brief { authorized_by, .. } => {
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by.as_deref(), Some("advisor-a"));
         }
         other => panic!("unexpected command: {other:?}"),
     }
 
     // Omitted → None (the overwhelmingly common case).
-    let cli = Cli::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
-    match cli.command {
-        Command::Brief { authorized_by, .. } => {
+    let cli =
+        crate::command_registry::try_parse_from(["aida", "brief", "codex", "TASK-492"]).unwrap();
+    match cli.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs { authorized_by, .. } => {
             assert_eq!(authorized_by, None);
         }
         other => panic!("unexpected command: {other:?}"),
@@ -588,7 +611,7 @@ fn brief_cli_parses_authorized_by_flag() {
 
 #[test]
 fn brief_cli_parses_list_and_ack_subcommands() {
-    let list = Cli::try_parse_from([
+    let list = crate::command_registry::try_parse_from([
         "aida",
         "brief",
         "list",
@@ -597,8 +620,8 @@ fn brief_cli_parses_list_and_ack_subcommands() {
         "--include-acked",
     ])
     .unwrap();
-    match list.command {
-        Command::Brief {
+    match list.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             cmd:
                 Some(BriefCommand::List {
                     for_agent,
@@ -612,9 +635,10 @@ fn brief_cli_parses_list_and_ack_subcommands() {
         other => panic!("unexpected command: {other:?}"),
     }
 
-    let ack = Cli::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
-    match ack.command {
-        Command::Brief {
+    let ack =
+        crate::command_registry::try_parse_from(["aida", "brief", "ack", "brief.md"]).unwrap();
+    match ack.command.registered::<crate::brief_cmd::BriefArgs>() {
+        crate::brief_cmd::BriefArgs {
             cmd: Some(BriefCommand::Ack { brief_file }),
             ..
         } => assert_eq!(brief_file, std::path::PathBuf::from("brief.md")),
@@ -778,7 +802,7 @@ fn setup_block_references_target_project_not_binary_repo() {
 // containing none of the reviewed work. trace:BUG-1525 | ai:claude
 
 fn brief_git(root: &std::path::Path, args: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = crate::test_git::git_command()
         .args(args)
         .current_dir(root)
         .output()

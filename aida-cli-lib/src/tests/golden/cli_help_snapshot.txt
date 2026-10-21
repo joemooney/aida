@@ -421,6 +421,7 @@ Commands:
   commands      List every command and subcommand as grep-able one-line rows
   skill         Stock and local skill tooling
   alias         Discoverable registry of AIDA's built-in shortcuts
+  fleet         Fleet operations over relay runs and lanes
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -5718,7 +5719,15 @@ Usage: aida mandate start [OPTIONS]
 
 Options:
       --ship-held
-          Cover shipping held PRs (the only scope today; required)
+          Cover shipping held PRs (required unless --drive)
+
+      --drive
+          A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns
+          on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers
+          sensitive specs unless --exclude-supervised
+
+      --exclude-supervised
+          With --drive: keep sensitive specs human-only
 
       --ttl <TTL>
           How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h). A mandate cannot be
@@ -5769,6 +5778,9 @@ Usage: aida mandate status [OPTIONS]
 Options:
       --json
           Print JSON
+
+      --line
+          Print one line while a mandate is active, nothing otherwise
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -10867,6 +10879,11 @@ Emit a deduplicated informational tool-hook expiry notice
 Usage: aida role expiry-notice [OPTIONS]
 
 Options:
+      --client <CLIENT>
+          Target hook client protocol (`claude`, `codex`, or `agy`)
+          
+          [default: claude]
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -15528,13 +15545,25 @@ Options:
 ===== aida config format
 Set the ID format (single-level or two-level)
 
-Usage: aida config format <FORMAT>
+Usage: aida config format [OPTIONS] <FORMAT>
 
 Arguments:
-  <FORMAT>  Format: "single" for PREFIX-NNN, "two" for FEATURE-TYPE-NNN
+  <FORMAT>
+          Format: "single" for PREFIX-NNN, "two" for FEATURE-TYPE-NNN
 
 Options:
-  -h, --help  Print help
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida config numbering
 Set the numbering strategy
 
@@ -16164,12 +16193,31 @@ Export requirements to different formats
 Usage: aida export [OPTIONS]
 
 Options:
-  -f, --format <FORMAT>  Output format: mapping, json, spec, impl, tree. The default is `mapping`;
-                         the export -> import round-trip needs `--format tree` [default: mapping]
-  -o, --output <OUTPUT>  Output file path
-      --id <ID>          Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement
-                         and all descendants
-  -h, --help             Print help
+  -f, --export-format <FORMAT>
+          Export format: mapping, json, spec, impl, tree. The default is `mapping`; the export ->
+          import round-trip needs `--export-format tree`
+          
+          [default: mapping]
+
+  -o, --output <OUTPUT>
+          Output file path
+
+      --id <ID>
+          Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement and all
+          descendants
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida import
 Import requirements from a tree JSON file
 
@@ -17165,11 +17213,32 @@ Generate AI integration report
 Usage: aida report ai-integration [OPTIONS]
 
 Options:
-  -f, --format <FORMAT>              Output format: markdown or html [default: markdown]
-  -o, --output <OUTPUT>              Output file path (defaults to stdout)
-      --project-root <PROJECT_ROOT>  Project root directory for scaffolding status check
-      --include-scaffold             Include scaffolding status in report
-  -h, --help                         Print help
+  -f, --report-format <FORMAT>
+          Report format: markdown or html
+          
+          [default: markdown]
+
+  -o, --output <OUTPUT>
+          Output file path (defaults to stdout)
+
+      --project-root <PROJECT_ROOT>
+          Project root directory for scaffolding status check
+
+      --include-scaffold
+          Include scaffolding status in report
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== aida init
 Initialize AIDA in the current project
 
@@ -23969,6 +24038,58 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+===== aida fleet
+Fleet operations over relay runs and lanes.
+
+`drive --tick` runs one drive-mandate tick: it classifies every relay lane and routes each stalled
+one's next action to the advisor seat or the operator, under an active drive mandate only. It holds
+no seat grant and runs no model.
+
+Usage: aida fleet [OPTIONS] <COMMAND>
+
+Commands:
+  drive  The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without
+         `--tick`, shows what a tick would route, changing nothing
+  help   Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida fleet drive
+The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without `--tick`,
+shows what a tick would route, changing nothing
+
+Usage: aida fleet drive [OPTIONS]
+
+Options:
+      --tick
+          Run one tick: route stalled lanes and ledger every action
+
+      --json
+          Print the tick report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
 ===== help all (command groups)
 Getting started
   why            Ask your code why it exists — the decision behind any line
@@ -29171,6 +29292,16 @@ Working on aida itself
     "about": "Start a time-boxed mandate that lets the advisor seat ship held PRs with an attested, independent approval and green CI. Start and stop require a human at an interactive terminal; a same-uid process that forges files in the AIDA home is outside the threat model (the same as session grants)",
     "flags": [
       {
+        "name": "drive",
+        "takes_value": false,
+        "help": "A DRIVE mandate: also covers advisor signoff of sketches and dispatching fixers, and turns on the 15-minute drive tick that routes every stalled lane. Implies --ship-held and covers sensitive specs unless --exclude-supervised"
+      },
+      {
+        "name": "exclude-supervised",
+        "takes_value": false,
+        "help": "With --drive: keep sensitive specs human-only"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -29193,7 +29324,7 @@ Working on aida itself
       {
         "name": "ship-held",
         "takes_value": false,
-        "help": "Cover shipping held PRs (the only scope today; required)"
+        "help": "Cover shipping held PRs (required unless --drive)"
       },
       {
         "name": "ttl",
@@ -29246,6 +29377,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Print JSON"
+      },
+      {
+        "name": "line",
+        "takes_value": false,
+        "help": "Print one line while a mandate is active, nothing otherwise"
       }
     ],
     "hidden": false
@@ -34209,6 +34345,11 @@ Working on aida itself
     "about": "Emit a deduplicated informational tool-hook expiry notice",
     "flags": [
       {
+        "name": "client",
+        "takes_value": true,
+        "help": "Target hook client protocol (`claude`, `codex`, or `agy`)"
+      },
+      {
         "name": "format",
         "takes_value": true,
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
@@ -38836,9 +38977,14 @@ Working on aida itself
     "about": "Set the ID format (single-level or two-level)",
     "flags": [
       {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": true
@@ -39504,14 +39650,19 @@ Working on aida itself
     "about": "Export requirements to different formats",
     "flags": [
       {
+        "name": "export-format",
+        "takes_value": true,
+        "help": "Export format: mapping, json, spec, impl, tree. The default is `mapping`; the export -> import round-trip needs `--export-format tree`"
+      },
+      {
         "name": "format",
         "takes_value": true,
-        "help": "Output format: mapping, json, spec, impl, tree. The default is `mapping`; the export -> import round-trip needs `--format tree`"
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       },
       {
         "name": "id",
@@ -40553,12 +40704,12 @@ Working on aida itself
       {
         "name": "format",
         "takes_value": true,
-        "help": "Output format: markdown or html"
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
         "name": "help",
         "takes_value": false,
-        "help": "Print help"
+        "help": "Print help (see more with '--help')"
       },
       {
         "name": "include-scaffold",
@@ -40574,6 +40725,11 @@ Working on aida itself
         "name": "project-root",
         "takes_value": true,
         "help": "Project root directory for scaffolding status check"
+      },
+      {
+        "name": "report-format",
+        "takes_value": true,
+        "help": "Report format: markdown or html"
       }
     ],
     "hidden": true
@@ -47097,6 +47253,57 @@ Working on aida itself
         "name": "project",
         "takes_value": false,
         "help": "Remove from the project store (`.aida/aliases.toml`)"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "fleet"
+    ],
+    "about": "Fleet operations over relay runs and lanes",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "fleet",
+      "drive"
+    ],
+    "about": "The drive-mandate tick (scheduled every 15m while a drive mandate is active). Without `--tick`, shows what a tick would route, changing nothing",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Print the tick report as JSON"
+      },
+      {
+        "name": "tick",
+        "takes_value": false,
+        "help": "Run one tick: route stalled lanes and ledger every action"
       }
     ],
     "hidden": false

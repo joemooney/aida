@@ -253,3 +253,174 @@ pub(crate) fn handle_undefer_command(
     println!("{} {display_id}", "Undeferred:".cyan().bold());
     Ok(())
 }
+
+/// Defer a spec — park it as primed/conditional work, hidden from the
+/// default open-work view but not filed away the way archive is.
+///
+/// Defer is a view-level flag distinct from status (it does not touch the
+/// lifecycle state machine). Use `--reason` to record why this is an
+/// operator hold and `--until` to record the revisit trigger —
+/// the free-text condition that brings the spec back (e.g.
+/// `--until "when a slice verb ships"`). That trigger is the one thing
+/// distinguishing deferred (prospective, primed) from archived
+/// (retrospective, filed). Deferred rows are hidden from `aida list`,
+/// `aida search`, and `aida history` by default; surface them with
+/// `--deferred` (only) or `--all` (union).
+// trace:STORY-584 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "defer")]
+pub(crate) struct DeferArgs {
+    /// SPEC-ID or UUID to defer.
+    pub id: String,
+
+    /// The revisit trigger — the condition that brings this spec back
+    /// (free text). Stored alongside the spec and shown in the deferred
+    /// view so you can scan what is primed and what returns each item.
+    // trace:STORY-584 | ai:claude
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, value_name = "CONDITION", allow_hyphen_values = true)]
+    pub until: Option<String>,
+
+    /// Why the work is being held. Required for a durable operator hold;
+    /// legacy deferrals may omit it.
+    #[clap(long, value_name = "REASON", allow_hyphen_values = true)]
+    pub reason: Option<String>,
+}
+
+fn run_defer(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DeferArgs { id, until, reason } => {
+                    // STORY-584: park a spec on the primed/conditional shelf, hidden
+                    // from the default open-work view. trace:STORY-584 | ai:claude
+                    self::defer_single(
+                        id,
+                        until.as_deref(),
+                        reason.as_deref(),
+                        backend,
+                        store_path,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DeferArgs { .. } => {
+                    // STORY-584: defer uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida defer/undefer requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DEFER: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "defer",
+        help_after: "unarchive",
+        command: <DeferArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: true,
+        },
+        run: crate::command_registry::Handler::Store(run_defer),
+    };
+
+/// Inverse of `aida defer` — clears the deferred flag (and its revisit
+/// trigger) so the spec reappears in default `aida list` / `aida history`
+/// / `aida search` views.
+// trace:STORY-584 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "undefer")]
+pub(crate) struct UndeferArgs {
+    /// SPEC-ID or UUID to undefer.
+    pub id: String,
+}
+
+fn run_undefer(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <UndeferArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                UndeferArgs { id } => {
+                    // STORY-584: inverse of `aida defer`. trace:STORY-584 | ai:claude
+                    self::handle_undefer_command(id, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                UndeferArgs { .. } => {
+                    // STORY-584: defer uses the git-canonical write path.
+                    anyhow::bail!(
+                        "aida defer/undefer requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static UNDEFER: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "undefer",
+        help_after: "defer",
+        command: <UndeferArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: true,
+            skip_role_restore_prompt: false,
+            team_identity_write: true,
+        },
+        run: crate::command_registry::Handler::Store(run_undefer),
+    };

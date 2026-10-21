@@ -15,6 +15,24 @@ A rework brief preserves a review finding across a cold session. It is not
 5. Keep judgment in the finding and mechanics in the requested change. If the
    remedy requires a product/design choice, route that choice to the advisor
    instead of pretending it is implementation detail.
+6. State the local gate, and only the local gate: `make check-ci-fast`,
+   `make test-touched` (or named `cargo test --profile agent -p <crate>
+   <filter>` runs), and `make check-ci-compile` after merging main. A brief
+   never orders `make check-ci`, `make check`, `cargo test --workspace` or an
+   unfiltered `--lib` run; the full suite is CI's job. It never sets
+   `AIDA_CARGO_NO_SLOT` and never wraps cargo in `timeout N`. It tells the
+   implementer to run long cargo in the background. On 2026-10-17 advisor
+   briefs ordered `make check-ci`, and fix-2725 ran `make check` with the slot
+   limiter bypassed: 1h20m on a host where the targeted gate takes minutes.
+   <!-- trace:STORY-1853 | ai:claude -->
+7. When the brief names a cargo command, write its budget as
+   `AIDA_CARGO_TIMEOUT=<dur> cargo ...` and tell the implementer to run anything
+   that can exceed about 10 minutes in the tool's background mode. Never stack
+   an outer `timeout <N>` inside the tool's own cap: slot-queue wait counts
+   against it. Tell them to check `cargo ps` after a timeout or KILLED run
+   instead of retrying blindly. Until aida-host STORY-100 ships, the wrapper
+   ignores the variable and background mode is the only protection. See "Cargo time budgets" in
+   `implementer-discipline.md`. <!-- trace:STORY-1854 | ai:claude -->
 
 A sufficient brief lets a fresh implementer answer: what failed, where, how to
 reproduce it, what outcome is required, and which evidence will prove it fixed.

@@ -23,19 +23,37 @@
 
 use std::process::Command;
 
-fn aida() -> Command {
+// trace:TASK-1959 | ai:claude
+mod support;
+
+/// An empty git-canonical store in a fresh directory. The binary's default
+/// cwd is the crate dir inside this repository, so without it every run loaded
+/// the repository's own live store (seconds per call) before failing.
+// trace:TASK-1959 | ai:claude
+fn empty_store() -> tempfile::TempDir {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir_all(dir.path().join("store/objects")).expect("store dir");
+    dir
+}
+
+fn aida(dir: &tempfile::TempDir) -> Command {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
     // Keep the run hermetic: no telemetry side effects, and a stable HOME so a
     // developer's `~/.aida` never perturbs the error path under test.
     cmd.env("AIDA_TELEMETRY", "0");
-    cmd.env("HOME", std::env::temp_dir());
+    cmd.env("HOME", dir.path());
+    // trace:TASK-1959 | ai:claude
+    cmd.current_dir(dir.path())
+        .env("AIDA_STORE", dir.path().join("store"));
     cmd.arg("show").arg("NOSUCH-1");
     cmd
 }
 
 #[test]
 fn agent_mode_routes_structured_error_to_stdout_exit_1() {
-    let out = aida()
+    let _checkout = support::CheckoutGuard::new();
+    let dir = empty_store();
+    let out = aida(&dir)
         .env("AIDA_AGENT_OUTPUT", "1")
         .output()
         .expect("run aida");
@@ -62,7 +80,9 @@ fn agent_mode_routes_structured_error_to_stdout_exit_1() {
 
 #[test]
 fn human_mode_keeps_stderr_error_and_empty_stdout_exit_1() {
-    let out = aida()
+    let _checkout = support::CheckoutGuard::new();
+    let dir = empty_store();
+    let out = aida(&dir)
         .env("AIDA_AGENT_OUTPUT", "0")
         .output()
         .expect("run aida");

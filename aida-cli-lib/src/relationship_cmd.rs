@@ -9,6 +9,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "relationship_cmd_args.rs"]
+pub(crate) mod relationship_cmd_args;
+pub(crate) use relationship_cmd_args::*;
+
 pub(crate) fn handle_relationship_command(
     cmd: &RelationshipCommand,
     storage: &Storage,
@@ -304,3 +309,333 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// Relationship management commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "rel")]
+#[clap(hide = true)]
+pub(crate) struct RelArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::RelationshipCommand,
+}
+
+fn run_rel(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <RelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // Phase 2: Relationship commands
+                RelArgs {
+                    inner:
+                        RelationshipCommand::Add {
+                            from_pos,
+                            to_pos,
+                            from_flag,
+                            to_flag,
+                            r#type,
+                            bidirectional,
+                            force_parent,
+                        },
+                } => {
+                    let from = from_pos
+                        .as_deref()
+                        .or(from_flag.as_deref())
+                        .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+                    let to = to_pos
+                        .as_deref()
+                        .or(to_flag.as_deref())
+                        .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
+                    // trace:BUG-790 | ai:codex
+                    reject_cross_store_spec_ref(from)?;
+                    reject_cross_store_spec_ref(to)?;
+                    let mut from_req = backend
+                        .get_requirement_unambiguous(from)?
+                        .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
+
+                    let to_req = backend
+                        .get_requirement_unambiguous(to)?
+                        .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
+
+                    // BUG-1471: normalize the natural `related` spelling to the
+                    // traversable standard References edge before anything is written.
+                    // Other aliases and custom names retain the core parser's behavior.
+                    // trace:BUG-1471 | ai:codex
+                    let rel_type = cli_relationship_type(r#type);
+
+                    // TASK-887: a `--type` that isn't a standard relationship type lands
+                    // as a `Custom` edge, which the graph traversals (blocked-by,
+                    // blocks, tree, impact) silently won't follow. Don't hard-
+                    // reject (custom types can be intentional), but surface a note —
+                    // with a did-you-mean when it looks like a typo of a standard type —
+                    // so a fat-fingered `blockedby`/`depends` doesn't create an
+                    // invisible edge. trace:TASK-887 | ai:claude
+                    if let RelationshipType::Custom(ref custom) = rel_type {
+                        match nearest_standard_rel_type(custom) {
+                            Some(near) => eprintln!(
+                                "{} '{}' isn't a standard relationship type (did you mean '{}'?); \
+                             created as a custom edge — graph traversals won't follow it.",
+                                "note:".yellow().bold(),
+                                custom,
+                                near,
+                            ),
+                            None => eprintln!(
+                                "{} '{}' isn't a standard relationship type ({}); \
+                             created as a custom edge — graph traversals won't follow it.",
+                                "note:".yellow().bold(),
+                                custom,
+                                STANDARD_REL_TYPES.join(", "),
+                            ),
+                        }
+                    }
+
+                    // BUG-64: same terminal-status guard as `aida add --parent`,
+                    // applied here when the user is hand-rolling a parent edge
+                    // via `aida rel add X Y --type child` (X is child of Y, so Y
+                    // is the parent being checked) or its inverse `--type parent`
+                    // (X is parent of Y). `--force-parent` bypasses for backfill
+                    // cases. trace:BUG-64 | ai:claude
+                    if !*force_parent {
+                        let parent_for_guard = match &rel_type {
+                            RelationshipType::Child => Some(&to_req),
+                            RelationshipType::Parent => Some(&from_req),
+                            _ => None,
+                        };
+                        if let Some(p) = parent_for_guard {
+                            if is_terminal_status(&p.status) {
+                                anyhow::bail!(
+                                "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                                 Pass `--force-parent` to override.",
+                                p.spec_id.as_deref().unwrap_or("?"),
+                                p.status,
+                            );
+                            }
+                        }
+                    }
+                    if let Some(warning) =
+                        relationship_terminal_ambiguity_warning(&rel_type, &from_req, &to_req)
+                    {
+                        // trace:BUG-790 | ai:codex
+                        eprintln!("{} {}", "warning:".yellow().bold(), warning);
+                    }
+
+                    // TASK-679: a parent/child edge is canonically BIDIRECTIONAL so it
+                    // matches `aida add --parent` (which writes the parent's `Parent`
+                    // edge AND the child's reciprocal `Child` edge). The old `rel add`
+                    // wrote only the source-side edge, leaving the other spec's `show`
+                    // blind to the link (spec point #5). Force the reciprocal for
+                    // parent/child even without an explicit `--bidirectional`; other
+                    // edge types keep the opt-in flag. trace:TASK-679 | ai:claude
+                    let write_inverse = rel_should_write_inverse(&rel_type, *bidirectional);
+
+                    // TASK-679: dedup. The old git-canonical path pushed blindly, so a
+                    // repeated `rel add` (EPIC-37 had the same target twice) accumulated
+                    // duplicate edges. Skip the push when an identical (rel_type,
+                    // target) edge already exists on the source. trace:TASK-679 | ai:claude
+                    let edge_exists = from_req
+                        .relationships
+                        .iter()
+                        .any(|r| r.rel_type == rel_type && r.target_id == to_req.id);
+                    if edge_exists {
+                        println!(
+                            "Relationship already exists: {} --[{:?}]--> {} (no change)",
+                            from, rel_type, to
+                        );
+                    } else {
+                        let rel = aida_core::models::Relationship {
+                            rel_type: rel_type.clone(),
+                            target_id: to_req.id,
+                            created_at: Some(chrono::Utc::now()),
+                            created_by: Some(get_default_author()),
+                        };
+
+                        from_req.relationships.push(rel);
+                        from_req.modified_at = chrono::Utc::now();
+                        backend.update_requirement(&from_req)?;
+                        println!("Added relationship: {} --[{:?}]--> {}", from, rel_type, to);
+                    }
+
+                    if write_inverse {
+                        let mut to_req = backend.get_requirement_unambiguous(to)?.unwrap();
+                        // STORY-333: use the canonical inverse helper so new typed
+                        // variants (BlockedBy ↔ Blocks) compose automatically.
+                        // trace:STORY-333 | ai:claude
+                        let inverse_type = rel_type.inverse().unwrap_or_else(|| rel_type.clone());
+                        // TASK-679: dedup the inverse end too. trace:TASK-679 | ai:claude
+                        let inverse_exists = to_req
+                            .relationships
+                            .iter()
+                            .any(|r| r.rel_type == inverse_type && r.target_id == from_req.id);
+                        if inverse_exists {
+                            println!(
+                                "Inverse already exists: {} --[{:?}]--> {} (no change)",
+                                to, inverse_type, from
+                            );
+                        } else {
+                            let inv_rel = aida_core::models::Relationship {
+                                rel_type: inverse_type.clone(),
+                                target_id: from_req.id,
+                                created_at: Some(chrono::Utc::now()),
+                                created_by: Some(get_default_author()),
+                            };
+                            to_req.relationships.push(inv_rel);
+                            to_req.modified_at = chrono::Utc::now();
+                            backend.update_requirement(&to_req)?;
+                            println!("Added inverse: {} --[{:?}]--> {}", to, inverse_type, from);
+                        }
+                    }
+                }
+                RelArgs {
+                    inner:
+                        RelationshipCommand::Remove {
+                            from_pos,
+                            to_pos,
+                            from_flag,
+                            to_flag,
+                            r#type,
+                            bidirectional,
+                        },
+                } => {
+                    let from = from_pos
+                        .as_deref()
+                        .or(from_flag.as_deref())
+                        .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+                    let to = to_pos
+                        .as_deref()
+                        .or(to_flag.as_deref())
+                        .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
+                    let mut from_req = backend
+                        .get_requirement_unambiguous(from)?
+                        .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
+
+                    // Look up target UUID
+                    let to_req = backend
+                        .get_requirement_unambiguous(to)?
+                        .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
+
+                    // TASK-1426: honor `--type`. This arm used to drop EVERY edge to
+                    // the target whatever type was asked for, so removing a stale
+                    // custom `related` edge also removed a good `references` edge
+                    // beside it. `related` resolves through the same alias as
+                    // `rel add`, and the references family also matches stored
+                    // legacy custom `related` spellings. trace:TASK-1426 | ai:claude
+                    let requested = cli_relationship_type(r#type);
+                    let before = from_req.relationships.len();
+                    from_req.relationships.retain(|r| {
+                        !(r.target_id == to_req.id && rel_remove_matches(&r.rel_type, &requested))
+                    });
+                    let removed = before - from_req.relationships.len();
+
+                    if removed > 0 {
+                        from_req.modified_at = chrono::Utc::now();
+                        backend.update_requirement(&from_req)?;
+                        println!(
+                            "Removed {} relationship(s) from {} to {}",
+                            removed, from, to
+                        );
+                    } else {
+                        println!(
+                            "No {} relationship found from {} to {}",
+                            requested, from, to
+                        );
+                    }
+
+                    // Mirror `rel add`'s `rel_should_write_inverse` — the parent/child
+                    // pair (and any future pair added to that rule) is canonically
+                    // bidirectional, so remove drops both reciprocal edges even
+                    // without an explicit `--bidirectional`. Every other type keeps
+                    // the opt-in flag, matching `rel add`. trace:BUG-1602 | ai:claude
+                    if rel_should_write_inverse(&requested, *bidirectional) {
+                        let inverse = requested.inverse().unwrap_or_else(|| requested.clone());
+                        let mut to_req = backend.get_requirement(&to_req.id)?.ok_or_else(|| {
+                            not_found::requirement_not_found(to, Some(store_path))
+                        })?;
+                        let before = to_req.relationships.len();
+                        to_req.relationships.retain(|r| {
+                            !(r.target_id == from_req.id
+                                && rel_remove_matches(&r.rel_type, &inverse))
+                        });
+                        let removed_inverse = before - to_req.relationships.len();
+                        if removed_inverse > 0 {
+                            to_req.modified_at = chrono::Utc::now();
+                            backend.update_requirement(&to_req)?;
+                            println!(
+                                "Removed {} inverse relationship(s) from {} to {}",
+                                removed_inverse, to, from
+                            );
+                        }
+                    }
+                }
+                RelArgs {
+                    inner:
+                        RelationshipCommand::List {
+                            id,
+                            source,
+                            target,
+                            r#type,
+                            dangling,
+                            all,
+                            limit,
+                        },
+                } => {
+                    // trace:TASK-65 | ai:claude
+                    // Three modes:
+                    //   - target=Some                → incoming edges
+                    //   - id|source=Some             → outgoing edges (legacy point query)
+                    //   - none of the above          → global listing
+                    // --type / --dangling / --all compose across all three modes.
+                    let source_ref = source.as_deref().or(id.as_deref());
+                    handle_rel_list_modern(
+                        backend,
+                        store_path,
+                        source_ref,
+                        target.as_deref(),
+                        r#type.as_deref(),
+                        *dangling,
+                        *all,
+                        *limit,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                RelArgs { inner: rel_cmd } => {
+                    self::handle_relationship_command(rel_cmd, &storage)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static REL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "rel",
+    help_after: "upgrade",
+    command: <RelArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Relationship,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_rel),
+};

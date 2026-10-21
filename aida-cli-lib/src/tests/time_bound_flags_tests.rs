@@ -158,7 +158,7 @@ fn collect(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
 
 #[test]
 fn every_time_bound_flag_is_classified() {
-    let cmd = <crate::cli::Cli as clap::CommandFactory>::command();
+    let cmd = crate::command_registry::built_command();
     let mut found = Vec::new();
     collect(&cmd, "aida", &mut found);
     found.sort();
@@ -250,7 +250,7 @@ fn scratch_commit_date() -> DateTime<Utc> {
 
 fn git(root: &std::path::Path, args: &[&str]) {
     let date = "2020-01-02T03:04:05Z";
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.email=t@example.com", "-c", "user.name=Test"])
@@ -497,16 +497,17 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
     // covered too.
     let sink = tempfile::TempDir::new().unwrap();
     let bad = format!("--output={}", sink.path().join("pwned.txt").display());
-    let parse = |args: &[&str]| <crate::cli::Cli as clap::Parser>::try_parse_from(args).unwrap();
+    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args).unwrap();
     // The `--flag=value` spelling: clap refuses a dash-led value given as a
     // separate argument, but takes it when fused.
     for flag in ["--since", "--until"] {
         let fused = format!("{flag}={bad}");
         let args = ["aida", "changelog", "generate", fused.as_str()];
         let cli = parse(&args);
-        let crate::cli::Command::Changelog(cmd) = cli.command else {
-            panic!("not a changelog command: {args:?}");
-        };
+        let cmd = cli
+            .command
+            .registered::<crate::changelog_cmd::ChangelogArgs>()
+            .inner;
         let err = crate::changelog_cmd::handle_changelog_command(&cmd)
             .unwrap_err()
             .to_string();
@@ -514,7 +515,10 @@ fn ref_taking_cli_flags_refuse_option_like_values() {
         assert!(err.contains(flag), "{args:?}: {err}");
     }
     let cli = parse(&["aida", "field-study", "scan", &format!("--since={bad}")]);
-    let crate::cli::Command::FieldStudy { cmd } = cli.command else {
+    let crate::field_study_cmd::FieldStudyArgs { cmd } =
+        cli.command
+            .registered::<crate::field_study_cmd::FieldStudyArgs>()
+    else {
         panic!("not a field-study command");
     };
     let err = crate::field_study_cmd::handle_field_study_command(&cmd)

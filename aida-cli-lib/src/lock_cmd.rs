@@ -11,6 +11,11 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "lock_cmd_args.rs"]
+pub(crate) mod lock_cmd_args;
+pub(crate) use lock_cmd_args::*;
+
 use crate::cli::LockCommand;
 use crate::*;
 
@@ -164,3 +169,44 @@ pub(crate) fn handle_lock_command(cmd: &LockCommand) -> Result<()> {
         }
     }
 }
+
+/// Advisor-directed worktree lock — a MANUAL bouncer:
+/// `acquire` stamps `authorized_by` on the session lease covering a
+/// worktree, `verify` checks a token against it (exit 0/non-zero,
+/// scriptable), `release` clears it, `status` lists locked worktrees.
+/// Additive: nothing today calls `verify` automatically.
+// trace:STORY-711 | ai:claude — spec id kept out of the user-facing about
+// text (slice 1, generalizes BUG-637).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "lock")]
+pub(crate) struct LockArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::LockCommand,
+}
+
+// STORY-711 slice 1: `aida lock` reads/writes only `.aida/sessions/`
+// lease files (the same registry `aida session leases` uses) — no
+// requirement-store handle needed, same reasoning as `aida triage`
+// above. trace:STORY-711 | ai:claude
+fn run_lock(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <LockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let lock_cmd = &args.inner;
+    return self::handle_lock_command(lock_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static LOCK: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "lock",
+    help_after: "terminal",
+    command: <LockArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_lock),
+};

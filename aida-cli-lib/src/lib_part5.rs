@@ -1575,77 +1575,6 @@ pub(crate) fn handle_review_spec(
     Ok(())
 }
 
-pub(crate) fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
-    match cmd {
-        ReviewCommand::Prompt {
-            specs,
-            pr,
-            forge,
-            write,
-        } => generate_review_prompt(
-            storage,
-            specs.as_deref(),
-            *pr,
-            forge.as_deref(),
-            write.as_deref(),
-        ),
-        ReviewCommand::Assemble { output } => {
-            let project_root = find_project_root()?;
-            let out_path = rules_sync::assemble_review_md(&project_root, output.as_deref())?;
-            println!(
-                "{} Assembled root REVIEW.md at {}",
-                crate::glyph(crate::glyphs::Glyph::Check),
-                out_path.display()
-            );
-            Ok(())
-        }
-        // trace:BUG-775 | ai:claude
-        ReviewCommand::Record {
-            spec,
-            verdict,
-            sha,
-            branch,
-            summary,
-            finding,
-            finding_class,
-            pr,
-        } => handle_review_record(
-            spec,
-            verdict,
-            sha.as_deref(),
-            branch.as_deref(),
-            summary.as_deref(),
-            finding,
-            finding_class,
-            *pr,
-        ),
-        // trace:STORY-1417 | ai:claude
-        ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),
-        // trace:STORY-1405 | ai:claude
-        ReviewCommand::Claim {
-            pr,
-            sha,
-            spec,
-            ttl_mins,
-            release,
-        } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
-        // trace:BUG-775 | ai:claude
-        ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
-        ReviewCommand::List { json } => handle_review_list(*json),
-        // trace:BUG-1516 | ai:claude
-        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
-        // trace:TASK-1307 | ai:claude
-        // trace:TASK-1423 | ai:claude
-        ReviewCommand::Stranded { json, fix, age } => handle_review_stranded(*json, *fix, *age),
-        // trace:STORY-1415 | ai:claude
-        ReviewCommand::Mode { mode } => match mode {
-            cli::ReviewModeCommand::MassChange { action, days, json } => {
-                mass_change::handle_mass_change_command(action.as_str(), *days, *json)
-            }
-        },
-    }
-}
-
 /// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
 /// every abbreviated `reviewed_sha` on disk to its full commit sha where this
 /// repo can still resolve it, and mark the rest unresolvable rather than
@@ -3529,7 +3458,7 @@ mod story_1405_review_marker_tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
         let git = |args: &[&str]| {
-            assert!(std::process::Command::new("git")
+            assert!(crate::test_git::git_command()
                 .arg("-C")
                 .arg(repo)
                 .args(args)
@@ -3557,7 +3486,7 @@ mod story_1405_review_marker_tests {
     fn marker_head_best_effort_is_none_with_no_forge_and_no_local_ref() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(["init", "-q"])

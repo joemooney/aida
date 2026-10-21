@@ -259,3 +259,60 @@ fn is_drainable_type(ty: &str) -> bool {
 #[cfg(test)]
 #[path = "tests/task_1231_autoprogress_tests.rs"]
 mod task_1231_autoprogress_tests;
+
+/// Robust unattended autonomous-progress: safely drain the approved ready
+/// set from ANYWHERE. Resolves the project explicitly (no cwd/wrong-store
+/// surprises), skips if a drain is already running, and drains via the
+/// reliable single-spec path. Drain-only by default; `--groom` approves the
+/// safe fence first. Built for a cron: `aida autoprogress --groom --project <path>`.
+// trace:TASK-1231 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "autoprogress")]
+pub(crate) struct AutoprogressArgs {
+    /// Project path (the cron uses this — no cwd dependency). Defaults to
+    /// resolving from the current directory.
+    #[clap(long)]
+    pub project: Option<String>,
+    /// Approve the safe fence (advisor intake) before draining.
+    #[clap(long)]
+    pub groom: bool,
+    /// Drain at most this many ready specs this pass (default 5).
+    #[clap(long)]
+    pub max: Option<usize>,
+    /// Report what it WOULD drain without draining.
+    #[clap(long)]
+    pub dry_run: bool,
+}
+
+fn run_autoprogress(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let AutoprogressArgs {
+        project,
+        groom,
+        max,
+        dry_run,
+    } = <AutoprogressArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    self::handle_autoprogress(self::AutoprogressOpts {
+        project,
+        groom,
+        max: max.unwrap_or(5),
+        dry_run,
+    })
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static AUTOPROGRESS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "autoprogress",
+        help_after: "shift",
+        command: <AutoprogressArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_autoprogress),
+    };

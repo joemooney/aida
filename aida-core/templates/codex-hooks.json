@@ -13,6 +13,11 @@
             "type": "command",
             "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-git-guardrails.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-cargo-timeout-guard.sh",
+            "timeout": 5
           }
         ]
       },
@@ -23,6 +28,15 @@
             "type": "command",
             "command": "$(git rev-parse --show-toplevel)/.codex/hooks/aida-advisor-code-guard.sh",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0; h=\"$top/.codex/hooks/aida-grant-expiry-notice.sh\"; [ -x \"$h\" ] || exit 0; \"$h\" --client codex",
+            "timeout": 2
           }
         ]
       }
