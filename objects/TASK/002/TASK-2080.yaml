@@ -6,16 +6,25 @@ description: |
   PerMandate.dispatch grows without pruning for specs no longer approved. Specs routed before TASK-1915 (emitted key ending 'approved', no routed_at) never get an epoch bump, so their dead fixers are never re-routed.
 
   Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T18:35:47.580660358Z
-modified_at: 2026-10-21T18:35:47.580660358Z
+modified_at: 2026-10-21T18:48:55.273140261Z
 req_type: Task
 tags:
 - from-review:PR-2804
 - severity:minor
+history:
+- id: 01a15fcb-82e9-7162-90b0-8334c0c35ce4
+  author: joe
+  timestamp: 2026-10-21T18:48:55.273134784Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
   branch: pr-2804
