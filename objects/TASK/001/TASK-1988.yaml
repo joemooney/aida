@@ -3,12 +3,12 @@ spec_id: TASK-1988
 agreed_id: TASK-1988
 title: 'STORY-1853 S2 PR-2: nextest gating swap via --partition across the S6 shards; per-test budgets from JUnit (closes AC4)'
 description: 'Split from TASK-1957 by advisor ruling 2026-10-19 22:15. TASK-1957 is now PR-1 only (#2766: the shadow nextest lane) and completes on that merge. This spec owns the remaining S2 scope from the PR-2766 review: (a) swap the gating test lanes to cargo nextest run --partition across the S6 shards, keeping doctests on cargo test; (b) move the S1 time budgets (scripts/test-time-budget.toml) to per-test keys read from nextest JUnit output, which closes STORY-1853 AC4; (c) the rest of TASK-1957''s PR-2 items as listed in .aida/review-verdicts/PR-2766.json. Precondition: the shadow lane shows parity with the cargo-test totals on at least 3 main runs.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T05:14:09.836170552Z
-modified_at: 2026-10-20T20:43:54.150651194Z
+modified_at: 2026-10-21T01:25:38.865082408Z
 req_type: Task
 comments:
 - id: 01a15918-8ac1-74a1-b95b-a7b8bde2e27b
@@ -40,6 +40,20 @@ history:
   timestamp: 2026-10-20T20:43:00.162028673Z
   session_id: 01a15b0ace73
   changes: []
+- id: 01a15c10-5c03-7472-b879-6ce461d1d883
+  author: aida-auto-bump
+  timestamp: 2026-10-21T01:25:38.435060325Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15c10-5db1-73b3-be5b-8e2c6d87d1a9
+  timestamp: 2026-10-21T01:25:38.865072145Z
+  agent: aida
+  commit_sha: c43d5444ad020ad1c1d3f7f95cb4fbede32c018b
+  summary: 'Round 3 (budget calibration only) meets the advisor''s bar: every entry is >= measured max x2 (rounded to 5 s, min 15, capped at the 180 s kill; mechanically checked, 0 under-budget), tests over 5 s carry entries, and Test time budget is green on all lanes in both attempts of run 39494894926 at b60ea1beb2 with zero runner-stall warnings. Round-2 carry-overs (--partition rationale in PR body, other-lib-half notes) fixed; 17 py tooling tests OK. Non-blocking: the new stall waiver is fail-open for multi-test regressions (follow-up filed).'
+  review_verdict: approved
 filed_at:
   code_sha: 880d7667bc566fe9eb9c0f8d05e6d8c8636f8ab5
   branch: main
@@ -48,11 +62,7 @@ filed_at:
   aida_build_sha: f801433bcd
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Gating swap, per-test JUnit budgets, PR-2766 carry-overs and parity evidence are implemented and unit-tested (41 py tests OK), but the new per-test budget gate is RED on CI (lib-1) at the reviewed head 44e0c94bee, run 39492854022 — the swap cannot merge on a failing gate.
-  recovery_hint: address the review findings, move TASK-1988 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-20T20:42:59.572396320Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T01:25:38.435044135Z
+  completion_sha: c43d5444ad020ad1c1d3f7f95cb4fbede32c018b
