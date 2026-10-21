@@ -1,6 +1,7 @@
 # BUG-2169: give each contained seat a private clone (architecture sketch)
 
-Status: SKETCH, awaiting advisor signoff. Nothing is implemented.
+Status: APPROVED 2026-10-16 (option A, slices S1-S4). S1 landed in 2177eaad8f. S2 (sandbox
+boundary) is the next slice; see "S2 as built" at the end.
 Owning spec: BUG-2169. Supersedes the PR #2694 approach, which the round-2 ruling rejected.
 Code references are to `main` at fc39d8f0bc. Paths are relative to `aida-cli-lib/src/` unless they
 start with `aida-core/`.
@@ -400,3 +401,31 @@ slices S1-S4. Most of the change is turning silent-skip paths into explicit clon
   affects build cost, not containment.
 - **O3:** a GitHub tag ruleset for `v*` is an operator action. Please confirm it is acceptable to
   record it as the origin-side residual rather than block on it.
+
+## S2 as built
+
+- **Trust for the clone's own `.git`.** BUG-2012 denies a real `.git` under any write root as a
+  main checkout's. `seat_clone::host_recorded_clone` is the only exemption: the root must be the
+  clone root itself, named `aida-seat-*`, verified by `main_for`, and named by a `clone` lease in
+  `<main>/.aida/sessions`. That host-written lease sits outside every granted root. The tool rules
+  also deny `.aida/sessions` under the clone (a symlink into main) and main's own copy. In practice
+  the BUG-2012 deny reached only the Edit/Write tool rules, not `sandbox.filesystem.denyWrite`, so
+  Bash git in a clone worked either way; the exemption fixes the tool layer.
+- **Write set.** The clone, `<main>/.aida-store` and `cache.db*` (BUG-1929), and
+  `<main>/target/worktrees/<clone dir>` from the lease. `session_start` creates the target directory
+  host-side, since a sandbox skips a path missing at launch. There is no sccache path (ruling O2).
+  `RUSTC_WRAPPER=""` and `CARGO_TARGET_DIR` go into the settings `env` and the os_wrap
+  `--setenv`. Measured here: with sccache configured and the network shared, a sandboxed build
+  otherwise reaches the host's sccache server, which writes the shared cache for it.
+- **os_wrap.** `os_wrap_rw_paths` binds main's store and cache files plus the target directory for a
+  clone, never `<main>/.git`.
+- **Pre-existing defects.** `agent new` rescopes `--settings` to `plan.launch_cwd`
+  (`rescope_contained_settings`), so the boundary is no longer the launcher's git root. The
+  interactive `claude` launch and the interactive resume go through `os_wrapped_program_and_args`. `--bg` cannot be wrapped,
+  because `claude --bg` hands the session to Claude Code's background daemon, which the dispatcher
+  never parents, so a contained `--bg` launch under os_wrap is refused before any claim, lease, clone or pin.
+- **Harness.** `tests/bug_2169_contained_clone_bwrap_tests.rs` covers T1, T2 (update-ref and
+  pack-refs variants), T3, T4, T5/T5b and T8, plus a cargo build. Each runs against both the
+  modelled Claude Code sandbox and the os_wrap argv. The attack tests also run against the frozen
+  #2694 layout, where the attacks must succeed. The tests join the GitHub live-bwrap gate, where
+  `AIDA_REQUIRE_BWRAP_LIVE=1` turns a skip into a failure. T4's probe check and T6/T7 belong to S3.

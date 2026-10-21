@@ -2162,6 +2162,18 @@ pub(crate) fn session_start(
     if let Some(target) = &cargo_target_dir {
         let isolated_target = isolate_cargo_target_dir(target, &worktree_path);
         recorded_target_dir = Some(isolated_target.clone());
+        // BUG-2169 S2: a contained clone seat's sandbox binds this directory
+        // read-write, and a sandbox skips a path missing at launch, so the
+        // host makes it now.
+        // trace:BUG-2169 | ai:claude
+        if tree_kind == crate::seat_clone::TreeKind::Clone {
+            std::fs::create_dir_all(&isolated_target).with_context(|| {
+                format!(
+                    "create the seat clone's cargo target directory {}",
+                    isolated_target.display()
+                )
+            })?;
+        }
         write_session_env_file(&worktree_path, &isolated_target).with_context(|| {
             format!("writing session env shim under {}", worktree_path.display())
         })?;
