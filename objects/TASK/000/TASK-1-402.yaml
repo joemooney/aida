@@ -1,0 +1,27 @@
+id: 01a15e43-ed39-7d01-80d6-28989f63ac34
+spec_id: TASK-1-402
+title: '[cosmetic][non-blocking] review_verdict.rs set_errno_zero is a no-op off Linux/…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1801, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic][non-blocking] review_verdict.rs set_errno_zero is a no-op off Linux/Apple, so list_verdict_directory could report a stale errno as a readdir error on other Unixes. AIDA is Linux-only; fine to leave or add a cfg compile_error.
+  Reviewed sha: d5cdd8a5763bcafc8077d26430286e1683e3c948
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T11:41:12.377185644Z
+modified_at: 2026-10-21T11:41:12.377185644Z
+req_type: Task
+tags:
+- carried-from:TASK-1801
+- finding-hash:048a3b81
+- from-review:TASK-1801
+- kind:carried-forward
+filed_at:
+  code_sha: ed4168add1853ab65f9573e89f3f19a03aef6eb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
