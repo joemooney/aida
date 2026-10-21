@@ -1,0 +1,28 @@
+id: 01a15d89-488d-7af1-819f-5953ac26c58f
+spec_id: TASK-2049
+agreed_id: TASK-2049
+title: Cross-format review-authority token match only holds while the author pid is alive
+description: |
+  review_authority::tokens_match_with (aida-cli-lib/src/review_authority.rs:93-115) now treats a legacy-rfc3339 token and an exact linux-starttime token for the same pid as the same identity only when BOTH strictly match the currently live process. When an author token was recorded in legacy form by a pre-upgrade binary and that process has since exited, `aida pr ship`'s self-approval check (lib_part5.rs:3759, mandate.rs:1435) can no longer match it against an exact-form recorder token from the same process. The window is narrow: the binary has to be upgraded mid-session, and the session:/lease: tokens usually overlap anyway. Still, this refusal path should not depend on liveness. Consider normalising both tokens to the same scheme at record time, or noting the residual.
+
+  Raised in review of PR-2735 (BUG-2130).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T08:17:20.525819064Z
+modified_at: 2026-10-21T08:17:20.525819064Z
+req_type: Task
+tags:
+- from-review:PR-2735
+- liveness
+- review-authority
+- severity:minor
+filed_at:
+  code_sha: f687736aa0674af02c12031f315b4ac882106c18
+  branch: pr-2735
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70664344cd
+  vendor: claude
+  session: 01a15d82002d
