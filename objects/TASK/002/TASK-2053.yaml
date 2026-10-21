@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-21T20:08:30.954315063Z
+modified_at: 2026-10-21T22:47:52.856145584Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -39,6 +39,11 @@ history:
   timestamp: 2026-10-21T20:08:31.082073984Z
   session_id: 01a160115718
   changes: []
+- id: 01a160a6-49a8-7d03-927e-676638e5a418
+  author: joe
+  timestamp: 2026-10-21T22:47:53.000596078Z
+  session_id: 01a160a2e337
+  changes: []
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -51,7 +56,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'S3 lifecycle is well built and CI incl. live-bwrap gate is green at 451e2e05, but salvage/probe can lose seat work before removal: quoted untracked names are silently dropped, and only HEAD is counted/salvaged (other branches, stash, merge commits lost).'
+  detail: S3 round-2 fixes verified and CI green incl. live-bwrap gate, but session end now follows a seat-controlled <clone>/.aida symlink and deletes runtime links / lock-info outside the clone (host write driven by seat content)
   recovery_hint: address the review findings, move TASK-2053 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T20:08:30.954315063Z
+  shelved_at: 2026-10-21T22:47:52.856145584Z
