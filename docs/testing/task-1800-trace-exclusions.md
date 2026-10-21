@@ -69,3 +69,8 @@ Two new regressions fail on the parent collector and pass on this collector.
 The real ship-cover callback fixture separately requires an item trace, module
 trace, and file-header trace alongside the named subject. Its workspace runtime
 result is recorded in the PR validation, separately from extracted-module tests.
+
+The [manual witness audit](task-1800-witness-audit.md) breaks down all 290
+fallback pairs and reviews the selected refusal reasons. Its incidental-witness
+counts are not PR-level false-positive rates; the exhaustive measurement gate
+remains open.
