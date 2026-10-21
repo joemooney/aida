@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T23:36:40.360733292Z
+modified_at: 2026-10-21T23:50:46.676130381Z
 req_type: Task
 tags:
 - launch
@@ -883,6 +883,11 @@ history:
   timestamp: 2026-10-21T23:30:45.548675130Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a160df-df0d-7e93-8509-d776cb035588
+  author: joe
+  timestamp: 2026-10-21T23:50:46.797720832Z
+  session_id: 01a160dca256
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -895,7 +900,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Slice 5 covers every folded item, but CI (lib-0) fails at the head on the first run and on a re-run (main's lib-0 is green), so it cannot merge; TASK-2095's reap gate also omits the remote-PR-head alternative.
+  detail: Slice 6 (TASK-2075/2076/2077/2085) mostly correct and CI green, but one .RECIPEPREFIX spelling still fails open despite the header claim, and the ifdef fixture never runs against its own Makefile.
   recovery_hint: address the review findings, move TASK-1955 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T22:24:46.575565679Z
+  shelved_at: 2026-10-21T23:50:46.676130381Z
