@@ -3958,9 +3958,23 @@ fn run_vendor_headless_child(
             }
         }
     }
+    // trace:STORY-1688 | ai:claude
+    crate::lane_liveness::register_headless_lane_for_child(
+        log_path,
+        lease_id,
+        vendor.as_str(),
+        child.id(),
+    );
     let status = child
         .wait()
-        .with_context(|| format!("failed to wait for {}", vendor.program()))?;
+        .with_context(|| format!("failed to wait for {}", vendor.program()));
+    // trace:STORY-1688 | ai:claude
+    crate::lane_liveness::finish_headless_lane_for_child(
+        log_path,
+        lease_id,
+        status.as_ref().ok().copied(),
+    );
+    let status = status?;
     tee.stop();
     Ok(status)
 }
