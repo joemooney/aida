@@ -3495,11 +3495,21 @@ pub(crate) fn pr_ship_with_method(
                     Ok(true) => {}
                     // STORY-1698: a mandate release never stays released on
                     // a failure. trace:STORY-1698 | ai:claude
-                    Ok(false) if mandate_release.is_some() => anyhow::bail!(
-                        "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
-                        crate::ci_gate::HOLD_GATE_CHECK,
-                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
-                    ),
+                    Ok(false) if mandate_release.is_some() => {
+                        let refusal = format!(
+                            "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                            crate::ci_gate::HOLD_GATE_CHECK,
+                            rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                        );
+                        // trace:TASK-1915 | ai:claude
+                        ledger_mandate_ship_failure(
+                            &main_worktree,
+                            mandate_release.as_ref(),
+                            pr_number,
+                            &refusal,
+                        );
+                        anyhow::bail!(refusal)
+                    }
                     Ok(false) => anyhow::bail!(
                         "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
                          180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
@@ -3532,6 +3542,8 @@ pub(crate) fn pr_ship_with_method(
                     Some(pr_number),
                     &refusal,
                 );
+                // trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(&main_worktree, Some(cover), pr_number, &refusal);
                 return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
@@ -3613,8 +3625,23 @@ pub(crate) fn pr_ship_with_method(
                 if mandate_release.is_some() && marker_reason.is_some() {
                     let rearm =
                         rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number);
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &format!("`gh pr merge` failed: {stderr_text}.{rearm}"),
+                    );
                     return Err(e.context(format!("`gh pr merge` failed.{rearm}")));
                 }
+                // A mandate ship with no hold to re-arm is still a failed
+                // mandate-driven action. trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &format!("`gh pr merge` failed: {stderr_text}"),
+                );
                 return Err(e.context("`gh pr merge` failed"));
             }
         } else {
@@ -5168,6 +5195,32 @@ mod task_140_squash_subject_tests;
 #[cfg(test)]
 #[path = "tests/bug_2203_refs_subject_tests.rs"]
 mod bug_2203_refs_subject_tests;
+
+/// A ship a mandate released that stops short of its merge (the hold gate
+/// not re-running green, the mandate ending, `gh pr merge` failing) is a
+/// mandate-driven action too: ledger its refusal under the mandate. A ship
+/// no mandate covered writes nothing.
+// trace:TASK-1915 | ai:claude
+pub(crate) fn ledger_mandate_ship_failure(
+    root: &std::path::Path,
+    cover: Option<&MandateCover>,
+    pr: u64,
+    why: &str,
+) {
+    if let Some(cover) = cover {
+        crate::mandate_drive::emit_session_ship(
+            root,
+            &cover.id,
+            pr,
+            crate::mandate_drive::Outcome::Refused,
+            Some(why.to_string()),
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "tests/task_1915_mandate_ship_failure_ledger_tests.rs"]
+mod task_1915_mandate_ship_failure_ledger_tests;
 
 pub(crate) struct PrShipMetadata {
     pub(crate) title: String,
