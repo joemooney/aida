@@ -2318,26 +2318,68 @@ mod task_1981_publication_tests {
     fn retry_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
         rebase_dev_release_store_snapshot(store, branch)
     }
+    fn sync_snapshot(store: &std::path::Path) -> Result<bool> {
+        sync_dev_release_store(store, "v-test")
+    }
     include!("tests/task_1981_publication_tests.rs");
-}
 
-#[cfg(test)]
-mod task_1981_release_status_tests {
-    use super::*;
+    // Seed the bare origin with one published commit and leave a pending store
+    // change behind it, so a sync that got past status would commit and push.
+    fn seeded_with_pending_change(fixture: &Fixture) -> String {
+        let seeded = fixture.advance("seed.txt");
+        assert!(git_ops::push(&fixture.store, "origin", "main").unwrap());
+        assert_eq!(fixture.remote_head(), seeded);
+        std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+        seeded
+    }
 
-    // trace:TASK-1981 | ai:codex
+    fn remote_refs(fixture: &Fixture) -> String {
+        git_at(
+            &fixture.bare,
+            &["for-each-ref", "--format=%(refname) %(objectname)"],
+        )
+    }
+
+    // trace:TASK-1981 | ai:claude
     #[test]
     fn task_1981_release_status_failure_prevents_publication() {
-        let dir = tempfile::tempdir().unwrap();
-        let store = dir.path().join("store");
-        aida_core::git_ops::init(&store).unwrap();
+        let fixture = Fixture::new();
+        let seeded = seeded_with_pending_change(&fixture);
+        let refs_before = remote_refs(&fixture);
+        let objects_before = git_at(&fixture.bare, &["rev-list", "--all"]);
         // A truncated index makes status fail, rather than look clean.
-        std::fs::write(store.join(".git/index"), "not a git index").unwrap();
-        let error = sync_dev_release_store(&store, "v-test").unwrap_err();
+        std::fs::write(fixture.store.join(".git/index"), "not a git index").unwrap();
+        let error = sync_snapshot(&fixture.store).unwrap_err();
         assert!(
             format!("{error:#}").contains("git status failed"),
             "{error:#}"
         );
-        assert!(!store.join(".git/refs/heads/main").exists());
+        assert_eq!(remote_refs(&fixture), refs_before);
+        assert_eq!(
+            git_at(&fixture.bare, &["rev-list", "--all"]),
+            objects_before
+        );
+        assert_eq!(fixture.remote_head(), seeded);
+        assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), seeded);
+    }
+
+    // Positive control for the test above: the same setup with a readable index
+    // does commit the pending change and advance the origin.
+    // trace:TASK-1981 | ai:claude
+    #[test]
+    fn task_1981_release_status_success_publishes_pending_change() {
+        let fixture = Fixture::new();
+        let seeded = seeded_with_pending_change(&fixture);
+        assert!(!sync_snapshot(&fixture.store).unwrap());
+        let published = git_ops::head_sha(&fixture.store).unwrap();
+        assert_ne!(published, seeded);
+        assert_eq!(fixture.remote_head(), published);
+        assert_eq!(
+            git_at(
+                &fixture.bare,
+                &["rev-list", "--count", &format!("{seeded}..{published}")]
+            ),
+            "1"
+        );
     }
 }
