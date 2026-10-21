@@ -6,17 +6,26 @@ description: |
   aida session resume (session.rs ~5653) scopes os_wrap and --settings to the process cwd. ResumeTarget.worktree is main, so a resume run from the main checkout is bounded to main, not the seat tree. Scope it to the lease tree the way rescope_contained_settings does. Carried from round 2 (F3).
 
   Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6304296951
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T23:41:52.529250067Z
-modified_at: 2026-10-20T23:41:52.529250067Z
+modified_at: 2026-10-21T04:31:30.356850120Z
 req_type: Task
 tags:
 - contained
 - from-review:PR-2787
 - severity:minor
+history:
+- id: 01a15cba-8634-7343-8c57-3cd31e154054
+  author: joe
+  timestamp: 2026-10-21T04:31:30.356847568Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
