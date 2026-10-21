@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T19:33:37.788977335Z
+modified_at: 2026-10-21T19:33:41.299893198Z
 req_type: Task
 tags:
 - launch
@@ -391,6 +391,12 @@ comments:
   content: 'ADVISOR 12:32: folded the PR-2802 review notes. TASK-2086: drop the no-op ledger_mandate_ship_failure call in the non-mandate Ok(false) arm (pr_cmd.rs ~3560). TASK-2087: extend the task_1915 wiring pin to ''?'' early returns between mandate release and merge. TASK-2088: a behavioural test for the TASK-1960 moved-base re-arm of a mandate-released hold (pr_cmd.rs ~3619-3627), replacing the comment-text source pin in story_1698_mandate_tests.rs:1041.'
   created_at: 2026-10-21T19:28:30.931561562Z
   modified_at: 2026-10-21T19:28:30.931561562Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15ff4-7f33-7b70-84b8-3908010823b0
+  author: joe
+  content: 'ADVISOR 12:38: folded BUG-2206 (dead attested-reviewer PR-N leases show as running in aida ps and are never reaped: 103 leases, 37 worktrees). Take it in slice 3 (launch/session). The acceptance is in BUG-2206''s description; keep the BUG-2176 marker-copy rule.'
+  created_at: 2026-10-21T19:33:41.299893198Z
+  modified_at: 2026-10-21T19:33:41.299893198Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
