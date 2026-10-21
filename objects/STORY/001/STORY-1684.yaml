@@ -21,11 +21,12 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:05.317476642Z
-modified_at: 2026-10-13T06:17:23.826733780Z
+modified_at: 2026-10-21T04:32:28.981651884Z
 req_type: Story
 tags:
 - cycle-time
 - fasttrack
+- operator-held
 - process
 comments:
 - id: 01a133e8-9872-7931-95f6-6577906a5ccf
@@ -34,6 +35,16 @@ comments:
   created_at: 2026-10-13T06:17:23.826733780Z
   modified_at: 2026-10-13T06:17:23.826733780Z
   session_id: 6fd5497b-0c27-4e83-9725-0bf46198f394
+history:
+- id: 01a15cbb-6ccd-75a0-a0bf-ba05881db971
+  author: joe
+  timestamp: 2026-10-21T04:32:29.389825450Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:28.981651884Z
+deferred_until: Fire-mode ruling routes docs/test PRs to fasttrack by discipline. Revisit if aida metrics cycle-time still shows queued-wait p50 > 2h for trivial specs.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
