@@ -3,12 +3,12 @@ spec_id: TASK-2003
 agreed_id: TASK-2003
 title: NeedsAttention never clears on a rework push, so the needs-attention list hides active work
 description: 'Observed 2026-10-20 05:45 (operator: ''why does this list look like nothing is happening?''). A review refusal or merge hold sets NeedsAttention, and it stays set until the PR merges. A rework push, re-review or green CI never moves the spec back to In Progress or In Review, so a spec in its final round looks the same as an abandoned one. Acceptance: when a new head is pushed on a PR whose spec is NeedsAttention, the spec shows an in-review state with the PR, head SHA and round; it goes back to NeedsAttention only on a new refusal; aida list shows the last activity time for each spec. Fold into STORY-1688 (lane liveness) if that fits better.'
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T12:47:12.308287689Z
-modified_at: 2026-10-20T21:32:05.567253033Z
+modified_at: 2026-10-21T17:37:26.528773354Z
 req_type: Task
 comments:
 - id: 01a15b3a-8a3f-78d3-b8e2-3f0f199aa118
@@ -17,6 +17,15 @@ comments:
   created_at: 2026-10-20T21:32:05.567253033Z
   modified_at: 2026-10-20T21:32:05.567253033Z
   session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
+history:
+- id: 01a15f8a-1200-7ca2-8f4d-cc103e32368b
+  author: joe
+  timestamp: 2026-10-21T17:37:26.528767615Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: fe70a874c6dee801991780f6ceccf8e9aeb3c124
   branch: main
