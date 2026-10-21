@@ -1,0 +1,19 @@
+{
+  "id": "65025928-188d-4b72-a9fb-ec3058fb9c74",
+  "thread_id": "65025928-188d-4b72-a9fb-ec3058fb9c74",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792596757768,
+  "body": "PR #2794 at 06191d581c (0 behind; merged 7be4321436 #2781 BUG-2187; no rebase, no force-push). Two conflicts, resolved:\n- session.rs spawn_vendor_headless_with_seat_granted: took #2781's apply_child_agent_identity (sets AIDA_AGENT_TYPE + AIDA_AGENT_NAME) and dropped my own AIDA_AGENT_TYPE line plus the now-unused HeadlessVendor::agent_type(); BUG-2187 supersedes that part of my change. The call still sits after the ceiling env, and task1169_launcher_sets_ceiling_guardrail passes 2/2.\n- queue_cmd.rs run_standalone_reviewer: kept #2781's structure (shared 'outcome' + ReviewerVendorExit for a non-zero exit + recovery text). My denials are now parsed from #2781's log_body, which is read whenever collection fails, and passed into standalone_reviewer_outcome before the recovery text is appended, so a denial is named on the exit-0 (code 30) and the non-zero-exit paths alike.\nTests: bug_2187_reviewer_record_identity 1/1, bug_2201 e2e 2/2, ceiling guardrail 2/2.\nGates: check-ci-fast PASS; test-touched: one run 907/908 (the recurring bug_1983 one_rejection_table grant-file flake, 4th sighting), the next run clean 908/908 + 2/2. I'd file the bug_1983 flake separately; it predates my lib test (first seen in round 1).",
+  "subject": "PR-2794 merged with #2781: 06191d581c",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

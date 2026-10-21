@@ -1,0 +1,19 @@
+{
+  "id": "bae97fb2-1bc0-451a-a03b-55699600b3e8",
+  "thread_id": "bae97fb2-1bc0-451a-a03b-55699600b3e8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792596770484,
+  "body": "PR #2800, head b578ba6021427f1662547091b557371cc613f749. Gates: check-ci-fast 33/33 passed; test-touched aida-core 1578 ok, aida-tui term 10 ok, aida-cli-lib 1364 ok + 1 parallel-only flake (test_task_1736_relay_refusal_with_long_grant, passes on its own, unrelated); help snapshot regenerated; check-templates OK. 17 items done (TASK-1666/2054 partial: roster path named). Not done, behaviour change: AIDA_STORE divergence (2054/1666), TASK-2055 probe split, TASK-1667 store-reuse refactor. Reasons in PR body.",
+  "subject": "PR for TASK-1953",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

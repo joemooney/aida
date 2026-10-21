@@ -1,0 +1,19 @@
+{
+  "id": "b3b0642f-c979-4eec-8b12-2bab71f46937",
+  "thread_id": "b3b0642f-c979-4eec-8b12-2bab71f46937",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792594430312,
+  "body": "PR #2794 round 3 at c2c6782e92 (0 behind main; merged 0cc97d963b; no rebase, no force-push).\n1-3: rather than prune CONTAINED_READ_ONLY_GIT, I removed EVERY git allow (0c722b0726). Reason: the relay log shows plain git reads (git diff --stat main...HEAD, git diff main...HEAD -- ...) already run under autoAllowBashIfSandboxed inside the OS sandbox; they were never in the denial list. A Bash(git ...) allow rule only adds commands that auto-allow refuses, and no prefix rule can fence git's option-borne exec/writes (grep -O, fetch --upload-pack / +src:dst / --prune, diff|log --output=, --ext-diff, --textconv, -c k=v before the subcommand), nor can the deny list enumerate them. So: no git, no fetch, no grep. The baseline is now Bash(aida), Bash(aida *) + Read(worktree, main store/cache).\n4: baseline_allows_no_ref_or_remote_writing_git now also covers every form you listed: grep -O / --open-files-in-pager, fetch . +sha:ref, fetch +refs/*:refs/*, --upload-pack, --prune, bare fetch origin, diff --output (both positions), --ext-diff, log --output, show --textconv, -c diff.external / core.pager / core.sshCommand / core.fsmonitor. It asserts no Bash(git rule exists, with mutation controls showing the matcher would catch Bash(git *) and Bash(git fetch *). The e2e asserts the real launch's --settings allow list has no Bash(git rule. The PR body is updated to match.\nCI failure on 352ec74bc7: the only red check was merge-hold-gate (active aida:merge-hold label from the review); the test lanes were still pending, so it was not a code failure.\nGates on c2c6782e92: check-ci-fast PASS; test-touched PASS 897/897 + 2/2 e2e on two consecutive runs. An earlier pre-merge run hit the bug_1983 one_rejection_table grant-file flake again (3rd sighting, same panic site, an aida_home grant read; passes alone; I set no HOME/AIDA_HOME). It may deserve its own BUG.",
+  "subject": "PR-2794 round 3: c2c6782e92",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

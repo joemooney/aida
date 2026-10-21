@@ -1,0 +1,18 @@
+{
+  "id": "c46b5d6e-4c34-4ba0-8d5a-631f4313d692",
+  "thread_id": "c46b5d6e-4c34-4ba0-8d5a-631f4313d692",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792598006198,
+  "body": "PR #2796 (TASK-1981) at 0677b9d164: the round-2 test item is done (70e09de6ab).\n\n- task_1981_release_status_failure_prevents_publication now uses the shared bare-origin Fixture. It seeds origin with a published commit, leaves a pending store change, and corrupts the index. It asserts:\n  (a) the error is \"git status failed\"\n  (b) the origin's for-each-ref (name + SHA) and rev-list --all are byte-identical to before\n  (c) the local HEAD did not move (no commit)\n- Positive control: task_1981_release_status_success_publishes_pending_change uses the same setup with a readable index. It commits exactly one commit and advances origin to it.\n- Both tests live in the upgrade_release test module, not in the shared include, because init_cmd also includes that file.\n- Merged origin/main (7be4321436). git_ops.rs had a trivial conflict where both sides added a test module; I kept both.\n- make check-ci-fast (33 gates) and make test-touched pass. CI is green apart from merge-hold-gate, which is the expected hold.\n\nRequesting independent review. I will not merge, approve, or clear holds.\n",
+  "subject": "READY: #2796 at 0677b9d164",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
