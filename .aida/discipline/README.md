@@ -45,10 +45,12 @@ The full workspace suite runs only in CI, at the PR head. Never run
 `make check-ci-fast` runs before every push; `make check-ci-compile` after every
 merge from main. `make test-touched` exits nonzero (script exit 3) when a suspect filter (the file
 holds `#[test]`/`mod tests`) matches 0 tests; a module (including a `#[path]` one)
-with no unit tests of its own falls back to its package's unfiltered unit tests.
+with no unit tests of its own falls back to its package's unfiltered unit tests (in `aida-cli-lib` the filter is dropped instead).
 It also exits nonzero (script exit 4) when workspace-root build config
-(`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain*`) changed. make reports
-either as `make: *** [Makefile:...] Error 3`/`Error 4` and itself exits 2; read the
+(`Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain*`) changed, and (exit 5)
+when a change would run the whole `aida-cli-lib` unit suite with no module to
+narrow to; name modules with `ARGS="--filter <module>"`. make reports
+these as `make: *** [Makefile:...] Error 3`/`Error 4`/`Error 5` and itself exits 2; read the
 script's own message above it. Embedded inputs such as `aida-core/templates/**` run
 the embedding package's unit tests plus the modules in other crates that use
 `EMBEDDED_TEMPLATES`. Whole-tree source-scanning guard tests are not

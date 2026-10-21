@@ -47,6 +47,11 @@ use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 
+// trace:STORY-1728 | ai:claude
+#[path = "maintenance_schedule_args.rs"]
+pub(crate) mod maintenance_schedule_args;
+pub(crate) use maintenance_schedule_args::*;
+
 use crate::cli::MaintenanceScheduleCommand;
 use crate::events::{self, Event, EventKind};
 use crate::schedule_ledger::{self, EpisodeTransition, JobLedger, LastBy};
@@ -2812,6 +2817,10 @@ pub(crate) fn collect_snapshot(
     if fields.contains(&Field::DrainLockFree) {
         snap.drain_lock_free = crate::drain_lock::read_pid_live_lock(project_root).is_none();
     }
+    // trace:STORY-1700 | ai:claude
+    if fields.contains(&Field::MandateDriveActive) {
+        snap.mandate_drive_active = crate::mandate_drive::drive_record_active(now);
+    }
     if fields.contains(&Field::QueueDepth) {
         snap.queue_depth = crate::read_queue_depth(project_root, None).unwrap_or(0) as i64;
     }
@@ -3099,6 +3108,17 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                     "--json",
                     "--fail-on-findings",
                 ],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1700: the drive-mandate tick. Model-free and grant-free; a
+        // no-op unless a drive mandate is active (the job's `when` gate).
+        // trace:STORY-1700 | ai:claude
+        (
+            &["fleet drive --tick"],
+            ScheduledCommand {
+                display: "fleet drive --tick",
+                args: &["fleet", "drive", "--tick"],
                 hook_allowed: false,
             },
         ),
@@ -6449,3 +6469,77 @@ enabled = true
         );
     }
 }
+
+/// Per-seat job registry: substrate jobs run by the tick, seat jobs
+/// delivered to whoever holds the seat (alias: `aida cron`).
+// trace:STORY-1047 | ai:codex
+// trace:STORY-1226 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "schedule")]
+#[clap(visible_alias = "cron")]
+pub(crate) struct ScheduleArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::MaintenanceScheduleCommand,
+}
+
+fn run_schedule(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ScheduleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ScheduleArgs {
+                    inner: schedule_cmd,
+                } => {
+                    return crate::command_registry::returned(self::handle_schedule_command(
+                        schedule_cmd,
+                        store_path,
+                        Some(backend),
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                ScheduleArgs { inner: _ } => {
+                    anyhow::bail!(
+                        "`aida schedule` is available in the default (distributed) mode."
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SCHEDULE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "schedule",
+        help_after: "store",
+        command: <ScheduleArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_schedule),
+    };

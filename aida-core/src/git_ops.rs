@@ -43,7 +43,29 @@ fn git(cwd: &Path, args: &[&str]) -> Result<GitResult> {
 /// where the caller classifies git's stderr).
 // trace:BUG-1969 | ai:claude
 fn git_with_env(cwd: &Path, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
-    let output = host_git_command(cwd)
+    run_git_result(host_git_command(cwd), args, envs)
+}
+
+/// [`git`] for a call that contacts `remote`: the remote's stored
+/// credentials stay out of every child's `argv`
+/// ([`configure_remote_credentials`]).
+// trace:BUG-2181 | ai:claude
+fn remote_git(cwd: &Path, remote: &str, args: &[&str]) -> Result<GitResult> {
+    remote_git_with_env(cwd, remote, args, &[])
+}
+
+// trace:BUG-2181 | ai:claude
+fn remote_git_with_env(
+    cwd: &Path,
+    remote: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+) -> Result<GitResult> {
+    run_git_result(host_remote_git_command(cwd, remote), args, envs)
+}
+
+fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
+    let output = cmd
         .env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
         .envs(envs.iter().copied())
         .args(args)
@@ -138,8 +160,121 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
     } else {
         cmd.env_remove("AIDA_STORE_HOOKS_ONLY");
     }
+    // BUG-1985 F1: a `.gitmodules` `ignore = none` on a planted submodule
+    // outranks `diff.ignoreSubmodules`, so incidental status/diff would enter
+    // it and run its own config. A per-submodule `-c` outranks `.gitmodules`
+    // (only an explicit `--ignore-submodules` flag outranks it, which is how
+    // the safety checks recurse into host-owned submodules after
+    // `refuse_untrusted_gitlinks`). A `.gitmodules` the override cannot cover
+    // gets the fixed refusal process instead.
+    // trace:BUG-1985 | ai:claude
+    let store = is_store_tree(cwd);
+    if store || is_contained_writable_tree(cwd) {
+        let value = if store { "all" } else { "dirty" };
+        match gitmodules_submodule_names(cwd) {
+            Ok(names) => {
+                for name in names {
+                    cmd.arg("-c")
+                        .arg(format!("submodule.{name}.ignore={value}"));
+                }
+            }
+            Err(err) => {
+                let mut refused = Command::new("sh");
+                refused
+                    .current_dir(cwd)
+                    .args([
+                        "-c",
+                        "printf '%s\n' \"$1\" >&2; exit 1",
+                        "aida-gitmodules-refusal",
+                    ])
+                    .arg(format!("{err:#}"));
+                return refused;
+            }
+        }
+    }
     cmd
 }
+
+/// Every submodule name in the `.gitmodules` git itself would read for the
+/// tree holding `cwd`: the checked-out file, or when there is none the index
+/// blob, then `HEAD`'s (git's own fallback order). Errors when the registry
+/// cannot be read or holds a name a `-c submodule.<name>.ignore=` override
+/// cannot express, so the caller fails closed.
+// trace:BUG-1985 | ai:claude
+fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
+    let start = std::path::absolute(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let Some(top) = start
+        .ancestors()
+        .find(|a| std::fs::symlink_metadata(a.join(".git")).is_ok())
+    else {
+        return Ok(Vec::new());
+    };
+    let file = top.join(".gitmodules");
+    let sources: Vec<Vec<String>> = if std::fs::symlink_metadata(&file).is_ok() {
+        vec![vec!["--file".into(), file.to_string_lossy().into_owned()]]
+    } else {
+        vec![
+            vec!["--blob".into(), ":.gitmodules".into()],
+            vec!["--blob".into(), "HEAD:.gitmodules".into()],
+        ]
+    };
+    let blob = sources.len() > 1;
+    for source in sources {
+        // raw-git-ok(BUG-1985): `git config` reads one file or blob and never
+        // walks the tree; host_git_command itself calls this.
+        let out = Command::new("git")
+            .current_dir(top)
+            .args(["-c", "core.fsmonitor=false", "config"])
+            .args(&source)
+            .args(["-z", "--get-regexp", r"^submodule\."])
+            .output()
+            .context("run git config over .gitmodules")?;
+        match out.status.code() {
+            Some(0) => {}
+            // No submodule key at all.
+            Some(1) => return Ok(Vec::new()),
+            // An absent blob: try the next source.
+            Some(128) if blob => continue,
+            _ => anyhow::bail!(
+                "refusing to run git in {}: its .gitmodules cannot be read ({}), so host git \
+                 cannot be kept out of its submodules",
+                top.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+        }
+        let mut names: Vec<String> = Vec::new();
+        for entry in out.stdout.split(|b| *b == 0).filter(|e| !e.is_empty()) {
+            let key = entry.split(|b| *b == b'\n').next().unwrap_or_default();
+            let key = std::str::from_utf8(key).ok();
+            let name = key
+                .and_then(|k| k.strip_prefix("submodule."))
+                .and_then(|k| k.rsplit_once('.'))
+                .map(|(name, _)| name);
+            let Some(name) = name.filter(|n| !n.contains('=') && !n.chars().any(char::is_control))
+            else {
+                anyhow::bail!(
+                    "refusing to run git in {}: its .gitmodules names a submodule host git \
+                     cannot be kept out of",
+                    top.display()
+                );
+            };
+            if !names.iter().any(|n| n == name) {
+                names.push(name.to_string());
+            }
+        }
+        return Ok(names);
+    }
+    Ok(Vec::new())
+}
+
+/// `-c` options that stop a git command from starting automatic maintenance
+/// (`maintenance run --auto`, or `gc --auto` on older git). Store writers use
+/// them under the write lock ([`transaction_git_config`]); test fixtures use
+/// them on every git call, because since git 2.54 the detached geometric
+/// repack can prune an object fanout dir while the fixture's next git call
+/// writes into it.
+// trace:TASK-1717 | ai:claude trace:BUG-2191 | ai:claude
+pub const NO_AUTO_MAINTENANCE: [&str; 4] = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
 
 /// `-c` options for a git command run inside a store-writer transaction:
 /// no automatic maintenance. `git commit`, `fetch`, `merge` and `rebase`
@@ -152,7 +287,7 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
 // trace:TASK-1717 | ai:claude
 pub fn transaction_git_config() -> &'static [&'static str] {
     if crate::db::any_store_write_lock_held() {
-        &["-c", "maintenance.auto=false", "-c", "gc.auto=0"]
+        &NO_AUTO_MAINTENANCE
     } else {
         &[]
     }
@@ -172,8 +307,14 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 ///   `submodule.recurse=false` and `fetch.recurseSubmodules=false`, so git
 ///   never descends into a gitlink at all. A fetch that recursed on demand
 ///   into a planted `objects/zz/.git` would run its `remote.origin.uploadpack`
-///   (F1). A code checkout keeps git's submodule handling: a user project
-///   with real submodules must still see them as dirty.
+///   (F1).
+/// - In a code tree a contained session may have written
+///   ([`is_contained_writable_tree`]) `diff.ignoreSubmodules=dirty` plus the
+///   same two recursion switches (BUG-1985): status and porcelain diff still
+///   report a moved gitlink but never run git inside it, where a planted
+///   repository's own config could name a filter driver. Other code checkouts
+///   keep git's submodule handling: a user project with real submodules must
+///   still see them as dirty.
 /// - In a store tree also pin core.hooksPath to verified, host-owned shipped
 ///   hooks. A project hook manager must never load executable store content.
 ///   Store writes refuse when the host profile cannot be verified.
@@ -181,6 +322,13 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
     let mut args = vec!["-c".to_string(), "core.fsmonitor=false".to_string()];
     if !is_store_tree(cwd) {
+        // trace:BUG-1985 | ai:claude
+        if is_contained_writable_tree(cwd) {
+            for setting in CONTAINED_TREE_GIT_CONFIG {
+                args.push("-c".to_string());
+                args.push(setting.to_string());
+            }
+        }
         return args;
     }
     for setting in [
@@ -355,6 +503,301 @@ fn canonical_best_effort(path: &Path) -> PathBuf {
             _ => return path.to_path_buf(),
         }
     }
+}
+
+/// The `-c` settings [`host_git_hardening`] adds in a code tree a contained
+/// session may have written (BUG-1985 policy A).
+// trace:BUG-1985 | ai:claude
+pub const CONTAINED_TREE_GIT_CONFIG: [&str; 3] = [
+    "diff.ignoreSubmodules=dirty",
+    "submodule.recurse=false",
+    "fetch.recurseSubmodules=false",
+];
+
+/// Could a contained session have written the code tree at `dir` (BUG-1985)?
+/// True for a linked worktree, whose `.git` is a pointer file (every pool and
+/// session worktree), and for any tree of a repository a contained session
+/// was launched against: the BUG-2131 marker sits in its git directory or in
+/// its store's. Filesystem reads only, because it runs before every host git
+/// call. Claude Code's sandbox denies writes to a worktree's own `.git`
+/// pointer and to the main git directory, so a contained session cannot
+/// reclassify its tree.
+// trace:BUG-1985 | ai:claude
+pub fn is_contained_writable_tree(dir: &Path) -> bool {
+    let start = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+    for ancestor in start.ancestors() {
+        let dotgit = ancestor.join(".git");
+        let Ok(meta) = std::fs::symlink_metadata(&dotgit) else {
+            continue;
+        };
+        if !meta.is_dir() {
+            return true;
+        }
+        return [dotgit, ancestor.join(".aida-store").join(".git")]
+            .iter()
+            .any(|git_dir| git_dir.join(crate::store_hooks::CONTAINED_MARKER).exists());
+    }
+    false
+}
+
+/// Refuse host git over a code tree a contained session may have written
+/// ([`is_contained_writable_tree`]) unless every gitlink in its index is a
+/// submodule the host owns (BUG-1985 policy B). The gitlink must be
+/// registered in `.gitmodules`, and its checked-out `.git` (when there is one)
+/// must be a pointer file that resolves to a submodule git directory inside
+/// the repository's common git directory, which the contained sandbox denies
+/// (BUG-1982). A planted embedded repository fails one of these. Its own
+/// config can name commands, and `git add -A`, `add -u` and the plumbing
+/// diffs recurse into it whatever `diff.ignoreSubmodules` says. Reads only the
+/// index, `.gitmodules` and the pointer files. No-op in a store tree
+/// ([`refuse_embedded_repos`] covers it) and in other code trees. The safety
+/// checks never let git recurse into a submodule even after this passes; they
+/// inspect each one themselves ([`worktree_status_porcelain`]).
+// trace:BUG-1985 | ai:claude
+pub fn refuse_untrusted_gitlinks(tree: &Path) -> Result<()> {
+    if is_store_tree(tree) || !is_contained_writable_tree(tree) {
+        return Ok(());
+    }
+    contained_top_gitlinks(tree).map(|_| ())
+}
+
+/// The toplevel of the code tree holding `tree` and its validated gitlinks
+/// ([`validated_gitlinks`] against the repository's common git directory).
+// trace:BUG-1985 | ai:claude
+fn contained_top_gitlinks(tree: &Path) -> Result<(PathBuf, Vec<TrustedGitlink>)> {
+    let dirs = git(
+        tree,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--show-toplevel",
+            "--git-common-dir",
+        ],
+    )?;
+    anyhow::ensure!(
+        dirs.success,
+        "git rev-parse failed in {}: {}",
+        tree.display(),
+        dirs.stderr
+    );
+    let mut lines = dirs.stdout.lines();
+    let (Some(top), Some(common)) = (lines.next(), lines.next()) else {
+        anyhow::bail!("git rev-parse gave no toplevel in {}", tree.display());
+    };
+    let top = PathBuf::from(top);
+    let common = canonical_best_effort(Path::new(common));
+    // F3: only a submodule git directory git itself made counts, under
+    // `<common>/modules/` or a linked worktree's `<common>/worktrees/<wt>/modules/`.
+    // Any other directory inside the common dir (`objects`, `refs`, the common
+    // dir's worktree metadata) is not a repository the host owns.
+    let owned = |target: &Path| {
+        let Ok(rest) = target.strip_prefix(&common) else {
+            return false;
+        };
+        let parts: Vec<Option<&str>> = rest.components().map(|c| c.as_os_str().to_str()).collect();
+        matches!(parts.as_slice(), [Some("modules"), _, ..])
+            || matches!(
+                parts.as_slice(),
+                [Some("worktrees"), _, Some("modules"), _, ..]
+            )
+    };
+    let links = validated_gitlinks(&top, None, &owned)?;
+    Ok((top, links))
+}
+
+/// A gitlink that passed policy B: its path relative to the tree that indexes
+/// it, and the canonical submodule git directory its `.git` pointer named when
+/// it was checked (`None` when not checked out: nothing to inspect).
+// trace:BUG-1985 | ai:claude
+struct TrustedGitlink {
+    path: String,
+    git_dir: Option<PathBuf>,
+}
+
+/// Policy B over one index: every gitlink of the repository whose work tree
+/// is `work_tree` (with an explicit, already validated `git_dir` for a
+/// submodule; `None` for the toplevel) must be registered in that work tree's
+/// `.gitmodules`, and a checked-out one must carry a `.git` pointer file whose
+/// canonical target satisfies `owned` and is a git directory. Errors (refuses)
+/// otherwise.
+// trace:BUG-1985 | ai:claude
+fn validated_gitlinks(
+    work_tree: &Path,
+    git_dir: Option<&Path>,
+    owned: &dyn Fn(&Path) -> bool,
+) -> Result<Vec<TrustedGitlink>> {
+    let mut cmd = host_git_command(work_tree);
+    if let Some(dir) = git_dir {
+        cmd.arg(format!("--git-dir={}", dir.display()))
+            .arg(format!("--work-tree={}", work_tree.display()));
+    }
+    let staged = cmd
+        .args(["ls-files", "--stage", "-z"])
+        .output()
+        .context("run git ls-files")?;
+    anyhow::ensure!(
+        staged.status.success(),
+        "git ls-files failed in {}: {}",
+        work_tree.display(),
+        String::from_utf8_lossy(&staged.stderr).trim()
+    );
+    let staged = String::from_utf8_lossy(&staged.stdout).into_owned();
+    let links: Vec<&str> = staged
+        .split('\0')
+        .filter_map(|entry| entry.strip_prefix("160000 "))
+        .map(|rest| rest.split_once('\t').map_or(rest, |(_, path)| path))
+        .collect();
+    if links.is_empty() {
+        return Ok(Vec::new());
+    }
+    // `git config --file` never follows an include from the file, and a
+    // missing `.gitmodules` (or no match) is an empty registry.
+    let modules = git(
+        work_tree,
+        &[
+            "config",
+            "--file",
+            &work_tree.join(".gitmodules").to_string_lossy(),
+            "-z",
+            "--get-regexp",
+            r"^submodule\..*\.path$",
+        ],
+    )?;
+    let registered: Vec<&str> = modules
+        .stdout
+        .split('\0')
+        .filter_map(|entry| entry.split_once('\n').map(|(_, path)| path))
+        .collect();
+    let mut trusted = Vec::new();
+    let mut untrusted: Vec<String> = Vec::new();
+    for link in links {
+        if !registered.contains(&link) {
+            untrusted.push(format!("{link} (not in .gitmodules)"));
+            continue;
+        }
+        match submodule_git_dir(&work_tree.join(link), owned) {
+            Ok(git_dir) => trusted.push(TrustedGitlink {
+                path: link.to_string(),
+                git_dir,
+            }),
+            Err(()) => untrusted.push(format!("{link} (its .git is not a host-owned submodule)")),
+        }
+    }
+    if untrusted.is_empty() {
+        return Ok(trusted);
+    }
+    untrusted.sort_unstable();
+    anyhow::bail!(
+        "refusing to run git over {}: its index holds a gitlink that is not a host-owned \
+         submodule, which a sandboxed session may have planted to run commands on this \
+         machine. Check who added it, then remove it with `git rm --cached <path>`: {}",
+        work_tree.display(),
+        untrusted.join(", ")
+    )
+}
+
+/// The canonical git directory the checked-out submodule at `dir` points at:
+/// `Ok(None)` when it has no `.git` (not checked out; never inspected),
+/// `Ok(Some(_))` for a `.git` pointer file naming a git directory that
+/// satisfies `owned`, `Err(())` for anything else (a planted directory, a
+/// symlink, a pointer elsewhere).
+// trace:BUG-1985 | ai:claude
+fn submodule_git_dir(dir: &Path, owned: &dyn Fn(&Path) -> bool) -> Result<Option<PathBuf>, ()> {
+    let dotgit = dir.join(".git");
+    let Ok(meta) = std::fs::symlink_metadata(&dotgit) else {
+        return Ok(None);
+    };
+    if !meta.is_file() {
+        return Err(());
+    }
+    let text = std::fs::read_to_string(&dotgit).map_err(|_| ())?;
+    let target = text.trim_end().strip_prefix("gitdir: ").ok_or(())?;
+    let target = std::fs::canonicalize(dir.join(target)).map_err(|_| ())?;
+    if owned(&target) && target.join("HEAD").is_file() && target.join("objects").is_dir() {
+        Ok(Some(target))
+    } else {
+        Err(())
+    }
+}
+
+/// [`refuse_untrusted_gitlinks`] plus a refusal for an untracked nested
+/// repository that `git add -A` would stage as a new gitlink, in a code tree
+/// a contained session may have written. Run before host staging there.
+/// No-op in a store tree and in other code trees.
+// trace:BUG-1985 | ai:claude
+pub fn refuse_untrusted_staging(tree: &Path) -> Result<()> {
+    refuse_untrusted_gitlinks(tree)?;
+    if is_store_tree(tree) || !is_contained_writable_tree(tree) {
+        return Ok(());
+    }
+    let untracked = git(
+        tree,
+        &[
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "--directory",
+            "-z",
+        ],
+    )?;
+    anyhow::ensure!(
+        untracked.success,
+        "git ls-files failed in {}: {}",
+        tree.display(),
+        untracked.stderr
+    );
+    // F2: `--directory` collapses an untracked parent to `a/`, so a repository
+    // at `a/b/.git` is found by walking each untracked directory for a `.git`
+    // entry (file or directory), never by trusting the listed level alone.
+    // trace:BUG-1985 | ai:claude
+    let mut nested: Vec<String> = Vec::new();
+    for dir in untracked.stdout.split('\0').filter(|p| p.ends_with('/')) {
+        nested.extend(
+            nested_git_entries(&tree.join(dir))?
+                .into_iter()
+                .map(|found| {
+                    found
+                        .strip_prefix(tree)
+                        .unwrap_or(&found)
+                        .display()
+                        .to_string()
+                }),
+        );
+    }
+    if nested.is_empty() {
+        return Ok(());
+    }
+    nested.sort_unstable();
+    anyhow::bail!(
+        "refusing to stage {}: it holds an untracked embedded git repository, which a \
+         sandboxed session may have planted to run commands on this machine: {}",
+        tree.display(),
+        nested.join(", ")
+    )
+}
+
+/// Every directory at or under `dir` that holds a `.git` entry (a nested
+/// repository `git add -A` would stage as a gitlink). Symlinks are not
+/// followed; an unreadable directory is an error so staging fails closed.
+// trace:BUG-1985 | ai:claude
+fn nested_git_entries(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        if std::fs::symlink_metadata(current.join(".git")).is_ok() {
+            found.push(current);
+            continue;
+        }
+        let entries = std::fs::read_dir(&current)
+            .with_context(|| format!("read untracked directory {}", current.display()))?;
+        for entry in entries {
+            let entry = entry.with_context(|| format!("read {}", current.display()))?;
+            if entry.file_type().is_ok_and(|t| t.is_dir()) {
+                stack.push(entry.path());
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// Is `dir` the root of an AIDA store worktree? True for a directory named
@@ -765,7 +1208,7 @@ pub fn push(repo: &Path, remote: &str, branch: &str) -> Result<bool> {
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
     refuse_embedded_repos_for_push(repo, "HEAD")?; // trace:BUG-1929 | ai:claude
-    let result = git(repo, &["push", "--end-of-options", remote, branch])?;
+    let result = remote_git(repo, remote, &["push", "--end-of-options", remote, branch])?;
     if result.success {
         Ok(true)
     } else if crate::external_tool_output::contains_any_case_insensitive(
@@ -874,13 +1317,19 @@ pub fn push_exact_outcome(
         !crate::db::any_store_write_lock_held(),
         "refusing to push while this thread holds a store write lock: publish after the store-writer transaction ends"
     );
+    // trace:TASK-1930 | ai:agy
+    anyhow::ensure!(
+        !sha.trim().is_empty(),
+        "push_exact requires a non-empty commit SHA"
+    );
     reject_option_like("branch", branch)?;
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /
     // libcurl's) messages to untranslated English. trace:BUG-1969 | ai:claude
-    let result = git_with_env(
+    let result = remote_git_with_env(
         repo,
+        remote,
         &["push", "--end-of-options", remote, &refspec],
         &[("LC_ALL", "C"), ("LANGUAGE", "C")],
     )?;
@@ -922,8 +1371,9 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
     let target = format!("refs/aida/store-pull/{}", uuid::Uuid::new_v4());
     let refspec = format!("{source}:{target}");
     let result = (|| {
-        let fetched = git(
+        let fetched = remote_git(
             repo,
+            remote,
             &[
                 "fetch",
                 "--no-write-fetch-head",
@@ -958,7 +1408,14 @@ fn fetch_rebase_target(repo: &Path, remote: &str, branch: &str) -> Result<String
 }
 
 mod evidence;
+// trace:BUG-2181 | ai:claude
+mod remote_credentials;
 pub use crate::hypothesis::{is_evidence_refusal, EvidenceRefusal};
+pub use remote_credentials::{
+    configure_remote_credentials, configure_remote_credentials_with, host_remote_git_command,
+    operator_credential_helper_configured, percent_decode, split_http_url_userinfo,
+    upstream_remote, FallbackCredentials, RemoteCredentialsExt, GIT_CREDENTIAL_HELPER_SCRIPT,
+};
 
 /// Pull with rebase from remote.
 ///
@@ -1226,19 +1683,12 @@ pub fn store_worktree_issue(repo: &Path) -> Option<&'static str> {
     }
 }
 
-/// Whether this process cannot commit to the store at `repo` and must leave
-/// its store change for a host-side aida run to commit (BUG-1929 r4): the
-/// store's git directory or object database is not writable here. The
-/// contained sandbox write set covers the store's files but denies
-/// `<main>/.git`, so a contained session can never write the history. The
-/// check is on the filesystem, not `AIDA_CONTAINED`: that variable is set
-/// in host-side launcher processes and can leak into host children
-/// (BUG-2124), and a host process must never skip its own commit. The host commits the
-/// pending YAML at its next store sync (`aida db sync`), which stages
-/// through the hardened builder and keeps the embedded-repository refusal.
-// trace:BUG-1929 | ai:claude
+/// Return the first store git metadata directory (`<git-dir>` or
+/// `<git-common-dir>/objects`) that this process cannot write, or `None` when
+/// both are writable (or cannot be resolved).
+// trace:BUG-2140 | ai:antigravity
 #[cfg(feature = "native")]
-pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
+pub fn store_unwritable_git_path(repo: &Path) -> Option<PathBuf> {
     #[cfg(unix)]
     {
         let writable = |p: &Path| -> bool {
@@ -1258,29 +1708,92 @@ pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
         let git_dir = dir(&["rev-parse", "--absolute-git-dir"]);
         let common = dir(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
         match (git_dir, common) {
-            (Some(g), Some(c)) => !(writable(&g) && writable(&c.join("objects"))),
+            (Some(g), Some(c)) => {
+                if !writable(&g) {
+                    Some(g)
+                } else {
+                    let objects = c.join("objects");
+                    (!writable(&objects)).then_some(objects)
+                }
+            }
             // Can't resolve the git directories: let the commit run and
             // report its own failure.
-            _ => false,
+            _ => None,
         }
     }
     #[cfg(not(unix))]
-    false
+    None
+}
+
+/// Whether this process cannot commit to the store at `repo` and must leave
+/// its store change for a host-side aida run to commit (BUG-1929 r4): the
+/// store's git directory or object database is not writable here. The
+/// contained sandbox write set covers the store's files but denies
+/// `<main>/.git`, so a contained session can never write the history. The
+/// check is on the filesystem, not `AIDA_CONTAINED`: that variable is set
+/// in host-side launcher processes and can leak into host children
+/// (BUG-2124), and a host process must never skip its own commit. The host commits the
+/// pending YAML at its next store sync (`aida db sync`), which stages
+/// through the hardened builder and keeps the embedded-repository refusal.
+// trace:BUG-1929 trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn store_commit_deferred_to_host(repo: &Path) -> bool {
+    store_unwritable_git_path(repo).is_some()
+}
+
+/// Format the deferral notice for `repo` naming the unwritable git metadata
+/// path without assuming a sandboxed session (BUG-2140).
+// trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn format_store_commit_deferred_notice(repo: &Path) -> String {
+    let target = store_unwritable_git_path(repo).unwrap_or_else(|| repo.join(".git"));
+    format!(
+        "note: cannot write {}: store change queued for host commit",
+        target.display()
+    )
 }
 
 /// Tell the user, once per process, that a store change was written but its
-/// commit is left to the host (BUG-1929 r4). A notice, not an error: the
-/// write itself succeeded and is visible to every reader.
-// trace:BUG-1929 | ai:claude
+/// commit is left to the host (BUG-1929 r4, BUG-2140). A notice, not an error:
+/// the write itself succeeded and is visible to every reader.
+// trace:BUG-1929 trace:BUG-2140 | ai:antigravity
 #[cfg(feature = "native")]
-pub fn notice_store_commit_deferred() {
+pub fn notice_store_commit_deferred(repo: &Path) {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
-        eprintln!(
-            "note: store change queued for host commit (this sandboxed session cannot write \
-             the store's git history; the next host-side `aida db sync` commits it)"
-        );
+        eprintln!("{}", format_store_commit_deferred_notice(repo));
     });
+}
+
+/// Commit any pending changes in the git-canonical store worktree on the host
+/// through the hardened `add_all` / `commit` (`host_git_command`) path, under
+/// the store write lock.
+///
+/// No-ops (returns `Ok(false)`) when `store_path` is not a git repo, when
+/// this process itself cannot write the store's git directory (inside a
+/// contained sandbox), or when nothing is pending in the store worktree.
+/// Checks `refuse_embedded_repos` and `has_changes_checked` before acquiring
+/// `with_store_write_lock` so an unrelated store worktree issue (e.g. a rebase
+/// in progress or detached HEAD) does not fail `session end` or contained phases
+/// when nothing is pending, while embedded-repository plants still fail loudly.
+// trace:BUG-2140 | ai:antigravity
+#[cfg(feature = "native")]
+pub fn commit_pending_store_changes_on_host(store_path: &Path) -> Result<bool> {
+    if !is_git_repo(store_path) || store_commit_deferred_to_host(store_path) {
+        return Ok(false);
+    }
+    refuse_embedded_repos(store_path)?;
+    if !has_changes_checked(store_path)? {
+        return Ok(false);
+    }
+    crate::db::with_store_write_lock(store_path, || {
+        refuse_embedded_repos(store_path)?;
+        if !has_changes_checked(store_path)? {
+            return Ok(false);
+        }
+        add_all(store_path, ".")?;
+        commit(store_path, "chore: sync pending changes")
+    })
 }
 
 /// True when HEAD has advanced and no rebase is in progress (sanity check
@@ -1844,7 +2357,7 @@ pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
         "refusing a bare git pull of the AIDA store {}; use pull_rebase, which checks hypothesis evidence",
         repo.display()
     );
-    let result = git(repo, &["pull", "--end-of-options", remote, branch])?;
+    let result = remote_git(repo, remote, &["pull", "--end-of-options", remote, branch])?;
     if !result.success {
         anyhow::bail!("git pull failed: {}", result.stderr);
     }
@@ -1879,6 +2392,37 @@ pub fn first_parent_sha(repo: &Path, sha: &str) -> Option<String> {
     let rev = format!("{sha}^1");
     let result = git(repo, &["rev-parse", "--verify", "--quiet", &rev]).ok()?;
     (result.success && !result.stdout.is_empty()).then_some(result.stdout)
+}
+
+/// Roll back a store writer's local commit `expected_sha` after its push was
+/// rejected, under the store write lock.
+///
+/// If `HEAD` is still `expected_sha`, resets `--hard` to `<expected_sha>~1`.
+/// If another local writer committed on top of `expected_sha` while this caller
+/// was pushing unlocked (`HEAD != expected_sha`), drops `expected_sha` via
+/// `git rebase --onto <expected_sha>~1 <expected_sha>` so the peer's commit is
+/// preserved rather than erased by a blind `reset --hard HEAD~1`. If that
+/// rebase conflicts, aborts it and leaves `HEAD` untouched.
+// trace:TASK-1930 | ai:agy
+pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Result<bool> {
+    if expected_sha.is_empty() {
+        return Ok(false);
+    }
+    crate::db::with_store_write_lock(repo, || {
+        let current = head_sha(repo)?;
+        let parent = format!("{expected_sha}~1");
+        if current == expected_sha {
+            let out = git(repo, &["reset", "--hard", &parent])?;
+            return Ok(out.success);
+        }
+        if is_ancestor(repo, expected_sha, &current).unwrap_or(false) {
+            let rebased = git(repo, &["rebase", "--onto", &parent, expected_sha])?;
+            if !rebased.success && rebase_in_progress(repo) {
+                let _ = git(repo, &["rebase", "--abort"]);
+            }
+        }
+        Ok(false)
+    })
 }
 
 /// The kind of change a diff reports for a single object file. Renames are
@@ -2738,15 +3282,26 @@ pub fn preserve_dirty_worktree(
     if worktree_status_porcelain(worktree_path)?.is_empty() {
         return Ok(None);
     }
+    // BUG-1985: a patch of the superproject cannot hold edits inside a
+    // submodule, so a salvage that would leave them behind refuses and the
+    // tree is kept. trace:BUG-1985 | ai:claude
+    let inner = submodules_with_uncommitted_edits(worktree_path)?;
+    if !inner.is_empty() {
+        anyhow::bail!(
+            "{} has uncommitted edits inside a submodule, which a salvage patch cannot \
+             hold; commit or save them in the submodule first: {}",
+            worktree_path.display(),
+            inner.join(", ")
+        );
+    }
     // Raw (untrimmed) diff capture — the shared `git()` helper trims, which we
     // avoid here to keep the patch byte-faithful for `git apply`.
     // A git failure is an error, never an empty section: a patch silently
     // missing the diff would let the caller reset the tree believing the
     // work was saved. trace:BUG-1947 | ai:claude
+    // trace:BUG-1985 | ai:claude
     let raw = |args: &[&str]| -> Result<String> {
-        let out = Command::new("git")
-            .arg("-C")
-            .arg(worktree_path)
+        let out = host_git_command(worktree_path)
             .args(args)
             .output()
             .with_context(|| format!("run git {}", args.join(" ")))?;
@@ -2899,13 +3454,175 @@ pub fn furthest_ahead_default_ref(repo_root: &Path) -> Result<String> {
     }
 }
 
+/// The submodules of `worktree_path` with tracked or untracked changes inside
+/// them. In a code tree a contained session may have written they come from
+/// [`contained_safety_scan`], which never lets git recurse; elsewhere from
+/// `git status --porcelain=v2` submodule state `S?M?` or `S??U`.
+// trace:BUG-1985 | ai:claude
+fn submodules_with_uncommitted_edits(worktree_path: &Path) -> Result<Vec<String>> {
+    if contained_code_tree(worktree_path) {
+        return contained_safety_scan(worktree_path).map(|(_, edited)| edited);
+    }
+    let r = git(
+        worktree_path,
+        &["status", "--porcelain=v2", "--ignore-submodules=none"],
+    )?;
+    anyhow::ensure!(
+        r.success,
+        "git status failed in {}: {}",
+        worktree_path.display(),
+        r.stderr
+    );
+    Ok(submodule_paths_with_edits(&r.stdout))
+}
+
+/// A code (not store) tree a contained session may have written.
+// trace:BUG-1985 | ai:claude
+fn contained_code_tree(tree: &Path) -> bool {
+    !is_store_tree(tree) && is_contained_writable_tree(tree)
+}
+
+/// How deep [`submodule_has_changes`] follows nested submodules before it
+/// refuses (fails closed).
+// trace:BUG-1985 | ai:claude
+const MAX_SUBMODULE_DEPTH: usize = 8;
+
+/// The safety-check status of a contained-writable code tree, without ever
+/// letting git recurse into a submodule (BUG-1985 review round 2). Git's own
+/// recursion would read each submodule's work-tree `.gitmodules`, which the
+/// session can write, so a nested `ignore = none` would make it enter a
+/// planted repository. Instead:
+///
+/// - policy B ([`validated_gitlinks`]) runs over the toplevel index;
+/// - the toplevel `git status --porcelain --ignore-submodules=dirty` reports
+///   tracked, untracked and moved-gitlink changes but never enters a
+///   submodule;
+/// - each validated, checked-out submodule is inspected by
+///   [`submodule_has_changes`] with the git directory validated here, so a
+///   `.git` swapped in after the check is never read, and a submodule with no
+///   `.git` is skipped (there is no work tree to inspect).
+///
+/// Returns the porcelain (with a ` M <path>` line for a submodule whose
+/// inside changed) and the paths of those submodules. Any refusal or git
+/// failure is an error, so callers keep the tree.
+// trace:BUG-1985 | ai:claude
+fn contained_safety_scan(tree: &Path) -> Result<(String, Vec<String>)> {
+    let (top, links) = contained_top_gitlinks(tree)?;
+    let out = host_git_command(&top)
+        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
+        .output()
+        .context("run git status")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git status failed in {}: {}",
+        top.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    let mut porcelain = String::from_utf8_lossy(&out.stdout).into_owned();
+    let mut edited = Vec::new();
+    for link in links {
+        let Some(git_dir) = &link.git_dir else {
+            continue;
+        };
+        if submodule_has_changes(&top.join(&link.path), git_dir, 1)? {
+            if !porcelain
+                .lines()
+                .any(|l| l.get(3..) == Some(link.path.as_str()))
+            {
+                porcelain.push_str(&format!(" M {}\n", link.path));
+            }
+            edited.push(link.path);
+        }
+    }
+    Ok((porcelain, edited))
+}
+
+/// Does the submodule work tree `work_tree`, whose validated git directory is
+/// `git_dir`, hold uncommitted changes, its own nested submodules included?
+/// Policy B runs over the submodule's own index first (its nested gitlinks
+/// must point under `<git_dir>/modules/`), every git call names `git_dir`
+/// explicitly (the `.git` pointer is never re-read), and git never recurses.
+// trace:BUG-1985 | ai:claude
+fn submodule_has_changes(work_tree: &Path, git_dir: &Path, depth: usize) -> Result<bool> {
+    anyhow::ensure!(
+        depth <= MAX_SUBMODULE_DEPTH,
+        "refusing to inspect {}: submodules nest deeper than {MAX_SUBMODULE_DEPTH} levels",
+        work_tree.display()
+    );
+    let modules = git_dir.join("modules");
+    let owned = |target: &Path| target.starts_with(&modules) && target != modules;
+    let nested = validated_gitlinks(work_tree, Some(git_dir), &owned)?;
+    let out = host_git_command(work_tree)
+        .arg(format!("--git-dir={}", git_dir.display()))
+        .arg(format!("--work-tree={}", work_tree.display()))
+        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
+        .output()
+        .context("run git status in a submodule")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git status failed in submodule {}: {}",
+        work_tree.display(),
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    if !out.stdout.iter().all(u8::is_ascii_whitespace) {
+        return Ok(true);
+    }
+    for link in nested {
+        let Some(inner) = &link.git_dir else {
+            continue;
+        };
+        if submodule_has_changes(&work_tree.join(&link.path), inner, depth + 1)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The submodule paths in `git status --porcelain=v2` output whose
+/// submodule state is `S?M?` or `S??U` (see
+/// [`submodules_with_uncommitted_edits`]).
+// trace:BUG-1985 | ai:claude
+fn submodule_paths_with_edits(porcelain_v2: &str) -> Vec<String> {
+    porcelain_v2
+        .lines()
+        .filter_map(|line| {
+            // Ordinary (`1`) entries have 9 fields, renames (`2`) 10 and
+            // unmerged (`u`, F6) 11; the last one is the path, which may hold
+            // spaces. trace:BUG-1985 | ai:claude
+            let count = match line.split(' ').next()? {
+                "1" => 9,
+                "2" => 10,
+                "u" => 11,
+                _ => return None,
+            };
+            let fields: Vec<&str> = line.splitn(count, ' ').collect();
+            let state = fields.get(2)?.as_bytes();
+            let changed =
+                state.len() == 4 && state[0] == b'S' && (state[2] == b'M' || state[3] == b'U');
+            let path = fields.last()?.split('\t').next()?;
+            changed.then(|| path.to_string())
+        })
+        .collect()
+}
+
 /// `git status --porcelain` for a worktree, failing when git fails, unlike
-/// [`worktree_is_dirty`], which reads a git error as "clean". Callers about
+/// [`worktree_is_dirty`], which answers only dirty or clean. Callers about
 /// to reset or delete a tree use this so a probe error keeps the tree.
 /// Lines starting `??` are untracked files.
 // trace:BUG-1947 | ai:claude
 pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
-    let r = git(worktree_path, &["status", "--porcelain"])?;
+    // BUG-1985: in a tree a contained session may have written, a planted
+    // gitlink is an error (the tree is kept) and git never recurses into a
+    // submodule; each validated submodule is inspected separately, so its
+    // uncommitted edits still count. trace:BUG-1985 | ai:claude
+    if contained_code_tree(worktree_path) {
+        return contained_safety_scan(worktree_path)
+            .map(|(porcelain, _)| porcelain.trim().to_string());
+    }
+    let r = git(
+        worktree_path,
+        &["status", "--porcelain", "--ignore-submodules=none"],
+    )?;
     if !r.success {
         anyhow::bail!(
             "git status failed in {}: {}",
@@ -2916,14 +3633,69 @@ pub fn worktree_status_porcelain(worktree_path: &Path) -> Result<String> {
     Ok(r.stdout)
 }
 
+/// [`worktree_status_porcelain`] as untrimmed porcelain v1 lines (each keeps
+/// its two status columns), for callers that parse or show them. Errors
+/// exactly when [`worktree_status_porcelain`] does.
+// trace:BUG-1985 | ai:claude
+pub fn worktree_status_porcelain_lines(worktree_path: &Path) -> Result<Vec<String>> {
+    let raw = if contained_code_tree(worktree_path) {
+        contained_safety_scan(worktree_path)?.0
+    } else {
+        let out = host_git_command(worktree_path)
+            .args(["status", "--porcelain", "--ignore-submodules=none"])
+            .output()
+            .context("run git status")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git status failed in {}: {}",
+            worktree_path.display(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+    Ok(raw
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(str::to_string)
+        .collect())
+}
+
 /// True when a worktree has uncommitted changes (tracked or untracked,
 /// gitignored paths excluded). Used to classify a tree as dirty before a
-/// reset/return/destroy so unlanded work is never silently discarded.
+/// reset/return/destroy so unlanded work is never silently discarded. A tree
+/// holding a planted gitlink ([`refuse_untrusted_gitlinks`]) counts as
+/// dirty, so it is kept for a person to inspect; uncommitted edits inside a
+/// host-owned submodule count too. A status that fails (or cannot run) over
+/// an existing tree counts as dirty as well (F4): unreadable is never clean.
 // trace:STORY-714 | ai:claude
+// trace:BUG-1985 | ai:claude
 pub fn worktree_is_dirty(worktree_path: &Path) -> bool {
-    git(worktree_path, &["status", "--porcelain"])
-        .map(|r| !r.stdout.is_empty())
-        .unwrap_or(false)
+    if !worktree_path.exists() {
+        return false;
+    }
+    worktree_status_porcelain(worktree_path)
+        .map(|porcelain| !porcelain.trim().is_empty())
+        .unwrap_or(true)
+}
+
+/// [`worktree_is_dirty`] for a non-destructive probe (`aida ps`): it never
+/// inspects inside a submodule, so a live session cannot race a recursion it
+/// can trigger on every probe. A moved gitlink still reads as dirty, a
+/// planted gitlink or a failed status reads as dirty, and edits inside a
+/// submodule are not seen (nothing is removed on this answer).
+// trace:BUG-1985 | ai:claude
+pub fn worktree_is_dirty_shallow(worktree_path: &Path) -> bool {
+    if !worktree_path.exists() {
+        return false;
+    }
+    if refuse_untrusted_gitlinks(worktree_path).is_err() {
+        return true;
+    }
+    host_git_command(worktree_path)
+        .args(["status", "--porcelain", "--ignore-submodules=dirty"])
+        .output()
+        .map(|o| !o.status.success() || !o.stdout.iter().all(u8::is_ascii_whitespace))
+        .unwrap_or(true)
 }
 
 /// True when the worktree's current HEAD is already an ancestor of `base_ref`
@@ -2971,7 +3743,7 @@ pub fn remove_worktree_at(repo_root: &Path, worktree_path: &Path, force: bool) -
 
 /// Check if the remote is reachable (can we push/pull?).
 pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
-    git(repo, &["ls-remote", "--exit-code", remote])
+    remote_git(repo, remote, &["ls-remote", "--exit-code", remote])
         .map(|r| r.success)
         .unwrap_or(false)
 }
@@ -3010,7 +3782,11 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
 /// trace:TASK-844 | ai:claude
 pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
     // trace:BUG-1622 | ai:claude
-    match git(repo, &["ls-remote", "--heads", "--end-of-options", remote]) {
+    match remote_git(
+        repo,
+        remote,
+        &["ls-remote", "--heads", "--end-of-options", remote],
+    ) {
         Ok(r) if r.success => r.stdout.trim().is_empty(),
         _ => false,
     }
@@ -3021,8 +3797,9 @@ pub fn remote_has_no_heads(repo: &Path, remote: &str) -> bool {
 /// callers can treat absence and unreachability the same.
 /// trace:EPIC-1-052 Phase 4 | ai:claude
 pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
-    git(
+    remote_git(
         repo,
+        remote,
         &[
             "ls-remote",
             "--exit-code",
@@ -3046,8 +3823,9 @@ pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
 /// "fall back to the heavier path".
 // trace:TASK-857 | ai:claude
 pub fn remote_branch_head_sha(repo: &Path, remote: &str, branch: &str) -> Option<String> {
-    let r = git(
+    let r = remote_git(
         repo,
+        remote,
         // trace:BUG-1622 | ai:claude
         &[
             "ls-remote",
@@ -3125,7 +3903,11 @@ pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Resul
     let refspec = format!("{}:{}", branch, branch);
     // `--end-of-options` keeps a dash-led remote or branch from reading as
     // an option. trace:BUG-1622 | ai:claude
-    let result = git(repo, &["fetch", "--end-of-options", remote, &refspec])?;
+    let result = remote_git(
+        repo,
+        remote,
+        &["fetch", "--end-of-options", remote, &refspec],
+    )?;
     if !result.success {
         anyhow::bail!("git fetch {} {} failed: {}", remote, refspec, result.stderr);
     }
@@ -3419,52 +4201,55 @@ pub fn squash_orphan_to_snapshot(
     message: &str,
     backup_ref: &str,
 ) -> Result<SquashOutcome> {
-    let head = git(repo, &["rev-parse", "HEAD"])?;
-    if !head.success {
-        anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
-    }
-    let old_head = head.stdout.clone();
+    // trace:TASK-1930 | ai:agy
+    crate::db::with_store_write_lock(repo, || {
+        let head = git(repo, &["rev-parse", "HEAD"])?;
+        if !head.success {
+            anyhow::bail!("cannot resolve store HEAD: {}", head.stderr);
+        }
+        let old_head = head.stdout.clone();
 
-    // ── Guard: create + verify the backup BEFORE any rewrite ──
-    let backup = git(repo, &["branch", backup_ref, &old_head])?;
-    if !backup.success {
-        anyhow::bail!(
-            "refusing to squash: could not create backup ref '{}' ({}) — \
-             no history was rewritten",
-            backup_ref,
-            backup.stderr
-        );
-    }
-    let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
-    if !verify.success || verify.stdout != old_head {
-        anyhow::bail!(
-            "refusing to squash: backup ref '{}' did not record HEAD — \
-             no history was rewritten",
-            backup_ref
-        );
-    }
+        // ── Guard: create + verify the backup BEFORE any rewrite ──
+        let backup = git(repo, &["branch", backup_ref, &old_head])?;
+        if !backup.success {
+            anyhow::bail!(
+                "refusing to squash: could not create backup ref '{}' ({}) — \
+                 no history was rewritten",
+                backup_ref,
+                backup.stderr
+            );
+        }
+        let verify = git(repo, &["rev-parse", &format!("refs/heads/{backup_ref}")])?;
+        if !verify.success || verify.stdout != old_head {
+            anyhow::bail!(
+                "refusing to squash: backup ref '{}' did not record HEAD — \
+                 no history was rewritten",
+                backup_ref
+            );
+        }
 
-    // ── Build a fresh root commit carrying the current tree ──
-    let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
-    if !tree.success {
-        anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
-    }
-    let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
-    if !snapshot.success {
-        anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
-    }
-    let snapshot_sha = snapshot.stdout.clone();
+        // ── Build a fresh root commit carrying the current tree ──
+        let tree = git(repo, &["rev-parse", "HEAD^{tree}"])?;
+        if !tree.success {
+            anyhow::bail!("cannot resolve store tree: {}", tree.stderr);
+        }
+        let snapshot = git(repo, &["commit-tree", &tree.stdout, "-m", message])?;
+        if !snapshot.success {
+            anyhow::bail!("commit-tree failed: {}", snapshot.stderr);
+        }
+        let snapshot_sha = snapshot.stdout.clone();
 
-    // Move the checked-out branch to the snapshot, keeping tree + index intact.
-    let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
-    if !reset.success {
-        anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
-    }
+        // Move the checked-out branch to the snapshot, keeping tree + index intact.
+        let reset = git(repo, &["reset", "--soft", &snapshot_sha])?;
+        if !reset.success {
+            anyhow::bail!("reset --soft to snapshot failed: {}", reset.stderr);
+        }
 
-    Ok(SquashOutcome {
-        backup_ref: backup_ref.to_string(),
-        old_head,
-        snapshot_sha,
+        Ok(SquashOutcome {
+            backup_ref: backup_ref.to_string(),
+            old_head,
+            snapshot_sha,
+        })
     })
 }
 
@@ -3675,33 +4460,35 @@ pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdP
     let registry_path = registry_dir.join("nodes.toml");
     let blocks_path = registry_dir.join("blocks.yaml");
 
-    if let Ok(branch) = current_branch(aida_repo) {
-        let _ = pull_rebase(aida_repo, "origin", &branch);
-    }
-
-    let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-    let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
-        BlockRegistry::load(&blocks_path)
-            .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
-            .unwrap_or_default()
-    } else {
-        std::collections::HashSet::new()
-    };
-
-    let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
-
-    if !in_use(requested) {
-        return Ok(NodeIdProbe::Free);
-    }
-    for n in 2..u32::MAX {
-        let candidate = format!("{}{}", requested, n);
-        if !in_use(&candidate) {
-            return Ok(NodeIdProbe::Taken {
-                suggested: candidate,
-            });
+    crate::db::with_store_write_lock(aida_repo, || {
+        if let Ok(branch) = current_branch(aida_repo) {
+            let _ = pull_rebase(aida_repo, "origin", &branch);
         }
-    }
-    anyhow::bail!("could not find a free suffix for node id '{}'", requested)
+
+        let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
+            BlockRegistry::load(&blocks_path)
+                .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
+                .unwrap_or_default()
+        } else {
+            std::collections::HashSet::new()
+        };
+
+        let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
+
+        if !in_use(requested) {
+            return Ok(NodeIdProbe::Free);
+        }
+        for n in 2..u32::MAX {
+            let candidate = format!("{}{}", requested, n);
+            if !in_use(&candidate) {
+                return Ok(NodeIdProbe::Taken {
+                    suggested: candidate,
+                });
+            }
+        }
+        anyhow::bail!("could not find a free suffix for node id '{}'", requested)
+    })
 }
 
 /// Result of [`suggest_free_node_id`]. trace:STORY-42 | ai:claude
@@ -3776,91 +4563,99 @@ pub fn register_node_full_identity(
     let local_only = !has_remote(aida_repo, "origin");
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: Pull latest (skip on first attempt if no remote)
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
-                anyhow::bail!(
-                    "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
-                    attempt, e
-                );
-            }
-        }
-
-        // Step 2: Load registry and pick the id to claim. A node id is
-        // "in use" if it appears in nodes.toml OR if it owns any entry in
-        // blocks.yaml — the latter catches legacy clones that operated
-        // with implicit (pre-EPIC-1-052) node ids and never registered.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
-            BlockRegistry::load(&blocks_path)
-                .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
-                .unwrap_or_default()
-        } else {
-            std::collections::HashSet::new()
-        };
-        let id_in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
-
-        let node_id: String = match requested_id.clone() {
-            Some(id) => {
-                if id_in_use(&id) {
-                    anyhow::bail!(
-                        "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
-                         pick a different id",
-                        id
+        // trace:TASK-1930 | ai:agy
+        let (node_id, node_name, committed_sha) = crate::db::with_store_write_lock(
+            aida_repo,
+            || -> Result<(String, String, String)> {
+                // Step 1: Pull latest (skip on first attempt if no remote)
+                if attempt > 0 && !local_only {
+                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                        eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+                        anyhow::bail!(
+                        "Cannot complete node registration: remote unreachable after {} attempts. Error: {}",
+                        attempt, e
                     );
+                    }
                 }
-                id
-            }
-            None => {
-                // Walk numeric next-id space, skipping any id that's
-                // already implied by blocks.yaml (legacy clones).
-                let mut next = registry.next_node_id();
-                while blocks_in_use.contains(&next) {
-                    let n: u32 = next.parse().unwrap_or(0);
-                    next = (n + 1).to_string();
-                }
-                next
-            }
-        };
 
-        // Step 3: Register the node, capturing clone_path for hijack-mark-
-        // in-place support (STORY-43). The clone path is the parent of the
-        // .aida-store worktree (i.e., the project root). trace:STORY-41
-        let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
-        // STORY-652: compute the friendly name once so both nodes.toml and the
-        // local node.toml agree. Owner string prefers the threaded `user`,
-        // falling back to the email local-part / integer for the name slug.
-        let owner_for_name = identity.user.clone().unwrap_or_else(|| {
-            email
-                .as_deref()
-                .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
-                .unwrap_or_else(|| user_id.to_string())
-        });
-        let node_name = identity
-            .name
-            .clone()
-            .filter(|n| !n.is_empty())
-            .unwrap_or_else(|| default_node_name(hostname, &owner_for_name, &node_id));
-        registry.register_specific_full_named(
-            node_id.clone(),
-            user_id,
-            hostname.to_string(),
-            email.clone(),
-            clone_path,
-            Some(node_name.clone()),
-            identity.user.clone(),
-        );
-        registry.save(&registry_path)?;
+                // Step 2: Load registry and pick the id to claim. A node id is
+                // "in use" if it appears in nodes.toml OR if it owns any entry in
+                // blocks.yaml — the latter catches legacy clones that operated
+                // with implicit (pre-EPIC-1-052) node ids and never registered.
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
+                    BlockRegistry::load(&blocks_path)
+                        .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
+                        .unwrap_or_default()
+                } else {
+                    std::collections::HashSet::new()
+                };
+                let id_in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
 
-        // Step 4: Stage, commit, push
-        add(aida_repo, &["registry/nodes.toml"])?;
+                let node_id: String = match requested_id.clone() {
+                    Some(id) => {
+                        if id_in_use(&id) {
+                            anyhow::bail!(
+                                "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
+                             pick a different id",
+                                id
+                            );
+                        }
+                        id
+                    }
+                    None => {
+                        // Walk numeric next-id space, skipping any id that's
+                        // already implied by blocks.yaml (legacy clones).
+                        let mut next = registry.next_node_id();
+                        while blocks_in_use.contains(&next) {
+                            let n: u32 = next.parse().unwrap_or(0);
+                            next = (n + 1).to_string();
+                        }
+                        next
+                    }
+                };
 
-        let msg = format!(
-            "chore(registry): register node {} for user {} ({})",
-            node_id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+                // Step 3: Register the node, capturing clone_path for hijack-mark-
+                // in-place support (STORY-43). The clone path is the parent of the
+                // .aida-store worktree (i.e., the project root). trace:STORY-41
+                let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
+                // STORY-652: compute the friendly name once so both nodes.toml and the
+                // local node.toml agree. Owner string prefers the threaded `user`,
+                // falling back to the email local-part / integer for the name slug.
+                let owner_for_name = identity.user.clone().unwrap_or_else(|| {
+                    email
+                        .as_deref()
+                        .and_then(|e| e.split_once('@').map(|(l, _)| l.to_string()))
+                        .unwrap_or_else(|| user_id.to_string())
+                });
+                let node_name = identity
+                    .name
+                    .clone()
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or_else(|| default_node_name(hostname, &owner_for_name, &node_id));
+                registry.register_specific_full_named(
+                    node_id.clone(),
+                    user_id,
+                    hostname.to_string(),
+                    email.clone(),
+                    clone_path,
+                    Some(node_name.clone()),
+                    identity.user.clone(),
+                );
+                registry.save(&registry_path)?;
+
+                // Step 4: Stage, commit
+                add(aida_repo, &["registry/nodes.toml"])?;
+
+                let msg = format!(
+                    "chore(registry): register node {} for user {} ({})",
+                    node_id, user_id, hostname
+                );
+                commit(aida_repo, &msg)?;
+                let sha = head_sha(aida_repo)?;
+                Ok((node_id, node_name, sha))
+            },
+        )?;
 
         // Step 5: Push — if rejected, pull and retry. When there's no
         // origin remote (solo first clone), skip the push entirely:
@@ -3881,7 +4676,7 @@ pub fn register_node_full_identity(
             config.save(&node_config_path)?;
             return Ok(node_id);
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 // Success! Save local node config
                 let config = NodeConfig {
@@ -3909,9 +4704,7 @@ pub fn register_node_full_identity(
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -3961,48 +4754,52 @@ pub fn register_node_remote_only(
     let local_only = !has_remote(aida_repo, "origin");
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: Pull latest (skip on first attempt if no remote)
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+        // trace:TASK-1930 | ai:agy
+        let committed_sha = crate::db::with_store_write_lock(aida_repo, || -> Result<String> {
+            // Step 1: Pull latest (skip on first attempt if no remote)
+            if attempt > 0 && !local_only {
+                if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                    eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
+                    anyhow::bail!(
+                        "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
+                        attempt, e
+                    );
+                }
+            }
+
+            // Step 2: Load registry and verify the requested id isn't already in
+            // nodes.toml. A block-only id (legacy clone with blocks but no
+            // registry entry) is the legitimate backfill *target*, so unlike the
+            // normal acquire path we do NOT treat block ownership as a collision.
+            let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            if registry.is_registered(&id) {
                 anyhow::bail!(
-                    "Cannot complete remote-only node backfill: remote unreachable after {} attempts. Error: {}",
-                    attempt, e
+                    "Node id {} is already in registry/nodes.toml — nothing to backfill",
+                    id
                 );
             }
-        }
 
-        // Step 2: Load registry and verify the requested id isn't already in
-        // nodes.toml. A block-only id (legacy clone with blocks but no
-        // registry entry) is the legitimate backfill *target*, so unlike the
-        // normal acquire path we do NOT treat block ownership as a collision.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        if registry.is_registered(&id) {
-            anyhow::bail!(
-                "Node id {} is already in registry/nodes.toml — nothing to backfill",
-                id
+            // Step 3: Register the entry. clone_path is None: we don't know the
+            // legacy clone's path from here, and recording the local clone's path
+            // would be wrong (the entry isn't about this clone).
+            registry.register_specific_full(
+                id.clone(),
+                user_id,
+                hostname.to_string(),
+                Some(email.clone()),
+                None,
             );
-        }
+            registry.save(&registry_path)?;
 
-        // Step 3: Register the entry. clone_path is None: we don't know the
-        // legacy clone's path from here, and recording the local clone's path
-        // would be wrong (the entry isn't about this clone).
-        registry.register_specific_full(
-            id.clone(),
-            user_id,
-            hostname.to_string(),
-            Some(email.clone()),
-            None,
-        );
-        registry.save(&registry_path)?;
-
-        // Step 4: Stage, commit
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let msg = format!(
-            "chore(registry): backfill node {} for user {} ({}) [remote-only]",
-            id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+            // Step 4: Stage, commit
+            add(aida_repo, &["registry/nodes.toml"])?;
+            let msg = format!(
+                "chore(registry): backfill node {} for user {} ({}) [remote-only]",
+                id, user_id, hostname
+            );
+            commit(aida_repo, &msg)?;
+            head_sha(aida_repo)
+        })?;
 
         // Step 5: Push (skip when there's no remote — the commit lives on the
         // local orphan branch and uploads on the next `aida push`). Crucially,
@@ -4011,12 +4808,10 @@ pub fn register_node_remote_only(
         if local_only {
             return Ok(id);
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(id),
             Ok(false) => {
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Remote-only node backfill: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4085,54 +4880,69 @@ pub fn set_node_identity_field(
     };
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: pull latest (skip first attempt / solo).
-        if attempt > 0 && !local_only {
-            if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
-                anyhow::bail!(
-                    "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
-                    attempt,
-                    e
+        // trace:TASK-1930 | ai:agy
+        let committed_sha = crate::db::with_store_write_lock(
+            aida_repo,
+            || -> Result<Option<String>> {
+                // Step 1: pull latest (skip first attempt / solo).
+                if attempt > 0 && !local_only {
+                    if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
+                        anyhow::bail!(
+                            "Cannot update node identity: remote unreachable after {} attempts. Error: {}",
+                            attempt,
+                            e
+                        );
+                    }
+                }
+
+                // Step 2: load → find the entry (error if absent) → set the field.
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                let entry = registry
+                    .nodes
+                    .iter_mut()
+                    .find(|n| n.id.as_str() == id)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Node id {} is not in the shared registry (registry/nodes.toml) — \
+                             nothing to update. Run `aida node list` to see registered nodes.",
+                            id
+                        )
+                    })?;
+                match field {
+                    NodeIdentityField::Owner => entry.user = Some(value.to_string()),
+                    NodeIdentityField::Name => entry.name = Some(value.to_string()),
+                }
+                registry.save(&registry_path)?;
+
+                // Step 3: stage + commit. On a no-op commit (Ok(false)), return
+                // None without capturing head_sha so we never push or arm the
+                // rollback against another writer's commit.
+                add(aida_repo, &["registry/nodes.toml"])?;
+                let field_label = match field {
+                    NodeIdentityField::Owner => "owner",
+                    NodeIdentityField::Name => "name",
+                };
+                let msg = format!(
+                    "chore(registry): set node {} {} = {}",
+                    id, field_label, value
                 );
-            }
-        }
-
-        // Step 2: load → find the entry (error if absent) → set the field.
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let entry = registry
-            .nodes
-            .iter_mut()
-            .find(|n| n.id.as_str() == id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Node id {} is not in the shared registry (registry/nodes.toml) — \
-                     nothing to update. Run `aida node list` to see registered nodes.",
-                    id
-                )
-            })?;
-        match field {
-            NodeIdentityField::Owner => entry.user = Some(value.to_string()),
-            NodeIdentityField::Name => entry.name = Some(value.to_string()),
-        }
-        registry.save(&registry_path)?;
-
-        // Step 3: stage + commit.
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let field_label = match field {
-            NodeIdentityField::Owner => "owner",
-            NodeIdentityField::Name => "name",
+                if !commit(aida_repo, &msg)? {
+                    return Ok(None);
+                }
+                Ok(Some(head_sha(aida_repo)?))
+            },
+        )?;
+        let Some(committed_sha) = committed_sha else {
+            apply_local(id)?;
+            return Ok(());
         };
-        let msg = format!(
-            "chore(registry): set node {} {} = {}",
-            id, field_label, value
-        );
-        commit(aida_repo, &msg)?;
 
         // Step 4: push (or stop here when solo).
         if local_only {
             apply_local(id)?;
             return Ok(());
         }
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 apply_local(id)?;
                 return Ok(());
@@ -4140,9 +4950,7 @@ pub fn set_node_identity_field(
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly. trace:BUG-1-069
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 eprintln!(
                     "Node identity update: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4199,111 +5007,121 @@ pub fn hijack_node(
     let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
 
     for attempt in 0..MAX_CAS_RETRIES {
-        if attempt > 0 {
-            pull_rebase(aida_repo, "origin", &branch)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let (outcome, recomputed_name, recomputed_user, committed_sha) =
+            crate::db::with_store_write_lock(
+                aida_repo,
+                || -> Result<(HijackOutcome, String, Option<String>, String)> {
+                    if attempt > 0 {
+                        pull_rebase(aida_repo, "origin", &branch)?;
+                    }
 
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        let entry_idx = registry
-            .nodes
-            .iter()
-            .position(|n| n.id == target_id)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Node id '{}' is not registered — nothing to hijack",
-                    target_id
-                )
-            })?;
+                    let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                    let entry_idx = registry
+                        .nodes
+                        .iter()
+                        .position(|n| n.id == target_id)
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "Node id '{}' is not registered — nothing to hijack",
+                                target_id
+                            )
+                        })?;
 
-        // Decide reachability before mutating the registry. "Reachable"
-        // means same hostname, the clone_path is recorded and exists on
-        // disk, and email matches (proxy for same user). When email is
-        // None on either side, fall back to hostname+path.
-        let old_entry = registry.nodes[entry_idx].clone();
-        let same_host = old_entry.hostname == hostname;
-        let same_user = match (old_entry.email.as_deref(), email.as_deref()) {
-            (Some(a), Some(b)) => a == b,
-            _ => true,
-        };
-        let path_exists = old_entry
-            .clone_path
-            .as_ref()
-            .map(|p| p.exists() && *p != aida_repo.parent().unwrap_or(p))
-            .unwrap_or(false);
-
-        let outcome = if same_host && same_user && path_exists {
-            // Reachable — write HIJACKED.toml in the old clone.
-            let old_clone = old_entry.clone_path.clone().unwrap();
-            let marker = HijackMarker {
-                node_id: target_id.to_string(),
-                new_owner_hostname: hostname.to_string(),
-                new_owner_email: email.clone(),
-                new_owner_clone_path: clone_path.clone(),
-                hijacked_at: chrono::Utc::now(),
-            };
-            let marker_path = HijackMarker::path_in_store(&old_clone.join(".aida-store"));
-            // Best-effort: if the old store path doesn't exist (the clone
-            // was deleted but its parent dir lingered), fall through to
-            // Reattributed instead of failing the whole hijack.
-            if marker_path.parent().map(|p| p.exists()).unwrap_or(false)
-                || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
-            {
-                marker.save(&marker_path)?;
-                HijackOutcome::MarkedInPlace { marker_path }
-            } else {
-                HijackOutcome::Reattributed {
-                    reason: format!(
-                        "old clone path {} no longer has a writable .aida-store/.aida/",
-                        old_clone.display()
-                    ),
-                }
-            }
-        } else {
-            let reason = if !same_host {
-                format!(
-                    "old clone was on different host ({} vs {})",
-                    old_entry.hostname, hostname
-                )
-            } else if !same_user {
-                "old clone was owned by a different user".to_string()
-            } else if old_entry.clone_path.is_none() {
-                "old clone path was not recorded (pre-EPIC-9 entry)".to_string()
-            } else {
-                format!(
-                    "old clone path {} no longer exists",
-                    old_entry
+                    // Decide reachability before mutating the registry. "Reachable"
+                    // means same hostname, the clone_path is recorded and exists on
+                    // disk, and email matches (proxy for same user). When email is
+                    // None on either side, fall back to hostname+path.
+                    let old_entry = registry.nodes[entry_idx].clone();
+                    let same_host = old_entry.hostname == hostname;
+                    let same_user = match (old_entry.email.as_deref(), email.as_deref()) {
+                        (Some(a), Some(b)) => a == b,
+                        _ => true,
+                    };
+                    let path_exists = old_entry
                         .clone_path
                         .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_default()
-                )
-            };
-            HijackOutcome::Reattributed { reason }
-        };
+                        .map(|p| p.exists() && *p != aida_repo.parent().unwrap_or(p))
+                        .unwrap_or(false);
 
-        // Update the registry entry to point at this clone.
-        let entry = &mut registry.nodes[entry_idx];
-        entry.hostname = hostname.to_string();
-        entry.email = email.clone();
-        entry.clone_path = clone_path.clone();
-        entry.registered = chrono::Utc::now();
-        // STORY-652: the node now belongs to a new clone — recompute the
-        // friendly name from the new host/owner so the roster reflects the
-        // new owner rather than the prior clone's name. trace:STORY-652
-        let recomputed_name = entry.display_name();
-        entry.name = Some(recomputed_name.clone());
-        let recomputed_user = entry.user.clone();
-        registry.save(&registry_path)?;
+                    let outcome = if same_host && same_user && path_exists {
+                        // Reachable — write HIJACKED.toml in the old clone.
+                        let old_clone = old_entry.clone_path.clone().unwrap();
+                        let marker = HijackMarker {
+                            node_id: target_id.to_string(),
+                            new_owner_hostname: hostname.to_string(),
+                            new_owner_email: email.clone(),
+                            new_owner_clone_path: clone_path.clone(),
+                            hijacked_at: chrono::Utc::now(),
+                        };
+                        let marker_path =
+                            HijackMarker::path_in_store(&old_clone.join(".aida-store"));
+                        // Best-effort: if the old store path doesn't exist (the clone
+                        // was deleted but its parent dir lingered), fall through to
+                        // Reattributed instead of failing the whole hijack.
+                        if marker_path.parent().map(|p| p.exists()).unwrap_or(false)
+                            || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
+                        {
+                            marker.save(&marker_path)?;
+                            HijackOutcome::MarkedInPlace { marker_path }
+                        } else {
+                            HijackOutcome::Reattributed {
+                                reason: format!(
+                                    "old clone path {} no longer has a writable .aida-store/.aida/",
+                                    old_clone.display()
+                                ),
+                            }
+                        }
+                    } else {
+                        let reason = if !same_host {
+                            format!(
+                                "old clone was on different host ({} vs {})",
+                                old_entry.hostname, hostname
+                            )
+                        } else if !same_user {
+                            "old clone was owned by a different user".to_string()
+                        } else if old_entry.clone_path.is_none() {
+                            "old clone path was not recorded (pre-EPIC-9 entry)".to_string()
+                        } else {
+                            format!(
+                                "old clone path {} no longer exists",
+                                old_entry
+                                    .clone_path
+                                    .as_ref()
+                                    .map(|p| p.display().to_string())
+                                    .unwrap_or_default()
+                            )
+                        };
+                        HijackOutcome::Reattributed { reason }
+                    };
 
-        // Stage + commit + push.
-        add(aida_repo, &["registry/nodes.toml"])?;
-        let msg = format!(
-            "chore(registry): hijack node {} for user {} ({})",
-            target_id, user_id, hostname
-        );
-        commit(aida_repo, &msg)?;
+                    // Update the registry entry to point at this clone.
+                    let entry = &mut registry.nodes[entry_idx];
+                    entry.hostname = hostname.to_string();
+                    entry.email = email.clone();
+                    entry.clone_path = clone_path.clone();
+                    entry.registered = chrono::Utc::now();
+                    // STORY-652: the node now belongs to a new clone — recompute the
+                    // friendly name from the new host/owner so the roster reflects the
+                    // new owner rather than the prior clone's name. trace:STORY-652
+                    let recomputed_name = entry.display_name();
+                    entry.name = Some(recomputed_name.clone());
+                    let recomputed_user = entry.user.clone();
+                    registry.save(&registry_path)?;
 
-        match push(aida_repo, "origin", &branch) {
+                    // Stage + commit.
+                    add(aida_repo, &["registry/nodes.toml"])?;
+                    let msg = format!(
+                        "chore(registry): hijack node {} for user {} ({})",
+                        target_id, user_id, hostname
+                    );
+                    commit(aida_repo, &msg)?;
+                    let sha = head_sha(aida_repo)?;
+                    Ok((outcome, recomputed_name, recomputed_user, sha))
+                },
+            )?;
+
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 // Save local NodeConfig so this clone now claims the id.
                 let config = NodeConfig {
@@ -4331,9 +5149,7 @@ pub fn hijack_node(
                 if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
                     let _ = std::fs::remove_file(marker_path);
                 }
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 continue;
             }
             Err(e) => anyhow::bail!("Hijack push failed: {}", e),
@@ -4361,22 +5177,30 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
     let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
     for attempt in 0..MAX_CAS_RETRIES {
-        if attempt > 0 {
-            pull_rebase(aida_repo, "origin", &branch)?;
-        }
+        // trace:TASK-1930 | ai:agy
+        let committed_sha =
+            crate::db::with_store_write_lock(aida_repo, || -> Result<Option<String>> {
+                if attempt > 0 {
+                    pull_rebase(aida_repo, "origin", &branch)?;
+                }
 
-        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-        if !registry.remove(node_id) {
+                let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+                if !registry.remove(node_id) {
+                    return Ok(None);
+                }
+                registry.save(&registry_path)?;
+                add(aida_repo, &["registry/nodes.toml"])?;
+                commit(
+                    aida_repo,
+                    &format!("chore(registry): unregister node {}", node_id),
+                )?;
+                Ok(Some(head_sha(aida_repo)?))
+            })?;
+        let Some(committed_sha) = committed_sha else {
             return Ok(false);
-        }
-        registry.save(&registry_path)?;
-        add(aida_repo, &["registry/nodes.toml"])?;
-        commit(
-            aida_repo,
-            &format!("chore(registry): unregister node {}", node_id),
-        )?;
+        };
 
-        match push(aida_repo, "origin", &branch) {
+        match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(true),
             Ok(false) => {
                 // Same soft-reset dance as register_node_full so the next
@@ -4386,9 +5210,7 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = host_git_command(aida_repo)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
                 continue;
             }
             Err(e) => anyhow::bail!("Node unregister failed: {}", e),
@@ -5455,7 +6277,7 @@ mod tests {
     use std::process::Command;
 
     fn run_git(cwd: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
+        let output = crate::test_git::git_command()
             .current_dir(cwd)
             .args(args)
             .output()
@@ -5588,7 +6410,7 @@ mod tests {
 
     /// `git check-ignore --no-index -q`: true when `rel` is ignored.
     fn bug_2141_ignored(worktree: &Path, rel: &str) -> bool {
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(worktree)
             .args(["check-ignore", "--no-index", "-q", rel])
             .status()
@@ -9205,7 +10027,7 @@ mod tests {
         assert!(run_git(&store, &["ls-files", "--stage"]).contains("160000 "));
 
         // The plant is live: an unhardened `git status` runs the hook.
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&store)
             .args(["status", "--porcelain"])
             .output()
@@ -9294,6 +10116,438 @@ mod tests {
         std::fs::create_dir_all(custom.join("objects")).unwrap();
         std::fs::write(custom.join("metadata.yaml"), "").unwrap();
         assert!(is_store_tree(&custom));
+    }
+
+    /// A main checkout `<dir>/main` and a linked worktree `<dir>/wt` (the
+    /// shape of every pool and session tree) holding an embedded repository
+    /// staged as a gitlink at `sub`, the way a contained session could plant
+    /// one. Its own config names a `filter.evil.clean` driver, selected by its
+    /// `.gitattributes`, that appends to `marker`; `x.txt` is left stale so a
+    /// status inside it must re-hash the file through the driver. Returns
+    /// (main, wt, marker).
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    fn bug_1985_planted_worktree(dir: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let main = dir.join("main");
+        init(&main).unwrap();
+        configure_user(&main, "Test User", "test@example.com").unwrap();
+        std::fs::write(main.join("a.txt"), "a\n").unwrap();
+        run_git(&main, &["add", "a.txt"]);
+        run_git(&main, &["commit", "-qm", "initial"]);
+        let wt = dir.join("wt");
+        run_git(
+            &main,
+            &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+        );
+
+        let marker = dir.join("filter-ran");
+        let driver = dir.join("evil-filter.sh");
+        std::fs::write(
+            &driver,
+            format!("#!/bin/sh\necho ran >> '{}'\ncat\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&driver, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let sub = wt.join("sub");
+        init(&sub).unwrap();
+        configure_user(&sub, "Test User", "test@example.com").unwrap();
+        std::fs::write(sub.join(".gitattributes"), "* filter=evil\n").unwrap();
+        std::fs::write(sub.join("x.txt"), "x\n").unwrap();
+        run_git(&sub, &["add", "."]);
+        run_git(&sub, &["commit", "-qm", "planted"]);
+        run_git(
+            &sub,
+            &["config", "filter.evil.clean", driver.to_str().unwrap()],
+        );
+        let _ = crate::test_git::git_command()
+            .current_dir(&wt)
+            .args(["add", "sub"])
+            .output()
+            .unwrap();
+        assert!(run_git(&wt, &["ls-files", "--stage"]).contains("160000 "));
+        // Same size, new mtime: git cannot tell it changed without hashing it.
+        std::fs::write(sub.join("x.txt"), "q\n").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(sub.join("x.txt"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(7200))
+            .unwrap();
+        let _ = std::fs::remove_file(&marker);
+        (main, wt, marker)
+    }
+
+    // BUG-1985: host status over a contained-writable worktree never runs a
+    // planted repository's filter driver, and a gitlink .gitmodules does not
+    // register keeps the tree (dirty, salvage refused) instead of resetting it.
+    // trace:BUG-1985.ac027ce2 | ai:claude
+    // trace:BUG-1985.acba0e36 | ai:claude
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_planted_filter_driver_never_runs_from_host_git() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_main, wt, marker) = bug_1985_planted_worktree(dir.path());
+
+        // The plant is live: a plain host `git status` runs the driver.
+        let _ = crate::test_git::git_command()
+            .current_dir(&wt)
+            .args(["-c", "core.fsmonitor=false", "status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            marker.exists(),
+            "precondition: a plain git status must run the planted filter driver"
+        );
+        std::fs::remove_file(&marker).unwrap();
+
+        assert!(is_contained_writable_tree(&wt));
+        assert!(worktree_is_dirty(&wt), "a planted gitlink keeps the tree");
+        let err = worktree_status_porcelain(&wt).unwrap_err().to_string();
+        assert!(err.contains("gitlink") && err.contains("sub"), "{err}");
+        let salvage = dir.path().join("salvage");
+        assert!(preserve_dirty_worktree(&wt, &salvage, "t").is_err());
+        assert!(!salvage.exists(), "no patch written for a refused tree");
+        let _ = git(&wt, &["status", "--porcelain"]).unwrap();
+        let _ = git(&wt, &["diff", "HEAD"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host git run over the worktree ran the planted filter driver"
+        );
+
+        // The session can register its plant in .gitmodules too. Its `.git` is
+        // still its own directory, not a pointer into the host-owned common
+        // git directory, so the tree is still refused and kept.
+        // Round 4 F1: it also sets `ignore = none`, which outranks
+        // `diff.ignoreSubmodules`.
+        std::fs::write(
+            wt.join(".gitmodules"),
+            "[submodule \"sub\"]\n\tpath = sub\n\turl = ./sub\n\tignore = none\n",
+        )
+        .unwrap();
+        let err = refuse_untrusted_gitlinks(&wt).unwrap_err().to_string();
+        assert!(err.contains("host-owned"), "{err}");
+        assert!(worktree_is_dirty(&wt));
+        assert!(worktree_status_porcelain(&wt).is_err());
+        assert!(preserve_dirty_worktree(&wt, &salvage, "t").is_err());
+
+        // Positive control: the hardening `-c` flags alone (no per-submodule
+        // override) let `ignore = none` re-enable recursion into the plant.
+        let _ = crate::test_git::git_command()
+            .current_dir(&wt)
+            .args(host_git_hardening(&wt))
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            marker.exists(),
+            "precondition: `ignore = none` must outrank diff.ignoreSubmodules"
+        );
+        std::fs::remove_file(&marker).unwrap();
+
+        // Incidental host git over the tree (policy A, the phase-gate progress
+        // signature for example) still never enters it, and still reports the
+        // staged gitlink.
+        let status = git(&wt, &["status", "--porcelain"]).unwrap();
+        assert!(status.stdout.contains("sub"), "{}", status.stdout);
+        let _ = git(&wt, &["status", "--porcelain=v2", "--branch"]).unwrap();
+        let _ = git(&wt, &["diff", "HEAD"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host git run over a registered plant ran its filter driver"
+        );
+
+        // The same registry staged in the index with no checked-out file is
+        // what git reads then; it is covered too.
+        run_git(&wt, &["add", ".gitmodules"]);
+        std::fs::remove_file(wt.join(".gitmodules")).unwrap();
+        let _ = git(&wt, &["status", "--porcelain"]).unwrap();
+        let _ = git(&wt, &["diff", "HEAD"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "an index-only .gitmodules re-enabled recursion into the plant"
+        );
+
+        // A registry the override cannot express refuses instead.
+        std::fs::write(
+            wt.join(".gitmodules"),
+            "[submodule \"a=b\"]\n\tpath = sub\n\tignore = none\n",
+        )
+        .unwrap();
+        let refused = git(&wt, &["status", "--porcelain"]).unwrap();
+        assert!(!refused.success, "{}", refused.stdout);
+        assert!(refused.stderr.contains(".gitmodules"), "{}", refused.stderr);
+        assert!(worktree_is_dirty(&wt));
+        assert!(!marker.exists());
+    }
+
+    // F3: a `.git` pointer that canonicalizes inside the common git directory
+    // but is not a submodule git directory (here `<main>/.git/objects`) is
+    // not host-owned, and the dirty probes keep the tree.
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_gitlink_pointer_into_common_dir_internals_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, wt, _marker) = bug_1985_planted_worktree(dir.path());
+        let sub = wt.join("sub");
+        std::fs::remove_dir_all(sub.join(".git")).unwrap();
+        let objects = std::fs::canonicalize(main.join(".git").join("objects")).unwrap();
+        std::fs::write(sub.join(".git"), format!("gitdir: {}\n", objects.display())).unwrap();
+        std::fs::write(
+            wt.join(".gitmodules"),
+            "[submodule \"sub\"]\n\tpath = sub\n\turl = ./sub\n",
+        )
+        .unwrap();
+        let err = refuse_untrusted_gitlinks(&wt).unwrap_err().to_string();
+        assert!(err.contains("host-owned"), "{err}");
+        assert!(worktree_is_dirty(&wt), "the tree must be kept");
+        assert!(worktree_status_porcelain(&wt).is_err());
+    }
+
+    // F6: an unmerged (`u`) submodule record with inner edits is reported, so
+    // salvage refuses instead of writing a patch without them.
+    // trace:BUG-1985 | ai:claude
+    #[test]
+    fn bug_1985_unmerged_submodule_with_edits_is_reported() {
+        let zero = "0".repeat(40);
+        let out = format!(
+            "u UU S.M. 160000 160000 160000 160000 {zero} {zero} {zero} dep dir\n\
+             u UU N... 100644 100644 100644 100644 {zero} {zero} {zero} plain.txt\n\
+             1 .M S..U 160000 160000 160000 {zero} {zero} other\n\
+             1 .M N... 100644 100644 100644 {zero} {zero} a.txt\n"
+        );
+        assert_eq!(submodule_paths_with_edits(&out), ["dep dir", "other"]);
+    }
+
+    /// Run git with a fixed identity and the file protocol allowed (local
+    /// submodule URLs); panics on failure.
+    // trace:BUG-1985 | ai:claude
+    fn bug_1985_sub_git(cwd: &Path, args: &[&str]) {
+        let out = crate::test_git::git_command()
+            .current_dir(cwd)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
+            .args(["-c", "protocol.file.allow=always"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?} in {}: {}",
+            cwd.display(),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A main checkout whose registered submodule `dep` has its own nested
+    /// submodule `inner`, and a linked worktree `<dir>/wt` with both
+    /// initialized. Returns (wt, marker): `wt/dep/inner/.git` is replaced by a
+    /// planted repository whose `filter.evil.clean` driver appends to `marker`,
+    /// with a stale file so a status inside it must run the driver, and
+    /// `wt/dep/.gitmodules` (session-writable) sets `ignore = none` for it.
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    fn bug_1985_nested_plant(dir: &Path) -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let make = |name: &str, file: &str| {
+            let repo = dir.join(name);
+            std::fs::create_dir_all(&repo).unwrap();
+            bug_1985_sub_git(&repo, &["init", "-q", "-b", "main"]);
+            std::fs::write(repo.join(file), "x\n").unwrap();
+            bug_1985_sub_git(&repo, &["add", "."]);
+            bug_1985_sub_git(&repo, &["commit", "-qm", name]);
+            repo
+        };
+        let inner = make("inner-origin", "i.txt");
+        let dep = make("dep-origin", "d.txt");
+        bug_1985_sub_git(
+            &dep,
+            &["submodule", "add", "-q", inner.to_str().unwrap(), "inner"],
+        );
+        bug_1985_sub_git(&dep, &["commit", "-qm", "inner"]);
+        let main = make("main", "m.txt");
+        bug_1985_sub_git(
+            &main,
+            &["submodule", "add", "-q", dep.to_str().unwrap(), "dep"],
+        );
+        bug_1985_sub_git(&main, &["commit", "-qm", "dep"]);
+        let wt = dir.join("wt");
+        bug_1985_sub_git(
+            &main,
+            &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+        );
+        bug_1985_sub_git(&wt, &["submodule", "update", "-q", "--init", "--recursive"]);
+        let nested = wt.join("dep").join("inner");
+        assert!(
+            nested.join(".git").is_file(),
+            "inner is a real nested submodule"
+        );
+
+        let marker = dir.join("nested-filter-ran");
+        let driver = dir.join("nested-evil.sh");
+        std::fs::write(
+            &driver,
+            format!("#!/bin/sh\necho ran >> '{}'\ncat\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&driver, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::remove_file(nested.join(".git")).unwrap();
+        bug_1985_sub_git(&nested, &["init", "-q", "-b", "main"]);
+        std::fs::write(nested.join(".gitattributes"), "* filter=evil\n").unwrap();
+        bug_1985_sub_git(&nested, &["add", "."]);
+        bug_1985_sub_git(&nested, &["commit", "-qm", "planted"]);
+        bug_1985_sub_git(
+            &nested,
+            &["config", "filter.evil.clean", driver.to_str().unwrap()],
+        );
+        std::fs::write(nested.join("i.txt"), "q\n").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(nested.join("i.txt"))
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(7200))
+            .unwrap();
+        let gitmodules = wt.join("dep").join(".gitmodules");
+        let text = std::fs::read_to_string(&gitmodules).unwrap();
+        std::fs::write(&gitmodules, format!("{text}\tignore = none\n")).unwrap();
+        let _ = std::fs::remove_file(&marker);
+        (wt, marker)
+    }
+
+    // Review round 2 BLOCKER: a nested submodule whose `.git` is planted, made
+    // visible by `ignore = none` in the host-owned submodule's work-tree
+    // `.gitmodules`, never runs its filter driver from any safety check, and
+    // the tree is kept (the nested gitlink fails policy B).
+    // trace:BUG-1985.ac027ce2 | ai:claude
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_nested_submodule_plant_never_runs_its_filter_driver() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(dir.path()).unwrap();
+        let (wt, marker) = bug_1985_nested_plant(&dir);
+        assert!(is_contained_writable_tree(&wt));
+        assert!(
+            refuse_untrusted_gitlinks(&wt).is_ok(),
+            "the toplevel index is clean"
+        );
+
+        // Positive control: the round-1 safety-check status (git recursing
+        // with the hardening flags) runs the nested driver.
+        let _ = crate::test_git::git_command()
+            .current_dir(&wt)
+            .args(host_git_hardening(&wt))
+            .args(["-c", "submodule.dep.ignore=dirty"])
+            .args(["status", "--porcelain", "--ignore-submodules=none"])
+            .output()
+            .unwrap();
+        assert!(
+            marker.exists(),
+            "precondition: git's own recursion must run the nested driver"
+        );
+        std::fs::remove_file(&marker).unwrap();
+
+        assert!(worktree_is_dirty(&wt), "the tree must be kept");
+        let err = worktree_status_porcelain(&wt).unwrap_err().to_string();
+        assert!(err.contains("inner"), "{err}");
+        assert!(worktree_status_porcelain_lines(&wt).is_err());
+        assert!(submodules_with_uncommitted_edits(&wt).is_err());
+        let salvage = dir.join("salvage");
+        assert!(preserve_dirty_worktree(&wt, &salvage, "t").is_err());
+        let _ = worktree_is_dirty_shallow(&wt);
+        let _ = git(&wt, &["status", "--porcelain"]).unwrap();
+        assert!(
+            !marker.exists(),
+            "a host safety check ran the nested planted filter driver"
+        );
+    }
+
+    // Round 2 F1/F2 positive path: an uncommitted edit two submodules deep is
+    // seen through the validated git directories, and a submodule with no
+    // `.git` (not checked out) is skipped rather than inspected.
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_nested_submodule_edit_is_seen_without_git_recursion() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = std::fs::canonicalize(dir.path()).unwrap();
+        let (wt, _marker) = bug_1985_nested_plant(&dir);
+        // Undo the plant: a real nested submodule again, then edit inside it.
+        let nested = wt.join("dep").join("inner");
+        std::fs::remove_dir_all(&nested).unwrap();
+        bug_1985_sub_git(&wt.join("dep"), &["checkout", "-q", "--", ".gitmodules"]);
+        bug_1985_sub_git(&wt, &["submodule", "update", "-q", "--init", "--recursive"]);
+        assert!(!worktree_is_dirty(&wt), "a fresh nested tree is clean");
+        std::fs::write(nested.join("i.txt"), "unsaved nested edit\n").unwrap();
+        assert!(worktree_is_dirty(&wt));
+        assert_eq!(submodules_with_uncommitted_edits(&wt).unwrap(), ["dep"]);
+        let status = worktree_status_porcelain(&wt).unwrap();
+        assert!(status.contains("dep"), "{status}");
+        assert!(
+            !worktree_is_dirty_shallow(&wt),
+            "the non-destructive probe never looks inside a submodule"
+        );
+
+        // A deinitialized submodule has no `.git`: skipped, never inspected.
+        bug_1985_sub_git(&wt, &["checkout", "-q", "--", "."]);
+        bug_1985_sub_git(&wt.join("dep"), &["checkout", "-q", "--", "."]);
+        std::fs::write(nested.join("i.txt"), "x\n").unwrap();
+        bug_1985_sub_git(&wt, &["submodule", "deinit", "-q", "-f", "dep"]);
+        assert!(!wt.join("dep").join(".git").exists());
+        assert!(
+            !worktree_is_dirty(&wt),
+            "{:?}",
+            worktree_status_porcelain(&wt)
+        );
+    }
+
+    // BUG-1985: which trees get policy A and B, and that ordinary checkouts
+    // keep git's submodule handling.
+    // trace:BUG-1985.acba0e36 | ai:claude
+    // trace:BUG-1985 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn bug_1985_contained_writable_tree_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let (main, wt, _marker) = bug_1985_planted_worktree(dir.path());
+        assert!(!is_contained_writable_tree(dir.path()));
+        assert!(!is_contained_writable_tree(&main));
+        assert_eq!(host_git_hardening(&main), ["-c", "core.fsmonitor=false"]);
+        assert!(is_contained_writable_tree(&wt));
+        let h = host_git_hardening(&wt).join(" ");
+        for setting in CONTAINED_TREE_GIT_CONFIG {
+            assert!(h.contains(setting), "{h}");
+        }
+        // A gitlink in the main checkout is not refused: no contained
+        // session ever ran against this repository.
+        let nested = main.join("vendor");
+        init(&nested).unwrap();
+        configure_user(&nested, "Test User", "test@example.com").unwrap();
+        std::fs::write(nested.join("v.txt"), "v").unwrap();
+        run_git(&nested, &["add", "v.txt"]);
+        run_git(&nested, &["commit", "-qm", "v"]);
+        let _ = crate::test_git::git_command()
+            .current_dir(&main)
+            .args(["add", "vendor"])
+            .output()
+            .unwrap();
+        assert!(refuse_untrusted_gitlinks(&main).is_ok());
+
+        // Once a contained session is launched against it (the BUG-2131
+        // marker in its git directory, or in an own-repository store's), the
+        // main checkout is covered too.
+        let git_dir = main.join(".git");
+        std::fs::write(git_dir.join(crate::store_hooks::CONTAINED_MARKER), "").unwrap();
+        assert!(is_contained_writable_tree(&main));
+        let err = refuse_untrusted_gitlinks(&main).unwrap_err().to_string();
+        assert!(err.contains("vendor"), "{err}");
+        std::fs::remove_file(git_dir.join(crate::store_hooks::CONTAINED_MARKER)).unwrap();
+        assert!(!is_contained_writable_tree(&main));
+        let store_git = main.join(".aida-store").join(".git");
+        std::fs::create_dir_all(&store_git).unwrap();
+        std::fs::write(store_git.join(crate::store_hooks::CONTAINED_MARKER), "").unwrap();
+        assert!(is_contained_writable_tree(&main));
     }
 
     // trace:BUG-1969 | ai:claude — each push-failure class from real git /
@@ -9482,5 +10736,226 @@ mod tests {
         }
         let err = push_exact(&repo, "origin", &next, "main").unwrap_err();
         assert!(err.to_string().starts_with("git push failed:"), "{err:#}");
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_rollback_commit_if_head_matches_preserves_intervening_peer_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        let seed_sha = head_sha(&repo).unwrap();
+
+        // Writer A commits and captures its SHA before unlocking to push.
+        std::fs::write(repo.join("writer_a.txt"), "from writer a\n").unwrap();
+        run_git(&repo, &["add", "writer_a.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "writer a"]);
+        let writer_a_sha = head_sha(&repo).unwrap();
+
+        // Direct rollback when HEAD still equals writer_a_sha resets to seed.
+        assert!(rollback_commit_if_head_matches(&repo, &writer_a_sha).unwrap());
+        assert_eq!(head_sha(&repo).unwrap(), seed_sha);
+        assert!(!repo.join("writer_a.txt").exists());
+
+        // Now simulate a peer commit landing on HEAD while Writer A was pushing unlocked.
+        std::fs::write(repo.join("writer_a.txt"), "from writer a\n").unwrap();
+        run_git(&repo, &["add", "writer_a.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "writer a retry"]);
+        let writer_a_retry_sha = head_sha(&repo).unwrap();
+
+        std::fs::write(repo.join("peer_b.txt"), "from peer b\n").unwrap();
+        run_git(&repo, &["add", "peer_b.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "peer b"]);
+
+        // Rolling back writer_a_retry_sha must NOT erase peer_b.txt!
+        assert!(!rollback_commit_if_head_matches(&repo, &writer_a_retry_sha).unwrap());
+        assert!(
+            repo.join("peer_b.txt").exists(),
+            "intervening peer commit must be preserved"
+        );
+        assert!(
+            !repo.join("writer_a.txt").exists(),
+            "rejected writer_a commit should be dropped by rebase --onto"
+        );
+        let log = run_git(&repo, &["log", "--oneline"]);
+        assert!(
+            log.contains("peer b"),
+            "peer commit must remain in history: {log}"
+        );
+        assert!(
+            !log.contains("writer a retry"),
+            "rejected commit must not remain in history: {log}"
+        );
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_push_exact_refuses_empty_sha_and_node_writers_wait_for_store_write_lock() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        let bare = dir.path().join("origin.git");
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&bare, &["init", "--bare", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        run_git(&repo, &["remote", "add", "origin", bare.to_str().unwrap()]);
+        std::fs::write(repo.join("seed.txt"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed.txt"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        assert!(push(&repo, "origin", "aida-store").unwrap());
+
+        // 1. push_exact and push_exact_outcome refuse an empty/whitespace SHA
+        // so `:refs/heads/<branch>` can never delete a remote branch.
+        for empty in ["", "   "] {
+            let err = push_exact(&repo, "origin", empty, "aida-store").unwrap_err();
+            assert!(
+                err.to_string()
+                    .contains("push_exact requires a non-empty commit SHA"),
+                "expected empty-SHA refusal, got: {err:#}"
+            );
+        }
+
+        // 2. Barrier test: register_node_full blocks on store_write_lock until released.
+        let initial_head = head_sha(&repo).unwrap();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let repo_holder = repo.clone();
+        let holder = std::thread::spawn(move || {
+            crate::db::with_store_write_lock(&repo_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let repo_writer = repo.clone();
+        let writer = std::thread::spawn(move || {
+            let assigned = register_node_full(
+                &repo_writer,
+                Some("n77".to_string()),
+                1000,
+                "devbox",
+                Some("t@example.com".to_string()),
+            )
+            .unwrap();
+            done_tx.send(assigned).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while crate::db::store_write_lock_contended_for(&repo) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for register_node_full to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "register_node_full must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            head_sha(&repo).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            "n77"
+        );
+        writer.join().unwrap();
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_set_node_identity_field_noop_write_does_not_capture_sha_or_push_or_rollback() {
+        let dir = tempfile::tempdir().unwrap();
+        let hub = dir.path().join("hub.git");
+        let clone_a = dir.path().join("clone_a");
+        let clone_b = dir.path().join("clone_b");
+
+        std::process::Command::new("git")
+            .args(["init", "--bare", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+
+        init(&clone_a).unwrap();
+        configure_user(&clone_a, "Test", "test@example.com").unwrap();
+        std::fs::write(clone_a.join("README.md"), "seed\n").unwrap();
+        add(&clone_a, &["README.md"]).unwrap();
+        commit(&clone_a, "seed").unwrap();
+        let branch = current_branch(&clone_a).unwrap();
+        std::process::Command::new("git")
+            .current_dir(&clone_a)
+            .args(["remote", "add", "origin", hub.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(push(&clone_a, "origin", &branch).unwrap());
+
+        std::process::Command::new("git")
+            .args([
+                "clone",
+                "--branch",
+                &branch,
+                hub.to_str().unwrap(),
+                clone_b.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        configure_user(&clone_b, "Peer", "peer@example.com").unwrap();
+
+        // 1. Register node "n1" and set its owner field to "alice".
+        register_node_full(
+            &clone_a,
+            Some("n1".to_string()),
+            1000,
+            "devbox",
+            Some("t@example.com".to_string()),
+        )
+        .unwrap();
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        pull_rebase(&clone_b, "origin", &branch).unwrap();
+
+        // 2. Advance `origin` from clone_b so any push from clone_a would be rejected,
+        // and create an unpushed local peer commit on clone_a.
+        std::fs::write(clone_b.join("remote.txt"), "remote\n").unwrap();
+        add(&clone_b, &["remote.txt"]).unwrap();
+        commit(&clone_b, "remote advance").unwrap();
+        assert!(push(&clone_b, "origin", &branch).unwrap());
+
+        std::fs::write(clone_a.join("unpushed_peer.txt"), "precious\n").unwrap();
+        add(&clone_a, &["unpushed_peer.txt"]).unwrap();
+        commit(&clone_a, "local unpushed peer commit").unwrap();
+        let peer_sha = head_sha(&clone_a).unwrap();
+
+        // 3. Second write with the identical value produces Ok(false) ("nothing to commit")
+        // and MUST return early without capturing `peer_sha`, without pushing, and
+        // without rolling back `unpushed_peer.txt`.
+        set_node_identity_field(&clone_a, "n1", NodeIdentityField::Owner, "alice").unwrap();
+        assert_eq!(
+            head_sha(&clone_a).unwrap(),
+            peer_sha,
+            "no-op set_node_identity_field must not capture or roll back an unpushed peer commit"
+        );
+        assert!(
+            clone_a.join("unpushed_peer.txt").exists(),
+            "unpushed peer file must survive a no-op set_node_identity_field"
+        );
     }
 }

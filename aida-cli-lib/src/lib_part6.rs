@@ -262,9 +262,10 @@ mod bug_1807_handoff_tests {
     #[test]
     fn reviewer_pickup_commands_parse_for_both_forges() {
         for label in ["MR-35", "PR-35"] {
-            assert!(
-                Cli::try_parse_from(["aida", "queue", "work", label, "--role", "reviewer"]).is_ok()
-            );
+            assert!(crate::command_registry::try_parse_from([
+                "aida", "queue", "work", label, "--role", "reviewer"
+            ])
+            .is_ok());
         }
     }
 
@@ -323,3 +324,8 @@ mod bug_1807_handoff_tests {
         assert!(canonical_review_story(&store, ReviewForge::GitLab, 3, None, None).is_none());
     }
 }
+
+// trace:TASK-1737 | ai:antigravity
+#[cfg(test)]
+#[path = "tests/task_1737_authority_trailers_tests.rs"]
+mod task_1737_authority_trailers_tests;

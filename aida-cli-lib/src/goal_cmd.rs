@@ -320,3 +320,97 @@ mod goal_command_tests {
         );
     }
 }
+
+/// Derive a machine-checkable completion condition from AIDA
+/// metadata, ready to paste into `/goal` (or `/schedule`). Each flag
+/// contributes one clause; multiple flags compose with `AND`. Every
+/// clause carries an explicit verification command so a small
+/// evaluator can check it deterministically — no vague "make the
+/// tests pass" conditions that loop forever.
+// trace:TASK-242 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "goal")]
+pub(crate) struct GoalArgs {
+    /// Condition: all specs tagged `batch:<NAME>` reach a terminal
+    /// status (Completed/Rejected). `batch:` prefix optional.
+    #[clap(long, value_name = "NAME")]
+    pub batch: Option<String>,
+
+    /// Condition: all direct children of EPIC/STORY `<ID>` reach a
+    /// terminal status.
+    #[clap(long, value_name = "ID")]
+    pub epic: Option<String>,
+
+    /// Condition: spec `<SPEC-ID>` reaches status Completed.
+    #[clap(long, value_name = "SPEC-ID")]
+    pub spec: Option<String>,
+
+    /// Condition: PR `<N>` is merged.
+    #[clap(long, value_name = "N")]
+    pub pr: Option<u64>,
+
+    /// Condition: the given role's queue is empty. Accepts
+    /// `implementer` or `role:implementer`.
+    #[clap(long, value_name = "ROLE")]
+    pub queue_empty: Option<String>,
+
+    /// Copy the assembled `/goal` line to the system clipboard.
+    #[clap(long, conflicts_with = "invoke")]
+    pub copy: bool,
+
+    /// Print only the bare `/goal <condition>` line, no framing —
+    /// for scripting / command substitution.
+    #[clap(long)]
+    pub invoke: bool,
+
+    /// Print a `claude-cli://open` deep link with the `/goal …` line
+    /// pre-filled. Click → Claude Code opens in cwd with the prompt
+    /// ready (inert until Enter). Requires Claude Code v2.1.91+.
+    // trace:SPIKE-33 | ai:claude
+    #[clap(long = "as-deep-link", conflicts_with_all = ["copy", "invoke"])]
+    pub as_deep_link: bool,
+}
+
+// `aida goal` is a pure condition generator — no store needed.
+// trace:TASK-242 | ai:claude
+fn run_goal(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    use crate::*;
+    let args = <GoalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let GoalArgs {
+        batch,
+        epic,
+        spec,
+        pr,
+        queue_empty,
+        copy,
+        invoke,
+        as_deep_link,
+    } = &args;
+    return self::handle_goal_command(
+        batch.as_deref(),
+        epic.as_deref(),
+        spec.as_deref(),
+        *pr,
+        queue_empty.as_deref(),
+        *copy,
+        *invoke,
+        *as_deep_link,
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static GOAL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "goal",
+    help_after: "import-plan",
+    command: <GoalArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Early(run_goal),
+};

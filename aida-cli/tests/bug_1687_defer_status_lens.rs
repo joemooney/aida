@@ -17,6 +17,9 @@
 //! and that nothing was rewritten underneath it.
 // trace:BUG-1687 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -31,7 +34,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

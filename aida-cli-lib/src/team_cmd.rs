@@ -338,3 +338,100 @@ pub(crate) fn handle_team_my_role(store_path: &std::path::Path, json: bool) -> R
     );
     Ok(())
 }
+
+/// List the team: every registered node/clone sharing this store
+/// (`registry/nodes.toml`) — node id, host, email, clone path, when it
+/// registered, and whether it currently holds a coordination claim
+/// (lease / drain / solo). The roster that makes a team visible.
+///
+/// With a subcommand, manage per-user roles (`set-role`, `my-role`).
+// trace:STORY-640 | ai:claude
+// trace:STORY-646 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "team")]
+pub(crate) struct TeamArgs {
+    /// Machine-readable JSON output (bare `aida team` roster view only).
+    #[clap(long)]
+    pub json: bool,
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::TeamCommand>,
+}
+
+fn run_team(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <TeamArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                TeamArgs { json, cmd } => {
+                    // trace:STORY-640 | ai:claude
+                    // trace:STORY-646 | ai:claude
+                    return crate::command_registry::returned(match cmd {
+                        None => self::handle_team_command(store_path, *json),
+                        Some(TeamCommand::SetRole { user, role }) => {
+                            self::handle_team_set_role(store_path, user, role)
+                        }
+                        Some(TeamCommand::MyRole { json }) => {
+                            self::handle_team_my_role(store_path, *json)
+                        }
+                        Some(TeamCommand::UnsetRole { user }) => {
+                            self::handle_team_unset_role(store_path, user)
+                        }
+                        Some(TeamCommand::AllowSeat { user, seat }) => {
+                            self::handle_team_allow_seat(store_path, user, seat)
+                        }
+                        Some(TeamCommand::DisallowSeat { user, seat }) => {
+                            self::handle_team_disallow_seat(store_path, user, seat)
+                        }
+                    });
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // STORY-640: `aida team` reads the shared node roster on the orphan
+                // `aida-store` branch — a distributed-mode concept. Legacy
+                // --centralized stores have no roster. trace:STORY-640 | ai:claude
+                TeamArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida team` is available in the default (distributed) mode — it lists the \
+                     nodes sharing the orphan `aida-store` branch. Legacy --centralized mode has \
+                     no node roster."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static TEAM: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "team",
+    help_after: "notify",
+    command: <TeamArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_team),
+};

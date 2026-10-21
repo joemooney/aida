@@ -19,7 +19,7 @@ use std::process::Command as StdCommand;
 use tempfile::TempDir;
 
 fn git(dir: &std::path::Path, args: &[&str]) {
-    let ok = StdCommand::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -91,48 +91,42 @@ fn unattached_distributed_root_stays_none_without_any_distributed_signal() {
 // trace:TASK-1487 | ai:claude
 #[test]
 fn per_write_auto_push_fires_only_for_non_dry_run_tracker_pulls() {
-    assert!(command_triggers_per_write_auto_push(&Command::Jira(
-        JiraCommand::Pull {
-            jql: None,
-            limit: 50,
-            dry_run: false,
-        }
-    )));
-    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
-        JiraCommand::Pull {
-            jql: None,
-            limit: 50,
-            dry_run: true,
-        }
-    )));
-    assert!(command_triggers_per_write_auto_push(&Command::Github(
-        GitHubCommand::Pull {
-            labels: None,
-            open_only: true,
-            limit: 50,
-            dry_run: false,
-        }
-    )));
-    assert!(!command_triggers_per_write_auto_push(&Command::Github(
-        GitHubCommand::Pull {
-            labels: None,
-            open_only: true,
-            limit: 50,
-            dry_run: true,
-        }
-    )));
+    use crate::command_registry::parse_command;
+    assert!(command_triggers_per_write_auto_push(&parse_command([
+        "aida", "jira", "pull", "--limit", "50"
+    ])));
+    assert!(!command_triggers_per_write_auto_push(&parse_command([
+        "aida",
+        "jira",
+        "pull",
+        "--limit",
+        "50",
+        "--dry-run"
+    ])));
+    assert!(command_triggers_per_write_auto_push(&parse_command([
+        "aida",
+        "github",
+        "pull",
+        "--open-only",
+        "--limit",
+        "50"
+    ])));
+    assert!(!command_triggers_per_write_auto_push(&parse_command([
+        "aida",
+        "github",
+        "pull",
+        "--open-only",
+        "--limit",
+        "50",
+        "--dry-run"
+    ])));
     // Read-only / remote-only tracker subcommands never trigger it.
-    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
-        JiraCommand::List {
-            jql: None,
-            limit: 20,
-        }
-    )));
-    assert!(!command_triggers_per_write_auto_push(&Command::Jira(
-        JiraCommand::Push {
-            id: "TASK-1".to_string(),
-        }
-    )));
+    assert!(!command_triggers_per_write_auto_push(&parse_command([
+        "aida", "jira", "list", "--limit", "20"
+    ])));
+    assert!(!command_triggers_per_write_auto_push(&parse_command([
+        "aida", "jira", "push", "TASK-1"
+    ])));
 }
 
 /// Seed an existing oplog whose log-level node id is still the unregistered

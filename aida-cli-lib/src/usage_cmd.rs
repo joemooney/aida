@@ -11,6 +11,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "usage_cmd_args.rs"]
+pub(crate) mod usage_cmd_args;
+pub(crate) use usage_cmd_args::*;
+
 use aida_core::RequirementsStore;
 
 use crate::{
@@ -1717,3 +1722,393 @@ mod task_872_read_write_audit_tests {
         assert_eq!(tally.ratio(), None);
     }
 }
+
+/// Inspect locally-recorded CLI usage. Reads `~/.aida/usage.jsonl`
+/// (written one line per `aida ...` invocation when telemetry is
+/// enabled — opt out via `[telemetry] enabled = false` or
+/// `AIDA_TELEMETRY=0`). Default: top-20 most-used commands over the
+/// last 30 days.
+///
+/// Privacy: only command shapes are logged (e.g. "queue list",
+/// "show", "rel add") — never arg values, paths, or req content.
+///
+// trace:STORY-122 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "usage")]
+pub(crate) struct UsageArgs {
+    /// Show commands used since this point (default `30d`): a relative
+    /// duration (`30d`, `12h`, `2w`, or `24 hours ago`), an ISO date
+    /// (`2026-05-01`, local midnight), a zone-less ISO datetime (local
+    /// time), or RFC3339.
+    // trace:STORY-122 | ai:claude
+    // trace:TASK-1509 | ai:claude
+    #[clap(long, value_name = "WINDOW", default_value = "30d")]
+    pub since: String,
+    /// Show commands NOT used since this point (deprecation
+    /// candidates). Same forms as `--since`. Mutually exclusive with
+    /// --errors.
+    // trace:STORY-122 | ai:claude
+    // trace:TASK-1509 | ai:claude
+    #[clap(long, value_name = "WINDOW", conflicts_with = "errors", hide = true)]
+    pub unused: Option<String>,
+    /// Show commands with the highest error rate (`exit_code != 0`
+    /// over total invocations). UX-gap candidates.
+    // trace:STORY-122 | ai:claude
+    #[clap(long, hide = true)]
+    pub errors: bool,
+    /// JSON output (commands as an array of {cmd, count, errors,
+    /// avg_ms} objects).
+    // trace:STORY-122 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Limit the number of rows returned. Default 20.
+    // trace:STORY-122 | ai:claude
+    #[clap(long, default_value = "20")]
+    pub limit: usize,
+    /// Switch to the `--auto-complete` orchestrator telemetry view.
+    /// Reads `~/.aida/auto-complete.jsonl` instead of the per-command
+    /// usage log: a success/failure summary plus the recent phase
+    /// failures and the Draft BUGs auto-filed for them.
+    // trace:TASK-266 | ai:claude — plain `//` so the SPEC-ID stays out
+    // of `--help` output (TASK-268).
+    #[clap(long = "auto-complete", conflicts_with_all = ["unused", "errors"], hide = true)]
+    pub auto_complete: bool,
+    /// With `--auto-complete`: list every recent orchestrator failure
+    /// in full (date, spec, failed phase, drafted BUG + its status).
+    // trace:TASK-266 | ai:claude
+    #[clap(long, requires = "auto_complete", hide = true)]
+    pub failures: bool,
+    /// With `--auto-complete`: show which phases fail most often — the
+    /// signal for where to invest orchestrator fixes.
+    // trace:TASK-266 | ai:claude
+    #[clap(
+        long,
+        requires = "auto_complete",
+        conflicts_with = "failures",
+        hide = true
+    )]
+    pub pattern: bool,
+    /// Show the deterministic project-health catalog: phase-failure
+    /// distribution, reap-vs-kill breakdown, drain halt-rate, recovery
+    /// latency, draft-inbox depth, and burn-down velocity. Reads the
+    /// orchestrator telemetry log + headless session logs + the spec graph.
+    // trace:STORY-530 | ai:claude — plain `//` so the SPEC-ID stays out of
+    // `--help` output (TASK-268).
+    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern"], hide = true)]
+    pub health: bool,
+    /// Trace-read-rate audit: classify logged commands into graph READS
+    /// (list/show/search/graph/why/history/queue list/…) vs graph WRITES
+    /// (add/edit/comment add/rel add/queue add/defer/archive/…) and report
+    /// the read:write ratio over the window — evidence for whether the
+    /// intent graph is consulted, not just written.
+    // trace:TASK-872 | ai:claude — plain `//` so the SPEC-ID stays out of
+    // `--help` output (TASK-268).
+    #[clap(long = "read-write", conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health"])]
+    pub read_write: bool,
+    /// Performance lens: rank command shapes by latency (p50/p95/max +
+    /// call count), slowest-first, from the captured `duration_ms`. The
+    /// perf-debug view — e.g. `status` topped it at ~26s before its
+    /// latency fix landed. Honors --since/--limit/--json.
+    // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
+    // `--help` output (TASK-268).
+    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write"], hide = true)]
+    pub slowest: bool,
+    /// Raw recent event stream: each invocation's ts, cmd, duration_ms,
+    /// and exit_code, newest-first. Filter with --cmd / --slower-than;
+    /// cap with --limit (default 25). Honors --since/--json.
+    // trace:STORY-709 | ai:claude — plain `//` so the SPEC-ID stays out of
+    // `--help` output (TASK-268).
+    #[clap(long, conflicts_with_all = ["unused", "errors", "failures", "pattern", "auto_complete", "health", "read_write", "slowest"], hide = true)]
+    pub events: bool,
+    /// With `events`: keep only events for this exact command shape
+    /// (e.g. `queue list`).
+    // trace:STORY-709 | ai:claude
+    #[clap(long, value_name = "shape")]
+    pub cmd: Option<String>,
+    /// With `events`: keep only events whose `duration_ms` is at or
+    /// above this threshold.
+    // trace:STORY-709 | ai:claude
+    #[clap(long, value_name = "Nms", value_parser = crate::cli::parse_duration_ms)]
+    pub slower_than: Option<u64>,
+
+    /// Usage view.
+    // trace:STORY-1028 | ai:codex
+    #[clap(subcommand)]
+    pub action: Option<crate::cli::UsageCommand>,
+}
+
+fn run_usage(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <UsageArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                UsageArgs {
+                    since,
+                    unused,
+                    errors,
+                    json,
+                    limit,
+                    auto_complete,
+                    failures,
+                    pattern,
+                    health,
+                    read_write,
+                    slowest,
+                    events,
+                    cmd,
+                    slower_than,
+                    action,
+                } => {
+                    // The distributed backend dispatches before the legacy handler in
+                    // lib.rs, so the token-ledger subcommands must terminate here too.
+                    // trace:TASK-1427 | ai:codex
+                    if let Some(action) = action {
+                        match action {
+                            UsageCommand::Rebuild { project, json } => {
+                                let root = project.clone().unwrap_or_else(|| {
+                                    store_path.parent().unwrap_or(store_path).to_path_buf()
+                                });
+                                return crate::command_registry::returned(token_ledger::rebuild(
+                                    &root,
+                                    *json || output_format_is_json(),
+                                ));
+                            }
+                            UsageCommand::Show {
+                                spec,
+                                group_by,
+                                cost,
+                                provenance,
+                                json,
+                                toon,
+                            } => {
+                                if *provenance {
+                                    let req =
+                                        backend.get_requirement_by_spec_id(spec)?.ok_or_else(
+                                            || anyhow::anyhow!("requirement not found: {spec}"),
+                                        )?;
+                                    return crate::command_registry::returned(
+                                        crate::write_provenance::show(
+                                            store_path.parent().unwrap_or(store_path),
+                                            &req,
+                                            *json || output_format_is_json(),
+                                            *toon,
+                                        ),
+                                    );
+                                }
+
+                                let root = store_path.parent().unwrap_or(store_path);
+                                return crate::command_registry::returned(token_ledger::show(
+                                    root,
+                                    spec,
+                                    group_by,
+                                    *cost,
+                                    *json || output_format_is_json(),
+                                    *toon,
+                                ));
+                            }
+                            _ => {}
+                        }
+                    }
+                    // TASK-266: load the store only for the `--auto-complete` view,
+                    // which resolves drafted-BUG statuses; plain usage stays cheap.
+                    // STORY-530: the `--health` catalog also needs the store.
+                    let (
+                        unused,
+                        errors,
+                        auto_complete,
+                        failures,
+                        pattern,
+                        health,
+                        slowest,
+                        events,
+                        timeline,
+                    ) = normalize_usage_mode(
+                        unused.as_deref(),
+                        *errors,
+                        *auto_complete,
+                        *failures,
+                        *pattern,
+                        *health,
+                        *slowest,
+                        *events,
+                        action.as_ref(),
+                    );
+                    let store = if auto_complete || health {
+                        backend.load().ok()
+                    } else {
+                        None
+                    };
+                    return crate::command_registry::returned(self::handle_usage_command(
+                        since,
+                        unused,
+                        errors,
+                        // trace:BUG-1289 | ai:claude
+                        *json || output_format_is_json(),
+                        *limit,
+                        auto_complete,
+                        failures,
+                        pattern,
+                        health,
+                        *read_write,
+                        slowest,
+                        events,
+                        timeline,
+                        cmd.as_deref(),
+                        *slower_than,
+                        store.as_ref(),
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                UsageArgs {
+                    since,
+                    unused,
+                    errors,
+                    json,
+                    limit,
+                    auto_complete,
+                    failures,
+                    pattern,
+                    health,
+                    read_write,
+                    slowest,
+                    events,
+                    cmd,
+                    slower_than,
+                    action,
+                } => {
+                    // TASK-1427's derived token ledger is separate from the historical
+                    // command-shape telemetry handled below.
+                    if let Some(action) = action {
+                        match action {
+                            UsageCommand::Rebuild { project, json } => {
+                                let root = project.clone().unwrap_or(find_project_root()?);
+                                token_ledger::rebuild(&root, *json || output_format_is_json())?;
+                                return crate::command_registry::returned(Ok(()));
+                            }
+                            UsageCommand::Show {
+                                spec,
+                                group_by,
+                                cost,
+                                provenance,
+                                json,
+                                toon,
+                            } => {
+                                if *provenance {
+                                    let store = storage.load()?;
+                                    let req = store.get_requirement_by_spec_id(spec).ok_or_else(
+                                        || anyhow::anyhow!("requirement not found: {spec}"),
+                                    )?;
+                                    return crate::command_registry::returned(
+                                        crate::write_provenance::show(
+                                            &find_project_root()?,
+                                            req,
+                                            *json || output_format_is_json(),
+                                            *toon,
+                                        ),
+                                    );
+                                }
+
+                                token_ledger::show(
+                                    &find_project_root()?,
+                                    spec,
+                                    group_by,
+                                    *cost,
+                                    *json || output_format_is_json(),
+                                    *toon,
+                                )?;
+                                return crate::command_registry::returned(Ok(()));
+                            }
+                            _ => {}
+                        }
+                    }
+                    // TASK-266: only the `--auto-complete` view needs the store
+                    // (to resolve drafted-BUG statuses) — keep plain `aida usage`
+                    // store-load-free. STORY-530: the `--health` catalog also needs
+                    // the store for draft-inbox depth + burn-down velocity.
+                    let (
+                        unused,
+                        errors,
+                        auto_complete,
+                        failures,
+                        pattern,
+                        health,
+                        slowest,
+                        events,
+                        timeline,
+                    ) = normalize_usage_mode(
+                        unused.as_deref(),
+                        *errors,
+                        *auto_complete,
+                        *failures,
+                        *pattern,
+                        *health,
+                        *slowest,
+                        *events,
+                        action.as_ref(),
+                    );
+                    let store = if auto_complete || health {
+                        storage.load().ok()
+                    } else {
+                        None
+                    };
+                    self::handle_usage_command(
+                        since,
+                        unused,
+                        errors,
+                        // trace:BUG-1289 | ai:claude
+                        *json || output_format_is_json(),
+                        *limit,
+                        auto_complete,
+                        failures,
+                        pattern,
+                        health,
+                        *read_write,
+                        slowest,
+                        events,
+                        timeline,
+                        cmd.as_deref(),
+                        *slower_than,
+                        store.as_ref(),
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static USAGE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "usage",
+        help_after: "identity",
+        command: <UsageArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_usage),
+    };

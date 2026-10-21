@@ -74,8 +74,9 @@ pub(crate) fn refresh_remote_branch_state(
     }
     let deadline = std::time::Instant::now() + timeout;
     let refspec = format!("+refs/heads/{branch}:refs/remotes/origin/{branch}");
-    match run_git_with_timeout(
+    match run_remote_git_with_timeout(
         project_root,
+        "origin",
         &["fetch", "--quiet", "--no-tags", "origin", &refspec],
         timeout,
     ) {
@@ -88,8 +89,9 @@ pub(crate) fn refresh_remote_branch_state(
                 ));
             }
             let head_ref = format!("refs/heads/{branch}");
-            match run_git_with_timeout(
+            match run_remote_git_with_timeout(
                 project_root,
+                "origin",
                 &["ls-remote", "--exit-code", "--heads", "origin", &head_ref],
                 remaining,
             ) {
@@ -511,8 +513,12 @@ pub(crate) fn emit_dry_run(verb: &str, legs: &[DryRunLeg], json: bool) {
     }
 }
 
-pub(crate) fn run_git_with_timeout(
+/// Every caller contacts `remote`, so its stored credentials stay out of
+/// argv.
+// trace:BUG-2181 | ai:claude
+pub(crate) fn run_remote_git_with_timeout(
     cwd: &std::path::Path,
+    remote: &str,
     args: &[&str],
     timeout: std::time::Duration,
 ) -> Result<std::process::ExitStatus> {
@@ -521,7 +527,7 @@ pub(crate) fn run_git_with_timeout(
     // hardened builder, since `cwd` is the store for the push-plan fetch and
     // the auto-push.
     // trace:BUG-1626 trace:BUG-1929 | ai:claude
-    let mut child = aida_core::git_ops::host_git_command(cwd)
+    let mut child = aida_core::git_ops::host_remote_git_command(cwd, remote)
         .args(args)
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null())
@@ -588,8 +594,9 @@ pub(crate) fn auto_push_store_best_effort(store_path: &std::path::Path, reason: 
         return;
     }
     let refspec = format!("{sha}:refs/heads/{branch}");
-    match run_git_with_timeout(
+    match run_remote_git_with_timeout(
         store_path,
+        "origin",
         &["push", "origin", &refspec],
         std::time::Duration::from_secs(5),
     ) {
@@ -1481,7 +1488,8 @@ pub(crate) fn handle_push_command(
                 None
             } else {
                 Some(
-                    aida_core::git_ops::host_git_command(&project_root)
+                    // trace:BUG-2181 | ai:claude
+                    aida_core::git_ops::host_remote_git_command(&project_root, "origin")
                         .args(["push", "origin", &branch])
                         .status(),
                 )
@@ -1815,7 +1823,7 @@ mod bug_1626_push_fresh_state_tests {
     const T: Duration = Duration::from_secs(20);
 
     fn git(dir: &Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1871,7 +1879,7 @@ mod bug_1626_push_fresh_state_tests {
     }
 
     fn second_clone(bare: &Path, dir: &Path) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .args(["clone", "-q", bare.to_str().unwrap(), dir.to_str().unwrap()])
             .output()
             .expect("clone");
@@ -2078,7 +2086,7 @@ mod bug_1626_push_fresh_state_tests {
         let (proj, code_bare, _) = project(tmp.path());
         // Push target is a different repository that lags the fetch URL.
         let push_target = tmp.path().join("push-target.git");
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .args([
                 "clone",
                 "-q",
@@ -2166,7 +2174,7 @@ mod bug_1626_push_fresh_state_tests {
         let err = handle_push_command(&proj.join(".aida-store"), true, false, None, false, true)
             .expect_err("a behind-main branch with no terminal must not exit 0");
         assert!(err.to_string().contains("behind main"), "{err}");
-        let has_feature = std::process::Command::new("git")
+        let has_feature = crate::test_git::git_command()
             .arg("-C")
             .arg(&code_bare)
             .args(["rev-parse", "--verify", "--quiet", "refs/heads/feature"])
@@ -2251,7 +2259,7 @@ mod bug_1500_store_pull_hint_tests {
     fn rebase_in_progress_still_suggests_abort() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(repo)
             .status()
@@ -2292,7 +2300,7 @@ mod bug_1500_store_pull_hint_tests {
     fn db_sync_pull_bail_message_includes_abort_hint_with_rebase() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(repo)
             .status()
@@ -2525,7 +2533,8 @@ pub(crate) fn handle_pull_command(
                 // pull.rebase config (which can fail with "Cannot rebase onto
                 // multiple branches"). Do fetch + merge instead.
                 // trace:BUG-1780 | ai:codex
-                let _ = aida_core::git_ops::host_git_command(&project_root)
+                // trace:BUG-2181 | ai:claude
+                let _ = aida_core::git_ops::host_remote_git_command(&project_root, "origin")
                     .args(["fetch", "origin", &branch])
                     .status();
                 let res = aida_core::git_ops::host_git_command(&project_root)
@@ -3325,7 +3334,8 @@ pub(crate) fn cascade_rebase_stacked_branches(
         // rebase target is the freshly-merged tip, not a stale ref.
         // Best-effort — offline / fetch failure still tries the rebase
         // against whatever cached ref we have.
-        let _ = aida_core::git_ops::host_git_command(&lease.worktree_path)
+        // trace:BUG-2181 | ai:claude
+        let _ = aida_core::git_ops::host_remote_git_command(&lease.worktree_path, "origin")
             .args([
                 "fetch",
                 git_arg_guard::END_OF_OPTIONS,
@@ -3562,8 +3572,8 @@ pub(crate) fn fetch_branch(repo: &std::path::Path, branch: &str, quiet: bool) ->
     // The branch can be a forge-reported PR head a fork author named, so
     // refuse a dash-led one and end options before it. trace:BUG-1622 | ai:claude
     git_arg_guard::reject_option_like("branch", branch)?;
-    // trace:BUG-1929 | ai:claude
-    let mut cmd = aida_core::git_ops::host_git_command(repo);
+    // trace:BUG-1929 trace:BUG-2181 | ai:claude
+    let mut cmd = aida_core::git_ops::host_remote_git_command(repo, "origin");
     cmd.args([
         "fetch",
         "--prune",
@@ -3684,3 +3694,365 @@ pub(crate) fn print_fetch_delta(
         );
     }
 }
+
+/// Push code branch AND orphan aida-store branch to origin. Use
+/// --code-only or --store-only to scope. Equivalent to running
+/// `git push` on the current branch followed by `aida db sync
+/// --push` — the two operations users routinely forget to do
+/// together. Skips a leg cleanly when nothing's pending (no
+/// upstream tracked, no commits ahead, no orphan drift). Set
+/// `AIDA_PUSH_DEFAULT=code|store` to flip the default scope.
+// trace:FR-264 TASK-106 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "push")]
+pub(crate) struct PushArgs {
+    /// Push only the code branch (skip the orphan-store sync).
+    // trace:BUG-1917 | ai:claude
+    #[clap(long, conflicts_with = "store_only")]
+    pub code_only: bool,
+    /// Sync only the orphan store (skip the code push).
+    // trace:BUG-1917 | ai:claude
+    #[clap(long, conflicts_with = "code_only")]
+    pub store_only: bool,
+    /// Commit any pending orphan-store changes with this message
+    /// before pushing. Same as `aida db sync --message`.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'm', allow_hyphen_values = true)]
+    pub message: Option<String>,
+    /// Skip pre-push interactive checks ("branch behind main" and
+    /// "PR for this branch already merged"). Useful for CI /
+    /// scripted pushes where the prompt would just hang waiting
+    /// on stdin.
+    // trace:TASK-54 BUG-88 | ai:claude
+    #[clap(long)]
+    pub no_rebase_check: bool,
+    /// Show what each in-scope leg would push (commit count +
+    /// subjects) and exit 0 without pushing anything. Honors
+    /// --code-only / --store-only.
+    // trace:TASK-108 | ai:claude
+    #[clap(long)]
+    pub dry_run: bool,
+    /// Emit the dry-run plan as JSON instead of text. Implies
+    /// --dry-run.
+    // trace:TASK-108 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Suppress the non-blocking "N uncommitted change(s) not
+    /// included" notice (also honors AIDA_PUSH_QUIET).
+    // trace:TASK-863 | ai:claude
+    #[clap(long)]
+    pub no_notice: bool,
+}
+
+fn run_push(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <PushArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                PushArgs {
+                    code_only,
+                    store_only,
+                    message,
+                    no_rebase_check,
+                    dry_run,
+                    json,
+                    no_notice,
+                } => {
+                    // TASK-106: AIDA_PUSH_DEFAULT lets a user flip the default
+                    // scope when neither flag is passed explicitly.
+                    let (code_only, store_only) = resolve_push_scope(
+                        *code_only,
+                        *store_only,
+                        std::env::var("AIDA_PUSH_DEFAULT").ok().as_deref(),
+                    );
+                    // TASK-108: --dry-run (or --json, which implies it) prints
+                    // the plan and exits without touching origin.
+                    if *dry_run || *json {
+                        return crate::command_registry::returned(handle_push_dry_run(
+                            store_path, code_only, store_only, *json,
+                        ));
+                    }
+                    return crate::command_registry::returned(handle_push_command(
+                        store_path,
+                        code_only,
+                        store_only,
+                        message.as_deref(),
+                        *no_rebase_check,
+                        *no_notice,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                PushArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida push` requires a git-canonical store. Run `aida init` (or upgrade from \
+                     the deprecated centralized backend with `aida db export-git`)."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUSH: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "push",
+    help_after: "remote",
+    command: <PushArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_push),
+};
+
+/// Fetch remote refs for both legs (code + orphan store) without
+/// merging or touching the worktree. Read-only counterpart to
+/// `aida pull` — refreshes what `origin/<branch>` points at so
+/// downstream checks (statusline behind-count, queue precheck,
+/// rebase dry-run) see the current remote state without paying
+/// the cost of two separate `git fetch` invocations or being
+/// surprised by an implicit merge. Bumps the
+/// `~/.aida/cache/last-fetch.toml` timestamp on success so the
+/// statusline freshness indicator reflects the fetch.
+// trace:TASK-107 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "fetch")]
+pub(crate) struct FetchArgs {
+    /// Skip the orphan-store fetch (only refresh code refs).
+    #[clap(long, conflicts_with = "store_only")]
+    pub code_only: bool,
+    /// Skip the code-branch fetch (only refresh orphan-store refs).
+    #[clap(long, conflicts_with = "code_only")]
+    pub store_only: bool,
+    /// Suppress progress + the "N new commits" summary. Errors still
+    /// print. Useful for background callers (statusline, hooks).
+    #[clap(long, short = 'q')]
+    pub quiet: bool,
+}
+
+fn run_fetch(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FetchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                FetchArgs {
+                    code_only,
+                    store_only,
+                    quiet,
+                } => {
+                    return crate::command_registry::returned(handle_fetch_command(
+                        store_path,
+                        *code_only,
+                        *store_only,
+                        *quiet,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                FetchArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida fetch` requires a git-canonical store. Run `aida init` (or upgrade from \
+                     the deprecated centralized backend with `aida db export-git`)."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FETCH: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "fetch",
+        help_after: "push",
+        command: <FetchArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_fetch),
+    };
+
+/// Pull code branch AND orphan aida-store branch from origin. Use
+/// --code-only or --store-only to scope. Symmetric to `aida push`:
+/// equivalent to `git pull --ff-only` on the current branch
+/// followed by `aida db sync --pull`. Skips a leg cleanly when
+/// there's nothing to pull (no upstream tracked, no orphan
+/// remote).
+// trace:TASK-43 TASK-106 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "pull")]
+pub(crate) struct PullArgs {
+    /// Pull only the code branch (skip the orphan-store sync).
+    // trace:BUG-1917 | ai:claude
+    #[clap(long, conflicts_with = "store_only")]
+    pub code_only: bool,
+    /// Sync only the orphan store (skip the code pull).
+    // trace:BUG-1917 | ai:claude
+    #[clap(long, conflicts_with = "code_only")]
+    pub store_only: bool,
+    /// Suppress the per-commit change summary printed after the
+    /// orphan-store pull. Errors still print. Useful in scripts that
+    /// pipe pull output.
+    // trace:TASK-73 | ai:claude
+    #[clap(long, short = 'q')]
+    pub quiet: bool,
+    /// Skip the post-pull merge-gate run. By default `aida pull`
+    /// promotes any pending node-aware ids to their agreed short
+    /// form after a successful orphan-store pull (idempotent + cheap;
+    /// no-ops when nothing's pending). Set the env var
+    /// `AIDA_AUTO_MERGE_GATE=false` for a project-wide opt-out.
+    // trace:TASK-78 | ai:claude
+    #[clap(long)]
+    pub no_gate: bool,
+    /// Fetch both in-scope legs, then show what each would pull
+    /// (commit count + subjects) and exit 0 without merging.
+    /// Honors --code-only / --store-only.
+    // trace:TASK-108 | ai:claude
+    #[clap(long)]
+    pub dry_run: bool,
+    /// Emit the dry-run plan as JSON instead of text. Implies
+    /// --dry-run.
+    // trace:TASK-108 | ai:claude
+    #[clap(long)]
+    pub json: bool,
+    /// Auto-rebase tracked stacked branches whose base merged in this
+    /// pull. Walks `.aida/stacks.json` bottom-up; for each chain whose
+    /// `parent_branch` was just deleted on origin, runs
+    /// `git rebase --onto origin/main <recorded-parent-sha> <branch>`
+    /// in that branch's worktree. Without `--auto`, prompts
+    /// interactively and refuses non-interactively. Refuses to execute
+    /// any rebase the `aida_core::rebase::classify` pure classifier
+    /// flags as `diverged-risky` — drops the user into `/aida-rebase`
+    /// for those.
+    // trace:STORY-248 | ai:claude
+    #[clap(long)]
+    pub auto: bool,
+}
+
+fn run_pull(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <PullArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                PullArgs {
+                    code_only,
+                    store_only,
+                    quiet,
+                    no_gate,
+                    dry_run,
+                    json,
+                    auto,
+                } => {
+                    // TASK-108: --dry-run fetches, reports, and exits.
+                    if *dry_run || *json {
+                        return crate::command_registry::returned(handle_pull_dry_run(
+                            store_path,
+                            *code_only,
+                            *store_only,
+                            *json,
+                        ));
+                    }
+                    return crate::command_registry::returned(handle_pull_command(
+                        store_path,
+                        *code_only,
+                        *store_only,
+                        *quiet,
+                        *no_gate,
+                        *auto,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                PullArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida pull` requires a git-canonical store. Run `aida init` (or upgrade from \
+                     the deprecated centralized backend with `aida db export-git`)."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PULL: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "pull",
+    help_after: "commit",
+    command: <PullArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_pull),
+};

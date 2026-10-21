@@ -71,9 +71,8 @@ pub(crate) fn config_is_clean(root: &Path) -> Option<bool> {
         .args(["ls-files", "--error-unmatch", "--", CONFIG_REL_PATH])
         .output()
         .ok()?;
-    let status = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    // trace:BUG-1985 | ai:claude
+    let status = aida_core::git_ops::host_git_command(root)
         .args(["status", "--porcelain", "--", CONFIG_REL_PATH])
         .output()
         .ok()?;
@@ -170,7 +169,7 @@ mod tests {
     use super::*;
 
     fn git(root: &Path, args: &[&str]) {
-        let st = Command::new("git")
+        let st = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)
@@ -180,7 +179,7 @@ mod tests {
     }
 
     fn git_out(root: &Path, args: &[&str]) -> String {
-        let out = Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)

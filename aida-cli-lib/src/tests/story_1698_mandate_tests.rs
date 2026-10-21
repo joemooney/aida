@@ -35,6 +35,8 @@ fn active(include_supervised: bool) -> Mandate {
         expires_at: now() + Duration::hours(7),
         revoked_at: None,
         revoked_by: None,
+        scopes: Default::default(),
+        kind: None,
     }
 }
 
@@ -112,6 +114,7 @@ struct Case {
     now: DateTime<Utc>,
     ledger: std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
     hold: HoldFacts,
+    carry_over: Option<std::result::Result<String, String>>,
 }
 
 impl Case {
@@ -134,6 +137,7 @@ impl Case {
                 kind: crate::merge_hold::HoldReasonKind::Supervision,
                 legacy: false,
             },
+            carry_over: None,
         }
     }
 
@@ -150,6 +154,10 @@ impl Case {
             override_stale_approval: self.override_stale,
             ledger: &self.ledger,
             hold: &self.hold,
+            carry_over: self.carry_over.clone(),
+            changed_paths: Some(&[]),
+            ship_gate: None,
+            hold_clear_gate: None,
         })
     }
 }
@@ -659,7 +667,7 @@ fn unreadable_history_is_refused_even_with_include_supervised() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args([
@@ -1338,7 +1346,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1371,7 +1379,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     );
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 1; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 1; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1380,7 +1388,7 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
     git(root, &["update-ref", "refs/remotes/origin/main", &base]);
     std::fs::write(
         root.join("code.rs"),
-        "//! trace:SUP-1\nuse std::fmt;\nfn changed() { let x = 2; }\n",
+        "//! trace:SUP-1\nuse std::fmt;\n// trace:MODULE-2\nconst MARKER: u8 = 0;\n// trace:ITEM-3\nfn changed() { let x = 2; }\n",
     )
     .unwrap();
     git(root, &["add", "code.rs"]);
@@ -1447,11 +1455,17 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
                             .iter()
                             .map(|s| (s.id.as_str(), s.named))
                             .collect::<Vec<_>>(),
-                        vec![("SUP-1", false), ("TASK-1", true)]
+                        vec![
+                            ("ITEM-3", false),
+                            ("MODULE-2", false),
+                            ("SUP-1", false),
+                            ("TASK-1", true)
+                        ]
                     );
                     // No approval/clearance is fabricated: the fixture decision refuses.
                     Err(MandateRefusal::SpecsUnresolved)
                 },
+                false,
             )
         },
     );
@@ -1459,6 +1473,57 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         matches!(result, Err(MandateRefusal::SpecsUnresolved)),
         "{result:?}"
     );
+}
+
+// ── STORY-1700 × STORY-1655: a solo self-approval is not independent ──────
+
+// trace:STORY-1700.ac8eabb8 | ai:claude
+#[test]
+fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
+    let mut c = Case::ok();
+    let mut v = approval(HEAD);
+    v.attestation.as_mut().unwrap().solo_human = true;
+    c.candidates = vec![v.clone()];
+    c.policy = policy(&c.candidates);
+    // Solo mode off (or the receipt unverified): an ordinary human approval.
+    assert!(c.decide().is_ok(), "{:?}", c.decide());
+    // Solo mode on and the solo receipt verified: the self-approval may pass
+    // the author check by hand, but never a mandate.
+    let key = v
+        .attestation
+        .as_ref()
+        .unwrap()
+        .authority_key(v.recorded_at.as_deref())
+        .unwrap();
+    assert!(key.starts_with("receipt:"), "{key}");
+    c.policy.solo_human = true;
+    c.policy.verified_solo.insert(key);
+    assert!(crate::pr_ship::solo_self_approval(&v, &c.policy));
+    assert_eq!(c.decide(), Err(MandateRefusal::SoloSelfApproval));
+    // The rework-release path refuses it too.
+    c.state = MandateState::Active(active(true));
+    c.hold = HoldFacts::Marker {
+        kind: crate::merge_hold::HoldReasonKind::Rework,
+        legacy: false,
+    };
+    let release = rework_release_decision(&ShipCheck {
+        state: &c.state,
+        now: c.now,
+        grant: c.grant,
+        specs: &c.specs,
+        specs_resolved: c.specs_resolved,
+        candidates: &c.candidates,
+        policy: &c.policy,
+        head: c.head,
+        override_stale_approval: false,
+        ledger: &c.ledger,
+        hold: &c.hold,
+        carry_over: None,
+        changed_paths: Some(&[]),
+        ship_gate: None,
+        hold_clear_gate: None,
+    });
+    assert_eq!(release, Err(MandateRefusal::SoloSelfApproval));
 }
 
 // ── TASK-1800 advisor ruling (2026-10-17) ──────────────────────────────────
@@ -1559,7 +1624,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1694,6 +1759,7 @@ fn task_1800_aliased_id_resolves_through_alias_and_is_judged_normally() {
                 || Some(head.clone()),
                 false,
                 crate::mandate::ship_decision,
+                true,
             )
         },
     );
@@ -1735,7 +1801,7 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1868,6 +1934,7 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
                 || Some(head.clone()),
                 false,
                 crate::mandate::ship_decision,
+                true,
             )
         },
     );
@@ -1875,4 +1942,290 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
         matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
         "a deleted spec named by its agreed_id must be judged, not dropped: {result:?}"
     );
+}
+
+/// TASK-1960: a held PR shipped under an active mandate whose head moved only
+/// by a clean main merge proceeds on the carried-over approval; an evil merge
+/// is still a stale approval, and the refusal names why.
+// trace:TASK-1960 | ai:claude
+#[test]
+fn mandate_ship_carries_over_a_clean_main_merge_but_not_an_evil_one() {
+    use crate::review_carryover::tests as fx;
+    let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+    let (tmp, approved) = fx::fixture();
+    let repo = tmp.path();
+    let approved: &'static str = leak(approved);
+
+    let mut case = Case::ok();
+    case.candidates = vec![approval(approved)];
+    case.policy = policy(&case.candidates);
+    let clean = leak(fx::clean_merge(repo));
+    case.head = Some(clean);
+    // Without a proof the moved head is stale, as before.
+    assert!(matches!(
+        case.decide(),
+        Err(MandateRefusal::StaleApproval(_))
+    ));
+    case.carry_over =
+        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    assert_eq!(case.carry_over, Some(Ok(clean.to_string())));
+    assert_eq!(
+        case.decide().as_deref(),
+        Ok("6f1c1d6e-0000-4000-8000-000000000001"),
+        "a held PR ships under the mandate on the carried-over approval"
+    );
+    // A proof for some other head never covers this one.
+    case.carry_over = Some(Ok(approved.to_string()));
+    assert!(matches!(
+        case.decide(),
+        Err(MandateRefusal::StaleApproval(_))
+    ));
+
+    let evil = leak(fx::evil_merge(repo, approved));
+    case.head = Some(evil);
+    case.carry_over =
+        crate::pr_cmd::mandate_carry_over(repo, 42, &case.candidates, case.head, Some("main"));
+    match case.decide() {
+        Err(MandateRefusal::StaleApproval(why)) => {
+            assert!(why.contains("did not carry over"), "{why}")
+        }
+        other => panic!("an evil merge must stay a stale approval: {other:?}"),
+    }
+    // The mandate path only proves; the pinning gate records.
+    assert!(crate::review_carryover::read_record(repo, 42, clean).is_none());
+}
+
+// ── BUG-2179: one bounded store-history read for every traced spec ─────────
+
+/// A store repo where TASK-1 had three versions (the middle one excluded),
+/// TASK-2 one, TASK-3 was added excluded and then deleted, TASK-5 changed in
+/// the same commits, and TASK-6 exists only on a side ref; TASK-4 never existed.
+// trace:BUG-2179 | ai:claude
+fn bug_2179_store() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    git(root, &["init", "-q", "-b", "main"]);
+    let write = |id: &str, tag: Option<&str>, title: &str| {
+        let rel = aida_core::object_store::relative_object_path(id).unwrap();
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut req = plain();
+        req.spec_id = Some(id.into());
+        req.title = title.into();
+        if let Some(tag) = tag {
+            req.tags.insert(tag.into());
+        }
+        std::fs::write(path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    };
+    let commit = |msg: &str| {
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-qm", msg]);
+    };
+    write("TASK-1", None, "v1");
+    write("TASK-2", None, "only");
+    write("TASK-5", None, "noise 1");
+    commit("one");
+    write("TASK-1", Some("security"), "v2");
+    write("TASK-3", Some("security"), "doomed");
+    write("TASK-5", None, "noise 2");
+    commit("two");
+    write("TASK-1", None, "v3");
+    std::fs::remove_file(
+        root.join(aida_core::object_store::relative_object_path("TASK-3").unwrap()),
+    )
+    .unwrap();
+    commit("three");
+    git(root, &["checkout", "-q", "-b", "side"]);
+    write("TASK-6", Some("security"), "side only");
+    commit("side");
+    git(root, &["checkout", "-q", "main"]);
+    tmp
+}
+
+/// The pre-BUG-2179 algorithm: a full-history walk and one read per version,
+/// per spec. The batch must return exactly what it returned.
+// trace:BUG-2179 | ai:claude
+fn per_spec_reference(root: &Path, id: &str) -> Vec<String> {
+    let rel = aida_core::object_store::relative_object_path(id).unwrap();
+    let run = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        String::from_utf8(out.stdout).unwrap()
+    };
+    let log = run(&[
+        "log",
+        "--all",
+        "--format=%H",
+        "--diff-filter=ACMRT",
+        "--",
+        &rel,
+    ]);
+    let mut out = Vec::new();
+    for sha in log.lines().filter(|l| !l.trim().is_empty()) {
+        let req: aida_core::Requirement =
+            serde_yaml::from_str(&run(&["show", &format!("{sha}:{rel}")])).unwrap();
+        for v in field_change_versions(&req)
+            .iter()
+            .chain(std::iter::once(&req))
+        {
+            out.push(serde_yaml::to_string(v).unwrap());
+        }
+    }
+    out
+}
+
+// trace:BUG-2179 | ai:claude
+#[test]
+fn bug_2179_batched_history_matches_the_per_spec_walk() {
+    let store = bug_2179_store();
+    let ids: Vec<String> = ["TASK-1", "TASK-2", "TASK-3", "TASK-4", "TASK-6", "task-2"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    for id in ["TASK-1", "TASK-2", "TASK-3", "TASK-4", "TASK-6"] {
+        let got: Vec<String> = batch
+            .versions(id)
+            .unwrap()
+            .iter()
+            .map(|v| serde_yaml::to_string(v).unwrap())
+            .collect();
+        assert_eq!(got, per_spec_reference(store.path(), id), "{id}");
+    }
+    assert_eq!(batch.versions("TASK-1").unwrap().len(), 3);
+    assert!(batch.versions("TASK-4").unwrap().is_empty());
+    assert!(
+        batch.versions("TASK-9").is_err(),
+        "an ID not read is never `no history`"
+    );
+    assert!(StoreHistoryBatch::read(tempfile::tempdir().unwrap().path(), &ids).is_err());
+}
+
+// trace:BUG-2179 | ai:claude
+#[test]
+fn bug_2179_batched_history_still_refuses_an_excluded_earlier_version() {
+    let store = bug_2179_store();
+    let ids = vec![
+        "TASK-1".to_string(),
+        "TASK-2".to_string(),
+        "TASK-6".to_string(),
+    ];
+    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    // TASK-1 is plain now; only its middle version carried `security`.
+    let mut c = Case::ok();
+    c.specs = ids
+        .iter()
+        .map(|id| ShipSpec {
+            id: id.clone(),
+            aliases: Vec::new(),
+            named: id == "TASK-2",
+            current: Some(plain()),
+            history: batch.versions(id),
+        })
+        .collect();
+    assert!(
+        matches!(c.decide(), Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-1"),
+        "{:?}",
+        c.decide()
+    );
+    // Without the excluded spec the same batch ships, so the refusal above
+    // came from TASK-1's earlier version and not from the batch itself.
+    c.specs.retain(|s| s.id == "TASK-2");
+    assert!(c.decide().is_ok(), "{:?}", c.decide());
+}
+
+// trace:BUG-2179 | ai:claude
+#[test]
+fn bug_2179_alias_map_matches_the_per_id_search() {
+    let store = bug_2179_store();
+    let root = store.path();
+    let write = |id: &str, agreed: &str| {
+        let rel = aida_core::object_store::relative_object_path(id).unwrap();
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut req = plain();
+        req.spec_id = Some(id.into());
+        req.agreed_id = Some(agreed.into());
+        std::fs::write(path, serde_yaml::to_string(&req).unwrap()).unwrap();
+    };
+    write("TASK-1-152", "TASK-176");
+    write("TASK-1-153", "TASK-177");
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "aliases"]);
+    for id in ["TASK-1-152", "TASK-1-153"] {
+        std::fs::remove_file(root.join(aida_core::object_store::relative_object_path(id).unwrap()))
+            .unwrap();
+    }
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "-qm", "delete aliases"]);
+    let ids: Vec<String> = ["TASK-176", "task-177", "TASK-3", "TASK-178"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let map = store_history_alias_map(root, &ids).unwrap();
+    assert_eq!(map["TASK-176"], vec!["TASK-1-152".to_string()]);
+    assert_eq!(map["TASK-177"], vec!["TASK-1-153".to_string()]);
+    assert!(map["TASK-3"].is_empty(), "its own object is not an alias");
+    assert!(map["TASK-178"].is_empty());
+    for id in &ids {
+        assert_eq!(
+            map[&id.to_ascii_uppercase()],
+            store_history_alias_ids(root, id).unwrap(),
+            "{id}"
+        );
+    }
+    assert!(store_history_alias_map(root, &["TASK 1;".to_string()]).is_err());
+}
+
+// trace:BUG-2179 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let real = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
+        .display()
+        .to_string();
+    let store = bug_2179_store();
+    let shim = tempfile::tempdir().unwrap();
+    let log = shim.path().join("calls");
+    crate::test_exec::write_executable(
+        &shim.path().join("git"),
+        format!(
+            "#!/bin/sh\necho \"$*\" >> '{}'\nexec '{real}' \"$@\"\n",
+            log.display()
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        shim.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+    let ids: Vec<String> = (1..=40).map(|n| format!("TASK-{n}")).collect();
+    let batch = StoreHistoryBatch::read(store.path(), &ids).unwrap();
+    assert_eq!(batch.versions("TASK-1").unwrap().len(), 3);
+    store_history_alias_map(store.path(), &ids).unwrap();
+    let calls = std::fs::read_to_string(&log).unwrap();
+    let walks = calls.lines().filter(|l| l.contains(" log ")).count();
+    // One history walk and one object read for 40 specs, plus one alias walk.
+    assert_eq!(walks, 2, "{calls}");
+    // The history walk is limited by the objects directory, not by one
+    // pathspec per spec (git checks every pathspec against every commit).
+    assert!(
+        calls
+            .lines()
+            .any(|l| l.contains(" log ") && l.ends_with("--name-only -- objects")),
+        "{calls}"
+    );
+    assert_eq!(calls.lines().count(), 3, "{calls}");
 }

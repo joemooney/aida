@@ -92,6 +92,10 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         // STORY-1698: the mandate's audit copy stays local; the store is
         // never its record. trace:STORY-1698 | ai:claude
         MandateChanged { .. }
+        // STORY-1700: the drive ledger likewise stays local.
+        // trace:STORY-1700 | ai:claude
+        | MandateDriveAction { .. }
+        | MandateDriveDue { .. }
         | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }
@@ -174,7 +178,7 @@ fn commit_record(
     // A contained session cannot write the store's history; the host's next
     // store sync commits the record.
     if aida_core::git_ops::store_commit_deferred_to_host(store_root) {
-        aida_core::git_ops::notice_store_commit_deferred();
+        aida_core::git_ops::notice_store_commit_deferred(store_root);
         return Ok(());
     }
     aida_core::git_ops::add_all(store_root, rel)?;

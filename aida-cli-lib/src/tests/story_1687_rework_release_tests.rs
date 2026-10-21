@@ -56,6 +56,7 @@ impl Fixture {
         eligible(
             &self.hold,
             &self.body,
+            &RetainedHistory::default(),
             HEAD,
             &[Some(&self.req)],
             &sa::GrantCheck::Valid(self.grant.clone()),
@@ -138,6 +139,7 @@ fn invalid_or_absent_reviewer_grant_cannot_release() {
         assert!(eligible(
             &f.hold,
             &f.body,
+            &RetainedHistory::default(),
             HEAD,
             &[Some(&f.req)],
             &authority,
@@ -257,13 +259,32 @@ fn each_sensitive_metadata_trigger_requires_human() {
 fn missing_covered_specs_and_one_sensitive_member_stay_held() {
     let f = Fixture::new();
     let grant = sa::GrantCheck::Valid(f.grant.clone());
-    assert!(eligible(&f.hold, &f.body, HEAD, &[], &grant, &no_mandate).is_err());
-    assert!(eligible(&f.hold, &f.body, HEAD, &[None], &grant, &no_mandate).is_err());
+    assert!(eligible(
+        &f.hold,
+        &f.body,
+        &RetainedHistory::default(),
+        HEAD,
+        &[],
+        &grant,
+        &no_mandate
+    )
+    .is_err());
+    assert!(eligible(
+        &f.hold,
+        &f.body,
+        &RetainedHistory::default(),
+        HEAD,
+        &[None],
+        &grant,
+        &no_mandate
+    )
+    .is_err());
     let mut other = f.req.clone();
     other.title = "Credential logging".into();
     assert!(eligible(
         &f.hold,
         &f.body,
+        &RetainedHistory::default(),
         HEAD,
         &[Some(&f.req), Some(&other)],
         &grant,
@@ -378,6 +399,7 @@ fn expired_revoked_subject_roster_and_parent_grants_stay_held() {
         let error = eligible(
             &f.hold,
             &f.body,
+            &RetainedHistory::default(),
             HEAD,
             &[Some(&f.req)],
             &authority,
@@ -412,10 +434,15 @@ fn new_artifact_writer_cannot_inherit_release_grant() {
 #[test]
 fn auto_release_cli_supports_one_or_all_and_has_no_override() {
     use clap::Parser;
-    assert!(crate::cli::Cli::try_parse_from(["aida", "merge-hold", "auto-release"]).is_ok());
-    assert!(crate::cli::Cli::try_parse_from(["aida", "merge-hold", "auto-release", "37"]).is_ok());
+    assert!(
+        crate::command_registry::try_parse_from(["aida", "merge-hold", "auto-release"]).is_ok()
+    );
+    assert!(
+        crate::command_registry::try_parse_from(["aida", "merge-hold", "auto-release", "37"])
+            .is_ok()
+    );
     for flag in ["--force", "--override", "--yes"] {
-        assert!(crate::cli::Cli::try_parse_from([
+        assert!(crate::command_registry::try_parse_from([
             "aida",
             "merge-hold",
             "auto-release",
@@ -791,6 +818,7 @@ fn auto_release_fixture(change: ReleaseChange) {
                 }
                 Ok(body)
             },
+            read_history: &|_| Ok(RetainedHistory::default()),
             read_corpus: &|ids| {
                 corpus_reads.set(corpus_reads.get() + 1);
                 if change.failed_read == Some("corpus") {
@@ -1419,6 +1447,7 @@ fn malformed_matching_heads_cannot_authorize_release() {
         let error = eligible(
             &f.hold,
             &f.body,
+            &RetainedHistory::default(),
             head,
             &[Some(&f.req)],
             &sa::GrantCheck::Valid(f.grant.clone()),

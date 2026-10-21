@@ -907,6 +907,11 @@ pub struct ScaffoldConfig {
     /// like `push --force` to main without explicit confirmation.
     /// trace:TASK-27 | ai:claude
     pub include_git_guardrails_hook: bool,
+    /// Include the cargo time-budget hook (PreToolUse on Bash) — warns, never
+    /// blocks, when cargo or make is wrapped in an outer `timeout <N>`, and
+    /// suggests `AIDA_CARGO_TIMEOUT=<N>` plus background mode instead.
+    // trace:STORY-1854 | ai:claude
+    pub include_cargo_timeout_hook: bool,
     /// Include advisor-code-guard hook (PreToolUse on Write|Edit|MultiEdit) —
     /// soft-blocks the first code edit in an advisor session, routing to
     /// switch-role / route-work / solo. Makes the advisor=specs-not-code
@@ -977,6 +982,7 @@ impl Default for ScaffoldConfig {
             include_track_commits_hook: true,
             include_role_context_hook: true,
             include_git_guardrails_hook: true,
+            include_cargo_timeout_hook: true,
             include_advisor_code_guard_hook: true,
             include_pending_approval_hooks: true,
             project_type: ProjectType::Generic,
@@ -2481,6 +2487,32 @@ aida show <SPEC-ID>
                 }
             }
 
+            // Cargo time-budget hook (PreToolUse on Bash) — sourced from
+            // embedded template. trace:STORY-1854 | ai:claude
+            if self.config.include_cargo_timeout_hook {
+                let path = PathBuf::from(".claude/hooks/aida-cargo-timeout-guard.sh");
+                let body = self.generate_cargo_timeout_hook();
+                if !body.is_empty() {
+                    let artifact = self.create_artifact(
+                        path.clone(),
+                        body,
+                        "Claude Code PreToolUse hook warning on outer cargo timeouts".to_string(),
+                        true, // shell script
+                    );
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
+            }
+
             // Advisor-code-guard hook (PreToolUse on Write|Edit|MultiEdit) —
             // sourced from embedded template. trace:STORY-670 | ai:claude
             if self.config.include_advisor_code_guard_hook {
@@ -3783,7 +3815,7 @@ mod tests {
     }
 
     fn run_git_in(dir: &Path, args: &[&str]) {
-        let mut cmd = std::process::Command::new("git");
+        let mut cmd = crate::test_git::git_command();
         cmd.args(args).current_dir(dir);
         for (key, _) in std::env::vars() {
             if key.starts_with("GIT_") {
@@ -3800,7 +3832,7 @@ mod tests {
     }
 
     fn git_stdout_in(dir: &Path, args: &[&str]) -> String {
-        let mut cmd = std::process::Command::new("git");
+        let mut cmd = crate::test_git::git_command();
         cmd.args(args).current_dir(dir);
         for (key, _) in std::env::vars() {
             if key.starts_with("GIT_") {
@@ -5182,7 +5214,7 @@ mod tests {
 
         // Helper to run git commands with cleared parent git environment variables
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5437,7 +5469,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5558,7 +5590,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(&store_root);
             for (key, _) in std::env::vars() {
@@ -5606,7 +5638,7 @@ mod tests {
         // Raw `git commit` simulates the stale binary: no marker on the
         // subprocess env. The bulk write must be REFUSED with a message.
         let raw_commit = |msg: &str| -> std::process::Output {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(["commit", "-m", msg]);
             cmd.current_dir(&store_root);
             for (key, _) in std::env::vars() {
@@ -5658,7 +5690,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5759,7 +5791,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5857,7 +5889,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {

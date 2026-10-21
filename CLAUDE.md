@@ -18,6 +18,10 @@ needed.
   explicitly for developers/operators.
 - Architecture changes require a sketch on the owning spec and advisor signoff
   before implementation.
+- CLI commands are registered from their own modules
+  (`command_registry::REGISTRY`; clap types in `<module>_args.rs`); never add
+  to the legacy `Command` enum in `cli.rs` (a ratchet test fails). See the
+  repository guide's "Adding or changing a CLI command".
 
 ## Develop AIDA itself
 

@@ -17,8 +17,14 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use anyhow::Result;
 use colored::Colorize;
+
+// trace:STORY-1728 | ai:claude
+#[path = "doctor_cmd_args.rs"]
+pub(crate) mod doctor_cmd_args;
+pub(crate) use doctor_cmd_args::*;
 
 use crate::*;
 
@@ -93,6 +99,19 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_store_free_light(
                     crate::relay_stall::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
+            // STORY-1700: the drive-mandate check reads the AIDA home and the
+            // schedule driver only. trace:STORY-1700 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::mandate_drive::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::mandate_drive::DOCTOR_CATEGORY,
                     *json,
                     *fail_on_findings,
                 );
@@ -259,7 +278,7 @@ mod task_190_tests {
     #[test]
     fn detector_resolves_canonical_store_from_sibling_worktree() {
         fn git(cwd: &std::path::Path, args: &[&str]) {
-            let output = Command::new("git")
+            let output = crate::test_git::git_command()
                 .current_dir(cwd)
                 .args(args)
                 .output()
@@ -720,6 +739,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::relay_stall::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:STORY-1700 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::mandate_drive::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::mandate_drive::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
@@ -1093,6 +1120,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1699 | ai:claude
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
+        // trace:STORY-1700 | ai:claude
+        crate::mandate_drive::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
@@ -2147,7 +2178,7 @@ mod bug_2009_git_hook_tests {
     fn non_executable_aida_hook_is_reported() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root)
             .status()
@@ -5281,7 +5312,7 @@ mod bug_1796_orphan_store_doctor_tests {
     use std::process::Command;
 
     fn git(path: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = crate::test_git::git_command()
             .arg("-C")
             .arg(path)
             .args(args)
@@ -5518,6 +5549,8 @@ fn heal_doctor_stale_remote_branch(
             "origin",
             &finding.id,
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .status()
         .with_context(|| format!("deleting remote branch origin/{}", finding.id))?;
     Ok(DoctorHealResult {
@@ -8326,7 +8359,7 @@ mod story_462_doctor_tests {
         let dir = tempfile::tempdir().unwrap();
         let project = dir.path();
         let run_git = |cwd: &std::path::Path, args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8364,7 +8397,7 @@ mod story_462_doctor_tests {
     }
 
     fn task_202_git(cwd: &std::path::Path, args: &[&str]) {
-        let output = std::process::Command::new("git")
+        let output = crate::test_git::git_command()
             .arg("-C")
             .arg(cwd)
             .args(args)
@@ -8444,7 +8477,7 @@ mod story_462_doctor_tests {
             store.canonicalize().unwrap()
         );
         let git_value = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8560,7 +8593,7 @@ mod story_462_doctor_tests {
         let store = project.join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(&store)
             .args(["init", "-q"])
@@ -8628,7 +8661,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
         let run_git = |cwd: &std::path::Path, args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8686,7 +8719,7 @@ mod story_462_doctor_tests {
         .unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8699,7 +8732,7 @@ mod story_462_doctor_tests {
             );
             output
         };
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(&store)
             .args(["init", "-b", "aida-store", "-q"])
@@ -8741,7 +8774,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&project).unwrap();
         std::fs::create_dir_all(&foreign).unwrap();
         let git = |cwd: &std::path::Path, args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8820,7 +8853,7 @@ mod story_462_doctor_tests {
         let (_dir, store) = task_1547_linked_store("wrong-store", &bug_563_runtime_patterns());
         let project = store.parent().unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8877,7 +8910,7 @@ mod story_462_doctor_tests {
         let (_dir, store) = task_1547_linked_store("aida-store", &bug_563_runtime_patterns());
         let project = store.parent().unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8965,7 +8998,7 @@ mod story_462_doctor_tests {
 
     #[test]
     fn doctor_default_flags_parse_without_subcommand() {
-        let cli = Cli::try_parse_from([
+        let cli = crate::command_registry::try_parse_from([
             "aida",
             "doctor",
             "--heal",
@@ -8975,7 +9008,7 @@ mod story_462_doctor_tests {
             "--json",
         ])
         .unwrap();
-        let Command::Doctor {
+        let crate::doctor_cmd::DoctorArgs {
             heal,
             yes,
             category,
@@ -8986,7 +9019,7 @@ mod story_462_doctor_tests {
             fix_sandbox,
             cmd,
             ..
-        } = cli.command
+        } = cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor command");
         };
@@ -9311,7 +9344,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&root).unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -9325,7 +9358,7 @@ mod story_462_doctor_tests {
             );
         };
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -9382,7 +9415,7 @@ mod story_462_doctor_tests {
         // shipped-work: ancestry can never clear this (different SHA forever),
         // and the current trees no longer match, but the landed patch is still
         // present in main's bounded history.
-        let count_out = std::process::Command::new("git")
+        let count_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["rev-list", "--count", "main..shipped-work"])
@@ -9396,7 +9429,7 @@ mod story_462_doctor_tests {
             ancestry_count, 2,
             "ancestry must still see both squash-merged branch commits as unique"
         );
-        let per_commit_out = std::process::Command::new("git")
+        let per_commit_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args([
@@ -9453,7 +9486,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&root).unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -9467,7 +9500,7 @@ mod story_462_doctor_tests {
             );
         };
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -9494,7 +9527,7 @@ mod story_462_doctor_tests {
             run(&["commit", "--allow-empty", "-m", &format!("filler {i}")]);
         }
 
-        let merge_base_out = std::process::Command::new("git")
+        let merge_base_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["merge-base", "main", "deep-history-work"])
@@ -9503,7 +9536,7 @@ mod story_462_doctor_tests {
         let merge_base = String::from_utf8_lossy(&merge_base_out.stdout)
             .trim()
             .to_string();
-        let count_out = std::process::Command::new("git")
+        let count_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["rev-list", "--count", &format!("{merge_base}..main")])
@@ -9935,10 +9968,16 @@ hostname = "localhost"
 
     #[test]
     fn doctor_check_and_heal_subcommands_parse() {
-        let check =
-            Cli::try_parse_from(["aida", "doctor", "check", "OBE-briefs", "--json", "--all"])
-                .unwrap();
-        let Command::Doctor {
+        let check = crate::command_registry::try_parse_from([
+            "aida",
+            "doctor",
+            "check",
+            "OBE-briefs",
+            "--json",
+            "--all",
+        ])
+        .unwrap();
+        let crate::doctor_cmd::DoctorArgs {
             cmd:
                 Some(cli::DoctorCommand::Check {
                     category,
@@ -9947,7 +9986,7 @@ hostname = "localhost"
                     ..
                 }),
             ..
-        } = check.command
+        } = check.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor check");
         };
@@ -9955,7 +9994,7 @@ hostname = "localhost"
         assert!(all);
         assert!(json);
 
-        let heal = Cli::try_parse_from([
+        let heal = crate::command_registry::try_parse_from([
             "aida",
             "doctor",
             "heal",
@@ -9965,7 +10004,7 @@ hostname = "localhost"
             "--all",
         ])
         .unwrap();
-        let Command::Doctor {
+        let crate::doctor_cmd::DoctorArgs {
             cmd:
                 Some(cli::DoctorCommand::Heal {
                     category,
@@ -9975,7 +10014,7 @@ hostname = "localhost"
                     json,
                 }),
             ..
-        } = heal.command
+        } = heal.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected doctor heal");
         };
@@ -10495,11 +10534,11 @@ User content.
 
     #[test]
     fn legacy_doctor_subcommands_still_parse() {
-        let cli = Cli::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
-        let Command::Doctor {
+        let cli = crate::command_registry::try_parse_from(["aida", "doctor", "fsck"]).unwrap();
+        let crate::doctor_cmd::DoctorArgs {
             cmd: Some(cli::DoctorCommand::Fsck),
             ..
-        } = cli.command
+        } = cli.command.registered::<crate::doctor_cmd::DoctorArgs>()
         else {
             panic!("expected legacy doctor fsck");
         };
@@ -10513,22 +10552,25 @@ User content.
     fn task_956_hidden_top_level_parents_still_dispatch() {
         // punts / worker / headless are hidden from `aida --help` but still parse.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "punts", "analyze"])
+            crate::command_registry::try_parse_from(["aida", "punts", "analyze"])
                 .unwrap()
-                .command,
-            Command::Punts(_)
+                .command
+                .registered::<crate::punt_done::PuntsArgs>(),
+            crate::punt_done::PuntsArgs { inner: _ }
         ));
         assert!(matches!(
-            Cli::try_parse_from(["aida", "worker", "directives"])
+            crate::command_registry::try_parse_from(["aida", "worker", "directives"])
                 .unwrap()
-                .command,
-            Command::Worker(_)
+                .command
+                .registered::<crate::queue_misc::WorkerArgs>(),
+            crate::queue_misc::WorkerArgs { inner: _ }
         ));
         assert!(matches!(
-            Cli::try_parse_from(["aida", "headless", "tail"])
+            crate::command_registry::try_parse_from(["aida", "headless", "tail"])
                 .unwrap()
-                .command,
-            Command::Headless(_)
+                .command
+                .registered::<crate::queue_misc::HeadlessArgs>(),
+            crate::queue_misc::HeadlessArgs { inner: _ }
         ));
     }
 
@@ -10537,27 +10579,39 @@ User content.
     fn task_956_hidden_subcommands_still_dispatch() {
         // doctor verify-relationships — hidden under `doctor`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "doctor", "verify-relationships", "--repair"])
-                .unwrap()
-                .command,
-            Command::Doctor {
+            crate::command_registry::try_parse_from([
+                "aida",
+                "doctor",
+                "verify-relationships",
+                "--repair"
+            ])
+            .unwrap()
+            .command
+            .registered::<crate::doctor_cmd::DoctorArgs>(),
+            crate::doctor_cmd::DoctorArgs {
                 cmd: Some(cli::DoctorCommand::VerifyRelationships { repair: true, .. }),
                 ..
             }
         ));
         // queue load — hidden under `queue`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "queue", "load"])
+            crate::command_registry::try_parse_from(["aida", "queue", "load"])
                 .unwrap()
-                .command,
-            Command::Queue(cli::QueueCommand::Load { .. })
+                .command
+                .registered::<crate::queue_cmd::QueueArgs>(),
+            crate::queue_cmd::QueueArgs {
+                inner: cli::QueueCommand::Load { .. }
+            }
         ));
         // role repair — hidden under `role`, still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "role", "repair"])
+            crate::command_registry::try_parse_from(["aida", "role", "repair"])
                 .unwrap()
-                .command,
-            Command::Role(cli::RoleCommand::Repair { .. })
+                .command
+                .registered::<crate::role_cmd::RoleArgs>(),
+            crate::role_cmd::RoleArgs {
+                inner: cli::RoleCommand::Repair { .. }
+            }
         ));
     }
 
@@ -10570,25 +10624,38 @@ User content.
         // changelog generate — hidden, but keeps its stdout/range surface
         // distinct from the canonical `changelog refresh`.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "changelog", "generate", "--since", "v0.7.0"])
-                .unwrap()
-                .command,
-            Command::Changelog(cli::ChangelogCommand::Generate { since: Some(_), .. })
+            crate::command_registry::try_parse_from([
+                "aida",
+                "changelog",
+                "generate",
+                "--since",
+                "v0.7.0"
+            ])
+            .unwrap()
+            .command
+            .registered::<crate::changelog_cmd::ChangelogArgs>(),
+            crate::changelog_cmd::ChangelogArgs {
+                inner: cli::ChangelogCommand::Generate { since: Some(_), .. }
+            }
         ));
         // The canonical `changelog refresh` is unchanged and still parses.
         assert!(matches!(
-            Cli::try_parse_from(["aida", "changelog", "refresh"])
+            crate::command_registry::try_parse_from(["aida", "changelog", "refresh"])
                 .unwrap()
-                .command,
-            Command::Changelog(cli::ChangelogCommand::Refresh { .. })
+                .command
+                .registered::<crate::changelog_cmd::ChangelogArgs>(),
+            crate::changelog_cmd::ChangelogArgs {
+                inner: cli::ChangelogCommand::Refresh { .. }
+            }
         ));
         // doctor fsck — hidden, but keeps its own full-suite logic distinct
         // from the canonical `doctor check` (which requires a category arg).
         assert!(matches!(
-            Cli::try_parse_from(["aida", "doctor", "fsck"])
+            crate::command_registry::try_parse_from(["aida", "doctor", "fsck"])
                 .unwrap()
-                .command,
-            Command::Doctor {
+                .command
+                .registered::<crate::doctor_cmd::DoctorArgs>(),
+            crate::doctor_cmd::DoctorArgs {
                 cmd: Some(cli::DoctorCommand::Fsck),
                 ..
             }
@@ -10653,7 +10720,7 @@ User content.
         std::fs::write(root.join("Dockerfile"), "FROM scratch\n").unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -10667,7 +10734,7 @@ User content.
             );
         };
         std::fs::create_dir_all(&root).unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -10819,7 +10886,7 @@ User content.
     /// are saved through `Storage`. Returns (project_root tempdir, storage).
     fn integrity_fixture() -> (tempfile::TempDir, Storage) {
         fn g(root: &std::path::Path, args: &[&str]) {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10849,7 +10916,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10881,7 +10948,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10915,7 +10982,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10946,7 +11013,7 @@ User content.
         // this check targets only Completed-without-corroboration.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -10992,7 +11059,7 @@ User content.
     fn integrity_since_exempts_legacy_specs() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11023,7 +11090,7 @@ User content.
     fn integrity_excludes_non_code_spec_types() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11069,7 +11136,7 @@ User content.
     fn integrity_collapses_historical_tail_by_default() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11098,7 +11165,7 @@ User content.
     fn integrity_all_expands_historical_tail() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -12002,19 +12069,19 @@ User content.
     fn salvage_worktree_patch_writes_diff_before_cleanup() {
         let project = tempfile::tempdir().unwrap();
         let worktree = tempfile::tempdir().unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .arg("init")
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["config", "user.email", "t@example.com"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["config", "user.name", "Test"])
@@ -12022,13 +12089,13 @@ User content.
             .unwrap();
         let file = worktree.path().join("notes.txt");
         std::fs::write(&file, "before\n").unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["add", "notes.txt"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["commit", "-m", "init"])
@@ -12063,7 +12130,7 @@ User content.
             vec!["config", "user.email", "t@example.com"],
             vec!["config", "user.name", "Test"],
         ] {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(worktree.path())
                 .args(&args)
@@ -12074,13 +12141,13 @@ User content.
         // untracked file whose content must survive.
         let tracked = worktree.path().join("tracked.txt");
         std::fs::write(&tracked, "before\n").unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["add", "tracked.txt"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["commit", "-m", "init"])
@@ -12142,7 +12209,7 @@ User content.
     }
 
     fn git752(root: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .output()
@@ -12785,39 +12852,12 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         }
     }
 
-    // Repair: filter dangling edges out of each affected req's
-    // relationships array and rewrite the YAML. trace:TASK-58 | ai:claude
-    let dangling_target_uuids: std::collections::HashSet<uuid::Uuid> =
-        dangling.iter().map(|d| d.target_uuid).collect();
-    let affected_source_uuids: std::collections::HashSet<uuid::Uuid> =
-        dangling.iter().map(|d| d.source_uuid).collect();
-    let mut fixed = 0usize;
-    for mut req in reqs.into_iter() {
-        if !affected_source_uuids.contains(&req.id) {
-            continue;
-        }
-        let prior = req.clone(); // trace:STORY-1674 | ai:codex
-        let before = req.relationships.len();
-        req.relationships
-            .retain(|r| !dangling_target_uuids.contains(&r.target_id));
-        if req.relationships.len() != before {
-            aida_core::provenance::stamp_write(
-                &mut req,
-                Some(&prior),
-                &aida_core::provenance::WriteContext::capture(),
-            )?;
-            aida_core::object_store::write_object(&store_path.join("objects"), &req)?;
-            fixed += 1;
-        }
-    }
-    let _ = aida_core::git_ops::add(&store_path, &["objects"]);
-    let _ = aida_core::git_ops::commit(
-        &store_path,
-        &format!(
-            "chore(repair): strip {} dangling relationship target(s)",
-            dangling.len()
-        ),
-    );
+    // Repair: re-load canonical objects inside the store write lock so any
+    // concurrent spec edit made while waiting for confirmation (or the lock) is
+    // preserved rather than overwritten by the pre-prompt `reqs` snapshot.
+    // trace:TASK-58 trace:TASK-1930 | ai:agy
+    let _ = reqs;
+    let fixed = doctor_repair_dangling_relationships_in_store(&store_path)?;
     println!(
         "{} repaired {} requirement(s).",
         crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
@@ -12825,6 +12865,50 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     );
     println!("  Push with: {}", "aida push".cyan());
     Ok(())
+}
+
+/// Re-load canonical objects under `store_write_lock` and strip any relationship
+/// whose `target_id` does not resolve to an existing requirement in the store.
+// trace:TASK-1930 | ai:agy
+pub(crate) fn doctor_repair_dangling_relationships_in_store(
+    store_path: &std::path::Path,
+) -> Result<usize> {
+    let objects_root = store_path.join("objects");
+    let mut fixed = 0usize;
+    let mut stripped_edges = 0usize;
+    aida_core::db::with_store_write_lock(store_path, || -> Result<()> {
+        let fresh_reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+        let fresh_uuids: std::collections::HashSet<uuid::Uuid> =
+            fresh_reqs.iter().map(|r| r.id).collect();
+        for mut req in fresh_reqs {
+            let prior = req.clone(); // trace:STORY-1674 | ai:codex
+            let before = req.relationships.len();
+            req.relationships
+                .retain(|r| fresh_uuids.contains(&r.target_id));
+            if req.relationships.len() != before {
+                stripped_edges += before - req.relationships.len();
+                aida_core::provenance::stamp_write(
+                    &mut req,
+                    Some(&prior),
+                    &aida_core::provenance::WriteContext::capture(),
+                )?;
+                aida_core::object_store::write_object(&objects_root, &req)?;
+                fixed += 1;
+            }
+        }
+        if fixed > 0 {
+            let _ = aida_core::git_ops::add(store_path, &["objects"]);
+            let _ = aida_core::git_ops::commit(
+                store_path,
+                &format!(
+                    "chore(repair): strip {} dangling relationship target(s)",
+                    stripped_edges
+                ),
+            );
+        }
+        Ok(())
+    })?;
+    Ok(fixed)
 }
 
 // Walk source files under the project root for `trace:<SPEC-ID>`
@@ -13243,21 +13327,11 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
         }
     }
 
-    let stale_indices: Vec<usize> = stale.iter().map(|(i, _)| *i).collect();
-    let count = stale_indices.len();
-    for idx in stale_indices {
-        let b = &mut blocks.blocks[idx];
-        b.next = b.range_end + 1;
-    }
-    blocks.save(&blocks_path)?;
-    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
-    let _ = aida_core::git_ops::commit(
-        &store_path,
-        &format!(
-            "chore(registry): tombstone {} stale block(s) (no node owner)",
-            count
-        ),
-    );
+    // trace:TASK-1930 | ai:agy — A1 lock order: store_write_lock -> blocks.lock,
+    // and re-load blocks.yaml + nodes.toml inside the lock so concurrent `next`
+    // advances or node registrations since the preview are preserved.
+    let _ = blocks;
+    let count = doctor_tombstone_stale_blocks_in_store(&store_path)?;
 
     println!(
         "{} tombstoned {} block(s).",
@@ -13266,6 +13340,45 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
     );
     println!("  Push with: {}", "aida push".cyan());
     Ok(())
+}
+
+/// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
+/// `nodes.toml`, and tombstone any active block whose `node_id` is absent from
+/// `nodes.toml`.
+// trace:TASK-1930 | ai:agy
+pub(crate) fn doctor_tombstone_stale_blocks_in_store(
+    store_path: &std::path::Path,
+) -> Result<usize> {
+    use aida_core::{BlockRegistry, NodeRegistry};
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+    aida_core::db::with_store_write_lock(store_path, || {
+        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<usize> {
+            let mut fresh_blocks = BlockRegistry::load(&blocks_path)?;
+            let fresh_nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+            let fresh_registered: std::collections::HashSet<String> =
+                fresh_nodes.nodes.iter().map(|n| n.id.clone()).collect();
+            let mut tombstoned = 0usize;
+            for b in &mut fresh_blocks.blocks {
+                if !fresh_registered.contains(&b.node_id) && !b.is_exhausted() {
+                    b.next = b.range_end + 1;
+                    tombstoned += 1;
+                }
+            }
+            if tombstoned > 0 {
+                fresh_blocks.save(&blocks_path)?;
+                let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+                let _ = aida_core::git_ops::commit(
+                    store_path,
+                    &format!(
+                        "chore(registry): tombstone {} stale block(s) (no node owner)",
+                        tombstoned
+                    ),
+                );
+            }
+            Ok(tombstoned)
+        })
+    })
 }
 
 /// Walk the orphan store's objects tree, group requirements by their
@@ -13955,43 +14068,18 @@ fn doctor_migrate_counter_scope(
         }
     }
 
-    // Apply: mark our per-type blocks exhausted (next = range_end + 1) so
-    // the dispenser skips them. Then append the new `*` block.
-    for b in registry.blocks.iter_mut() {
-        if b.node_id == node_id && !b.is_exhausted() {
-            b.next = b.range_end + 1;
-        }
-    }
-    let owner = aida_core::git_ops::git_config_get("user.email")
-        .ok()
-        .or_else(|| std::env::var("USER").ok())
-        .unwrap_or_else(|| "unknown".to_string());
-    registry.claim_block_with_floor(
-        node_id.clone(),
-        owner,
-        hostname(),
-        aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
-        new_block_size,
-        highest_end,
-    );
-    registry.save(&blocks_path)?;
-
-    // Update config.toml — preserve the file by line-rewriting; if
-    // counter_scope already exists (it shouldn't given the early check),
-    // overwrite. Otherwise append after the [id_format] section.
-    update_config_counter_scope(&config_path, "global")?;
-
-    // Stage + commit the registry change. The lease symlink in the
-    // session worktree means `git -C <store_path>` operates on the
-    // shared orphan branch.
-    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
-    let _ = aida_core::git_ops::commit(
+    // Apply: acquire store_write_lock -> blocks.lock (A1), re-load blocks.yaml
+    // and re-validate inside the lock so concurrent dispenses or block claims
+    // since the preview are preserved. Then mark our per-type blocks exhausted
+    // (next = range_end + 1) and append the new `*` block.
+    // trace:TASK-1930 | ai:agy
+    let _ = registry;
+    let (new_start, new_end) = doctor_migrate_counter_scope_in_store(
+        &project_root,
         &store_path,
-        &format!(
-            "chore(registry): migrate node {} to global counter (*-{}..{})",
-            node_id, new_start, new_end
-        ),
-    );
+        &node_id,
+        new_block_size,
+    )?;
 
     println!();
     println!(
@@ -14010,6 +14098,84 @@ fn doctor_migrate_counter_scope(
     println!("Don't forget to push:");
     println!("  {}", "aida push".cyan());
     Ok(())
+}
+
+/// Acquire `store_write_lock -> blocks.lock`, re-load `blocks.yaml` and
+/// `config.toml`, exhaust `node_id`'s active per-type blocks, claim a new `*`
+/// global block above the fresh `highest_end`, update `config.toml`, and commit.
+// trace:TASK-1930 | ai:agy
+pub(crate) fn doctor_migrate_counter_scope_in_store(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    node_id: &str,
+    new_block_size: u32,
+) -> Result<(u32, u32)> {
+    use aida_core::BlockRegistry;
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let config_path = project_root.join(".aida").join("config.toml");
+    aida_core::db::with_store_write_lock(store_path, || {
+        aida_core::BlockRegistry::with_dispense_lock(&blocks_path, || -> Result<(u32, u32)> {
+            if read_id_counter_scope(project_root) == aida_core::IdCounterScope::Global {
+                anyhow::bail!("already on global counter_scope — nothing to migrate");
+            }
+            let mut fresh_registry = BlockRegistry::load(&blocks_path)?;
+            if !fresh_registry
+                .blocks
+                .iter()
+                .any(|b| b.node_id == node_id && !b.is_exhausted())
+            {
+                anyhow::bail!(
+                    "node {} has no active per-type blocks in blocks.yaml — \
+                     either already migrated, or this clone hasn't been initialized",
+                    node_id
+                );
+            }
+            let fresh_highest_end: u32 = fresh_registry
+                .blocks
+                .iter()
+                .map(|b| b.range_end)
+                .max()
+                .unwrap_or(0);
+            for b in fresh_registry.blocks.iter_mut() {
+                if b.node_id == node_id && !b.is_exhausted() {
+                    b.next = b.range_end + 1;
+                }
+            }
+            let owner = aida_core::git_ops::git_config_get("user.email")
+                .ok()
+                .or_else(|| std::env::var("USER").ok())
+                .unwrap_or_else(|| "unknown".to_string());
+            let claimed = fresh_registry.claim_block_with_floor(
+                node_id.to_string(),
+                owner,
+                hostname(),
+                aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
+                new_block_size,
+                fresh_highest_end,
+            );
+            let claimed_start = claimed.range_start;
+            let claimed_end = claimed.range_end;
+            fresh_registry.save(&blocks_path)?;
+
+            // Update config.toml — preserve the file by line-rewriting; if
+            // counter_scope already exists (it shouldn't given the early check),
+            // overwrite. Otherwise append after the [id_format] section.
+            update_config_counter_scope(&config_path, "global")?;
+
+            // Stage + commit the registry change. The lease symlink in the
+            // session worktree means `git -C <store_path>` operates on the
+            // shared orphan branch.
+            let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+            let _ = aida_core::git_ops::commit(
+                store_path,
+                &format!(
+                    "chore(registry): migrate node {} to global counter (*-{}..{})",
+                    node_id, claimed_start, claimed_end
+                ),
+            );
+            Ok((claimed_start, claimed_end))
+        })
+    })
 }
 
 /// Update the `[id_format] counter_scope` value in config.toml. Adds the
@@ -14175,3 +14341,155 @@ mod bug_1505_review_verdict_doctor_tests {
         );
     }
 }
+
+/// Diagnose and heal AIDA multi-agent state drift. Report-only by
+/// design: exit 0 means the scan RAN, not that it found nothing —
+/// findings print as text/JSON either way. A caller that needs a
+/// pass/fail signal (e.g. a CI gate or scheduled job) opts in with
+/// `doctor check <category> --fail-on-findings`, which exits non-zero
+/// only when that one category has findings.
+// trace:EPIC-19 trace:STORY-462
+#[derive(clap::Parser, Debug)]
+#[clap(name = "doctor")]
+pub(crate) struct DoctorArgs {
+    /// Apply safe fixes after scanning. Without this, doctor is read-only.
+    #[clap(long)]
+    pub heal: bool,
+
+    /// Skip per-category confirmation prompts while healing.
+    #[clap(long, short = 'y')]
+    pub yes: bool,
+
+    /// Restrict scan/heal to one category.
+    #[clap(long, value_name = "CATEGORY")]
+    pub category: Option<String>,
+
+    /// Emit machine-readable JSON.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Permit riskier destructive fixes such as branch deletion.
+    #[clap(long)]
+    pub force: bool,
+
+    /// Show older completed-without-commit findings individually.
+    #[clap(long)]
+    pub all: bool,
+
+    /// Exempt specs completed before this point from the
+    /// completed-without-commit integrity check: a relative duration
+    /// (`30d`, `2w`, `24 hours ago`), an ISO date (local midnight), a
+    /// zone-less ISO datetime (local time), RFC3339, or else a git
+    /// ref/tag whose commit date is the cutoff. An invalid value is an
+    /// error. Quiets noise on legacy history predating trace
+    /// conventions. Falls back to the AIDA_DOCTOR_COMPLETED_SINCE env var.
+    // trace:TASK-673 | ai:claude
+    // trace:TASK-1509 | ai:claude
+    // trace:BUG-1622 | ai:claude
+    #[clap(long, value_name = "DATE_OR_REF")]
+    pub since: Option<String>,
+
+    /// Print the guided, copy-pasteable steps to bring the OS sandbox
+    /// (bubblewrap write-confinement) up on this host: detect the current
+    /// state, the exact sysctl to persist if the kernel blocks unprivileged
+    /// user namespaces, how to opt in, and the verify command. Prints the
+    /// sequence — sudo steps are clearly marked "run this yourself"; it
+    /// never silently runs sudo. Runs the non-sudo availability re-probe as
+    /// a smoke check.
+    // trace:STORY-665 | ai:claude
+    #[clap(long)]
+    pub fix_sandbox: bool,
+
+    /// Run a store-wide semantic contradiction sweep combining mechanical joins
+    /// in Rust with Jev System One semantic choice queries.
+    // trace:STORY-1426 | ai:antigravity
+    #[clap(long)]
+    pub contradictions: bool,
+
+    /// Maximum contradiction findings to print per page. The default is
+    /// deliberately bounded; use --contradictions-offset to continue or
+    /// --all to request the complete scan.
+    // trace:STORY-1426 | ai:codex
+    #[clap(long, value_name = "N", default_value_t = 25)]
+    pub contradictions_limit: usize,
+
+    /// Zero-based offset into the deterministically ordered contradiction
+    /// findings. Ignored with --all.
+    // trace:STORY-1426 | ai:codex
+    #[clap(long, value_name = "N", default_value_t = 0)]
+    pub contradictions_offset: usize,
+
+    /// Legacy maintenance subcommand or focused doctor action.
+    #[clap(subcommand)]
+    pub cmd: Option<crate::cli::DoctorCommand>,
+}
+
+// Doctor commands run before storage init — they may need to operate
+// on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
+fn run_doctor(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let DoctorArgs {
+        heal,
+        yes,
+        category,
+        json,
+        force,
+        all,
+        since,
+        fix_sandbox,
+        contradictions,
+        contradictions_limit,
+        contradictions_offset,
+        cmd,
+    } = &args;
+    // STORY-665: `aida doctor --fix-sandbox` is a guided printer for bringing
+    // bwrap OS-confinement up on a new machine. Short-circuit before the
+    // multi-agent drift scan — it's a standalone setup helper, not a check.
+    // trace:STORY-665 | ai:claude
+    if *fix_sandbox {
+        return self::doctor_fix_sandbox();
+    }
+    // STORY-1426: `aida doctor --contradictions` runs the store-wide semantic
+    // contradiction sweep combining mechanical joins with Jev choice queries.
+    // trace:STORY-1426 | ai:antigravity
+    if *contradictions {
+        return self::doctor_contradictions(
+            *json,
+            *contradictions_limit,
+            *contradictions_offset,
+            *all,
+        );
+    }
+    return self::handle_doctor_command(
+        *heal,
+        *yes,
+        category.as_deref(),
+        *json,
+        *force,
+        *all,
+        since.as_deref(),
+        cmd.as_ref(),
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DOCTOR: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "doctor",
+        help_after: "driver",
+        command: <DoctorArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_doctor),
+    };
+
+#[cfg(test)]
+#[path = "tests/bug_1985_destructive_gate_tests.rs"]
+mod bug_1985_destructive_gate_tests;

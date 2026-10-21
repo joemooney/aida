@@ -45,6 +45,10 @@ pub struct GitBackend {
     auto_commit: bool,
     /// Whether to record operations in the append-only oplog
     oplog_enabled: bool,
+    /// Whether the staged write under the current store lock includes an
+    /// advisor-gated status advance (`TASK-1737`).
+    // trace:TASK-1737 | ai:antigravity
+    pending_authority_advance: std::sync::atomic::AtomicBool,
 }
 
 /// What a whole-store `save()` left alone.
@@ -523,6 +527,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: true,
             oplog_enabled: true,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -577,29 +582,70 @@ impl GitBackend {
         }
     }
 
+    // trace:TASK-1737 | ai:antigravity
+    fn with_authority_trailers(&self, message: &str, record_authority: bool) -> String {
+        if !record_authority {
+            return message.to_string();
+        }
+        match crate::lifecycle::resolve_commit_authority(&self.root) {
+            Some(auth) => format!("{message}{}", auth.format_trailers()),
+            None => message.to_string(),
+        }
+    }
+
     /// Stage every YAML the backend is responsible for and commit. Used by
     /// the bulk `save()` path that legitimately touches the entire object
     /// tree. For per-operation paths, prefer `auto_commit_paths` so we don't
     /// pull in unrelated drift from sibling files.
     /// trace:BUG-1-040 | ai:claude
+    fn path_present_or_tracked(&self, rel: &str) -> bool {
+        self.root.join(rel).exists()
+            || crate::git_ops::host_git_command(&self.root)
+                .args(["ls-files", "--error-unmatch", "--", rel])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+    }
+
     fn auto_commit(&self, message: &str) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
         // A contained session leaves the commit to the host, and says so.
-        // trace:BUG-1929 | ai:claude
+        // trace:BUG-1929 trace:BUG-2140 | ai:antigravity
         if crate::git_ops::store_commit_deferred_to_host(&self.root) {
-            crate::git_ops::notice_store_commit_deferred();
+            crate::git_ops::notice_store_commit_deferred(&self.root);
             return;
         }
-        let _ = crate::git_ops::add_all(&self.root, "objects");
+        if let Err(e) = crate::git_ops::refuse_embedded_repos(&self.root) {
+            eprintln!("warning: store change written but not committed: {e:#}");
+            return;
+        }
+        if self.path_present_or_tracked("objects") {
+            if let Err(e) = crate::git_ops::add_all(&self.root, "objects") {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
+        }
         if self.metadata_path.exists() {
-            let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
+            if let Err(e) = crate::git_ops::add(&self.root, &["metadata.yaml"]) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         if self.root.join("oplog.yaml").exists() {
-            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
+            if let Err(e) = crate::git_ops::add(&self.root, &["oplog.yaml"]) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
-        if let Err(e) = crate::git_ops::commit(&self.root, message) {
+        let commit_message = self.with_authority_trailers(message, record_authority);
+        if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
             // Never succeed silently: the write is on disk but uncommitted.
             // trace:BUG-1929 | ai:claude
             eprintln!("warning: store change written but not committed: {e:#}");
@@ -610,27 +656,47 @@ impl GitBackend {
     /// the commit when nothing is staged so no-op operations don't churn
     /// commit history. Use `git add -A <path>` semantics so deletions are
     /// captured along with adds/modifications.
-    /// trace:BUG-1-040 | ai:claude
+    // trace:BUG-1-040 trace:BUG-2140 | ai:antigravity
     fn auto_commit_paths(&self, message: &str, paths: &[&str]) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
-        // trace:BUG-1929 | ai:claude
+        // trace:BUG-1929 trace:BUG-2140 | ai:antigravity
         if crate::git_ops::store_commit_deferred_to_host(&self.root) {
-            crate::git_ops::notice_store_commit_deferred();
+            crate::git_ops::notice_store_commit_deferred(&self.root);
+            return;
+        }
+        if let Err(e) = crate::git_ops::refuse_embedded_repos(&self.root) {
+            eprintln!("warning: store change written but not committed: {e:#}");
             return;
         }
         for p in paths {
+            if !self.path_present_or_tracked(p) {
+                continue;
+            }
             // `git add -A <path>` so a removed file is staged as a deletion
             // (plain `git add` only handles add/modify).
             // Route through the shared git helper so targeted store writes get
             // the same stale-index-lock recovery as bulk saves. trace:BUG-1164 | ai:codex
-            let _ = crate::git_ops::add_all(&self.root, p);
+            if let Err(e) = crate::git_ops::add_all(&self.root, p) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         // Always include oplog.yaml when present — every targeted op records
         // an op and we want it captured in the same commit.
+        // BUG-2140: when staging oplog.yaml, also stage any object/metadata/block
+        // files from earlier deferred oplog operations (whose target_id is in
+        // uncommitted `oplog.yaml` entries not already covered by `paths`),
+        // without staging unrelated concurrent object writes (BUG-1612).
         if self.root.join("oplog.yaml").exists() {
-            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
+            if let Err(e) = self.stage_oplog_and_deferred_targets(paths) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         // Don't make an empty commit if nothing was actually staged.
         // Store git goes through the hardened host builder (TASK-1775).
@@ -641,11 +707,170 @@ impl GitBackend {
             .map(|s| !s.success()) // non-zero exit means there ARE staged changes
             .unwrap_or(false);
         if staged {
-            if let Err(e) = crate::git_ops::commit(&self.root, message) {
+            let commit_message = self.with_authority_trailers(message, record_authority);
+            if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
                 // trace:BUG-1929 | ai:claude
                 eprintln!("warning: store change written but not committed: {e:#}");
             }
         }
+    }
+
+    /// Read and parse a requirement YAML from `HEAD:<rel_path>` when that path
+    /// exists in `HEAD`. Returns `Ok(None)` when `HEAD` or `HEAD:<rel_path>`
+    /// does not exist; propagates git or YAML parse failures as `Err`.
+    // trace:BUG-2140 | ai:antigravity
+    fn read_head_object(&self, rel_path: &str) -> Result<Option<Requirement>> {
+        let spec = format!("HEAD:{rel_path}");
+        let exists = crate::git_ops::host_git_command(&self.root)
+            .args(["cat-file", "-e", &spec])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            return Ok(None);
+        }
+        let out = crate::git_ops::host_git_command(&self.root)
+            .args(["show", &spec])
+            .output()
+            .with_context(|| format!("failed to run git show {spec}"))?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "git show {spec} failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        let req = serde_yaml::from_slice::<Requirement>(&out.stdout)
+            .with_context(|| format!("failed to parse {spec}"))?;
+        Ok(Some(req))
+    }
+
+    /// Stage `oplog.yaml` along with any object/metadata/block files belonging
+    /// to earlier deferred oplog operations whose `target_id` is not already
+    /// covered by `paths` (BUG-2140), while preserving BUG-1612's targeted
+    /// commit invariant so unrelated unlogged object writes are never staged.
+    ///
+    /// Propagates any `oplog.yaml`, `HEAD:oplog.yaml`, or dirty object parse
+    /// failure as `Err` so `auto_commit_paths` never commits `oplog.yaml`
+    /// without its companion objects, and skips the `HEAD` probe when
+    /// `oplog.yaml` is clean relative to `HEAD`.
+    // trace:BUG-2140 trace:BUG-1612 | ai:antigravity
+    fn stage_oplog_and_deferred_targets(&self, paths: &[&str]) -> Result<()> {
+        let head_has_oplog = crate::git_ops::host_git_command(&self.root)
+            .args(["cat-file", "-e", "HEAD:oplog.yaml"])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if head_has_oplog {
+            let oplog_clean = crate::git_ops::host_git_command(&self.root)
+                .args(["diff", "--quiet", "HEAD", "--", "oplog.yaml"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if oplog_clean {
+                return Ok(());
+            }
+        }
+
+        let oplog_path = self.root.join("oplog.yaml");
+        let log = crate::oplog::OpLog::load(&oplog_path).context("failed to load oplog.yaml")?;
+        if !log.operations.is_empty() {
+            let committed_ids: std::collections::HashSet<uuid::Uuid> = if head_has_oplog {
+                let out = crate::git_ops::host_git_command(&self.root)
+                    .args(["show", "HEAD:oplog.yaml"])
+                    .output()
+                    .context("failed to run git show HEAD:oplog.yaml")?;
+                if !out.status.success() {
+                    anyhow::bail!(
+                        "git show HEAD:oplog.yaml failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    );
+                }
+                let head_log: crate::oplog::OpLog = serde_yaml::from_slice(&out.stdout)
+                    .context("failed to parse HEAD:oplog.yaml")?;
+                head_log.operations.into_iter().map(|op| op.id).collect()
+            } else {
+                std::collections::HashSet::new()
+            };
+
+            let mut uncommitted_targets: std::collections::HashSet<uuid::Uuid> = log
+                .operations
+                .iter()
+                .filter(|op| !committed_ids.contains(&op.id))
+                .map(|op| op.target_id)
+                .collect();
+
+            for p in paths {
+                if p.starts_with("objects/") {
+                    let disk_path = self.root.join(p);
+                    if disk_path.exists() {
+                        let req = object_store::read_object_from_path(&disk_path)?;
+                        uncommitted_targets.remove(&req.id);
+                    } else if let Some(req) = self.read_head_object(p)? {
+                        uncommitted_targets.remove(&req.id);
+                    }
+                }
+            }
+
+            if !uncommitted_targets.is_empty() {
+                if self.objects_root.exists() {
+                    let status_out = crate::git_ops::host_git_command(&self.root)
+                        .args([
+                            "status",
+                            "--porcelain",
+                            "-z",
+                            "--untracked-files=all",
+                            "--",
+                            "objects",
+                        ])
+                        .output()
+                        .context("failed to inspect dirty store object paths")?;
+                    if !status_out.status.success() {
+                        anyhow::bail!(
+                            "git status -- objects failed: {}",
+                            String::from_utf8_lossy(&status_out.stderr).trim()
+                        );
+                    }
+                    let mut entries = status_out
+                        .stdout
+                        .split(|&b| b == 0)
+                        .filter(|s| !s.is_empty());
+                    while let Some(entry) = entries.next() {
+                        if entry.len() < 4 {
+                            continue;
+                        }
+                        let status_x = entry[0];
+                        let rel = std::str::from_utf8(&entry[3..])
+                            .context("non-UTF-8 path in store git status")?;
+                        if matches!(status_x, b'R' | b'C') {
+                            let _ = entries.next();
+                        }
+                        if !rel.ends_with(".yaml") || paths.contains(&rel) {
+                            continue;
+                        }
+                        let disk_path = self.root.join(rel);
+                        let req_opt = if disk_path.exists() {
+                            Some(object_store::read_object_from_path(&disk_path)?)
+                        } else {
+                            self.read_head_object(rel)?
+                        };
+                        if let Some(req) = req_opt {
+                            if uncommitted_targets.contains(&req.id) {
+                                crate::git_ops::add_all(&self.root, rel)?;
+                            }
+                        }
+                    }
+                }
+                if self.metadata_path.exists() {
+                    crate::git_ops::add(&self.root, &["metadata.yaml"])?;
+                }
+                if self.root.join("registry/blocks.yaml").exists() {
+                    crate::git_ops::add(&self.root, &["registry/blocks.yaml"])?;
+                }
+            }
+        }
+        crate::git_ops::add(&self.root, &["oplog.yaml"])
     }
 
     /// Read a user's queue file, PROPAGATING any parse error instead of
@@ -758,6 +983,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: false,
             oplog_enabled: false,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         };
         backend.load_metadata_only()
     }
@@ -1057,6 +1283,12 @@ impl GitBackend {
         )?;
 
         // Record ops for changed fields (compare with existing if possible).
+        let authority_advance = existing.as_ref().is_some_and(|old| {
+            crate::lifecycle::status_advance_records_authority_trailers(
+                &old.status,
+                &requirement.status,
+            )
+        });
         if let Some(old) = existing {
             if old.title != requirement.title {
                 self.record_op(
@@ -1122,6 +1354,10 @@ impl GitBackend {
         }
 
         let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
+        if wrote && authority_advance {
+            self.pending_authority_advance
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -1305,6 +1541,8 @@ impl GitBackend {
         // waiting; a sync holding the lock can leave a failed rebase behind
         // in between, so the outermost holder checks again once it owns it.
         if guard.is_outermost() {
+            self.pending_authority_advance
+                .store(false, std::sync::atomic::Ordering::SeqCst);
             crate::git_ops::ensure_store_write_safe(&self.root)?;
         }
         Ok(guard)
@@ -1614,8 +1852,21 @@ impl GitBackend {
         let mut written_specs: Vec<String> = Vec::new();
         for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
+            let authority_advance = !imported
+                && object_store::read_object(&self.objects_root, spec_id)
+                    .ok()
+                    .is_some_and(|old| {
+                        crate::lifecycle::status_advance_records_authority_trailers(
+                            &old.status,
+                            &req.status,
+                        )
+                    });
             if object_store::write_object_if_changed(&self.objects_root, req)? {
                 written_specs.push(spec_id.to_string());
+                if authority_advance {
+                    self.pending_authority_advance
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                }
             }
             if let (Some(snapshot), Some(caller_fp)) = (snapshot, caller_fp) {
                 if let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? {
@@ -2221,10 +2472,13 @@ impl DatabaseBackend for GitBackend {
         let mut planned = vec![req.clone()];
         self.prepare_hypothesis_updates(&mut planned, &[])?;
         req = planned.iter().find(|r| r.id == req.id).unwrap().clone();
+        let mut paths = Vec::new();
         if let Some(meta) = new_metadata {
             self.save_metadata(&meta)?;
+            paths.push("metadata.yaml".to_string());
+        } else if self.metadata_path.exists() {
+            paths.push("metadata.yaml".to_string());
         }
-        let mut paths = vec!["metadata.yaml".to_string()];
         for row in planned.iter().filter(|r| r.id != req.id) {
             if let Some(sid) = self.stage_requirement_update(row)? {
                 paths.push(object_store::relative_object_path(sid)?);
@@ -3439,7 +3693,7 @@ mod tests {
         // outside a git repo — so make the store a real repo, else there are
         // no commits to count. (This is the property under test.)
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3458,7 +3712,7 @@ mod tests {
         }
 
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -3511,7 +3765,7 @@ mod tests {
         let backend = GitBackend::new(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3537,7 +3791,7 @@ mod tests {
 
         let targets = vec![reqs[0].clone(), reqs[1].clone(), impostor];
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -4092,7 +4346,7 @@ mod tests {
         crate::git_ops::add(&root, &["metadata.yaml"]).unwrap();
         crate::git_ops::commit(&root, "seed").unwrap();
         let before = crate::git_ops::head_sha(&root).unwrap();
-        let detached = std::process::Command::new("git")
+        let detached = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["checkout", "--detach"])
@@ -4422,7 +4676,7 @@ mod tests {
             &["config", "user.email", "test@example.com"][..],
             &["config", "user.name", "Test"][..],
         ] {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -4439,7 +4693,7 @@ mod tests {
     }
 
     fn bug1612_head_files(root: &Path) -> Vec<String> {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args([
@@ -4710,7 +4964,7 @@ mod tests {
         // A no-op transaction writes and commits nothing.
         let head = |root: &Path| {
             String::from_utf8(
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .arg("-C")
                     .arg(root)
                     .args(["rev-parse", "HEAD"])
@@ -4926,7 +5180,7 @@ mod tests {
         );
 
         let git = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -5539,7 +5793,7 @@ mod tests {
     fn bug1641_spec_only_save_leaves_metadata_alone() {
         let (_dir, root, backend, _) = bug1612_git_store(2);
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -5968,7 +6222,7 @@ mod tests {
             &["config", "user.name", "t"],
             &["commit", "-q", "--allow-empty", "-m", "seed"],
         ] {
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .current_dir(&root)
                 .args(args)
                 .status()
@@ -5998,5 +6252,89 @@ mod tests {
         );
         std::fs::remove_dir_all(root.join(".git").join("rebase-merge")).unwrap();
         assert!(backend.queue_list("fay", false).unwrap().is_empty());
+    }
+
+    // trace:BUG-2140 | ai:antigravity
+    #[cfg(unix)]
+    #[test]
+    fn bug_2140_stage_oplog_and_deferred_targets_stages_deferred_objects_and_refuses_corrupt_state()
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::Command;
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        std::fs::create_dir_all(&root).unwrap();
+        for args in [
+            &["init", "-q", "-b", "aida-store"][..],
+            &["config", "user.email", "t@example.com"],
+            &["config", "user.name", "t"],
+        ] {
+            assert!(crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let backend = GitBackend::new(&root)
+            .unwrap()
+            .with_auto_commit(true)
+            .with_oplog(true);
+        let r1 = backend
+            .add_requirement(Requirement::new("Seed".into(), "seed".into()))
+            .unwrap();
+        assert_eq!(r1.spec_id.as_deref(), Some("FR-001"));
+
+        // Defer a second requirement write by locking `.git/objects` read-only.
+        let git_objects = root.join(".git/objects");
+        std::fs::set_permissions(&git_objects, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let r2 = backend
+            .add_requirement(Requirement::new("Deferred".into(), "deferred".into()))
+            .unwrap();
+        std::fs::set_permissions(&git_objects, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let r2_rel = object_store::relative_object_path(r2.spec_id.as_deref().unwrap()).unwrap();
+        let r2_disk = root.join(&r2_rel);
+        let r2_valid = std::fs::read_to_string(&r2_disk).unwrap();
+
+        // Corrupt the deferred object on disk: `stage_oplog_and_deferred_targets`
+        // must return `Err` instead of silently committing `oplog.yaml` without
+        // its companion object (F4).
+        std::fs::write(&r2_disk, "id: [corrupt yaml").unwrap();
+        assert!(
+            backend.stage_oplog_and_deferred_targets(&[]).is_err(),
+            "corrupt deferred object must fail stage_oplog_and_deferred_targets"
+        );
+        std::fs::write(&r2_disk, &r2_valid).unwrap();
+
+        // Corrupt `oplog.yaml` on disk: `stage_oplog_and_deferred_targets` must
+        // return `Err` as well.
+        let oplog_path = root.join("oplog.yaml");
+        let oplog_valid = std::fs::read_to_string(&oplog_path).unwrap();
+        std::fs::write(&oplog_path, "operations: [corrupt yaml").unwrap();
+        assert!(
+            backend.stage_oplog_and_deferred_targets(&[]).is_err(),
+            "corrupt oplog.yaml must fail stage_oplog_and_deferred_targets"
+        );
+        std::fs::write(&oplog_path, &oplog_valid).unwrap();
+
+        // Once valid, a targeted host update on `r1` commits `r1`, `oplog.yaml`,
+        // AND the earlier deferred `r2` object in the same commit.
+        let mut r1_edit = r1.clone();
+        r1_edit.title = "Seed updated".into();
+        backend.update_requirement(&r1_edit).unwrap();
+
+        let status = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&status.stdout).trim().is_empty(),
+            "deferred object + oplog must be committed cleanly alongside targeted update"
+        );
     }
 }

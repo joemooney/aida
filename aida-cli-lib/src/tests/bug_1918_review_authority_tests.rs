@@ -683,7 +683,7 @@ fn ship_policy_from_on_disk_ledger_refuses_the_harness_authors_approval() {
 fn head_commit_date_is_read_from_the_repo() {
     let tmp = tempfile::tempdir().unwrap();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(args)
@@ -1296,4 +1296,39 @@ fn release_burndown_and_drain_merges_pass_the_authority_gate() {
         &[concat!("drain_merge_approval", "_gate("), merge],
         "drain merge",
     );
+}
+
+// TASK-1968: concurrent appenders never fuse two records on one line — the
+// record and its newline are a single write under O_APPEND.
+// trace:TASK-1968 | ai:claude
+#[test]
+fn concurrent_ledger_appends_keep_every_line_parseable() {
+    const THREADS: usize = 8;
+    const PER_THREAD: usize = 50;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".aida").join(LEDGER_FILE);
+    std::thread::scope(|s| {
+        for t in 0..THREADS {
+            let path = &path;
+            s.spawn(move || {
+                for i in 0..PER_THREAD {
+                    let record = AuthorshipRecord {
+                        scope: format!("TASK-{t}"),
+                        lease_id: format!("lease-{t}-{i}"),
+                        branch: format!("claude/task-{t}"),
+                        tokens: (0..8).map(|k| format!("session:{t}-{i}-{k}")).collect(),
+                        recorded_at: "2026-10-19T00:00:00Z".to_string(),
+                    };
+                    append_record(path, &record).unwrap();
+                }
+            });
+        }
+    });
+    let body = std::fs::read_to_string(&path).unwrap();
+    let lines: Vec<&str> = body.lines().collect();
+    assert_eq!(lines.len(), THREADS * PER_THREAD, "one line per record");
+    for line in lines {
+        serde_json::from_str::<AuthorshipRecord>(line)
+            .unwrap_or_else(|e| panic!("malformed ledger line {line:?}: {e}"));
+    }
 }

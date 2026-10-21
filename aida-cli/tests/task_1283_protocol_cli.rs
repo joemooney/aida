@@ -5,6 +5,9 @@
 //! store discovery, lease discovery, and user-visible output are all covered.
 // trace:TASK-1283 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -17,7 +20,7 @@ mod support;
 static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

@@ -1,7 +1,7 @@
 use super::*;
 
 fn git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -153,6 +153,7 @@ fn linkage(
         files_scan_incomplete: false,
         commits_scan_incomplete: false,
         shipped_unknown: false,
+        worktree_scan_incomplete: false,
         worktree: None,
         shipped_pr,
         repo: None,

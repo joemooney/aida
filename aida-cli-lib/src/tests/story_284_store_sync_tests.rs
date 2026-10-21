@@ -172,7 +172,7 @@ fn auto_push_failure_is_non_fatal_for_per_write_and_session_end() {
             "/definitely/missing/aida-store.git",
         ],
     ] {
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(&store)
             .args(args)
             .stdout(std::process::Stdio::null())
@@ -202,7 +202,7 @@ fn task_1717_session_end_auto_push_keeps_the_commit_when_origin_is_unreachable()
     let store = tmp.path().join(".aida-store");
     std::fs::create_dir_all(&store).unwrap();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(&store)
             .args(args)
             .output()

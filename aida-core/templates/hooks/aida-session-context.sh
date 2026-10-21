@@ -174,6 +174,16 @@ if [ -z "$codex_daemon" ] && [ -n "${AIDA_SESSION_GRANT:-}" ]; then
     fi
     [ -n "$expiry_note" ] && printf '%s\n' "$expiry_note"
 fi
+# An active operator mandate (scope, time left, principal, reason, human
+# gates) is announced to EVERY seat, relay sessions included. Silent when no
+# mandate is active; best-effort.
+# trace:STORY-1700 | ai:claude
+if command -v timeout >/dev/null 2>&1; then
+    mandate_note=$(timeout 2 aida mandate status --line 2>/dev/null)
+else
+    mandate_note=$(aida mandate status --line 2>/dev/null)
+fi
+[ -n "$mandate_note" ] && printf '%s\n' "$mandate_note"
 if [ -n "$queue_lines" ]; then
     printf '%s\n' "$queue_lines"
 fi

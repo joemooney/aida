@@ -1166,10 +1166,10 @@ mod tests {
         let texts: Vec<_> = ids().iter().map(Uuid::to_string).collect();
         let mut args = vec!["aida", "regen", "score", "--consensus"];
         args.extend(texts.iter().map(String::as_str));
-        assert!(crate::cli::Cli::try_parse_from(&args).is_ok());
+        assert!(crate::command_registry::try_parse_from(&args).is_ok());
         let mut file = args.clone();
         file.push("--file");
-        assert!(crate::cli::Cli::try_parse_from(file).is_ok());
+        assert!(crate::command_registry::try_parse_from(file).is_ok());
         for extra in [
             vec!["system"],
             vec!["--control", "stub"],
@@ -1181,13 +1181,15 @@ mod tests {
         ] {
             let mut bad = args.clone();
             bad.extend(extra);
-            assert!(crate::cli::Cli::try_parse_from(bad).is_err());
+            assert!(crate::command_registry::try_parse_from(bad).is_err());
         }
+        assert!(crate::command_registry::try_parse_from([
+            "aida", "regen", "score", "system", "--file"
+        ])
+        .is_err());
         assert!(
-            crate::cli::Cli::try_parse_from(["aida", "regen", "score", "system", "--file"])
-                .is_err()
+            crate::command_registry::try_parse_from(["aida", "regen", "score", "system"]).is_err()
         );
-        assert!(crate::cli::Cli::try_parse_from(["aida", "regen", "score", "system"]).is_err());
     }
 
     // trace:TASK-0446 | ai:antigravity

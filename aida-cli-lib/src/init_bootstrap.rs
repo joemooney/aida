@@ -11,6 +11,7 @@
 // trace:STORY-780 | ai:claude
 
 use crate::process_retry::RetryEtxtbsy;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use std::io::IsTerminal;
@@ -243,6 +244,22 @@ fn run_in(dir: &Path, program: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
+/// `git <args>` in `dir`, a push to `remote`, with the remote's stored
+/// credentials kept out of argv.
+// trace:BUG-2181 | ai:claude
+fn git_push_in(dir: &Path, remote: &str, args: &[&str]) -> Result<()> {
+    let status = std::process::Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .remote_credentials(dir, remote)
+        .status_retrying_etxtbsy()
+        .context("could not launch `git`")?;
+    if !status.success() {
+        bail!("`git {}` failed in {}", args.join(" "), dir.display());
+    }
+    Ok(())
+}
+
 fn git_head_exists(dir: &Path) -> bool {
     std::process::Command::new("git")
         .args(["rev-parse", "--verify", "HEAD"])
@@ -392,7 +409,7 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
                 "  {} origin already configured — skipping repo creation",
                 "Note:".dimmed()
             );
-            run_in(dir, "git", &["push", "-u", "origin", &branch])?;
+            git_push_in(dir, "origin", &["push", "-u", "origin", &branch])?;
         } else {
             let argv = crate::forge::ForgeKind::GitHub
                 .repo_create_argv(&repo_arg, plan.public)
@@ -414,7 +431,7 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
         }
         // Works for hosts with push-to-create (GitLab): the first push
         // creates the project.
-        run_in(dir, "git", &["push", "-u", "origin", &branch])?;
+        git_push_in(dir, "origin", &["push", "-u", "origin", &branch])?;
         println!("  {} pushed `{}` to {}", "+".green(), branch, url);
         hubs.push("origin".to_string());
     }
@@ -489,9 +506,9 @@ pub(crate) fn publish_remotes(plan: &BootstrapPlan, dir: &Path) -> Result<Option
     // to every hub, after the code branch reached every hub.
     for hub in &hubs {
         if hub == "origin" {
-            run_in(dir, "git", &["push", "-u", "origin", "aida-store"])?;
+            git_push_in(dir, "origin", &["push", "-u", "origin", "aida-store"])?;
         } else {
-            run_in(dir, "git", &["push", hub.as_str(), "aida-store"])?;
+            git_push_in(dir, hub, &["push", hub.as_str(), "aida-store"])?;
         }
     }
     println!(

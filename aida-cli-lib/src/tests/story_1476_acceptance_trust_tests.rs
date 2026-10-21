@@ -374,7 +374,7 @@ fn story_1476_disabled_or_empty_policy_denies() {
 // --- Trust sources -----------------------------------------------------------
 
 fn git(root: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(args)
@@ -398,13 +398,13 @@ fn story_1476_repo_config_optin_ignored() {
     let tmp = tempfile::tempdir().unwrap();
     let origin = tmp.path().join("origin.git");
     let work = tmp.path().join("work");
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["init", "-q", "--bare", "-b", "main"])
         .arg(&origin)
         .output()
         .unwrap();
     assert!(out.status.success());
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["init", "-q", "-b", "main"])
         .arg(&work)
         .output()

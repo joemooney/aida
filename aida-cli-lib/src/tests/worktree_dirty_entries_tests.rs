@@ -8,20 +8,20 @@ use tempfile::TempDir;
 fn init_repo_with_gitignore() -> TempDir {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["init", "--initial-branch=main", "--quiet"])
         .status()
         .unwrap();
     std::fs::write(p.join(".gitignore"), "target/\n.aida/cache.db\n").unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["add", ".gitignore"])
         .status()
         .unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["commit", "-m", "init", "--quiet"])
@@ -104,11 +104,19 @@ fn mixed_only_real_changes_show() {
     );
 }
 
-/// Non-git path → empty vec (git errors, we treat as clean and let
-/// the downstream remove --force produce the real error).
+/// Non-git path: `git status` fails, which reads as one dirty entry so a
+/// caller about to remove the tree keeps it (BUG-1985 F4: unreadable is
+/// never clean). A path that no longer exists is empty.
 // trace:BUG-67 | ai:claude
+// trace:BUG-1985 | ai:claude
 #[test]
-fn non_git_path_is_clean() {
+fn non_git_path_fails_closed() {
     let tmp = TempDir::new().unwrap();
-    assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    let entries = worktree_dirty_entries(tmp.path());
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert!(
+        entries[0].starts_with("?? (git status failed"),
+        "{entries:?}"
+    );
+    assert!(worktree_dirty_entries(&tmp.path().join("gone")).is_empty());
 }
