@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T22:26:09.084858958Z
+modified_at: 2026-10-21T23:18:56.155118729Z
 req_type: Task
 tags:
 - launch
@@ -488,6 +488,24 @@ comments:
   created_at: 2026-10-21T21:33:28.535094365Z
   modified_at: 2026-10-21T21:33:28.535094365Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160c2-b79b-7500-b434-b09bcb766b6f
+  author: joe
+  content: |-
+    IMPLEMENTER HANDOFF 2026-10-21 15:50 (claude, worktree ~/ai/aida-worktrees/fix-task-1955).
+    Merged: #2803 (slice 1), #2805 (slice 2), #2810 (slice 4). #2809 (slice 3) passed review; the operator ships it (it touches mandate.rs).
+    #2814 (slice 5): r1 rework pushed at f18a4cd93b, which adds the help snapshot, TASK-2108 and TASK-2109. Re-review runs when CI is green.
+    Slice 6 is committed locally and NOT pushed: branch claude/task-1955-hooks, commit 6f521be70b. It has TASK-2075/2076/2077 (cargo-timeout hook master plus tests/test_cargo_timeout_guard.sh fixtures, templates synced) and TASK-2085 (gc --phantoms case re-address). Gates are green. Push it and open the PR once #2814's CI is green.
+    Slice 7 (completes TASK-1955), still to do:
+    - TASK-2101/2102/2103 (PR-2809 notes; need #2809 on main)
+    - TASK-1808, TASK-1933
+    - the test-git ratchet items TASK-2010/2018/2017/2014
+    - test nits TASK-2050/2073/2074
+    - flakes BUG-2196/BUG-2202 and the two flake notes in comments 5 and 10
+    - TASK-2086/2087/2088 and the PR-2804 drive notes (after #2802 and #2804 merge)
+    - the optional age floor for pid-less review-watch probe refs (#2814 r1)
+  created_at: 2026-10-21T23:18:56.155118729Z
+  modified_at: 2026-10-21T23:18:56.155118729Z
+  session_id: b4f9fa57-6efa-415c-9329-ade8b4373c55
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
