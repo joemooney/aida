@@ -1,0 +1,27 @@
+id: 01a15f8e-3743-73b0-8b5f-4197431e78a1
+spec_id: TASK-2076
+agreed_id: TASK-2076
+title: Cargo-timeout hook ignores pattern/suffix rules that build unknown prerequisites
+description: |
+  make_targets_skip_cargo counts an unknown prerequisite as a plain file, even when a pattern rule (%.html:) or old-style suffix rule (.md.html:) in the same Makefile would build it with cargo. Fix: fail closed when such a rule exists and a prerequisite is unknown.
+
+  Raised in review of PR-2801: https://github.com/joemooney/aida/pull/2801#issuecomment-6322555279
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:41:58.211063753Z
+modified_at: 2026-10-21T17:41:58.211063753Z
+req_type: Task
+tags:
+- from-review:PR-2801
+- hooks
+- severity:minor
+filed_at:
+  code_sha: 57c220717cc5190b1d8e90ec39fdd0b0d1ee6197
+  branch: pr-2801
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15f8ac422

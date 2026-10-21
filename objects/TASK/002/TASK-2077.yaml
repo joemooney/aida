@@ -1,0 +1,27 @@
+id: 01a15f8e-4bf3-71d1-8f3f-be64a20db89d
+spec_id: TASK-2077
+agreed_id: TASK-2077
+title: Cargo-timeout hook inert allowlist admits awk/sed/cat command execution
+description: |
+  awk/sed/cat are on the inert allowlist, but quoted bodies are stripped before the check, so awk 'BEGIN{system("cargo build")}', GNU sed 'e', and cat <(cargo ...) pass as inert. .RECIPEPREFIX and top-level $(eval ...) rule generation are also not seen. Drop awk/sed, treat '<(' as non-inert, and list the remaining misses next to the 'Known misses' line in the header.
+
+  Raised in review of PR-2801: https://github.com/joemooney/aida/pull/2801#issuecomment-6322555279
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:42:03.507304323Z
+modified_at: 2026-10-21T17:42:03.507304323Z
+req_type: Task
+tags:
+- from-review:PR-2801
+- hooks
+- severity:cosmetic
+filed_at:
+  code_sha: 57c220717cc5190b1d8e90ec39fdd0b0d1ee6197
+  branch: pr-2801
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15f8ac422
