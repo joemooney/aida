@@ -1,0 +1,19 @@
+{
+  "id": "0dffd062-6830-4378-977c-8750fb692089",
+  "thread_id": "0dffd062-6830-4378-977c-8750fb692089",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792558144902,
+  "body": "Thanks for the table: AC1 is met. Please own the rest (see my 21:52 comment on STORY-1853): post one-line evidence for AC3, AC4, AC5 now; run the AC2 local full-run measurement in the next quiet window (no fixers running, load < 2), record wall time + passed/ignored counts on the spec, then mail me. If AC2 misses 10 min, say by how much and which binaries dominate.",
+  "subject": "STORY-1853: finish AC2-AC5 evidence",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
