@@ -6,17 +6,26 @@ description: |
   PR-2810 addresses TASK-2030 (a)/(b) only. The advisor folded TASK-2025 (operator gate finding marked routed when [notify] is unconfigured), TASK-1664 (no warning that notify is missing) and TASK-1665 (crashed Dormant reviewer suppresses unpicked-ready-pr for 24h) into TASK-2030. None is fixed or deferred in the PR body. Take them in a later slice, each with a fix and a test or a stated reason.
 
   Raised in review of PR-2810: https://github.com/joemooney/aida/pull/2810#issuecomment-6325879491
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T20:31:22.448238964Z
-modified_at: 2026-10-21T20:31:22.448238964Z
+modified_at: 2026-10-21T20:32:29.977783910Z
 req_type: Task
 tags:
 - TASK-1955
 - from-review:PR-2810
 - severity:minor
+history:
+- id: 01a1602a-5719-7393-a6c7-44274f1917b5
+  author: joe
+  timestamp: 2026-10-21T20:32:29.977774602Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 396cb2bf3cdc964d4c5c07d6665d05ece4204880
   branch: pr-2810
