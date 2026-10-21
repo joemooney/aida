@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-17T00:26:47.623987290Z
-modified_at: 2026-10-17T00:26:47.623987290Z
+modified_at: 2026-10-21T04:32:16.335996228Z
 req_type: Bug
+tags:
+- operator-held
+history:
+- id: 01a15cbb-3b98-7b50-ad08-62814d5b877f
+  author: joe
+  timestamp: 2026-10-21T04:32:16.792921893Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:16.335996228Z
+deferred_until: Cross-project reviewer permissions; root cause unknown. Revisit when aida-relay (or another non-aida project) next needs an attested reviewer verdict.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: a7101365ea6a12b448688d13bfb3f2f32594a153
   branch: main
