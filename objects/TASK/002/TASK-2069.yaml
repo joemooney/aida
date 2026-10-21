@@ -1,0 +1,31 @@
+id: 01a15ec1-40d4-7b93-93d1-63070089bae6
+spec_id: TASK-2069
+agreed_id: TASK-2069
+title: Claim CAS retry hard-fails when the store HEAD moved past our unpushed claim commit
+description: |
+  aida-cli-lib/src/coordination.rs, acquire_claim_receipted: on push rejection (Ok(false)) and on push error, PR-2782 replaced main's rollback_commit_if_head_matches with rollback_claim_commit(...)?.
+  The claim commit is made under with_store_write_lock, but push_exact runs outside the lock. Another store writer in the same clone can commit in that window. When that happens, rollback_claim_commit fails its HEAD == expected check and returns Err. session_start then bails ("claim rollback identity changed"), so the launch fails.
+  Main's helper handled this case (TASK-1981): it rebased our own unpushed commit out from under the newer HEAD and retried, or carried on local-only after a network error.
+  Fix: for the CAS retry and push-error paths, drop our own unpushed claim commit the way rollback_commit_if_head_matches does (rebase --onto when HEAD advanced). Keep the strict identity check for launch-rollback deletion only (release_claim_receipt).
+  Related: release_claim_receipt makes one push attempt and bails on contention, leaving a local rollback commit. Consider a bounded retry.
+
+  Raised in review of PR-2782: https://github.com/joemooney/aida/pull/2782
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T13:58:05.780115847Z
+modified_at: 2026-10-21T13:58:05.780115847Z
+req_type: Task
+tags:
+- coordination
+- from-review:PR-2782
+- severity:minor
+filed_at:
+  code_sha: 01a04910d0fcedbf42a4ae5c23cdc6d61d36013c
+  branch: pr-2782
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15eb6efbb
