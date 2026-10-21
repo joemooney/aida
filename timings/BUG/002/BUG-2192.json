@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2192",
+  "publishes": [
+    {
+      "at": "2026-10-21T05:12:57.892923701Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-20T11:39:45.628509580Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T22:09:12.035270982Z",
+      "spec": "BUG-2192",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2192",
+        "branch": "pr-2786",
+        "first_seen": "2026-10-20T22:09:12.032632847+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:37:45.675893166Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2786,
+        "verdict": "APPROVED",
+        "reviewed_sha": "73986c95929c"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:57:14.338295960Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2786,
+        "verdict": "APPROVED",
+        "reviewed_sha": "73986c95929c"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:58:21.906292698Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T05:10:36.366291478Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T05:10:51.409436072Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2788
+      }
+    },
+    {
+      "ts": "2026-10-21T05:12:50.284067536Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:12:50.284763707Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:12:57.423392499Z",
+      "spec": "BUG-2192",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:12:57.424201169Z",
+      "spec": "BUG-2192",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
