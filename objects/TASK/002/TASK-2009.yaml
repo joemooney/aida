@@ -10,18 +10,27 @@ description: |
   Trigger needs host-staged, uncommitted store dirt (contained children can't stage), so the case is rare. Fix: drop paths absent from both index and HEAD from refs before commit_paths (or check with `git ls-files`/`git cat-file -e HEAD:<p>`), and add a unit test.
 
   Raised in review of PR-2777: https://github.com/joemooney/aida/pull/2777#issuecomment-6293734093
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T14:51:28.968634668Z
-modified_at: 2026-10-20T14:51:28.968634668Z
+modified_at: 2026-10-21T04:30:32.511638124Z
 req_type: Task
 tags:
 - containment
 - from-review:PR-2777
 - severity:minor
 - store
+history:
+- id: 01a15cb9-a43f-7140-87bc-02ad04f41c02
+  author: joe
+  timestamp: 2026-10-21T04:30:32.511635802Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 6bd0d98c4d89e5561ea6d35dd373ca8abc93ea78
   branch: pr-2777
