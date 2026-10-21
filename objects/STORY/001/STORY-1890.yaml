@@ -12,12 +12,12 @@ description: |
   - Record the ordinary independent attested PR verdict only for the current SHA. Require green required CI at that head before ship. Do not bypass holds or rework. Ask advisor if design questions arise.
 
   Filed manually because aida pr auto-queue-review skipped the approved Refs-only commit trailers. Operator explicitly authorized full implementation with advisor-coordinated independent review for each PR. Author lease01a15f84fa7c remains in /home/joe/ai/aida-story-1843-routing; reviewer should use explicit --role reviewer and the PR's unambiguous backing spec for coexistence.
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T19:03:31.740684502Z
-modified_at: 2026-10-21T19:04:12.028834261Z
+modified_at: 2026-10-21T19:12:32.860664248Z
 req_type: Story
 tags:
 - pr:2808
@@ -40,6 +40,14 @@ history:
   author: ai:codex:joe
   timestamp: 2026-10-21T19:04:13.073341192Z
   changes: []
+- id: 01a15fe1-245c-7b63-b251-39b9689a4b23
+  author: joe
+  timestamp: 2026-10-21T19:12:32.860658598Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 3df0a4c73dccd81e6defc0be0bf89595d846dbda
   branch: main
