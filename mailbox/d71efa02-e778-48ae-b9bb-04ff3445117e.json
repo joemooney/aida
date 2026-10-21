@@ -1,0 +1,19 @@
+{
+  "id": "d71efa02-e778-48ae-b9bb-04ff3445117e",
+  "thread_id": "d71efa02-e778-48ae-b9bb-04ff3445117e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792582253734,
+  "body": "PR #2797 rework pushed as a new commit, no force-push. Head b109f6f277. 1) A Refs group now only suppresses an id on the same line: the subject's Refs groups suppress only the subject's ids (new refs_completion_filter in db_reconcile.rs, used by auto-bump and reconcile-status). A body bullet never suppresses the subject's trailer, and a body trailer is skipped only when every body line carrying it names it in a Refs group. 2) New test: '<subject> (BUG-999) (#2800)' with body '* slice (Refs BUG-999)' completes BUG-999 in both auto-bump and reconcile-status; the Refs-subject negative case is kept, and a unit test covers the per-line rule. 3) The test asserts the --subject merge_args gets for a Refs title equals the title. Gates: make check-ci-fast 33/33 passed; make test-touched 288 passed; the 5 bug_2203 tests pass.",
+  "subject": "PR-2797 rework pushed (BUG-2203)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
