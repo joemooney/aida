@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/mailbox_cmd.rs:914 (TASK-2085, PR-2817): `misspelled` re-addresses any case variant of a known id to the spelling known_mailbox_recipients keeps first (or_insert_with). If a reader's live identity is the other spelling, for example team.toml key `Joe` with USER/AIDA_USER=`joe`, mail that `joe` could read before gc is archived and copied to `Joe`. That reader can no longer see it, because Message::addressed_to is exact. Option: skip the re-address when the mismatched spelling is one of this machine's inbox_identities(), or make delivery case-insensitive for known ids.
 
   Raised in review of PR-2817: https://github.com/joemooney/aida/pull/2817#issuecomment-6329162664
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T23:51:11.935096441Z
-modified_at: 2026-10-21T23:51:11.935096441Z
+modified_at: 2026-10-21T23:54:30.726437582Z
 req_type: Task
 tags:
 - from-review:PR-2817
 - mailbox
 - severity:minor
+history:
+- id: 01a160e3-49c6-7630-98b1-355eccf2219f
+  author: joe
+  timestamp: 2026-10-21T23:54:30.726434314Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 376a46ecd1a020d216cd0946c37738bb580a3803
   branch: main
