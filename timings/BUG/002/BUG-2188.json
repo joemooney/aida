@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2188",
+  "publishes": [
+    {
+      "at": "2026-10-21T14:02:11.444629977Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-19T15:14:48.802506066Z",
+      "spec": "BUG-2188",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T03:54:34.621241098Z",
+      "spec": "BUG-2188",
+      "seat": "integrator",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-20T17:52:45.256158857Z",
+      "spec": "BUG-2188",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2188",
+        "branch": "codex/bug-2188",
+        "first_seen": "2026-10-20T17:52:45.187334730+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T14:00:34.604056845Z",
+      "spec": "BUG-2188",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T14:01:51.338153929Z",
+      "spec": "BUG-2188",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2782
+      }
+    },
+    {
+      "ts": "2026-10-21T14:02:11.322421587Z",
+      "spec": "BUG-2188",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "0cc97d963b3d294920db4dd454a461f9226c9b5c",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
