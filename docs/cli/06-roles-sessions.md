@@ -139,9 +139,9 @@ a tree with live users. A failed spawn revokes only its newly issued grant.
 
 For AIDA delegation, keep the advisor shell's validated parent grant and clear
 `AIDA_SESSION_PURPOSE`; the launcher issues the child's own grant. If the grant
-was scrubbed, enter the advisor role in a human terminal with
-`eval "$(aida role enter advisor --delegate-seat implementer)"`, then retry the
-original launch in that shell. Direct vendor/relay launches still scrub the
+was scrubbed, enter the advisor role in a human terminal by evaluating the
+output of `aida role enter advisor --delegate-seat implementer` (wrap it in
+`eval "$(...)"`), then retry the original launch in that shell. Direct vendor/relay launches still scrub the
 advisor grant. An ambient `AIDA_SESSION_ROLE=implementer` alone does not authorize
 a delegated launch.
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->

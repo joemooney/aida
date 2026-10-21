@@ -1353,3 +1353,107 @@ fn bug2188_failed_pool_checkout_rolls_back_the_pool_tree_then_falls_back() {
     assert!(!branch_exists_anywhere(&root, &branch));
     assert!(list_leases(&root).is_empty());
 }
+
+// Review round 2: the Approved → InProgress bump is part of this launch's
+// setup. A launch refused after it (spawn failure, dispatcher refusal) puts
+// the spec back to Approved, so the retry is not refused as stuck work.
+// trace:BUG-2188 | ai:claude
+// trace:BUG-2188.ac41d009 | ai:claude
+#[test]
+fn bug2188_refused_launch_restores_approved_status_and_retry_succeeds() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for background in [false, true] {
+        let (_tmp, root, _tree) = receipt_project();
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = aida_core::Requirement::new("launch fixture".into(), "".into());
+        req.spec_id = Some("BUG-9188".into());
+        req.status = RequirementStatus::Approved;
+        store.requirements.push(req);
+        std::fs::create_dir_all(root.join(".aida-store")).unwrap();
+        let storage = Storage::new(root.join(".aida-store"));
+        storage.save(&store).unwrap();
+        let status = || {
+            storage
+                .load()
+                .unwrap()
+                .get_requirement_unambiguous_mut("BUG-9188")
+                .unwrap()
+                .unwrap()
+                .status
+                .clone()
+        };
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            &["implementer"],
+            &[
+                ("AIDA_BUILD_PROFILE", None),
+                ("AIDA_BIN", None),
+                ("AIDA_OS_WRAP", Some("0")),
+                ("AIDA_CONTAINED", None),
+            ],
+        );
+        let script = root.join("fail-child");
+        crate::test_exec::write_executable(
+            &script,
+            if background {
+                "#!/bin/sh\nif [ \"$1\" = --version ]; then echo fixture-version; exit 0; fi\necho dispatcher-refused >&2\nexit 73\n"
+            } else {
+                "#!/aida-fixture-no-such-interpreter\n"
+            },
+        );
+        let config = AgentLaunchConfig {
+            agent_type: "claude",
+            binary: Box::leak(script.to_string_lossy().into_owned().into_boxed_str()),
+            default_args: vec![],
+            prompt_style: AgentPromptStyle::Positional,
+            contained: false,
+        };
+        let launch = if background {
+            agent_new_bg_dispatch
+        } else {
+            agent_new_with_config
+        };
+        let previous_cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&root).unwrap();
+        let result = launch(
+            config,
+            Some("implementer".into()),
+            Some("BUG-9188".into()),
+            false,
+            None,
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(Some("fixture".into()), false),
+            AgentResumeOptions::new(false, None, false, false),
+            AgentDefaultFlagOptions::new(false, vec![], None),
+            Some("status-launch".into()),
+            None,
+            false,
+        );
+        std::env::set_current_dir(previous_cwd).unwrap();
+        assert!(result.is_err(), "the fixture child must refuse");
+        assert_eq!(status(), RequirementStatus::Approved, "bg={background}");
+        assert!(list_leases(&root).is_empty());
+
+        let (plan, receipt) = prepare_agent_launch_attempt(
+            &root,
+            Some("implementer".into()),
+            Some("BUG-9188".into()),
+            "claude",
+            Some("status-retry".into()),
+            None,
+            false,
+        )
+        .expect("the retry is not refused as stuck InProgress work");
+        assert_eq!(status(), RequirementStatus::InProgress);
+        assert!(plan.lease_id.is_some());
+        drop(receipt);
+        assert_eq!(status(), RequirementStatus::Approved);
+    }
+}

@@ -3414,8 +3414,9 @@ fn preflight_agent_new_delegation(
         let seat = canonical_role_name(role);
         seat_authority::validate_child_delegation(project_root, &seat).map_err(|cause| {
             anyhow::anyhow!(
-                "cannot launch child seat `{seat}`: {cause:#}. From a human terminal in {}, run `eval \"$(aida role enter advisor --delegate-seat {seat})\"`, then retry the original `aida agent new` command in that same shell with its AIDA_SESSION_GRANT intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
-                project_root.display()
+                "cannot launch child seat `{seat}`: {cause:#}. From a human terminal in {}, run `eval \"$(aida role enter advisor --delegate-seat {seat})\"`, then retry the original `aida agent new` command in that same shell with its {} intact; remove only AIDA_SESSION_PURPOSE. An ambient AIDA_SESSION_ROLE does not supply a grant.",
+                project_root.display(),
+                seat_authority::GRANT_ENV
             )
         })?;
     }

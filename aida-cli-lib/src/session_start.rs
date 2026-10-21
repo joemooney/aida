@@ -1196,6 +1196,9 @@ pub(crate) struct SessionStartCleanup {
     clone: Option<crate::seat_clone::CreatedClone>,
     clone_git_identity: Option<(u64, u64)>,
     lease_id: Option<String>,
+    // The spec this invocation moved Approved → InProgress, if it did.
+    // trace:BUG-2188 | ai:claude
+    status_bump: Option<String>,
     armed: bool,
 }
 impl SessionStartCleanup {
@@ -1211,6 +1214,7 @@ impl SessionStartCleanup {
             clone: None,
             clone_git_identity: None,
             lease_id: None,
+            status_bump: None,
             armed: true,
         }
     }
@@ -1231,7 +1235,7 @@ impl SessionStartCleanup {
         if !self.release_tree() {
             return false;
         }
-        self.release_branch();
+        let _ = self.release_branch();
         self.tree = None;
         self.gitdir = None;
         self.branch = None;
@@ -1302,17 +1306,60 @@ impl SessionStartCleanup {
         }
         true
     }
-    fn release_branch(&self) {
-        if let (Some(branch), Some(expected)) = (&self.branch, &self.branch_sha) {
-            let reference = format!("refs/heads/{branch}");
-            let out = std::process::Command::new("git")
-                .current_dir(&self.root)
-                .args(["update-ref", "-d", &reference, expected])
-                .output();
-            if !matches!(out, Ok(ref out) if out.status.success()) {
-                eprintln!("launch cleanup kept branch {branch}; inspect `git branch --list` before retrying");
+    /// Put back the Approved → InProgress bump this invocation made, so a
+    /// refused launch leaves the spec pickable. Only an InProgress status is
+    /// reverted: anything a later writer set is left alone.
+    // trace:BUG-2188 | ai:claude
+    fn revert_status_bump(&self) {
+        let Some(spec) = &self.status_bump else {
+            return;
+        };
+        let storage = Storage::new(self.root.join(".aida-store"));
+        let reverted = storage.load().and_then(|mut store| {
+            let Some(req) = store.get_requirement_unambiguous_mut(spec)? else {
+                return Ok(false);
+            };
+            if !matches!(req.status, RequirementStatus::InProgress) {
+                return Ok(false);
             }
+            aida_core::conflict::set_status_recorded(
+                req,
+                RequirementStatus::Approved,
+                aida_core::conflict::SESSION_START_AUTHOR,
+            );
+            req.modified_at = chrono::Utc::now();
+            storage.save(&store)?;
+            Ok::<bool, anyhow::Error>(true)
+        });
+        match reverted {
+            Ok(true) => {}
+            Ok(false) => eprintln!("launch cleanup kept {spec}'s status: it changed after this launch set InProgress"),
+            Err(error) => eprintln!("launch cleanup could not restore {spec} to Approved: {error:#}; run `aida edit {spec} --status approved`"),
         }
+    }
+    /// Compare-and-delete the branch this invocation created. True when the
+    /// branch is gone: deleted here, or never created (a setup that failed
+    /// before Git made it is already clean, not "kept").
+    // trace:BUG-2188 | ai:claude
+    fn release_branch(&self) -> bool {
+        let (Some(branch), Some(expected)) = (&self.branch, &self.branch_sha) else {
+            return true;
+        };
+        if matches!(rollback_branch_absent(&self.root, branch), Ok(true)) {
+            return true;
+        }
+        let reference = format!("refs/heads/{branch}");
+        let out = std::process::Command::new("git")
+            .current_dir(&self.root)
+            .args(["update-ref", "-d", &reference, expected])
+            .output();
+        if matches!(out, Ok(ref out) if out.status.success()) {
+            return true;
+        }
+        eprintln!(
+            "launch cleanup kept branch {branch}; inspect `git branch --list` before retrying"
+        );
+        false
     }
 }
 impl Drop for SessionStartCleanup {
@@ -1326,7 +1373,8 @@ impl Drop for SessionStartCleanup {
                 return;
             }
         }
-        self.release_branch();
+        self.revert_status_bump();
+        let _ = self.release_branch();
         if let Some(claim) = &self.claim {
             match coordination::release_claim_receipt(&self.root.join(".aida-store"), claim) {
                 Ok(true) => {},
@@ -1334,6 +1382,61 @@ impl Drop for SessionStartCleanup {
                 Err(error) => eprintln!("launch cleanup could not release shared claim for {}: {error:#}; inspect `aida session leases --all`", self.scope),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bug2188_release_branch_tests {
+    use super::*;
+
+    // An absent branch is clean; a branch whose tip moved is kept.
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn release_branch_treats_an_absent_ref_as_clean_and_keeps_a_moved_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for args in [
+            vec!["init", "-q", "-b", "main"],
+            vec![
+                "-c",
+                "user.name=f",
+                "-c",
+                "user.email=f@t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "a",
+            ],
+        ] {
+            assert!(crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let head = rollback_ref_sha(root, "HEAD").unwrap();
+        let mut cleanup = SessionStartCleanup::new(root, "TASK-1");
+        cleanup.armed = false;
+        cleanup.branch = Some("never-created".into());
+        cleanup.branch_sha = Some(head.clone());
+        assert!(cleanup.release_branch(), "absent branch is already clean");
+
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(["branch", "moved", "HEAD"])
+            .status()
+            .unwrap()
+            .success());
+        cleanup.branch = Some("moved".into());
+        cleanup.branch_sha = Some("1".repeat(40));
+        assert!(!cleanup.release_branch(), "changed identity is kept");
+        assert!(!rollback_branch_absent(root, "moved").unwrap());
+
+        cleanup.branch_sha = Some(head);
+        assert!(cleanup.release_branch());
+        assert!(rollback_branch_absent(root, "moved").unwrap());
     }
 }
 
@@ -2764,7 +2867,12 @@ pub(crate) fn session_start_with_receipt(
             }
             Ok::<bool, anyhow::Error>(bumped)
         }) {
-            Ok(b) => b,
+            Ok(b) => {
+                if let Some(cleanup) = rollback.as_mut().filter(|_| b) {
+                    cleanup.status_bump = Some(owns.to_string());
+                }
+                b
+            }
             Err(e) => {
                 eprintln!(
                     "{} couldn't bump spec status for `{}` (stays at Approved): {} — `aida doctor` will heal",

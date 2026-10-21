@@ -3192,12 +3192,28 @@ pub fn publish_worktree_noreplace(
         )
     };
     if result != 0 {
-        return Err(std::io::Error::last_os_error()).with_context(|| {
-            format!(
-                "publish worktree at {} without replacing an existing path",
-                destination.display()
-            )
-        });
+        let error = std::io::Error::last_os_error();
+        // NFS and older OpenZFS reject RENAME_NOREPLACE (EINVAL); kernels
+        // without renameat2 report ENOSYS. trace:BUG-2188 | ai:claude
+        if matches!(
+            error.raw_os_error(),
+            Some(libc::EINVAL) | Some(libc::ENOSYS)
+        ) {
+            publish_dir_reserved(stage, destination).with_context(|| {
+                format!(
+                    "publish worktree at {} without replacing an existing path \
+                     (this filesystem does not support RENAME_NOREPLACE: {error})",
+                    destination.display()
+                )
+            })?;
+        } else {
+            return Err(error).with_context(|| {
+                format!(
+                    "publish worktree at {} without replacing an existing path",
+                    destination.display()
+                )
+            });
+        }
     }
     anyhow::ensure!(
         std::fs::symlink_metadata(destination.join(".git"))?
@@ -3218,6 +3234,79 @@ pub fn publish_worktree_noreplace(
         destination.display()
     );
     Ok(())
+}
+
+/// No-replace publication for filesystems without `RENAME_NOREPLACE`. The
+/// exclusive `mkdir` reserves the destination (it fails if anything exists
+/// there), and a directory rename only replaces an EMPTY directory: a writer
+/// that fills the reservation meanwhile makes the rename fail (ENOTEMPTY),
+/// never get replaced or nested into. A failed rename releases only a
+/// still-empty reservation.
+// trace:BUG-2188 | ai:claude
+fn publish_dir_reserved(stage: &Path, destination: &Path) -> Result<()> {
+    std::fs::create_dir(destination)
+        .with_context(|| format!("reserve {}", destination.display()))?;
+    if let Err(error) = std::fs::rename(stage, destination) {
+        let _ = std::fs::remove_dir(destination);
+        return Err(error).with_context(|| {
+            format!(
+                "move {} onto reserved {}",
+                stage.display(),
+                destination.display()
+            )
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod bug2188_publish_fallback_tests {
+    use super::*;
+
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn reserved_publish_moves_into_an_absent_destination() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        std::fs::create_dir(&stage).unwrap();
+        std::fs::write(stage.join(".git"), "gitdir: x\n").unwrap();
+        let destination = tmp.path().join("published");
+        publish_dir_reserved(&stage, &destination).unwrap();
+        assert!(!stage.exists());
+        assert_eq!(
+            std::fs::read_to_string(destination.join(".git")).unwrap(),
+            "gitdir: x\n"
+        );
+    }
+
+    // trace:BUG-2188 | ai:claude
+    #[test]
+    fn reserved_publish_never_replaces_or_nests_into_an_existing_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let stage = tmp.path().join("stage");
+        std::fs::create_dir(&stage).unwrap();
+        std::fs::write(stage.join(".git"), "gitdir: x\n").unwrap();
+        for existing_is_dir in [true, false] {
+            let destination = tmp.path().join(format!("taken-{existing_is_dir}"));
+            if existing_is_dir {
+                std::fs::create_dir(&destination).unwrap();
+                std::fs::write(destination.join("keep"), "kept").unwrap();
+            } else {
+                std::fs::write(&destination, "kept").unwrap();
+            }
+            assert!(publish_dir_reserved(&stage, &destination).is_err());
+            assert!(stage.join(".git").exists(), "stage stays put");
+            if existing_is_dir {
+                assert_eq!(std::fs::read_dir(&destination).unwrap().count(), 1);
+                assert_eq!(
+                    std::fs::read_to_string(destination.join("keep")).unwrap(),
+                    "kept"
+                );
+            } else {
+                assert_eq!(std::fs::read_to_string(&destination).unwrap(), "kept");
+            }
+        }
+    }
 }
 
 /// Add a new worktree at `path` with a **detached HEAD** pointing at `ref_`.
