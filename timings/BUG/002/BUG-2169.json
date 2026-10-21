@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2169",
+  "publishes": [
+    {
+      "at": "2026-10-21T09:51:54.955321189Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T08:21:11.832957587Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T11:10:28.228402469Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2694,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ef61d7a282e92c6ee78203b82de40345fc9d05a1"
+      }
+    },
+    {
+      "ts": "2026-10-16T11:10:44.358466781Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "STRICT: packed-ref bypass lets a contained seat repoint main; materialize loose refs so denies bind; fix test model",
+        "recovery_hint": "address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T11:11:01.128937184Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T11:11:01.129503931Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T11:11:25.629101018Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T14:11:24.462775924Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2694,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "8bc07d82e8e97541d37455f63b5d97c69e964ba1"
+      }
+    },
+    {
+      "ts": "2026-10-16T14:11:29.784432942Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "File-level ref denies inside a writable refs/ dir are bypassable under bwrap (rename-aside; host rename detaches bind). Architecture change required.",
+        "recovery_hint": "address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:15:56.021307871Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2699,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "7d68fcc022fe45e37ac2fa37e2bf8f122cc4791d"
+      }
+    },
+    {
+      "ts": "2026-10-16T15:16:03.235466819Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "S1: host git still runs in seat clones (fsmonitor escape); pin/clone leak after create; local-origin hardlinks",
+        "recovery_hint": "address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:02:50.161746249Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2699,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "23d3fcb2e2ac4753e216ab693e470c178eb035ff"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:03:02.670212317Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "S1 r2: items 1-4 pass; clone detection bypassable by replacing .git with symlink or gitdir file",
+        "recovery_hint": "address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:30:37.887237643Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2699,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bf34fa5c96a60968c4ab6e73f83ddbe24d6de515"
+      }
+    },
+    {
+      "ts": "2026-10-16T16:30:41.467475016Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "S1 r3: detection still keyed on the nearest .git holder; ruling: ancestor-wide name/marker/lease rule",
+        "recovery_hint": "address the review findings, move BUG-2169 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-10-18T02:06:30.855759414Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T04:22:27.975881798Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "BUG-2169",
+        "branch": "origin/bug-2169-sketch",
+        "first_seen": "2026-10-18T04:22:27.966761061+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:37:48.758313171Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2787,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d49cb02c8e2b"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:57:17.448260023Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2787,
+        "verdict": "APPROVED",
+        "reviewed_sha": "982026d9f1f0"
+      }
+    },
+    {
+      "ts": "2026-10-21T09:51:22.559199428Z",
+      "spec": "BUG-2169",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T09:51:54.778026402Z",
+      "spec": "BUG-2169",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b66e4d93b8fefe25b2af3139fe725fa1801e1981",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
