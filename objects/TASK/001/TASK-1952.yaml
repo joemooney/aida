@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-21T23:04:48.790791848Z
+modified_at: 2026-10-21T23:04:53.017413971Z
 req_type: Task
 tags:
 - contained
@@ -284,6 +284,12 @@ comments:
   content: 'ADVISOR 03:01: re-opened with --force. The PR-2790 ship (88430e08c6) appended a bare (TASK-1952) to the ''(Refs TASK-1952)'' subject and completed this sweep in error (BUG-2203). Only S1 (TASK-2004..2007) shipped; the other folded items (TASK-1781, 1989, 2001, 2009, 2031, 2034, 2036, 2037 and the rest listed in the comments) are still open. Status back to approved.'
   created_at: 2026-10-21T10:00:14.074827175Z
   modified_at: 2026-10-21T10:00:14.074827175Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160b5-da19-7c72-bcdd-9a2e551a3db8
+  author: joe
+  content: 'ADVISOR 16:06: folded the PR-2813 notes TASK-2111 (verify_linked_worktree_main fails open on a .git dir or symlink), TASK-2112 (PRIORITY: claude --resume from the lease-tree cwd may not find a transcript stored under main''s project dir; Claude keys transcripts by cwd. Verify it, or copy/symlink the transcript into the lease tree''s project dir) and TASK-2113 (nits).'
+  created_at: 2026-10-21T23:04:53.017413971Z
+  modified_at: 2026-10-21T23:04:53.017413971Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
