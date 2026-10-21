@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T20:16:57.948657453Z
+modified_at: 2026-10-21T20:17:00.261256203Z
 req_type: Task
 tags:
 - launch
@@ -429,6 +429,12 @@ comments:
   content: 'ADVISOR 13:16: PR-2807 (TASK-1721) round-3 non-blocking notes, for the slice-6 release/lease work. (1) IMPORTANT: merge_lock.rs::acquire still creates the lease with create_new and then write_all, so release.sh lease_is_live can read an empty file as acquired_at=0, judge it TTL-stale and DELETE a live ship''s lease. Write via temp file plus link in Rust too, and make release.sh treat an empty or unparsable lease as live, not stale. (2) release.sh retakes the lease after the confirm prompt without re-checking HEAD == the commit the bump, CHANGELOG and tag notes were computed on; refuse if HEAD moved. (3) Lease temp files main.XXXXXX inside .aida/merge-locks are listed by merge_lock::status, and a SIGKILL orphans them; use a dot-prefixed name that status skips. (4) Add TASK-1721 per-criterion trace anchors on the release-flow tests. (5) Tests 4d/4e are source-greps; prefer behavioural probes.'
   created_at: 2026-10-21T20:13:34.598529942Z
   modified_at: 2026-10-21T20:13:34.598529942Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1601c-2765-78f3-94c3-1d19c251bb18
+  author: joe
+  content: 'ADVISOR 13:20: the PR-2807 notes recorded at 13:16 were auto-filed as TASK-2089..2093 and are now folded here (2091 is the important one: an empty just-created lease gets stolen).'
+  created_at: 2026-10-21T20:17:00.261256203Z
+  modified_at: 2026-10-21T20:17:00.261256203Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
