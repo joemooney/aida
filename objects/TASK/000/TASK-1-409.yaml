@@ -1,0 +1,27 @@
+id: 01a15f78-3bb6-78c1-af1c-d3974f84ae47
+spec_id: TASK-1-409
+title: 'cosmetic: the spec asks to trace each change to TASK-1953 and the original item…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1953, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: the spec asks to trace each change to TASK-1953 and the original item ID. The inline trace tags name only TASK-1953, and commit b578ba6021's Refs trailer omits TASK-2054 even though its roster-path part shipped (seat_authority.rs issuance_roster_store / validate_child_delegation).
+  Reviewed sha: 48a6ce159419528992b224d29a7486b78348a256
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:17:57.558308294Z
+modified_at: 2026-10-21T17:17:57.558308294Z
+req_type: Task
+tags:
+- carried-from:TASK-1953
+- finding-hash:99d4e226
+- from-review:TASK-1953
+- kind:carried-forward
+filed_at:
+  code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
