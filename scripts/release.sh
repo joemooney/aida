@@ -226,7 +226,10 @@ lease_release() {
 }
 trap lease_release EXIT
 
-if lease_is_live; then
+if lease_is_live && [ "$dry_run" = "1" ]; then
+    # A preview changes nothing, so it warns instead of refusing.
+    echo "warning: a real release would refuse to start now: $(lease_describe) holds the '$release_base' merge-lease (check with \`aida merge-lock\`)." >&2
+elif lease_is_live; then
     cat <<EOM >&2
 error: an \`aida pr ship\` (or other merger) holds the '$release_base' merge-lease:
   $(lease_describe)
@@ -258,8 +261,8 @@ if [ "$dry_run" = "1" ]; then
     echo "dry run: v$current -> v$new. Nothing will be changed, committed, or pushed."
     echo
     echo "Planned release sequence:"
-    echo "  1. bump the workspace version, dependency pins, Cargo.lock and CHANGELOG.md; run cargo check and the docs gate"
-    echo "  2. take the '$release_base' merge-lease ($lease_file)"
+    echo "  1. take the '$release_base' merge-lease ($lease_file)"
+    echo "  2. bump the workspace version, dependency pins, Cargo.lock and CHANGELOG.md; run cargo check and the docs gate"
     echo "  3. commit the bump on branch $release_branch (AIDA_RELEASE=1)"
     echo "  4. push branch: git push $release_remote $release_branch"
     echo "  5. open the PR: gh pr create --base $release_base --head $release_branch --title \"chore: release v$new\""
@@ -292,7 +295,14 @@ if [ "$prepare_only" != "1" ]; then
     fi
     if git rev-parse -q --verify "refs/heads/$release_branch" >/dev/null \
         || git ls-remote --exit-code --heads "$release_remote" "$release_branch" >/dev/null 2>&1; then
-        echo "error: branch $release_branch already exists (locally or on $release_remote); finish or delete that release PR first" >&2
+        cat <<EOM >&2
+error: branch $release_branch already exists (locally or on $release_remote), probably from
+an earlier release run that stopped partway. Either finish that release PR:
+  gh pr create --base $release_base --head $release_branch --title "chore: release v$new"   # if no PR is open yet
+  gh pr view $release_branch                                                                # if one is
+or delete the branch and re-run:
+  git push $release_remote --delete $release_branch; git branch -D $release_branch
+EOM
         exit 1
     fi
     if git rev-parse -q --verify "refs/tags/v$new" >/dev/null; then
@@ -641,8 +651,23 @@ lease_release
 
 # Open the PR and wait for its checks. The lease is not held while CI runs.
 # trace:TASK-1721 | ai:claude
-pr_url=$(gh pr create --base "$release_base" --head "$release_branch" \
-    --title "chore: release v$new" --body-file "$notes_file")
+if ! pr_url=$(gh pr create --base "$release_base" --head "$release_branch" \
+    --title "chore: release v$new" --body-file "$notes_file"); then
+    cat <<EOM >&2
+error: gh pr create failed; $release_branch ($release_head) is pushed but no PR is open.
+Nothing was merged or tagged. Either open the PR by hand and finish the release:
+  gh pr create --base $release_base --head $release_branch --title "chore: release v$new" --body-file $notes_file
+  gh pr checks <PR> --watch
+  gh pr merge <PR> --squash --match-head-commit $release_head --delete-branch
+  git fetch $release_remote $release_base && git tag -a v$new <merged-sha> -F $notes_file
+  git push $release_remote v$new
+or delete the branch and re-run:
+  git push $release_remote --delete $release_branch; git branch -D $release_branch
+
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+fi
 pr_url=$(printf '%s\n' "$pr_url" | tail -n1)
 pr_number=${pr_url##*/}
 echo "opened release PR #$pr_number: $pr_url"

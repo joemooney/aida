@@ -57,6 +57,7 @@ state=$FAKE_GH_STATE
 echo "$*" >> "$state/calls"
 case "$1 $2" in
     "pr create")
+        [ "${FAKE_GH_CREATE_FAIL:-0}" = "1" ] && { echo "fake gh: pr create failed" >&2; exit 1; }
         shift 2
         while [ $# -gt 0 ]; do
             case "$1" in --head) echo "$2" > "$state/head"; shift ;; --base) echo "$2" > "$state/base"; shift ;; esac
@@ -280,6 +281,12 @@ printf '%s' "$out" | grep -q "PR #42" || fail "refusal does not name the ship's 
 grep -q "pid=$$" "$F4/work/.aida/merge-locks/main" || fail "refused release disturbed the ship's lease"
 pass "live ship lease refuses the release before anything changes"
 
+info "Test 4a: --dry-run warns about a live ship lease instead of refusing"
+out=$(run_release "$F4" patch --dry-run 2>&1) || fail "dry run refused under a live lease: $out"
+printf '%s' "$out" | grep -q "would refuse to start" || fail "dry run did not warn about the lease: $out"
+printf '%s' "$out" | grep -qF "gh pr create" || fail "dry run under a lease printed no plan: $out"
+pass "--dry-run warns and still prints the plan"
+
 info "Test 4b: a dead or expired holder does not block"
 sleep 0 & dead_pid=$!; wait "$dead_pid"
 write_lease "$dead_pid" "$(date +%s)"
@@ -308,6 +315,24 @@ chmod +x "$TEST_DIR/bin-lease/cargo"
 grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-during-check" 2>/dev/null \
     || fail "the main merge-lease was not held during cargo check"
 pass "release.sh holds the main merge-lease during the bump"
+
+# ─── 6. gh pr create fails after the branch push ──────────────────────────
+info "Test 6: a failed gh pr create prints recovery, and a re-run names the leftover branch"
+F7="$TEST_DIR/f7"; make_fixture "$F7"
+if out=$(FAKE_GH_CREATE_FAIL=1 run_release "$F7" patch --yes --skip-docs-check 2>&1); then
+    fail "release succeeded although gh pr create failed"
+fi
+printf '%s' "$out" | grep -q "gh pr create failed" || fail "no gh pr create failure message: $out"
+printf '%s' "$out" | grep -qF "gh pr create --base main --head release/v0.15.1" || fail "no manual PR command: $out"
+printf '%s' "$out" | grep -qF "git push origin --delete release/v0.15.1" || fail "no branch-delete command: $out"
+[ -z "$(git --git-dir="$F7/remote.git" tag)" ] || fail "a tag was pushed"
+[ "$(git -C "$F7/work" symbolic-ref --short HEAD)" = "main" ] || fail "left the checkout off main"
+if out=$(run_release "$F7" patch --yes --skip-docs-check 2>&1); then
+    fail "re-run succeeded with the release branch still present"
+fi
+printf '%s' "$out" | grep -q "already exists" || fail "re-run did not refuse on the leftover branch: $out"
+printf '%s' "$out" | grep -qF "git push origin --delete release/v0.15.1" || fail "re-run refusal lacks the delete hint: $out"
+pass "gh pr create failure and the re-run both print the exact recovery"
 
 # ─── 5. --prepare-only fallback text routes through a PR ──────────────────
 info "Test 5: --prepare-only manual steps open a PR instead of pushing main"
