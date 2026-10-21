@@ -748,7 +748,17 @@ pub enum SessionCommand {
     /// and reaped on a later pass once it exits on its own. Dirty worktrees,
     /// locked worktrees, and branches carrying unique unmerged commits are
     /// never removed — the same safety checks `aida worktree gc` applies.
+    ///
+    /// A lease held on the main checkout (or another protected checkout) is
+    /// never reaped, but it is RELEASED — the lease file only, never a file of
+    /// the checkout — when the agent process it recorded (pid plus start
+    /// identity) is provably dead: gone, or its pid reused by a different
+    /// process. A lease that records only the shell that created it, or no pid
+    /// at all, has an unknown owner and is released only with
+    /// --release-unknown-owner. A recorded process that is still running
+    /// always keeps the lease.
     // trace:TASK-1177 | ai:claude
+    // trace:BUG-2197 | ai:claude
     Reap {
         /// Show what would be reaped and what is left in place without
         /// touching anything.
@@ -763,6 +773,11 @@ pub enum SessionCommand {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+
+        /// Also release main-checkout leases with an unknown owner (no
+        /// recorded agent process). Without it they are listed and kept.
+        #[clap(long)]
+        release_unknown_owner: bool,
     },
 }
 
