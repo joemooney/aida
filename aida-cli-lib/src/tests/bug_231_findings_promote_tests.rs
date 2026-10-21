@@ -1468,3 +1468,44 @@ fn extract_mentions_keeps_cc_colon_prose_but_drops_line_refs_and_paths() {
         vec!["advisor".to_string()]
     );
 }
+
+// TASK-1918: the roster is checked before the SHA rule, so a registered
+// agent named like a SHA is a deliverable mention; an unknown SHA is not.
+// trace:TASK-1955 | ai:claude (TASK-1918)
+#[test]
+fn resolve_comment_mentions_delivers_a_known_sha_shaped_agent() {
+    let proj = tempfile::tempdir().unwrap();
+    let roles_dir = proj.path().join(".aida").join("roles");
+    std::fs::create_dir_all(&roles_dir).unwrap();
+    std::fs::write(
+        roles_dir.join("cafe1234.toml"),
+        "name = \"cafe1234\"\ncreated_at = \"2026-10-18T00:00:00Z\"\nlast_active_at = \"2026-10-18T00:00:00Z\"\n",
+    )
+    .unwrap();
+    let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(
+        &proj.path().join(".aida-store"),
+        "joe",
+        "ping @cafe1234 about commit @6e5727ce3c",
+    );
+    assert_eq!(recipients, vec!["cafe1234".to_string()]);
+    assert!(
+        warnings.is_empty(),
+        "an unknown SHA is not a mention: {warnings:?}"
+    );
+}
+
+// TASK-1918: `send_notification` trims the recipient before storing it.
+// trace:TASK-1955 | ai:claude (TASK-1918)
+#[test]
+fn send_notification_trims_the_recipient() {
+    let proj = tempfile::tempdir().unwrap();
+    let store = proj.path().join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    crate::punt_done::send_notification(&store, "alice", "  advisor  ", "hi".into());
+    let local = crate::mailbox_store::read_local_messages(proj.path()).unwrap();
+    assert_eq!(local.len(), 1);
+    assert_eq!(
+        local[0].to,
+        aida_core::mailbox::Recipient::Agent("advisor".into())
+    );
+}
