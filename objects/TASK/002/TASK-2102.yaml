@@ -1,0 +1,26 @@
+id: 01a16061-5236-7232-885f-79204bf7819c
+spec_id: TASK-2102
+agreed_id: TASK-2102
+title: 'BUG-2167: SessionStart hook firing after link_bg_session leaves the bg row unnamed'
+description: |
+  agent_launch.rs:3052-3076 / agent_registry.rs:625-628 (PR-2809): a hook that fires after link_bg_session (the --bg session starts asynchronously) resolves the linked lease but drops the contradicting env name and has no other name source, so the row is unnamed. If the spare already had an entry with the same pid_start, it keeps that entry's stale name. adopt_bg_session_identity does not run again. Take the name from the lease or manifest, or test that the post-link ordering ends with the launch's name.
+
+  Raised in review of PR-2809: https://github.com/joemooney/aida/pull/2809#issuecomment-6327023259
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:32:33.206772138Z
+modified_at: 2026-10-21T21:32:33.206772138Z
+req_type: Task
+tags:
+- from-review:PR-2809
+- severity:minor
+filed_at:
+  code_sha: 3e8d7168962397cf4a60e6946f7b5707ad79285e
+  branch: pr-2809
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a1605b901b

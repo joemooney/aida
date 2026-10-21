@@ -1,0 +1,26 @@
+id: 01a16061-6027-76b3-a684-1e1ac3f93843
+spec_id: TASK-2103
+agreed_id: TASK-2103
+title: 'TASK-1804: pin apply_headless_harness_version wiring on the spawn and resume paths'
+description: |
+  session.rs:1473 (spawn_vendor_headless_with_seat_granted) and :4464 (spawn_claude_headless_resume_granted) call apply_headless_harness_version, but only build_exec_vendor_headless_command is tested. Deleting either of the other two calls still passes every test. Add a wiring assertion for each.
+
+  Raised in review of PR-2809: https://github.com/joemooney/aida/pull/2809#issuecomment-6327023259
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:32:36.775020656Z
+modified_at: 2026-10-21T21:32:36.775020656Z
+req_type: Task
+tags:
+- from-review:PR-2809
+- severity:minor
+filed_at:
+  code_sha: 3e8d7168962397cf4a60e6946f7b5707ad79285e
+  branch: pr-2809
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a1605b901b
