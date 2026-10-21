@@ -1,0 +1,27 @@
+id: 01a16054-2dd4-7c31-87f6-99c92df8872a
+spec_id: TASK-2099
+agreed_id: TASK-2099
+title: Test the GIT_SSH (bare program) branch of forge.rs configured_ssh_command
+description: |
+  forge.rs configured_ssh_command has a third branch that falls back to GIT_SSH, a bare program name. It wraps the name in single quotes and escapes embedded single quotes. No test covers this branch: task_1951_origin_head_probe_keeps_operator_ssh_command exercises only GIT_SSH_COMMAND and core.sshCommand. Add a case where GIT_SSH points at a fake ssh whose path contains a space or a quote, and assert the wrapper is invoked with BatchMode=yes.
+
+  Raised in review of PR-2811: https://github.com/joemooney/aida/pull/2811#issuecomment-6326770207
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:18:11.924706001Z
+modified_at: 2026-10-21T21:18:11.924706001Z
+req_type: Task
+tags:
+- forge
+- from-review:PR-2811
+- severity:minor
+filed_at:
+  code_sha: 36e29c143730eee422e45258f9f43c94f4cc1c64
+  branch: pr-2811
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a160526d8a

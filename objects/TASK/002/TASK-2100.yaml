@@ -1,0 +1,27 @@
+id: 01a16054-4018-7030-831a-cc47469cce72
+spec_id: TASK-2100
+agreed_id: TASK-2100
+title: BatchMode append breaks plink-variant GIT_SSH in the origin/HEAD probe
+description: |
+  forge.rs ssh_command_with_batch_mode appends OpenSSH's '-o BatchMode=yes' to whatever ssh command is configured. When GIT_SSH or GIT_SSH_COMMAND names plink or tortoiseplink, git selects that ssh.variant, and plink rejects -o. The ls-remote probe then fails, where before this PR it forced plain ssh. AIDA is Linux-only, so impact is low. Options: skip the append when the detected variant is not OpenSSH, or document the limitation.
+
+  Raised in review of PR-2811: https://github.com/joemooney/aida/pull/2811#issuecomment-6326770207
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:18:16.600423406Z
+modified_at: 2026-10-21T21:18:16.600423406Z
+req_type: Task
+tags:
+- forge
+- from-review:PR-2811
+- severity:cosmetic
+filed_at:
+  code_sha: 36e29c143730eee422e45258f9f43c94f4cc1c64
+  branch: pr-2811
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a160526d8a
