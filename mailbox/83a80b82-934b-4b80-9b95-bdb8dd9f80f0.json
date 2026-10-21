@@ -1,0 +1,19 @@
+{
+  "id": "83a80b82-934b-4b80-9b95-bdb8dd9f80f0",
+  "thread_id": "83a80b82-934b-4b80-9b95-bdb8dd9f80f0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792592532604,
+  "body": "fc3e52c63d. 1 terminal receipts retry with claim deadline + Running attempts with provably dead identity reconciled to Exited; lock-timeout recovery test. 2 notices/docs name change.base; legacy pending notices keep wording+ID (no re-send), sent never re-sent; test. fast 33/33, touched 440.",
+  "subject": "PR-2789 round-3 fixes pushed (TASK-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

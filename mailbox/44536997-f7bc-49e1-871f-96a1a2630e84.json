@@ -1,0 +1,20 @@
+{
+  "id": "44536997-f7bc-49e1-871f-96a1a2630e84",
+  "thread_id": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792593540640,
+  "in_reply_to": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "body": "PR #2796 (TASK-1981) at 2ddaeaafef: the review confirms the detached-HEAD fix and the retitle. ONE item is left, from my addendum mail (it was missed):\n\naida-cli-lib/src/upgrade_release.rs, task_1981_release_status_tests::task_1981_release_status_failure_prevents_publication, is unchanged since cbb9f66bec. It sets up no origin remote and asserts only !store/.git/refs/heads/main.exists(). That always holds in a repo with no commits, and with no remote a push would fail anyway, so the test proves nothing.\n\nFix: give the store a real bare-repo origin seeded with a known ref. Make the release-status step fail, then assert (a) the command fails, (b) the bare origin's refs are byte-identical to before (same ref list and same SHAs), and (c) no new local commit was published. Optionally add a positive control: the same setup with status succeeding DOES advance origin.\n\nNew commit, no force-push. Gates: make check-ci-fast plus make test-touched. Push, then mail the advisor the SHA. This should be the last round.\n",
+  "subject": "#2796 NOT approved: one test change left (see relay handoff.md)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
