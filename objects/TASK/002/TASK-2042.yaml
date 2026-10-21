@@ -6,17 +6,26 @@ description: |
   In docs/testing/task-1800-semantic-audit.json, every blockers[].occurrences[].trace_lines[].text has its leading whitespace stripped (e.g. PR2647 BUG-1978 lib_part5.rs:3036 stores '// trace:BUG-1978 | ai:claude', but the blob line is indented). docs/testing/task-1800-semantic-audit.md:297 calls these "exact trace lines". Line numbers and content otherwise match all 1607 lines. Either store the raw lines or document the normalization.
 
   Raised in review of PR-2721: https://github.com/joemooney/aida/pull/2721#issuecomment-6308797693
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T05:28:20.990312013Z
-modified_at: 2026-10-21T05:28:20.990312013Z
+modified_at: 2026-10-21T05:47:21.596232472Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2721
 - severity:cosmetic
+history:
+- id: 01a15cff-f87c-7ee3-a54d-82367f06a8bc
+  author: joe
+  timestamp: 2026-10-21T05:47:21.596225870Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 2481458f0b2a0bc0c4d5d69051529afc2c4f3590
   branch: pr-2721
