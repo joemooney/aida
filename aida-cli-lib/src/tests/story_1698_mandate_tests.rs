@@ -35,6 +35,8 @@ fn active(include_supervised: bool) -> Mandate {
         expires_at: now() + Duration::hours(7),
         revoked_at: None,
         revoked_by: None,
+        scopes: Default::default(),
+        kind: None,
     }
 }
 
@@ -153,6 +155,9 @@ impl Case {
             ledger: &self.ledger,
             hold: &self.hold,
             carry_over: self.carry_over.clone(),
+            changed_paths: Some(&[]),
+            ship_gate: None,
+            hold_clear_gate: None,
         })
     }
 }
@@ -1468,6 +1473,57 @@ fn mandate_ship_cover_passes_committed_trace_ids_to_the_decision() {
         matches!(result, Err(MandateRefusal::SpecsUnresolved)),
         "{result:?}"
     );
+}
+
+// ── STORY-1700 × STORY-1655: a solo self-approval is not independent ──────
+
+// trace:STORY-1700.ac8eabb8 | ai:claude
+#[test]
+fn a_solo_self_approval_never_covers_a_mandate_ship_or_release() {
+    let mut c = Case::ok();
+    let mut v = approval(HEAD);
+    v.attestation.as_mut().unwrap().solo_human = true;
+    c.candidates = vec![v.clone()];
+    c.policy = policy(&c.candidates);
+    // Solo mode off (or the receipt unverified): an ordinary human approval.
+    assert!(c.decide().is_ok(), "{:?}", c.decide());
+    // Solo mode on and the solo receipt verified: the self-approval may pass
+    // the author check by hand, but never a mandate.
+    let key = v
+        .attestation
+        .as_ref()
+        .unwrap()
+        .authority_key(v.recorded_at.as_deref())
+        .unwrap();
+    assert!(key.starts_with("receipt:"), "{key}");
+    c.policy.solo_human = true;
+    c.policy.verified_solo.insert(key);
+    assert!(crate::pr_ship::solo_self_approval(&v, &c.policy));
+    assert_eq!(c.decide(), Err(MandateRefusal::SoloSelfApproval));
+    // The rework-release path refuses it too.
+    c.state = MandateState::Active(active(true));
+    c.hold = HoldFacts::Marker {
+        kind: crate::merge_hold::HoldReasonKind::Rework,
+        legacy: false,
+    };
+    let release = rework_release_decision(&ShipCheck {
+        state: &c.state,
+        now: c.now,
+        grant: c.grant,
+        specs: &c.specs,
+        specs_resolved: c.specs_resolved,
+        candidates: &c.candidates,
+        policy: &c.policy,
+        head: c.head,
+        override_stale_approval: false,
+        ledger: &c.ledger,
+        hold: &c.hold,
+        carry_over: None,
+        changed_paths: Some(&[]),
+        ship_gate: None,
+        hold_clear_gate: None,
+    });
+    assert_eq!(release, Err(MandateRefusal::SoloSelfApproval));
 }
 
 // ── TASK-1800 advisor ruling (2026-10-17) ──────────────────────────────────
