@@ -449,7 +449,12 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
             },
-            read_body: &|key| Ok(serde_json::from_slice(&std::fs::read(verdict_file(key)?)?)?),
+            // trace:TASK-1801 | ai:claude
+            read_body: &|key| {
+                Ok(serde_json::from_str(&rv::read_verdict_body(
+                    verdict_file(key)?,
+                )?)?)
+            },
             // trace:BUG-2186 | ai:claude
             read_history: &|key| RetainedHistory::beside(&verdict_file(key)?),
             read_corpus: &|ids| {

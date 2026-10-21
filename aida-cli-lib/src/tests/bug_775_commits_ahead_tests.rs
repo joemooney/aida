@@ -957,3 +957,97 @@ fn from_pr_reviewer_prompt_names_contract_and_done_is_expected() {
         "without from-pr env, no contract suffix"
     );
 }
+
+// TASK-1801: concurrent phase-3 sweeps publish the same sibling verdict. One
+// wins, the loser reads the published verdict and reconciles, nothing ever
+// sees the canonical file doubly linked, and no staged file is left behind.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
+    use std::os::unix::fs::MetadataExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier};
+    const HEAD: &str = "9f1c2b3a4d5e6f7089abcdef0123456789fedcba";
+    for _ in 0..8 {
+        let parent = tempfile::tempdir().unwrap();
+        let root = parent.path().join("aida");
+        std::fs::create_dir_all(&root).unwrap();
+        let sibling = parent.path().join("aida-pr-31/.aida/review-verdicts");
+        std::fs::create_dir_all(&sibling).unwrap();
+        std::fs::write(
+            sibling.join("PR-31.json"),
+            format!(
+                r#"{{"verdict":"APPROVED","reviewed_sha":"{HEAD}","recorded_by":"reviewer-a"}}"#
+            ),
+        )
+        .unwrap();
+        let dest = root.join(".aida/review-verdicts/PR-31.json");
+        // The never-two-links watch holds only where the filesystem has a
+        // no-replace rename. The link-then-unlink fallback has a documented
+        // nlink=2 window, so the watch is skipped there (PR-2712 review F3).
+        // trace:TASK-1801 | ai:claude
+        let no_replace = {
+            let probe = parent.path().join("no-replace-probe");
+            std::fs::write(&probe, b"").unwrap();
+            let supported =
+                crate::review_verdict::rename_no_replace(&probe, &parent.path().join("probed"))
+                    .is_ok();
+            let _ = std::fs::remove_file(&probe);
+            let _ = std::fs::remove_file(parent.path().join("probed"));
+            supported
+        };
+        let started = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+        let done = Arc::new(AtomicBool::new(false));
+        let watcher = {
+            let (dest, done) = (dest.clone(), done.clone());
+            std::thread::spawn(move || {
+                while no_replace && !done.load(Ordering::SeqCst) {
+                    if let Ok(meta) = std::fs::symlink_metadata(&dest) {
+                        assert_eq!(meta.nlink(), 1, "canonical verdict seen doubly linked");
+                    }
+                }
+            })
+        };
+        let barrier = Arc::new(Barrier::new(2));
+        let publishers: Vec<_> = (0..2)
+            .map(|_| {
+                let (root, barrier) = (root.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    crate::sibling_verdict_sweep_for_phase3(
+                        &root,
+                        31,
+                        "TASK-31",
+                        started,
+                        Some(HEAD),
+                    )
+                })
+            })
+            .collect();
+        for publisher in publishers {
+            let out = publisher
+                .join()
+                .unwrap()
+                .expect("both publishers read the verdict");
+            assert!(matches!(
+                out,
+                Some(crate::auto_complete::ReviewerOutcome::Verdict(
+                    crate::auto_complete::Verdict::Approved
+                ))
+            ));
+        }
+        done.store(true, Ordering::SeqCst);
+        watcher.join().unwrap();
+        assert_eq!(std::fs::metadata(&dest).unwrap().nlink(), 1);
+        assert!(crate::review_verdict::read_verdict_body(&dest).is_ok());
+        let leftovers: Vec<_> = std::fs::read_dir(dest.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().contains(".publish-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "staged files left behind: {leftovers:?}"
+        );
+    }
+}
