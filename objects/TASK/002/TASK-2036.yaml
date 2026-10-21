@@ -1,0 +1,27 @@
+id: 01a15ca1-1af8-72b3-ad7a-ce3691b3d5d6
+spec_id: TASK-2036
+agreed_id: TASK-2036
+title: Main-checkout .git directory branch still skips on a bare commondir file (TASK-2005 class)
+description: |
+  aida-cli-lib/src/contained_boundary.rs:214 (contained_main_checkout_git_deny_paths): when <root>/.git is a DIRECTORY, the root is skipped if <root>/.git/commondir exists. A real linked worktree's .git is never a directory, so a planted commondir in a main checkout's .git exempts it from the deny. This is the same loose-trust shape TASK-2005 removed from is_linked_worktree_gitdir. Production is unaffected, because main_git_deny_paths denies <main>/.git with no commondir check, so this is defense in depth only. Fix: drop the skip, or apply the commondir-points-back check.
+
+  Raised in review of PR-2790: https://github.com/joemooney/aida/pull/2790#issuecomment-6307743151
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T04:03:44.504158174Z
+modified_at: 2026-10-21T04:03:44.504158174Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2790
+- severity:minor
+filed_at:
+  code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15c9bb2ab

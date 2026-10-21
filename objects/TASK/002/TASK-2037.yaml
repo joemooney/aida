@@ -1,0 +1,27 @@
+id: 01a15ca1-2779-7ee3-8073-615939bdcbd4
+spec_id: TASK-2037
+agreed_id: TASK-2037
+title: 'contained_settings_json_with_boundary: computed main-checkout denies bypass the deny_expressible fail-closed gate'
+description: |
+  aida-cli-lib/src/session.rs:3101-3147: deny_expressible checks only extra_deny. The main-checkout denies computed inside the function (contained_main_checkout_git_deny_paths(write_roots)) are passed to sandbox_allow_write_entries and root_rule_path, which skip an unexpressible path without reporting it. A gitdir: target containing a rule metacharacter (e.g. /x/git[1]/repo.git) is therefore dropped from both denyWrite and permissions.deny while the write roots stay granted. Production claude_contained_settings_json refuses these first via refuse_unexpressible_main_git_deny, so only contained_settings_json and contained_settings_json_with_store are exposed. Fix: include the computed denies in deny_expressible, as BUG-1982 does for extra_deny, and add a refusal test.
+
+  Raised in review of PR-2790: https://github.com/joemooney/aida/pull/2790#issuecomment-6307743151
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T04:03:47.705425025Z
+modified_at: 2026-10-21T04:03:47.705425025Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2790
+- severity:minor
+filed_at:
+  code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15c9bb2ab
