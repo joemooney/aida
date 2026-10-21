@@ -639,6 +639,25 @@ fn auto_release_with(
         io.comment,
         io.labels,
     )?;
+    // A release a mandate covered is a mandate-driven action: ledger it.
+    // trace:TASK-1915 | ai:claude
+    if let Some(id) = &release.mandate {
+        crate::mandate_drive::emit_action(
+            root,
+            id,
+            "session",
+            &crate::mandate_drive::ActionRow::new(
+                &format!("pr:{}", hold.pr),
+                &format!("PR #{}", hold.pr),
+                "release-rework-hold",
+                crate::mandate_drive::Outcome::Done,
+                Some(format!(
+                    "rework hold released on the approval {}",
+                    release.verdict.path()
+                )),
+            ),
+        );
+    }
     Ok(Outcome::Released {
         mandate: release.mandate,
     })

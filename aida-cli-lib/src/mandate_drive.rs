@@ -45,6 +45,9 @@ const TICK_INTERVAL: Duration = Duration::minutes(15);
 /// Backoff after a failed attempt, in ticks: 1, 2, then 4.
 const BACKOFF_TICKS: [i32; 3] = [1, 2, 4];
 const ADVISOR_LIVE_WITHIN: Duration = Duration::minutes(30);
+/// A routed dispatch that no owner has taken up within this window is
+/// re-routed: the fixer died before it claimed (TASK-1915 F8).
+const DISPATCH_STALE: Duration = Duration::hours(2);
 /// The session variables a tick never acts on and scrubs from its children.
 pub(crate) const SESSION_ENV: [&str; 3] = [
     crate::seat_authority::GRANT_ENV,
@@ -544,7 +547,13 @@ pub(crate) struct ActionRow {
 }
 
 impl ActionRow {
-    fn new(lane: &str, subject: &str, action: &str, outcome: Outcome, why: Option<String>) -> Self {
+    pub(crate) fn new(
+        lane: &str,
+        subject: &str,
+        action: &str,
+        outcome: Outcome,
+        why: Option<String>,
+    ) -> Self {
         Self {
             lane: lane.into(),
             subject: subject.into(),
@@ -563,10 +572,57 @@ pub(crate) trait DriveEffects {
     fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()>;
     /// Tell the operator; `Ok` names the delivery.
     fn notify_operator(&mut self, title: &str, body: &str) -> Result<String>;
-    /// Release session leases whose owner process is dead; the count.
-    fn reap_dead_leases(&mut self) -> Result<usize>;
+    /// Reap sessions whose owner process is dead: one row per thing the reap
+    /// did, skipped or failed (lease release, worktree teardown, branch
+    /// deletion, agent-registry GC).
+    // trace:TASK-1915 | ai:claude
+    fn reap_dead_leases(&mut self) -> Vec<ReapRow>;
     /// Ledger one row.
     fn ledger(&mut self, mandate_id: &str, row: &ActionRow);
+}
+
+/// One outcome of the dead-session reap (TASK-1915 F4).
+// trace:TASK-1915 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReapRow {
+    pub subject: String,
+    pub outcome: Outcome,
+    pub why: String,
+}
+
+/// The rows for one quiet reap: the agent-registry GC when it removed or
+/// failed anything, and every reapable lease as `reap_one` reported it.
+// trace:TASK-1915 | ai:claude
+pub(crate) fn reap_rows(reap: crate::session_reap::QuietReap) -> Vec<ReapRow> {
+    let mut rows = Vec::new();
+    match reap.agent_gc {
+        Ok(0) => {}
+        Ok(n) => rows.push(ReapRow {
+            subject: "agent registry".into(),
+            outcome: Outcome::Done,
+            why: format!("removed {n} dead agent record(s)"),
+        }),
+        Err(e) => rows.push(ReapRow {
+            subject: "agent registry".into(),
+            outcome: Outcome::Refused,
+            why: format!("agent registry GC failed: {e}"),
+        }),
+    }
+    rows.extend(reap.leases.into_iter().map(|(session, outcome)| {
+        let kind = if outcome.starts_with("reaped") {
+            Outcome::Done
+        } else if outcome.starts_with("skipped") {
+            Outcome::Skipped
+        } else {
+            Outcome::Refused
+        };
+        ReapRow {
+            subject: format!("session {session}"),
+            outcome: kind,
+            why: outcome,
+        }
+    }));
+    rows
 }
 
 // ── Shared state ────────────────────────────────────────────────────────────
@@ -593,6 +649,47 @@ pub(crate) struct PerMandate {
     pub absence_episode: Option<DateTime<Utc>>,
     #[serde(default)]
     pub mismatch_notified: bool,
+    /// Per approved spec, its dispatch epoch (TASK-1915 F8).
+    #[serde(default)]
+    pub dispatch: BTreeMap<String, DispatchEpoch>,
+}
+
+/// Where a spec's unowned-dispatch lane stands. A routed dispatch opens an
+/// epoch; it closes once the spec was seen owned since (its fixer took it
+/// and is gone again) or no owner showed up within [`DISPATCH_STALE`] (the
+/// fixer died before claiming). The next unowned sighting is then a new item.
+// trace:TASK-1915 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct DispatchEpoch {
+    #[serde(default)]
+    pub epoch: u32,
+    #[serde(default)]
+    pub routed_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub owned_since_route: bool,
+}
+
+impl PerMandate {
+    /// `s`'s dispatch epoch now, advancing it per [`DispatchEpoch`]. An
+    /// unknown PR state neither opens nor closes an epoch.
+    // trace:TASK-1915 | ai:claude
+    fn dispatch_epoch(&mut self, s: &UnownedSpec, now: DateTime<Utc>) -> u32 {
+        let d = self.dispatch.entry(s.id.to_ascii_uppercase()).or_default();
+        if s.owned() {
+            if d.routed_at.is_some() {
+                d.owned_since_route = true;
+            }
+        } else if s.open_pr.is_some() {
+            if let Some(at) = d.routed_at {
+                if d.owned_since_route || now - at >= DISPATCH_STALE {
+                    d.epoch += 1;
+                    d.routed_at = None;
+                    d.owned_since_route = false;
+                }
+            }
+        }
+        d.epoch
+    }
 }
 
 /// `.aida/mandate-drive-state.json`, keyed by mandate id.
@@ -606,11 +703,18 @@ pub(crate) fn state_path(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join(STATE_FILE)
 }
 
-pub(crate) fn load_state(project_root: &Path) -> DriveState {
-    std::fs::read(state_path(project_root))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+/// The drive state. Absent is a fresh state; unreadable or corrupt is an
+/// error, never a silent reset of dedup, backoff and notices (TASK-1915 F6).
+// trace:TASK-1915 | ai:claude
+pub(crate) fn load_state(project_root: &Path) -> Result<DriveState> {
+    let path = state_path(project_root);
+    match std::fs::read(&path) {
+        Ok(bytes) => {
+            serde_json::from_slice(&bytes).with_context(|| format!("{} is corrupt", path.display()))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(DriveState::default()),
+        Err(e) => Err(e).with_context(|| format!("cannot read {}", path.display())),
+    }
 }
 
 fn save_state(project_root: &Path, state: &DriveState) -> Result<()> {
@@ -752,6 +856,30 @@ impl Tick<'_, '_> {
         self.report.rows.push(row);
     }
 
+    /// A failed recheck before a substrate step: ledger the refusal and end
+    /// the tick (TASK-1915 F3).
+    // trace:TASK-1915 | ai:claude
+    fn end(&mut self, lane: &str, subject: &str, action: &str, why: String) {
+        self.row(ActionRow::new(
+            lane,
+            subject,
+            action,
+            Outcome::Refused,
+            Some(why.clone()),
+        ));
+        self.ended = Some(why);
+    }
+
+    /// Ledger a skip row once per `(key, reason)`: a lane skipped for the
+    /// same reason every tick is one row, not one per tick (TASK-1915 F7).
+    // trace:TASK-1915 | ai:claude
+    fn skip_once(&mut self, per: &mut PerMandate, key: &str, row: ActionRow) {
+        let seen = format!("{key}|skip|{}", row.why.as_deref().unwrap_or_default());
+        if per.emitted.insert(seen) {
+            self.row(row);
+        }
+    }
+
     /// R3: re-read the mandate immediately before a side effect. `Err` ends
     /// the tick: this action is refused and the caller skips the rest.
     fn recheck(&mut self) -> std::result::Result<(), String> {
@@ -817,7 +945,32 @@ pub(crate) fn run_tick(
             }
         }
     };
-    let mut state = load_state(inp.project_root);
+    // An unreadable state fails closed: acting on a reset state would
+    // re-route every deduplicated item and re-send every notice.
+    // trace:TASK-1915 | ai:claude
+    let mut state = match load_state(inp.project_root) {
+        Ok(state) => state,
+        Err(e) => {
+            let id = mandate.as_ref().map(|m| m.id.clone()).unwrap_or_default();
+            let why = format!(
+                "the drive state is unreadable ({e:#}); the tick refuses to act rather than reset its dedup, backoff and notices. Repair or remove the file"
+            );
+            let row = ActionRow::new(
+                "tick",
+                "drive tick",
+                "state-check",
+                Outcome::Refused,
+                Some(why.clone()),
+            );
+            fx.ledger(&id, &row);
+            drop(lock);
+            return TickReport {
+                mandate_id: Some(id).filter(|i| !i.is_empty()),
+                idle: Some(why),
+                rows: vec![row],
+            };
+        }
+    };
 
     let Some(mandate) = mandate else {
         // R4: a drive record for ANOTHER principal means the driver resolves
@@ -835,30 +988,34 @@ pub(crate) fn run_tick(
             if per.mismatch_notified {
                 continue;
             }
-            per.mismatch_notified = true;
-            let why = format!(
-                "principal mismatch: record={} tick={}",
-                m.principal, inp.principal
-            );
-            let row = ActionRow::new(
-                "tick",
-                "drive tick",
-                "tick",
-                Outcome::Refused,
-                Some(why.clone()),
-            );
-            fx.ledger(&m.id, &row);
-            let _ = fx.notify_operator(
+            let sent = fx.notify_operator(
                 "AIDA drive mandate is not acting",
                 &format!(
                     "Drive mandate {} belongs to `{}`, but the drive tick resolves `{}`. Set AIDA_USER={} in the schedule driver's environment.",
                     m.id, m.principal, inp.principal, m.principal
                 ),
             );
+            // Only a delivered notice marks the mismatch told: a failed one
+            // retries next tick. trace:TASK-1915 | ai:claude
+            let mut why = format!(
+                "principal mismatch: record={} tick={}",
+                m.principal, inp.principal
+            );
+            match &sent {
+                Ok(_) => per.mismatch_notified = true,
+                Err(e) => why.push_str(&format!("; notify failed: {e:#}")),
+            }
+            let row = ActionRow::new("tick", "drive tick", "tick", Outcome::Refused, Some(why));
+            fx.ledger(&m.id, &row);
             report.mandate_id = Some(m.id.clone());
             report.rows.push(row);
         }
-        let _ = save_state(inp.project_root, &state);
+        // trace:TASK-1915 | ai:claude
+        if let Err(e) = save_state(inp.project_root, &state) {
+            report.idle = Some(format!(
+                "no active drive mandate; could not save the drive state: {e:#}"
+            ));
+        }
         drop(lock);
         return report;
     };
@@ -894,29 +1051,25 @@ pub(crate) fn run_tick(
         ));
     }
 
-    // Substrate: dead-lease expiry.
+    // Substrate: the dead-session reap, every outcome ledgered.
+    // trace:TASK-1915 | ai:claude
     match tick.recheck() {
-        Err(why) => tick.ended = Some(why),
-        Ok(()) => match tick.fx.reap_dead_leases() {
-            Ok(0) => {}
-            Ok(n) => {
-                per.actions += 1;
-                tick.row(ActionRow::new(
-                    "leases",
-                    "session leases",
-                    "lease-expiry",
-                    Outcome::Done,
-                    Some(format!("released {n} lease(s) whose owner process is dead")),
-                ));
+        Err(why) => tick.end("leases", "session leases", "reap", why),
+        Ok(()) => {
+            for r in tick.fx.reap_dead_leases() {
+                let row = ActionRow::new("leases", &r.subject, "reap", r.outcome, Some(r.why));
+                match r.outcome {
+                    Outcome::Skipped => {
+                        tick.skip_once(per, &format!("leases|{}", r.subject), row);
+                    }
+                    Outcome::Done => {
+                        per.actions += 1;
+                        tick.row(row);
+                    }
+                    _ => tick.row(row),
+                }
             }
-            Err(e) => tick.row(ActionRow::new(
-                "leases",
-                "session leases",
-                "lease-expiry",
-                Outcome::Refused,
-                Some(format!("{e:#}")),
-            )),
-        },
+        }
     }
 
     // No live advisor: one operator notice per absence episode; seat items
@@ -925,7 +1078,8 @@ pub(crate) fn run_tick(
         per.absence_episode = None;
     } else if per.absence_episode.is_none() && tick.ended.is_none() {
         match tick.recheck() {
-            Err(why) => tick.ended = Some(why),
+            // trace:TASK-1915 | ai:claude
+            Err(why) => tick.end("advisor", "advisor seat", "escalate", why),
             Ok(()) => {
                 let sent = tick.fx.notify_operator(
                     "AIDA drive mandate: no advisor seat is live",
@@ -961,7 +1115,13 @@ pub(crate) fn run_tick(
         .map(|l| plan_relay_lane(l, inp.spec_signoff))
         .collect();
     decisions.extend(inp.held_prs.iter().map(plan_held_pr));
-    decisions.extend(inp.unowned_specs.iter().map(plan_unowned_spec));
+    // Each unowned spec carries its dispatch epoch, so a dead fixer's spec
+    // is routed again. trace:TASK-1915 | ai:claude
+    decisions.extend(inp.unowned_specs.iter().map(|s| {
+        let mut s = s.clone();
+        s.epoch = per.dispatch_epoch(&s, now);
+        plan_unowned_spec(&s)
+    }));
     // An unreadable store: no operator-only or signoff check can be made,
     // so every gated seat action is withheld, with one ledgered refusal and
     // one operator notice per episode. trace:STORY-1700 | ai:claude
@@ -975,7 +1135,8 @@ pub(crate) fn run_tick(
         decisions.retain(|d| !gated(d));
         if tick.ended.is_none() && !per.emitted.contains(STORE_KEY) {
             match tick.recheck() {
-                Err(why) => tick.ended = Some(why),
+                // trace:TASK-1915 | ai:claude
+                Err(why) => tick.end("store", "requirement store", "store-check", why),
                 Ok(()) => {
                     let sent = tick.fx.notify_operator(
                         "AIDA drive: the requirement store is unreadable",
@@ -1011,16 +1172,9 @@ pub(crate) fn run_tick(
                 head,
                 why,
             } => {
-                let key = format!("{lane}|skip|{head}");
-                if per.emitted.insert(key) {
-                    tick.row(ActionRow::new(
-                        &lane,
-                        &subject,
-                        "none",
-                        Outcome::Skipped,
-                        Some(why),
-                    ));
-                }
+                // trace:TASK-1915 | ai:claude
+                let row = ActionRow::new(&lane, &subject, "none", Outcome::Skipped, Some(why));
+                tick.skip_once(per, &format!("{lane}|none|{head}"), row);
                 continue;
             }
             LaneDecision::Act(p) => p,
@@ -1038,16 +1192,18 @@ pub(crate) fn run_tick(
                 Some(why),
             )
         };
+        // Skip rows are ledgered once per (item, reason), not every tick.
+        // trace:TASK-1915 | ai:claude
         if let Some(why) = &tick.ended {
             let r = row(Outcome::Skipped, why.clone());
-            tick.row(r);
+            tick.skip_once(per, &key, r);
             continue;
         }
         let now = (inp.clock)();
         if let Some(b) = per.backoff.get(&planned.backoff_key()) {
             if b.next_eligible_at.is_some_and(|at| now < at) {
                 let r = row(Outcome::Skipped, "backoff".into());
-                tick.row(r);
+                tick.skip_once(per, &key, r);
                 continue;
             }
         }
@@ -1056,7 +1212,7 @@ pub(crate) fn run_tick(
                 Outcome::Skipped,
                 format!("budget of {} actions per tick reached", tick.budget),
             );
-            tick.row(r);
+            tick.skip_once(per, &key, r);
             continue;
         }
         if let Some(scope) = planned.action.scope() {
@@ -1065,7 +1221,7 @@ pub(crate) fn run_tick(
                     Outcome::Skipped,
                     format!("not in the mandate's scope ({})", scope.as_str()),
                 );
-                tick.row(r);
+                tick.skip_once(per, &key, r);
                 continue;
             }
         }
@@ -1127,6 +1283,13 @@ pub(crate) fn run_tick(
             Ok(why) => {
                 per.emitted.insert(key);
                 per.backoff.remove(&planned.backoff_key());
+                // A routed dispatch opens the spec's epoch. trace:TASK-1915 | ai:claude
+                if let Some(spec) = planned.lane.strip_prefix("spec:") {
+                    per.dispatch
+                        .entry(spec.to_ascii_uppercase())
+                        .or_default()
+                        .routed_at = Some(now);
+                }
                 per.actions += 1;
                 let r = row(outcome, why);
                 tick.row(r);
@@ -1189,45 +1352,12 @@ struct LiveEffects<'a> {
 
 impl DriveEffects for LiveEffects<'_> {
     fn emit_due(&mut self, mandate_id: &str, item: &Planned) -> Result<()> {
-        let event = crate::events::Event::new(
-            item.spec.clone(),
-            "",
-            crate::events::EventKind::MandateDriveDue {
-                mandate_id: mandate_id.into(),
-                key: item.key(),
-                lane: item.lane.clone(),
-                action: item.action.as_str().into(),
-                subject: item.subject.clone(),
-                command: item.command.clone(),
-                detail: item.detail.clone(),
-            },
-        );
-        crate::events::emit_recorded(self.root, &event).map_err(anyhow::Error::msg)?;
-        // The mail nudge: the advisor inbox carries the exact command.
-        use aida_core::mailbox::{Intent, Message, Recipient};
-        let id = uuid::Uuid::new_v4().to_string();
-        let msg = Message {
-            subject: Some(format!("drive: {} {}", item.action.as_str(), item.subject)),
-            id: id.clone(),
-            thread_id: id,
-            from: "aida-drive-tick".into(),
-            to: Recipient::Agent(crate::mandate::MANDATE_SEAT.into()),
-            timestamp: Utc::now().timestamp_millis(),
-            in_reply_to: None,
-            body: format!(
-                "Drive mandate {mandate_id}: {}\n\nNext action:\n{}",
-                item.detail, item.command
-            ),
-            urgent: false,
-            intent: Intent::Request,
-            retracted: false,
-            deleted: false,
-            archived: false,
-            from_source: aida_core::mailbox::SenderSource::Explicit,
-            from_role: None,
-            relayed_from: None,
-        };
-        crate::mailbox_store::write_message(self.root, &msg)
+        emit_due_with(
+            self.root,
+            mandate_id,
+            item,
+            &crate::mailbox_store::write_message,
+        )
     }
 
     fn notify_operator(&mut self, title: &str, body: &str) -> Result<String> {
@@ -1243,13 +1373,72 @@ impl DriveEffects for LiveEffects<'_> {
         .to_string())
     }
 
-    fn reap_dead_leases(&mut self) -> Result<usize> {
-        Ok(crate::session_reap::reap_quiet(self.root))
+    fn reap_dead_leases(&mut self) -> Vec<ReapRow> {
+        reap_rows(crate::session_reap::reap_quiet_outcomes(self.root))
     }
 
     fn ledger(&mut self, mandate_id: &str, row: &ActionRow) {
         emit_action(self.root, mandate_id, "tick", row);
     }
+}
+
+/// Emit the advisor due item: the `MandateDriveDue` event, then the mail
+/// nudge. Idempotent per key: a retry after a failed mail finds the event
+/// already written and sends only the mail, so a mail failure never
+/// duplicates the due item (TASK-1915 F5).
+// trace:TASK-1915 | ai:claude
+pub(crate) fn emit_due_with(
+    root: &Path,
+    mandate_id: &str,
+    item: &Planned,
+    write_mail: &dyn Fn(&Path, &aida_core::mailbox::Message) -> Result<()>,
+) -> Result<()> {
+    let key = item.key();
+    let recorded = crate::events::read_all(root).iter().any(|ev| {
+        matches!(&ev.kind, crate::events::EventKind::MandateDriveDue { mandate_id: m, key: k, .. }
+        if m == mandate_id && *k == key)
+    });
+    if !recorded {
+        let event = crate::events::Event::new(
+            item.spec.clone(),
+            "",
+            crate::events::EventKind::MandateDriveDue {
+                mandate_id: mandate_id.into(),
+                key: key.clone(),
+                lane: item.lane.clone(),
+                action: item.action.as_str().into(),
+                subject: item.subject.clone(),
+                command: item.command.clone(),
+                detail: item.detail.clone(),
+            },
+        );
+        crate::events::emit_recorded(root, &event).map_err(anyhow::Error::msg)?;
+    }
+    // The mail nudge: the advisor inbox carries the exact command.
+    use aida_core::mailbox::{Intent, Message, Recipient};
+    let id = uuid::Uuid::new_v4().to_string();
+    let msg = Message {
+        subject: Some(format!("drive: {} {}", item.action.as_str(), item.subject)),
+        id: id.clone(),
+        thread_id: id,
+        from: "aida-drive-tick".into(),
+        to: Recipient::Agent(crate::mandate::MANDATE_SEAT.into()),
+        timestamp: Utc::now().timestamp_millis(),
+        in_reply_to: None,
+        body: format!(
+            "Drive mandate {mandate_id}: {}\n\nNext action:\n{}",
+            item.detail, item.command
+        ),
+        urgent: false,
+        intent: Intent::Request,
+        retracted: false,
+        deleted: false,
+        archived: false,
+        from_source: aida_core::mailbox::SenderSource::Explicit,
+        from_role: None,
+        relayed_from: None,
+    };
+    write_mail(root, &msg)
 }
 
 /// Ledger one `MandateDriveAction` row. Best-effort.
@@ -1466,12 +1655,22 @@ pub(crate) fn spec_signoff_from(
 pub(crate) struct UnownedSpec {
     pub id: String,
     pub title: String,
-    /// A live claim or spec-scoped session lease.
+    /// A live claim or spec-scoped session lease, a work-queue entry, or a
+    /// live drain's spec set.
+    // trace:TASK-1915 | ai:claude
     pub live_claim: bool,
     /// A local or remote branch named for the spec.
     pub branch: bool,
     /// An open PR for the spec; `None` = the forge could not say.
     pub open_pr: Option<bool>,
+    /// The spec's dispatch epoch ([`DispatchEpoch`]); the tick sets it.
+    pub epoch: u32,
+}
+
+impl UnownedSpec {
+    fn owned(&self) -> bool {
+        self.live_claim || self.branch || self.open_pr == Some(true)
+    }
 }
 
 /// The routing for one approved spec: unowned (no live claim, no branch,
@@ -1480,14 +1679,20 @@ pub(crate) struct UnownedSpec {
 // trace:STORY-1700 | ai:claude
 pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
     let lane = format!("spec:{}", s.id);
-    if s.live_claim || s.branch || s.open_pr == Some(true) {
+    if s.owned() {
         return LaneDecision::None;
     }
+    // The head carries the dispatch epoch, so a re-route is a new item.
+    // trace:TASK-1915 | ai:claude
+    let head = match s.epoch {
+        0 => "approved".to_string(),
+        n => format!("approved#{n}"),
+    };
     if s.open_pr.is_none() {
         return LaneDecision::Skip {
             lane,
             subject: s.id.clone(),
-            head: "approved".into(),
+            head,
             why: "the forge could not say whether it has an open PR".into(),
         };
     }
@@ -1496,7 +1701,7 @@ pub(crate) fn plan_unowned_spec(s: &UnownedSpec) -> LaneDecision {
         subject: s.id.clone(),
         action: DriveAction::Redispatch,
         route: Route::Advisor,
-        head: "approved".into(),
+        head,
         command: format!(
             "aida agent new claude --spec {} --bg (a separate session, never an in-session subagent)",
             s.id
@@ -1522,6 +1727,46 @@ fn branch_names_spec(branch: &str, id: &str) -> bool {
         !before.is_some_and(|c| c.is_ascii_alphanumeric())
             && !after.is_some_and(|c| c.is_ascii_digit())
     })
+}
+
+/// Specs a work queue or the live drain already holds, upper-cased (spec
+/// and agreed ids): a queue entry routes the spec to someone, and a live
+/// drain's spec set is being worked, so neither is unowned.
+// trace:TASK-1915 | ai:claude
+pub(crate) fn queue_and_drain_claims(
+    root: &Path,
+    reqs: &[aida_core::Requirement],
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    if let Some(lock) = crate::drain_lock::read_pid_live_lock(root) {
+        out.extend(lock.specs.iter().map(|s| s.to_ascii_uppercase()));
+    }
+    let Ok(entries) = std::fs::read_dir(root.join(".aida-store/registry/queues")) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|x| x.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Some(queue) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_yaml::from_str::<Vec<aida_core::QueueEntry>>(&t).ok())
+        else {
+            continue;
+        };
+        for q in queue {
+            if let Some(r) = reqs.iter().find(|r| r.id == q.requirement_id) {
+                out.extend(
+                    [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                        .into_iter()
+                        .flatten()
+                        .map(str::to_ascii_uppercase),
+                );
+            }
+        }
+    }
+    out
 }
 
 /// Approved, non-epic specs from the store with their ownership facts.
@@ -1559,6 +1804,7 @@ fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<Un
     let is_live = crate::leases::lease_is_live(&live, Utc::now());
     let ids: Vec<String> = approved.iter().filter_map(|r| r.spec_id.clone()).collect();
     let open = crate::db_reconcile::specs_with_open_prs(root, ids.clone());
+    let held = queue_and_drain_claims(root, reqs);
     approved
         .iter()
         .filter_map(|r| {
@@ -1570,7 +1816,9 @@ fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<Un
                 live_claim: crate::leases::live_spec_claim_by_other(
                     &leases, None, &names, &is_live,
                 )
-                .is_some(),
+                .is_some()
+                    || names.iter().any(|n| held.contains(&n.to_ascii_uppercase())),
+                epoch: 0,
                 branch: branches
                     .iter()
                     .any(|b| names.iter().any(|n| branch_names_spec(b, n))),

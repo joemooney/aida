@@ -235,6 +235,19 @@ impl Case {
                 audit.get("released_under_mandate").and_then(Value::as_str),
                 under.as_deref()
             );
+            // TASK-1915 F3: a mandate release writes its MandateDriveAction
+            // row; an ordinary one writes none. trace:TASK-1915 | ai:claude
+            let rows = crate::mandate_drive::ledger_rows(root.path(), MANDATE_ID);
+            let released: Vec<_> = rows
+                .iter()
+                .filter(|(_, actor, r)| {
+                    actor == "session"
+                        && r.action == "release-rework-hold"
+                        && r.lane == format!("pr:{PR}")
+                        && r.outcome == crate::mandate_drive::Outcome::Done
+                })
+                .collect();
+            assert_eq!(released.len(), usize::from(under.is_some()), "{rows:?}");
         }
         (result, comments.into_inner(), held)
     }
