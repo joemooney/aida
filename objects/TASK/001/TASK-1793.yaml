@@ -3,12 +3,12 @@ spec_id: TASK-1793
 agreed_id: TASK-1793
 title: Launchers (aida agent new, relay) set AIDA_HARNESS_VERSION so write provenance records a real harness version
 description: 'Follow-up from the #2682 STORY-1674 review. The provenance ruling says AIDA_HARNESS_VERSION is set by the launcher (agent new, relay), but nothing in the tree sets it, so every harness_version is unknown. Set it from the vendor CLI version (e.g. ''claude --version'', ''codex --version'') at launch in agent_launch and relay.sh; test that a launched session''s write carries it. Optionally add an effort column to ledger v1.'
-status: NeedsAttention
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-21T05:55:42.827528012Z
+modified_at: 2026-10-21T05:55:46.264501858Z
 req_type: Task
 relationships:
 - rel_type:
@@ -83,6 +83,12 @@ comments:
   created_at: 2026-10-21T05:55:42.827528012Z
   modified_at: 2026-10-21T05:55:42.827528012Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15d07-abd8-7140-b5ca-0e7c08f7dc54
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: agent-new harness-version probe is correct and well-tested, but the probe process escapes the launcher''s authority boundary (inherits parent AIDA_SESSION_GRANT; runs outside os_wrap) with no refusal-path test. No triage reason was given.'
+  created_at: 2026-10-21T05:55:46.264488224Z
+  modified_at: 2026-10-21T05:55:46.264488224Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
   author: aida-session-start
@@ -108,6 +114,14 @@ history:
   timestamp: 2026-10-18T04:18:54.907090068Z
   session_id: 7128c2cc-5f91-4d9b-84bf-33e6cbce2296
   changes: []
+- id: 01a15d07-abd8-7140-b5ca-0e62833153ad
+  author: joe
+  timestamp: 2026-10-21T05:55:46.264477224Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -116,11 +130,3 @@ filed_at:
   aida_build_sha: 5fb188c522
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: agent-new harness-version probe is correct and well-tested, but the probe process escapes the launcher's authority boundary (inherits parent AIDA_SESSION_GRANT; runs outside os_wrap) with no refusal-path test
-  recovery_hint: address the review findings, move TASK-1793 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T04:17:25.909168669Z
