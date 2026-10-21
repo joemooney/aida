@@ -1,0 +1,13 @@
+claim_id = "39b0c79e-3cb8-468d-8e91-9c80b8aa6c37"
+scope = "PR-2802"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 445709
+pid_start_time = "linux-starttime:125902959"
+agent = "reviewer"
+started_at = "2026-10-21T18:14:10.816573359+00:00"
+heartbeat_at = "2026-10-21T18:14:10.816573359+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = true
