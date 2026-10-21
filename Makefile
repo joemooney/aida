@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched test-lane \
+        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched test-lane task-1800-replay \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -272,6 +272,15 @@ test-lane: ## Run one CI test lane locally: make test-lane LANE=lib-0|lib-1|cli-
 # `ARGS="--filter foo"` adds a libtest filter. trace:TASK-1780 | ai:claude
 test-touched: ## Targeted tests for the Rust files changed vs origin/main (agent profile)
 	@python3 scripts/test-touched.py $(ARGS)
+
+# TASK-1800 AC2: replay the trace collectors on the frozen 50 mandate cases.
+# Local evidence only (it needs the pinned PR heads in this clone). Optional:
+# POLICY=<frozen per-ID policy classes JSON> adds case-level refusals,
+# OUT=<file> writes the JSON report. trace:TASK-1800 | ai:claude
+task-1800-replay: ## Replay mandate trace attribution on the frozen TASK-1800 corpus (local only)
+	AIDA_TASK1800_POLICY_CLASSES=$(POLICY) AIDA_TASK1800_REPLAY_OUT=$(OUT) \
+		cargo test -p aida-cli-lib --lib --profile $(TEST_PROFILE) \
+		mandate_traces::replay_tests -- --ignored --nocapture
 
 test-unit: ## Run unit tests only (agent profile)
 	cargo test --workspace --lib --profile $(TEST_PROFILE)
