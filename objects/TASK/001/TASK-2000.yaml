@@ -11,11 +11,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T10:24:36.954851539Z
-modified_at: 2026-10-20T10:58:10.215134293Z
+modified_at: 2026-10-21T04:32:49.195887043Z
 req_type: Task
 tags:
 - from-review:PR-2772
 - mcp
+- operator-held
 - performance
 - severity:minor
 - show
@@ -39,6 +40,15 @@ history:
   timestamp: 2026-10-20T10:56:32.265175117Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15cbb-bc04-7da0-946f-c6e1f44c3e0b
+  author: joe
+  timestamp: 2026-10-21T04:32:49.668868847Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:49.195887043Z
+deferred_until: mcp.rs:891/6059 still call unbounded collect_git_linkage, but no MCP-show incident. Revisit after BUG-2192 lands or if MCP show exceeds 5 s.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 42481f97c70e50a200eb225059c8f303788e8b18
   branch: pr-2772
