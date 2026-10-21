@@ -158,9 +158,19 @@ fn no_allow_rule_is_broader_than_the_worktree() {
     let mut want = WRITE_TOOLS.to_vec();
     want.sort_unstable();
     assert_eq!(tools, want, "one rule per file-writing tool");
-    // The deny list stays Bash-only, so it never shadows a worktree write.
+    // The deny list stays Bash-only apart from the worktree's own `.git`
+    // pointer (TASK-1989), so it never shadows a worktree source write.
+    // trace:TASK-1952 | trace:TASK-1989 | ai:claude
+    let pointer = format!("/{}", worktree.join(".git").display());
     for rule in settings["permissions"]["deny"].as_array().unwrap() {
-        assert!(rule.as_str().unwrap().starts_with("Bash("), "{rule}");
+        let rule = rule.as_str().unwrap();
+        assert!(
+            rule.starts_with("Bash(")
+                || parse_rule(rule).is_some_and(|(_, spec)| {
+                    spec == pointer || spec == format!("{pointer}/**")
+                }),
+            "{rule}"
+        );
     }
 }
 
@@ -681,7 +691,8 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
         );
     }
 
-    // 3. NEGATIVE: a linked worktree's own gitdir stays allowed when in write_roots.
+    // 3. NEGATIVE: a linked worktree's own gitdir stays allowed when in
+    //    write_roots; only its `.git` pointer file is denied (TASK-1989).
     let linked_wt = parent.join("aida-wt-linked");
     let wt_gitdir = main_checkout.join(".git/worktrees/aida-wt-linked");
     std::fs::create_dir_all(&linked_wt).unwrap();
@@ -694,9 +705,11 @@ fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
     .unwrap();
 
     let wt_roots = vec![linked_wt.clone(), wt_gitdir.clone()];
-    assert!(
-        contained_main_checkout_git_deny_paths(&wt_roots).is_empty(),
-        "linked worktree and its own gitdir must not be classified as main checkout .git"
+    // trace:TASK-1952 | trace:TASK-1989 | ai:claude
+    assert_eq!(
+        contained_main_checkout_git_deny_paths(&wt_roots),
+        vec![linked_wt.join(".git")],
+        "a linked worktree denies only its own .git pointer, never its gitdir"
     );
     let wt_settings: serde_json::Value = serde_json::from_str(
         &crate::session::contained_settings_json(&[], false, &wt_roots),
@@ -1148,5 +1161,100 @@ fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
     assert!(
         captured_plain.contains(&"bypassPermissions".to_string()),
         "uncontained resume must pass bypassPermissions: {captured_plain:?}"
+    );
+}
+
+// TASK-1989: a linked worktree's `.git` pointer file is denied to every write
+// tool (a rewritten pointer would aim the operator's next git command at a
+// planted gitdir), while its gitdir and source tree stay writable.
+// trace:TASK-1952 | trace:TASK-1989 | ai:claude
+#[test]
+fn linked_worktree_git_pointer_file_is_denied() {
+    let (_tmp, parent, worktree) = pool_fixture();
+    let home = parent.join("home");
+    let pointer = worktree.join(".git");
+    let original = std::fs::read_to_string(&pointer).unwrap();
+    let settings = settings_for(&worktree);
+    let deny_write = settings["sandbox"]["filesystem"]["denyWrite"].to_string();
+    assert!(
+        deny_write.contains(&pointer.display().to_string()),
+        "the pointer must reach the OS sandbox denyWrite: {settings}"
+    );
+    for tool in WRITE_TOOLS {
+        assert!(
+            !attempt_write(&settings, tool, &pointer, &worktree, &home),
+            "{tool} on the linked worktree's .git pointer must be denied: {settings}"
+        );
+        assert_eq!(std::fs::read_to_string(&pointer).unwrap(), original);
+        assert!(
+            allowed(
+                &settings,
+                tool,
+                &worktree.join("src/lib.rs"),
+                &worktree,
+                &home
+            ),
+            "{tool} inside src/ must stay allowed: {settings}"
+        );
+    }
+}
+
+// TASK-2036: a `commondir` planted in a main checkout's `.git` DIRECTORY no
+// longer exempts it (a linked worktree's `.git` is never a directory).
+// trace:TASK-1952 | trace:TASK-2036 | ai:claude
+#[test]
+fn planted_commondir_in_main_git_directory_does_not_exempt_it() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+    let main = parent.join("main-planted-commondir");
+    std::fs::create_dir_all(main.join(".git/hooks")).unwrap();
+    std::fs::write(main.join(".git/commondir"), "..\n").unwrap();
+    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    assert!(denied.contains(&main.join(".git")), "{denied:?}");
+    let settings = settings_for(&main);
+    for tool in WRITE_TOOLS {
+        assert!(
+            !attempt_write(
+                &settings,
+                tool,
+                &main.join(".git/hooks/pre-commit"),
+                &main,
+                &home
+            ),
+            "{tool} on a commondir-planted main .git must be denied: {settings}"
+        );
+    }
+}
+
+// TASK-2037: a computed main-checkout deny that no rule can express (a rule
+// metacharacter in the gitfile's `gitdir:` target) fails the settings closed:
+// no write-root allow rule survives beside the missing deny.
+// trace:TASK-1952 | trace:TASK-2037 | ai:claude
+#[test]
+fn unexpressible_computed_main_git_deny_grants_no_writes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let sep = parent.join("git[1]/repo.git");
+    std::fs::create_dir_all(sep.join("hooks")).unwrap();
+    let main = parent.join("main-unexpressible");
+    std::fs::create_dir_all(main.join("src")).unwrap();
+    std::fs::write(main.join(".git"), format!("gitdir: {}\n", sep.display())).unwrap();
+    assert!(contained_main_checkout_git_deny_paths(std::slice::from_ref(&main)).contains(&sep));
+    let settings = settings_for(&main);
+    let allow = settings["permissions"]["allow"].as_array().unwrap();
+    assert!(
+        !allow.iter().filter_map(|r| r.as_str()).any(is_write_rule),
+        "an unexpressible main .git deny must leave no write grant: {settings}"
+    );
+    assert!(
+        !allowed(
+            &settings,
+            "Write",
+            &main.join("src/lib.rs"),
+            &main,
+            &parent.join("home")
+        ),
+        "{settings}"
     );
 }
