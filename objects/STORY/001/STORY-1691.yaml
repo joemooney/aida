@@ -19,8 +19,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:50:04.319403829Z
-modified_at: 2026-10-14T15:50:04.319403829Z
+modified_at: 2026-10-21T04:32:32.671217675Z
 req_type: Story
+tags:
+- operator-held
+history:
+- id: 01a15cbb-7b5b-70d2-aec5-535dd206c317
+  author: joe
+  timestamp: 2026-10-21T04:32:33.115983647Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:32.671217675Z
+deferred_until: Authority-model change; TASK-1787 (4caea8b7a3) added operator-chosen grant TTL + max_grant_hours cap. Revisit if grant expiry stalls a lane again.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 278ff0b09857793951b477ef891e07212a53f833
   branch: main
