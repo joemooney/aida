@@ -50,13 +50,24 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-12T15:07:37.629452703Z
-modified_at: 2026-10-12T15:07:37.629452703Z
+modified_at: 2026-10-21T04:32:22.447466924Z
 req_type: Story
 tags:
 - architecture
+- operator-held
 - sandbox
 - security
 - store
+history:
+- id: 01a15cbb-535c-7842-9a3d-0c587abcf9fc
+  author: joe
+  timestamp: 2026-10-21T04:32:22.876567656Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:22.447466924Z
+deferred_until: 'Architecture awaiting operator decision; clone-per-contained-seat (BUG-2169 S1 2177eaad8f, S2 #2787) may moot the spool. Revisit after BUG-2169 slices land.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: d57f76a2771e72a762f6b92892c4b68390b7f9a5
   branch: main
