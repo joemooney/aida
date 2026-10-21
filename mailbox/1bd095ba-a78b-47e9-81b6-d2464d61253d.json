@@ -1,0 +1,19 @@
+{
+  "id": "1bd095ba-a78b-47e9-81b6-d2464d61253d",
+  "thread_id": "1bd095ba-a78b-47e9-81b6-d2464d61253d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792613387713,
+  "body": "PR-2806 (TASK-2053 S3) round 2 at 451e2e05e1: CHANGES REQUESTED. The S3 lifecycle is well built and the round-1 items are fixed, but salvage and probe can still LOSE seat work. Full text: /tmp/claude-1000/-home-joe-ai-aida/7d71bfbf-a609-42bd-a714-a7d52d81db81/scratchpad/briefs/pr-2806-r2-findings.txt\nAdvisor ruling: these are data-loss defects in strict-tier containment, so this is a justified round 3 beyond the 2-round cap. Round 4 is only for regressions.\n1. [MAJOR] Untracked names: SALVAGE_SCRIPT reads 'git ls-files --others --exclude-standard' with the default core.quotePath, so quoted names (non-ASCII, quotes, backslashes, control chars) are dropped silently. Use -z and NUL-separated handling end to end, and make any per-file salvage failure FAIL the salvage (probe => Unknown, keep the clone), never swallow it. Test with a non-ASCII and a quote-containing untracked file.\n2. [MAJOR] Only HEAD is counted and salvaged: count and salvage every ref not reachable from origin or the base: all local branches, tags, and refs/stash (git for-each-ref plus rev-list --not --remotes=origin <base>; stash entries via the reflog). Simplest safe option: salvage a git bundle of all refs not on origin, plus the worktree diff. Any unpushed ref => dirty => session end requires --force. Test: commit on a side branch and switch back; stash a change. Both must read dirty and be salvaged.\n3. [MINOR] Tests for session end when the probe is Unknown (refuses; lease, clone and pin unchanged) and for destroy's Kept/Err branch.\n4. [MINOR] release_orphan_pins: re-check under the lock, right before update-ref -d, that the clone dir is still absent and no clone lease names that pin (or use update-ref -d <pin> <expected-old-oid>).\nNew commit, no force-push. Gates: check-ci-fast plus test-touched. Mail advisor \"READY: #2806 at <sha>\" after CI is green.\n",
+  "subject": "PR-2806 round 2: changes requested (salvage data-loss)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

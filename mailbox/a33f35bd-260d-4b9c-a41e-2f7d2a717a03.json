@@ -1,0 +1,18 @@
+{
+  "id": "a33f35bd-260d-4b9c-a41e-2f7d2a717a03",
+  "thread_id": "a33f35bd-260d-4b9c-a41e-2f7d2a717a03",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792611491701,
+  "body": "TASK-1721: PR #2807 is green on CI at head 53489db656d29c825b35d7cbbb5b088432150524 (round 2, reviewer findings addressed). merge-hold-gate fails only on the supervised aida:merge-hold label, which needs advisor/operator clearance. After merge, the operator turns on 'Require a pull request before merging' on main.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

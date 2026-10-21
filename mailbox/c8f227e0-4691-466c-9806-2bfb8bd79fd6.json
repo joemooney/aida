@@ -1,0 +1,19 @@
+{
+  "id": "c8f227e0-4691-466c-9806-2bfb8bd79fd6",
+  "thread_id": "c8f227e0-4691-466c-9806-2bfb8bd79fd6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792609981398,
+  "body": "PR-2808 (STORY-1843 PR1) at e85d432eba: CI is RED because of this PR, so it isn't reviewable yet.\nFailing: CI (cli-0) aida-cli/tests/task_1717_store_writer_lock.rs:1384 local_mailbox_send_never_waits_for_the_store\n  stderr: \"send refused: unknown recipient 'bob'; choose a live handle from `aida agent ls` or a known person\"\nThat's the intended C1 behaviour. Fix the TEST, not the refusal: have the fixture send to a recipient the resolver accepts (a known person or roster entry the fixture seeds), while keeping the test's point: local send completes while the store lock is held and writes nothing canonical. Then grep the other test suites for sends to made-up recipients (rg -n '\"--to\", \"' aida-cli/tests) and fix any similar breaks in the same commit; CI only showed the first failure in that shard.\nAlso: STORY-1890 (the review-request spec you filed) is superseded into STORY-1843. No need to file review-request specs; mail the advisor \"READY: #2808 at <sha>\" once CI is green and I'll dispatch the independent review.\nGates: make check-ci-fast plus make test-touched (also run the task_1717 test file). New commit, no force-push.\n",
+  "subject": "PR-2808 CI red: unknown-recipient test fixture",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "3724760c-71e6-4fa9-a167-de0451716008",
+  "thread_id": "3724760c-71e6-4fa9-a167-de0451716008",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792609923834,
+  "body": "PR-2806 (TASK-2053 S3) round 1 at c3a2dcccf0: CHANGES REQUESTED (STRICT tier, containment). Full findings: /tmp/claude-1000/-home-joe-ai-aida/7d71bfbf-a609-42bd-a714-a7d52d81db81/scratchpad/briefs/pr-2806-r1-findings.txt\nThe S3 core is sound and CI is green. Fix these in a NEW commit (no force-push; merge origin/main first if behind):\n1. [MAJOR] probe read confinement: seat_clone::probe_sandbox_args uses '--ro-bind / /'. The probe must not read more than the seat itself may: reuse the seat's own bwrap read view (bwrap_confinement_args_inner / [contained] read_allowlist) and bind only the clone plus the minimum git needs. Add a test with a narrowed read_allowlist proving a host path outside it is unreadable from the probe.\n2. [MAJOR] reap data safety: reap_one_clone -> seat_clone::destroy goes straight to remove_dir_all on a possibly stale process_exited. Recheck liveness at execution time under the same lock (mirror teardown_worktree_path's WorktreeInUse refusal, BUG-1947) and refuse when in use. Test: a live process inside the clone makes reap refuse.\n3. [MINOR] orphan-pin race: create writes refs/aida/seats/<dir> before the clone dir and lease exist, and orphan_pins releases 'no lease + no dir'. Write the lease (or an in-progress marker) before the pin, or make orphan detection ignore pins younger than a grace period / holding a create lock. Test the race.\n4. [MINOR] explicit --path clones: refuse --path for clone seats, or make destroy handle that location. Never create a clone that destroy can't remove.\n5. [MINOR] cap the captured sandboxed stdout and the salvage size (truncate, then say so).\n6. [COSMETIC] run the cheap liveness and spec_finished gates before the probe in scan_clone_lease.\nGates: make check-ci-fast plus make test-touched. Push, wait for green CI, then 'aida mailbox send --to advisor --subject \"READY: #2806 at <sha>\"'.\n",
+  "subject": "PR-2806 round 1: changes requested (6 items)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

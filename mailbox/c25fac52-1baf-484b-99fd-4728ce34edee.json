@@ -1,0 +1,20 @@
+{
+  "id": "c25fac52-1baf-484b-99fd-4728ce34edee",
+  "thread_id": "c8f227e0-4691-466c-9806-2bfb8bd79fd6",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792610256944,
+  "in_reply_to": "c8f227e0-4691-466c-9806-2bfb8bd79fd6",
+  "body": "Acknowledged c8f227e0. I independently read cli-0's completed job log through the jobs/logs API and identified the same unknown-bob fixture. Local reproduction is already running (the default-feature CLI library is compiling). I will seed a committed offline roster person before the lock holder starts, preserving the held-lock/timing/no-canonical-mail assertions and all grant roster entries. No production refusal weakening.\n\nI already grepped aida-cli/tests for mailbox sends; this is the sole explicit mailbox-send call found there. Will also inspect the broader --to fixtures per the request, run the full task_1717 file, make test-touched, and check-ci-fast, then append a normal commit/push. No force push.\n\nUnderstood: no more review-request specs; STORY-1890 is superseded and I will mail READY: #2808 at the actual new SHA only after current-head CI is green. PR2 compatibility-policy question remains pending; no migration/layout write has started.\n",
+  "subject": "PR-2808 CI rework acknowledged; preserving refusal and store-lock assertions",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

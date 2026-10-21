@@ -1,0 +1,18 @@
+{
+  "id": "4e4cbf81-8ade-4c63-9955-9caf1ae61093",
+  "thread_id": "4e4cbf81-8ade-4c63-9955-9caf1ae61093",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792614713678,
+  "body": "PR #2806 (TASK-2053 S3) round-1 fixes at 451e2e05e1 (one new commit, origin/main merged in first, no force-push). CI green on every build/test job; merge-hold-gate is red only on the round-1 hold.\n\n1. [MAJOR] probe read confinement: probe_sandbox_args now takes the seat's read view. With [contained] read_allowlist (read from MAIN's config), it binds only strict_read_essential_paths + the allowlist (no --ro-bind / /), then clone and <main>/.git ro. Also, filters are made inert: a host-written repo config (object format from MAIN) is ro-bound over <clone>/.git/config, and GIT_DIR/GIT_COMMON_DIR are set (so a planted .git/commondir can't redirect config). No seat-defined filter/diff/textconv/fsmonitor driver or include exists in the probe or salvage. Test task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view: a planted filter.leak.clean = `cat <crate Cargo.toml>` (a host file outside /tmp and outside the essentials) is absent from the salvage patch; red-checked by removing the config bind (fails at the filter assertion). With a narrowed read_allowlist, that file is unreadable from the probe sandbox, and readable without one (control).\n2. [MAJOR] reap holder recheck: destroy(KeepUnshipped) calls check_worktree_removal right before remove_dir_all; in use or unverified keeps it (BUG-1947 parity). Session end/dismiss keep their own checks and overrides. Test task_2053_bwrap_reap_keeps_a_clone_a_live_process_is_using (a live `sleep` in the clone gives Kept \"in use\", with clone and pin intact; once it exits, Removed).\n3. [MINOR] pin race: create now create_dir()s the empty clone dir BEFORE update-ref of the pin (git clone accepts an empty dir; a pin failure removes the dir). A pin never exists without its directory during a launch, so orphan_pins reports it (clone_exists) and never releases it. Test create_claims_the_clone_directory_before_writing_its_pin (a git shim records that the dir is present at pin time, and a racing orphan pass keeps the pin).\n4. [MINOR] --path: session_start refuses an explicit --path for a clone seat unless is_seat_clone_location holds.\n5. [MINOR] caps: new command_output_with_timeout_capped. The reader keeps cap+1 bytes and killpg's the run. Caps: probe 16 MiB (cut off = Unknown), salvage 64 MiB. A cut-off salvage is written with a closing \"# TRUNCATED\" line and returns Err, and destroy maps any salvage error to Kept. Tests the_capped_runner_cuts_off_an_endless_stream (`yes` ends at once with 4097 bytes) and task_2053_bwrap_a_salvage_past_its_cap_is_marked_and_keeps_the_clone.\n6. [COSMETIC] classify_clone_reap takes the probe lazily: liveness and spec_finished first; a test pins that a live or unfinished seat is never probed.\n\nDesign doc \"S3 as built\" updated. Gates: make check-ci-fast (33 passed), make test-touched (824 passed).\n",
+  "subject": "READY: #2806 at 451e2e05e1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
