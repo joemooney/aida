@@ -1,13 +1,13 @@
 # cargo-nextest configuration (STORY-1853 S2).
 #
-# CI runs the `ci` profile in the non-gating "Nextest shadow" lanes of
-# .github/workflows/ci.yml, over the same shard set as the cargo-test lanes
-# (scripts/ci-test-shards.py --runner nextest). Doctests stay on `cargo test`:
-# nextest does not run them.
-#
-# Agents must not run `cargo nextest` locally until the host cargo-slot wrapper
-# gates the `nextest` subcommand (STORY-1853 advisor signoff, 2026-10-19).
+# CI's gating test lanes (lib-0, lib-1, cli-0, cli-1, rest in
+# .github/workflows/ci.yml) run the `ci` profile through
+# scripts/ci-test-shards.py --runner nextest, and so do `make test` and
+# `make check-ci` locally. Doctests stay on `cargo test`: nextest does not run
+# them. The host cargo-slot wrapper gates the `nextest` subcommand like
+# `test`, so a local run waits for a build slot.
 # trace:TASK-1957 | ai:claude
+# trace:TASK-1988 | ai:claude
 
 [profile.ci]
 # Report every failure in one run, as the cargo-test lanes do (BUG-1021).
@@ -17,12 +17,12 @@ retries = 0
 test-threads = "num-cpus"
 # Per-test budget (STORY-1853 AC4). A test is reported SLOW at every 10 s
 # period, so the log names each test over the 10 s default_limit of
-# scripts/test-time-budget.toml. It is killed after 12 periods (120 s): no
-# single test measured on main comes near that (the slowest whole binary,
-# task_1717_store_writer_lock, takes 66 s for 43 tests), so the kill is a hang
-# guard, not a performance limit. The gating swap replaces the per-binary
-# budget file with per-test keys read from the JUnit report below.
-slow-timeout = { period = "10s", terminate-after = 12 }
+# scripts/test-time-budget.toml, whose per-test entries test-timings.py checks
+# against the JUnit report below. A test is killed after 18 periods (180 s), a
+# hang guard rather than a performance limit: the slowest test measured on
+# main (contained_boundary's bug_1985_host_status_guard) takes about 103 s,
+# and no budget entry may exceed the kill.
+slow-timeout = { period = "10s", terminate-after = 18 }
 # Show the output of failing tests at the end of the run, where the log is read.
 failure-output = "immediate-final"
 success-output = "never"
