@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-20T23:06:37.012609126Z
+modified_at: 2026-10-21T04:29:00.346589127Z
 req_type: Task
 tags:
 - contained
@@ -183,6 +183,12 @@ comments:
   created_at: 2026-10-20T23:06:37.012609126Z
   modified_at: 2026-10-20T23:06:37.012609126Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15cb8-3c3a-7791-9f3f-78f58290f4e2
+  author: joe
+  content: 'Advisor triage 2026-10-20 21:30: folded TASK-1781 into this spec (Allowlist + picker items shipped (8e004a52ae, BUG-2151). Fold the --no-default-flags and --cwd write-root remainder into the contained-launch sweep.). Its open acceptance items now belong here.'
+  created_at: 2026-10-21T04:29:00.346589127Z
+  modified_at: 2026-10-21T04:29:00.346589127Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
   author: joe
