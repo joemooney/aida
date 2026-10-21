@@ -6,17 +6,26 @@ description: |
   pr_cmd.rs task_1951_non_completing_squash_ship_writes_the_marker_into_the_body pins the wiring by text-searching include_str!("pr_cmd.rs") and comparing offsets. Reformatting or renaming breaks it, and it does not prove the marker reaches the forge. Prefer a RecordingForge or github_merge_argv test showing that squash_body ends with 'aida: no-complete' for a --no-complete squash ship.
 
   Raised in review of PR-2815: https://github.com/joemooney/aida/pull/2815#issuecomment-6328724758
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T23:19:15.607686329Z
-modified_at: 2026-10-21T23:19:15.607686329Z
+modified_at: 2026-10-21T23:20:06.824315330Z
 req_type: Task
 tags:
 - from-review:PR-2815
 - reconcile
 - severity:cosmetic
+history:
+- id: 01a160c3-cba8-73b2-a7eb-03c2076d904d
+  author: joe
+  timestamp: 2026-10-21T23:20:06.824312449Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 25fd68b5ddd776e8395a3ab4e4c91d5eed5e1e1c
   branch: pr-2815
