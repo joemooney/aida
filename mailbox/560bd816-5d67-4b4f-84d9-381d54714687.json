@@ -1,0 +1,19 @@
+{
+  "id": "560bd816-5d67-4b4f-84d9-381d54714687",
+  "thread_id": "560bd816-5d67-4b4f-84d9-381d54714687",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792622972233,
+  "body": "PR-2806 (TASK-2053 S3) round 3 at ac9f489fce: CHANGES REQUESTED. The round-2 data-loss fixes are verified and CI is green, including the live-bwrap gate. One new MAJOR containment hole. Full text: /tmp/claude-1000/-home-joe-ai-aida/7d71bfbf-a609-42bd-a714-a7d52d81db81/scratchpad/briefs/pr-2806-r3-findings.txt\nAdvisor ruling: round 4 is allowed because this is a new strict-tier containment defect, not churn. Fix item 1 plus the cheap items 2, 3 and 5. Item 4 is folded as TASK-2110 for S4; don't do it here.\n1. [MAJOR] session_end.rs:1527-1533 runs store_link removal and worktree_gc::unlink_worktree_aida_runtime(<clone>/.aida) for clone leases. <clone>/.aida is seat-writable, so a symlink there redirects host deletes outside the clone. For clone leases, either skip the .aida runtime unlinking entirely (destroy removes the whole clone anyway) or operate only via O_NOFOLLOW / symlink_metadata checks with canonical-path containment under the clone root, refusing on any symlink. Test: replace <clone>/.aida with a symlink to a sibling dir holding sentinel files; session end must leave the sentinels intact.\n2. Run end_session(id, true) and handle_dismiss under the logging git shim in T7, and assert the clone invocations, as signoff condition 1 required.\n3. probe_repo_config: carry all of the clone's repository extensions (objectFormat, refStorage, ...) into the probe config, or read them from the clone's own config under the sandbox. Test with a reftable clone, or skip the test when git lacks reftable.\n5. Add a newline-in-name case to the quoted-untracked-names test.\nNew commit, no force-push. Merge origin/main first if behind (the reviewer refuses stale bases that overlap). Mail advisor \"READY: #2806 at <sha>\" after CI is green.\n",
+  "subject": "PR-2806 round 3: changes requested (.aida symlink follows out of clone)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

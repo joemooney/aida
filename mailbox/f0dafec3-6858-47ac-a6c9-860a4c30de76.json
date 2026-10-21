@@ -1,0 +1,19 @@
+{
+  "id": "f0dafec3-6858-47ac-a6c9-860a4c30de76",
+  "thread_id": "f0dafec3-6858-47ac-a6c9-860a4c30de76",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792623893286,
+  "body": "PR #2813 CI is green at head ae53df7c7251f9611eb03ca0de3054de80fbc26c. Round 1 fixes: (1+2) the lease-tree scoping now lives in build_contained_resume_command, the real contained resume path; cwd and --settings are both the lease tree, the dead exec_resume_command branch is removed, and the test drives the real builder and asserts cwd. (3) The yaml_backend.rs git calls go through host_git_command, with a guard test. The minor relative back-pointer finding is fixed here too, so TASK-2107 can close. Only merge-hold-gate is red (the review hold).",
+  "subject": "PR #2813 green at ae53df7c72 (TASK-1952 S2 r1 rework)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

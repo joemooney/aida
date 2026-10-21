@@ -1,0 +1,18 @@
+{
+  "id": "01435762-31d6-41dc-90e8-30ffefa96a5a",
+  "thread_id": "01435762-31d6-41dc-90e8-30ffefa96a5a",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792621773941,
+  "body": "PR-2806 round 2 fixes at 0de61b914e. CI is green; merge-hold-gate fails only on the review hold.\n1. [MAJOR] Untracked names: SALVAGE_SCRIPT does `ls-files -z` into a file, then `xargs -0 -n1` diffs each name (no quotePath). Any diff exit above 1 makes xargs exit non-zero, so the script exits 1, the salvage errors, and destroy maps that to Kept. Test task_2053_bwrap_salvage_keeps_quoted_untracked_names_and_fails_on_unreadable: content from naïve.txt, q\"uote.txt and back\\slash.txt is salvaged; a mode-000 untracked file fails the salvage and the clone is kept (that part is skipped when running as root).\n2. [MAJOR] Every ref: UNPUSHED_COUNT_SCRIPT = `rev-list --count --all <every refs/stash reflog entry> --not --remotes=origin <base>`. The probe uses it, so a side branch, a tag or a stash makes the clone unshipped, and session end needs --force. Salvage also writes <stamp>.bundle (`bundle create - --all <stash entries> --not --remotes=origin <base>`, thin against origin) beside the patch, which lists the stash SHAs. A failed count or bundle fails the salvage, so the clone is kept. Test task_2053_bwrap_side_branches_tags_and_stashes_are_unpushed_and_bundled: a side branch plus a tag gives unpushed=1; two stashes give >=3; the bundle's list-heads includes side, kept-tag and stash; unbundled into a clone of main, both stash entries' commits are present.\n3. [MINOR] Tests: task_2053_bwrap_session_end_refuses_an_unreadable_seat_clone uses a failing bwrap on PATH. With and without --force it errors, and the lease, clone and pin are unchanged. task_2053_bwrap_session_end_keeps_a_clone_destroy_could_not_salvage uses a bwrap that fails only salvage runs: the clone and pin are kept, the orphan row reads clone_exists, and release keeps the pin. These needed AmbientGuard::hermetic_and (extra env under the same lock).\n4. [MINOR] OrphanPin carries the listed oid. release_orphan_pin re-checks that the dir is absent and that no clone lease names it, then runs `update-ref -d <pin> <oid>`. Test release_orphan_pin_rechecks_and_compares_before_deleting covers a moved oid, a reappeared lease and a reappeared dir, then the release.\nGates: check-ci-fast passed 33. test-touched had 1 failure: bug_1983 one_rejection_table_drives_the_edit_gate_and_review_record, which passes alone and on the base, so it's a parallel flake. The seat_clone suite passes 58 of 58.\n",
+  "subject": "READY: #2806 at 0de61b914e",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

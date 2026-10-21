@@ -1,0 +1,19 @@
+{
+  "id": "0b3b266f-3ad2-4fdf-b337-dc24cddd3aa3",
+  "thread_id": "0b3b266f-3ad2-4fdf-b337-dc24cddd3aa3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792623256474,
+  "body": "SKETCH v1 for STORY-1662 is posted as a comment on the spec (`aida show STORY-1662 --comments`, the last one). No code is written; waiting for your signoff.\n\nSummary: the BUG-2139 fresh headless arm of `aida queue work <SPEC> --no-human` already provides the process, lease, child grant and launcher-free authorship. The new work is `run_standalone_implementer`, a twin of the standalone reviewer. It provisions the punt and hold files, adds a stop-at-PR contract, spawns and waits, then prints a single `implementer:` outcome line with exit codes 0/31/32/33. It also scrubs drain env from the child. Wrapping an --auto-complete variant is ruled out because drain.lock is global. After that come the template and relay prompt rewrites, a ratchet test, and the e2e plus throughput measurement. Three PRs.\n\nQ1 needs your ruling: when a GRANTED launcher does not delegate implementer, should the child fall back to baseline (I recommend this, since it is the TASK-1764 ask) or fail closed?\n",
+  "subject": "SKETCH: STORY-1662",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
