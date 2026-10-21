@@ -11,11 +11,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T09:05:27.859220245Z
-modified_at: 2026-10-19T09:05:27.859220245Z
+modified_at: 2026-10-21T04:32:42.597535773Z
 req_type: Task
 tags:
 - from-review:PR-2751
+- operator-held
 - severity:minor
+history:
+- id: 01a15cbb-a243-7552-9423-d685f5d761c8
+  author: joe
+  timestamp: 2026-10-21T04:32:43.075351715Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:42.597535773Z
+deferred_until: Policy 'decide' item, minor, pre-existing. Revisit when guest stakeholder seats are actually in use.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: a2e163b106ce19a23c6620b69167d66b53e05694
   branch: pr-2751
