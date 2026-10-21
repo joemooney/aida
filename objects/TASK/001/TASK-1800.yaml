@@ -3,12 +3,12 @@ spec_id: TASK-1800
 agreed_id: TASK-1800
 title: Measure and reduce mandate trace-exclusion fallback rate (semantic false positives)
 description: 'Follow-up from the TASK-1790 item 3 review (#2709). Trace-derived exclusions refuse about 24/50 ordinary-mandate PRs beyond the named checks; hunk scope gains 1 case and 46/50 fall back to the full file, so the mandate is close to inert. Acceptance: (1) classify the refusals on the frozen last-50 set as true supervised touches vs incidental co-location; (2) cut the full-file fallback rate (e.g. module-level item attribution, non-Rust hunk scoping) without dropping any true touch; (3) keep ADD-only and fail-closed. STANDARD review unless authority code changes.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T05:47:34.624432386Z
+modified_at: 2026-10-21T07:04:54.760519737Z
 req_type: Task
 relationships:
 - rel_type:
@@ -482,6 +482,21 @@ history:
   timestamp: 2026-10-21T05:47:29.872827899Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15d46-f87a-7ce2-8fcd-2d98a5b975ef
+  author: aida-auto-bump
+  timestamp: 2026-10-21T07:04:54.650320640Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15d46-f8e8-7e53-a1a7-4f633e0e5f9a
+  timestamp: 2026-10-21T07:04:54.760514912Z
+  agent: aida
+  commit_sha: befc5a2e236ee7b20164f52c22d62a7058613203
+  summary: 'r2: all ruling items (dangling trace dropped, alias/deleted-alias judged via history, unreadable refuses, named fail-closed) and TASK-1803 ACs verified by tests; CI Build green at f6b41c0; remaining findings non-blocking'
+  review_verdict: approved
 filed_at:
   code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
   branch: main
@@ -490,3 +505,7 @@ filed_at:
   aida_build_sha: 7dd7aee9de
   vendor: claude
   session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T07:04:54.650315388Z
+  completion_sha: befc5a2e236ee7b20164f52c22d62a7058613203
