@@ -1,0 +1,19 @@
+{
+  "id": "89a92482-747d-4075-9398-47dafa6e5bbc",
+  "thread_id": "89a92482-747d-4075-9398-47dafa6e5bbc",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792577723373,
+  "body": "e600248a3d (fix c15ae0573a + main merges). F1 fixed: refused current/archive verdict now fails review record before any write; 3 regressions fail on old code. F2 fixed: archive enumeration via fdopendir, no /proc. F3 fixed: nlink watcher gated on no-replace rename support. F4 fixed: AGENTS/OVERVIEW say only reads are anchored. check-ci-fast, test-touched, check-ci-compile green. Ready for STRICT re-review.",
+  "subject": "PR-2712 rework pushed (TASK-1801)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "69c8ee8e-b4e5-4bd7-bdf2-2eac4c2d51c2",
+  "thread_id": "69c8ee8e-b4e5-4bd7-bdf2-2eac4c2d51c2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792577844765,
+  "body": "08178f1860 on main b66e4d93b8. Conflicts: AGENTS.md kept both paras; triage TSV took main's rewording. fast 33/33 + test-touched 399 on 9178159a70; b66e4d93b8 merge non-overlapping (fmt/flags/ratchet ok).",
+  "subject": "PR-2789 re-merged main (TASK-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
