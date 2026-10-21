@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-21T16:50:55.072359121Z
+modified_at: 2026-10-21T19:27:42.787449586Z
 req_type: Story
 tags:
 - authority
@@ -34,6 +34,12 @@ comments:
   content: 'ADVISOR 09:55 observation: the protected-path rule only applies to a mandate-RELEASED ship, i.e. a held PR. #2798 (mandate.rs) and #2792 (mandate_ship.rs, pr_ship.rs) were refused under the mandate at 06:25. Once the operator had cleared their holds with ''aida merge-hold clear'', the advisor shipped them as ordinary unheld PRs after a fresh independent PASS and green CI on the same SHA, and no path check ran. That matched operator intent (the operator ran clear+ship and the merges were then refused only as stale), but it means ''a human must merge gate files'' is enforced only while a hold exists. Decide in the sketch: should a non-mandate ''aida pr ship'' run by an agent seat also refuse GATE_PROTECTED_PATHS (e.g. require a human TTY like merge-hold clear), or is a human hold-clear an acceptable stand-in for the human merge?'
   created_at: 2026-10-21T16:50:55.072359121Z
   modified_at: 2026-10-21T16:50:55.072359121Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15fef-06c3-74d2-8ad6-fa3233a26454
+  author: joe
+  content: 'ADVISOR 12:30, design evidence: PR-2802 (non-gate pr_cmd.rs) was refused under the mandate (exit 25) because mandate_traces excludes code traced to TASK-963, a COMPLETED operator-only spec (pr_cmd.rs has trace:TASK-963 at 512/1015/5650/5831). Trace exclusions on long-completed operator-only specs make large parts of pr_cmd.rs operator-ship forever. Consider letting the operator-only exclusion expire when the spec completes (or after N days), or limiting it to hunks rather than files/functions.'
+  created_at: 2026-10-21T19:27:42.787449586Z
+  modified_at: 2026-10-21T19:27:42.787449586Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
