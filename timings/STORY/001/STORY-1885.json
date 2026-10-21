@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1885",
+  "publishes": [
+    {
+      "at": "2026-10-21T09:51:55.756883039Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-20T23:00:51.876951483Z",
+      "spec": "STORY-1885",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T09:51:55.588005101Z",
+      "spec": "STORY-1885",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "pr": 2787,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
