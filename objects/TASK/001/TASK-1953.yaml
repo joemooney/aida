@@ -51,12 +51,12 @@ description: |-
 
   ### BUG-2175: aida queue list --epic help text still names the removed 'aida graph <ID> --tree' spelling
   cli.rs:6145-6146 (queue list --epic help): '...the same hierarchy closure `aida graph <ID> --tree` walks'. The flag form was replaced by subcommands (STORY-1028). scripts/check-removed-flags.sh misses it because the doc comment wraps between 'aida graph' and '<ID> --tree'. Found when STORY-1728's golden help snapshot rendered the text onto one line. Fix: name the current graph subcommand spelling, regenerate the snapshot.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:59:11.076757281Z
-modified_at: 2026-10-21T15:51:28.973636283Z
+modified_at: 2026-10-21T17:17:45.164282036Z
 req_type: Task
 tags:
 - docs
@@ -308,6 +308,20 @@ history:
   timestamp: 2026-10-21T15:51:29.080473261Z
   session_id: 01a15f271f32
   changes: []
+- id: 01a15f78-0a94-7be0-bd55-c3622217507b
+  author: aida-auto-bump
+  timestamp: 2026-10-21T17:17:44.980967785Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15f78-0b4c-7773-9b2b-b5e2acd0c8f2
+  timestamp: 2026-10-21T17:17:45.164274465Z
+  agent: aida
+  commit_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
+  summary: All 17 actionable sweep items verified against the diff, with CI green at head. 3 behaviour-change items (TASK-2054 AIDA_STORE part, TASK-2055, TASK-1667) are declined with stated reasons, as the spec allows. 2 non-blocking follow-ups.
+  review_verdict: approved
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -316,11 +330,7 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Sweep is ~complete and CI green; TASK-2052 still prints the multi-parent notice under a 'Parent conflict:' prefix, plus cosmetic doc wrap/paren nits.
-  recovery_hint: address the review findings, move TASK-1953 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T15:51:28.973636283Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T17:17:44.980962258Z
+  completion_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
