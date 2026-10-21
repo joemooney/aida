@@ -6,17 +6,26 @@ description: |
   docs/plans/2026-10-19-backlog-triage.tsv, TASK-1777 row: the evidence cites `session.rs:1302,1390` for `aida_contained_env()? || contained`. At the pinned snapshot 6d590ed the first occurrence is at aida-cli-lib/src/session.rs:1301. The claim itself is correct (the same pattern also appears at 3474 and 3963). Cosmetic: the snapshot artifact is frozen, so fix it only if the file is edited again.
 
   Raised in review of PR-2757: https://github.com/joemooney/aida/pull/2757
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:22:37.415098809Z
-modified_at: 2026-10-21T04:22:37.415098809Z
+modified_at: 2026-10-21T05:46:59.759731536Z
 req_type: Task
 tags:
 - docs
 - from-review:PR-2757
 - severity:cosmetic
+history:
+- id: 01a15cff-a32f-7842-ae04-6fcdbbc242b4
+  author: joe
+  timestamp: 2026-10-21T05:46:59.759720963Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 303f1167d6a42155d7e4e2d767b1fb3ad5b09ce1
   branch: pr-2757
