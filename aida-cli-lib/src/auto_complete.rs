@@ -3716,8 +3716,9 @@ pub(crate) fn classify_phase1_failure_recovery(
 /// prelude runs ahead of phase 1 and the drain's phases keep their numbers.
 ///
 /// Each step is the exact CLI invocation the prelude shells out to — reusing
-/// slice 2's `aida queue work <SPEC> --plan-only` (the interactive/headless
-/// planning session) and slice 1's `aida plan promote <SPEC>` (the
+/// slice 2's `aida queue work <SPEC> --plan-only` (the interactive planning
+/// session; a headless drain uses the hidden `--plan-phase --no-human` lane)
+/// and slice 1's `aida plan promote <SPEC>` (the
 /// Approved → Planned transition). Modelling the steps as data (rather than
 /// inlining the shell-outs) keeps the decision — *with-plan ⇒ plan then drain;
 /// without ⇒ drain only* — a pure function the unit tests pin down in
@@ -3726,10 +3727,11 @@ pub(crate) fn classify_phase1_failure_recovery(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlanPreludeStep {
     /// `aida queue work <spec> --plan-only` — the slice-2 planning session.
-    /// `headless` appends `--no-human` when the drain runs a headless
-    /// implementer (`--no-human=both`), matching how the phase-1 implementer
-    /// is launched.
+    /// `headless` swaps in the hidden `--plan-phase --no-human` lane when the
+    /// drain runs a headless implementer (`--no-human=both`), matching how the
+    /// phase-1 implementer is launched.
     // trace:STORY-265 | ai:claude
+    // trace:TASK-1953 | ai:claude — prose names the headless --plan-phase lane.
     PlanSession { spec: String, headless: bool },
     /// `aida plan promote <spec>` — the slice-1 Approved → Planned transition,
     /// fired once the plan file lands.

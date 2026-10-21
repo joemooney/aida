@@ -40,7 +40,8 @@ mandate.
 - Dispatching fixers and reviewers in parallel across the scope.
 - Recording an approval and merging a PR on green Build after its tiered
   review, including PRs the advisor did not write or launch.
-- Ruling at the two-round cap: merge with follow-ups, or park.
+- Ruling at the two-round cap: merge with follow-ups (only with a
+  reviewer-process approval at head), or park.
 - Filing follow-up specs for non-blocking findings without asking.
 - Fixing main forward with a one-line FASTTRACK PR through the normal gate.
 
@@ -68,7 +69,8 @@ mandate.
   the advisor, with its reasoning, on the spec before shipping.
 - **Independent review.** A fixer never reviews its own PR. Each review runs
   as a separate reviewer process launched from Bash
-  (`aida queue work PR-<n> --role reviewer --no-human`), never as an
+  (`aida queue work PR-<n> --role reviewer --no-human --vendor claude`;
+  codex refuses under `AIDA_CONTAINED`), never as an
   Agent-tool subagent, and the advisor never records a verdict itself: it is
   an author of every PR its fixer subagents wrote, so the ship gate refuses
   its approvals. <!-- trace:STORY-1654 | ai:claude -->
@@ -88,9 +90,13 @@ re-run the local suite.
 
 A PR gets at most **two** review rounds. After round two, the advisor rules:
 merge and file the remaining findings as follow-ups, or park the PR with its
-reason on the spec. Non-blocking findings are **always** follow-up specs,
-never another round. A blocking finding that survives round two usually means
+reason on the spec. Merging still needs an approval at head recorded by a
+reviewer process (or by the operator at a terminal). The advisor cannot record
+one, so a PR whose second round ends in RequestChanges is parked or handed to
+the operator. Non-blocking findings are **always** follow-up specs, never
+another round. A blocking finding that survives round two usually means
 the spec was under-specified: park it and clarify the spec.
+<!-- trace:TASK-1953 | ai:claude -->
 
 ## Shipping order
 
