@@ -1,0 +1,27 @@
+id: 01a15e43-e3b5-7f91-980c-7f359ef9b22b
+spec_id: TASK-1-401
+title: '[cosmetic][non-blocking] pr_merge_gate.rs:248 stamp_pr_review_verdict still re-…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1801, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic][non-blocking] pr_merge_gate.rs:248 stamp_pr_review_verdict still re-reads and rewrites the just-recorded verdict by path (raised in round 99ca766, not addressed). Low risk since record_verdict's anchored read-back precedes it; route through read_verdict_body/write_verdict_object.
+  Reviewed sha: d5cdd8a5763bcafc8077d26430286e1683e3c948
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T11:41:09.941870052Z
+modified_at: 2026-10-21T11:41:09.941870052Z
+req_type: Task
+tags:
+- carried-from:TASK-1801
+- finding-hash:7bb7be6a
+- from-review:TASK-1801
+- kind:carried-forward
+filed_at:
+  code_sha: ed4168add1853ab65f9573e89f3f19a03aef6eb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
