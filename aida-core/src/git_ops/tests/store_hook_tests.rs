@@ -901,3 +901,99 @@ fn bug_2192_host_git_command_resolves_store_hooks_once() {
         "a host tree never resolves store hooks"
     );
 }
+
+/// Run `f` with every file treated as settled, so the BUG-2192 memo can hit
+/// on a fixture made moments ago, and return what it returned plus the lookup
+/// git processes it spawned.
+// trace:BUG-2192 | ai:claude
+fn bug_2192_settled_spawns<T>(f: impl FnOnce() -> T) -> (T, usize) {
+    use crate::host_git_cache::{ALWAYS_SETTLED, LOOKUP_SPAWNS};
+    ALWAYS_SETTLED.with(|s| s.set(true));
+    LOOKUP_SPAWNS.with(|n| n.set(0));
+    let out = f();
+    ALWAYS_SETTLED.with(|s| s.set(false));
+    (out, LOOKUP_SPAWNS.with(std::cell::Cell::get))
+}
+
+// BUG-2192: the lookups one store git command needs (the common directory
+// and the index/HEAD `.gitmodules`) spawn git once each, then are memoised
+// while the files they depend on are unchanged. A changed `.git` pointer or
+// index recomputes them, so a `.gitmodules` staged later still gets its
+// override.
+// trace:BUG-2192.ac421074 | ai:claude
+// trace:BUG-2192 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2192_store_git_lookup_spawns_are_memoised_until_the_repo_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let args = |cmd: &Command| -> Vec<String> {
+        cmd.get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    };
+
+    let (cmd, first) = bug_2192_settled_spawns(|| host_git_command(&store));
+    assert_eq!(
+        first, 2,
+        "first store command: rev-parse + .gitmodules probe"
+    );
+    let (mut cmd2, second) = bug_2192_settled_spawns(|| host_git_command(&store));
+    assert_eq!(second, 0, "an unchanged store reuses both lookups");
+    assert_eq!(args(&cmd), args(&cmd2));
+    assert!(cmd2.args(["status", "--short"]).status().unwrap().success());
+
+    // Rewriting the `.git` pointer (same text, new inode) re-runs rev-parse.
+    let pointer = std::fs::read(store.join(".git")).unwrap();
+    std::fs::remove_file(store.join(".git")).unwrap();
+    std::fs::write(store.join(".git"), pointer).unwrap();
+    let (_, after_pointer) = bug_2192_settled_spawns(|| host_git_command(&store));
+    assert_eq!(
+        after_pointer, 2,
+        "a new .git pointer recomputes both lookups"
+    );
+
+    // Stage a .gitmodules (index only): the probe re-runs and the override
+    // for its submodule is added.
+    let gitmodules = "[submodule \"planted\"]\n\tpath = planted\n\turl = ./x\n";
+    std::fs::write(store.join(".gitmodules"), gitmodules).unwrap();
+    let blob = run_git(&store, &["hash-object", "-w", ".gitmodules"]);
+    std::fs::remove_file(store.join(".gitmodules")).unwrap();
+    run_git(
+        &store,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("100644,{},.gitmodules", blob.trim()),
+        ],
+    );
+    let (cmd, after_index) = bug_2192_settled_spawns(|| host_git_command(&store));
+    assert_eq!(after_index, 1, "a changed index re-runs only the probe");
+    assert!(
+        args(&cmd).contains(&"submodule.planted.ignore=all".to_string()),
+        "{:?}",
+        args(&cmd)
+    );
+}
+
+// BUG-2192: nothing is memoised over files changed in the last two seconds,
+// since a timestamp tick could hide a rewrite.
+// trace:BUG-2192 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2192_recently_changed_store_is_never_memoised() {
+    let dir = tempfile::tempdir().unwrap();
+    let (_main, store) = bug_1929_main_with_store(dir.path());
+    let spawns = || {
+        // A fresh `.git` pointer keeps this independent of fixture speed.
+        let pointer = std::fs::read(store.join(".git")).unwrap();
+        std::fs::remove_file(store.join(".git")).unwrap();
+        std::fs::write(store.join(".git"), pointer).unwrap();
+        crate::host_git_cache::LOOKUP_SPAWNS.with(|n| n.set(0));
+        let _ = host_git_command(&store);
+        crate::host_git_cache::LOOKUP_SPAWNS.with(std::cell::Cell::get)
+    };
+    assert_eq!(spawns(), 2);
+    assert_eq!(spawns(), 2, "a just-written store is looked up every time");
+}

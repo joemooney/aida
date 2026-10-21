@@ -220,16 +220,31 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
         return Ok(Vec::new());
     };
     let file = top.join(".gitmodules");
-    let sources: Vec<Vec<String>> = if std::fs::symlink_metadata(&file).is_ok() {
-        vec![vec!["--file".into(), file.to_string_lossy().into_owned()]]
-    } else {
-        vec![
-            vec!["--blob".into(), ":.gitmodules".into()],
-            vec!["--blob".into(), "HEAD:.gitmodules".into()],
-        ]
-    };
+    if std::fs::symlink_metadata(&file).is_ok() {
+        let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
+        return gitmodules_names_from(top, vec![source]);
+    }
+    // BUG-2192: the index and HEAD registries change only when the index or
+    // HEAD does, so the probe's answer is memoised per process on them.
+    // trace:BUG-2192 | ai:claude
+    crate::host_git_cache::gitmodules_blob_names(top, || {
+        gitmodules_names_from(
+            top,
+            vec![
+                vec!["--blob".into(), ":.gitmodules".into()],
+                vec!["--blob".into(), "HEAD:.gitmodules".into()],
+            ],
+        )
+    })
+}
+
+/// [`gitmodules_submodule_names`] read from the first of `sources` (`git
+/// config` source arguments) that exists, in the repository at `top`.
+// trace:BUG-1985 | ai:claude
+fn gitmodules_names_from(top: &Path, sources: Vec<Vec<String>>) -> Result<Vec<String>> {
     let blob = sources.len() > 1;
     for source in sources {
+        crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1985): `git config` reads one file or blob and never
         // walks the tree; host_git_command itself calls this.
         let out = Command::new("git")
@@ -445,6 +460,7 @@ pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
     // be built with it: `rev-parse`, `config --get` and `worktree list` run
     // no hook, fsmonitor, filter or remote helper.
     let read = |args: &[&str]| -> Result<Option<String>> {
+        crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1929): read-only lookup used to build the hardening.
         let out = Command::new("git")
             .env(
@@ -462,7 +478,14 @@ pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
                 .to_string()
         }))
     };
-    let Some(common) = read(&["rev-parse", "--path-format=absolute", "--git-common-dir"])? else {
+    // BUG-2192: the common directory changes only when the store's `.git`
+    // entry or `commondir` file does, so the lookup is memoised per process
+    // on them; the checks and hook verification below still run every time.
+    // trace:BUG-2192 | ai:claude
+    let common = crate::host_git_cache::common_dir(store, || {
+        read(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
+    })?;
+    let Some(common) = common else {
         return Ok(None);
     };
     let common = PathBuf::from(common);
