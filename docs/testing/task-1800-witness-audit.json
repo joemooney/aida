@@ -1,0 +1,5773 @@
+{
+  "version": 1,
+  "scope": "Manual selected-refusal-witness audit; not an exhaustive exclusion census or safe-to-ship verdict",
+  "collector_commit": "43839973d60cdd23081f2203d876bc97dd5f36be",
+  "collector_sha256": "7041c86bc20415191b8814875bdfc77e9aa6e8e904aea8894b9e64724e099dd8",
+  "raw_trace_sets_sha256": "6289b101d9e4a991a092f3f682c2eb7ea65c936d8eaea4d235e32a74e0b7ee67",
+  "store_head": "a5dae7145abd11d2480271c466030b12db6e7668",
+  "ledger_json_sha256": "753d1a323b18af13ed73a18f20f9a6f7c6242e3584edf01049897d0dba7289af",
+  "production_behavior_changed": false,
+  "classification_gate_complete": false,
+  "selected_witness_counts": [
+    {
+      "kind": "named",
+      "semantics": "true-touch",
+      "cases": 20
+    },
+    {
+      "kind": "named",
+      "semantics": "unresolved",
+      "cases": 2
+    },
+    {
+      "kind": "none",
+      "semantics": "allowed",
+      "cases": 1
+    },
+    {
+      "kind": "trace",
+      "semantics": "incidental",
+      "cases": 18
+    },
+    {
+      "kind": "trace",
+      "semantics": "true-touch",
+      "cases": 6
+    },
+    {
+      "kind": "trace",
+      "semantics": "unresolved",
+      "cases": 3
+    }
+  ],
+  "fallback_breakdown": [
+    {
+      "path_class": "AGENTS/OVERVIEW",
+      "case_path_pairs": 31,
+      "cases": 16,
+      "additional_witness_cases_with_provenance": 2
+    },
+    {
+      "path_class": "Rust source",
+      "case_path_pairs": 174,
+      "cases": 44,
+      "additional_witness_cases_with_provenance": 24
+    },
+    {
+      "path_class": "docs/*.md",
+      "case_path_pairs": 23,
+      "cases": 16,
+      "additional_witness_cases_with_provenance": 1
+    },
+    {
+      "path_class": "other",
+      "case_path_pairs": 40,
+      "cases": 18,
+      "additional_witness_cases_with_provenance": 1
+    },
+    {
+      "path_class": "templates/mirrors",
+      "case_path_pairs": 20,
+      "cases": 6,
+      "additional_witness_cases_with_provenance": 0
+    },
+    {
+      "path_class": "workflows",
+      "case_path_pairs": 2,
+      "cases": 2,
+      "additional_witness_cases_with_provenance": 2
+    }
+  ],
+  "rows": [
+    {
+      "pr": 2705,
+      "base": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+      "head": "007c853a0fb0d0f42a8835af04e608d1269fbcef",
+      "merge": "7dd7aee9de535329db3d4a8caf1883d7cf6c3c35",
+      "title": "[AI:codex] fix(session): revoke pooled child grants and close preflight gaps (TASK-1789)",
+      "named": [
+        "TASK-1789"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1789",
+        "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Pooled-worktree lease removal now revokes the stamped headless child grant; drain-gate changes also refuse an unresolved root. These directly implement the named grant-lifecycle requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/session_start.rs",
+        "diff_sha256": "86baff585db0bd4e7b7035042f924bb7d08868921da96b4303a8b81d1eb5700f"
+      }
+    },
+    {
+      "pr": 2707,
+      "base": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+      "head": "218d0250cb0fe31e58f7595b96283d24e5758eca",
+      "merge": "652423b0e42dce7c3bc41a41c3bd28dfffa8f5bc",
+      "title": "[AI:codex] fix(mandate): validate ledger metadata and clarify re-arm audits (TASK-1790)",
+      "named": [
+        "TASK-1790"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1167",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The diff factors write_typed_hold through write_typed_hold_context, adds rearm_typed_hold, and changes the MergeHoldPlaced event reason. This directly touches persistence and audit of the supervised hold marker described by BUG-1167; retain it even though the BUG-1167 header is unchanged.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/merge_hold.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 437,
+              "start": 437
+            },
+            {
+              "end": 440,
+              "start": 438
+            },
+            {
+              "end": 450,
+              "start": 449
+            },
+            {
+              "end": 457,
+              "start": 457
+            },
+            {
+              "end": 495,
+              "start": 494
+            },
+            {
+              "end": 4756,
+              "start": 4755
+            },
+            {
+              "end": 4773,
+              "start": 4772
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 16,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 1115,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 2294,
+              "text": "// trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/merge_hold.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 454,
+              "start": 437
+            },
+            {
+              "end": 457,
+              "start": 455
+            },
+            {
+              "end": 467,
+              "start": 466
+            },
+            {
+              "end": 475,
+              "start": 474
+            },
+            {
+              "end": 520,
+              "start": 512
+            },
+            {
+              "end": 4781,
+              "start": 4780
+            },
+            {
+              "end": 4798,
+              "start": 4797
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 16,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 1140,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 2319,
+              "text": "// trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2679,
+      "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "head": "92afa7ea3fc02302fc8c2433e5ed50d9a69e9ed4",
+      "merge": "a8bfa2d7d761e07d188c037aa5f0b3d4b73cbdd2",
+      "title": "[AI:codex] feat(regen): check completeness and split component diagnostics (STORY-1677)",
+      "named": [
+        "STORY-1677",
+        "TASK-1734"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "TASK-1730",
+        "why": "sensitive spec metadata (sandbox) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The scorer execute path now invokes completeness helpers under the existing confinement before the oracle, records survivors, and quarantines helper writes. This extends the untrusted execution pipeline owned by TASK-1730. Its inherited AGENTS/OVERVIEW paragraphs alone would not prove this touch; score.rs supplies the direct evidence.",
+      "witness_occurrences": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 8,
+              "start": 8
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 71,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            },
+            {
+              "line": 80,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 14,
+              "start": 8
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 77,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            },
+            {
+              "line": 86,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 579,
+              "start": 579
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 466,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 618,
+              "start": 579
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 466,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 15,
+              "start": 15
+            },
+            {
+              "end": 33,
+              "start": 33
+            },
+            {
+              "end": 78,
+              "start": 78
+            },
+            {
+              "end": 151,
+              "start": 151
+            },
+            {
+              "end": 532,
+              "start": 532
+            },
+            {
+              "end": 639,
+              "start": 639
+            },
+            {
+              "end": 885,
+              "start": 885
+            },
+            {
+              "end": 889,
+              "start": 888
+            },
+            {
+              "end": 918,
+              "start": 918
+            },
+            {
+              "end": 975,
+              "start": 975
+            },
+            {
+              "end": 1001,
+              "start": 1001
+            },
+            {
+              "end": 1032,
+              "start": 1032
+            },
+            {
+              "end": 1074,
+              "start": 1074
+            },
+            {
+              "end": 1167,
+              "start": 1167
+            },
+            {
+              "end": 1189,
+              "start": 1189
+            },
+            {
+              "end": 1216,
+              "start": 1216
+            },
+            {
+              "end": 1242,
+              "start": 1242
+            },
+            {
+              "end": 1395,
+              "start": 1395
+            },
+            {
+              "end": 1484,
+              "start": 1484
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 19,
+              "text": "mod guards; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 20,
+              "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 22,
+              "text": "mod roots; // trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16,
+              "start": 15
+            },
+            {
+              "end": 38,
+              "start": 34
+            },
+            {
+              "end": 84,
+              "start": 83
+            },
+            {
+              "end": 161,
+              "start": 157
+            },
+            {
+              "end": 553,
+              "start": 542
+            },
+            {
+              "end": 661,
+              "start": 660
+            },
+            {
+              "end": 908,
+              "start": 907
+            },
+            {
+              "end": 912,
+              "start": 911
+            },
+            {
+              "end": 943,
+              "start": 941
+            },
+            {
+              "end": 1005,
+              "start": 1000
+            },
+            {
+              "end": 1036,
+              "start": 1031
+            },
+            {
+              "end": 1072,
+              "start": 1067
+            },
+            {
+              "end": 1119,
+              "start": 1114
+            },
+            {
+              "end": 1217,
+              "start": 1212
+            },
+            {
+              "end": 1244,
+              "start": 1239
+            },
+            {
+              "end": 1276,
+              "start": 1271
+            },
+            {
+              "end": 1307,
+              "start": 1302
+            },
+            {
+              "end": 1465,
+              "start": 1460
+            },
+            {
+              "end": 1559,
+              "start": 1554
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 20,
+              "text": "mod guards; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 21,
+              "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 23,
+              "text": "mod roots; // trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/oracle.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 503,
+              "start": 503
+            },
+            {
+              "end": 525,
+              "start": 525
+            },
+            {
+              "end": 704,
+              "start": 704
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/oracle.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 508,
+              "start": 503
+            },
+            {
+              "end": 532,
+              "start": 530
+            },
+            {
+              "end": 713,
+              "start": 711
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/roots.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 480,
+              "start": 480
+            },
+            {
+              "end": 489,
+              "start": 489
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/roots.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 485,
+              "start": 480
+            },
+            {
+              "end": 496,
+              "start": 494
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 786,
+              "start": 786
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 779,
+              "text": "# trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 789,
+              "text": "# trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 788,
+              "start": 786
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 779,
+              "text": "# trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 791,
+              "text": "# trace:TASK-1730 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/completeness.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2701,
+      "base": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "head": "9d4002c627d8b7e98a3e42626323d6283544046a",
+      "merge": "08f6a4af7a143146d283518fd43dca481b0ef4d6",
+      "title": "[AI:codex] fix(relay): detect dead owners and bound stall alerts (TASK-1792)",
+      "named": [
+        "TASK-1792"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "TASK-1337",
+        "why": "sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "Only the relay-stall description at the scheduler paragraph changes in this document. TASK-1337 is on the unchanged pickup/child-delegation paragraph near line 64; no pickup/delegation contract is edited here.",
+      "witness_occurrences": [
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 284,
+              "start": 283
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 64,
+              "text": "<!-- trace:TASK-1337 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 284,
+              "start": 283
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 64,
+              "text": "<!-- trace:TASK-1337 | ai:codex -->"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/relay_stall.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2692,
+      "base": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+      "head": "3ec1b703c0676af1553ffebde59114af90cd0ce0",
+      "merge": "502aa04ca4ea03483d57588366a6a67b1f058512",
+      "title": "[AI:antigravity] fix(session): route headless CI-fix and quiet burndown through child grant and scrub PURPOSE (BUG-2165)",
+      "named": [
+        "BUG-2165"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2165",
+        "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Burndown and CI-fix launch paths issue routed headless child grants and propagate the resulting child scope. This is the named delegated-grant work, not an inherited neighboring trace.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/leases.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/session.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2165_headless_child_grant_isolation_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/burndown_run.rs",
+        "diff_sha256": "94b6b5a9cf83891b9f827345e8cc167e3275ea63824a490f13eb46125b970f57"
+      }
+    },
+    {
+      "pr": 2683,
+      "base": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+      "head": "cf6ecf1bcb62988ff28bc8534095db9305f6d608",
+      "merge": "ed29b2b6603ebb4e980a3dd9aee70dd251276308",
+      "title": "[AI:codex] feat(constraints): verify host facts with built-in probes (STORY-1673)",
+      "named": [
+        "STORY-1673"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "STORY-1673",
+        "why": "sticky ledger: keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "A new explicit constraint-verification dispatcher and closed built-in host probes implement the named keystone feature, with associated canonical data fields.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "Cargo.lock",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/schema.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/verify_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/constraints.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/constraints_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/export.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/models.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-generate-types/Cargo.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/08-reporting.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/plans/2026-10-15-story-1673-constraint-probes.md",
+          "path_class": "docs/*.md",
+          "change_kind": "A"
+        },
+        {
+          "path": "scripts/generate-format-json-audit.py",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "shared/types.ts",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/verify_cmd.rs",
+        "diff_sha256": "86e922c464446114dac13f7d848d0909ab89b838957219f86cb19709b12f36b9"
+      }
+    },
+    {
+      "pr": 2691,
+      "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "head": "d8d16437ce5fe52f26feaea5c3f5b11b91e09570",
+      "merge": "4caea8b7a332552fe03af4ca36534675de93fe2e",
+      "title": "[AI:antigravity] feat(authority): operator-chosen grant ttl and max_grant_hours cap (TASK-1787)",
+      "named": [
+        "TASK-1787"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1787",
+        "why": "sticky ledger: sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Grant issuance gains operator-selected TTL and a maximum-grant-hours policy. This directly changes the named grant lifetime contract.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "CHANGELOG.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/config_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/kernel.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_authority.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/task_1787_grant_ttl_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli/06-roles-sessions.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/seat_authority.rs",
+        "diff_sha256": "16f5a6c6f2473a3671ce186a52285afc9a3580bd15479339d89ce6be9b3f4335"
+      }
+    },
+    {
+      "pr": 2698,
+      "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "head": "06c6c50962f24641bd341c5b11112d00053f5f84",
+      "merge": "f1663f5eab79007a5506ce41ef248661cd1446c5",
+      "title": "[AI:claude] fix(worktree): re-mint after a hand-deleted worktree instead of a misleading refusal (TASK-1784)",
+      "named": [
+        "TASK-1784"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1533",
+        "why": "sensitive spec metadata (identity) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "session_reap.rs extracts lease companion cleanup into release_lease_files. The BUG-1533 trace remains on the unchanged system-message sender envelope, not this cleanup. This says nothing about other grant-related traces in the moved cleanup.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1020,
+              "start": 1004
+            },
+            {
+              "end": 1057,
+              "start": 1057
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 1321,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1005,
+              "start": 1004
+            },
+            {
+              "end": 1063,
+              "start": 1042
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 1327,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/worktree_gc.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli/tests/task_1784_worktree_add_after_deleted_tree.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2673,
+      "base": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "head": "826c3352e4ccecf11795e95d9a9614c27c4f8f39",
+      "merge": "a2cecb69741328a6b9238634f60dee50d23dbe42",
+      "title": "[AI:codex] feat(regen): surface score and age in statusline and digest (TASK-1734)",
+      "named": [
+        "TASK-1734"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1924",
+        "why": "sensitive spec metadata (authority) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "handle_statusline_command appends a regeneration summary and adds regeneration_statusline_segment. BUG-1924's validated-role display/routing and no-grant warning are unchanged, despite sharing the long handler.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/statusline_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 451,
+              "start": 451
+            },
+            {
+              "end": 527,
+              "start": 527
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 59,
+              "text": "// trace:BUG-1924 | ai:claude"
+            },
+            {
+              "line": 488,
+              "text": "// trace:BUG-1924 | ai:claude"
+            },
+            {
+              "line": 505,
+              "text": "// trace:BUG-1924 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/statusline_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 455,
+              "start": 451
+            },
+            {
+              "end": 539,
+              "start": 531
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 59,
+              "text": "// trace:BUG-1924 | ai:claude"
+            },
+            {
+              "line": 492,
+              "text": "// trace:BUG-1924 | ai:claude"
+            },
+            {
+              "line": 509,
+              "text": "// trace:BUG-1924 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/digest.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/report.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/report/cache.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2695,
+      "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "head": "57ee0a5281253191556cfd9a625326091f381665",
+      "merge": "6d9ea04f5fa0822cef3a791bf78486c5ebce3ae3",
+      "title": "[AI:claude] feat(review): an attested approval releases its rework hold in place (STORY-1697)",
+      "named": [
+        "STORY-1697"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1167",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The diff makes mandate_ship_cover dispatch an approval-release decision and updates hold release conditions to permit an independent attested approval. That changes who can release the supervised marker, the behavior guarded by BUG-1167.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/merge_hold.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 354,
+              "start": 354
+            },
+            {
+              "end": 356,
+              "start": 355
+            },
+            {
+              "end": 2791,
+              "start": 2791
+            },
+            {
+              "end": 2793,
+              "start": 2792
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 16,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 1114,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 2293,
+              "text": "// trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/merge_hold.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 355,
+              "start": 354
+            },
+            {
+              "end": 357,
+              "start": 356
+            },
+            {
+              "end": 2793,
+              "start": 2792
+            },
+            {
+              "end": 2795,
+              "start": 2794
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 16,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 1115,
+              "text": "// trace:BUG-1167 | ai:claude"
+            },
+            {
+              "line": 2294,
+              "text": "// trace:BUG-1167 | ai:claude (STORY-1165 forge-routes it)"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1761,
+              "start": 1761
+            },
+            {
+              "end": 1848,
+              "start": 1847
+            },
+            {
+              "end": 2612,
+              "start": 2612
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3113,
+              "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1766,
+              "start": 1761
+            },
+            {
+              "end": 1853,
+              "start": 1852
+            },
+            {
+              "end": 2618,
+              "start": 2617
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3119,
+              "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".aida/discipline/git-sync-and-review.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/mandate.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/rework_hold_release.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/story_1687_rework_release_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/story_1697_attested_release_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/agents/aida-repository-guide.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2696,
+      "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "head": "1ddcc54fb8110e6533561b0d45e1f7c335aca4c5",
+      "merge": "0ef2f8227a8b9b4d378db939b4f3c85313200c65",
+      "title": "[AI:antigravity] fix(containment): enforce containment and purpose scrub in burndown, intake, clarify (BUG-2171 BUG-2170)",
+      "named": [
+        "BUG-2170",
+        "BUG-2171"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2170",
+        "why": "sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Headless intake obtains/revokes its child grant and command builders propagate contained posture. These touch the named grant isolation work.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2171_2170_contained_builders_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/autopilot_intake.rs",
+        "diff_sha256": "b8400585bfe8a322d201eacac4ac94d15b3062223f33efe93d6c1165ebb05af2"
+      }
+    },
+    {
+      "pr": 2684,
+      "base": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "head": "88329ff1903079c3468eb0f6bc56a9464529efda",
+      "merge": "1f5e08becb2bfa23c73ec23d4cfb6b50b784f5c3",
+      "title": "[AI:codex] feat(hypothesis): sticky preregistration locks (STORY-1675)",
+      "named": [
+        "STORY-1675"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "AUTH-0001",
+        "why": "unresolved trace/spec id"
+      },
+      "witness_semantics": "unresolved",
+      "manual_reason": "AUTH-0001 is on the unchanged v3-to-v4 users.pin_hash SQLite migration, included by an enclosing impl. The diff only initializes hypothesis_lock in Requirement construction. The trace location is incidental, but the frozen classifier cannot resolve this ID; it cannot establish the supervised classification, so retain an explicit unresolved category.",
+      "witness_occurrences": [
+        {
+          "path": "aida-core/src/db/sqlite_backend.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 596,
+              "start": 596
+            },
+            {
+              "end": 1556,
+              "start": 1556
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 146,
+              "text": "// trace:AUTH-0001 | ai:claude:high"
+            }
+          ]
+        },
+        {
+          "path": "aida-core/src/db/sqlite_backend.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 597,
+              "start": 596
+            },
+            {
+              "end": 1558,
+              "start": 1557
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 146,
+              "text": "// trace:AUTH-0001 | ai:claude:high"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/edit_rebase.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/schema.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/db/mod.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/db/tests/hypothesis_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/export.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/hypothesis.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/import.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/models.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-web-react/src/components/dashboard/StatusChart.tsx",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-web-react/src/components/kanban/KanbanBoard.tsx",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-web-react/src/lib/constants.ts",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/02-specs.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "shared/types.ts",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2697,
+      "base": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "head": "aa8069e2cb4da3b83f8c021bb0c85558a060df5a",
+      "merge": "fc39d8f0bc76504a62b5733ebcc61ab9677f5121",
+      "title": "[AI:antigravity] fix(ship): refuse pr ship on default branch without PR number (BUG-2164)",
+      "named": [
+        "BUG-2164"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1167",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "The ship handler adds an early default-branch/no-explicit-PR refusal and an approved-PR listing helper. The BUG-1167 trace remains at the later, unchanged hold-marker/clearance branch. This is a same-handler match, not an edit to that marker contract.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 2243,
+              "start": 2243
+            },
+            {
+              "end": 4368,
+              "start": 4368
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3113,
+              "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 2254,
+              "start": 2243
+            },
+            {
+              "end": 4416,
+              "start": 4379
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3124,
+              "text": "// trace:BUG-1167 trace:BUG-1566 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_ship.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2164_default_branch_ship_refusal_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2693,
+      "base": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+      "head": "45f646c54c3ffc9d757351bab2bf572b33111826",
+      "merge": "e0713fdb5e41eccc3806aa28ddef719caa08f48c",
+      "title": "[AI:antigravity] fix(queue): plan-only honours contained parent and refuses permission-mode (BUG-2166)",
+      "named": [
+        "BUG-2166"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2166",
+        "why": "sensitive spec metadata (contained) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Queue-work posture resolution checks a contained parent and rejects conflicting permission-mode before a plan-only launch. This is the named containment contract.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2166_contained_parent_escape_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/queue_cmd.rs",
+        "diff_sha256": "d6ab335d987e1100879626808781181ea787eba286569a094e2e34669fa81b44"
+      }
+    },
+    {
+      "pr": 2678,
+      "base": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+      "head": "58ce1964dda751c3f7134ea9b8ff54945aa7d55c",
+      "merge": "5aa7198cfe4e3a3f5055480c06d7095208e7080b",
+      "title": "[AI:codex] feat(regen): report consensus failures and file draft amendments (STORY-1679)",
+      "named": [
+        "STORY-1679"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-11",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "Only RegenCommand::Score consensus options change in cli.rs. ADR-11 is attached to the unchanged do_command_parses_spec_positional test, not to the regeneration command.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16868,
+              "start": 16867
+            },
+            {
+              "end": 16871,
+              "start": 16870
+            },
+            {
+              "end": 16877,
+              "start": 16873
+            },
+            {
+              "end": 16880,
+              "start": 16879
+            },
+            {
+              "end": 16885,
+              "start": 16881
+            },
+            {
+              "end": 16887,
+              "start": 16886
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15359,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16868,
+              "start": 16867
+            },
+            {
+              "end": 16871,
+              "start": 16870
+            },
+            {
+              "end": 16885,
+              "start": 16873
+            },
+            {
+              "end": 16888,
+              "start": 16887
+            },
+            {
+              "end": 16908,
+              "start": 16889
+            },
+            {
+              "end": 16910,
+              "start": 16909
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15359,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/consensus.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2690,
+      "base": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "head": "acc8c0c690e61d02bf424526a00381d372314af9",
+      "merge": "75ff185cbf8ff389956bf8d15c87ca71e8d1202b",
+      "title": "[AI:claude] feat(schedule): hourly fleet heartbeat and relay stall guard (STORY-1699)",
+      "named": [
+        "STORY-1699"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-55",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "lib.rs adds mod relay_stall. ADR-55 stays attached to the unchanged evaluator module declaration. No evaluator-engine or quality-gating contract is edited by this hunk.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 181,
+              "start": 181
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 305,
+              "text": "// trace:ADR-55 | ai:antigravity"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 182,
+              "start": 181
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 306,
+              "text": "// trace:ADR-55 | ai:antigravity"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".aida/config.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/doctor_root.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/relay_stall.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/story_1699_relay_stall_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2687,
+      "base": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+      "head": "1fcfa134735ca0cb0f0f4e72ced1979b0a25ebe3",
+      "merge": "76790181a08a33a50ec1228acb9ab9b0104e8a21",
+      "title": "[AI:claude] feat(ship): fire-fighting mandate lets the advisor ship held PRs (STORY-1698)",
+      "named": [
+        "STORY-1698"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "STORY-1698",
+        "why": "sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The PR introduces mandate authorization/decision state and gated hold-shipping behavior. The named mandate/grant feature is directly implemented.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/events.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/mandate.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/merge_hold.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/story_1698_mandate_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/04-git-lifecycle.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/monitor-contract-fixtures/events-follow.json",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/mandate.rs",
+        "diff_sha256": "1a0df5a81e1a34df560bdcf040180c80ae6252d68ce778a972bfa54974d8a8ea"
+      }
+    },
+    {
+      "pr": 2686,
+      "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "head": "9c7ba29c813eb3ee907a2772e705d9224037444e",
+      "merge": "5fb188c5221a3609af83b197c1fef2e99a47fcfc",
+      "title": "[AI:claude] test: deflake fork-window races in regen guard, scorer and shift-lock tests (BUG-2160 BUG-2161)",
+      "named": [
+        "BUG-2160",
+        "BUG-2160-2161",
+        "BUG-2161"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2160-2161",
+        "why": "unresolved trace/spec id"
+      },
+      "witness_semantics": "unresolved",
+      "manual_reason": "The named classifier extracts a combined branch ID (BUG-2160-2161) that does not resolve. Do not count an unresolved name as a supervised touch. The real component IDs and changed behavior need separate classification.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/shift.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2688,
+      "base": "463b81d02796148deba3c59c47daefce584c35f4",
+      "head": "4a1cacb65210e615f8e436e1e92d230c5822ca01",
+      "merge": "b8784ba39419f2dedfb0acd95e33eef3a865d084",
+      "title": "[AI:claude] fix(session): every headless queue-work child runs under its own routed-seat grant (BUG-2139)",
+      "named": [
+        "BUG-2139"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2139",
+        "why": "sensitive spec metadata (authority) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Headless phase seats are preflighted for child grants before execution. This directly implements the named delegated-authority requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/drain_gate.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_authority.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/session.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_1808_delegation_preflight_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli/tests/bug_2139_headless_child_grant.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/drain_gate.rs",
+        "diff_sha256": "7ca1e6b7dee452cd8cfe8b67ff12e54fe0656d87990d3e0b5447cd68af68086f"
+      }
+    },
+    {
+      "pr": 2685,
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "head": "d5f63fee913d206a5ff6f8e27593124b29508b15",
+      "merge": "a38e37f0f81ac5b87408dba0cc04b610094f27f1",
+      "title": "[AI:claude] fix(ship): a just-merged PR no longer withholds its own completion (BUG-2163)",
+      "named": [
+        "BUG-2163"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "TASK-1335",
+        "why": "history unreadable: no version of TASK-1335 in the store's history"
+      },
+      "witness_semantics": "unresolved",
+      "manual_reason": "The diff changes live open-PR state filtering, credit parsing, and count_diagnostic_rows in reconcile_evidence.rs, including a TASK-1335 trace on changed documentation, and updates its integration fixture. This is a genuine touch of the referenced evidence-query behavior, but the frozen classifier says no historical TASK-1335 version is readable; its supervised classification is unavailable.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/reconcile_evidence.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 187,
+              "start": 186
+            },
+            {
+              "end": 212,
+              "start": 211
+            },
+            {
+              "end": 218,
+              "start": 216
+            },
+            {
+              "end": 232,
+              "start": 231
+            },
+            {
+              "end": 245,
+              "start": 245
+            },
+            {
+              "end": 248,
+              "start": 246
+            },
+            {
+              "end": 255,
+              "start": 255
+            },
+            {
+              "end": 303,
+              "start": 302
+            },
+            {
+              "end": 321,
+              "start": 318
+            },
+            {
+              "end": 331,
+              "start": 328
+            },
+            {
+              "end": 340,
+              "start": 332
+            },
+            {
+              "end": 342,
+              "start": 341
+            },
+            {
+              "end": 690,
+              "start": 689
+            },
+            {
+              "end": 694,
+              "start": 694
+            },
+            {
+              "end": 696,
+              "start": 695
+            },
+            {
+              "end": 708,
+              "start": 708
+            },
+            {
+              "end": 720,
+              "start": 720
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 10,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 104,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 152,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 224,
+              "text": "// trace:TASK-1335 trace:BUG-2134 | ai:claude"
+            },
+            {
+              "line": 278,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 321,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 495,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 579,
+              "text": "// trace:TASK-1335 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/reconcile_evidence.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 190,
+              "start": 186
+            },
+            {
+              "end": 215,
+              "start": 214
+            },
+            {
+              "end": 223,
+              "start": 219
+            },
+            {
+              "end": 236,
+              "start": 236
+            },
+            {
+              "end": 260,
+              "start": 249
+            },
+            {
+              "end": 263,
+              "start": 261
+            },
+            {
+              "end": 291,
+              "start": 270
+            },
+            {
+              "end": 341,
+              "start": 338
+            },
+            {
+              "end": 363,
+              "start": 356
+            },
+            {
+              "end": 373,
+              "start": 370
+            },
+            {
+              "end": 379,
+              "start": 374
+            },
+            {
+              "end": 388,
+              "start": 380
+            },
+            {
+              "end": 736,
+              "start": 735
+            },
+            {
+              "end": 742,
+              "start": 740
+            },
+            {
+              "end": 744,
+              "start": 743
+            },
+            {
+              "end": 837,
+              "start": 756
+            },
+            {
+              "end": 870,
+              "start": 849
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 10,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 104,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 152,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 229,
+              "text": "// trace:TASK-1335 trace:BUG-2134 | ai:claude"
+            },
+            {
+              "line": 314,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 363,
+              "text": "// trace:TASK-1335 trace:BUG-2163 | ai:claude"
+            },
+            {
+              "line": 541,
+              "text": "// trace:TASK-1335 | ai:claude"
+            },
+            {
+              "line": 625,
+              "text": "// trace:TASK-1335 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 60,
+              "start": 59
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 14,
+              "text": "// trace:TASK-1335 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 60,
+              "start": 59
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 14,
+              "text": "// trace:TASK-1335 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli/tests/task_1335_reconcile_unavailable_evidence.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2689,
+      "base": "463b81d02796148deba3c59c47daefce584c35f4",
+      "head": "99e6baef64552f1058a180ce215d473c0ef239f3",
+      "merge": "8e004a52ae9f4e4c518a10b661f9d1f8ba41b833",
+      "title": "[AI:claude] fix(contained): contain session resume/new/start --launch; allowlist claude passthrough flags (BUG-2157 BUG-2158)",
+      "named": [
+        "BUG-2157",
+        "BUG-2157-2158",
+        "BUG-2158"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2157",
+        "why": "sensitive spec metadata (contained) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Interactive launch posture now honors a contained parent and refuses an overriding permission-mode. This is the named contained-session launch behavior.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/session.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2157_2158_contained_session_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/agents/per-agent-config.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/agent_launch.rs",
+        "diff_sha256": "9dbe52052015beb7d5bc4f131de846bf07bbb4cdf69ba45e56fff847acf81926"
+      }
+    },
+    {
+      "pr": 2677,
+      "base": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "head": "f60fafc68b18d026682b2334f5c58121b291aaab",
+      "merge": "251f99e7ef50bfc1537ce57ef7e88ff6975eaa85",
+      "title": "[AI:codex] feat(regen): classify failures and audit explicit model families (STORY-1676)",
+      "named": [
+        "STORY-1676"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-11",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "cli.rs adds model_family to RegenCommand::Score. The inherited ADR-11 trace is on the unchanged aida do parser test.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16831,
+              "start": 16831
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15313,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16835,
+              "start": 16831
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15313,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/adapter.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/diagnostics.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/report.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2681,
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "head": "487bd6dd2d1ab24b6e11c9cdcb0ba6f452cb715b",
+      "merge": "696c90c4f4e6a486035759b30bd2f0e6a99cd02c",
+      "title": "[AI:antigravity] fix(registry): distinguish recycled vs unknown identity on agent stop and fix test race (TASK-1782)",
+      "named": [
+        "TASK-1782"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1782",
+        "why": "sensitive spec metadata (identity) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Process-stop classification separates recycled, unknown and corrupt PID identity evidence before signaling. This is the named process-identity requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/agent_registry_root.rs",
+        "diff_sha256": "a5754ec575885e2fd4023b484d2bd2ae7e3ad246206c16c36dcce5cdc84d4eb1"
+      }
+    },
+    {
+      "pr": 2680,
+      "base": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "head": "b285957b9f9223cfe2e2c2b5643cb51377b4e896",
+      "merge": "463b81d02796148deba3c59c47daefce584c35f4",
+      "title": "[AI:claude] fix(review): PR-scoped standalone reviewer pickup and verified verdict collection (BUG-2149 BUG-2150)",
+      "named": [
+        "BUG-2149",
+        "BUG-2149-2150",
+        "BUG-2150"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2149-2150",
+        "why": "unresolved trace/spec id"
+      },
+      "witness_semantics": "unresolved",
+      "manual_reason": "The named classifier extracts a combined branch ID (BUG-2149-2150) that does not resolve. Do not count an unresolved name as a supervised touch. The real component IDs and changed behavior need separate classification.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/leases.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2149_2150_standalone_reviewer_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2674,
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "head": "40a627637e2c0419c4e5d53c6e20bf88a42c0e66",
+      "merge": "8336ec073197b9ebce8cbd9339fcada23f6320b0",
+      "title": "[AI:claude] feat(build): local testing tiers and make test-touched (TASK-1780)",
+      "named": [
+        "TASK-1780"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-54",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "ci.yml adds a test-touched planner test step. ADR-54 belongs to the unchanged GitLab live-smoke perimeter-auth guard step; neither its credentials nor its authentication command changes.",
+      "witness_occurrences": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 183,
+              "start": 183
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 158,
+              "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 188,
+              "start": 183
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 158,
+              "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".aida/discipline/README.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": ".aida/discipline/git-sync-and-review.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": ".aida/discipline/implementer-discipline.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": ".aida/discipline/workflow-patterns.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "change_kind": "M"
+        },
+        {
+          "path": "CLAUDE.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "Makefile",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/README.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/git-sync-and-review.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/implementer-discipline.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/workflow-patterns.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-fire.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-implement.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-pickup.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-pr/SKILL.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/ci-gate-tiers.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/test-touched.py",
+          "path_class": "other",
+          "change_kind": "A"
+        },
+        {
+          "path": "tests/test_test_touched.py",
+          "path_class": "other",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2671,
+      "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "head": "d8cea0368fe6c9e0399d43a498258131f23f2d4f",
+      "merge": "1e6449feed61e71c7bcd9b00ecd15987675f915f",
+      "title": "[AI:claude] feat(session): handoff --show prints standing orders first (STORY-1693)",
+      "named": [
+        "STORY-1693"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-11",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "cli.rs adds session handoff standing-orders options and their test. ADR-11's aida do parser test remains unchanged.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1848,
+              "start": 1847
+            },
+            {
+              "end": 1857,
+              "start": 1857
+            },
+            {
+              "end": 14958,
+              "start": 14958
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15180,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 1849,
+              "start": 1847
+            },
+            {
+              "end": 1872,
+              "start": 1858
+            },
+            {
+              "end": 14997,
+              "start": 14973
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15219,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".aida/discipline/standing-orders/advisor.md",
+          "path_class": "other",
+          "change_kind": "A"
+        },
+        {
+          "path": "Makefile",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_rotation.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/standing-orders/advisor.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/templates/hooks/aida-role-context.sh",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "tests/test_session_role_grant.sh",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2672,
+      "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "head": "febe3b0a4f56759e77d70a64bbfcaea95b1405ef",
+      "merge": "e93765f63773294be22b3a0d835006eadfe6a1c1",
+      "title": "[AI:claude] fix(contained): agent new honours a contained parent; --bg keeps containment (BUG-2151)",
+      "named": [
+        "BUG-2144",
+        "BUG-2145",
+        "BUG-2146",
+        "BUG-2151"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2144",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Agent-new launch handling honors a contained parent and preserves containment for background launch. This directly touches the named broader containment floor, even though the PR title credits its BUG-2151 continuation.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_launch.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/agent_launch.rs",
+        "diff_sha256": "68746a492a1ee6d4beac29bc265196921c7af4a1ff79644dc60ffe6f6e7f2278"
+      }
+    },
+    {
+      "pr": 2676,
+      "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "head": "e1a40a89bcae34ede42bce015543b506c984a10f",
+      "merge": "84a04dc111d04db11f26375d2a7d12d68f1ed930",
+      "title": "[AI:antigravity] fix(liveness): check start-time identity before killing processes on agent stop and session end (BUG-2148)",
+      "named": [
+        "BUG-2148"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2148",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Agent-stop/session-end signaling requires matching recorded start-time identity. This is direct implementation of the named keystone liveness work.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_registry.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/session_end.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2148_liveness_kill_signal_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/agent_registry_root.rs",
+        "diff_sha256": "d38daecf928d74fd3cb8129542b7f5e139a3a5eb1bc7164426e0bf59a32ff5f6"
+      }
+    },
+    {
+      "pr": 2667,
+      "base": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+      "head": "c333cec91771650a9c76799688ae8d24745b7137",
+      "merge": "bf267ad5cba345faa0bd5ee2a301dc905b55300c",
+      "title": "[AI:codex] feat(regen): report diagnostic gap trends (TASK-1733)",
+      "named": [
+        "TASK-1733"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-11",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "cli.rs adds RegenCommand::Report. The ADR-11 trace belongs to the unchanged aida do parser test.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16774,
+              "start": 16774
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15274,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 16778,
+              "start": 16774
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15274,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/adapter.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/report.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2666,
+      "base": "a46af7481e794f7ad299631a78a258f55022c503",
+      "head": "7c8c72c75f0db2462d6ac3019eb0dd4665050bcf",
+      "merge": "c419f6a5efdbdf3c450a099b26f79428c01c8d3b",
+      "title": "[AI:codex] feat(regen): score environment seam adapters (TASK-1732)",
+      "named": [
+        "TASK-1732"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "TASK-1730",
+        "why": "sensitive spec metadata (sandbox) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "ScoreEnv changes which environment is supplied to the oracle; handle_score captures and validates mapped variables and executes an adapted second trial. This directly changes the sandboxed oracle-input contract of TASK-1730.",
+      "witness_occurrences": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 0,
+              "start": 0
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 14,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            },
+            {
+              "line": 23,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 8,
+              "start": 0
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 22,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            },
+            {
+              "line": 31,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 496,
+              "start": 496
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 458,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 553,
+              "start": 496
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 458,
+              "text": "<!-- trace:TASK-1730 | ai:codex -->"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 14,
+              "start": 14
+            },
+            {
+              "end": 128,
+              "start": 127
+            },
+            {
+              "end": 137,
+              "start": 137
+            },
+            {
+              "end": 239,
+              "start": 239
+            },
+            {
+              "end": 306,
+              "start": 306
+            },
+            {
+              "end": 404,
+              "start": 402
+            },
+            {
+              "end": 557,
+              "start": 553
+            },
+            {
+              "end": 563,
+              "start": 562
+            },
+            {
+              "end": 566,
+              "start": 564
+            },
+            {
+              "end": 574,
+              "start": 573
+            },
+            {
+              "end": 575,
+              "start": 575
+            },
+            {
+              "end": 608,
+              "start": 605
+            },
+            {
+              "end": 639,
+              "start": 639
+            },
+            {
+              "end": 719,
+              "start": 718
+            },
+            {
+              "end": 760,
+              "start": 754
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 17,
+              "text": "mod guards; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 18,
+              "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 19,
+              "text": "mod roots; // trace:TASK-1730 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 15,
+              "start": 14
+            },
+            {
+              "end": 129,
+              "start": 128
+            },
+            {
+              "end": 142,
+              "start": 138
+            },
+            {
+              "end": 247,
+              "start": 244
+            },
+            {
+              "end": 315,
+              "start": 314
+            },
+            {
+              "end": 416,
+              "start": 411
+            },
+            {
+              "end": 569,
+              "start": 565
+            },
+            {
+              "end": 574,
+              "start": 574
+            },
+            {
+              "end": 577,
+              "start": 575
+            },
+            {
+              "end": 585,
+              "start": 584
+            },
+            {
+              "end": 587,
+              "start": 586
+            },
+            {
+              "end": 644,
+              "start": 617
+            },
+            {
+              "end": 676,
+              "start": 675
+            },
+            {
+              "end": 766,
+              "start": 755
+            },
+            {
+              "end": 813,
+              "start": 801
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2,
+              "text": "// trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 18,
+              "text": "mod guards; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 19,
+              "text": "mod oracle; // trace:TASK-1730 | ai:codex"
+            },
+            {
+              "line": 20,
+              "text": "mod roots; // trace:TASK-1730 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/adapter.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2664,
+      "base": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+      "head": "79ee6c08874b705d579bdda5a407b67e21306b1d",
+      "merge": "a46af7481e794f7ad299631a78a258f55022c503",
+      "title": "[AI:codex] feat(regen): control batches and fresh scoring roots (TASK-1731)",
+      "named": [
+        "TASK-1731"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1731",
+        "why": "sensitive spec metadata (sandbox) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Reference/stub control batches and fresh scoring roots implement the named sandbox-scoring control contract.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/Cargo.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/controls.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/fresh.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/oracle.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/roots.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/regen/score/controls.rs",
+        "diff_sha256": "cd51bccc54a7646a70d40e1c4255d1b2467697e395dd306b4625638af1f7674d"
+      }
+    },
+    {
+      "pr": 2675,
+      "base": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "head": "a230cf860ef52b0587a6fa21fa93f5132c26786b",
+      "merge": "34280b1914159dad6f03798ba68ff0c0f64262b4",
+      "title": "[AI:claude] fix(worktree): never re-enter a worktree-less claim lease; print the created path (BUG-2143)",
+      "named": [
+        "BUG-2143"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1533",
+        "why": "sensitive spec metadata (identity) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "mcp.rs changes claim lease branch selection, and session_reap.rs changes worktree-less lease/protected-branch handling. BUG-1533 is on unchanged mailbox sender resolution/envelopes in those files. Those identity-attribution statements are not edited.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/mcp.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 3577,
+              "start": 3576
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2756,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 mirror the CLI's `--from` resolution:"
+            },
+            {
+              "line": 2910,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 which precedence tier"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/mcp.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 3583,
+              "start": 3576
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2756,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 mirror the CLI's `--from` resolution:"
+            },
+            {
+              "line": 2910,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 which precedence tier"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 242,
+              "start": 242
+            },
+            {
+              "end": 763,
+              "start": 763
+            },
+            {
+              "end": 778,
+              "start": 777
+            },
+            {
+              "end": 819,
+              "start": 818
+            },
+            {
+              "end": 835,
+              "start": 834
+            },
+            {
+              "end": 838,
+              "start": 837
+            },
+            {
+              "end": 913,
+              "start": 913
+            },
+            {
+              "end": 915,
+              "start": 914
+            },
+            {
+              "end": 1021,
+              "start": 1020
+            },
+            {
+              "end": 1045,
+              "start": 1044
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 1281,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 276,
+              "start": 242
+            },
+            {
+              "end": 798,
+              "start": 797
+            },
+            {
+              "end": 814,
+              "start": 812
+            },
+            {
+              "end": 855,
+              "start": 854
+            },
+            {
+              "end": 871,
+              "start": 870
+            },
+            {
+              "end": 874,
+              "start": 873
+            },
+            {
+              "end": 950,
+              "start": 949
+            },
+            {
+              "end": 952,
+              "start": 951
+            },
+            {
+              "end": 1058,
+              "start": 1057
+            },
+            {
+              "end": 1082,
+              "start": 1081
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 1318,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/session_reap.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2660,
+      "base": "0c69debffe439310aacf3756a5efe363d1216474",
+      "head": "0e526567f131888830d42ae22b51fcb466c37739",
+      "merge": "7b51e37f2106733490cb01f9a3fb197f611ceccd",
+      "title": "[AI:codex] feat(regen): score isolated held-out oracles (TASK-1730)",
+      "named": [
+        "TASK-1730"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1730",
+        "why": "sensitive spec metadata (sandbox) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The PR adds the isolated oracle scoring pipeline, private execution roots and held-out bundle checks described by the named sandbox requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/guards.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/oracle.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/regen/score/roots.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/regen/score.rs",
+        "diff_sha256": "a153198a83a4f6944e74f3aadf1ae8da9ce3474568ef67ec0bb2dd6e3d54af65"
+      }
+    },
+    {
+      "pr": 2485,
+      "base": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "head": "6475cfba9b43bae3babefef7614893c22257860f",
+      "merge": "0c69debffe439310aacf3756a5efe363d1216474",
+      "title": "[AI:claude] fix(review): bind approval authority to session identity, not labels (BUG-1918)",
+      "named": [
+        "BUG-1918"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-10",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "queue_cmd.rs wraps session_start in as_launcher and exports the worker lease identity. ADR-10's typed AutonomyMode resolution, zen transport, and banner logic are unchanged elsewhere in the same handler. The approval-authority change itself must not be treated as safe merely because this selected witness is incidental.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 12304,
+              "start": 12276
+            },
+            {
+              "end": 12551,
+              "start": 12551
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11622,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 12314,
+              "start": 12276
+            },
+            {
+              "end": 12565,
+              "start": 12561
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11622,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".aida/discipline/machinery-glossary.md",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/events.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib_part5.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/pr_ship.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/review_authority.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_1918_review_authority_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli/tests/task_1287_label_only_merge_hold.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/.aida/discipline/machinery-glossary.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/commands/aida-drain-queue.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/commands/aida-fasttrack.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-drain-queue.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/skills/aida-fasttrack.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/04-git-lifecycle.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli/12-glossary.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/review-process.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2657,
+      "base": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+      "head": "96da17df62ca8e8d195843057015d1c47a9ab096",
+      "merge": "bfddcbee4259524e54f874e89fb66b38bef02594",
+      "title": "[AI:antigravity] fix(ps): attribute factory lane leases to agent process with start-time identity (BUG-2010)",
+      "named": [
+        "BUG-2010"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-10",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "queue_cmd.rs adds queue_work_self_claim and threads it into session_start. ADR-10's autonomy resolution and zen transport are unchanged in the long handler; worker ownership is a different contract.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 10825,
+              "start": 10825
+            },
+            {
+              "end": 12294,
+              "start": 12294
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11615,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 10832,
+              "start": 10825
+            },
+            {
+              "end": 12303,
+              "start": 12301
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11622,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/agent_registry.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/ps_integrate.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2010_factory_lane_ps_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2451,
+      "base": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+      "head": "2f0ef157cb27a37e78e64d8335a5cd9e74eef085",
+      "merge": "3d85bbde84130b00330ac845d79ffdd4eb9bcce7",
+      "title": "[AI:claude] feat(seats): single-occupancy orchestrator seat, graceful path (TASK-1607)",
+      "named": [
+        "STORY-1485",
+        "TASK-1607"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1607",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Seat lifecycle operations resolve/revalidate caller authority at the seat lock and reconcile absolute deadlines. These are direct changes to the named guided occupancy core.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/config.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/mod.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/runtime.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/scope.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/store.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli-lib/src/seat_occupancy/tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/process_probe.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/architecture/external-tool-output-classifiers.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/plans/2026-10-03-story-1485-seat-occupancy-sketch.md",
+          "path_class": "docs/*.md",
+          "change_kind": "A"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "tests/test_seat_takeover_lifecycle.py",
+          "path_class": "other",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/seat_occupancy/cmd.rs",
+        "diff_sha256": "15939b217097995a5c3d56e36284eeee01150fb2e94445ec3c1e550d9a514965"
+      }
+    },
+    {
+      "pr": 2670,
+      "base": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+      "head": "182ef87134058ffc1d85c78d52401214b08c8736",
+      "merge": "dcc46d8298a7da6c5c8b3e899b8878db6fa20767",
+      "title": "[AI:claude] fix(store): write the contained-store marker before the git version check; route the store diff through host_git_command (TASK-1775)",
+      "named": [
+        "TASK-1775"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1775",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The contained-store marker is written before the Git version check so an older Git cannot leave a writable unmarked store. This is the named keystone store boundary fix.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-core/src/store_hooks.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/session.rs",
+        "diff_sha256": "cbf99ee6dfd7b2708b241fa1698e59b35595b2a0d85f78e992d855855391029b"
+      }
+    },
+    {
+      "pr": 2669,
+      "base": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "head": "34b992adce793bb2f022ec77f312b83b6a5aca89",
+      "merge": "b9f2f5a28b0448375ce2ef8a819854b34acd4c11",
+      "title": "[AI:claude] fix(schedule): compare tick-driver binaries canonically and document the live-binary contract (TASK-1769)",
+      "named": [
+        "TASK-1769"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "STORY-1226",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The changed comment in handle_schedule_command explicitly documents the unsupported-job/full-tick nonzero contract. This is a documentation touch of the scheduler registry execution/reporting behavior described by guided STORY-1226, even though it changes no executable statement in this file.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 473,
+              "start": 473
+            },
+            {
+              "end": 474,
+              "start": 474
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 39,
+              "text": "//! trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 84,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 119,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 234,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 352,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 384,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 546,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 555,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 584,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 685,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 785,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 992,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1065,
+              "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1273,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1343,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1450,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1552,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1633,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1690,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1741,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1748,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1766,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 2781,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 3525,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 4976,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5007,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5079,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5129,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5202,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5203,
+              "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5256,
+              "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5338,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5494,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5566,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5589,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5645,
+              "text": "// trace:STORY-1226 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 478,
+              "start": 473
+            },
+            {
+              "end": 480,
+              "start": 479
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 39,
+              "text": "//! trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 84,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 119,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 234,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 352,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 384,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 552,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 561,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 590,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 691,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 791,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 998,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1071,
+              "text": "// events after this tick. trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1279,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1349,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1456,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1558,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1639,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1696,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1747,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1754,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 1772,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 2787,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 3531,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 4982,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5013,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5085,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5135,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5208,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5209,
+              "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5262,
+              "text": "// Advisor review round 1 (#1946). trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5344,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5500,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5572,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5595,
+              "text": "// trace:STORY-1226 | ai:claude"
+            },
+            {
+              "line": 5651,
+              "text": "// trace:STORY-1226 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "docs/cli/03-work-autonomy.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2668,
+      "base": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+      "head": "0498eac1e9e30bd322ac7db03d3202bf091d7758",
+      "merge": "596a91dbc047f434d8db31558d6465c1f4c0030e",
+      "title": "[AI:claude] docs(memories): correct check-ignore precedence claim in the winner memory (TASK-1767)",
+      "named": [
+        "TASK-1767"
+      ],
+      "kind": "none",
+      "witness": null,
+      "witness_semantics": "allowed",
+      "manual_reason": "No named or trace refusal in the frozen classification. This is a policy outcome, not a proof that the PR is generally safe.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-core/templates/memories/feedback_check_ignore_names_the_winner.md",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2665,
+      "base": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+      "head": "1013c63db6b86f39f75431f429de55e7c76910c4",
+      "merge": "3ea566f8401deaca3f5e1bc62c61fff34c0e68c2",
+      "title": "[AI:claude] fix(contained): refuse uncontainable launches, honour --auto-complete --sandbox, fail closed on malformed agents.toml (BUG-2144 BUG-2145 BUG-2146)",
+      "named": [
+        "BUG-2144",
+        "BUG-2145",
+        "BUG-2146",
+        "CONTAINMENT-2144"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2144",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Launches of agent tools without an available contained posture are refused, alongside contained drain configuration checks. This implements the named containment floor.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2144_2146_containment_refusal_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/lib_part2.rs",
+        "diff_sha256": "d3e24a24c76113e30faa3ab8f5eaaec2f87c07079733e162850f647b2d7460fd"
+      }
+    },
+    {
+      "pr": 2653,
+      "base": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+      "head": "551163384f4769ebfaa38e3afd7107ad59ca5ce2",
+      "merge": "3f7bcd28fddde3481dbe486209992176fef8b4c9",
+      "title": "[AI:claude] fix(liveness): read exact linux-starttime identities in the canonical liveness path (TASK-1750)",
+      "named": [
+        "TASK-1750",
+        "TASK-1768"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "TASK-1750",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Linux process identity now uses exact /proc start ticks through the canonical liveness path. This directly implements the named keystone process-identity work.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/drain_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/db/cache_lock.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/liveness.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-core/src/liveness.rs",
+        "diff_sha256": "61c9cdaa66e4010986b3dc812048f4aab607583e47a673721e0601ea6bdacd65"
+      }
+    },
+    {
+      "pr": 2658,
+      "base": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "head": "c4b503beeccefe43e0284a6a748811da53f6d0e3",
+      "merge": "453b2e22c5ddd73e1f35d68e17d9a685c0dd8df4",
+      "title": "[AI:codex] feat(regen): export deterministic committed corpus (TASK-1729)",
+      "named": [
+        "TASK-1729"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-11",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "cli.rs adds the regeneration command and corpus options. The trace of ADR-11 belongs to the unchanged aida do parser test.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 12818,
+              "start": 12818
+            },
+            {
+              "end": 16640,
+              "start": 16640
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15180,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 12823,
+              "start": 12818
+            },
+            {
+              "end": 16659,
+              "start": 16645
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 15185,
+              "text": "// trace:TASK-1155 trace:ADR-11 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/cli.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/regen.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "docs/cli-format-json-audit.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2663,
+      "base": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+      "head": "099a574c97a4fb3d0473a8e8e0a8e3bbee24c1f2",
+      "merge": "6ddf336dddb944e409cfd1d7f96f42bd293a0bc5",
+      "title": "[AI:claude] fix(store): refuse store git on git < 2.40, where GIT_ATTR_SOURCE is ignored (BUG-2131)",
+      "named": [
+        "BUG-2131"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-10",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "queue_cmd.rs adds a contained-git-version preflight. ADR-10's typed autonomy resolution and zen transport remain unchanged. The containment change has other potential exclusion reasons not settled by this witness.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 11232,
+              "start": 11232
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11568,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/queue_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 11236,
+              "start": 11232
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 5803,
+              "text": "// to spawned phase children / skill templates. trace:ADR-10 trace:TASK-1060"
+            },
+            {
+              "line": 11572,
+              "text": "// trace:STORY-287 trace:ADR-10 trace:TASK-1060 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/git_ops.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/store_hooks.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "docs/agents/claude-bubblewrap-sandbox.md",
+          "path_class": "docs/*.md",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/config-trust.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2656,
+      "base": "672c12158b936102c7cad34691f2ba285a9284de",
+      "head": "2cc1095b5fd8c13ac130fd49862dde453302a4ca",
+      "merge": "0d8c0c3b0c935bbd0aefd5fd86d56cfe403c4aa3",
+      "title": "[AI:antigravity] fix(build): ensure stable TMPDIR for sccache and detect missing temp dir (BUG-2135)",
+      "named": [
+        "BUG-2135"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "ADR-54",
+        "why": "keystone-class spec requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "ci.yml adds sccache TMPDIR fixture execution in a different part of the workflow. ADR-54's GitLab perimeter-auth guard step remains byte-for-byte unchanged.",
+      "witness_occurrences": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 558,
+              "start": 558
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 158,
+              "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+            }
+          ]
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 562,
+              "start": 558
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 158,
+              "text": "# exposing credentials in ordinary PR CI. trace:TASK-1425 trace:ADR-54 | ai:codex"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "path_class": "workflows",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/check-ci-gates.py",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "scripts/ci-gate-tiers.toml",
+          "path_class": "other",
+          "change_kind": "M"
+        },
+        {
+          "path": "tests/test_bug_2135_sccache_tmpdir.py",
+          "path_class": "other",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2654,
+      "base": "efd3bba8de3e098599e85dd29c381d4066961994",
+      "head": "1e5dd25bbe4a459d42c9529baf8004768e1c6254",
+      "merge": "672c12158b936102c7cad34691f2ba285a9284de",
+      "title": "[AI:claude] fix(schedule): fail only an unsupported job, pin tick drivers to the live binary (BUG-2142)",
+      "named": [
+        "BUG-2142"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "STORY-1218",
+        "why": "guided/operator execution requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The changed real_tick_invocation in schedule_driver.rs switches from the running build path to real_stable_tick_exe. At the pinned head, shift.rs install_command (lines 3541-3542) directly calls this shared invocation before switch_driver. This establishes a real touch of guided STORY-1218\u2019s unattended night-shift installer, rather than assuming schedule/shift commands are independent.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 253,
+              "start": 253
+            },
+            {
+              "end": 282,
+              "start": 282
+            },
+            {
+              "end": 451,
+              "start": 448
+            },
+            {
+              "end": 452,
+              "start": 452
+            },
+            {
+              "end": 568,
+              "start": 567
+            },
+            {
+              "end": 574,
+              "start": 573
+            },
+            {
+              "end": 576,
+              "start": 575
+            },
+            {
+              "end": 631,
+              "start": 631
+            },
+            {
+              "end": 789,
+              "start": 789
+            },
+            {
+              "end": 794,
+              "start": 794
+            },
+            {
+              "end": 801,
+              "start": 798
+            },
+            {
+              "end": 822,
+              "start": 818
+            },
+            {
+              "end": 824,
+              "start": 824
+            },
+            {
+              "end": 834,
+              "start": 830
+            },
+            {
+              "end": 858,
+              "start": 857
+            },
+            {
+              "end": 955,
+              "start": 954
+            },
+            {
+              "end": 1070,
+              "start": 1069
+            },
+            {
+              "end": 1077,
+              "start": 1072
+            },
+            {
+              "end": 1141,
+              "start": 1141
+            },
+            {
+              "end": 1171,
+              "start": 1170
+            },
+            {
+              "end": 1178,
+              "start": 1173
+            },
+            {
+              "end": 1356,
+              "start": 1356
+            },
+            {
+              "end": 1361,
+              "start": 1361
+            },
+            {
+              "end": 1396,
+              "start": 1395
+            },
+            {
+              "end": 1435,
+              "start": 1435
+            },
+            {
+              "end": 1842,
+              "start": 1839
+            },
+            {
+              "end": 2427,
+              "start": 2427
+            },
+            {
+              "end": 2446,
+              "start": 2446
+            },
+            {
+              "end": 2459,
+              "start": 2459
+            },
+            {
+              "end": 3251,
+              "start": 3251
+            },
+            {
+              "end": 3468,
+              "start": 3468
+            },
+            {
+              "end": 3489,
+              "start": 3489
+            },
+            {
+              "end": 4078,
+              "start": 4078
+            },
+            {
+              "end": 6058,
+              "start": 6058
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2947,
+              "text": "// trace:STORY-1218 | ai:claude"
+            },
+            {
+              "line": 2963,
+              "text": "// trace:STORY-1218 | ai:claude"
+            },
+            {
+              "line": 3808,
+              "text": "// trace:STORY-1218 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 268,
+              "start": 253
+            },
+            {
+              "end": 300,
+              "start": 297
+            },
+            {
+              "end": 469,
+              "start": 466
+            },
+            {
+              "end": 484,
+              "start": 470
+            },
+            {
+              "end": 603,
+              "start": 599
+            },
+            {
+              "end": 621,
+              "start": 608
+            },
+            {
+              "end": 623,
+              "start": 622
+            },
+            {
+              "end": 679,
+              "start": 678
+            },
+            {
+              "end": 847,
+              "start": 837
+            },
+            {
+              "end": 860,
+              "start": 852
+            },
+            {
+              "end": 868,
+              "start": 864
+            },
+            {
+              "end": 892,
+              "start": 885
+            },
+            {
+              "end": 899,
+              "start": 894
+            },
+            {
+              "end": 912,
+              "start": 905
+            },
+            {
+              "end": 939,
+              "start": 935
+            },
+            {
+              "end": 1042,
+              "start": 1035
+            },
+            {
+              "end": 1157,
+              "start": 1156
+            },
+            {
+              "end": 1159,
+              "start": 1159
+            },
+            {
+              "end": 1269,
+              "start": 1223
+            },
+            {
+              "end": 1299,
+              "start": 1298
+            },
+            {
+              "end": 1301,
+              "start": 1301
+            },
+            {
+              "end": 1489,
+              "start": 1479
+            },
+            {
+              "end": 1496,
+              "start": 1494
+            },
+            {
+              "end": 1531,
+              "start": 1530
+            },
+            {
+              "end": 1571,
+              "start": 1570
+            },
+            {
+              "end": 1977,
+              "start": 1975
+            },
+            {
+              "end": 2587,
+              "start": 2562
+            },
+            {
+              "end": 2608,
+              "start": 2606
+            },
+            {
+              "end": 2625,
+              "start": 2621
+            },
+            {
+              "end": 3418,
+              "start": 3417
+            },
+            {
+              "end": 3636,
+              "start": 3635
+            },
+            {
+              "end": 3658,
+              "start": 3657
+            },
+            {
+              "end": 4248,
+              "start": 4247
+            },
+            {
+              "end": 6425,
+              "start": 6228
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3113,
+              "text": "// trace:STORY-1218 | ai:claude"
+            },
+            {
+              "line": 3129,
+              "text": "// trace:STORY-1218 | ai:claude"
+            },
+            {
+              "line": 3977,
+              "text": "// trace:STORY-1218 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/maintenance_schedule.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/schedule_driver.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2142_tick_binary_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "supporting_sources": [
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/shift.rs",
+          "start_line": 3541,
+          "end_line": 3542,
+          "meaning": "install_command calls the shared tick invocation then switch_driver"
+        },
+        {
+          "side": "head",
+          "path": "aida-cli-lib/src/schedule_driver.rs",
+          "start_line": 1335,
+          "end_line": 1336,
+          "meaning": "the changed shared invocation chooses real_stable_tick_exe"
+        }
+      ]
+    },
+    {
+      "pr": 2655,
+      "base": "92763a125a7b2ac062064c6324063723a02a80ad",
+      "head": "a55d76553bbbdb791e76ef36dae7ac5bb4155676",
+      "merge": "efd3bba8de3e098599e85dd29c381d4066961994",
+      "title": "[AI:claude] fix(drain): contain every agent child a contained drain spawns (BUG-2133)",
+      "named": [
+        "BUG-2133"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-2133",
+        "why": "sensitive spec metadata (contained) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "Drain child launch paths require and propagate containment, including the harvest child. This directly implements the named contained-drain requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/phase_driver.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/status_sections.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_2133_contained_drain_children_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/harvest.rs",
+        "diff_sha256": "ffb2b5677c70a73531945271fc172760c3c745d0ccdb92ae8d46521dd5c05819"
+      }
+    },
+    {
+      "pr": 2652,
+      "base": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+      "head": "53548583acbfc53a30149900edf75e3e15d47a7c",
+      "merge": "92763a125a7b2ac062064c6324063723a02a80ad",
+      "title": "[AI:claude] fix(git): anchor the shared info/exclude .aida entry and migrate the legacy line (BUG-2141)",
+      "named": [
+        "BUG-2141"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1-051",
+        "why": "unresolved trace/spec id"
+      },
+      "witness_semantics": "unresolved",
+      "manual_reason": "BUG-1-051 remains on the unchanged deprecated pull wrapper; the diff changes runtime info/exclude migration and its tests. The trace location is incidental, but this ID is unresolved in the frozen store, so its supervisory meaning cannot be established.",
+      "witness_occurrences": [
+        {
+          "path": "aida-core/src/git_ops.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 419,
+              "start": 418
+            },
+            {
+              "end": 435,
+              "start": 422
+            },
+            {
+              "end": 438,
+              "start": 437
+            },
+            {
+              "end": 441,
+              "start": 440
+            },
+            {
+              "end": 446,
+              "start": 445
+            },
+            {
+              "end": 458,
+              "start": 449
+            },
+            {
+              "end": 519,
+              "start": 506
+            },
+            {
+              "end": 553,
+              "start": 530
+            },
+            {
+              "end": 554,
+              "start": 554
+            },
+            {
+              "end": 5416,
+              "start": 5414
+            },
+            {
+              "end": 5561,
+              "start": 5420
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 1673,
+              "text": "/// trace:BUG-1-051 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-core/src/git_ops.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2541,
+      "base": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+      "head": "148dc79429c949ab96a425b5ddebc24190ecb47f",
+      "merge": "266d8f5ef3ef6dafccff037e2c8d62a4007aac6a",
+      "title": "[AI:claude] fix(contained): let contained sessions write the main checkout's store and cache (BUG-1929)",
+      "named": [
+        "BUG-1929"
+      ],
+      "kind": "named",
+      "witness": {
+        "id": "BUG-1929",
+        "why": "sensitive spec metadata (contained) requires a human clear"
+      },
+      "witness_semantics": "true-touch",
+      "manual_reason": "The PR adds contained access to the main checkout's shared AIDA data paths and hardens store-hook/Git boundaries. This directly implements the named contained-store requirement.",
+      "witness_occurrences": [],
+      "fallback_paths": [
+        {
+          "path": "AGENTS.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "OVERVIEW.md",
+          "path_class": "AGENTS/OVERVIEW",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/contained_boundary.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/doctor_cmd.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/history_cache.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli/tests/bug_1929_embedded_repo_store.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-cli/tests/fixtures/task_1717_git_observer.sh",
+          "path_class": "other",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/db/cache.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/db/cached_git_backend.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/db/mod.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/git_ops.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/git_ops/tests/store_hook_tests.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/src/lib.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/src/store_hooks.rs",
+          "path_class": "Rust source",
+          "change_kind": "A"
+        },
+        {
+          "path": "aida-core/templates/hooks/aida-commit-msg",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/hooks/aida-pre-commit.sh",
+          "path_class": "templates/mirrors",
+          "change_kind": "M"
+        },
+        {
+          "path": "aida-core/templates/hooks/aida-store-pre-push.sh",
+          "path_class": "templates/mirrors",
+          "change_kind": "A"
+        },
+        {
+          "path": "tests/test_bug_1929_hook_templates.py",
+          "path_class": "other",
+          "change_kind": "A"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false,
+      "named_changed_source": {
+        "path": "aida-cli-lib/src/contained_boundary.rs",
+        "diff_sha256": "e8a3a4b70a8fbc8216cc992643933cbdfa2a008dd1ccbb4c9ea4f4e58103d300"
+      }
+    },
+    {
+      "pr": 2650,
+      "base": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+      "head": "01bc7eb75fe2681e1cc45efa0ea34bc29b34423f",
+      "merge": "b13bf7d3ebf702d7bc2e4b4ccab2838a24cb7060",
+      "title": "[AI:claude] fix(mailbox): refuse junk recipient ids and code-ish @mentions (BUG-2132)",
+      "named": [
+        "BUG-2132"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1533",
+        "why": "sensitive spec metadata (identity) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "The diff rejects junk recipient IDs and code-like mentions before mailbox writes. BUG-1533 concerns sender attribution and from_source; sender precedence and the envelope fields remain unchanged across CLI, MCP and notification paths.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/mailbox_cmd.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 137,
+              "start": 137
+            },
+            {
+              "end": 1117,
+              "start": 1117
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 165,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 resolve authorship with the same"
+            },
+            {
+              "line": 1579,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 1610,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 1658,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/mailbox_cmd.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 145,
+              "start": 137
+            },
+            {
+              "end": 1186,
+              "start": 1125
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 173,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 resolve authorship with the same"
+            },
+            {
+              "line": 1648,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 1679,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 1727,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/mcp.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 2746,
+              "start": 2746
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2751,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 mirror the CLI's `--from` resolution:"
+            },
+            {
+              "line": 2905,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 which precedence tier"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/mcp.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 2751,
+              "start": 2746
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 2756,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 mirror the CLI's `--from` resolution:"
+            },
+            {
+              "line": 2910,
+              "text": "// trace:BUG-1533 | ai:claude \u2014 which precedence tier"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/punt_done.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 188,
+              "start": 188
+            },
+            {
+              "end": 253,
+              "start": 252
+            },
+            {
+              "end": 264,
+              "start": 264
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 210,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/punt_done.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 193,
+              "start": 188
+            },
+            {
+              "end": 258,
+              "start": 257
+            },
+            {
+              "end": 285,
+              "start": 269
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 215,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-core/src/mailbox.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 250,
+              "start": 250
+            },
+            {
+              "end": 1083,
+              "start": 1083
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 40,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 77,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 100,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 413,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-core/src/mailbox.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": true,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 293,
+              "start": 250
+            },
+            {
+              "end": 1159,
+              "start": 1126
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 40,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 77,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 100,
+              "text": "// trace:BUG-1533 | ai:claude"
+            },
+            {
+              "line": 456,
+              "text": "// trace:BUG-1533 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-core/src/mailbox.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    },
+    {
+      "pr": 2647,
+      "base": "403be14eddc78e845f636fc5ae366fe2b9e53d75",
+      "head": "825ebd7102699a00708fa1f316945b1186d593b1",
+      "merge": "732db496014cc356d823a0a8d8cb5a4623f61f8b",
+      "title": "[AI:claude] fix(review): state the record outcome explicitly in aida review record (BUG-2136)",
+      "named": [
+        "BUG-2136"
+      ],
+      "kind": "trace",
+      "witness": {
+        "id": "BUG-1978",
+        "why": "sensitive spec metadata (grant) requires a human clear"
+      },
+      "witness_semantics": "incidental",
+      "manual_reason": "handle_review_record_at snapshots a prior verdict and formats an explicit record-outcome line. BUG-1978's grant-present/missing-agent-identity attribution fallback is unchanged. Sharing the recording handler does not make this an attribution-guidance edit.",
+      "witness_occurrences": [
+        {
+          "path": "aida-cli-lib/src/lib_part5.rs",
+          "path_class": "Rust source",
+          "side": "base",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 3136,
+              "start": 3136
+            },
+            {
+              "end": 3150,
+              "start": 3150
+            },
+            {
+              "end": 3190,
+              "start": 3190
+            },
+            {
+              "end": 3192,
+              "start": 3191
+            },
+            {
+              "end": 3199,
+              "start": 3193
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3036,
+              "text": "// trace:BUG-1978 | ai:claude"
+            },
+            {
+              "line": 3498,
+              "text": "// trace:BUG-1978 | ai:claude"
+            }
+          ]
+        },
+        {
+          "path": "aida-cli-lib/src/lib_part5.rs",
+          "path_class": "Rust source",
+          "side": "head",
+          "fallback": false,
+          "changed_ranges_zero_based_half_open": [
+            {
+              "end": 3143,
+              "start": 3136
+            },
+            {
+              "end": 3163,
+              "start": 3157
+            },
+            {
+              "end": 3207,
+              "start": 3203
+            },
+            {
+              "end": 3209,
+              "start": 3208
+            },
+            {
+              "end": 3216,
+              "start": 3210
+            }
+          ],
+          "trace_lines": [
+            {
+              "line": 3036,
+              "text": "// trace:BUG-1978 | ai:claude"
+            },
+            {
+              "line": 3515,
+              "text": "// trace:BUG-1978 | ai:claude"
+            }
+          ]
+        }
+      ],
+      "fallback_paths": [
+        {
+          "path": "aida-cli-lib/src/review_verdict.rs",
+          "path_class": "Rust source",
+          "change_kind": "M"
+        }
+      ],
+      "all_exclusion_reasons_adjudicated": false
+    }
+  ],
+  "fallback_change_kinds": {
+    "M": 227,
+    "A": 63
+  },
+  "rust_fallback_change_kinds": {
+    "M": 122,
+    "A": 52
+  }
+}
