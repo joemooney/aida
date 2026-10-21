@@ -6,16 +6,25 @@ description: |
   session.rs:1473 (spawn_vendor_headless_with_seat_granted) and :4464 (spawn_claude_headless_resume_granted) call apply_headless_harness_version, but only build_exec_vendor_headless_command is tested. Deleting either of the other two calls still passes every test. Add a wiring assertion for each.
 
   Raised in review of PR-2809: https://github.com/joemooney/aida/pull/2809#issuecomment-6327023259
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T21:32:36.775020656Z
-modified_at: 2026-10-21T21:32:36.775020656Z
+modified_at: 2026-10-21T21:33:23.336047311Z
 req_type: Task
 tags:
 - from-review:PR-2809
 - severity:minor
+history:
+- id: 01a16062-1608-76b0-a81c-30d29deb0663
+  author: joe
+  timestamp: 2026-10-21T21:33:23.336044757Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 3e8d7168962397cf4a60e6946f7b5707ad79285e
   branch: pr-2809
