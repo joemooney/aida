@@ -14,9 +14,11 @@
 # that only mentions the pattern (a quoted argument, heredoc body or comment)
 # is not a command and is not flagged. A `timeout <N> bash -c "..."` (or sh,
 # zsh, dash) is flagged when the quoted body runs cargo or make. A make target
-# is passed over only when the Makefile in the hook's directory shows that it
-# and every prerequisite run nothing that could reach cargo; anything it cannot
-# resolve still gets the hint.
+# is passed over only when the Makefile in the command's directory shows that
+# it and every prerequisite run only known-inert commands (echo, cp, ...);
+# anything it cannot resolve still gets the hint, and so does a line where any
+# other timeout-wrapped segment runs cargo. Known misses: cargo reached
+# through `eval`, an alias or a function.
 #
 # trace:STORY-1854 | ai:claude
 # trace:TASK-1967 | ai:claude
@@ -158,56 +160,70 @@ TIMEOUT_PREFIX="(^|[[:space:];&|(\`])(${WORD}*/)?g?timeout[[:space:]]+(${OPT}[[:
 TOOL_TAIL="(${WORD}*/)?(cargo|g?make)([[:space:];&|)]|$)"
 PATTERN="${TIMEOUT_PREFIX}${TOOL_TAIL}"
 # `timeout <N> bash -c "<body>"`: the body is a quoted literal, so the
-# stripped scan sees only its quote. trace:TASK-1967 | ai:claude
-SHELL_C="(${WORD}*/)?(ba|da|z|k)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*c[[:space:]]*"
-SHELL_PATTERN="${TIMEOUT_PREFIX}${SHELL_C}[\"']"
+# stripped scan sees only its quote; it is read from the raw command.
+# trace:TASK-1967 | ai:claude
+SHELL_C="(${WORD}*/)?(ba|da|z|k)?sh[[:space:]]+((-[A-Za-z]+|[-+]o[[:space:]]+${WORD}+)[[:space:]]+)*-[A-Za-z]*c[[:space:]]*"
 DQ_BODY='"(([^"\\]|\\.)*)"'
 SQ_BODY="'([^']*)'"
-# Inside the body: cargo or make at a command position, after optional
-# env assignments and plain wrappers such as `nice -n 10`.
-WRAPPER="((exec|time|command|nohup|nice)[[:space:]]+(-n[[:space:]]*-?[0-9]+[[:space:]]+)?)"
+SHELL_RAW="${TIMEOUT_PREFIX}${SHELL_C}(${DQ_BODY}|${SQ_BODY})"
+# Inside a body: cargo or make at a command position, after optional env
+# assignments, wrappers such as `nice -n 10`, and shell keywords.
+WRAPPER="((exec|time|command|nohup|nice|if|then|else|elif|while|until|do|\{|!)[[:space:]]+(-n[[:space:]]*-?[0-9]+[[:space:]]+)?)"
 BODY_PATTERN="(^|[;&|(\`])[[:space:]]*${WRAPPER}*(${ASSIGN}[[:space:]]+)*${TOOL_TAIL}"
 CD_PATTERN='(^|[;&|(`])[[:space:]]*(cd|pushd)([[:space:]]|$)'
 
+# The directory the command runs in: the payload's cwd, else this process's.
+RUN_DIR=$(printf '%s' "$INPUT" | __aida_json_field cwd)
+[ -n "$RUN_DIR" ] && [ -d "$RUN_DIR" ] || RUN_DIR=$PWD
+
 # True (0) only when every named make target, resolved through the Makefile
-# in the current directory, runs nothing that could reach cargo: no cargo or
-# rustc, no recursive make, no `aida dev`, no script file and no make variable
-# (which could expand to any of those). An unknown target, a prerequisite
-# that may come from an include or pattern rule, or no target at all (the
-# default goal) is not shown safe. trace:TASK-1967 | ai:claude
+# in RUN_DIR, runs only known-inert commands (echo, printf, ls, cp ...), and
+# so cannot reach cargo. Anything else is not shown safe: an unknown target,
+# a make variable or command substitution, an include anywhere in the
+# Makefile, or a prerequisite list naming a variable. trace:TASK-1967 | ai:claude
 make_targets_skip_cargo() {
     local makefile=""
     local f
     for f in GNUmakefile makefile Makefile; do
-        if [ -f "$f" ]; then makefile=$f; break; fi
+        if [ -f "$RUN_DIR/$f" ]; then makefile=$RUN_DIR/$f; break; fi
     done
     [ -n "$makefile" ] && [ "$#" -gt 0 ] || return 1
     awk -v wanted="$*" '
-    function risky(cmd,   c) {
-        c = tolower(cmd)
-        gsub(/\$\$/, "", c)
-        if (c ~ /cargo|rustc/) return 1
-        if (c ~ /\$[({]/) return 1
-        if (c ~ /(^|[^a-z0-9_.-])g?make([ \t;&|)]|$)/) return 1
-        if (c ~ /aida[ \t]+dev/) return 1
-        if (c ~ /\.(sh|py|pl|rb|bash)([^a-z0-9]|$)/) return 1
-        if (c ~ /(^|[ \t;&|(@-])(\.\.?\/|scripts\/|tests\/)/) return 1
-        return 0
+    function inert(cmd,   c, parts, n, k, w) {
+        c = cmd
+        gsub(/\$\$\{[A-Za-z_][A-Za-z0-9_]*\}/, "", c)
+        gsub(/\$\$[A-Za-z_][A-Za-z0-9_]*/, "", c)
+        gsub(/\$[@<^*?]/, "", c)
+        if (c ~ /[$`]/) return 0
+        gsub(/\047[^\047]*\047/, "\047\047", c)
+        gsub(/"[^"]*"/, "\"\"", c)
+        n = split(c, parts, /;|&&|\|\||\||&/)
+        for (k = 1; k <= n; k++) {
+            w = parts[k]
+            sub(/^[ \t@+-]*/, "", w)
+            sub(/[ \t<>].*$/, "", w)
+            if (w == "") continue
+            if (w !~ /^(echo|printf|true|false|:|ls|cat|grep|awk|sed|mkdir|rm|cp|mv|touch|test|\[)$/) return 0
+        }
+        return 1
     }
-    BEGIN { owner = ""; opaque = 0; incont = 0; indef = 0 }
+    BEGIN { owner = ""; incont = 0; indef = 0 }
     indef { if ($0 ~ /^[ \t]*endef/) indef = 0; next }
     /^\t/ || incont {
         # A recipe line, or the continuation of one, whatever its indent.
         incont = ($0 ~ /\\$/)
+        line = $0
+        sub(/\\$/, "", line)
         if (owner != "") {
             n = split(owner, os, " ")
-            for (k = 1; k <= n; k++) if (risky($0)) bad[os[k]] = 1
+            for (k = 1; k <= n; k++) if (!inert(line)) bad[os[k]] = 1
         }
         next
     }
     /^[ \t]*(#|$)/ { next }
     /^[ \t]*(override[ \t]+)?define[ \t]/ { indef = 1; owner = ""; next }
-    /^[ \t]*-?(include|sinclude)[ \t]/ { opaque = 1; owner = ""; next }
+    # An include can add prerequisites or recipes to any target.
+    /^[ \t]*-?s?include[ \t]/ { exit 1 }
     {
         line = $0
         while (line ~ /\\$/ && (getline nxt) > 0) line = substr(line, 1, length(line) - 1) " " nxt
@@ -218,7 +234,6 @@ make_targets_skip_cargo() {
         body = substr(line, c + 1)
         sub(/^:/, "", body)
         if (body ~ /=/) { owner = ""; next }
-        if (head ~ /%/) opaque = 1
         inline = ""
         s = index(body, ";")
         if (s > 0) { inline = substr(body, s + 1); body = substr(body, 1, s - 1) }
@@ -229,7 +244,9 @@ make_targets_skip_cargo() {
             if (ts[k] == "") continue
             known[ts[k]] = 1
             deps[ts[k]] = deps[ts[k]] " " body
-            if (inline != "" && risky(inline)) bad[ts[k]] = 1
+            # A pattern rule or a variable prerequisite cannot be resolved here.
+            if (head ~ /%/ || body ~ /[$%]/) bad[ts[k]] = 1
+            if (inline != "" && !inert(inline)) bad[ts[k]] = 1
             owner = owner " " ts[k]
         }
     }
@@ -239,9 +256,8 @@ make_targets_skip_cargo() {
             t = queue[i]
             if (t == "" || seen[t]++) continue
             if (!(t in known)) {
-                # A plain file prerequisite is fine; a top-level target, or a
-                # prerequisite an include or pattern rule may define, is not.
-                if (i <= top || opaque) exit 1
+                # A plain file prerequisite is fine; a top-level target is not.
+                if (i <= top) exit 1
                 continue
             }
             if (t in bad) exit 1
@@ -272,54 +288,82 @@ make_targets_from() {
     printf '%s\n' "${targets[*]}"
 }
 
+# Every timeout-wrapped cargo/make on the line is a segment. The hint is
+# skipped only when every segment is a make target shown not to reach cargo;
+# the first other segment names the hint. A `cd` anywhere means RUN_DIR's
+# Makefile may not be the one that runs. trace:TASK-1967 | ai:claude
 duration=""
 tool=""
-rest=""
 shown=""
-while IFS= read -r line; do
-    if [[ "$line" =~ $PATTERN ]]; then
-        duration=${BASH_REMATCH[7]}
-        tool=${BASH_REMATCH[12]}
-        rest=${line#*"${BASH_REMATCH[0]}"}
-        [[ "${BASH_REMATCH[0]}" =~ [[:space:]]$ ]] || rest=""
-        shown="timeout ${duration} ${tool}"
-        break
-    fi
-    if [[ "$line" =~ $SHELL_PATTERN ]]; then
-        sh_duration=${BASH_REMATCH[7]}
-        # Read the body from the raw command: the scan blanked it out.
-        body=""
-        if [[ "$COMMAND" =~ ${TIMEOUT_PREFIX}${SHELL_C}${DQ_BODY} ]]; then
-            body=${BASH_REMATCH[14]}
-        elif [[ "$COMMAND" =~ ${TIMEOUT_PREFIX}${SHELL_C}${SQ_BODY} ]]; then
-            body=${BASH_REMATCH[14]}
-        fi
-        body_scan=$(strip_shell_literals "$body") || body_scan=$body
-        while IFS= read -r body_line; do
-            if [[ "$body_line" =~ $BODY_PATTERN ]]; then
-                tool=${BASH_REMATCH[8]}
-                rest=${body_line#*"${BASH_REMATCH[0]}"}
-                [[ "${BASH_REMATCH[0]}" =~ [[:space:]]$ ]] || rest=""
-                break
-            fi
-        done <<< "$body_scan"
-        if [ -n "$tool" ]; then
-            duration=$sh_duration
-            shown="timeout ${duration} sh -c \"${tool} ...\""
-            [[ "$body_scan" =~ $CD_PATTERN ]] && rest=""
-            break
-        fi
-    fi
-done <<< "$SCAN"
-[ -n "$duration" ] || exit 0
+moved=0
+[[ "$SCAN" =~ $CD_PATTERN ]] && moved=1
 
-# A make target shown not to reach cargo needs no hint. A `cd` anywhere
-# means the Makefile here may not be the one that runs. trace:TASK-1967 | ai:claude
-if [ "$tool" != cargo ] && ! [[ "$SCAN" =~ $CD_PATTERN ]]; then
-    if targets=$(make_targets_from "$rest") && make_targets_skip_cargo $targets; then
-        exit 0
+# Record one segment: $1 duration, $2 tool, $3 the text after the tool word
+# (empty when the arguments end at a separator), $4 how the hint shows it.
+consider() {
+    [ -z "$duration" ] || return 0
+    if [ "$2" != cargo ] && [ "$moved" = 0 ]; then
+        local targets
+        if targets=$(make_targets_from "$3") && make_targets_skip_cargo $targets; then
+            return 0
+        fi
     fi
-fi
+    duration=$1
+    tool=$2
+    shown=$4
+}
+
+# What follows the matched text, or nothing when the match ended on a
+# separator (so the command's arguments are already over).
+after_match() {
+    local text=$1 match=$2
+    [[ "$match" =~ [[:space:]]$ ]] || return 0
+    printf '%s' "${text#*"$match"}"
+}
+
+while IFS= read -r line; do
+    rem=$line
+    while [[ "$rem" =~ $PATTERN ]]; do
+        m=${BASH_REMATCH[0]}
+        consider "${BASH_REMATCH[7]}" "${BASH_REMATCH[12]}" "$(after_match "$rem" "$m")" \
+            "timeout ${BASH_REMATCH[7]} ${BASH_REMATCH[12]}"
+        rem=${rem#*"$m"}
+    done
+done <<< "$SCAN"
+
+# Each `timeout <N> sh -c` with its own body. An occurrence inside a quoted
+# argument, heredoc or comment is prose: appending a marker to the raw text
+# before it and stripping must leave the marker intact.
+rem=$COMMAND
+seen_text=""
+while [[ "$rem" =~ $SHELL_RAW ]]; do
+    m=${BASH_REMATCH[0]}
+    sh_duration=${BASH_REMATCH[7]}
+    before=${rem%%"$m"*}
+    seen_text+=$before
+    rem=${rem#*"$m"}
+    probe=$(strip_shell_literals "${seen_text}__AIDA_AT__") || probe=""
+    seen_text+=$m
+    [[ "$probe" == *__AIDA_AT__ ]] || continue
+    body=""
+    if [[ "$m" =~ ${DQ_BODY}$ ]] || [[ "$m" =~ ${SQ_BODY}$ ]]; then
+        body=${BASH_REMATCH[1]}
+    fi
+    body_scan=$(strip_shell_literals "$body") || body_scan=$body
+    [[ "$body_scan" =~ $CD_PATTERN ]] && body_moved=1 || body_moved=0
+    while IFS= read -r body_line; do
+        brem=$body_line
+        while [[ "$brem" =~ $BODY_PATTERN ]]; do
+            bm=${BASH_REMATCH[0]}
+            btool=${BASH_REMATCH[8]}
+            bafter=$(after_match "$brem" "$bm")
+            [ "$body_moved" = 1 ] && bafter=""
+            consider "$sh_duration" "$btool" "$bafter" "timeout ${sh_duration} sh -c \"${btool} ...\""
+            brem=${brem#*"$bm"}
+        done
+    done <<< "$body_scan"
+done
+[ -n "$duration" ] || exit 0
 
 case "$tool" in
     cargo) replacement="AIDA_CARGO_TIMEOUT=${duration} cargo ..." ;;

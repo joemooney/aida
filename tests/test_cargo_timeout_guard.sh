@@ -11,10 +11,15 @@ fail=0
 
 # Feed one Bash command through the hook as a PreToolUse payload. The command
 # is JSON-encoded by python so quotes and newlines survive intact.
-# RUN_DIR is the hook's working directory (where it looks for a Makefile).
+# RUN_DIR is the hook process's working directory; PAYLOAD_CWD, when set, is
+# the payload's `cwd` (the Bash tool's directory), which the hook prefers.
 RUN_DIR="$ROOT"
+PAYLOAD_CWD=""
 run() {
-    python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
+    python3 -c 'import json,sys
+d={"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}
+if sys.argv[2]: d["cwd"]=sys.argv[2]
+print(json.dumps(d))' "$1" "$PAYLOAD_CWD" \
         | (cd "$RUN_DIR" && "$HOOK") >"$TMP/out" 2>"$TMP/err"
     echo $? >"$TMP/status"
 }
@@ -76,7 +81,7 @@ printf '%s\n' \
     'hello: ## Prints a greeting' \
     $'\t@echo hello' \
     $'\t@printf "%s\\n" "$$HOME" \\' \
-    '      | wc -c' \
+    '      | cat' \
     'docs: hello README.md' \
     $'\t@echo docs' \
     'lint:' \
@@ -112,6 +117,39 @@ RUN_DIR="$MK/sub"
 expect_warn "prerequisite an include may define" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 RUN_DIR="$TMP"
 expect_warn "no Makefile here" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# The payload's cwd, not the hook process's, picks the Makefile.
+PAYLOAD_CWD="$MK"
+expect_silent "payload cwd names the Makefile" 'timeout 1h make hello'
+RUN_DIR="$MK"
+PAYLOAD_CWD="$TMP"
+expect_warn "payload cwd without a Makefile" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+PAYLOAD_CWD=""
+
+# PR-2801 round 1: every segment counts, and the resolver fails toward warning.
+RUN_DIR="$MK"
+expect_warn "safe make then a timeout cargo" 'timeout 1h make hello && timeout 1h cargo test' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "safe make then ; timeout cargo" 'timeout 1h make hello; timeout 1h cargo test' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "sh -c body: safe make then cargo" 'timeout 1h bash -c "make hello && cargo test"' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "second sh -c runs cargo" 'timeout 30 bash -c "ls" && timeout 30 bash -c "cargo test"' 'AIDA_CARGO_TIMEOUT=30 cargo ...'
+expect_warn "safe sh -c make then sh -c cargo" "timeout 30 sh -c 'make hello'; timeout 30 sh -c 'cargo test'" 'AIDA_CARGO_TIMEOUT=30 cargo ...'
+expect_silent "quoted sh -c prose before a harmless sh -c" "echo 'timeout 3 bash -c \"cargo x\"'; timeout 30 bash -c 'ls'"
+expect_warn "sh -o option before -c" 'timeout 3000 bash -o pipefail -c "cargo test"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+expect_warn "cargo after then" 'timeout 3000 bash -c "if true; then cargo test; fi"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+expect_warn "cargo after do" 'timeout 3000 bash -c "for p in a b; do cargo test -p \$p; done"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+mk_case() { mkdir -p "$MK/$1"; shift_dir="$MK/$1"; shift; printf '%s\n' "$@" >"$shift_dir/Makefile"; RUN_DIR="$shift_dir"; }
+mk_case vardeps 'DEPS = lint' 'hello: $(DEPS)' $'\t@echo hi' 'lint:' $'\tcargo clippy'
+expect_warn "variable prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case incl 'include extra.mk' 'hello: ; @echo hi'
+printf '%s\n' 'hello: lint' 'lint:' $'\tcargo clippy' >"$MK/incl/extra.mk"
+expect_warn "include may add to a known target" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case dashincl '-include extra.mk' 'hello:' $'\t@echo hi'
+expect_warn "-include fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for recipe in 'bin/check' 'python3 -m tool' 'npm run build' 'just ci' '@echo a && rustup run stable cargo build' 'X=1 echo hi' 'echo $$(cargo --version)'; do
+    mk_case allow 'hello:' $'\t'"$recipe"
+    expect_warn "recipe outside the inert allowlist: $recipe" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case inert 'hello: a' $'\t@mkdir -p out && cp a out/ && echo "done; ok" > out/log' $'\t-rm -f stale; touch out/stamp' $'\t@test -f a || printf \'%s\\n\' missing' 'a:' $'\t@true'
+expect_silent "only inert recipe commands" 'timeout 1h make hello'
 RUN_DIR="$ROOT"
 
 # Malformed input never blocks.
