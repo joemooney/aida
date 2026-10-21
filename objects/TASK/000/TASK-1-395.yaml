@@ -1,0 +1,28 @@
+id: 01a15d86-6918-72c3-afbf-4b0a13ad3830
+spec_id: TASK-1-395
+title: '[minor][non-blocking] A crashed reviewer whose worktree lease remains Dormant s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1688, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor][non-blocking] A crashed reviewer whose worktree lease remains Dormant still counts as review started, so unpicked-ready-pr is suppressed for that PR for up to max_age_hours (24h). Carried from round 3.
+  Reviewed sha: 0acdec32e36997c90ecef26089b92755773fc4ad
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T08:14:12.248872054Z
+modified_at: 2026-10-21T08:14:12.248872054Z
+req_type: Task
+tags:
+- carried-from:STORY-1688
+- finding-hash:511dedd2
+- from-review:STORY-1688
+- kind:carried-forward
+filed_at:
+  code_sha: 87e4fca49ea56ae8732d5c00230f53d94796c826
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70664344cd
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
