@@ -1122,6 +1122,16 @@ mod tests {
                 }
             }
         }
+        // A descendant being reaped between two probes reads as an unknown
+        // identity, which liveness treats as alive; the skipped pidfd wait then
+        // failed at 1 s under nextest (PR-2785 run 39487052143). Re-probe until
+        // it reads dead or the same deadline passes. trace:TASK-1988 | ai:claude
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while aida_core::liveness::process_identity_is_alive(pid, start)
+            && std::time::Instant::now() < deadline
+        {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         assert!(
             !aida_core::liveness::process_identity_is_alive(pid, start),
             "sleeping descendant {pid} survived the group timeout"
