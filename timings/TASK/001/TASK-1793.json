@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1793",
+  "publishes": [
+    {
+      "at": "2026-10-21T05:55:54.132237203Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T21:53:03.305008529Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-16T21:58:38.064270561Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1793",
+        "branch": "codex/task-1793",
+        "first_seen": "2026-10-16T21:58:38.061977833+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-16T22:26:51.254645497Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Needs Attention"
+      }
+    },
+    {
+      "ts": "2026-10-18T13:30:05.881831147Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-18T13:32:36.899269668Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T05:55:49.386968596Z",
+      "spec": "TASK-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:55:49.387701246Z",
+      "spec": "TASK-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:55:53.840650152Z",
+      "spec": "TASK-1793",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-21T05:55:53.841403078Z",
+      "spec": "TASK-1793",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
