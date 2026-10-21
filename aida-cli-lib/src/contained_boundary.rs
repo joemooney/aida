@@ -190,11 +190,13 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// checkout's real `.git` (directory or gitfile target, plus the `.git` file
 /// itself) directly from `write_roots` even when `store_write_paths` is empty.
 ///
-/// Linked worktrees (whose `gitdir:` target has a `commondir` file or lives
-/// under `worktrees/<name>`) and non-checkout directories (no `.git`, or a
-/// nested `.git` outside the checkout root) are not main checkouts, so their
-/// paths stay allowed. No seat-clone name or marker exempts a main checkout's
-/// real `.git`: those markers are writable by the contained session.
+/// Linked worktrees (whose `gitdir:` target is `<common>/worktrees/<name>`
+/// with a `commondir` resolving back to `<common>`) and non-checkout
+/// directories (no `.git`, or a nested `.git` outside the checkout root) are
+/// not main checkouts, so their paths stay allowed. A `.git` symlink is
+/// followed to its directory or gitfile. No seat-clone name or marker exempts
+/// a main checkout's real `.git`: those markers are writable by the contained
+/// session.
 // trace:BUG-2012 | ai:antigravity
 pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut denied = Vec::new();
@@ -216,7 +218,13 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
             if let Ok(canon) = std::fs::canonicalize(&git_entry) {
                 push_unique(canon);
             }
-        } else if meta.is_file() {
+        } else if git_entry.is_file() {
+            // TASK-2006: `is_file()` follows a `.git` symlink to a gitfile,
+            // which `symlink_metadata` reports as a symlink and the old
+            // `meta.is_file()` test skipped, denying nothing. The symlink's
+            // gitfile (canonical `.git`) and its `gitdir:` target are denied;
+            // like git, a relative `gitdir:` resolves against `<root>`.
+            // trace:TASK-1952 | trace:TASK-2006 | ai:antigravity
             let Some(raw_target) = aida_core::git_ops::worktree_gitdir_path(root) else {
                 continue;
             };
@@ -255,18 +263,34 @@ pub(crate) fn normalize_lexical(path: &Path) -> PathBuf {
 }
 
 /// Whether `gitdir` (the target of a `.git` file) is a linked worktree's own
-/// gitdir (`commondir` present or `<common>/worktrees/<name>`) rather than a
-/// main checkout's `--separate-git-dir` target.
+/// gitdir rather than a main checkout's `--separate-git-dir` target.
+///
+/// TASK-2005: a directory merely named `worktrees/<name>` is not enough. The
+/// gitdir must hold a `commondir` file that resolves (absolute, or relative to
+/// `gitdir`) to an existing common git directory `C` such that `gitdir` is
+/// exactly `C/worktrees/<name>`, the layout `git worktree add` creates.
 // trace:BUG-2012 | ai:antigravity
+// trace:TASK-1952 | trace:TASK-2005 | ai:antigravity
 pub(crate) fn is_linked_worktree_gitdir(gitdir: &Path) -> bool {
-    if gitdir.join("commondir").exists() {
-        return true;
+    let Ok(body) = std::fs::read_to_string(gitdir.join("commondir")) else {
+        return false;
+    };
+    let raw = body.trim();
+    if raw.is_empty() {
+        return false;
     }
-    let normalized = std::fs::canonicalize(gitdir).unwrap_or_else(|_| normalize_lexical(gitdir));
-    normalized
-        .parent()
-        .and_then(|p| p.file_name())
-        .is_some_and(|name| name == "worktrees")
+    let common = if Path::new(raw).is_absolute() {
+        PathBuf::from(raw)
+    } else {
+        gitdir.join(raw)
+    };
+    let (Ok(common), Ok(gitdir)) = (std::fs::canonicalize(common), std::fs::canonicalize(gitdir))
+    else {
+        return false;
+    };
+    common.is_dir()
+        && gitdir.file_name().is_some()
+        && gitdir.parent() == Some(common.join("worktrees").as_path())
 }
 
 /// The `sandbox.filesystem` object for `store_write_paths`: `allowWrite` from

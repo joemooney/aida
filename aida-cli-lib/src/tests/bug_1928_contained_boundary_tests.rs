@@ -15,17 +15,22 @@ use super::evaluator::{allowed, anchor, normalize, parse_rule};
 use super::*;
 use std::path::{Path, PathBuf};
 
-/// `<tmp>/aida-pool-aida-relay-0`, a linked-worktree-shaped directory (a `.git`
-/// FILE, as `git worktree add` leaves) next to where the main checkout and the
-/// never-created requested path would sit.
+/// `<tmp>/aida-pool-aida-relay-0`, a linked worktree (a `.git` FILE, as `git
+/// worktree add` leaves, whose gitdir `<tmp>/aida-relay/.git/worktrees/<name>`
+/// carries a `commondir` back to `<tmp>/aida-relay/.git`) next to where the
+/// main checkout and the never-created requested path would sit.
+// trace:TASK-1952 | trace:TASK-2005 | ai:antigravity
 fn pool_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
     let parent = std::fs::canonicalize(tmp.path()).unwrap();
     let worktree = parent.join("aida-pool-aida-relay-0");
     std::fs::create_dir_all(worktree.join("src")).unwrap();
+    let wt_gitdir = parent.join("aida-relay/.git/worktrees/aida-pool-aida-relay-0");
+    std::fs::create_dir_all(&wt_gitdir).unwrap();
+    std::fs::write(wt_gitdir.join("commondir"), "../..\n").unwrap();
     std::fs::write(
         worktree.join(".git"),
-        "gitdir: /nonexistent/aida-relay/.git/worktrees/aida-pool-aida-relay-0\n",
+        format!("gitdir: {}\n", wt_gitdir.display()),
     )
     .unwrap();
     (tmp, parent, worktree)
@@ -794,6 +799,246 @@ fn main_checkout_git_denied_even_with_seat_clone_marker() {
             "{tool} on marked checkout .git/config must be denied: {settings}"
         );
     }
+}
+
+// TASK-2004: `main_git_deny_paths` denies a main checkout's
+// `--separate-git-dir` target, both as written (lexical) and canonical, for an
+// absolute target through a symlink and for a relative `../` target.
+// trace:TASK-1952 | trace:TASK-2004 | ai:antigravity
+#[test]
+fn main_git_deny_paths_includes_gitfile_target_lexical_and_canonical() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+
+    let real_sep = parent.join("real-sep.git");
+    std::fs::create_dir_all(real_sep.join("hooks")).unwrap();
+    let sep_link = parent.join("sep-link");
+    std::os::unix::fs::symlink(&real_sep, &sep_link).unwrap();
+    let main = parent.join("main-abs");
+    std::fs::create_dir_all(&main).unwrap();
+    std::fs::write(
+        main.join(".git"),
+        format!("gitdir: {}\n", sep_link.display()),
+    )
+    .unwrap();
+
+    let paths = crate::session::main_git_deny_paths(&main);
+    assert!(paths.contains(&main.join(".git")), "{paths:?}");
+    assert!(
+        paths.contains(&sep_link),
+        "lexical target missing: {paths:?}"
+    );
+    assert!(
+        paths.contains(&real_sep),
+        "canonical target missing: {paths:?}"
+    );
+
+    let rel_sep = parent.join("rel-sep.git");
+    std::fs::create_dir_all(&rel_sep).unwrap();
+    let rel_main = parent.join("main-rel");
+    std::fs::create_dir_all(&rel_main).unwrap();
+    std::fs::write(rel_main.join(".git"), "gitdir: ../rel-sep.git\n").unwrap();
+    let rel_paths = crate::session::main_git_deny_paths(&rel_main);
+    assert!(
+        rel_paths.contains(&rel_sep),
+        "normalized relative target missing: {rel_paths:?}"
+    );
+    assert!(
+        rel_paths
+            .iter()
+            .all(|p| crate::contained_boundary::root_rule_path(p).is_some()),
+        "every deny path must be expressible: {rel_paths:?}"
+    );
+}
+
+// TASK-2005: a gitdir under a directory named `worktrees` is a linked
+// worktree's only when its `commondir` resolves back to the common git dir
+// that holds that `worktrees/` directory.
+// trace:TASK-1952 | trace:TASK-2005 | ai:antigravity
+#[test]
+fn linked_worktree_gitdir_requires_commondir_pointing_back() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+
+    // Real layout: <common>/worktrees/wt with commondir `../..`.
+    let common = parent.join("common.git");
+    let linked = common.join("worktrees/wt");
+    std::fs::create_dir_all(&linked).unwrap();
+    std::fs::write(linked.join("commondir"), "../..\n").unwrap();
+    assert!(is_linked_worktree_gitdir(&linked));
+
+    // Absolute commondir pointing back is also valid.
+    let linked_abs = common.join("worktrees/wt-abs");
+    std::fs::create_dir_all(&linked_abs).unwrap();
+    std::fs::write(
+        linked_abs.join("commondir"),
+        format!("{}\n", common.display()),
+    )
+    .unwrap();
+    assert!(is_linked_worktree_gitdir(&linked_abs));
+
+    // Named `worktrees/<name>` but no commondir: a main checkout's separate gitdir.
+    let fake = parent.join("x/worktrees/sep");
+    std::fs::create_dir_all(fake.join("hooks")).unwrap();
+    assert!(!is_linked_worktree_gitdir(&fake));
+
+    // commondir present but pointing somewhere that does not hold this gitdir.
+    let elsewhere = parent.join("elsewhere.git");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let wrong = parent.join("y/worktrees/sep");
+    std::fs::create_dir_all(&wrong).unwrap();
+    std::fs::write(
+        wrong.join("commondir"),
+        format!("{}\n", elsewhere.display()),
+    )
+    .unwrap();
+    assert!(!is_linked_worktree_gitdir(&wrong));
+
+    // commondir pointing at a missing directory.
+    let dangling = parent.join("z/worktrees/sep");
+    std::fs::create_dir_all(&dangling).unwrap();
+    std::fs::write(dangling.join("commondir"), "../../missing\n").unwrap();
+    assert!(!is_linked_worktree_gitdir(&dangling));
+
+    // A main checkout whose separate gitdir is the fake `worktrees/sep` now has
+    // that gitdir denied in both deny sources and in the generated settings.
+    let main = parent.join("main-fake-wt");
+    std::fs::create_dir_all(main.join("src")).unwrap();
+    std::fs::write(main.join(".git"), format!("gitdir: {}\n", fake.display())).unwrap();
+    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    assert!(denied.contains(&fake), "{denied:?}");
+    assert!(denied.contains(&main.join(".git")), "{denied:?}");
+    assert!(crate::session::main_git_deny_paths(&main).contains(&fake));
+    let settings = settings_for(&main);
+    let home = parent.join("home");
+    for tool in WRITE_TOOLS {
+        assert!(
+            !attempt_write(
+                &settings,
+                tool,
+                &fake.join("hooks/pre-commit"),
+                &main,
+                &home
+            ),
+            "{tool} on fake-worktrees separate gitdir must be denied: {settings}"
+        );
+    }
+}
+
+// TASK-2006: `<root>/.git` as a symlink to a gitfile denies the `.git` link,
+// the gitfile it resolves to, and the gitfile's `gitdir:` target.
+// trace:TASK-1952 | trace:TASK-2006 | ai:antigravity
+#[test]
+fn main_checkout_git_symlink_to_gitfile_is_denied() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+
+    let sep = parent.join("sep.git");
+    std::fs::create_dir_all(sep.join("hooks")).unwrap();
+    let gitfile = parent.join("stash/gitfile");
+    std::fs::create_dir_all(gitfile.parent().unwrap()).unwrap();
+    std::fs::write(&gitfile, format!("gitdir: {}\n", sep.display())).unwrap();
+    let main = parent.join("main-symlinked-git");
+    std::fs::create_dir_all(main.join("src")).unwrap();
+    std::os::unix::fs::symlink(&gitfile, main.join(".git")).unwrap();
+
+    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&main));
+    assert!(denied.contains(&main.join(".git")), "{denied:?}");
+    assert!(denied.contains(&gitfile), "symlink's gitfile: {denied:?}");
+    assert!(denied.contains(&sep), "gitdir target: {denied:?}");
+
+    let settings = settings_for(&main);
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&settings, tool, &main.join("src/lib.rs"), &main, &home),
+            "{tool} inside src/ must remain allowed: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &sep.join("hooks/pre-commit"), &main, &home),
+            "{tool} on symlinked gitfile target hooks must be denied: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &sep.join("config"), &main, &home),
+            "{tool} on symlinked gitfile target config must be denied: {settings}"
+        );
+    }
+}
+
+// TASK-2007: the BUG-2012 main-checkout denies appear in the OS sandbox's
+// `denyWrite` as well as `permissions.deny`, with no store grant present.
+// trace:TASK-1952 | trace:TASK-2007 | ai:antigravity
+#[test]
+fn main_checkout_git_denies_reach_sandbox_deny_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+
+    let dir_main = parent.join("main-dir");
+    std::fs::create_dir_all(dir_main.join(".git/hooks")).unwrap();
+    let sep = parent.join("sep.git");
+    std::fs::create_dir_all(&sep).unwrap();
+    let file_main = parent.join("main-file");
+    std::fs::create_dir_all(&file_main).unwrap();
+    std::fs::write(
+        file_main.join(".git"),
+        format!("gitdir: {}\n", sep.display()),
+    )
+    .unwrap();
+
+    for (main, expected) in [
+        (&dir_main, vec![dir_main.join(".git")]),
+        (&file_main, vec![file_main.join(".git"), sep.clone()]),
+    ] {
+        let settings = settings_for(main);
+        let deny_write: Vec<String> = settings["sandbox"]["filesystem"]["denyWrite"]
+            .as_array()
+            .unwrap_or_else(|| panic!("no sandbox denyWrite: {settings}"))
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        let deny: Vec<String> = settings["permissions"]["deny"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        for path in expected {
+            let entry = format!("/{}", path.display());
+            assert!(
+                deny_write.contains(&entry),
+                "{entry} missing from sandbox denyWrite: {settings}"
+            );
+            assert!(
+                deny.contains(&format!("Edit({entry}/**)")),
+                "{entry} missing from permissions.deny: {settings}"
+            );
+        }
+    }
+
+    // A linked worktree's own gitdir is not added to denyWrite.
+    let common = dir_main.join(".git");
+    let wt_gitdir = common.join("worktrees/wt");
+    std::fs::create_dir_all(&wt_gitdir).unwrap();
+    std::fs::write(wt_gitdir.join("commondir"), "../..\n").unwrap();
+    let wt = parent.join("wt");
+    std::fs::create_dir_all(&wt).unwrap();
+    std::fs::write(
+        wt.join(".git"),
+        format!("gitdir: {}\n", wt_gitdir.display()),
+    )
+    .unwrap();
+    let wt_settings = settings_for(&wt);
+    let wt_entry = format!("/{}", wt_gitdir.display());
+    let wt_deny_write = wt_settings["sandbox"]["filesystem"]["denyWrite"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !wt_deny_write
+            .iter()
+            .any(|v| v.as_str() == Some(wt_entry.as_str())),
+        "linked worktree gitdir must stay writable: {wt_settings}"
+    );
 }
 
 // trace:BUG-2012 | ai:antigravity
