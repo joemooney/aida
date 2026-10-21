@@ -1,0 +1,19 @@
+{
+  "id": "4d725f15-66d7-4edc-a283-abd0436d66ed",
+  "thread_id": "4d725f15-66d7-4edc-a283-abd0436d66ed",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792619777705,
+  "body": "TASK-1951 slice 2 (drain summary: TASK-1615, TASK-1617) is CI-green and ready for review: PR #2812, head 0dd6fb919744cdbe94c86f82c9b85a8a4dc40b79.",
+  "subject": "TASK-1951 S2 green: PR #2812",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

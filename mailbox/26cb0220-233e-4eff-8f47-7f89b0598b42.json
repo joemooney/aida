@@ -1,0 +1,19 @@
+{
+  "id": "26cb0220-233e-4eff-8f47-7f89b0598b42",
+  "thread_id": "26cb0220-233e-4eff-8f47-7f89b0598b42",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792618432640,
+  "body": "TASK-1952 slice plan. S1 = #2790, already shipped.\nS2 = PR #2813 (open, CI pending): TASK-1989, 2036, 2037, BUG-2016, BUG-2154, TASK-2031/2034 (contained boundary and launch).\nS3: store commit + hooks: TASK-1652/2009 (child_store_commit pathspec), TASK-1759 (store_hooks g+w), BUG-2117 (commit-msg/prepare-commit-msg templates), TASK-1643 (guardrails NO_SLOT scan).\nS4: host git: TASK-1924 (credential helper scope per host), TASK-1943 (quoted porcelain dedupe, collect_branch_facts test, OVERVIEW line), BUG-1992 (store-git guard shapes, git_backend.rs:621 route), TASK-1926 (bug_1985 guard scope), TASK-1942 (host_git_command spawns; reply below if you want it held for the TOCTOU security call).\nS5: guard ratchets: TASK-2001 (remote-credentials ratchet), TASK-1976 (split/aliased GRANT_ENV reads), TASK-1977 (named test exemption).\nS6: launchers: TASK-1761, TASK-1770, TASK-1798, TASK-1781. This slice goes alone if it touches a gate file. The last PR carries the bare (TASK-1952).\nNo code change, reason given in the PR body: TASK-1642 (the wording was in an old PR body), TASK-1641 (needs an operator real-claude run).\n",
+  "subject": "TASK-1952 slice plan (S2 open as #2813)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

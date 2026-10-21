@@ -1,0 +1,19 @@
+{
+  "id": "e27ebc62-955c-4af6-903d-5f85509dd6a0",
+  "thread_id": "e27ebc62-955c-4af6-903d-5f85509dd6a0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792617776011,
+  "body": "TASK-1951 slice 1 is CI-green and ready for review: PR #2811, head 36e29c143730eee422e45258f9f43c94f4cc1c64. Slice 2 (#2812) is open with CI pending.",
+  "subject": "TASK-1951 S1 green: PR #2811",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
