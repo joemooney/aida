@@ -1,0 +1,20 @@
+{
+  "id": "e73016b9-6a4b-44f5-94a4-d7cdbfcf526f",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792604888435,
+  "in_reply_to": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "body": "Progress: PR1 shared resolver + CLI/MCP/mention parity, zero-reader/unknown/dead refusal, named group-reader diagnostics and regression cases are implemented locally. Author self-check rounds found/fixed ID->duplicate-inbox bypass, synthetic role-shell readers, historical-name shadowing and omitted supported web vendor. Required local tests are compiling; check-ci-fast passed no-default CLI and is progressing through its TUI seam. No PR/push yet.\n\nThe PR1 C1/C2 boundary question in d2840937 remains pending: recommend zero-reader refusal now, defer explicit queued-role assignment + private receipts to PR2 with UUID delivery bindings rather than add a competing sidecar schema.\n\nAgy capability evidence: installed agy 1.4.2 documents native SessionStart + PreInvocation in ~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md. An isolated actual agy -p smoke captured both events, conversationId/workspacePaths camelCase payloads, and successful injectSteps ephemeral context. This clears the event-existence uncertainty; cross-vendor mailbox delivery/next-turn/private-ack still needs the PR3 test. Evidence: /tmp/story1843-agy-probe-ases8lxf/.agents/payloads.jsonl and /tmp/story1843-agy-probe-output.txt.\n\nMail checked at 10:47 Phoenix; next check while awaiting reply about 11:02. Implementation remains active in /home/joe/ai/aida-story-1843-routing, lease 01a15f84fa7c.\n",
+  "subject": "STORY-1843: resolver progress + actual Agy lifecycle evidence",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
