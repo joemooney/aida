@@ -1,0 +1,40 @@
+id: 01a15efd-bf8c-7643-a5a0-700cce5c2312
+spec_id: FAQ-59
+agreed_id: FAQ-59
+title: Why can't the advisor ship a PR that changes the mandate or merge-gate code?
+description: |
+  **Because the mandate excludes its own gate files: a PR that changes `mandate.rs`, `pr_ship.rs`, `merge_hold.rs` (or an operator-only spec) must be shipped by a human, even with an active ship-held mandate.**
+
+  ## Why
+  The mandate is what lets the advisor ship approved, green PRs while the operator is away. If it also covered changes to its own rules, an agent could merge edits to the gates that constrain what it may merge. So `aida pr ship` refuses with `mandate does not cover this ship: it changes <file>, part of the mandate and its human gates; a human must merge it` (or `<SPEC> is operator-only; it always needs a human merge`). A supervised merge-hold on such a PR also needs a human at an interactive terminal to clear.
+
+  ## How
+  1. The advisor gets an independent attested PASS and green CI on the same head.
+  2. The operator runs `aida merge-hold clear N && aida pr ship N` at a terminal.
+  3. If ship refuses with "green check completed before a CI definition file changed on main", do NOT use `--override-stale-check`. The advisor runs `gh pr update-branch N`, waits for CI, gets a fresh review (approvals never carry over), and the operator then runs `aida pr ship N` again (the hold is already cleared).
+  4. Each gated merge can make the other gated PRs stale, so ship them one at a time.
+
+  ## See also
+  FAQ-57, STORY-1887, BUG-2203
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T15:04:10.380102032Z
+modified_at: 2026-10-21T15:04:10.380102032Z
+req_type: Faq
+tags:
+- audience:dev
+- topic:mandate
+- topic:ship
+filed_at:
+  code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0cc97d963b
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T15:04:10.380135179Z
