@@ -3,12 +3,12 @@ spec_id: BUG-2203
 agreed_id: BUG-2203
 title: aida pr ship appends a bare (SPEC) trailer to a '(Refs SPEC)' subject, so a non-completing slice completes its spec
 description: 'Seen 2026-10-21 02:51: PR-2787''s subject ended ''(Refs BUG-2169)''. The squash commit on main is b66e4d93b8 ''... slice 2 (Refs BUG-2169) (BUG-2169)'', and BUG-2169 went to completed with slices S3-S5 still open. Earlier tonight #2790 (Refs TASK-1952) got ''(Refs TASK-1952) (TASK-1952)'' too. This supersedes TASK-2035 (folded into the TASK-1951 sweep at 22:48, now promoted because it causes wrong completions). Acceptance: (1) a subject whose trailing group is (Refs X[, Y]) never gets a bare completion trailer appended, and the branch-name fallback does not add one either; (2) merge-time completion skips Refs IDs; (3) a regression test ships a Refs-subject PR and asserts the merge subject and that the spec status is unchanged; (4) aida pr ship prints which IDs it will complete before merging.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:30.070573682Z
-modified_at: 2026-10-21T10:57:20.150600171Z
+modified_at: 2026-10-21T11:49:21.648383402Z
 req_type: Bug
 history:
 - id: 01a15de1-83a5-7843-892b-e401bb884a71
@@ -24,6 +24,20 @@ history:
   timestamp: 2026-10-21T10:57:20.271848320Z
   session_id: 01a15e1a9882
   changes: []
+- id: 01a15e4b-6469-7a63-926f-0b6575b55402
+  author: aida-auto-bump
+  timestamp: 2026-10-21T11:49:21.641649987Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15e4b-6470-7891-94db-2e45e15c713b
+  timestamp: 2026-10-21T11:49:21.648376027Z
+  agent: aida
+  commit_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  summary: 'All 4 AC met; round-1 findings fixed: Refs suppression scoped to the carrying line (subject vs body bullet), body-bullet regression test in auto-bump+replay, --subject asserted; CI green'
+  review_verdict: approved
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -32,11 +46,7 @@ filed_at:
   aida_build_sha: 68d66b1e36
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Title/branch Refs handling (AC1, AC4) is correct, but the merge-time skip (AC2) reads Refs groups from the whole commit message. That suppresses legitimate completions on real squash merges whose bodies list (Refs X) slice commits under a completing (X) title.
-  recovery_hint: address the review findings, move BUG-2203 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T10:57:20.150600171Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T11:49:21.641645145Z
+  completion_sha: 0add137bc25547cbc420443409b8bbff3993a748
