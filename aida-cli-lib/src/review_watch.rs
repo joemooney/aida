@@ -1,0 +1,1441 @@
+//! Review discovery and dispatch; supersession and readiness are later slices.
+// trace:TASK-1945 trace:TASK-1993 | ai:codex
+use anyhow::{Context, Result};
+use clap::Args;
+use fs2::FileExt;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+
+#[path = "review_watch_forge.rs"]
+mod forge;
+
+#[derive(Args, Debug)]
+pub struct ReviewWatchArgs {
+    /// Discover and dispatch once, then leave admitted reviews running.
+    #[arg(long)]
+    pub once: bool,
+    /// Seconds between discovery passes (default 10).
+    #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u64).range(1..=3600), hide_default_value = true)]
+    pub interval: u64,
+    /// Maximum watcher-launched reviews across instances: one or two (default two).
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u8).range(1..=2), hide_default_value = true)]
+    pub max_concurrent: u8,
+    /// Vendor: claude, codex, or agy; omit for ordinary queue-work selection.
+    #[arg(long, value_parser = ["claude", "codex", "agy"], hide_possible_values = true)]
+    pub vendor: Option<String>,
+    #[arg(long, hide = true)]
+    launch_reservation: Option<String>,
+}
+
+const LIMIT: u64 = 2 * 1024 * 1024;
+const STATE: &str = "state.json";
+const WATCH_HEAD: &str = "AIDA_REVIEW_WATCH_HEAD";
+const MAX_ENTRIES: usize = 2000;
+// Tests shorten the claim retry window so a contention test stays fast.
+const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(300)
+} else {
+    std::time::Duration::from_secs(5)
+};
+const DIAGNOSTIC_LIMIT: usize = 512;
+
+/// Marks a failure of the whole watcher state (missing, corrupt, unsafe), the
+/// only error that stops a continuous watcher; per-change errors are logged.
+// trace:TASK-1993 | ai:claude
+#[derive(Debug)]
+struct GlobalState;
+impl std::fmt::Display for GlobalState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("review-watch state is unusable; inspect .aida/review-watch/state.json")
+    }
+}
+
+fn bounded_diagnostic(text: &str) -> String {
+    let mut out: String = text
+        .chars()
+        .filter(|c| !c.is_control() || *c == ' ')
+        .collect();
+    if out.len() > DIAGNOSTIC_LIMIT {
+        let mut cut = DIAGNOSTIC_LIMIT - 3;
+        while !out.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        out.truncate(cut);
+        out.push_str("...");
+    }
+    out
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct Identity {
+    pid: u32,
+    start: String,
+    boot: String,
+}
+impl Identity {
+    fn current() -> Result<Self> {
+        Self::of(std::process::id())
+    }
+    fn of(pid: u32) -> Result<Self> {
+        Ok(Self {
+            pid,
+            start: aida_core::liveness::process_start_identity_exact(pid)
+                .context("cannot bind review launch to its kernel process identity")?,
+            boot: boot_id()?,
+        })
+    }
+    /// The same kernel process is still running (not reused, not a zombie).
+    // trace:TASK-1993 | ai:claude
+    fn alive(&self) -> bool {
+        let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
+            .ok()
+            .and_then(|stat| {
+                let rest = &stat[stat.rfind(')')? + 1..];
+                rest.split_whitespace().next().map(|state| state == "Z")
+            })
+            .unwrap_or(true);
+        !zombie
+            && boot_id().is_ok_and(|boot| boot == self.boot)
+            && aida_core::liveness::process_start_identity_exact(self.pid).as_deref()
+                == Some(self.start.as_str())
+    }
+}
+fn boot_id() -> Result<String> {
+    Ok(std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?
+        .trim()
+        .into())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum Phase {
+    Reserved,
+    Running,
+    Completed,
+    Failed,
+    // The dispatcher observed queue work exit unsuccessfully. Terminal: it
+    // frees capacity and lets a later head dispatch, but never relaunches
+    // this head. trace:TASK-1993 | ai:claude
+    Exited,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Attempt {
+    head: String,
+    token: String,
+    vendor: Option<String>,
+    phase: Phase,
+    identity: Option<Identity>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<String>,
+    // The spawned dispatcher, recorded by the parent so any watcher can see
+    // a reservation whose dispatcher exited before claiming it.
+    // trace:TASK-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    dispatcher: Option<Identity>,
+    // Set just before queue work is spawned; `worker` then records that child.
+    // Queue work outlives a killed dispatcher, so a claimed attempt is freed
+    // only once both processes are provably gone. trace:TASK-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    spawning: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    worker: Option<Identity>,
+    // Queue work in turn marks `reviewer_spawning` and records the reviewer
+    // process that actually carries the review; it can outlive both.
+    // trace:TASK-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    reviewer_spawning: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reviewer: Option<Identity>,
+}
+impl Attempt {
+    /// Queue work and the reviewer it launched are both provably gone, or
+    /// were never started. A process marked spawning but never recorded
+    /// counts as possibly alive.
+    // trace:TASK-1993 | ai:claude
+    fn descendants_gone(&self) -> bool {
+        let gone = |spawning: bool, process: &Option<Identity>| {
+            !spawning || process.as_ref().is_some_and(|p| !p.alive())
+        };
+        gone(self.spawning, &self.worker) && gone(self.reviewer_spawning, &self.reviewer)
+    }
+    fn unrecorded_descendant(&self) -> bool {
+        (self.spawning && self.worker.is_none())
+            || (self.reviewer_spawning && self.reviewer.is_none())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Notice {
+    message: aida_core::mailbox::Message,
+    sent: bool,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Entry {
+    attempts: Vec<Attempt>,
+    // Preserve observed canonical rounds before queue work clears its current verdict.
+    #[serde(default)]
+    historical_keys: BTreeSet<crate::review_verdict::RecordingKey>,
+    notices: BTreeMap<String, Notice>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct State {
+    version: u8,
+    repository: String,
+    max_concurrent: u8,
+    entries: BTreeMap<String, Entry>,
+}
+
+fn effective_uid() -> u32 {
+    // SAFETY: geteuid takes no pointers and has no preconditions.
+    unsafe { libc::geteuid() }
+}
+
+/// Pin runtime directories, then open files relative to the pinned handle.
+/// In particular a FIFO or symlink can never make a state read block or escape.
+struct Directory {
+    handle: File,
+}
+impl Directory {
+    fn open(path: &Path) -> Result<Self> {
+        match std::fs::DirBuilder::new().mode(0o700).create(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
+        }
+        let handle = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)?;
+        let meta = handle.metadata()?;
+        anyhow::ensure!(
+            meta.is_dir() && meta.uid() == effective_uid() && meta.mode() & 0o022 == 0,
+            "unsafe review-watch directory {}",
+            path.display()
+        );
+        Ok(Self { handle })
+    }
+    // The shared .aida root and canonical history use the repository's ordinary
+    // group-writable directory policy. Watch-owned subdirectories stay strict.
+    // trace:TASK-1993 | ai:codex
+    fn shared(path: &Path) -> Result<Self> {
+        match std::fs::DirBuilder::new().mode(0o700).create(path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e.into()),
+        }
+        Self::existing(path)?.context("shared review runtime directory disappeared")
+    }
+    fn existing(path: &Path) -> Result<Option<Self>> {
+        let handle = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)
+        {
+            Ok(handle) => handle,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error.into()),
+        };
+        let meta = handle.metadata()?;
+        anyhow::ensure!(
+            meta.is_dir() && meta.uid() == effective_uid() && meta.mode() & 0o002 == 0,
+            "unsafe review history directory {}",
+            path.display()
+        );
+        Ok(Some(Self { handle }))
+    }
+    fn path(&self) -> PathBuf {
+        use std::os::fd::AsRawFd;
+        PathBuf::from(format!("/proc/self/fd/{}", self.handle.as_raw_fd()))
+    }
+    fn file(&self, name: &str, create: bool) -> Result<File> {
+        self.open_file(name, create, false)
+    }
+    fn open_file(&self, name: &str, create: bool, history: bool) -> Result<File> {
+        let file = OpenOptions::new()
+            .read(true)
+            .write(create)
+            .create(create)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(self.path().join(name))
+            .with_context(|| format!("open review-watch runtime file {name}"))?;
+        let meta = file.metadata()?;
+        anyhow::ensure!(
+            meta.is_file()
+                && meta.nlink() == 1
+                && if history {
+                    matches!(meta.mode() & 0o777, 0o600 | 0o640 | 0o644 | 0o660 | 0o664)
+                } else {
+                    meta.mode() & 0o777 == 0o600
+                }
+                && meta.uid() == effective_uid(),
+            "unsafe review-watch file {name}"
+        );
+        Ok(file)
+    }
+    fn read(&self, name: &str) -> Result<Option<Vec<u8>>> {
+        self.read_file(name, false)
+    }
+    fn read_file(&self, name: &str, history: bool) -> Result<Option<Vec<u8>>> {
+        let file = match self.open_file(name, false, history) {
+            Ok(file) => file,
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                return Ok(None)
+            }
+            Err(e) => return Err(e),
+        };
+        let mut bytes = Vec::new();
+        file.take(LIMIT + 1).read_to_end(&mut bytes)?;
+        anyhow::ensure!(
+            bytes.len() as u64 <= LIMIT,
+            "review-watch file exceeds size limit"
+        );
+        Ok(Some(bytes))
+    }
+    fn write(&self, name: &str, bytes: &[u8]) -> Result<()> {
+        anyhow::ensure!(
+            bytes.len() as u64 <= LIMIT,
+            "review-watch state exceeds size limit"
+        );
+        let mut temp = tempfile::NamedTempFile::new_in(self.path())?;
+        temp.write_all(bytes)?;
+        temp.as_file().sync_all()?;
+        temp.persist(self.path().join(name)).map_err(|e| e.error)?;
+        self.handle.sync_all()?;
+        Ok(())
+    }
+    fn lock(&self, name: &str) -> Result<File> {
+        let file = self.file(name, true)?;
+        // A forked child shares this lock's open file description until it
+        // execs, so a just-released lock can read busy for a moment. Retry
+        // briefly; a live holder still yields WouldBlock to the caller.
+        // trace:TASK-1993 | ai:claude
+        let mut attempts = 0;
+        loop {
+            match file.try_lock_exclusive() {
+                Ok(()) => return Ok(file),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
+                    attempts += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
+            }
+        }
+    }
+}
+
+struct Store {
+    runtime: Directory,
+    dir: Directory,
+    repository: String,
+}
+impl Store {
+    fn open(root: &Path, repository: &str) -> Result<Self> {
+        let runtime = Directory::shared(&root.join(".aida"))?;
+        let dir = Directory::open(&runtime.path().join("review-watch"))?;
+        Ok(Self {
+            runtime,
+            dir,
+            repository: repository.into(),
+        })
+    }
+    fn load(&self) -> Result<State> {
+        self.load_unchecked().context(GlobalState)
+    }
+    fn load_unchecked(&self) -> Result<State> {
+        let state = match self.dir.read(STATE)? {
+            Some(bytes) => serde_json::from_slice::<State>(&bytes)
+                .context("invalid review-watch state; inspect .aida/review-watch/state.json")?,
+            None => {
+                anyhow::ensure!(self.dir.read("initialized")?.is_none(), "review-watch state is missing after initialization; inspect existing reviews before recovery");
+                State {
+                    version: 1,
+                    repository: self.repository.clone(),
+                    max_concurrent: 2,
+                    entries: BTreeMap::new(),
+                }
+            }
+        };
+        validate_state(&state, &self.repository)?;
+        Ok(state)
+    }
+    fn transaction<T>(&self, key: &str, f: impl FnOnce(&mut State) -> Result<T>) -> Result<T> {
+        parse_key(key)?;
+        // Every writer uses this ordering. No forge query, child wait or mail
+        // delivery occurs while either lock is held.
+        let _global = self.dir.lock("admission.lock")?;
+        let _change = self.dir.lock(&format!("{key}.lock"))?;
+        let mut state = self.load()?;
+        let initialized = self.dir.read("initialized")?.is_some();
+        let before = serde_json::to_vec(&state)?;
+        let result = f(&mut state)?;
+        // A change seen only to be skipped leaves no durable entry, so state
+        // tracks reviewed/notified changes rather than every PR ever polled.
+        // trace:TASK-1993 | ai:claude
+        state.entries.retain(|_, e| {
+            !(e.attempts.is_empty() && e.notices.is_empty() && e.historical_keys.is_empty())
+        });
+        validate_state(&state, &self.repository)?;
+        if before != serde_json::to_vec(&state)? || !initialized {
+            self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
+        }
+        if !initialized {
+            self.dir.file("initialized", true)?.sync_all()?;
+            self.dir.handle.sync_all()?;
+        }
+        Ok(result)
+    }
+    /// Drop state for changes no longer open and non-draft. Discovery is
+    /// complete or refused, so an absent key is closed, merged or draft. Live
+    /// or ambiguous attempts are kept: their capacity is never released here.
+    /// A re-opened change re-reads canonical history; a repeated notice reuses
+    /// its deterministic mailbox ID and is not duplicated.
+    // trace:TASK-1993 | ai:claude
+    fn prune(&self, open: &BTreeSet<String>) -> Result<usize> {
+        // Every writer takes the global lock first, so it alone excludes them.
+        let _global = self.dir.lock("admission.lock")?;
+        let mut state = self.load()?;
+        let bytes = serde_json::to_vec(&state)?;
+        self.reconcile_lost_dispatchers(&mut state);
+        let before = state.entries.len();
+        state
+            .entries
+            .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
+        let removed = before - state.entries.len();
+        if bytes != serde_json::to_vec(&state)? {
+            validate_state(&state, &self.repository)?;
+            self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
+        }
+        Ok(removed)
+    }
+    /// An attempt whose dispatcher is provably gone (its exact kernel start
+    /// identity no longer runs) can never record its own outcome: record it
+    /// exited and free its slot. That covers a reservation never claimed and
+    /// a claimed review whose terminal receipt was lost (a crash, or a lock
+    /// that stayed busy past the deadline). Callers hold the global lock.
+    // trace:TASK-1993 | ai:claude
+    fn reconcile_lost_dispatchers(&self, state: &mut State) {
+        for (key, entry) in state.entries.iter_mut() {
+            for attempt in entry.attempts.iter_mut() {
+                let (process, when) = match (&attempt.phase, &attempt.identity, &attempt.dispatcher)
+                {
+                    (Phase::Reserved, None, Some(dispatcher)) => {
+                        (dispatcher, "before claiming its launch receipt")
+                    }
+                    // Queue work may outlive its dispatcher: both must be gone,
+                    // and an unrecorded child stays ambiguous.
+                    // trace:TASK-1993 | ai:claude
+                    (Phase::Running, Some(identity), _) if attempt.descendants_gone() => {
+                        (identity, "after claiming, without a terminal receipt")
+                    }
+                    _ => continue,
+                };
+                if process.alive() {
+                    continue;
+                }
+                let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
+                let diagnostic = bounded_diagnostic(&format!(
+                    "dispatcher {} exited {when}: {}",
+                    process.pid,
+                    tail.as_deref().unwrap_or("no log output")
+                ));
+                attempt.phase = Phase::Exited;
+                attempt.diagnostic = Some(diagnostic);
+            }
+        }
+    }
+    /// Blocking review identities this watcher has observed, kept per change
+    /// outside state.json so pruning (a draft toggle, close and reopen) can
+    /// never forget a consumed round.
+    // trace:TASK-1993 | ai:claude
+    fn retained(&self, key: &str) -> Result<BTreeSet<crate::review_verdict::RecordingKey>> {
+        let dir = Directory::open(&self.dir.path().join("history"))?;
+        let Some(bytes) = dir.read(&format!("{key}.json"))? else {
+            return Ok(BTreeSet::new());
+        };
+        let keys: BTreeSet<crate::review_verdict::RecordingKey> =
+            serde_json::from_slice(&bytes).context("invalid retained review history")?;
+        anyhow::ensure!(
+            keys.len() <= 16 && keys.iter().all(valid_recording_key),
+            "invalid retained review history"
+        );
+        Ok(keys)
+    }
+    fn retain(
+        &self,
+        key: &str,
+        keys: impl Iterator<Item = crate::review_verdict::RecordingKey>,
+    ) -> Result<()> {
+        let mut retained = self.retained(key)?;
+        let before = retained.len();
+        retained.extend(keys);
+        if retained.len() != before {
+            let dir = Directory::open(&self.dir.path().join("history"))?;
+            dir.write(&format!("{key}.json"), &serde_json::to_vec(&retained)?)?;
+        }
+        Ok(())
+    }
+    fn history(&self, key: &str) -> Result<History> {
+        let mut history = History {
+            keys: self
+                .load()?
+                .entries
+                .get(key)
+                .map(|e| e.historical_keys.clone())
+                .unwrap_or_default(),
+        };
+        history.keys.extend(self.retained(key)?);
+        let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
+            return Ok(history);
+        };
+        // GitLab's ordinary standalone collector historically used PR-N too.
+        let aliases = if let Some(number) = key.strip_prefix("MR-") {
+            vec![key.to_string(), format!("PR-{number}")]
+        } else {
+            vec![key.to_string()]
+        };
+        for alias in aliases {
+            if let Some(bytes) = dir.read_file(&format!("{alias}.json"), true)? {
+                history.add(&bytes)?;
+            }
+            if history.blocking() >= 2 {
+                return Ok(history);
+            }
+            if let Some(archive) = Directory::existing(&dir.path().join(&alias))? {
+                let mut names = Vec::new();
+                for (index, entry) in std::fs::read_dir(archive.path())?.enumerate() {
+                    anyhow::ensure!(index < 1000, "review archive exceeds admission scan limit");
+                    let name = entry?
+                        .file_name()
+                        .into_string()
+                        .map_err(|_| anyhow::anyhow!("non-UTF8 review archive entry"))?;
+                    anyhow::ensure!(
+                        names.len() < 1000,
+                        "review archive exceeds admission scan limit"
+                    );
+                    if name.ends_with(".json") {
+                        names.push(name);
+                    }
+                }
+                names.sort();
+                for name in names {
+                    let bytes = archive
+                        .read_file(&name, true)?
+                        .context("review history disappeared during admission")?;
+                    history.add(&bytes)?;
+                    if history.blocking() >= 2 {
+                        return Ok(history);
+                    }
+                }
+            }
+        }
+        Ok(history)
+    }
+    fn round_for(&self, key: &str, attempt: &Attempt) -> Result<usize> {
+        self.transaction(key, |state| {
+            let entry = state
+                .entries
+                .get_mut(key)
+                .context("review reservation disappeared")?;
+            anyhow::ensure!(
+                entry
+                    .attempts
+                    .iter()
+                    .any(|a| a.token == attempt.token && a.head == attempt.head && active(a)),
+                "review reservation changed before queue work"
+            );
+            let history = self.history(key)?;
+            anyhow::ensure!(
+                !history.contains(&attempt.head),
+                "head already has a recorded review; route further work to the advisor"
+            );
+            let used = history.blocking();
+            anyhow::ensure!(
+                used < 2,
+                "two-round review cap reached outside watcher; route further work to the advisor"
+            );
+            self.retain(key, history.blocking_keys())?;
+            Ok(used + 1)
+        })
+    }
+    /// Record that queue work is being spawned (`None`) or the spawned child's
+    /// identity, for the dispatcher that holds this Running receipt.
+    // trace:TASK-1993 | ai:claude
+    fn record_worker(&self, key: &str, token: &str, worker: Option<Identity>) -> Result<()> {
+        let me = Identity::current()?;
+        self.transaction(key, |state| {
+            let attempt = state
+                .entries
+                .get_mut(key)
+                .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+                .context("unknown review-watch reservation")?;
+            anyhow::ensure!(
+                attempt.phase == Phase::Running && attempt.identity.as_ref() == Some(&me),
+                "review-watch receipt changed before queue work"
+            );
+            attempt.spawning = true;
+            if worker.is_some() {
+                attempt.worker = worker;
+            }
+            Ok(())
+        })
+    }
+    /// Called from queue work (the recorded worker) for the active attempt at
+    /// `head`: mark the reviewer spawning (`None`) or record its identity.
+    // trace:TASK-1993 | ai:claude
+    fn record_reviewer(&self, key: &str, head: &str, reviewer: Option<Identity>) -> Result<()> {
+        let me = Identity::current()?;
+        self.transaction(key, |state| {
+            let attempt = state
+                .entries
+                .get_mut(key)
+                .and_then(|e| {
+                    e.attempts
+                        .iter_mut()
+                        .find(|a| a.head == head && a.phase == Phase::Running)
+                })
+                .context("missing watcher reservation at reviewer spawn")?;
+            anyhow::ensure!(
+                attempt.spawning && attempt.worker.as_ref().is_none_or(|w| w == &me),
+                "review-watch reservation belongs to another queue-work process"
+            );
+            // The dispatcher may not have recorded this process yet.
+            attempt.worker.get_or_insert(me);
+            attempt.reviewer_spawning = true;
+            if reviewer.is_some() {
+                attempt.reviewer = reviewer;
+            }
+            Ok(())
+        })
+    }
+    fn transition(&self, key: &str, token: &str, phase: Phase) -> Result<Attempt> {
+        self.transition_with(key, token, phase, None)
+    }
+    fn transition_with(
+        &self,
+        key: &str,
+        token: &str,
+        phase: Phase,
+        diagnostic: Option<String>,
+    ) -> Result<Attempt> {
+        let me = Identity::current()?;
+        self.transaction(key, |state| {
+            let attempt = state
+                .entries
+                .get_mut(key)
+                .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+                .context("unknown review-watch reservation; no review started")?;
+            if phase == Phase::Running {
+                anyhow::ensure!(
+                    attempt.phase == Phase::Reserved && attempt.identity.is_none(),
+                    "review-watch reservation already claimed; no duplicate review started"
+                );
+                attempt.identity = Some(me);
+            } else {
+                anyhow::ensure!(
+                    attempt.phase == Phase::Running && attempt.identity.as_ref() == Some(&me),
+                    "review-watch completion identity changed"
+                );
+            }
+            attempt.phase = phase;
+            attempt.diagnostic = diagnostic.map(|d| bounded_diagnostic(&d));
+            Ok(attempt.clone())
+        })
+    }
+}
+
+// Durable rounds outside this watcher count too. Deduplicate current/archive
+// copies using the verdict writer's recording identity, never a separate policy.
+// trace:TASK-1993 | ai:codex
+#[derive(Default)]
+struct History {
+    keys: BTreeSet<crate::review_verdict::RecordingKey>,
+}
+impl History {
+    fn add(&mut self, bytes: &[u8]) -> Result<()> {
+        let mut object = serde_json::from_slice::<serde_json::Value>(bytes)?
+            .as_object()
+            .cloned()
+            .context("review history is not an object")?;
+        let rounds = match object.remove("rounds") {
+            None => Vec::new(),
+            Some(serde_json::Value::Array(rounds)) => rounds,
+            Some(_) => anyhow::bail!("invalid retained review rounds"),
+        };
+        for value in std::iter::once(serde_json::Value::Object(object)).chain(rounds) {
+            let object = value
+                .as_object()
+                .context("invalid historical review round")?;
+            anyhow::ensure!(
+                object
+                    .get("unarchived_rounds")
+                    .is_none_or(|v| v.as_u64() == Some(0)),
+                "unidentifiable historical rounds require advisor reconciliation"
+            );
+            let key = crate::review_verdict::recording_key(object);
+            anyhow::ensure!(
+                valid_recording_key(&key),
+                "unidentifiable historical review requires advisor reconciliation"
+            );
+            self.keys.insert(key);
+        }
+        Ok(())
+    }
+    fn contains(&self, head: &str) -> bool {
+        self.keys.iter().any(|key| {
+            key.0
+                .as_deref()
+                .is_some_and(|sha| crate::review_verdict::same_reviewed_sha(sha, head))
+        })
+    }
+    // The ordinary round (queue_cmd::review_round_from_comments) counts the
+    // durable findings blocks, which the hand-off writes exactly for
+    // verdicts that block done. Approvals never consume a round, so a head
+    // approved and then merged with main still gets its re-review at round 1.
+    // trace:TASK-1993 | ai:claude
+    fn blocking_keys(&self) -> impl Iterator<Item = crate::review_verdict::RecordingKey> + '_ {
+        self.keys
+            .iter()
+            .filter(|key| crate::review_verdict::VerdictKind::parse(&key.2).blocks_done())
+            .cloned()
+    }
+    fn blocking(&self) -> usize {
+        self.blocking_keys().count()
+    }
+}
+
+// trace:TASK-1993 | ai:codex
+fn valid_recording_key(key: &crate::review_verdict::RecordingKey) -> bool {
+    key.0.as_deref().is_some_and(|sha| {
+        (7..=64).contains(&sha.len()) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+    }) && !key.1.is_empty()
+        && crate::review_verdict::VerdictKind::parse(&key.2)
+            != crate::review_verdict::VerdictKind::Unknown
+}
+
+fn validate_state(state: &State, repository: &str) -> Result<()> {
+    anyhow::ensure!(
+        state.version == 1
+            && state.repository == repository
+            && (1..=2).contains(&state.max_concurrent)
+            // Pruning keeps this to open changes plus live attempts; the
+            // forge discovery bound is 1000 rows. trace:TASK-1993 | ai:claude
+            && state.entries.len() <= MAX_ENTRIES,
+        "unsupported or mismatched review-watch state"
+    );
+    for (key, entry) in &state.entries {
+        parse_key(key)?;
+        anyhow::ensure!(
+            entry.attempts.len() <= 2
+                && entry.notices.len() <= 256
+                && entry.historical_keys.len() <= 2
+                && entry.historical_keys.iter().all(valid_recording_key),
+            "invalid review-watch attempt/notice count"
+        );
+        let mut heads = BTreeSet::new();
+        for attempt in &entry.attempts {
+            anyhow::ensure!(
+                valid_sha(&attempt.head)
+                    && heads.insert(&attempt.head)
+                    && uuid::Uuid::parse_str(&attempt.token).is_ok()
+                    && attempt
+                        .vendor
+                        .as_deref()
+                        .is_none_or(|v| matches!(v, "claude" | "codex" | "agy")),
+                "invalid review-watch launch receipt"
+            );
+            anyhow::ensure!(
+                match attempt.phase {
+                    Phase::Reserved => attempt.identity.is_none(),
+                    Phase::Running | Phase::Completed => attempt
+                        .identity
+                        .as_ref()
+                        .is_some_and(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
+                    // An unclaimed reservation whose dispatcher died exits
+                    // without a receipt identity. trace:TASK-1993 | ai:claude
+                    Phase::Failed | Phase::Exited => true,
+                },
+                "invalid review-watch process receipt"
+            );
+            anyhow::ensure!(
+                attempt
+                    .diagnostic
+                    .as_ref()
+                    .is_none_or(|d| d.len() <= DIAGNOSTIC_LIMIT)
+                    && attempt
+                        .dispatcher
+                        .as_ref()
+                        .is_none_or(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
+                "invalid review-watch diagnostic or dispatcher"
+            );
+        }
+        anyhow::ensure!(
+            entry.notices.keys().all(|h| valid_sha(h)),
+            "invalid review-watch notice head"
+        );
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+enum Action {
+    Dispatch(Attempt),
+    Notify(Notice),
+    Skip(String),
+}
+
+fn valid_sha(sha: &str) -> bool {
+    matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+}
+fn parse_key(key: &str) -> Result<u64> {
+    let number = key
+        .strip_prefix("PR-")
+        .or_else(|| key.strip_prefix("MR-"))
+        .context("invalid review-watch change key")?;
+    let id = number
+        .parse::<u64>()
+        .context("invalid review-watch change number")?;
+    anyhow::ensure!(
+        id > 0 && id.to_string() == number,
+        "invalid review-watch change number"
+    );
+    Ok(id)
+}
+fn active(attempt: &Attempt) -> bool {
+    matches!(attempt.phase, Phase::Reserved | Phase::Running)
+}
+
+fn select(
+    store: &Store,
+    change: &forge::Change,
+    vendor: Option<String>,
+    max: u8,
+) -> Result<Action> {
+    let key = change.key();
+    let overlap = change
+        .overlap
+        .context("base-branch overlap evidence is unknown")?;
+    store.transaction(&key, |state| {
+        store.reconcile_lost_dispatchers(state);
+        let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
+        if total == 0 { state.max_concurrent = max; }
+        anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
+        let repository = state.repository.clone();
+        let holders = capacity_holders(state);
+        let entry = state.entries.entry(key.clone()).or_default();
+        let history = store.history(&key)?;
+        store.retain(&key, history.blocking_keys())?;
+        if overlap {
+            let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
+                message: stale_message(&repository, &key, change), sent: false,
+            });
+            // A sent receipt is final: never re-validated or re-sent. A pending
+            // notice keeps the wording it was recorded with (same deterministic
+            // ID), so a retry re-delivers that exact message idempotently; one
+            // recorded before notices named the base still matches its
+            // template. trace:TASK-1993 | ai:claude
+            if notice.sent { return Ok(Action::Skip("stale overlapping head already notified".into())); }
+            let recorded = serde_json::to_value(&notice.message)?;
+            let matches = |base: Option<&str>| -> Result<bool> {
+                let mut expected = stale_message_for(&repository, &key, change, base);
+                expected.timestamp = notice.message.timestamp;
+                Ok(serde_json::to_value(&expected)? == recorded)
+            };
+            anyhow::ensure!(matches(Some(&change.base))? || matches(None)?, "notification identity changed; pending message retained");
+            return Ok(Action::Notify(notice.clone()));
+        }
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase == Phase::Exited) {
+            // trace:TASK-1993 | ai:claude
+            return Ok(Action::Skip(format!("review of this head exited without completing ({}); not relaunched: push a new head or route it to the advisor", attempt.diagnostic.as_deref().unwrap_or("no diagnostic"))));
+        }
+        if let Some(attempt) = entry.attempts.iter().find(|a| a.head == change.head && a.phase != Phase::Failed) {
+            return Ok(Action::Skip(format!("head already reserved ({:?}); inspect .aida/review-watch/state.json and `aida session leases --all` for unfinished attempts", attempt.phase)));
+        }
+        if entry.attempts.iter().any(active) {
+            return Ok(Action::Skip("prior head still active or ambiguous; S1 waits without signalling processes".into()));
+        }
+        if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
+        if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
+        if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
+        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None, reviewer_spawning: false, reviewer: None };
+        // Nothing is active here, so earlier terminal attempts are history only:
+        // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
+        entry.attempts.clear();
+        entry.attempts.push(attempt.clone());
+        Ok(Action::Dispatch(attempt))
+    })
+}
+
+// trace:TASK-1993 | ai:claude
+fn capacity_holders(state: &State) -> String {
+    let holders: Vec<String> = state
+        .entries
+        .iter()
+        .flat_map(|(key, entry)| {
+            entry
+                .attempts
+                .iter()
+                .filter(|a| active(a))
+                .map(move |a| (key, a))
+        })
+        .map(|(key, a)| {
+            format!(
+                "{key} at {} ({:?}, token {}{})",
+                &a.head[..12],
+                a.phase,
+                a.token,
+                if a.phase == Phase::Running && a.unrecorded_descendant() {
+                    // trace:TASK-1993 | ai:claude
+                    format!("; ambiguous: its queue-work or reviewer process was never recorded, so it is held until an operator confirms no `queue work {key}` or reviewer process for it remains and then records the attempt as exited in .aida/review-watch/state.json while no watcher runs")
+                } else {
+                    String::new()
+                }
+            )
+        })
+        .collect();
+    holders.join(", ")
+}
+
+fn stale_message(
+    repository: &str,
+    key: &str,
+    change: &forge::Change,
+) -> aida_core::mailbox::Message {
+    stale_message_for(repository, key, change, Some(&change.base))
+}
+
+/// The stale-head notice naming the change's own base. `None` renders the
+/// original default-branch wording, accepted only for a pending notice
+/// recorded before the base was named. The ID never depends on the wording.
+// trace:TASK-1993 | ai:claude
+fn stale_message_for(
+    repository: &str,
+    key: &str,
+    change: &forge::Change,
+    base: Option<&str>,
+) -> aida_core::mailbox::Message {
+    use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
+    let (behind, merge) = match base {
+        Some(base) => (
+            format!("is behind its base branch `{base}`"),
+            format!("Merge `{base}`"),
+        ),
+        None => (
+            "is behind the default branch".into(),
+            "Merge the default branch".into(),
+        ),
+    };
+    let subject = match base {
+        Some(base) => format!("{key}: merge `{base}` before review"),
+        None => format!("{key}: merge the default branch before review"),
+    };
+    let id = format!(
+        "review-watch-{:x}",
+        Sha256::digest(format!("{repository}\0{key}\0{}\0stale", change.head))
+    );
+    Message { id: id.clone(), thread_id: id, from: "review-watch".into(), to: Recipient::Agent(change.author.clone()),
+        timestamp: chrono::Utc::now().timestamp(), in_reply_to: None,
+        body: format!("{key} at {} {behind} with overlapping paths. {merge} into the branch and push before review. The watcher did not update the branch.", change.head),
+        subject: Some(subject), urgent: false, intent: Intent::Request,
+        retracted: false, deleted: false, archived: false, from_source: SenderSource::Explicit,
+        from_role: None, relayed_from: None }
+}
+
+/// A deterministic mailbox ID and no-clobber publication close the
+/// delivery-before-sent-receipt crash window without overwriting reader state.
+fn deliver(root: &Path, notice: &Notice) -> Result<()> {
+    let runtime = Directory::shared(&root.join(".aida"))?;
+    let mailbox = Directory::shared(&runtime.path().join("mailbox"))?;
+    let name = format!("{}.json", notice.message.id);
+    let mut temp = tempfile::NamedTempFile::new_in(mailbox.path())?;
+    temp.write_all(&serde_json::to_vec_pretty(&notice.message)?)?;
+    temp.as_file().sync_all()?;
+    match temp.persist_noclobber(mailbox.path().join(&name)) {
+        Ok(_) => {
+            mailbox.handle.sync_all()?;
+            Ok(())
+        }
+        Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            let bytes = mailbox
+                .read_file(&name, true)?
+                .context("notification disappeared during retry")?;
+            let old: aida_core::mailbox::Message = serde_json::from_slice(&bytes)?;
+            anyhow::ensure!(
+                old.id == notice.message.id
+                    && old.thread_id == notice.message.thread_id
+                    && old.from == notice.message.from
+                    && old.to == notice.message.to
+                    && old.body == notice.message.body
+                    && old.subject == notice.message.subject,
+                "notification ID collision; existing message retained"
+            );
+            Ok(())
+        }
+        Err(e) => Err(e.error.into()),
+    }
+}
+
+fn queue_args(key: &str, vendor: Option<&str>) -> Vec<String> {
+    let mut args = vec![
+        "queue".into(),
+        "work".into(),
+        key.into(),
+        "--role".into(),
+        "reviewer".into(),
+        "--no-human".into(),
+        "--fresh".into(),
+    ];
+    if let Some(vendor) = vendor {
+        args.extend(["--vendor".into(), vendor.into()]);
+    }
+    args
+}
+
+// Clear inherited orchestration/gate context so queue work must take its
+// ordinary standalone attested path in the same pinned repository.
+// trace:TASK-1993 | ai:codex
+fn watch_command(repo: &forge::Repository, root: &Path, program: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.current_dir(root).stdin(Stdio::null());
+    for (key, _) in std::env::vars_os() {
+        if key.to_str().is_some_and(|key| {
+            key.starts_with("AIDA_REVIEW_")
+                || key.starts_with("AIDA_FROM_PR_")
+                || key.starts_with("AIDA_AGENT_GATE_")
+        }) {
+            command.env_remove(key);
+        }
+    }
+    command
+        .env_remove("AIDA_GRADED_REVIEW_CONTEXT")
+        .env_remove("AIDA_SESSION_PURPOSE")
+        .env_remove("AIDA_CARGO_NO_SLOT");
+    repo.pin_command(&mut command);
+    command
+}
+
+fn child(root: &Path, repo: &forge::Repository, reservation: &str) -> Result<()> {
+    child_with_program(root, repo, reservation, &crate::aida_exe_path())
+}
+
+// Kept separate from executable resolution so process-level fixtures exercise
+// the production receipt/preflight/queue command boundary without an LLM.
+// trace:TASK-1993 | ai:codex
+fn child_with_program(
+    root: &Path,
+    repo: &forge::Repository,
+    reservation: &str,
+    program: &Path,
+) -> Result<()> {
+    let (key, token) = reservation
+        .split_once(':')
+        .context("invalid launch reservation")?;
+    let id = parse_key(key)?;
+    let store = Store::open(root, &repo.identity)?;
+    let round = std::cell::Cell::new(0);
+    execute_reservation(
+        &store,
+        key,
+        token,
+        |attempt| {
+            let mut current = repo.change(root, id)?;
+            repo.probe(root, &mut current)?;
+            anyhow::ensure!(
+                current.head == attempt.head
+                    && current.key() == key
+                    && current.overlap == Some(false),
+                "head changed before review dispatch"
+            );
+            round.set(store.round_for(key, attempt)?);
+            Ok(())
+        },
+        |attempt| {
+            let mut cmd = watch_command(repo, root, program);
+            cmd.args(queue_args(key, attempt.vendor.as_deref()))
+                .env(WATCH_HEAD, &attempt.head)
+                .env("AIDA_REVIEW_ROUND", round.get().to_string());
+            // Mark spawning first, then record the child: a crash between the
+            // two leaves the attempt held as ambiguous, never freed.
+            // trace:TASK-1993 | ai:claude
+            retry_busy(|| store.record_worker(key, token, None))?;
+            let mut child = crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut cmd)?;
+            match Identity::of(child.id()) {
+                Ok(worker) => {
+                    if let Err(error) = retry_busy(|| store.record_worker(key, token, Some(worker.clone()))) {
+                        eprintln!("{key}: could not record the queue-work child; the attempt stays held as ambiguous: {error:#}");
+                    }
+                }
+                Err(error) => eprintln!("{key}: queue-work child identity unavailable; the attempt stays held as ambiguous: {error:#}"),
+            }
+            let status = child.wait()?;
+            if !status.success() {
+                // trace:TASK-1993 | ai:claude
+                let log = format!("{key}-{token}.log");
+                let reason = log_tail(&store, &log).unwrap_or_default();
+                anyhow::bail!("queue work exited {status}: {reason} (full log: .aida/review-watch/logs/{log})");
+            }
+            Ok(())
+        },
+    )
+}
+
+fn execute_reservation(
+    store: &Store,
+    key: &str,
+    token: &str,
+    preflight: impl FnOnce(&Attempt) -> Result<()>,
+    work: impl FnOnce(&Attempt) -> Result<()>,
+) -> Result<()> {
+    // No work begins before the durable, process-bound receipt. If this
+    // dispatcher dies before a terminal receipt, the attempt stays Running
+    // until a watcher proves the receipt's process identity is gone.
+    let attempt = retry_busy(|| store.transition(key, token, Phase::Running))?;
+    if let Err(error) = preflight(&attempt) {
+        // No queue-work process was started, so this reservation can retry
+        // without consuming a review round or claiming reviewer completion.
+        retry_busy(|| store.transition(key, token, Phase::Failed))?;
+        return Err(error);
+    }
+    if let Err(error) = work(&attempt) {
+        // The exit was observed in-process, so it is not ambiguous: record it
+        // terminally with its reason. Only a lost dispatcher stays Running.
+        // trace:TASK-1993 | ai:claude
+        retry_busy(|| store.transition_with(key, token, Phase::Exited, Some(format!("{error:#}"))))
+            .with_context(|| format!("{error:#}"))?;
+        return Err(error);
+    }
+    retry_busy(|| store.transition(key, token, Phase::Completed))?;
+    Ok(())
+}
+
+/// Retry a state transition through lock contention for the claim deadline:
+/// terminal receipts get the same patience as the claim, so a finished review
+/// is not left Running by a briefly busy lock.
+// trace:TASK-1993 | ai:claude
+fn retry_busy<T>(mut f: impl FnMut() -> Result<T>) -> Result<T> {
+    let deadline = std::time::Instant::now() + CLAIM_DEADLINE;
+    loop {
+        match f() {
+            Err(e) if is_busy(&e) && std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            result => return result,
+        }
+    }
+}
+
+/// The last non-empty line of a dispatcher log: queue work's refusal reason.
+// trace:TASK-1993 | ai:claude
+fn log_tail(store: &Store, name: &str) -> Option<String> {
+    use std::io::{Seek, SeekFrom};
+    let logs = Directory::existing(&store.dir.path().join("logs")).ok()??;
+    let mut file = logs.file(name, false).ok()?;
+    let len = file.metadata().ok()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(4096))).ok()?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).ok()?;
+    let text = String::from_utf8_lossy(&bytes);
+    text.lines()
+        .map(str::trim)
+        .rfind(|line| !line.is_empty())
+        .map(bounded_diagnostic)
+}
+
+const REVIEWER_POLICY: &str = "Review-watch policy: do not run Cargo or local test/build commands. Inspect source and existing CI evidence; record the ordinary attested verdict. Never merge or update the branch.";
+
+/// Called at the ordinary standalone-review launch boundary: outside a watch
+/// launch, `None`; inside one, the prompt with the watch policy appended,
+/// after revalidating head, overlap and reservation. The context restricts
+/// the head and prompt; it supplies no seat or verdict authority.
+// trace:TASK-1993 | ai:claude
+pub(crate) fn reviewer_launch_prompt(root: &Path, id: u64, prompt: &str) -> Result<Option<String>> {
+    Ok(reviewer_launch_context(root, id)?.then(|| format!("{prompt}\n\n{REVIEWER_POLICY}")))
+}
+
+pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
+    let Some(head) = std::env::var_os(WATCH_HEAD) else {
+        return Ok(false);
+    };
+    let head = head.to_str().context("invalid review-watch head context")?;
+    anyhow::ensure!(valid_sha(head), "invalid review-watch head context");
+    let repository = forge::Repository::load(root)?;
+    let mut current = repository.change(root, id)?;
+    repository.probe(root, &mut current)?;
+    anyhow::ensure!(
+        current.head == head && current.overlap == Some(false),
+        "review-watch head changed before reviewer launch; no review started"
+    );
+    let store = Store::open(root, &repository.identity)?;
+    let key = current.key();
+    let state = store.load()?;
+    let attempt = state
+        .entries
+        .get(&key)
+        .and_then(|entry| entry.attempts.iter().find(|a| active(a) && a.head == head))
+        .context("missing watcher reservation at reviewer launch")?;
+    store.round_for(&key, attempt)?;
+    LAUNCH.with(|launch| {
+        *launch.borrow_mut() = Some((
+            root.to_path_buf(),
+            repository.identity.clone(),
+            key,
+            head.to_string(),
+        ))
+    });
+    Ok(true)
+}
+
+// The revalidated watch launch this queue-work process serves, if any. The
+// launch check and the reviewer spawn run on the same thread.
+// trace:TASK-1993 | ai:claude
+type Launch = (PathBuf, String, String, String);
+thread_local! {
+    static LAUNCH: std::cell::RefCell<Option<Launch>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run the reviewer process queue work launches. Inside a watch launch, mark
+/// it spawning, spawn it, and record its identity before waiting: it carries
+/// the review and can outlive queue work and the dispatcher. Outside one,
+/// this is the ordinary blocking run.
+// trace:TASK-1993 | ai:claude
+pub(crate) fn reviewer_status(cmd: &mut Command) -> std::io::Result<std::process::ExitStatus> {
+    use crate::process_retry::RetryEtxtbsy;
+    let launch = LAUNCH.with(|launch| launch.borrow().clone());
+    let Some((root, identity, key, head)) = launch else {
+        return cmd.status_retrying_etxtbsy();
+    };
+    let store = Store::open(&root, &identity).map_err(std::io::Error::other)?;
+    retry_busy(|| store.record_reviewer(&key, &head, None)).map_err(std::io::Error::other)?;
+    let mut child = cmd.spawn_retrying_etxtbsy()?;
+    match Identity::of(child.id()) {
+        Ok(reviewer) => {
+            if let Err(error) =
+                retry_busy(|| store.record_reviewer(&key, &head, Some(reviewer.clone())))
+            {
+                eprintln!("{key}: could not record the reviewer process; the attempt stays held as ambiguous: {error:#}");
+            }
+        }
+        Err(error) => eprintln!(
+            "{key}: reviewer identity unavailable; the attempt stays held as ambiguous: {error:#}"
+        ),
+    }
+    child.wait()
+}
+
+pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
+    let root = forge::main_root(&std::env::current_dir()?)?;
+    let repo = forge::Repository::load(&root)?;
+    crate::seat_authority::validate_child_delegation(&root, "reviewer")?;
+    if let Some(reservation) = args.launch_reservation.as_deref() {
+        return child(&root, &repo, reservation);
+    }
+    let store = Store::open(&root, &repo.identity)?;
+    let mut children = Vec::<Dispatcher>::new();
+    loop {
+        children.retain_mut(|d| match d.child.try_wait() {
+            Ok(Some(status)) => {
+                if let Err(error) =
+                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
+                {
+                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+                }
+                false
+            }
+            _ => true,
+        });
+        let changes = match repo.discover(&root) {
+            Ok(changes) => changes,
+            Err(error) if !args.once => {
+                eprintln!("review-watch discovery refused: {error:#}");
+                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        let open: BTreeSet<String> = changes.iter().map(forge::Change::key).collect();
+        match store.prune(&open) {
+            Ok(_) => {}
+            Err(error) if is_busy(&error) => eprintln!("review-watch prune deferred: busy"),
+            Err(error) => return Err(error),
+        }
+        for change in changes {
+            let key = change.key();
+            match watch_change(&root, &repo, &store, args, &mut children, change) {
+                Ok(()) => {}
+                Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+                Err(error) if stops_watcher(&error, args.once) => {
+                    return Err(error.context(format!("{key}: review watch refused")))
+                }
+                Err(error) => eprintln!("{key}: refused: {error:#}"),
+            }
+        }
+        if args.once {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+    }
+}
+
+/// Only whole-state failure stops a continuous watcher; one change's refusal
+/// must not stall every other change. `--once` reports any refusal.
+// trace:TASK-1993 | ai:claude
+fn stops_watcher(error: &anyhow::Error, once: bool) -> bool {
+    once || error.downcast_ref::<GlobalState>().is_some()
+}
+
+struct Dispatcher {
+    child: Child,
+    key: String,
+    token: String,
+}
+
+/// An observed dispatcher exit before it claimed its receipt (a refused grant,
+/// an unusable store, a claim that timed out) can never start a review.
+// trace:TASK-1993 | ai:claude
+fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> Result<()> {
+    let tail = log_tail(store, &format!("{key}-{token}.log"));
+    store.transaction(key, |state| {
+        if let Some(a) = state
+            .entries
+            .get_mut(key)
+            .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+            .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+        {
+            a.phase = Phase::Exited;
+            a.diagnostic = Some(bounded_diagnostic(&format!(
+                "dispatcher exited {status} before claiming its launch receipt: {}",
+                tail.as_deref().unwrap_or("no log output")
+            )));
+        }
+        Ok(())
+    })
+}
+
+fn is_busy(error: &anyhow::Error) -> bool {
+    error.chain().any(|e| {
+        e.downcast_ref::<std::io::Error>()
+            .is_some_and(|e| e.kind() == std::io::ErrorKind::WouldBlock)
+    })
+}
+
+// trace:TASK-1993 | ai:claude
+fn watch_change(
+    root: &Path,
+    repo: &forge::Repository,
+    store: &Store,
+    args: &ReviewWatchArgs,
+    children: &mut Vec<Dispatcher>,
+    mut change: forge::Change,
+) -> Result<()> {
+    let key = change.key();
+    repo.probe(root, &mut change)
+        .context("base evidence refused")?;
+    match select(store, &change, args.vendor.clone(), args.max_concurrent)? {
+        Action::Skip(reason) => eprintln!("{key}: {reason}"),
+        Action::Notify(notice) => {
+            deliver(root, &notice)?;
+            store.transaction(&key, |state| {
+                let pending = state
+                    .entries
+                    .get_mut(&key)
+                    .and_then(|e| e.notices.get_mut(&change.head))
+                    .context("notification receipt disappeared")?;
+                anyhow::ensure!(
+                    pending.message.id == notice.message.id,
+                    "notification receipt changed"
+                );
+                pending.sent = true;
+                Ok(())
+            })?;
+            eprintln!("{key}: merge-base notice delivered to {}", change.author);
+        }
+        Action::Dispatch(attempt) => {
+            use std::os::unix::process::CommandExt;
+            let spawned = (|| {
+                let logs = Directory::open(&store.dir.path().join("logs"))?;
+                let log = logs.file(&format!("{key}-{}.log", attempt.token), true)?;
+                let mut command = watch_command(repo, root, &crate::aida_exe_path());
+                command
+                    .args([
+                        "review",
+                        "watch",
+                        "--launch-reservation",
+                        &format!("{key}:{}", attempt.token),
+                    ])
+                    .stdout(Stdio::from(log.try_clone()?))
+                    .stderr(Stdio::from(log))
+                    .process_group(0);
+                Ok::<_, anyhow::Error>(crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(
+                    &mut command,
+                )?)
+            })();
+            match spawned {
+                Ok(mut child) => {
+                    // trace:TASK-1993 | ai:claude
+                    let exited = child.try_wait().ok().flatten();
+                    let identity = Identity::of(child.id()).ok();
+                    let token = attempt.token.clone();
+                    children.push(Dispatcher {
+                        child,
+                        key: key.clone(),
+                        token: token.clone(),
+                    });
+                    match exited {
+                        Some(status) => {
+                            mark_unclaimed_exit(store, &key, &token, &status.to_string())?
+                        }
+                        None => store.transaction(&key, |state| {
+                            if let Some(a) = state
+                                .entries
+                                .get_mut(&key)
+                                .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+                                .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+                            {
+                                a.dispatcher = identity;
+                            }
+                            Ok(())
+                        })?,
+                    }
+                    eprintln!("{key}: review admitted for {}", change.head);
+                }
+                Err(error) => {
+                    store.transaction(&key, |state| {
+                        let a = state
+                            .entries
+                            .get_mut(&key)
+                            .and_then(|e| e.attempts.iter_mut().find(|a| a.token == attempt.token))
+                            .context("launch reservation disappeared")?;
+                        anyhow::ensure!(
+                            a.phase == Phase::Reserved && a.identity.is_none(),
+                            "launch reservation already claimed"
+                        );
+                        a.phase = Phase::Failed;
+                        Ok(())
+                    })?;
+                    return Err(error).context("could not spawn review dispatcher");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/task_1993_review_watch_tests.rs"]
+mod tests;

@@ -59,7 +59,7 @@ impl TermGuard {
         let guard = Self { active: true };
         // Only once raw mode is on and the guard will clear it: a failed
         // enable_raw_mode must not leave cache notes swallowed.
-        // trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
+        // trace:TASK-1739 | ai:antigravity
         aida_core::db::cache_refresh::set_tui_owns_terminal(true);
         let mut out = stdout();
         out.execute(EnterAlternateScreen)
@@ -88,7 +88,7 @@ impl Drop for TermGuard {
 /// `false` and runs the sequence; the loser sees `false` and returns
 /// without touching the terminal. trace:BUG-110 | ai:claude
 pub fn restore_terminal() {
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     aida_core::db::cache_refresh::set_tui_owns_terminal(false);
     if !TERMINAL_NEEDS_RESTORE.swap(false, Ordering::SeqCst) {
         return;
@@ -174,7 +174,7 @@ pub fn sanitize_after_child() {
 pub fn suspend_for_child<T>(f: impl FnOnce() -> T) -> T {
     let mut out = stdout();
     // Hand the terminal to the child: cooked mode, main screen, visible cursor.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     aida_core::db::cache_refresh::set_tui_owns_terminal(false);
     let _ = out.execute(LeaveAlternateScreen);
     let _ = out.execute(cursor::Show);
@@ -189,7 +189,7 @@ pub fn suspend_for_child<T>(f: impl FnOnce() -> T) -> T {
     let _ = out.execute(EnterAlternateScreen);
     let _ = out.execute(cursor::Hide);
     let _ = out.flush();
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     aida_core::db::cache_refresh::set_tui_owns_terminal(true);
     result
 }

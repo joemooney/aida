@@ -15,6 +15,9 @@ use std::path::PathBuf;
 // trace:TASK-487 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum ReviewCommand {
+    /// Discover new heads and dispatch attested reviews without waiting for CI.
+    // trace:TASK-1993 | ai:codex
+    Watch(crate::review_watch::ReviewWatchArgs),
     /// Generate a markdown review prompt from a set of linked
     /// requirements' acceptance criteria. Specs come either from an
     /// explicit `--specs` list (CSV) or from the commit-range of a

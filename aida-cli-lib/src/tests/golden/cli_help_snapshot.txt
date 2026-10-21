@@ -16718,6 +16718,7 @@ The `prompt` / `assemble` subcommands are the review-prompt helpers.
 Usage: aida review [OPTIONS] [SPEC] [COMMAND]
 
 Commands:
+  watch           Discover new heads and dispatch attested reviews without waiting for CI
   prompt          Generate a markdown review prompt from a set of linked requirements' acceptance
                   criteria. Specs come either from an explicit `--specs` list (CSV) or from the
                   commit-range of a PR/MR (parsed `(REQ-ID)` trailers in commit messages)
@@ -16763,6 +16764,36 @@ Options:
           (`.aida/mr-recovery/<spec>.json`) — use this to correct a stuck recovery, e.g. when a
           GitLab project's default branch became the feature branch itself because remote `main` was
           never pushed
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review watch
+Discover new heads and dispatch attested reviews without waiting for CI
+
+Usage: aida review watch [OPTIONS]
+
+Options:
+      --once
+          Discover and dispatch once, then leave admitted reviews running
+
+      --interval <INTERVAL>
+          Seconds between discovery passes (default 10)
+
+      --max-concurrent <MAX_CONCURRENT>
+          Maximum watcher-launched reviews across instances: one or two (default two)
+
+      --vendor <VENDOR>
+          Vendor: claude, codex, or agy; omit for ordinary queue-work selection
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -19317,7 +19348,7 @@ Options:
       --epic <ID>
           Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the
           epic itself plus all its children and grandchildren, computed in-process from the
-          requirement graph (the same hierarchy closure `aida graph <ID> --tree` walks). Filters the
+          requirement graph (the same hierarchy closure `aida graph tree <ID>` walks). Filters the
           single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters
           (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias
           
@@ -19829,7 +19860,7 @@ Options:
           plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets
           you plan work ahead while another spec is being implemented (the parallel-pipelining
           workflow). Headless auto-complete plan-phase is separate; this flag is interactive only,
-          so it conflicts with --auto-complete for now
+          so it conflicts with --auto-complete, --drain and --no-human (--headless, --unattended)
 
       --guided
           Guided keystone-implementation mode: launch a structured, step-by-step decision dialog for
@@ -40238,6 +40269,52 @@ Working on aida itself
     "path": [
       "aida",
       "review",
+      "watch"
+    ],
+    "about": "Discover new heads and dispatch attested reviews without waiting for CI",
+    "flags": [
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "interval",
+        "takes_value": true,
+        "help": "Seconds between discovery passes (default 10)"
+      },
+      {
+        "name": "launch-reservation",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "max-concurrent",
+        "takes_value": true,
+        "help": "Maximum watcher-launched reviews across instances: one or two (default two)"
+      },
+      {
+        "name": "once",
+        "takes_value": false,
+        "help": "Discover and dispatch once, then leave admitted reviews running"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "Vendor: claude, codex, or agy; omit for ordinary queue-work selection"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
       "prompt"
     ],
     "about": "Generate a markdown review prompt from a set of linked requirements' acceptance criteria. Specs come either from an explicit `--specs` list (CSV) or from the commit-range of a PR/MR (parsed `(REQ-ID)` trailers in commit messages)",
@@ -42759,7 +42836,7 @@ Working on aida itself
       {
         "name": "epic",
         "takes_value": true,
-        "help": "Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the epic itself plus all its children and grandchildren, computed in-process from the requirement graph (the same hierarchy closure `aida graph <ID> --tree` walks). Filters the single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias"
+        "help": "Narrow the listing to items whose spec is in this epic's TRANSITIVE descendant tree — the epic itself plus all its children and grandchildren, computed in-process from the requirement graph (the same hierarchy closure `aida graph tree <ID>` walks). Filters the single queue; it does NOT create a per-epic queue. ANDs with the role / scope filters (`--for`, `--all`, `--global`, `--local`). `--parent` is an alias"
       },
       {
         "name": "for",
@@ -43545,7 +43622,7 @@ Working on aida itself
       {
         "name": "plan-only",
         "takes_value": false,
-        "help": "Plan-only mode: launch a PLANNING session for the spec instead of an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`) and defaults the permission mode to `plan` (read-only) so the session writes a `docs/plans/` file without touching code. After the plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets you plan work ahead while another spec is being implemented (the parallel-pipelining workflow). Headless auto-complete plan-phase is separate; this flag is interactive only, so it conflicts with --auto-complete for now"
+        "help": "Plan-only mode: launch a PLANNING session for the spec instead of an implementing one. Runs `/aida-plan <SPEC>` (not `/aida-pickup`) and defaults the permission mode to `plan` (read-only) so the session writes a `docs/plans/` file without touching code. After the plan lands, promote the spec with `aida plan promote <SPEC>` (Approved -> Planned). Lets you plan work ahead while another spec is being implemented (the parallel-pipelining workflow). Headless auto-complete plan-phase is separate; this flag is interactive only, so it conflicts with --auto-complete, --drain and --no-human (--headless, --unattended)"
       },
       {
         "name": "plan-phase",

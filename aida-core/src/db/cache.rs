@@ -28,7 +28,7 @@ static FALLBACK_NOTE_EMITTED: AtomicBool = AtomicBool::new(false);
 
 fn note_cache_fallback(original: &Path, fallback: &Path) {
     if !FALLBACK_NOTE_EMITTED.swap(true, Ordering::Relaxed) {
-        // trace:TASK-1739 | ai:codex
+        // trace:TASK-1739 | ai:antigravity
         super::cache_refresh::emit_cache_note(format!(
             "note: the AIDA cache at {} is not writable; using a private fallback cache at {}",
             original.display(),
@@ -1098,7 +1098,7 @@ fn quarantine_or_remove_with_note(path: &Path) {
 
 // trace:BUG-1940 | ai:claude
 fn note_cache_quarantined(path: &Path, moved: &[PathBuf]) {
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     super::cache_refresh::emit_cache_note(format!(
         "note: the AIDA cache at {} was corrupt; moved it aside to {} and started a fresh one",
         path.display(),
@@ -1529,7 +1529,7 @@ impl Cache {
         // trace:BUG-1644 | ai:claude
         let lock_info_path = cache_lock_info_path(&path);
         let read_only = !probe_cache_writable(&path, &lock_info_path);
-        // trace:TASK-1739 | ai:codex
+        // trace:TASK-1739 | ai:antigravity
         let pre_open_fds = CacheBinding::open_fds_for(&path);
         let conn = match open_connection_with_retry(&path, &lock_info_path) {
             Ok(conn) => conn,
@@ -1908,7 +1908,7 @@ impl Cache {
         match Cache::open_at(self.path.clone(), false) {
             Ok(fresh) => {
                 self.adopt_connection(&mut guard, fresh);
-                // trace:TASK-1739 | ai:codex
+                // trace:TASK-1739 | ai:antigravity
                 super::cache_refresh::emit_cache_note(format!(
                     "note: the AIDA cache at {} changed on disk ({reason}); re-opened it",
                     self.path.display()
@@ -1916,7 +1916,7 @@ impl Cache {
                 Ok(Some(reason))
             }
             Err(err) => {
-                // trace:TASK-1739 | ai:codex
+                // trace:TASK-1739 | ai:antigravity
                 self.binding
                     .lock()
                     .unwrap_or_else(|p| p.into_inner())
@@ -1957,7 +1957,7 @@ impl Cache {
             migration_pending: AtomicBool::new(false),
             usable_snapshot: AtomicBool::new(true),
             read_only: self.read_only,
-            binding: Mutex::new(CacheBinding::pinned()), // trace:TASK-1739 | ai:codex
+            binding: Mutex::new(CacheBinding::pinned()), // trace:TASK-1739 | ai:antigravity
         })
     }
 

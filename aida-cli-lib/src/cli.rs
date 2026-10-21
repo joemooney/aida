@@ -982,7 +982,16 @@ mod tests {
                 if !trimmed.starts_with("#[derive(") {
                     continue;
                 }
-                let derive = trimmed.split(")]").next().unwrap_or_default();
+                // rustfmt wraps long derives over several lines; join until
+                // the closing `)]` as `command_clap_types` does.
+                // trace:TASK-1953 | ai:claude
+                let mut joined = trimmed.to_string();
+                let mut j = i;
+                while !joined.contains(")]") && j + 1 < lines.len() {
+                    j += 1;
+                    joined.push_str(lines[j]);
+                }
+                let derive = joined.split(")]").next().unwrap_or_default();
                 let is_clap = derive
                     .trim_start_matches("#[derive(")
                     .split(',')

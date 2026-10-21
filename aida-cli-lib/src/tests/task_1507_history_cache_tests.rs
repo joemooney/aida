@@ -203,7 +203,9 @@ impl Fixture {
 /// The real `git` binary, resolved once from a PATH stripped of temp-dir
 /// entries.
 ///
-/// Defensive hardening; the CI root cause is unconfirmed. The lib test binary
+/// General hygiene, not the CI fix: the confirmed CI root cause (BUG-2118) was
+/// detached git auto-maintenance on git 2.54+, which [`NO_AUTO_MAINTENANCE`]
+/// guards. PATH pinning still matters because the lib test binary
 /// runs thousands of tests in one process, and some tests prepend a temp-dir
 /// `git` shim to the process-wide PATH. A bare `Command::new("git")` resolves
 /// through whatever PATH is live at spawn time, so the fixture could otherwise
@@ -214,6 +216,7 @@ impl Fixture {
 /// real install dirs. Nothing in the lib mutates TMPDIR, so `temp_dir()` is
 /// stable for the process lifetime.
 // trace:BUG-1955 | ai:claude
+// trace:TASK-1953 | ai:claude — doc points at the confirmed BUG-2118 cause.
 fn real_git() -> &'static Path {
     static GIT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     GIT.get_or_init(|| {

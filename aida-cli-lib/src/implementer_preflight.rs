@@ -408,6 +408,21 @@ fn cargo_backstop(budget: Duration) -> Duration {
     budget.saturating_mul(QUEUE_ALLOWANCE_FACTOR)
 }
 
+/// What a budgeted run that hit its backstop reports. The deadline that fired
+/// is the doubled backstop, not the configured `[preflight]` budget, so the
+/// reason names both rather than leave the operator to guess why a 900s
+/// budget ran for 1800s. Must not contain "(build ": that marks the build
+/// clause `split_on_build_failure_clause` looks for.
+// trace:TASK-1967 | ai:claude
+fn cargo_timeout_reason(budget: Duration, config_key: &str) -> String {
+    format!(
+        "timed out after {}s: [preflight] {config_key} is {}s, doubled to allow for \
+         build-slot queue wait",
+        cargo_backstop(budget).as_secs(),
+        budget.as_secs()
+    )
+}
+
 fn run_bounded(command: &mut Command, timeout: Duration) -> Result<Option<Output>, String> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
@@ -537,9 +552,9 @@ fn build_worktree_binary(
             output_text(&out)
         )),
         Ok(None) => Err(format!(
-            "{} (build timed out after {}s)",
+            "{} (build {})",
             path.display(),
-            cargo_backstop(timeout).as_secs()
+            cargo_timeout_reason(timeout, "build_timeout_secs")
         )),
         Err(err) => Err(format!("{} (build could not start: {err})", path.display())),
     }
@@ -667,8 +682,8 @@ fn execute(
             Ok(None) => GuardResult::Inconclusive {
                 name: guard.name,
                 reason: format!(
-                    "timed out after {}s; binary: {binary_label}",
-                    cargo_backstop(timeout).as_secs()
+                    "{}; binary: {binary_label}",
+                    cargo_timeout_reason(timeout, "guard_timeout_secs")
                 ),
             },
             Err(err) => GuardResult::Inconclusive {
@@ -961,6 +976,51 @@ mod tests {
             test_budgets(Duration::from_secs(900)),
         );
         assert_eq!(results, vec![GuardResult::Passed("Budget probe".into())]);
+    }
+
+    /// TASK-1963 (via TASK-1967): the deadline that fires is the doubled
+    /// backstop, so a timeout reason names the configured key, its budget and
+    /// the doubling, and the build reason still splits on its build clause.
+    // trace:TASK-1967 | ai:claude
+    #[test]
+    fn timeout_reason_names_the_configured_budget_and_the_backstop() {
+        let guard = cargo_timeout_reason(Duration::from_secs(900), "guard_timeout_secs");
+        assert!(guard.starts_with("timed out after 1800s"), "{guard}");
+        assert!(
+            guard.contains("[preflight] guard_timeout_secs is 900s, doubled"),
+            "{guard}"
+        );
+        assert!(!guard.contains("(build "), "{guard}");
+        let build = format!(
+            "/t/aida (build {})",
+            cargo_timeout_reason(Duration::from_secs(3600), "build_timeout_secs")
+        );
+        let reason = format!("{guard}; binary: {build}");
+        assert_eq!(
+            split_on_build_failure_clause(&reason),
+            Some((
+                format!("{guard}; binary: /t/aida").as_str(),
+                "(build timed out after 7200s: [preflight] build_timeout_secs is 3600s, \
+                 doubled to allow for build-slot queue wait)"
+            ))
+        );
+
+        let root = tempfile::tempdir().unwrap();
+        let results = execute(
+            root.path(),
+            vec![ResolvedGuard::Found(Guard {
+                name: "Hung guard".into(),
+                command: "sleep 5".into(),
+            })],
+            test_budgets(Duration::from_millis(50)),
+        );
+        let GuardResult::Inconclusive { reason, .. } = &results[0] else {
+            panic!("a hung guard is inconclusive, got {:?}", results[0])
+        };
+        assert!(
+            reason.contains("[preflight] guard_timeout_secs is") && reason.contains("doubled"),
+            "reason was: {reason}"
+        );
     }
 
     /// BUG-1714 AC4: budgets come from `[preflight]` configuration; the

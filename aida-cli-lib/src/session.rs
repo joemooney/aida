@@ -1479,9 +1479,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .stdout(Stdio::from(log))
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok((status, child_grant.id))
@@ -1666,7 +1665,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.status().context("failed to spawn claude")
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn claude")
 }
 
 /// TASK-895: build the argv (after the `codex` program name) for an interactive
@@ -1858,8 +1858,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(&mut cmd)
         .with_context(|| format!("failed to spawn {}", plan.program))?;
     Ok((status, grant.id))
 }
@@ -3951,7 +3951,16 @@ pub(crate) fn apply_headless_child_seat_env(
 /// (headless and interactive child launches alike).
 /// These labels confer no authority: recording still requires its existing
 /// reviewer grant and independent-session attestation.
+///
+/// Every seat gets it, not only the reviewer, deliberately: an implementer
+/// child launched from an `aida agent new` lane is labelled
+/// `<vendor>-implementer` rather than inheriting the lane's name. Inheriting
+/// would attribute the child's writes to whatever seat launched it (an
+/// advisor's `queue work`, say). Lane attribution in `aida ps` does not
+/// depend on this label: BUG-2010 binds a lane by the lease the child
+/// claims itself, and skips children that claim none.
 // trace:BUG-2187 | ai:codex
+// trace:TASK-1955 | ai:claude (TASK-2066, TASK-1672)
 fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
     let agent_type = match vendor {
         HeadlessVendor::Claude => "claude",
@@ -4424,9 +4433,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .stdout(Stdio::from(log))
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
         .context("failed to spawn claude")?;
     tee.stop();
     Ok((status, child_grant.id))
@@ -9469,6 +9477,41 @@ mod tests {
                     "{vendor:?}: the launcher's purpose is scrubbed"
                 );
             }
+        }
+    }
+
+    /// TASK-2066: every seat's child is labelled from its own vendor and
+    /// seat; an implementer child never inherits the launcher's lane name.
+    // trace:TASK-1955 | ai:claude (TASK-2066, TASK-1672)
+    #[test]
+    fn headless_child_identity_comes_from_vendor_and_seat_not_the_launcher() {
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", None),
+            ("AIDA_AGENT_TYPE", Some("claude")),
+            ("AIDA_AGENT_NAME", Some("fix-task-1784")),
+        ]);
+        for (vendor, seat, agent_type) in [
+            (HeadlessVendor::Claude, "implementer", "claude"),
+            (HeadlessVendor::Codex, "implementer", "codex"),
+            (HeadlessVendor::Claude, "reviewer", "claude"),
+        ] {
+            let cmd = build_exec_vendor_headless_command(
+                vendor, "prompt", "sid", false, None, None, seat, "",
+            )
+            .unwrap();
+            let env = |key: &str| {
+                cmd.get_envs()
+                    .find(|(k, _)| *k == key)
+                    .and_then(|(_, v)| v)
+                    .map(|v| v.to_string_lossy().into_owned())
+            };
+            assert_eq!(env("AIDA_AGENT_TYPE").as_deref(), Some(agent_type));
+            assert_eq!(
+                env("AIDA_AGENT_NAME"),
+                Some(format!("{agent_type}-{seat}")),
+                "{vendor:?} {seat} child must not inherit the lane name"
+            );
         }
     }
 

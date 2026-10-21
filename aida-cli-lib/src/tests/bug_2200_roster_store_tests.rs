@@ -50,6 +50,9 @@ fn solo_store_without_objects_still_reads_its_roster() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("not allowed by the team roster"), "{err}");
+    // trace:TASK-1953 | ai:claude — the refusal names the roster file it read.
+    let roster = store.join("registry").join("team.toml");
+    assert!(err.contains(&roster.display().to_string()), "{err}");
 }
 
 #[test]
