@@ -1479,9 +1479,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .stdout(Stdio::from(log))
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
         .with_context(|| format!("failed to spawn {}", vendor.program()))?;
     tee.stop();
     Ok((status, child_grant.id))
@@ -1666,7 +1665,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd.status().context("failed to spawn claude")
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    crate::review_watch::reviewer_status(&mut cmd).context("failed to spawn claude")
 }
 
 /// TASK-895: build the argv (after the `codex` program name) for an interactive
@@ -1858,8 +1858,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(&mut cmd)
         .with_context(|| format!("failed to spawn {}", plan.program))?;
     Ok((status, grant.id))
 }
@@ -4424,9 +4424,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    let status = cmd
-        .stdout(Stdio::from(log))
-        .status_retrying_etxtbsy()
+    // A watch-launched reviewer is recorded before the wait. trace:TASK-1993 | ai:claude
+    let status = crate::review_watch::reviewer_status(cmd.stdout(Stdio::from(log)))
         .context("failed to spawn claude")?;
     tee.stop();
     Ok((status, child_grant.id))
