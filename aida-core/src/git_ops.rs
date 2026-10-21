@@ -105,9 +105,14 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             .arg(crate::seat_clone_detect::host_git_refusal(&clone_root));
         return refused;
     }
+    // BUG-2192: resolve the store hooks directory once per command. The pin
+    // below and the refusal check both need it; resolving it twice ran an
+    // extra `git rev-parse` and re-verified the hooks on every store git call.
+    // trace:BUG-2192 | ai:claude
+    let store_hooks = is_store_tree(cwd).then(|| resolve_store_hooks_dir(cwd));
     let mut cmd = Command::new("git");
     cmd.current_dir(cwd)
-        .args(host_git_hardening(cwd))
+        .args(host_git_hardening_with(cwd, store_hooks.as_ref()))
         .args(transaction_git_config());
     // Every commit an aida build makes in a store tree carries the store
     // write marker, whatever the caller: the shipped hooks key their
@@ -129,9 +134,14 @@ pub fn host_git_command(cwd: impl AsRef<Path>) -> Command {
             "GIT_ATTR_SOURCE",
             "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
         );
-        let refusal = crate::store_hooks::ensure_attr_source(cwd)
-            .err()
-            .or_else(|| resolve_store_hooks_dir(cwd).err());
+        let refusal =
+            crate::store_hooks::ensure_attr_source(cwd)
+                .err()
+                .or_else(|| match store_hooks {
+                    Some(Err(err)) => Some(err),
+                    Some(Ok(_)) => None,
+                    None => resolve_store_hooks_dir(cwd).err(),
+                });
         if let Some(err) = refusal {
             // The builder's contract returns Command, so direct callers get a
             // fixed refusal process, never a partially hardened git command.
@@ -210,16 +220,31 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
         return Ok(Vec::new());
     };
     let file = top.join(".gitmodules");
-    let sources: Vec<Vec<String>> = if std::fs::symlink_metadata(&file).is_ok() {
-        vec![vec!["--file".into(), file.to_string_lossy().into_owned()]]
-    } else {
-        vec![
-            vec!["--blob".into(), ":.gitmodules".into()],
-            vec!["--blob".into(), "HEAD:.gitmodules".into()],
-        ]
-    };
+    if std::fs::symlink_metadata(&file).is_ok() {
+        let source = vec!["--file".into(), file.to_string_lossy().into_owned()];
+        return gitmodules_names_from(top, vec![source]);
+    }
+    // BUG-2192: the index and HEAD registries change only when the index or
+    // HEAD does, so the probe's answer is memoised per process on them.
+    // trace:BUG-2192 | ai:claude
+    crate::host_git_cache::gitmodules_blob_names(top, || {
+        gitmodules_names_from(
+            top,
+            vec![
+                vec!["--blob".into(), ":.gitmodules".into()],
+                vec!["--blob".into(), "HEAD:.gitmodules".into()],
+            ],
+        )
+    })
+}
+
+/// [`gitmodules_submodule_names`] read from the first of `sources` (`git
+/// config` source arguments) that exists, in the repository at `top`.
+// trace:BUG-1985 | ai:claude
+fn gitmodules_names_from(top: &Path, sources: Vec<Vec<String>>) -> Result<Vec<String>> {
     let blob = sources.len() > 1;
     for source in sources {
+        crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1985): `git config` reads one file or blob and never
         // walks the tree; host_git_command itself calls this.
         let out = Command::new("git")
@@ -320,6 +345,16 @@ pub fn transaction_git_config() -> &'static [&'static str] {
 ///   Store writes refuse when the host profile cannot be verified.
 // trace:BUG-1929 | ai:claude
 pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
+    host_git_hardening_with(cwd, None)
+}
+
+/// [`host_git_hardening`] given the store's already-resolved hooks directory
+/// (`None` resolves it here).
+// trace:BUG-2192 | ai:claude
+fn host_git_hardening_with(
+    cwd: &Path,
+    store_hooks: Option<&Result<Option<PathBuf>>>,
+) -> Vec<String> {
     let mut args = vec!["-c".to_string(), "core.fsmonitor=false".to_string()];
     if !is_store_tree(cwd) {
         // trace:BUG-1985 | ai:claude
@@ -339,9 +374,18 @@ pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
         args.push("-c".to_string());
         args.push(setting.to_string());
     }
-    let hooks = resolve_store_hooks_dir(cwd)
+    let resolved;
+    let store_hooks = match store_hooks {
+        Some(hooks) => hooks,
+        None => {
+            resolved = resolve_store_hooks_dir(cwd);
+            &resolved
+        }
+    };
+    let hooks = store_hooks
+        .as_ref()
         .ok()
-        .flatten()
+        .and_then(|dir| dir.as_deref())
         .and_then(|dir| dir.to_str().map(str::to_string))
         .unwrap_or_else(|| NO_HOOKS_DIR.to_string());
     #[cfg(test)]
@@ -357,6 +401,12 @@ pub fn host_git_hardening(cwd: &Path) -> Vec<String> {
 // trace:BUG-1929 | ai:codex
 #[cfg(test)]
 thread_local! { static DROP_STORE_HOOK_PIN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
+
+// Test-only counter of `resolve_store_hooks_dir` calls on this thread, so a
+// test can pin how many resolutions one `host_git_command` makes.
+// trace:BUG-2192 | ai:claude
+#[cfg(test)]
+thread_local! { static STORE_HOOKS_RESOLVES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
 
 /// Refuse launching (or enabling) contained mode when host git is older than
 /// 2.40 or its version cannot be parsed (BUG-2131).
@@ -413,10 +463,13 @@ pub const NO_HOOKS_DIR: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
 /// stores use their denied .git subtree; other writable-store locations refuse.
 // trace:BUG-1929 | ai:codex
 pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
+    #[cfg(test)]
+    STORE_HOOKS_RESOLVES.with(|n| n.set(n.get() + 1));
     // Read-only lookups `host_git_command` itself depends on, so they cannot
     // be built with it: `rev-parse`, `config --get` and `worktree list` run
     // no hook, fsmonitor, filter or remote helper.
     let read = |args: &[&str]| -> Result<Option<String>> {
+        crate::host_git_cache::note_lookup_spawn();
         // raw-git-ok(BUG-1929): read-only lookup used to build the hardening.
         let out = Command::new("git")
             .env(
@@ -434,7 +487,14 @@ pub fn resolve_store_hooks_dir(store: &Path) -> Result<Option<PathBuf>> {
                 .to_string()
         }))
     };
-    let Some(common) = read(&["rev-parse", "--path-format=absolute", "--git-common-dir"])? else {
+    // BUG-2192: the common directory changes only when the store's `.git`
+    // entry or `commondir` file does, so the lookup is memoised per process
+    // on them; the checks and hook verification below still run every time.
+    // trace:BUG-2192 | ai:claude
+    let common = crate::host_git_cache::common_dir(store, || {
+        read(&["rev-parse", "--path-format=absolute", "--git-common-dir"])
+    })?;
+    let Some(common) = common else {
         return Ok(None);
     };
     let common = PathBuf::from(common);
