@@ -1,0 +1,28 @@
+id: 01a15d79-072a-79e2-b505-8907b370e7c7
+spec_id: TASK-2048
+agreed_id: TASK-2048
+title: 'BUG-2169 trust tests: assert main/.git deny under a forged main; cover a mismatched cargo_target_dir lease'
+description: |
+  only_the_host_lease_makes_a_host_recorded_clone forges a main but does not re-assert that the real main/.git stays denied in both --settings and os_wrap_rw_paths while the forgery is in place. No test covers a genuine-main lease whose cargo_target_dir names a path other than <main>/target/worktrees/<clone dir>. Add both refusal assertions.
+
+  Raised in review of PR-2787: https://github.com/joemooney/aida/pull/2787#issuecomment-6311051300
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T07:59:35.210586842Z
+modified_at: 2026-10-21T07:59:35.210586842Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2787
+- severity:cosmetic
+- tests
+filed_at:
+  code_sha: 6143426902787c3a923d3b7247627a03a05cbcd5
+  branch: pr-2787
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 01a15d6f6403
