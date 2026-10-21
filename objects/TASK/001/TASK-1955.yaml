@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T12:52:27.221292542Z
+modified_at: 2026-10-21T12:52:48.166602403Z
 req_type: Task
 tags:
 - launch
@@ -154,6 +154,12 @@ comments:
   content: 'Non-blocking PR-2781 (BUG-2187) review notes: (1) reviewer_summary.rs review_record_template uses pr_spec_ids.first(), so a multi-spec PR''s recovery command names one spec; (2) apply_child_agent_identity now applies to every seat (session.rs:1471,3826), so implementer children get AIDA_AGENT_NAME=<vendor>-implementer instead of the lane name. This broadening is undocumented and untested.'
   created_at: 2026-10-21T12:52:27.221292542Z
   modified_at: 2026-10-21T12:52:27.221292542Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e85-79a6-70b1-b547-79c9c6c5cf38
+  author: joe
+  content: 'Folded TASK-2064: "review watch: bound per-change notices, lock files and dispatcher logs"'
+  created_at: 2026-10-21T12:52:48.166602403Z
+  modified_at: 2026-10-21T12:52:48.166602403Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
