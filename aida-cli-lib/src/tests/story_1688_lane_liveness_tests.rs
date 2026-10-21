@@ -1001,7 +1001,7 @@ fn orchestrate_templates_send_and_answer_the_sketch_request() {
 }
 
 fn git(root: &Path, args: &[&str]) {
-    let status = std::process::Command::new("git")
+    let status = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(args)
@@ -1046,7 +1046,7 @@ fn reviewer_session_lease_counts_as_review_started() {
         &["push", "-q", "origin", "main", "HEAD:refs/pull/2770/head"],
     );
     let head = String::from_utf8(
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["rev-parse", "HEAD"])
