@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-20T19:07:52.403967434Z
+modified_at: 2026-10-21T07:34:54.366768227Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -86,6 +86,12 @@ comments:
   content: 'Relay Session 5: remaining F6 exact-SHA init/dev-release publication and F7 coverage are implemented and committed ONLY LOCALLY at 4737fd5c7521a8d55ad85faf14f5b15f9241d42c (implementation c60359d2c0, normal main merge through 6657ffff6d, docs-rule compliance commit 4737fd5c75). Worktree /home/joe/ai/aida-agy-batch is clean. Final merged-source gates completed: fast 32; targeted 224 CLI + 155 core; all test targets compiled (870.0s), no full suite execution. Three author self-check rounds, final two no findings; this is not independent review. Publication retries only NFF once, preserves typed evidence refusals/second rejection, stage/status/commit errors stop before push; initial init offline warning and outer release best effort remain. New barriers cover both publication phases, add-vs-sync A1, six node writers plus direct rollback-error propagation, runtime-untracking commit and GC configuration. GC stays outside the AIDA lock. BUG-2194 separately tracks eight other non-node CLI discarders. Remote PR-2778 is still frozen at e683d5a679 and independently approved; no next-slice push, own verdict, hold clear, merge, or completion. Advisor must ship that prior non-completing slice before the final completing PR can be pushed. Relay handoff records this external block.'
   created_at: 2026-10-20T19:07:52.403967434Z
   modified_at: 2026-10-20T19:07:52.403967434Z
+- id: 01a15d62-6e9e-7721-97cb-492d9605aa21
+  author: joe
+  content: 'ADVISOR 00:40: PR-2778 head 750c8ec442 got an independent PASS for its declared non-completing slice; all test lanes are green. It is blocked only by the gates lane''s removed-flag guard, which fails on main itself (docs/plans/2026-10-19-backlog-triage.tsv:78 from #2757), tracked as TASK-2045 with fixer fix-task-2045. Once that merges: merge main into agy/task-1981, then a fresh reviewer at the new head (no carry-over), then ship.'
+  created_at: 2026-10-21T07:34:54.366768227Z
+  modified_at: 2026-10-21T07:34:54.366768227Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a158f3-5991-7fc2-ba6f-30ab954f620e
   author: joe
