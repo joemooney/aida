@@ -1,3 +1,10 @@
+`aida review watch` dispatches attested reviews without waiting for CI. Shared
+versioned runtime state reserves at most two reviews before spawning; ambiguous
+receipts retain capacity. Stale overlapping heads notify the forge author once;
+new heads wait for prior work. No process termination or readiness/merge action
+exists in this slice. See [review watch](docs/cli/06-roles-sessions.md#watching-for-new-review-heads).
+<!-- trace:TASK-1993 | ai:codex -->
+
 Agent-new setup retains invocation receipts through actual child spawn (or
 background-dispatch acceptance). Fresh worktrees publish atomically without
 replacement; rollback validates `.git` identity and compare-deletes only newly
@@ -83,9 +90,9 @@ mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
 mandate ships restore holds with explicit re-arm context in the placement event.
 Mandate exclusions also include committed base/head traces in changed source
 hunks and enclosing Rust fn/impl items, plus each Rust file’s header traces,
-with full-file fallback when attribution
-fails. Trace IDs grant no completion or author/reviewer authority; unreadable
-evidence or a moving/dirty store refuses mandate coverage. See OVERVIEW.md.
+with full-file fallback when attribution fails. Trace IDs grant no completion or
+author/reviewer authority; unreadable evidence or a moving/dirty store refuses
+mandate coverage. See OVERVIEW.md.
 <!-- trace:TASK-1790 | ai:codex -->
 
 Explicit `aida verify constraints` reads data-only version-1 blocks using six

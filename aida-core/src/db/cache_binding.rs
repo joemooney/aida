@@ -70,7 +70,7 @@ fn identity(path: &Path) -> Option<(u64, u64)> {
 /// paired with `stat("/proc/self/fd/N")`'s `(dev, ino)`. Reading metadata from
 /// `/proc/self/fd/N` inspects the open file without opening a new handle, so
 /// SQLite's POSIX advisory locks are never dropped.
-// trace:TASK-1739 | ai:codex
+// trace:TASK-1739 | ai:antigravity
 #[cfg(target_os = "linux")]
 fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> {
     use std::os::unix::fs::MetadataExt;
@@ -110,7 +110,7 @@ fn matching_fds(path: &Path, excluded: &HashSet<u32>) -> Vec<(u32, (u64, u64))> 
 
 /// `(dev, ino)` of SQLite's open descriptor for `path` from `/proc/self/fd`,
 /// or `None` on non-Linux or when no descriptor is open for `path`.
-// trace:TASK-1739 | ai:codex
+// trace:TASK-1739 | ai:antigravity
 fn fd_identity(path: &Path, excluded: &HashSet<u32>) -> Option<(u64, u64)> {
     #[cfg(target_os = "linux")]
     {
@@ -148,7 +148,7 @@ impl CacheBinding {
     /// Descriptor numbers in `/proc/self/fd` already open on `cache_path` and
     /// its sidecars before a new connection is opened, so the new handle's
     /// binding inspects only its own connection's descriptors.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     pub(crate) fn open_fds_for(cache_path: &Path) -> HashSet<u32> {
         #[cfg(target_os = "linux")]
         {
@@ -172,7 +172,7 @@ impl CacheBinding {
         Self::capture_with_excluded(cache_path, HashSet::new())
     }
 
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     pub(crate) fn capture_with_excluded(cache_path: &Path, excluded_fds: HashSet<u32>) -> Self {
         Self {
             files: CacheFile::ALL
@@ -193,7 +193,7 @@ impl CacheBinding {
 
     /// A handle pinned to a single read transaction (`Cache::read_snapshot`):
     /// never runs the identity check or swaps out its connection.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     pub(crate) fn pinned() -> Self {
         Self {
             files: Vec::new(),
@@ -219,7 +219,7 @@ impl CacheBinding {
 
     /// Back off for one full check interval after a failed re-open so callers
     /// do not retry the broken open on every `conn()` access.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     pub(crate) fn backoff(&mut self) {
         self.next_check = Instant::now() + BINDING_CHECK_INTERVAL;
     }
@@ -392,7 +392,7 @@ mod tests {
     /// records `stat(path)`), or before a sidecar is first adopted at a later
     /// check, `/proc/self/fd` still carries SQLite's open inode and detects
     /// the split.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     #[cfg(target_os = "linux")]
     #[test]
     fn holder_rebinds_when_replaced_inside_bind_window_or_before_sidecar_adoption() {
@@ -433,7 +433,7 @@ mod tests {
     /// (`SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`) before closing the stale connection,
     /// so closing the last handle to the old database never folds its WAL into
     /// the old database inode or unlinks the replacement WAL by name.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     #[test]
     fn rebind_does_not_checkpoint_stale_wal_into_old_db_on_close() {
         let dir = tempfile::tempdir().unwrap();
@@ -478,7 +478,7 @@ mod tests {
 
     /// Item 3 (TASK-1739): a failed reopen backs off for one check interval
     /// instead of expiring the timer and retrying on every `conn()` call.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     #[test]
     fn failed_reopen_backs_off_instead_of_retrying_on_every_use() {
         let dir = tempfile::tempdir().unwrap();
@@ -508,7 +508,7 @@ mod tests {
     /// Item 4 (TASK-1739): `read_snapshot` handles are pinned to a single read
     /// transaction and must skip the identity check even if they outlive the
     /// 60s check interval.
-    // trace:TASK-1739 | ai:codex
+    // trace:TASK-1739 | ai:antigravity
     #[test]
     fn read_snapshot_skips_the_identity_check_even_after_expiry() {
         let dir = tempfile::tempdir().unwrap();
@@ -541,7 +541,7 @@ mod tests {
     /// Item 5 (TASK-1739): while a TUI owns the terminal, the rebind note is
     /// routed into `cache_read_note()` instead of writing to raw stderr — even
     /// when the rebind runs on a thread other than the one rendering the note.
-    // trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
+    // trace:TASK-1739 | ai:antigravity
     #[test]
     fn rebind_note_routes_to_cache_read_note_while_tui_owns_terminal() {
         use crate::db::cache_refresh::{

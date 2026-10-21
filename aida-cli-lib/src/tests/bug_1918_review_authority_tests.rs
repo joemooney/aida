@@ -582,7 +582,7 @@ fn harness_agent_claim_in_one_shell_then_approve_in_another_is_refused() {
                 ),
                 None,
             ),
-            || RecorderIdentity::current(root.path(), &[]),
+            || RecorderIdentity::current(&[]),
         );
         assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
     }
@@ -605,7 +605,7 @@ fn unrecognised_agent_is_bound_by_its_session_leader() {
     let authors = author_sessions_at(root.path(), &subjects(), None);
 
     let same = with_identity_source(source_under(101, 201, tool.clone(), leader), || {
-        RecorderIdentity::current(root.path(), &[])
+        RecorderIdentity::current(&[])
     });
     assert!(crate::review_author_refusal(&authors, &same, true).is_some());
 
@@ -617,7 +617,7 @@ fn unrecognised_agent_is_bound_by_its_session_leader() {
             proc(61, "my-agent", &["my-agent"], "t1"),
             other_leader,
         ),
-        || RecorderIdentity::current(root.path(), &[]),
+        || RecorderIdentity::current(&[]),
     );
     assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
 }
@@ -639,7 +639,7 @@ fn harness_session_id_binds_claim_and_record() {
     };
     with_identity_source(src(70), || record_authoring_lease(root.path(), &l));
     let authors = author_sessions_at(root.path(), &subjects(), None);
-    let later = with_identity_source(src(71), || RecorderIdentity::current(root.path(), &[]));
+    let later = with_identity_source(src(71), || RecorderIdentity::current(&[]));
     assert!(crate::review_author_refusal(&authors, &later, true).is_some());
 }
 
@@ -654,7 +654,7 @@ fn ship_policy_from_on_disk_ledger_refuses_the_harness_authors_approval() {
         record_authoring_lease(root.path(), &l)
     });
     let recorder = with_identity_source(source_under(101, 201, harness.clone(), None), || {
-        RecorderIdentity::current(root.path(), &[])
+        RecorderIdentity::current(&[])
     });
     let att = RecorderAttestation {
         sha: HEAD.into(),
@@ -839,7 +839,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
         record_authoring_lease(root.path(), &l)
     });
     let recorder = with_identity_source(source_under(101, 201, harness, None), || {
-        RecorderIdentity::current(root.path(), &[])
+        RecorderIdentity::current(&[])
     });
     let att = RecorderAttestation {
         sha: HEAD.into(),
@@ -855,7 +855,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
         head_ref: "renamed-branch".into(),
         commit_subjects: vec!["[AI:claude] fix(x): y (BUG-91801)".into()],
     };
-    let (ids, branch, resolved) = crate::with_review_pr_subject(subject, || {
+    let (ids, branch, resolved, _) = crate::with_review_pr_subject(subject, || {
         crate::pr_cmd::pr_gate_subject(root.path(), 2485, &[], Some("renamed-local"))
     });
     assert!(resolved);
@@ -871,7 +871,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
     // Forge offline: the local title/branch claim an unrelated spec. That
     // claim is not trusted for authorship — every recorded author counts.
     let claimed = vec!["TASK-99901".to_string()];
-    let (ids, _, resolved) =
+    let (ids, _, resolved, _) =
         crate::pr_cmd::pr_gate_subject(root.path(), 2485, &claimed, Some("task-99901-work"));
     assert!(!resolved);
     assert_eq!(ids, claimed);
@@ -932,7 +932,7 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
     let with_id = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(&l.id))]);
         with_identity_source(source_under(101, 201, worker.clone(), None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert!(crate::review_author_refusal(&authors, &with_id, true).is_some());
@@ -940,7 +940,7 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
     let bare = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         with_identity_source(source_under(102, 202, worker, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert!(crate::review_author_refusal(&authors, &bare, true).is_some());
@@ -949,7 +949,7 @@ fn worker_with_a_different_session_id_than_the_launcher_is_the_author() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         with_identity_source(
             source_under(103, 203, proc(97, "codex", &["codex"], "R"), None),
-            || RecorderIdentity::current(root.path(), &[]),
+            || RecorderIdentity::current(&[]),
         )
     };
     assert_eq!(crate::review_author_refusal(&authors, &other, true), None);
@@ -1004,7 +1004,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
         let _env =
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some("advisor-session"))]);
         with_identity_source(source_under(101, 201, launcher_harness, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert_eq!(
@@ -1018,7 +1018,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         let mut src = source_under(104, 4242, proc(91, "bash", &["-bash"], "H"), None);
         src.chain[1].start = Some("t0".into());
-        with_identity_source(src, || RecorderIdentity::current(root.path(), &[]))
+        with_identity_source(src, || RecorderIdentity::current(&[]))
     };
     assert!(same_shell.tokens.contains(&"shell:4242@t0".to_string()));
     assert_eq!(
@@ -1029,7 +1029,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
     let with_id = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(&l.id))]);
         with_identity_source(source_under(102, 202, worker.clone(), None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert!(crate::review_author_refusal(&authors, &with_id, true).is_some());
@@ -1037,7 +1037,7 @@ fn launcher_may_approve_the_worker_it_launched_but_the_worker_may_not() {
     let bare = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         with_identity_source(source_under(103, 203, worker, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert!(crate::review_author_refusal(&authors, &bare, true).is_some());
@@ -1082,7 +1082,7 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
     let from_main = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         with_identity_source(source_under(101, 201, harness, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     assert!(
@@ -1176,20 +1176,20 @@ fn launched_worker_is_bound_by_the_real_launch_binding() {
     let with_env = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some(&worker_seen))]);
         with_identity_source(source_under(102, 202, worker.clone(), None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     let bare = {
         let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", None)]);
         with_identity_source(source_under(103, 203, worker, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     let launcher = {
         let _env =
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_SESSION_ID", Some("advisor-session"))]);
         with_identity_source(source_under(104, 204, launcher_harness, None), || {
-            RecorderIdentity::current(root.path(), &[])
+            RecorderIdentity::current(&[])
         })
     };
     let _ = child.kill();

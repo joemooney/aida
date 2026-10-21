@@ -92,7 +92,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `aida session leases` — the standing "is anyone already on this?" check before you (or an agent) claim a spec; the multi-agent drain's collision guard.
 - `aida session end` — finishing isolated work: removes the worktree and lease, *leaves the branch alone* (merge/discard is your call), and as a safety net files a reviewer item if the branch has an open PR. It refuses to remove a worktree that another live process is still using (its working directory, an open or memory-mapped file, or a program running from inside it, such as a cargo build), names each pid and command, and changes nothing until you stop them or pass `--include-in-use` (`--force` does not override it). It checks again after you confirm and once more just before the worktree is removed; if a process started in the meantime, the worktree is kept. The same check applies when the worktree would be reset and returned to the warm pool (the default), since that rewrites its files. Your own shell, its parents and background jobs, and the helpers of the agent you are ending from (its MCP server, for example) never count, so you can end your session from inside its worktree; a process in another terminal or tmux pane still counts, even one started in that worktree. `aida session reap`, `aida session gc`, `aida worktree dismiss`, doctor's lease and worktree heals, automatic stale-lease release, and the warm pool's reclaim of an expired reservation keep a tree that is in use, so a scripted bulk sweep can't delete live work. So do `aida worktree pool destroy` and `aida worktree pool return`, unless you pass `--include-in-use`; `pool return` also keeps a dirty tree as it is, without resetting it, when it cannot save its uncommitted changes first. They also keep it when the process list can't be read in full (for example inside a pid namespace). In that case `session end` only warns, and only when no process in the tree is visible: inside a container, a process the check can see still makes `session end` refuse. In a container that owns its worktrees, set `AIDA_TRUST_PID_NAMESPACE=1` to trust the check there.
 - `aida session conversations` / `resume` — finding and re-entering a *past conversation* by its role+spec context instead of grepping Claude's auto-generated subjects. (`conversations` is the renamed `session list`; the old verb is a deprecated alias.) Each row also names the **process behind it** when one can be found — a PID and TTY column (`pts/3`) so a forgotten tab is findable — and the liveness glyph is three-state: `●` means a process was resolved and is alive (the AGE cell is then the process's elapsed time), `◐` means the transcript was written in the last five minutes but no process could be resolved, blank means neither. Resolution is best-effort and never invented: a session lease's recorded pid first, else a live claude/codex process whose cwd matches the transcript and whose start time falls inside the transcript's launch/resume window; two candidates render `?` and `--format json` lists both (`pids`), alongside `liveness` (`alive|file-touched|none`), `resolution` (`lease|proc-scan|none`) and the covering lease's `lease_role` when it differs from the transcript's hook role — the same role rule `aida ps` uses.
-- `aida session reap` — clearing up after sessions that already finished: a headless agent exits the moment its work lands, and because a session can't tear down its own worktree (it *is* the live cwd), every spec boundary otherwise needs a human to end the session, remove the worktree, and delete the branch. This pass does all three in one go for the sessions it can prove are done.
+- `aida session reap` — clearing up after sessions that already finished: a headless agent exits the moment its work lands, and because a session can't tear down its own worktree (it *is* the live cwd), every spec boundary otherwise needs a human to end the session, remove the worktree, and delete the branch. This pass does all three in one go for the sessions it can prove are done. It never reaps a lease held on the main checkout (or the store tree, or a protected branch such as `main`), but it can **release** one: it deletes only the lease file and never touches a file of the checkout. It does this when the agent process the lease recorded is provably gone, meaning no process has that pid or the pid now belongs to a different process (its start time differs). If the start time can't be read, the process does not count as gone. A lease that records no agent process, or only the short-lived shell that ran `aida session start`, has an **unknown owner**: it is neither live nor dead. Reap lists it and keeps it unless you pass `--release-unknown-owner`. A lease whose recorded process is still running is always kept, as is a lease taken on another host. Releasing follows the same `--dry-run` / `--yes` / confirmation rules as reaping, and the reap that runs after `aida pr ship` merges never releases a lease. `aida session leases` marks such leases "unknown owner" (`owner_unknown` in `--json`), and `aida session handoff --check` doesn't count them as a reason to compact. A lease with an unknown owner is never credited to the process that is looking at it. <!-- trace:BUG-2197 | ai:claude -->
 
 **Don't reach for it when** — you want the "who's working" view but typed `conversations` (that's historical conversations — use `leases`). And don't `start` a scoped worktree for trivial in-place work; the worktree-per-scope model pays off for *parallel* or *long-running* work, not a two-line fix on your current branch.
 
@@ -107,6 +107,7 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 - `new --permission-mode` — the faithful-launcher knob: omit it and Claude uses its native posture (prompts); pass `bypassPermissions`/`acceptEdits`/`auto`/etc. to opt in. Fleet-wide bypass is `[agents] bypass = true` in `agents.toml`, not a baked-in default.
 - Supervised launches that resolve to bypass ask for confirmation by default. The setting is `[agents] confirm_bypass = true` in `.aida/config.toml`; only `~/.aida/config.toml` may set it to `false`. Project config can require confirmation but cannot disable it. A non-TTY configured bypass is downgraded to native; an explicit bypass request and detached agent launch require a terminal confirmation. This guard does not stop edits by an agent already running in bypass, a fake TTY, or direct edits to the user config with an editor that already has write authority.
 - `[agents] vendor = "codex"` (agents.toml/config.toml; precedence: project `.aida/agents.toml` per-clone > project `.aida/config.toml` TRACKED & worktree-inherited > user-global `~/.aida/agents.toml`) — the set-once default-vendor knob for codex-first/codex-mandated machines: every launch surface (interactive `queue work` host, orchestrator headless phases, TUI tabs, and queue-work launch chains) falls back to it when no per-surface flag/env/config picks a vendor. Per-surface knobs keep priority.
+- `reap --release-unknown-owner` — also release main-checkout leases with an unknown owner. It is opt-in because the lease may belong to a live session that never recorded its process; any recorded process that is still running keeps the lease even with this flag. <!-- trace:BUG-2197 | ai:claude -->
 - `leases --verbose` / `--all` — `-v` probes live claude PIDs (and flags `(deleted)`-cwd zombies); every view has a state column. The default view includes every spec-scoped lease that can block dispatch, even when stale, and hides only stale harness leases; `--all` adds those stale harness leases back. <!-- trace:BUG-2002 | ai:codex --> <!-- trace:TASK-1367 | ai:claude -->
 - `manifest` — record which specs a session *intends* to work, so other commands can surface "planned by another session" cues. Coordination *before* the lease, for a planned cluster.
 - `prune` — bulk disk-cleanup of old session.jsonl files by age (and skips dirs with active leases, defensively). It only touches conversation metadata; worktree cleanup is a separate concern — `gc` removes stale agent isolation worktrees, `reap` tears down finished scoped sessions (see below).
@@ -317,6 +318,87 @@ SessionStart and statusline warnings remain available. See
 [verified hook delivery](../testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
 <!-- trace:TASK-1744 | ai:antigravity -->
+
+## Watching for new review heads
+
+`aida review watch` discovers open, non-draft GitHub PRs or GitLab MRs and
+starts ordinary attested reviewers as soon as a head is eligible. It does not
+wait for CI. Run it from a shell with a validated grant that delegates the
+reviewer seat. `--once` performs one discovery pass and leaves admitted reviews
+running; the ordinary loop polls every 10 seconds. `--interval` accepts 1–3600
+seconds, and `--max-concurrent` accepts one or two reviewers (default two).
+`--vendor` uses the ordinary queue-work vendor selection when omitted.
+
+The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
+per-command timeouts; the watcher avoids unbounded version-detection probes.
+Initial root resolution and later probes clear ambient Git routing variables.
+Discovery pins origin's forge host/project and fetches each change's own
+target branch (GitHub `baseRefName`, GitLab `target_branch`) and head into
+private temporary refs. It fetches by remote name, so a credential stored in
+the origin URL never appears in process arguments. A missing or invalid base,
+unknown metadata, head movement, or unreadable base evidence refuses dispatch.
+A stale base with overlapping changed paths receives a local mailbox request to
+merge the change's base branch, named in the notice; a stale non-overlapping head remains reviewable. The
+recipient is the exact forge author login/username, with no inferred mapping to
+an agent seat. Read that identity's mailbox with `aida mailbox inbox <login>`.
+The watcher never updates a branch.
+
+Version-1 atomic state lives under the main worktree's `.aida/review-watch/`.
+Permanent admission and per-change lock files coordinate watcher instances.
+Each launch is reserved before spawn, and its dispatcher records PID, process
+start identity and boot ID before calling `queue work ... --role reviewer
+--no-human`. Pending/running receipts count toward global capacity, even after
+a PID disappears or is reused. When the dispatcher observes queue work exit
+unsuccessfully (a stale-base or intermediate-only refusal, a reviewer lease
+already held, or a launch-boundary revalidation failure), it records the
+attempt as exited with the last line of its log. That frees the slot, the head
+is not relaunched, and a later head dispatches normally. The parent records
+each dispatcher's process identity; if a dispatcher exits before claiming its
+reservation (a refused grant, an unusable store, a timed-out claim), any
+watcher, including a restarted one, records the reservation as exited and
+frees its slot. Only a dispatcher lost after claiming, before recording an
+outcome, stays reserved until its exact process (start identity and boot ID)
+is gone. The review is carried by the reviewer process that queue work
+launches, and queue work and the reviewer can each outlive their parent. So
+the dispatcher records queue work's identity, queue work records the
+reviewer's identity before waiting on it, and the slot is freed (recorded as
+exited) only once the dispatcher, queue work and the reviewer are all gone. If
+either process was being spawned but never recorded, the attempt stays held
+and the capacity refusal names it with the recovery step: confirm no `queue
+work` or reviewer process for that change remains, then record the attempt as
+exited while no watcher runs. The watcher never signals a process. Terminal receipts
+retry through lock contention for the same window as the claim. The capacity refusal names each
+holder's change, head and token. A missing/corrupt/unsafe state file refuses
+reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
+and `aida session leases --all` before operator recovery. Do not delete lock
+files or clear ambiguous receipts while a reviewer may still be running.
+Changes that are skipped leave no state, and state for changes no longer open
+and non-draft is pruned on each complete discovery pass unless an attempt is
+still live. Observed blocking review identities are kept per change in
+`review-watch/history/`, which pruning never removes, so a draft toggle or a
+close and reopen cannot reset the round count. In the continuous loop a refusal for one change is logged and the
+pass continues; only an unusable state file stops the watcher. `--once`
+reports any refusal.
+
+Stale-head notifications have deterministic IDs and retry without overwriting
+mailbox reader flags. Delivery is recorded only after successful publication.
+A head is launched once. Rounds follow the ordinary review policy: only
+request-changes or rejected verdicts (the reviews that leave a findings block)
+consume a round, so an approved head later merged with its base branch is
+re-reviewed at round 1 with the full-sweep contract, and a third blocking
+round is refused. Existing manual/drain verdicts and their retained archives
+count the same way; current/archive
+copies deduplicate using the verdict writer's recording identity. Admission
+retains those identities in private watcher state before queue work clears the
+current verdict, including legacy rounds without an archive. Canonical history
+uses ordinary writer permissions; watcher state and locks require mode 0600. History is
+rechecked before queue work and at the final vendor boundary; unreadable or
+unidentifiable history refuses dispatch. The round prompt comes from that
+combined count. Ordinary queue-work risk and review authority checks still apply. New heads wait
+while an earlier review is active or ambiguous. Review instructions forbid local
+Cargo, tests/builds, merge, and branch updates. The watcher adds no verdict
+authority, process termination, ship-ready report, or merge action.
+<!-- trace:TASK-1993 | ai:codex -->
 
 Launch setup keeps invocation receipts before Git allocation. Fresh worktrees
 materialize at a private staging path and publish to the requested absent path

@@ -43,7 +43,9 @@ fn ps_live_lease_classifies_live() {
     let tmp = tempfile::tempdir().unwrap();
     let l = ps_lease("l-live", "STORY-1", tmp.path().to_path_buf());
     let live = vec![process_probe::LiveSession {
-        pid: std::process::id(),
+        // BUG-2197: another claude's pid, not the test's own: a pid-less lease
+        // is never attributed to the inspector. trace:BUG-2197 | ai:claude
+        pid: 4_000_123,
         cwd: tmp.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,

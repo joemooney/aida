@@ -113,14 +113,16 @@ pub(crate) fn mandate_ship_cover(
         )
     });
     let head = head();
-    let (ids, branch, forge_resolved) = pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    let (ids, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = pr_ship::merge_gate_verdict_candidates(
         &[project_root, main_worktree],
         pr,
         &ids,
         head.as_deref(),
     );
-    let author_ids: &[String] = if forge_resolved { &ids } else { &[] };
+    // trace:BUG-2199 | ai:claude
+    let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
     // trace:TASK-1790 | ai:codex
     // Trace-derived IDs can only ADD exclusions. Build verdict/author inputs

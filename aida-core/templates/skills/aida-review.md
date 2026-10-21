@@ -122,8 +122,11 @@ orchestrator, relay, burndown or fire-mode session needs a review, it runs
 this from **Bash** and waits for the command to exit:
 
 ```bash
-aida queue work PR-<n> --role reviewer --no-human
+aida queue work PR-<n> --role reviewer --no-human --vendor claude
 ```
+
+`--vendor claude` is required: a codex reviewer refuses to start under
+`AIDA_CONTAINED`.
 
 That command starts a separate headless reviewer: its own session id and
 process, a PR-scoped lease, a review worktree, and a child reviewer grant.
