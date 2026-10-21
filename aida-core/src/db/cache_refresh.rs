@@ -484,7 +484,7 @@ static TUI_OWNS_TERMINAL: std::sync::atomic::AtomicBool = std::sync::atomic::Ato
 /// alternate screen). While set, [`emit_cache_note`] routes cache notes into
 /// [`cache_read_note`] for the TUI status line instead of writing raw bytes to
 /// stderr.
-// trace:TASK-1739 | ai:codex
+// trace:TASK-1739 | ai:antigravity
 pub fn set_tui_owns_terminal(owns: bool) -> bool {
     TUI_OWNS_TERMINAL.swap(owns, std::sync::atomic::Ordering::SeqCst)
 }
@@ -521,7 +521,7 @@ pub(crate) fn as_tui_test_emitter<T>(f: impl FnOnce() -> T) -> T {
     f()
 }
 
-// trace:TASK-1739 | ai:codex
+// trace:TASK-1739 | ai:antigravity
 pub fn tui_owns_terminal() -> bool {
     TUI_OWNS_TERMINAL.load(std::sync::atomic::Ordering::SeqCst)
 }
@@ -529,7 +529,7 @@ pub fn tui_owns_terminal() -> bool {
 /// The latest cache note recorded while a TUI owned the terminal. Process-wide
 /// rather than thread-local: a rebind or reopen note can fire on a background
 /// refresh thread, and the TUI reads it on its render thread.
-// trace:TASK-1739 | ai:claude
+// trace:TASK-1739 | ai:antigravity
 static TUI_CACHE_NOTE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
@@ -539,14 +539,14 @@ fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
 }
 
 /// Record a cache note for [`cache_read_note`], from any thread.
-// trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
+// trace:TASK-1739 | ai:antigravity
 pub fn record_cache_note(note: impl Into<String>) {
     *tui_cache_note() = Some(note.into());
 }
 
 /// Emit a one-line cache note: to `cache_read_note()` while a TUI owns the
 /// terminal, or to stderr otherwise.
-// trace:TASK-1739 | ai:codex
+// trace:TASK-1739 | ai:antigravity
 pub fn emit_cache_note(note: impl Into<String>) {
     let note = note.into();
     // trace:TASK-1956 | ai:claude
@@ -635,13 +635,13 @@ pub fn reset_cache_read_observations() {
         c.wait_deadline = None;
         c.ladder_waited = Duration::ZERO;
     });
-    // trace:TASK-1739 | ai:claude
+    // trace:TASK-1739 | ai:antigravity
     *tui_cache_note() = None;
 }
 
 /// The status-line note for the current read: the stale-serve note and any
 /// recorded cache note, joined so neither hides the other.
-// trace:TASK-1526 | ai:codex trace:TASK-1739 | ai:claude
+// trace:TASK-1526 | ai:codex trace:TASK-1739 | ai:antigravity
 pub fn cache_read_note() -> Option<String> {
     let stale = COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note));
     let recorded = tui_cache_note().clone();
@@ -1210,7 +1210,7 @@ except OSError:
 
     /// A note recorded on a background thread reaches the render thread, and a
     /// stale-serve note does not hide it.
-    // trace:TASK-1739 | ai:claude
+    // trace:TASK-1739 | ai:antigravity
     #[test]
     fn recorded_note_crosses_threads_and_joins_the_stale_note() {
         let _serial = TUI_TERMINAL_TEST_LOCK

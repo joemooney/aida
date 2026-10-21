@@ -1283,13 +1283,14 @@ were denied (`permission-denied`), or the disk or memory ran out
 **2 consecutive** specs fail with the same one of these causes the drain
 halts before starting another (any member already in flight in a pipelined
 drain finishes its run — or is recorded in `skipped` with its PR left open if
-the parent's serial leg broke un-shelvably — before the drain exits). It prints one `environment blocked` line naming
-the cause and the fix, leaves the rest of the queue untouched, and exits
-`3`. In a `--batches` chain the count runs across batch boundaries. The JSON summary reports `"outcome": "environment-blocked"` and
-`"halt_reason": "<cause>"` (`null` on every other stop). Any other result in
-between (a ship, or a different failure) resets the count. Set the threshold
-with `environment_halt_after` under `[orchestrator]` in `.aida/config.toml`;
-`0` turns the halt off.
+the parent's serial leg broke un-shelvably — before the drain exits). It
+prints one `environment blocked` line naming the cause and the fix, leaves
+the rest of the queue untouched, and exits `3`. In a `--batches` chain the
+count runs across batch boundaries. The JSON summary reports
+`"outcome": "environment-blocked"` and `"halt_reason": "<cause>"` (`null` on
+every other stop). Any other result in between (a ship, or a different
+failure) resets the count. Set the threshold with `environment_halt_after`
+under `[orchestrator]` in `.aida/config.toml`; `0` turns the halt off.
 
 ### The `--max-failures` safety cap
 
