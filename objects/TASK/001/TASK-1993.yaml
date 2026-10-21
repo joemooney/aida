@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T07:23:12.251645147Z
-modified_at: 2026-10-21T12:23:30.375963354Z
+modified_at: 2026-10-21T13:56:24.348480195Z
 req_type: Task
 tags:
 - dispatch
@@ -83,6 +83,11 @@ history:
   timestamp: 2026-10-21T12:23:30.478187248Z
   session_id: 01a15e630916
   changes: []
+- id: 01a15ebf-b4dd-7260-b2ec-3d1abddcd3be
+  author: joe
+  timestamp: 2026-10-21T13:56:24.413726725Z
+  session_id: 01a15eb7d164
+  changes: []
 filed_at:
   code_sha: 419579e7c4510fece5f45c04ef3edc6878dda24d
   branch: main
@@ -94,7 +99,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'Round 1: AC1-AC6 implemented and test-traced, but CI lib-1 ''Test time budget'' is red and five code defects (capacity wedge on observed pre-receipt dispatcher exit, BUG-2181 credential-argv regression, two-round cap bypass via prune, default-branch-only base evidence, verdict cleared before final revalidation) need rework.'
+  detail: 'Round-2 fixes verified (capacity wedge, credential argv, base-of-change overlap, pruned history, revalidation order, CI budget); ACs 1,2,4,5,6 verified by named tests + CI lib/cli green. Blocking: completion/exit receipts are not retried under lock contention, so an observed outcome can become a permanent ambiguous slot (AC3); stale notice instructs merging the default branch although overlap is now judged against the change''s own base.'
   recovery_hint: address the review findings, move TASK-1993 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T12:23:30.375963354Z
+  shelved_at: 2026-10-21T13:56:24.348480195Z
