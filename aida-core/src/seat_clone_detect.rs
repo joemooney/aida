@@ -100,20 +100,71 @@ pub fn is_host_main(main: &Path) -> bool {
 /// `<main>/.aida/sessions/*.toml` (never from a clone). FIFO-safe.
 // trace:BUG-2169 | ai:claude
 pub fn clone_lease_roots(main: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(main.join(".aida").join("sessions")) else {
+    let sessions = main.join(".aida").join("sessions");
+    let Ok(entries) = std::fs::read_dir(&sessions) else {
         return Vec::new();
     };
-    entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
-        .filter_map(|p| read_regular_file(&p))
-        .filter_map(|body| toml::from_str::<toml::Value>(&body).ok())
-        .filter(|lease| lease.get("tree_kind").and_then(|v| v.as_str()) == Some("clone"))
-        .filter_map(|lease| lease.get("worktree_path")?.as_str().map(PathBuf::from))
-        .filter(|root| root.is_absolute() && root.parent().is_some())
+    // BUG-2192: this runs on every host git call, and `.aida/sessions` holds
+    // hundreds of files. Each file's parsed root is memoised per process
+    // under its stamp (inode, size, times; see `host_git_cache`), so an
+    // unchanged file is not re-read; a new, changed or recently written file
+    // is read as before.
+    // trace:BUG-2192 | ai:claude
+    static MEMO: std::sync::Mutex<Option<std::collections::HashMap<PathBuf, LeaseMemo>>> =
+        std::sync::Mutex::new(None);
+    let mut memo = MEMO
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let previous = memo
+        .get_or_insert_with(Default::default)
+        .remove(&sessions)
+        .unwrap_or_default();
+    let mut current = LeaseMemo::new();
+    let mut roots = Vec::new();
+    for path in entries.flatten().map(|e| e.path()) {
+        if !path.extension().is_some_and(|x| x == "toml") {
+            continue;
+        }
+        let stamp = crate::host_git_cache::stamp(&path);
+        let root = match (&stamp, previous.get(&path)) {
+            (Some(now), Some((then, root))) if now == then => root.clone(),
+            _ => read_regular_file(&path).and_then(|body| lease_clone_root(&body)),
+        };
+        if let Some(stamp) = stamp {
+            current.insert(path, (stamp, root.clone()));
+        }
+        roots.extend(root);
+    }
+    memo.get_or_insert_with(Default::default)
+        .insert(sessions, current);
+    roots
+        .into_iter()
         .map(|root| root.canonicalize().unwrap_or(root))
         .collect()
+}
+
+/// One sessions directory's memo: each lease file's stamp and parsed root.
+type LeaseMemo =
+    std::collections::HashMap<PathBuf, (crate::host_git_cache::Stamp, Option<PathBuf>)>;
+
+/// The tree a lease body names when it is a `clone` lease with an absolute
+/// `worktree_path` (not yet canonicalized).
+// trace:BUG-2169 | ai:claude
+fn lease_clone_root(body: &str) -> Option<PathBuf> {
+    // BUG-2192: most of `.aida/sessions` is not a clone lease. A TOML value
+    // that parses to "clone" needs the literal text or an escape (a
+    // backslash), so a body with neither can skip the parse without changing
+    // what is found.
+    // trace:BUG-2192 | ai:claude
+    if !(body.contains("clone") || body.contains('\\')) {
+        return None;
+    }
+    let lease = toml::from_str::<toml::Value>(body).ok()?;
+    if lease.get("tree_kind").and_then(|v| v.as_str()) != Some("clone") {
+        return None;
+    }
+    let root = PathBuf::from(lease.get("worktree_path")?.as_str()?);
+    (root.is_absolute() && root.parent().is_some()).then_some(root)
 }
 
 /// The nearest ancestor of `start` (itself included) named `aida-seat-*` or
@@ -168,4 +219,85 @@ pub fn host_git_refusal(clone_root: &Path) -> String {
          configuration and hooks are writable by the seat",
         clone_root.display()
     )
+}
+
+#[cfg(test)]
+mod bug_2192_lease_scan_tests {
+    use super::clone_lease_roots;
+
+    /// The pre-parse filter skips only bodies that cannot hold a "clone"
+    /// value: a plain clone lease and one that spells it with a TOML escape
+    /// are both found; a worktree lease and an activity file are not.
+    // trace:BUG-2192 | ai:claude
+    #[test]
+    fn lease_scan_filter_keeps_every_clone_lease() {
+        let main = tempfile::TempDir::new().unwrap();
+        let sessions = main.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let plain = main.path().join("aida-seat-plain");
+        let escaped = main.path().join("aida-seat-escaped");
+        let write = |name: &str, body: String| std::fs::write(sessions.join(name), body).unwrap();
+        // Quote each path through `toml` so a Windows backslash is escaped.
+        let lease = |kind: &str, path: &std::path::Path| {
+            let path = toml::Value::String(path.display().to_string());
+            format!("tree_kind = {kind}\nworktree_path = {path}\n")
+        };
+        write("a.toml", lease("\"clone\"", &plain));
+        write("b.toml", lease("\"\\u0063lone\"", &escaped));
+        write(
+            "c.toml",
+            lease("\"worktree\"", &main.path().join("aida-wt")),
+        );
+        write("c.activity.toml", "last = 1\n".to_string());
+
+        let mut found = clone_lease_roots(main.path());
+        found.sort();
+        let mut want = vec![plain, escaped];
+        want.sort();
+        assert_eq!(found, want);
+    }
+
+    /// The per-file memo never hides a change: a memoised worktree lease
+    /// rewritten in place as a clone lease, and a new clone lease, are both
+    /// found, and a removed one is dropped.
+    // trace:BUG-2192 | ai:claude
+    #[test]
+    fn lease_scan_memo_sees_rewritten_new_and_removed_leases() {
+        crate::host_git_cache::ALWAYS_SETTLED.with(|s| s.set(true));
+        let main = tempfile::TempDir::new().unwrap();
+        let sessions = main.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let seat = main.path().join("aida-seat-a");
+        let path = toml::Value::String(seat.display().to_string());
+        // Same length, so only the inode times tell the rewrite apart.
+        let worktree = format!("tree_kind = \"xlone\"\nworktree_path = {path}\n");
+        let clone = format!("tree_kind = \"clone\"\nworktree_path = {path}\n");
+        std::fs::write(sessions.join("a.toml"), &worktree).unwrap();
+        assert!(clone_lease_roots(main.path()).is_empty());
+        assert!(clone_lease_roots(main.path()).is_empty(), "memo hit");
+
+        // Past one coarse timestamp tick, so the in-place rewrite moves ctime.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(sessions.join("a.toml"))
+            .and_then(|mut f| std::io::Write::write_all(&mut f, clone.as_bytes()))
+            .unwrap();
+        assert_eq!(clone_lease_roots(main.path()), vec![seat.clone()]);
+
+        let other = main.path().join("aida-seat-b");
+        let other_path = toml::Value::String(other.display().to_string());
+        std::fs::write(
+            sessions.join("b.toml"),
+            format!("tree_kind = \"clone\"\nworktree_path = {other_path}\n"),
+        )
+        .unwrap();
+        let mut found = clone_lease_roots(main.path());
+        found.sort();
+        assert_eq!(found, vec![seat.clone(), other]);
+
+        std::fs::remove_file(sessions.join("b.toml")).unwrap();
+        assert_eq!(clone_lease_roots(main.path()), vec![seat]);
+        crate::host_git_cache::ALWAYS_SETTLED.with(|s| s.set(false));
+    }
 }
