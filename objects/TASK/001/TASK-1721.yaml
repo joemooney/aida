@@ -17,12 +17,12 @@ description: |
   - The bump commit keeps the AIDA_RELEASE=1 commit-msg hook suppression.
   - `aida dev release` still waits for the release artifact after the merge, with a timeout covering CI duration; docs/cli/11-dev.md and the release docs are updated.
   - Operator runbook step added: enable "Require a pull request before merging" (0 required approvals, enforce_admins on), then verify once that a direct `git push origin main` is rejected.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-10T18:22:23.867040641Z
-modified_at: 2026-10-21T19:41:34.776569454Z
+modified_at: 2026-10-21T23:52:53.160664468Z
 req_type: Task
 tags:
 - branch-protection
@@ -103,6 +103,20 @@ history:
   timestamp: 2026-10-21T19:41:34.865356062Z
   session_id: 01a15ff8d41c
   changes: []
+- id: 01a160e1-cca4-7cf1-bb65-779f2ebbd36c
+  author: aida-auto-bump
+  timestamp: 2026-10-21T23:52:53.156777788Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a160e1-cca8-7dc0-889c-7bb48a4cef41
+  timestamp: 2026-10-21T23:52:53.160660291Z
+  agent: aida
+  commit_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  summary: 'Round 3: all 6 TASK-1721 ACs + folded BUG-2193 refuse-during-ship AC met; fixture (11 cases) + Rust tests pass; PR CI green at head (merge-hold-gate red only for the supervised label). Round-2 findings fixed. Remaining items are minor non-blocking follow-ups (2-round cap).'
+  review_verdict: approved
 filed_at:
   code_sha: fe6723558eafc2f30254b70acccc4078639ec5fe
   branch: main
@@ -111,11 +125,7 @@ filed_at:
   aida_build_sha: fe6723558e
   vendor: antigravity
   session: cb4777a7-1c2d-4646-a80c-0ba4295cf83f
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'All 6 TASK-1721 ACs and the folded BUG-2193 in-flight-ship refusal are met and tested (tests/test_release_pr_flow.sh passes locally; CI code checks green, merge-hold-gate red only from the supervised hold label). Three small defects for one rework round: a non-atomic merge-lease write that can race aida pr ship, the lease held across the interactive confirm prompt, and two release descriptions still saying ''tag + push''.'
-  recovery_hint: address the review findings, move TASK-1721 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T19:41:34.776569454Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T23:52:53.156773355Z
+  completion_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
