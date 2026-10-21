@@ -1982,3 +1982,48 @@ fn leaked_probe_refs_are_swept_and_live_ones_kept() {
         format!("refs/aida/review-watch/{me}-live/base")
     );
 }
+
+/// TASK-1-410 / TASK-2109: a stale-head notice goes to the AIDA identity the
+/// author's forge login names, in its stored spelling, and a pending notice
+/// survives a roster change before it is sent.
+// trace:TASK-1955 | ai:claude (TASK-2109)
+#[test]
+fn stale_notice_maps_the_forge_login_and_survives_a_roster_change() {
+    let (temp, store) = fixture();
+    let registry = temp.path().join(".aida-store").join("registry");
+    std::fs::create_dir_all(&registry).unwrap();
+    std::fs::write(
+        registry.join("team.toml"),
+        "[members]\nJoe = [\"advisor\"]\n",
+    )
+    .unwrap();
+    let mut c = change(1, 1, true);
+    c.author = "joe".into();
+    let Action::Notify(notice) = select(&store, &c, None, 2).unwrap() else {
+        panic!("missing notice")
+    };
+    assert_eq!(
+        notice.message.to,
+        aida_core::mailbox::Recipient::Agent("Joe".into())
+    );
+
+    // The roster drops Joe before the notice is sent: the pending notice is
+    // still delivered as recorded, not refused as drifted.
+    std::fs::remove_file(registry.join("team.toml")).unwrap();
+    let Action::Notify(retry) = select(&store, &c, None, 2).unwrap() else {
+        panic!("pending notice lost after a roster change")
+    };
+    assert_eq!(retry.message.id, notice.message.id);
+    assert_eq!(retry.message.to, notice.message.to);
+
+    // An unmapped login goes to the advisor.
+    let mut stranger = change(2, 2, true);
+    stranger.author = "octocat".into();
+    let Action::Notify(n) = select(&store, &stranger, None, 2).unwrap() else {
+        panic!("missing notice")
+    };
+    assert_eq!(
+        n.message.to,
+        aida_core::mailbox::Recipient::Agent("advisor".into())
+    );
+}

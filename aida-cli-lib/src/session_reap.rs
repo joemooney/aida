@@ -1062,18 +1062,35 @@ fn review_lease_pr(lease: &SessionLease) -> Option<u64> {
         .flatten()
 }
 
-// trace:TASK-1955 | ai:claude (TASK-2095)
+/// Does the review branch hold nothing the reap would lose? True when its
+/// tip is the recorded PR head or behind it, or when every commit on it is
+/// already on `origin` (a fix-forward the reviewer pushed to the PR, or a
+/// lease that recorded no PR head). An unpushed local commit keeps it.
+// trace:TASK-1955 | ai:claude (TASK-2095, TASK-2108)
 fn review_branch_within_pr_head(
     project_root: &std::path::Path,
     branch_tip: Option<&str>,
     lease: &SessionLease,
 ) -> bool {
-    match (branch_tip, lease.pr_head_sha.as_deref()) {
-        (Some(tip), Some(pr_head)) => {
-            aida_core::git_ops::is_ancestor(project_root, tip, pr_head).unwrap_or(false)
-        }
-        _ => false,
-    }
+    let Some(tip) = branch_tip else {
+        return false;
+    };
+    let within_recorded = lease.pr_head_sha.as_deref().is_some_and(|pr_head| {
+        aida_core::git_ops::is_ancestor(project_root, tip, pr_head).unwrap_or(false)
+    });
+    within_recorded || commits_outside_origin(project_root, tip) == Some(0)
+}
+
+/// How many commits reachable from `tip` are on no `origin` remote-tracking
+/// ref; `None` when git cannot say (never read as zero).
+// trace:TASK-1955 | ai:claude (TASK-2108)
+fn commits_outside_origin(project_root: &std::path::Path, tip: &str) -> Option<u64> {
+    let out = aida_core::git_ops::host_git_command(project_root)
+        .args(["rev-list", "--count", tip, "--not", "--remotes=origin"])
+        .output()
+        .ok()?;
+    out.status.success().then_some(())?;
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
 /// Execute the reap for ONE session: remove the worktree, delete the lease (and

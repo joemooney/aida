@@ -843,3 +843,79 @@ fn session_leases_row_never_names_a_dead_creator_pid() {
     let rows = crate::leases::classify_session_leases(&root, &[lease]);
     assert_eq!(rows[0].2, None, "the dead creator is not the row's pid");
 }
+
+/// TASK-2108: a dead reviewer lease with no recorded PR head is reaped only
+/// when its review branch holds nothing outside `origin` (a pushed
+/// fix-forward included); a local-only commit keeps it.
+// trace:TASK-1955 | ai:claude (TASK-2108)
+#[cfg(unix)]
+#[test]
+fn reviewer_without_a_recorded_head_is_reaped_only_when_nothing_is_unpushed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let origin = base.join("origin.git");
+    let root = base.join("repo");
+    std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+    git(&base, &["init", "-q", "--bare", origin.to_str().unwrap()]);
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.name", "Test"]);
+    git(&root, &["config", "user.email", "test@example.com"]);
+    git(&root, &["config", "commit.gpgsign", "false"]);
+    std::fs::write(root.join("README.md"), "base\n").unwrap();
+    git(&root, &["add", "README.md"]);
+    git(&root, &["commit", "-q", "-m", "init"]);
+    std::fs::write(root.join(".git/info/exclude"), "/.aida/\n").unwrap();
+    git(
+        &root,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    let review = base.join("aida-pr-8");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "review/pr-8",
+            review.to_str().unwrap(),
+        ],
+    );
+    // A fix-forward the reviewer pushed: on origin, so nothing is lost.
+    std::fs::write(review.join("fix.txt"), "pushed\n").unwrap();
+    git(&review, &["add", "fix.txt"]);
+    git(&review, &["commit", "-q", "-m", "pushed fix-forward"]);
+    git(&review, &["push", "-q", "origin", "review/pr-8"]);
+
+    let (pid, identity) = dead_pid_with_identity();
+    let lease = lease_json(
+        "01a15ac30008",
+        &review,
+        serde_json::json!({
+            "scope": "PR-8",
+            "slug": "pr-8",
+            "branch": "review/pr-8",
+            "role": "reviewer",
+            "review_verb": true,
+            "started_at": (chrono::Utc::now() - chrono::Duration::minutes(5)).to_rfc3339(),
+            "creator_pid": pid,
+            "creator_pid_start_time": identity,
+        }),
+    );
+    write_lease(&root, &lease);
+    let reapable = |root: &Path| {
+        scan_reapable_with(root, |_| Some(true))
+            .reapable
+            .iter()
+            .any(|r| r.session == lease.id)
+    };
+    assert!(reapable(&root), "every review commit is on origin");
+
+    std::fs::write(review.join("local.txt"), "unpushed\n").unwrap();
+    git(&review, &["add", "local.txt"]);
+    git(&review, &["commit", "-q", "-m", "unpushed"]);
+    assert!(
+        !reapable(&root),
+        "an unpushed local commit keeps the session"
+    );
+}

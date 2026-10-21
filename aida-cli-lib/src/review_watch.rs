@@ -354,6 +354,9 @@ struct Store {
     runtime: Directory,
     dir: Directory,
     repository: String,
+    // The project root: `runtime`/`dir` paths are `/proc/self/fd` handles.
+    // trace:TASK-1955 | ai:claude (TASK-2109)
+    root: PathBuf,
 }
 impl Store {
     fn open(root: &Path, repository: &str) -> Result<Self> {
@@ -363,6 +366,7 @@ impl Store {
             runtime,
             dir,
             repository: repository.into(),
+            root: root.to_path_buf(),
         })
     }
     fn load(&self) -> Result<State> {
@@ -618,9 +622,9 @@ impl Store {
     /// (`joemooney` vs `joe`) reached no inbox and the stale PR stalled.
     // trace:TASK-1955 | ai:claude (TASK-1-410)
     fn notice_recipient(&self, author: &str) -> String {
-        let runtime = self.runtime.path();
-        let root = runtime.parent().unwrap_or(&runtime);
-        crate::known_mailbox_recipients(&root.join(".aida-store"))
+        let store = crate::detect_distributed_store_from(&self.root)
+            .unwrap_or_else(|| self.root.join(".aida-store"));
+        crate::known_mailbox_recipients(&store)
             .get(&author.to_lowercase())
             .cloned()
             .unwrap_or_else(|| "advisor".to_string())
@@ -942,8 +946,15 @@ fn select(
                 expected.timestamp = notice.message.timestamp;
                 Ok(serde_json::to_value(&expected)? == recorded)
             };
+            // A roster change between recording and sending moves the mapped
+            // recipient; the recorded one stays valid (the deterministic ID,
+            // body and subject still pin the notice). trace:TASK-1955 | ai:claude (TASK-2109)
+            let recorded_to = match &notice.message.to {
+                aida_core::mailbox::Recipient::Agent(to) => to.clone(),
+                aida_core::mailbox::Recipient::Broadcast => String::new(),
+            };
             let mut known = false;
-            for to in [recipient.as_str(), change.author.as_str()] {
+            for to in [recipient.as_str(), change.author.as_str(), recorded_to.as_str()] {
                 known = known || matches(Some(&change.base), to)? || matches(None, to)?;
             }
             anyhow::ensure!(known, "notification identity changed; pending message retained");
