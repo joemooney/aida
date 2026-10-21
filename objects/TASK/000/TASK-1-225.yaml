@@ -8,13 +8,14 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-21T04:49:51.270452684Z
+modified_at: 2026-10-21T04:49:55.640498253Z
 req_type: Task
 tags:
 - closure-pending
 - from-advisor:TASK-1604
 - kind:observation
 - linked:TASK-1604
+- operator-held
 - parked:night
 - severity:minor
 relationships:
@@ -788,6 +789,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a15ccb-65a8-71c1-bc25-7e7fb6ff6c7a
+  author: joe
+  timestamp: 2026-10-21T04:49:56.136335057Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:49:55.640498253Z
+deferred_until: TASK-1981's last slice merges (then complete TASK-1332)
+deferred_reason: 'Advisor ruling 2026-10-20 21:55: remaining scope owned by TASK-1981 and TASK-2041'
 execution_mode: drive
 filed_at:
   code_sha: 978c4974292a59513f53bab40b53b10be8122ca7
