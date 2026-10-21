@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1-225",
+  "publishes": [
+    {
+      "at": "2026-10-21T16:22:31.388680270Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-07T23:06:35.942958800Z",
+      "spec": "TASK-1-225",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-14T01:34:04.343197525Z",
+      "spec": "TASK-1-225",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drive"
+      }
+    },
+    {
+      "ts": "2026-10-21T04:49:54.839414806Z",
+      "spec": "TASK-1-225",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T04:49:54.840316974Z",
+      "spec": "TASK-1-225",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-21T16:22:31.226107781Z",
+      "spec": "TASK-1-225",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-10-21T16:22:31.226905037Z",
+      "spec": "TASK-1-225",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
