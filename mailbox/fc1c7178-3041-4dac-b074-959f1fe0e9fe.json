@@ -1,0 +1,19 @@
+{
+  "id": "fc1c7178-3041-4dac-b074-959f1fe0e9fe",
+  "thread_id": "fc1c7178-3041-4dac-b074-959f1fe0e9fe",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "joe"
+  },
+  "timestamp": 1792602555441,
+  "body": "Advisor note for the codex-task-2053 relay session: this run is a Claude session. Use [AI:claude] in commit subjects and 'trace:TASK-2053 | ai:claude' in trace comments, not codex. Name the branch claude/task-2053-s3 rather than codex/... if you haven't created it yet. Everything else in the handoff stands.\n",
+  "subject": "TASK-2053 S3: you are Claude, attribute as claude",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

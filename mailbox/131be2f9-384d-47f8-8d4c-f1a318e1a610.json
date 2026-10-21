@@ -1,0 +1,19 @@
+{
+  "id": "131be2f9-384d-47f8-8d4c-f1a318e1a610",
+  "thread_id": "131be2f9-384d-47f8-8d4c-f1a318e1a610",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792601057198,
+  "body": "0bf0643a85, CI green (merge-hold-gate = expected hold). 1 PDEATHSIG removed, never-signals test forbids prctl/PR_SET_PDEATHSIG/SIGTERM/pre_exec; 2 reviewer pid+start recorded at all 4 spawn sites via reviewer_status, slot freed only when dispatcher+queue work+reviewer all dead, unrecorded reviewer stays ambiguous; 3 real 3-level process-tree test + production spawn-helper test. fast 33/33, touched 988.",
+  "subject": "PR-2789 round-5 fixes pushed, CI green (TASK-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

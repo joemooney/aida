@@ -1,0 +1,19 @@
+{
+  "id": "a1d36e2a-85b5-4e73-a25b-25dc73a1936f",
+  "thread_id": "a1d36e2a-85b5-4e73-a25b-25dc73a1936f",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792601884856,
+  "body": "PR #2800 head 62b19e273ffaf39d7f914b864d44f5c5fdbde41c (origin/main merged, no rebase). All 4 findings fixed: parent_notices list printed 'Parent already linked:', mapped parent filtered from others, FileGapsOutcome::render tested for absent 'Parent conflict:'; burndown paren + rewraps; fire.md rewrap; drain_gate doc rewrap (trace moved off ///). Gates: check-ci-fast 33/33, test-touched all green (cli-lib 1365, core 1578, tui 10), check-templates OK. CI: 8 pass, Release skipped, merge-hold-gate fail (review hold only).",
+  "subject": "PR-2800 round 1 fixes",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "ac8c2ffb-0258-4c86-acc0-0bece96c0f8c",
+  "thread_id": "ac8c2ffb-0258-4c86-acc0-0bece96c0f8c",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792602001308,
+  "body": "A relay (run codex-task-2053) has waited 10 min for a missing handoff file: /home/joe/ai/aida/.aida/relay/codex-task-2053/handoff.md. The lane is idle until one is written.",
+  "subject": "relay idle: no handoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}
