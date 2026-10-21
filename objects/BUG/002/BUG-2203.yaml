@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:30.070573682Z
-modified_at: 2026-10-21T09:53:42.821198990Z
+modified_at: 2026-10-21T10:57:20.150600171Z
 req_type: Bug
 history:
 - id: 01a15de1-83a5-7843-892b-e401bb884a71
@@ -19,6 +19,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a15e1b-c38f-7f42-9060-f68bceb71758
+  author: joe
+  timestamp: 2026-10-21T10:57:20.271848320Z
+  session_id: 01a15e1a9882
+  changes: []
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -27,3 +32,11 @@ filed_at:
   aida_build_sha: 68d66b1e36
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Title/branch Refs handling (AC1, AC4) is correct, but the merge-time skip (AC2) reads Refs groups from the whole commit message. That suppresses legitimate completions on real squash merges whose bodies list (Refs X) slice commits under a completing (X) title.
+  recovery_hint: address the review findings, move BUG-2203 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-21T10:57:20.150600171Z
