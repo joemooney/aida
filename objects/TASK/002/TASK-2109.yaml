@@ -6,16 +6,25 @@ description: |
   review_watch.rs notice_recipient/select: no test maps a forge login to a known identity's stored spelling. A pending notice recorded under one mapping fails ensure!("notification identity changed") on every poll once the roster changes, so it is never delivered. Also, sweep_probe_refs can sweep live pid-less or other-namespace probe refs mid-probe (transient failure).
 
   Raised in review of PR-2814: https://github.com/joemooney/aida/pull/2814#issuecomment-6327894451
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T22:25:13.809030556Z
-modified_at: 2026-10-21T22:25:13.809030556Z
+modified_at: 2026-10-21T22:26:04.778021370Z
 req_type: Task
 tags:
 - from-review:PR-2814
 - severity:minor
+history:
+- id: 01a16092-536a-75c0-ad44-8e376f2911a9
+  author: joe
+  timestamp: 2026-10-21T22:26:04.778015768Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a59fbfeeffbfbfe0a063d2334a46566e2ce9634
   branch: pr-2814
