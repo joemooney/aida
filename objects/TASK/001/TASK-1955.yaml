@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T20:32:48.763231072Z
+modified_at: 2026-10-21T20:32:52.700737905Z
 req_type: Task
 tags:
 - launch
@@ -455,6 +455,12 @@ comments:
   content: 'ADVISOR 13:20: the PR-2807 notes recorded at 13:16 were auto-filed as TASK-2089..2093 and are now folded here (2091 is the important one: an empty just-created lease gets stolen).'
   created_at: 2026-10-21T20:17:00.261256203Z
   modified_at: 2026-10-21T20:17:00.261256203Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1602a-afdc-7603-80cc-d0e159362a92
+  author: joe
+  content: 'ADVISOR 13:33: folded the PR-2810 (slice 4) review findings TASK-2094..2098 (lane-liveness review_started vs a dead creator pid; reap skipping the unique-commit gate (DATA LOSS); TASK-2030 members 2025/1664/1665 unaddressed; misplaced rustdoc; session leases shows a dead creator_pid). They''re to be fixed in #2810''s rework.'
+  created_at: 2026-10-21T20:32:52.700737905Z
+  modified_at: 2026-10-21T20:32:52.700737905Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
