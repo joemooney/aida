@@ -1,0 +1,27 @@
+id: 01a1606d-8ed5-7981-bda3-b9f0152c80ac
+spec_id: TASK-2107
+agreed_id: TASK-2107
+title: verify_linked_worktree_main resolves a relative gitdir back-pointer against process cwd
+description: |
+  aida-cli-lib/src/session.rs verify_linked_worktree_main: back_ok runs canonicalize(Path::new(body.trim())) on <common>/worktrees/<name>/gitdir. With git >= 2.48, worktree.useRelativePaths (git worktree add --relative-paths) writes that file relative to the gitdir directory, so it resolves against the process cwd and every contained launch from such a worktree is falsely refused. It fails closed, so this is a usability bug, not an escape. Fix: resolve a relative body against the gitdir directory, and add a fixture.
+
+  Raised in review of PR-2813: https://github.com/joemooney/aida/pull/2813#issuecomment-6327254794
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:45:55.157372808Z
+modified_at: 2026-10-21T21:45:55.157372808Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2813
+- severity:minor
+filed_at:
+  code_sha: 9c7f3c3f4abc3d3a316ee45231bb9214a2796e7a
+  branch: pr-2813
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a1606afbef
