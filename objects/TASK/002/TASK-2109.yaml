@@ -1,0 +1,26 @@
+id: 01a16091-8c51-7573-b868-385daea55ab6
+spec_id: TASK-2109
+agreed_id: TASK-2109
+title: 'review-watch stale notice: test identity mapping; tolerate roster change for a pending notice'
+description: |
+  review_watch.rs notice_recipient/select: no test maps a forge login to a known identity's stored spelling. A pending notice recorded under one mapping fails ensure!("notification identity changed") on every poll once the roster changes, so it is never delivered. Also, sweep_probe_refs can sweep live pid-less or other-namespace probe refs mid-probe (transient failure).
+
+  Raised in review of PR-2814: https://github.com/joemooney/aida/pull/2814#issuecomment-6327894451
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T22:25:13.809030556Z
+modified_at: 2026-10-21T22:25:13.809030556Z
+req_type: Task
+tags:
+- from-review:PR-2814
+- severity:minor
+filed_at:
+  code_sha: 9a59fbfeeffbfbfe0a063d2334a46566e2ce9634
+  branch: pr-2814
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef47673729
+  vendor: claude
+  session: 01a16086d2dd
