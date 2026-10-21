@@ -6,16 +6,25 @@ description: |
   review_watch.rs: Entry.notices gains one entry per stale head while a change is open (validate_state caps it at 256, after which that change's transactions fail). Per-change {key}.lock files and logs/{key}-{token}.log are never pruned. Consider pruning notices for non-current heads and rotating logs. The spec makes locks permanent, so the lock files may be intended.
 
   Raised in review of PR-2789: https://github.com/joemooney/aida/pull/2789#issuecomment-6315813763
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T12:23:56.278924811Z
-modified_at: 2026-10-21T12:23:56.278924811Z
+modified_at: 2026-10-21T12:52:49.956761943Z
 req_type: Task
 tags:
 - from-review:PR-2789
 - severity:cosmetic
+history:
+- id: 01a15e85-80a4-7413-90ce-266006bdea0f
+  author: joe
+  timestamp: 2026-10-21T12:52:49.956756525Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: a685a32b2dca9447a93072bac77528045b07d47c
   branch: pr-2789
