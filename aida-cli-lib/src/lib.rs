@@ -568,6 +568,9 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
+#[cfg(test)]
+mod test_git;
 // trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
 #[cfg(test)]
 mod test_home;

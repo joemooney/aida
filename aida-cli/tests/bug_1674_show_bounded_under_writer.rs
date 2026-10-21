@@ -31,6 +31,9 @@
 // trace:BUG-1967 | ai:claude
 // trace:BUG-1995 | ai:antigravity
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
@@ -190,7 +193,7 @@ fn signal(pids: &[u32], sig: &str) {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

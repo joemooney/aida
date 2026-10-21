@@ -6,7 +6,7 @@
 use super::*;
 
 fn git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()
@@ -233,7 +233,7 @@ fn unreachable_origin_is_distinguished_from_missing_base() {
     let repo = tmp.path().join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     let git = |args: &[&str]| {
-        let ok = std::process::Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(&repo)
             .args(args)
             .status()

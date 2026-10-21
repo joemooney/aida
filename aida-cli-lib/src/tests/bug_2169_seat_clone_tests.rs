@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn git_ok(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -25,7 +25,7 @@ fn git_ok(dir: &Path, args: &[&str]) -> String {
 }
 
 fn ref_exists(dir: &Path, name: &str) -> bool {
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(["rev-parse", "--verify", "--quiet", name])
@@ -542,7 +542,7 @@ fn no_git_runs_in_a_seat_clone_outside_the_accessor_module() {
         .output();
     let before_control = std::fs::read_to_string(&log).unwrap();
     // Negative control: an untagged host git in the clone.
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(&clone)
         .args(["status", "--porcelain"])
@@ -591,6 +591,13 @@ fn clone_invocations(log: &str, clone: &Path) -> Vec<(bool, String)> {
             if arg == "-C" && i + 1 < args.len() {
                 cwd = cwd.join(args[i + 1]);
                 dirs.push(cwd.clone());
+                i += 2;
+                continue;
+            }
+            // `-c <key=value>` (test fixtures and store transactions pass
+            // these first) takes a value that is not the subcommand.
+            // trace:BUG-2191 | ai:claude
+            if (arg == "-c" || arg == "--config-env") && i + 1 < args.len() {
                 i += 2;
                 continue;
             }
@@ -925,7 +932,7 @@ fn a_symlinked_git_dir_is_still_refused() {
 
     assert_host_git_refused(&clone, &fsmonitor, &filter);
     // Control: the canaries are live, so the refusal is what kept them quiet.
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(&clone)
         .args(["add", "-A"])
@@ -946,7 +953,7 @@ fn a_gitdir_file_is_still_refused() {
     std::fs::write(clone.join(".git"), "gitdir: .gitx\n").unwrap();
 
     assert_host_git_refused(&clone, &fsmonitor, &filter);
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(&clone)
         .args(["add", "-A"])
@@ -957,7 +964,7 @@ fn a_gitdir_file_is_still_refused() {
 /// Plain host git in `dir` with the planted filter: proves the layout is
 /// live, so the builders' refusal is what kept the canary quiet.
 fn control_filter_fires(dir: &Path, filter: &Path) {
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(["add", "-A"])
@@ -990,7 +997,7 @@ fn a_root_laid_out_as_a_gitdir_is_still_refused() {
         ("core.bare", "false"),
         ("core.worktree", clone.to_str().unwrap()),
     ] {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .args(["config", "--file"])
             .arg(&config)
             .args([key, value])

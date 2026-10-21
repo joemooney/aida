@@ -1,7 +1,7 @@
 use super::*;
 
 fn git(path: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(args)
@@ -58,7 +58,7 @@ fn add_creates_worktree_with_focus_then_is_idempotent() {
     assert_eq!(focus.as_deref(), Some("EPIC-54"));
 
     // The new worktree is on the derived branch.
-    let head = std::process::Command::new("git")
+    let head = crate::test_git::git_command()
         .arg("-C")
         .arg(&out.path)
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
