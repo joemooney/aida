@@ -1316,8 +1316,12 @@ pub(crate) fn release_orphan_pins(
                     orphan.clone.display()
                 )
             } else {
-                match crate::seat_clone::release_pin(project_root, &orphan.pin) {
-                    Ok(()) => format!("released {} (its clone is gone)", orphan.pin),
+                match crate::seat_clone::release_orphan_pin(project_root, orphan) {
+                    Ok(true) => format!("released {} (its clone is gone)", orphan.pin),
+                    Ok(false) => format!(
+                        "kept {} — its clone or lease reappeared since the scan",
+                        orphan.pin
+                    ),
                     Err(error) => format!("could not release {}: {error:#}", orphan.pin),
                 }
             }

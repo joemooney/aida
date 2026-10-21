@@ -579,8 +579,15 @@ fn task_2053_bwrap_session_end_tears_down_a_seat_clone() {
         .main
         .join(".aida/salvage")
         .join(clone.file_name().unwrap());
-    let patches: Vec<_> = std::fs::read_dir(&salvage_dir).unwrap().collect();
+    let patches: Vec<_> = std::fs::read_dir(&salvage_dir)
+        .unwrap()
+        .filter(|e| e.as_ref().unwrap().path().extension() == Some("patch".as_ref()))
+        .collect();
     assert_eq!(patches.len(), 1);
+    assert!(salvage_dir
+        .read_dir()
+        .unwrap()
+        .any(|e| { e.unwrap().path().extension() == Some("bundle".as_ref()) }));
 }
 
 /// `aida worktree dismiss <clone>`: salvages, removes the clone and its pin,
@@ -799,4 +806,249 @@ fn task_2053_bwrap_a_salvage_past_its_cap_is_marked_and_keeps_the_clone() {
     let body = std::fs::read_to_string(patch).unwrap();
     assert!(body.trim_end().ends_with("the clone was kept"), "{body}");
     assert!(clone.exists());
+}
+
+/// A `bwrap` first on PATH that fails every run whose arguments contain
+/// `fail_on` (all runs when empty) and execs the real one otherwise.
+fn bwrap_shim_path(fx: &Fixture, fail_on: &str) -> String {
+    let real = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("bwrap"))
+        .find(|candidate| candidate.is_file())
+        .expect("bwrap on PATH")
+        .display()
+        .to_string();
+    let dir = fx.root.join("bwrap-shim");
+    std::fs::create_dir_all(&dir).unwrap();
+    let body = if fail_on.is_empty() {
+        "#!/bin/sh\nexit 1\n".to_string()
+    } else {
+        format!("#!/bin/sh\ncase \"$*\" in *{fail_on}*) exit 1;; esac\nexec '{real}' \"$@\"\n")
+    };
+    crate::test_exec::write_executable(&dir.join("bwrap"), body);
+    format!(
+        "{}:{}",
+        dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+fn end_session(id: &str, force: bool) -> anyhow::Result<()> {
+    crate::session_end::session_end(
+        Some(id),
+        None,
+        None,
+        true,
+        force,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+    )
+}
+
+/// Review round 2, item 1: untracked names that git would quote (non-ASCII,
+/// a double quote, a backslash) are salvaged with their content, and an
+/// untracked file that cannot be read fails the salvage, which keeps the clone.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_salvage_keeps_quoted_untracked_names_and_fails_on_unreadable() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "names", "c0ffee000021");
+    let names = ["naïve.txt", "q\"uote.txt", "back\\slash.txt"];
+    for (i, name) in names.iter().enumerate() {
+        std::fs::write(clone.join(name), format!("content-{i}\n")).unwrap();
+    }
+    let patch = std::fs::read_to_string(salvage(&fx.main, &clone).unwrap()).unwrap();
+    for i in 0..names.len() {
+        assert!(patch.contains(&format!("+content-{i}")), "{patch}");
+    }
+
+    use std::os::unix::fs::PermissionsExt;
+    let locked = clone.join("locked.txt");
+    std::fs::write(&locked, "secret work\n").unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let readable = std::fs::read(&locked).is_ok(); // true when the test runs as root
+    let failed = salvage(&fx.main, &clone);
+    let kept = destroy(&fx.main, &clone, DestroyMode::SalvageUnshipped, None);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644)).unwrap();
+    if !readable {
+        assert!(
+            failed.is_err(),
+            "an unreadable untracked file must fail the salvage"
+        );
+        assert!(matches!(kept, Ok(Destroyed::Kept { .. })), "{kept:?}");
+        assert!(clone.exists());
+    }
+}
+
+/// Review round 2, item 2: commits on a side branch the seat switched away
+/// from, a tag, and every stash entry count as unpushed, and the salvage
+/// bundles them all.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_side_branches_tags_and_stashes_are_unpushed_and_bundled() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "refs", "c0ffee000022");
+    git_ok(&clone, &["checkout", "-q", "-b", "side"]);
+    seat_commit(&clone, "side.txt");
+    git_ok(&clone, &["tag", "kept-tag"]);
+    git_ok(&clone, &["checkout", "-q", "feat"]);
+    let facts = known(probe(&fx.main, &clone));
+    assert_eq!(facts.unpushed, 1, "{facts:?}");
+    assert!(facts.unshipped() && facts.dirty.is_empty());
+
+    let stash = |text: &str| {
+        std::fs::write(clone.join("README.md"), text).unwrap();
+        git_ok(
+            &clone,
+            &[
+                "-c",
+                "user.email=seat@example.com",
+                "-c",
+                "user.name=Seat",
+                "stash",
+                "-q",
+            ],
+        );
+    };
+    stash("first stash\n");
+    stash("second stash\n");
+    let facts = known(probe(&fx.main, &clone));
+    assert!(
+        facts.unpushed >= 3,
+        "two stash entries count too: {facts:?}"
+    );
+
+    let patch_path = salvage(&fx.main, &clone).unwrap();
+    let patch = std::fs::read_to_string(&patch_path).unwrap();
+    let stashes = git_ok(&clone, &["log", "-g", "--format=%H", "refs/stash"]);
+    for sha in stashes.lines() {
+        assert!(patch.contains(&format!("# stash entry: {sha}")), "{patch}");
+    }
+    let bundle = patch_path.with_extension("bundle");
+    let heads = git_ok(
+        &fx.main,
+        &["bundle", "list-heads", bundle.to_str().unwrap()],
+    );
+    for want in ["refs/heads/side", "refs/tags/kept-tag", "refs/stash"] {
+        assert!(
+            heads.contains(want),
+            "{want} missing from the bundle:\n{heads}"
+        );
+    }
+    // The older stash entry's commit is in the bundle's pack too.
+    // The bundle is thin: it restores on top of a clone of the main checkout.
+    let restore = fx.root.join("restore");
+    git_ok(
+        &fx.root,
+        &[
+            "clone",
+            "-q",
+            fx.main.to_str().unwrap(),
+            restore.to_str().unwrap(),
+        ],
+    );
+    git_ok(&restore, &["bundle", "unbundle", bundle.to_str().unwrap()]);
+    for sha in stashes.lines() {
+        git_ok(&restore, &["cat-file", "-e", &format!("{sha}^{{commit}}")]);
+    }
+}
+
+/// Review round 2, item 3: session end on a clone whose probe answers
+/// "unknown" refuses, with or without `--force`, and changes nothing.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_session_end_refuses_an_unreadable_seat_clone() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000023";
+    let clone = seat(&fx, "unknown", id);
+    let pin = pin_ref(&clone).unwrap();
+    let path = bwrap_shim_path(&fx, "");
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    for force in [false, true] {
+        assert!(end_session(id, force).is_err());
+        assert!(clone.exists() && ref_exists(&fx.main, &pin));
+        assert!(crate::lease_path(&fx.main, id).exists());
+    }
+}
+
+/// Review round 2, item 3: when `destroy` keeps the clone during session end
+/// (here its salvage fails), the clone and its pin stay, and reap reports
+/// them for `aida worktree dismiss` instead of releasing the pin.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_session_end_keeps_a_clone_destroy_could_not_salvage() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000024";
+    let clone = seat(&fx, "kept", id);
+    let pin = pin_ref(&clone).unwrap();
+    seat_commit(&clone, "work.txt");
+    let path = bwrap_shim_path(&fx, "aida-seat-salvage");
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+    let _ = end_session(id, true);
+    assert!(clone.exists(), "a clone whose salvage failed must be kept");
+    assert!(ref_exists(&fx.main, &pin));
+    if !crate::lease_path(&fx.main, id).exists() {
+        let orphans = orphan_pins(&fx.main);
+        let row = orphans.iter().find(|o| o.pin == pin).expect("reported");
+        assert!(row.clone_exists);
+        crate::session_reap::release_orphan_pins(&fx.main, &orphans);
+        assert!(ref_exists(&fx.main, &pin));
+    }
+}
+
+/// Review round 2, item 4: an orphan pin is released only while it still
+/// names the listed commit and its clone and lease are still absent.
+#[test]
+fn release_orphan_pin_rechecks_and_compares_before_deleting() {
+    let fx = fixture();
+    let gone = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-cas"));
+    create(&fx.main, &gone, "feat", "origin/main").unwrap();
+    std::fs::remove_dir_all(&gone).unwrap();
+    let pin = pin_ref(&gone).unwrap();
+    let orphan = orphan_pins(&fx.main)
+        .into_iter()
+        .find(|o| o.pin == pin)
+        .unwrap();
+
+    // The pin moved since the scan: compare-and-delete refuses.
+    let moved = OrphanPin {
+        oid: "1".repeat(orphan.oid.len()),
+        ..orphan.clone()
+    };
+    assert!(release_orphan_pin(&fx.main, &moved).is_err());
+    assert!(ref_exists(&fx.main, &pin));
+    // A lease appeared since the scan: kept.
+    write_clone_lease(&fx.main, &gone, "c0ffee000025");
+    assert!(!release_orphan_pin(&fx.main, &orphan).unwrap());
+    std::fs::remove_file(crate::lease_path(&fx.main, "c0ffee000025")).unwrap();
+    // The directory reappeared since the scan: kept.
+    std::fs::create_dir_all(&gone).unwrap();
+    assert!(!release_orphan_pin(&fx.main, &orphan).unwrap());
+    std::fs::remove_dir(&gone).unwrap();
+    assert!(release_orphan_pin(&fx.main, &orphan).unwrap());
+    assert!(!ref_exists(&fx.main, &pin));
 }

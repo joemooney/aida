@@ -496,6 +496,18 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
 - **Still gated.** `seat_tree = "clone"` stays a development switch until S4 moves status and the
   other listing paths off plain git.
 
+### S3 review round 2 fixes
+
+- **Unpushed means any ref.** The probe counts commits reachable from every branch, tag, HEAD and
+  stash entry (the `refs/stash` reflog) that are not on `origin/*` or the pinned base, so a side
+  branch, a tag or a stash makes the clone unshipped.
+- **Salvage writes a bundle.** Beside the readable patch, salvage writes `<stamp>.bundle` holding
+  every one of those commits with all of the clone's refs (thin against origin; `git fetch` it into
+  a checkout of main). A bundle that cannot be made fails the salvage, and the clone is kept.
+- **Untracked names are NUL-separated** (`ls-files -z` into `xargs -0`), so no quoted name is
+  dropped, and a file that cannot be diffed fails the whole salvage.
+- **Orphan pins are compare-and-delete.** `release_orphan_pin` re-checks that the clone directory
+  is absent and that no clone lease names it, then runs `update-ref -d <pin> <listed oid>`.
 ## S4a as built (host git off seat clones)
 
 S4 ships in three PRs: S4a (this: no host git in a clone from routine paths), S4b (`seat_trees`

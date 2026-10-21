@@ -899,8 +899,9 @@ fn probe_run(
     clone: &Path,
     main: &Path,
     args: &[&std::ffi::OsStr],
+    program: &str,
 ) -> std::result::Result<String, String> {
-    run_sandboxed(clone, main, "git", args, PROBE_OUTPUT_CAP)
+    run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
         .map(|out| String::from_utf8_lossy(&out).into_owned())
         .map_err(|failure| failure.to_string())
 }
@@ -944,32 +945,30 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             "--branch".as_ref(),
             "--untracked-files=all".as_ref(),
         ],
+        "git",
     ) {
         Ok(out) => out,
         Err(why) => return Probe::Unknown(why),
     };
     let mut facts = parse_status_v2(&status);
-    if let Some(head) = facts.head.clone() {
-        let mut args: Vec<std::ffi::OsString> = vec![
-            "rev-list".into(),
-            "--count".into(),
-            head.into(),
-            "--not".into(),
-            "--remotes=origin".into(),
-        ];
-        if let Some(base) = pinned_base(main, clone) {
-            args.push(base.into());
-        }
-        let args: Vec<&std::ffi::OsStr> = args.iter().map(|a| a.as_os_str()).collect();
-        match probe_run(clone, main, &args) {
-            Ok(out) => match out.trim().parse() {
-                Ok(n) => facts.unpushed = n,
-                Err(_) => {
-                    return Probe::Unknown(format!("unreadable commit count `{}`", out.trim()))
-                }
-            },
-            Err(why) => return Probe::Unknown(why),
-        }
+    let base = pinned_base(main, clone).unwrap_or_default();
+    let count = probe_run(
+        clone,
+        main,
+        &[
+            "-c".as_ref(),
+            UNPUSHED_COUNT_SCRIPT.as_ref(),
+            "aida-seat-unpushed".as_ref(),
+            base.as_ref(),
+        ],
+        "sh",
+    );
+    match count {
+        Ok(out) => match out.trim().parse() {
+            Ok(n) => facts.unpushed = n,
+            Err(_) => return Probe::Unknown(format!("unreadable commit count `{}`", out.trim())),
+        },
+        Err(why) => return Probe::Unknown(why),
     }
     Probe::Known(facts)
 }
@@ -995,23 +994,61 @@ pub(crate) fn parse_status_v2(out: &str) -> ProbeFacts {
     facts
 }
 
-/// Inside the probe sandbox: the clone's commits origin does not have (as
-/// `format-patch`), its uncommitted changes and its untracked files' content
-/// (as new-file diffs), all on stdout. `$1` is the pinned base, or empty.
+/// Inside the probe sandbox: set `s` to every stash entry's commit (the
+/// reflog of `refs/stash`, not only its tip). Shared by the scripts below.
 // trace:TASK-2053 | ai:claude
-const SALVAGE_SCRIPT: &str = r#"set -u
-printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n\n' "$PWD"
-printf '# Commits not on origin:\n'
+macro_rules! stash_entries_sh {
+    () => {
+        "s=''\nif git rev-parse -q --verify refs/stash >/dev/null; then\n  \
+         s=$(git log -g --format=%H refs/stash) || exit 1\nfi\n"
+    };
+}
+
+/// Inside the probe sandbox: how many commits the clone holds that origin
+/// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
+/// and not from `origin/*` or the pinned base (`$1`, or empty).
+// trace:TASK-2053 | ai:claude
+const UNPUSHED_COUNT_SCRIPT: &str = concat!(
+    "set -u\n",
+    stash_entries_sh!(),
+    "git rev-list --count --all $s --not --remotes=origin ${1:+\"$1\"}\n"
+);
+
+/// Inside the probe sandbox: a git bundle of every commit
+/// [`UNPUSHED_COUNT_SCRIPT`] counts, with all of the clone's refs, on stdout.
+// trace:TASK-2053 | ai:claude
+const SALVAGE_BUNDLE_SCRIPT: &str = concat!(
+    "set -u\n",
+    stash_entries_sh!(),
+    "exec git bundle create - --all $s --not --remotes=origin ${1:+\"$1\"}\n"
+);
+
+/// Inside the probe sandbox: the HEAD commits origin does not have (as
+/// `format-patch`, for reading; the bundle beside the patch holds every
+/// ref), the stash entries' commits, the uncommitted changes and every
+/// untracked file's content (as new-file diffs), all on stdout. Untracked
+/// names travel NUL-separated, so no name is quoted or dropped, and a file
+/// that cannot be diffed fails the whole salvage. `$1` is the pinned base,
+/// or empty.
+// trace:TASK-2053 | ai:claude
+const SALVAGE_SCRIPT: &str = concat!(
+    "set -u\n",
+    stash_entries_sh!(),
+    r##"printf '# AIDA salvage patch (contained seat clone)\n# clone: %s\n' "$PWD"
+printf '# Every commit origin lacks, on every ref and stash entry, is in the .bundle beside this patch.\n'
+for c in $s; do printf '# stash entry: %s\n' "$c"; done
+printf '\n# Commits on HEAD not on origin:\n'
 git format-patch --stdout --binary HEAD --not --remotes=origin ${1:+"$1"} || exit 1
 printf '\n# Uncommitted changes:\n'
 git diff --binary --no-ext-diff --no-textconv HEAD || exit 1
 printf '\n# Untracked files:\n'
-git ls-files --others --exclude-standard | while IFS= read -r f; do
-  printf '#   %s\n' "$f"
-  git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$f"
-done
+git ls-files -z --others --exclude-standard > /tmp/aida-untracked || exit 1
+xargs -0 -r -n 1 sh -c 'printf "#   %s\n" "$1"
+git diff --no-index --binary --no-ext-diff --no-textconv -- /dev/null "$1"
+[ $? -le 1 ] || exit 255' aida-untracked < /tmp/aida-untracked || exit 1
 exit 0
-"#;
+"##
+);
 
 /// Write what [`SALVAGE_SCRIPT`] captures to
 /// `<main>/.aida/salvage/<clone dir>/<UTC stamp>.patch`. The host never fetches
@@ -1051,10 +1088,47 @@ fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
         .context("a seat clone path has a directory name")?;
     let dir = main.join(".aida").join("salvage").join(name);
     std::fs::create_dir_all(&dir).with_context(|| format!("create {}", dir.display()))?;
-    let path = dir.join(format!(
-        "{}.patch",
-        chrono::Utc::now().format("%Y-%m-%dT%H%M%S%.3fZ")
-    ));
+    let stamp = chrono::Utc::now()
+        .format("%Y-%m-%dT%H%M%S%.3fZ")
+        .to_string();
+    let path = dir.join(format!("{stamp}.patch"));
+    // Every commit origin lacks, on any ref or stash entry, goes into a
+    // bundle beside the patch (`git fetch <bundle>` restores the refs). A
+    // bundle that cannot be made whole keeps the clone.
+    // trace:TASK-2053 | ai:claude
+    let script_args = |script: &'static str| -> [std::ffi::OsString; 4] {
+        [
+            "-c".into(),
+            script.into(),
+            "aida-seat-salvage".into(),
+            base.clone().into(),
+        ]
+    };
+    let count_args = script_args(UNPUSHED_COUNT_SCRIPT);
+    let count_args: Vec<&std::ffi::OsStr> = count_args.iter().map(|a| a.as_os_str()).collect();
+    let unpushed: u64 = probe_run(clone, main, &count_args, "sh")
+        .ok()
+        .and_then(|out| out.trim().parse().ok())
+        .with_context(|| {
+            format!(
+                "could not count the unpushed commits of {}",
+                clone.display()
+            )
+        })?;
+    if unpushed > 0 {
+        let bundle_args = script_args(SALVAGE_BUNDLE_SCRIPT);
+        let bundle_args: Vec<&std::ffi::OsStr> =
+            bundle_args.iter().map(|a| a.as_os_str()).collect();
+        let bundle = run_sandboxed(clone, main, "sh", &bundle_args, cap).map_err(|failure| {
+            anyhow::anyhow!(
+                "could not bundle the {unpushed} unpushed commit(s) of {}: {failure}",
+                clone.display()
+            )
+        })?;
+        let bundle_path = dir.join(format!("{stamp}.bundle"));
+        std::fs::write(&bundle_path, bundle)
+            .with_context(|| format!("write {}", bundle_path.display()))?;
+    }
     if truncated {
         body.extend_from_slice(
             format!("\n# TRUNCATED: the salvage passed {cap} bytes; the clone was kept\n")
@@ -1238,6 +1312,9 @@ pub(crate) fn destroy(
 pub(crate) struct OrphanPin {
     /// `refs/aida/seats/<clone dir>`.
     pub(crate) pin: String,
+    /// The commit the pin named when it was listed; release deletes the pin
+    /// only while it still names this commit.
+    pub(crate) oid: String,
     /// Where that clone would be.
     pub(crate) clone: PathBuf,
     /// The directory still exists: an unleased clone, kept for the operator
@@ -1246,24 +1323,56 @@ pub(crate) struct OrphanPin {
     pub(crate) clone_exists: bool,
 }
 
+/// The directory names of every clone a `clone` lease in `main` names.
+// trace:TASK-2053 | ai:claude
+fn leased_clone_names(main: &Path) -> Vec<std::ffi::OsString> {
+    crate::list_leases(main)
+        .into_iter()
+        .filter(|lease| lease.tree_kind == TreeKind::Clone)
+        .filter_map(|lease| lease.worktree_path.file_name().map(|n| n.to_os_string()))
+        .collect()
+}
+
+/// Release an orphan pin whose clone is gone. Re-checks right before the
+/// delete that the directory is still absent and that no clone lease names
+/// it, then deletes the pin only while it still names the listed commit
+/// (`update-ref -d <pin> <oid>`), so a pass racing a launch or a re-lease
+/// never drops a live clone's pin. `Ok(false)`: the state changed; kept.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn release_orphan_pin(main: &Path, orphan: &OrphanPin) -> Result<bool> {
+    let name = orphan.pin.strip_prefix(PIN_PREFIX).unwrap_or_default();
+    if name.is_empty()
+        || std::fs::symlink_metadata(&orphan.clone).is_ok()
+        || leased_clone_names(main)
+            .iter()
+            .any(|l| l.as_os_str() == name)
+    {
+        return Ok(false);
+    }
+    let mut cmd = git(main);
+    cmd.args(["update-ref", "-d", &orphan.pin, &orphan.oid]);
+    run(cmd, &format!("release {}", orphan.pin)).map(|_| true)
+}
+
 /// Every `refs/aida/seats/*` pin in `main` with no `clone` lease naming its
 /// clone (signoff condition 4: reap enumerates orphan pins).
 // trace:TASK-2053 | ai:claude
 pub(crate) fn orphan_pins(main: &Path) -> Vec<OrphanPin> {
     let mut cmd = git(main);
-    cmd.args(["for-each-ref", "--format=%(refname)", PIN_PREFIX]);
+    cmd.args([
+        "for-each-ref",
+        "--format=%(objectname) %(refname)",
+        PIN_PREFIX,
+    ]);
     let Ok(listing) = run(cmd, "list seat-clone pins") else {
         return Vec::new();
     };
-    let leased: Vec<std::ffi::OsString> = crate::list_leases(main)
-        .into_iter()
-        .filter(|lease| lease.tree_kind == TreeKind::Clone)
-        .filter_map(|lease| lease.worktree_path.file_name().map(|n| n.to_os_string()))
-        .collect();
+    let leased = leased_clone_names(main);
     let parent = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
     listing
         .lines()
-        .filter_map(|pin| {
+        .filter_map(|line| {
+            let (oid, pin) = line.split_once(' ')?;
             let name = pin.strip_prefix(PIN_PREFIX)?;
             if name.is_empty() || leased.iter().any(|l| l.as_os_str() == name) {
                 return None;
@@ -1272,6 +1381,7 @@ pub(crate) fn orphan_pins(main: &Path) -> Vec<OrphanPin> {
                 aida_core::worktree_pool::worktree_placement_path(main, name, parent.as_deref());
             Some(OrphanPin {
                 pin: pin.to_string(),
+                oid: oid.to_string(),
                 clone_exists: std::fs::symlink_metadata(&clone).is_ok(),
                 clone,
             })
