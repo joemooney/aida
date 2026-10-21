@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T05:16:14.397684799Z
-modified_at: 2026-10-21T05:47:50.299566820Z
+modified_at: 2026-10-21T09:28:53.282442218Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -28,6 +28,12 @@ comments:
   created_at: 2026-10-21T05:47:50.299566820Z
   modified_at: 2026-10-21T05:47:50.299566820Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15dca-c922-7da3-ad48-68e1a0eccfe4
+  author: joe
+  content: 'Implemented in PR #2794 (1aa7ebcbda). Covers AC1-3 and the folded TASK-2040 handshake fallback; the write boundary is not widened.'
+  created_at: 2026-10-21T09:28:53.282442218Z
+  modified_at: 2026-10-21T09:28:53.282442218Z
+  session_id: 270d45f3-8587-4c1e-8471-8ca3fbb4db15
 history:
 - id: 01a15ce3-c8a6-7f51-91c2-ddf3bc26512f
   author: joe
