@@ -1,0 +1,28 @@
+id: 01a15d86-7347-76d1-baba-3dd4147f19e1
+spec_id: TASK-1-396
+title: '[cosmetic][non-blocking] With [notify] unconfigured, an operator gate finding s…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1688, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [cosmetic][non-blocking] With [notify] unconfigured, an operator gate finding stays unrouted and is retried every tick with no warning that tells the operator notify is missing. Carried from round 3.
+  Reviewed sha: 0acdec32e36997c90ecef26089b92755773fc4ad
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T08:14:14.855006596Z
+modified_at: 2026-10-21T08:14:14.855006596Z
+req_type: Task
+tags:
+- carried-from:STORY-1688
+- finding-hash:1d2bd8b1
+- from-review:STORY-1688
+- kind:carried-forward
+filed_at:
+  code_sha: 87e4fca49ea56ae8732d5c00230f53d94796c826
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 70664344cd
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
