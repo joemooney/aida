@@ -1,0 +1,26 @@
+id: 01a15f7e-4181-7192-8760-ac01312ec837
+spec_id: TASK-2073
+agreed_id: TASK-2073
+title: KillOnDrop steals the TASK-1768 stop-now test's doc comment and trace
+description: |
+  aida-cli-lib/src/drain_cmd.rs:738-745: struct KillOnDrop was inserted between the doc comment + '// trace:TASK-1768' of task_1768_stop_now_never_signals_an_unconfirmed_identity and its #[test], so the doc and trace now attach to KillOnDrop and the test has none. Move the struct and spawn_sleep helper above that doc comment.
+
+  Raised in review of PR-2803: https://github.com/joemooney/aida/pull/2803#issuecomment-6322206591
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:24:32.257295Z
+modified_at: 2026-10-21T17:24:32.257295Z
+req_type: Task
+tags:
+- from-review:PR-2803
+- severity:cosmetic
+filed_at:
+  code_sha: 479aa375b68d355a2cba3512b281a167dbddadc9
+  branch: pr-2803
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15f7bd0e3

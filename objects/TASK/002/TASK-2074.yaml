@@ -1,0 +1,26 @@
+id: 01a15f7e-5256-75c0-9273-0b96606babc4
+spec_id: TASK-2074
+agreed_id: TASK-2074
+title: Implementer store-commit wiring test discards run_implementer's outcome
+description: |
+  aida-cli-lib/src/tests/real_phase_driver_wiring_tests.rs:3160: bug_2185_phase_driver_implementer_commits_child_store_writes does 'let _ = d.run_implementer();'. Assert the expected outcome/failure kind (as the reviewer sibling does at line 3062) so the test pins which exit path committed the child's store writes.
+
+  Raised in review of PR-2803: https://github.com/joemooney/aida/pull/2803#issuecomment-6322206591
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:24:36.566614345Z
+modified_at: 2026-10-21T17:24:36.566614345Z
+req_type: Task
+tags:
+- from-review:PR-2803
+- severity:minor
+filed_at:
+  code_sha: 479aa375b68d355a2cba3512b281a167dbddadc9
+  branch: pr-2803
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15f7bd0e3
