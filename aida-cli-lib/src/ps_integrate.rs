@@ -2213,8 +2213,16 @@ pub(crate) fn build_running_work(
                 .active_pid
                 .filter(|p| process_probe::pid_is_alive(*p))
                 .or_else(|| live_in_worktree.map(|s| s.pid))
+                // BUG-2206: only a creator still alive is this row's process;
+                // a dead one would read its stale transcript as `working`.
+                // trace:TASK-1955 | ai:claude (BUG-2206)
                 .or(if l.review_verb || l.claim_verb {
-                    l.creator_pid
+                    l.creator_pid.filter(|p| {
+                        process_probe::process_identity_is_alive(
+                            *p,
+                            l.creator_pid_start_time.as_deref(),
+                        )
+                    })
                 } else {
                     None
                 });

@@ -1255,3 +1255,75 @@ fn replay_2026_10_13_incidents_each_produce_a_finding_in_one_tick() {
     fired.sort();
     assert_eq!(fired, ["lane-liveness-advisor", "lane-liveness-reviewer"]);
 }
+
+/// TASK-2030 (a): with a required-check set, only required checks are the
+/// readiness signal; a failing optional check no longer blocks pickup, a
+/// missing or red required check still does, and an unknown or empty set
+/// keeps every check in play.
+// trace:TASK-1955 | ai:claude (TASK-2030)
+#[test]
+fn readiness_counts_only_required_checks_when_the_set_is_known() {
+    let now = Utc::now();
+    let green_at = now - Duration::minutes(30);
+    let mut pr = gh_pr(1, HEAD_A, Some(green_at), false);
+    let optional_red = serde_json::json!({
+        "__typename": "CheckRun",
+        "completedAt": rfc(now - Duration::minutes(10)),
+        "conclusion": "FAILURE",
+        "name": "optional-lint",
+        "startedAt": rfc(now - Duration::minutes(20)),
+        "status": "COMPLETED",
+        "workflowName": "Lint"
+    });
+    pr["statusCheckRollup"]
+        .as_array_mut()
+        .unwrap()
+        .push(optional_red);
+    let rollup = pr["statusCheckRollup"].as_array().unwrap().clone();
+    let build = ["Build".to_string()];
+    let ready = rollup_green_at(&rollup, false, Some(&build)).expect("required Build is green");
+    assert_eq!(ready.timestamp(), green_at.timestamp());
+    assert_eq!(rollup_green_at(&rollup, false, None), None, "unknown set");
+    assert_eq!(
+        rollup_green_at(&rollup, false, Some(&[])),
+        None,
+        "unprotected"
+    );
+    let missing = ["Build".to_string(), "Deploy".to_string()];
+    assert_eq!(rollup_green_at(&rollup, false, Some(&missing)), None);
+    let red = ["optional-lint".to_string()];
+    assert_eq!(rollup_green_at(&rollup, false, Some(&red)), None);
+}
+
+/// TASK-2030 (b): a routed `lane-liveness-<seat>` job surfaces through the
+/// seat's due jobs and clears with `aida schedule done lane-liveness-<seat>`.
+// trace:TASK-1955 | ai:claude (TASK-2030)
+#[test]
+fn routed_seat_job_is_due_for_its_seat_and_cleared_by_schedule_done() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let feed = prs_json(vec![gh_pr(
+        2730,
+        HEAD_A,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    scan_and_route_at(root, now, true, &prs);
+    let due = |seat: &str| {
+        crate::maintenance_schedule::due_seat_jobs(root, Some(seat))
+            .into_iter()
+            .map(|j| j.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        due("reviewer").contains(&"lane-liveness-reviewer".to_string()),
+        "{:?}",
+        due("reviewer")
+    );
+    assert!(!due("advisor").contains(&"lane-liveness-reviewer".to_string()));
+
+    crate::maintenance_schedule::done(root, "lane-liveness-reviewer", None).unwrap();
+    assert!(!due("reviewer").contains(&"lane-liveness-reviewer".to_string()));
+}
