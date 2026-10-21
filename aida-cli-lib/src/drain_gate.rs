@@ -1290,16 +1290,6 @@ mod bug_1574_unattended_git_mutation_tests {
     }
 }
 
-/// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
-/// the plan phase that runs before the auto-complete drain's phase 1. Reuses
-/// slice 2's `aida queue work <spec> --plan-only` planning session (headless
-/// when the drain runs a headless implementer) and slice 1's
-/// `aida plan promote <spec>` Approved→Planned transition, in that order
-/// (decided by [`auto_complete::plan_prelude_steps`]). The drain itself is
-/// entered unchanged after this returns `Ok`; the Phase enum is untouched (the
-/// prelude is NOT a renumbered phase). Each step shells out to the current
-/// `aida` binary; a non-zero exit aborts the prelude so the caller skips the
-/// drain. trace:STORY-265 | ai:claude
 /// The `aida` argv the plan prelude's planning session runs. Interactive
 /// plans use the user-facing `--plan-only`; a headless plan mirrors the
 /// phase-1 headless implementer launch so a `--no-human=both` drain plans
@@ -1318,6 +1308,18 @@ pub(crate) fn plan_session_args(spec: &str, headless: bool) -> Vec<String> {
     args
 }
 
+/// STORY-265 slice 3: execute the `--with-plan` PLAN PRELUDE for one spec —
+/// the plan phase that runs before the auto-complete drain's phase 1. Reuses
+/// slice 2's `aida queue work <spec> --plan-only` planning session (the hidden
+/// `--plan-phase --no-human` lane when the drain runs a headless implementer)
+/// and slice 1's `aida plan promote <spec>` Approved→Planned transition, in
+/// that order (decided by [`auto_complete::plan_prelude_steps`]). The drain
+/// itself is entered unchanged after this returns `Ok`; the Phase enum is
+/// untouched (the prelude is NOT a renumbered phase). Each step shells out to
+/// the current `aida` binary; a non-zero exit aborts the prelude so the caller
+/// skips the drain.
+// trace:STORY-265 | ai:claude
+// trace:TASK-1953 | ai:claude — doc moved back above run_plan_prelude.
 pub(crate) fn run_plan_prelude(spec: &str, headless_implementer: bool, json: bool) -> Result<()> {
     use auto_complete::PlanPreludeStep;
     let exe = aida_exe_path();

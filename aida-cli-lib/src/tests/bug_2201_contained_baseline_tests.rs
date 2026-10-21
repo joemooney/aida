@@ -68,7 +68,7 @@ fn rules(settings: &serde_json::Value, key: &str) -> Vec<String> {
 }
 
 #[test]
-fn outside_project_reviewer_gets_aida_and_git_bash_rules() {
+fn outside_project_reviewer_gets_aida_rules_and_no_git_rule() {
     let (_tmp, main, worktree) = outside_project_fixture();
     let own: serde_json::Value =
         serde_json::from_slice(&std::fs::read(main.join(".claude/settings.json")).unwrap())

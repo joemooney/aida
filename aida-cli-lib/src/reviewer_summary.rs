@@ -728,21 +728,32 @@ pub(crate) fn unrecorded_review_recovery(
 
 /// The `aida review record` command for this PR, filled in with what the
 /// launcher knows; only the verdict, summary and findings are left to choose.
+/// `review record` takes one spec, so a PR covering several specs gets one
+/// command line per spec — naming only the first left the rest unreviewed.
 // trace:BUG-2187 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-2065, TASK-1673)
 pub(crate) fn review_record_template(
     spec_ids: &[String],
     pr: u64,
     head_sha: Option<&str>,
 ) -> String {
-    let spec = spec_ids
-        .first()
-        .cloned()
-        .unwrap_or_else(|| format!("PR-{pr}"));
-    format!(
-        "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected> \
-         --summary '<one line>' [--finding '<finding>' ...]",
-        head_sha.unwrap_or("<PR-HEAD-SHA>")
-    )
+    let fallback = [format!("PR-{pr}")];
+    let specs = if spec_ids.is_empty() {
+        &fallback[..]
+    } else {
+        spec_ids
+    };
+    specs
+        .iter()
+        .map(|spec| {
+            format!(
+                "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected> \
+                 --summary '<one line>' [--finding '<finding>' ...]",
+                head_sha.unwrap_or("<PR-HEAD-SHA>")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // Claude emits a terminal result (or, cut short, assistant text blocks);
@@ -982,5 +993,25 @@ mod bug2187_recovery_tests {
         let out = unrecorded_review_recovery(Path::new("/review"), None, Some("draft"), &template);
         assert!(out.contains(&template), "{out}");
         assert!(review_record_template(&[], 59, None).contains("PR-59 --pr 59 --sha <PR-HEAD-SHA>"));
+    }
+
+    /// A multi-spec PR's recovery hands over a record command for every
+    /// covered spec, not only the first.
+    // trace:TASK-1955 | ai:claude (TASK-2065)
+    #[test]
+    fn recovery_template_names_every_covered_spec() {
+        let template = review_record_template(
+            &["STORY-77".into(), "BUG-12".into(), "TASK-3".into()],
+            59,
+            Some("abc1234"),
+        );
+        let lines: Vec<&str> = template.lines().collect();
+        assert_eq!(lines.len(), 3, "{template}");
+        for (line, spec) in lines.iter().zip(["STORY-77", "BUG-12", "TASK-3"]) {
+            assert!(
+                line.starts_with(&format!("aida review record {spec} --pr 59 --sha abc1234 ")),
+                "{template}"
+            );
+        }
     }
 }

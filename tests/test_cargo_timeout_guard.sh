@@ -1,6 +1,7 @@
 #!/bin/bash
 # Pattern coverage for the warn-only cargo time-budget PreToolUse hook.
 # trace:STORY-1854 | ai:claude
+# trace:TASK-1967 | ai:claude
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOOK="$ROOT/aida-core/templates/hooks/aida-cargo-timeout-guard.sh"
@@ -10,9 +11,16 @@ fail=0
 
 # Feed one Bash command through the hook as a PreToolUse payload. The command
 # is JSON-encoded by python so quotes and newlines survive intact.
+# RUN_DIR is the hook process's working directory; PAYLOAD_CWD, when set, is
+# the payload's `cwd` (the Bash tool's directory), which the hook prefers.
+RUN_DIR="$ROOT"
+PAYLOAD_CWD=""
 run() {
-    python3 -c 'import json,sys; print(json.dumps({"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}))' "$1" \
-        | "$HOOK" >"$TMP/out" 2>"$TMP/err"
+    python3 -c 'import json,sys
+d={"tool_name":"Bash","tool_input":{"command":sys.argv[1]}}
+if sys.argv[2]: d["cwd"]=sys.argv[2]
+print(json.dumps(d))' "$1" "$PAYLOAD_CWD" \
+        | (cd "$RUN_DIR" && "$HOOK") >"$TMP/out" 2>"$TMP/err"
     echo $? >"$TMP/status"
 }
 expect_warn() {
@@ -55,6 +63,94 @@ expect_silent "quoted prose" 'aida comment add STORY-1 --body "never write timeo
 expect_silent "heredoc prose" $'aida mailbox send --to advisor --stdin <<EOF\nI ran timeout 3000 cargo test\nEOF'
 expect_silent "comment prose" 'cargo ps # was: timeout 3000 cargo test'
 expect_silent "non-Bash payload" ''
+
+# TASK-1961: a quoted `sh -c` body is still run under the outer timeout.
+expect_warn "timeout bash -c double-quoted cargo" 'timeout 3000 bash -c "cargo test"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+expect_warn "timeout sh -c single-quoted cd && cargo" "timeout 20m sh -c 'cd w && RUST_LOG=1 cargo build'" 'AIDA_CARGO_TIMEOUT=20m cargo'
+expect_warn "timeout bash -lc with nice and make" 'timeout 50m bash -lc "nice -n 10 make test-touched"' 'AIDA_CARGO_TIMEOUT=50m make <target>'
+expect_warn "hint names the sh -c form" 'timeout 3000 /bin/bash -c "cargo test"' 'timeout 3000 sh -c "cargo ..."'
+expect_silent "timeout bash -c body that only echoes cargo" 'timeout 30 bash -c "echo cargo test"'
+expect_silent "timeout bash -c body without cargo" "timeout 30 bash -c 'ls -la'"
+expect_silent "quoted prose naming an sh -c form" "aida comment add STORY-1 --body \"timeout 3 bash -c 'cargo test'\""
+
+# TASK-1962: a make target is skipped only when its Makefile shows no cargo.
+MK="$TMP/mk"
+mkdir -p "$MK/sub"
+printf '%s\n' \
+    '.PHONY: hello docs lint wrapper recurse varcmd script both' \
+    'hello: ## Prints a greeting' \
+    $'\t@echo hello' \
+    $'\t@printf "%s\\n" "$$HOME" \\' \
+    '      | cat' \
+    'docs: hello README.md' \
+    $'\t@echo docs' \
+    'lint:' \
+    $'\tcargo clippy --workspace' \
+    'wrapper: docs lint' \
+    'recurse:' \
+    $'\t@$(MAKE) hello' \
+    'varcmd:' \
+    $'\t$(TEST_CMD)' \
+    'script:' \
+    $'\t@./run-checks' \
+    'both: ; echo a && cargo build' \
+    'continued: hello \' \
+    '    lint' >"$MK/Makefile"
+RUN_DIR="$MK"
+expect_silent "make target that only echoes" 'timeout 1h make hello'
+expect_silent "make target and a file prerequisite" 'timeout 1h make -j4 V=1 docs'
+expect_silent "sh -c body running a make target without cargo" 'timeout 1h bash -c "make hello"'
+expect_warn "make target that runs cargo" 'timeout 1h make lint' 'AIDA_CARGO_TIMEOUT=1h make <target>'
+expect_warn "make prerequisite that runs cargo" 'timeout 1h make wrapper' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "make prerequisite on a continued line" 'timeout 1h make continued' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "one of several targets runs cargo" 'timeout 1h make hello lint' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "recursive make" 'timeout 1h make recurse' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "recipe expands a make variable" 'timeout 1h make varcmd' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "recipe runs a script" 'timeout 1h make script' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "inline recipe runs cargo" 'timeout 1h make both' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "unknown make target" 'timeout 1h make nope' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "default goal" 'timeout 1h make' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "make -C another directory" 'timeout 1h make -C sub hello' 'AIDA_CARGO_TIMEOUT=1h make'
+expect_warn "cd before the timeout" 'cd sub && timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+printf '%s\n' 'include rules.mk' 'hello: generated' $'\t@echo hello' >"$MK/sub/Makefile"
+RUN_DIR="$MK/sub"
+expect_warn "prerequisite an include may define" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+RUN_DIR="$TMP"
+expect_warn "no Makefile here" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# The payload's cwd, not the hook process's, picks the Makefile.
+PAYLOAD_CWD="$MK"
+expect_silent "payload cwd names the Makefile" 'timeout 1h make hello'
+RUN_DIR="$MK"
+PAYLOAD_CWD="$TMP"
+expect_warn "payload cwd without a Makefile" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+PAYLOAD_CWD=""
+
+# PR-2801 round 1: every segment counts, and the resolver fails toward warning.
+RUN_DIR="$MK"
+expect_warn "safe make then a timeout cargo" 'timeout 1h make hello && timeout 1h cargo test' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "safe make then ; timeout cargo" 'timeout 1h make hello; timeout 1h cargo test' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "sh -c body: safe make then cargo" 'timeout 1h bash -c "make hello && cargo test"' 'AIDA_CARGO_TIMEOUT=1h cargo ...'
+expect_warn "second sh -c runs cargo" 'timeout 30 bash -c "ls" && timeout 30 bash -c "cargo test"' 'AIDA_CARGO_TIMEOUT=30 cargo ...'
+expect_warn "safe sh -c make then sh -c cargo" "timeout 30 sh -c 'make hello'; timeout 30 sh -c 'cargo test'" 'AIDA_CARGO_TIMEOUT=30 cargo ...'
+expect_silent "quoted sh -c prose before a harmless sh -c" "echo 'timeout 3 bash -c \"cargo x\"'; timeout 30 bash -c 'ls'"
+expect_warn "sh -o option before -c" 'timeout 3000 bash -o pipefail -c "cargo test"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+expect_warn "cargo after then" 'timeout 3000 bash -c "if true; then cargo test; fi"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+expect_warn "cargo after do" 'timeout 3000 bash -c "for p in a b; do cargo test -p \$p; done"' 'AIDA_CARGO_TIMEOUT=3000 cargo ...'
+mk_case() { mkdir -p "$MK/$1"; shift_dir="$MK/$1"; shift; printf '%s\n' "$@" >"$shift_dir/Makefile"; RUN_DIR="$shift_dir"; }
+mk_case vardeps 'DEPS = lint' 'hello: $(DEPS)' $'\t@echo hi' 'lint:' $'\tcargo clippy'
+expect_warn "variable prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case incl 'include extra.mk' 'hello: ; @echo hi'
+printf '%s\n' 'hello: lint' 'lint:' $'\tcargo clippy' >"$MK/incl/extra.mk"
+expect_warn "include may add to a known target" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case dashincl '-include extra.mk' 'hello:' $'\t@echo hi'
+expect_warn "-include fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for recipe in 'bin/check' 'python3 -m tool' 'npm run build' 'just ci' '@echo a && rustup run stable cargo build' 'X=1 echo hi' 'echo $$(cargo --version)'; do
+    mk_case allow 'hello:' $'\t'"$recipe"
+    expect_warn "recipe outside the inert allowlist: $recipe" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case inert 'hello: a' $'\t@mkdir -p out && cp a out/ && echo "done; ok" > out/log' $'\t-rm -f stale; touch out/stamp' $'\t@test -f a || printf \'%s\\n\' missing' 'a:' $'\t@true'
+expect_silent "only inert recipe commands" 'timeout 1h make hello'
+RUN_DIR="$ROOT"
 
 # Malformed input never blocks.
 printf 'not json' | "$HOOK" >/dev/null 2>&1

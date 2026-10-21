@@ -167,6 +167,8 @@ pub(crate) fn handle_review_command(
 ) -> anyhow::Result<()> {
     use crate::*;
     match cmd {
+        // trace:TASK-1993 | ai:codex
+        ReviewCommand::Watch(args) => crate::review_watch::run(args),
         ReviewCommand::Prompt {
             specs,
             pr,

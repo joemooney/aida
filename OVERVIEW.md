@@ -1,3 +1,15 @@
+Review watch discovers open non-draft GitHub/GitLab changes against pinned
+origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
+CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
+and permanent admission/per-change locks enforce one reservation per head, a
+global cap of two, and the two-round limit. PID/start/boot receipts precede queue
+work; capacity is released only by a terminal receipt or proof that the
+dispatcher's exact process is gone. Stale overlap notices name the change's
+base branch and publish idempotently to the exact forge author's local mailbox.
+S1 waits for old reviews and never terminates reviewers, updates branches,
+reports readiness, or merges. See [review watch](docs/cli/06-roles-sessions.md#watching-for-new-review-heads).
+<!-- trace:TASK-1993 | ai:codex -->
+
 Agent launch setup validates delegation before allocation, honors explicit
 working directories in launch and preview paths, and retains an invocation-owned
 setup receipt until foreground spawn or successful background dispatch. Fresh
@@ -58,22 +70,23 @@ mandate ship; the event follows marker restoration and precedes label sync.
 Marker and label failures remain explicit.
 
 Mandate-only exclusion checks add trace IDs from both committed sides of changed
-text files of every format, including deleted and renamed files. Source blobs come
-from pinned Git object IDs, never checkout contents. Rust comments are parsed
-separately from string fixtures. Changed hunks contribute their enclosing fn/impl
-traces and always add the file’s leading header traces, including inner/outer
-doc comments and same-line block comments before the first item. The first
-code-token line is conservatively included in full. Module comments outside
-fn/impl items and their attached leading prefixes also add evidence, including
-between items and at EOF. Inline-module headers apply even when attached to an
-unchanged first function. Leading comments owned by other unchanged fn/impl
-items retain their scope. A hunk without safe item attribution, a mode-only
-change, an unparseable Rust file, or any other text format falls back to full-file union.
-For other formats that fallback conservatively includes raw trace tokens,
-including strings. Documentation, configuration, hooks and nested build paths
-are included. Trace markers are case insensitive. Diff ranges and Rust item
-maps both count LF lines, including when a file contains bare CR characters.
-Files without traces cannot identify unnamed specs.
+text files of every format, including deleted and renamed files. Source blobs
+come from pinned Git object IDs, never checkout contents. Rust comments are
+parsed separately from string fixtures. Changed hunks contribute their enclosing
+fn/impl traces and always add the file’s leading header traces, including
+inner/outer doc comments and same-line block comments before the first item. The
+first code-token line is conservatively included in full. Module comments
+outside fn/impl items and their attached leading prefixes also add evidence,
+including between items and at EOF. Inline-module headers apply even when
+attached to an unchanged first function. Leading comments owned by other
+unchanged fn/impl items retain their scope. A hunk without safe item
+attribution, a mode-only change, an unparseable Rust file, or any other text
+format falls back to full-file union. For other formats that fallback
+conservatively includes raw trace tokens, including strings. Documentation,
+configuration, hooks and nested build paths are included. Trace markers are case
+insensitive. Diff ranges and Rust item maps both count LF lines, including when
+a file contains bare CR characters. Files without traces cannot identify unnamed
+specs.
 
 These IDs only add exclusions through the existing current/history/sticky-ledger
 classifier. Verdict candidates, author identity and completion credit still use

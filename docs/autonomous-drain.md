@@ -136,6 +136,32 @@ branch-protection required set), GitLab the newest pipeline's jobs (no
 required-check concept, so only the allow-list applies); pure-git has no rows
 and keeps the coarse verdict.
 
+### Local guards before an implementer branch is published (`[preflight]`)
+
+Before the orchestrator opens a PR for an implementer's branch, it runs a set
+of CI guards in that worktree. Each name in `guards` is resolved to the step
+of the same name in `.github/workflows/ci.yml`, so local preflight runs CI's
+own command. A guard that fails refuses publication; one that cannot finish
+is inconclusive, and the PR opens under a merge-hold instead of merging.
+
+```toml
+[preflight]
+guards = ["Check formatting", "Run clippy"]  # default: five fast CI guards
+guard_timeout_secs = 900                     # per guard; default 900
+build_timeout_secs = 3600                    # the one shared build; default 3600 (cold worktree)
+```
+
+**The budgets are doubled for now.** Each budget is handed to the cargo
+wrapper as `AIDA_CARGO_TIMEOUT`, meant to start counting when a build slot is
+acquired, not while the command waits in the slot queue. The wrapper does not
+honour that variable yet (aida-host STORY-100). Until it does, the only
+deadline is a backstop that starts when the command is spawned and allows
+**twice** the configured budget, to leave room for slot-queue wait. A guard
+with `guard_timeout_secs = 900` can therefore run for up to 1800s before it
+is reported as timed out, and the timeout reason names both numbers. Size the
+budgets for the run itself; do not halve them to compensate.
+<!-- trace:TASK-1967 | ai:claude -->
+
 ### Spec-authored acceptance commands need a machine-level opt-in (`[review]`)
 
 The reviewer phase's graded review parses a spec's acceptance section and
@@ -1257,13 +1283,14 @@ were denied (`permission-denied`), or the disk or memory ran out
 **2 consecutive** specs fail with the same one of these causes the drain
 halts before starting another (any member already in flight in a pipelined
 drain finishes its run — or is recorded in `skipped` with its PR left open if
-the parent's serial leg broke un-shelvably — before the drain exits). It prints one `environment blocked` line naming
-the cause and the fix, leaves the rest of the queue untouched, and exits
-`3`. In a `--batches` chain the count runs across batch boundaries. The JSON summary reports `"outcome": "environment-blocked"` and
-`"halt_reason": "<cause>"` (`null` on every other stop). Any other result in
-between (a ship, or a different failure) resets the count. Set the threshold
-with `environment_halt_after` under `[orchestrator]` in `.aida/config.toml`;
-`0` turns the halt off.
+the parent's serial leg broke un-shelvably — before the drain exits). It
+prints one `environment blocked` line naming the cause and the fix, leaves
+the rest of the queue untouched, and exits `3`. In a `--batches` chain the
+count runs across batch boundaries. The JSON summary reports
+`"outcome": "environment-blocked"` and `"halt_reason": "<cause>"` (`null` on
+every other stop). Any other result in between (a ship, or a different
+failure) resets the count. Set the threshold with `environment_halt_after`
+under `[orchestrator]` in `.aida/config.toml`; `0` turns the halt off.
 
 ### The `--max-failures` safety cap
 

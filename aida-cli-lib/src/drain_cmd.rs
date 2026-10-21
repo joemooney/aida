@@ -607,13 +607,9 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
         // reads an uncomparable identity as Running. Signal only on a strict
         // positive identity match; otherwise the cooperative stop request
         // written above is the whole stop.
-        if !signal_drain_stop_now(&lock) {
-            println!(
-                "Drain pid {} was not signalled: its process identity could not be confirmed, \
-                 so it may be a different process. A stop request was written; a live drain \
-                 stops at its next phase.",
-                lock.pid
-            );
+        let signal = signal_drain_stop_now(&lock);
+        if let Some(why) = stop_now_not_signalled_message(signal, lock.pid) {
+            println!("{why}");
             return Ok(());
         }
         // TASK-1518: the drain catches SIGTERM and may keep driving its
@@ -657,25 +653,71 @@ fn handle_drain_stop(project: Option<&str>, now: bool) -> Result<()> {
     Ok(())
 }
 
+/// What `stop --now` did about signalling the drain pid. The two refusals
+/// read differently: an unconfirmed identity may be a different process, a
+/// failed kill is the drain we meant but the signal did not land.
+// trace:TASK-1955 | ai:claude (TASK-1773)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum StopNowSignal {
+    Sent,
+    /// No strict identity match (or a pid of 0/1): never signalled.
+    Unconfirmed,
+    /// The identity matched, but `kill -TERM` itself failed.
+    KillFailed,
+}
+
+/// The line `stop --now` prints when it did not signal, or `None` once the
+/// signal was sent.
+// trace:TASK-1955 | ai:claude (TASK-1773)
+pub(crate) fn stop_now_not_signalled_message(signal: StopNowSignal, pid: u32) -> Option<String> {
+    match signal {
+        StopNowSignal::Sent => None,
+        StopNowSignal::Unconfirmed => Some(format!(
+            "Drain pid {pid} was not signalled: its process identity could not be confirmed, \
+             so it may be a different process. A stop request was written; a live drain \
+             stops at its next phase."
+        )),
+        StopNowSignal::KillFailed => Some(format!(
+            "Drain pid {pid} was confirmed but could not be signalled (kill -TERM failed). \
+             A stop request was written; a live drain stops at its next phase."
+        )),
+    }
+}
+
 /// SIGTERM the drain named by `lock` ONLY when its recorded start identity
 /// strictly matches the live process (TASK-1768). A missing, unparsable,
 /// non-canonical or cross-scheme identity is "cannot tell", and "cannot tell"
 /// never signals: the pid may have been recycled onto an unrelated process.
-/// Returns whether the signal was sent.
 // trace:TASK-1768 | ai:claude
-pub(crate) fn signal_drain_stop_now(lock: &drain_lock::DrainLock) -> bool {
+pub(crate) fn signal_drain_stop_now(lock: &drain_lock::DrainLock) -> StopNowSignal {
+    signal_drain_stop_now_with(lock, |pid| {
+        std::process::Command::new("kill")
+            .arg("-TERM")
+            .arg(pid.to_string())
+            .status()
+            .is_ok_and(|s| s.success())
+    })
+}
+
+/// [`signal_drain_stop_now`] over an injected `kill`, so a failed signal on
+/// a confirmed identity is testable.
+// trace:TASK-1955 | ai:claude (TASK-1773)
+fn signal_drain_stop_now_with(
+    lock: &drain_lock::DrainLock,
+    kill: impl FnOnce(u32) -> bool,
+) -> StopNowSignal {
     let confirmed = lock
         .pid_start_time
         .as_deref()
         .is_some_and(|start| aida_core::liveness::process_identity_matches_strict(lock.pid, start));
     if !confirmed || lock.pid <= 1 {
-        return false;
+        return StopNowSignal::Unconfirmed;
     }
-    std::process::Command::new("kill")
-        .arg("-TERM")
-        .arg(lock.pid.to_string())
-        .status()
-        .is_ok_and(|s| s.success())
+    if kill(lock.pid) {
+        StopNowSignal::Sent
+    } else {
+        StopNowSignal::KillFailed
+    }
 }
 
 #[cfg(all(test, unix))]
@@ -697,13 +739,32 @@ mod task_1768_stop_now_tests {
     /// exact ticks, absent) naming a LIVE unrelated pid is never signalled by
     /// `stop --now`, even though the lenient lock probe reads it Running.
     // trace:TASK-1768 | ai:claude
+    /// Kills the `sleep` child on drop, so an early assert failure never
+    /// orphans it.
+    // trace:TASK-1955 | ai:claude (TASK-1773)
+    struct KillOnDrop(std::process::Child);
+
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    fn spawn_sleep() -> KillOnDrop {
+        KillOnDrop(
+            std::process::Command::new("sleep")
+                .arg("60")
+                .stdin(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        )
+    }
+
     #[test]
     fn task_1768_stop_now_never_signals_an_unconfirmed_identity() {
-        let mut unrelated = std::process::Command::new("sleep")
-            .arg("60")
-            .stdin(std::process::Stdio::null())
-            .spawn()
-            .unwrap();
+        let mut guard = spawn_sleep();
+        let unrelated = &mut guard.0;
         let pid = unrelated.id();
         for start in [
             Some("garbage"),
@@ -715,7 +776,11 @@ mod task_1768_stop_now_tests {
             if let Some(s) = start {
                 assert!(process_probe::process_identity_is_alive(pid, Some(s)));
             }
-            assert!(!signal_drain_stop_now(&lock), "{start:?} was signalled");
+            assert_eq!(
+                signal_drain_stop_now(&lock),
+                StopNowSignal::Unconfirmed,
+                "{start:?} was signalled"
+            );
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert!(
@@ -725,9 +790,34 @@ mod task_1768_stop_now_tests {
 
         // Positive control: the genuine identity IS signalled.
         let real = aida_core::liveness::process_start_identity(pid).expect("identity");
-        assert!(signal_drain_stop_now(&lock_for(pid, Some(&real))));
+        assert_eq!(
+            signal_drain_stop_now(&lock_for(pid, Some(&real))),
+            StopNowSignal::Sent
+        );
         use std::os::unix::process::ExitStatusExt as _;
         assert_eq!(unrelated.wait().unwrap().signal(), Some(15));
+    }
+
+    /// A confirmed identity whose `kill` fails is reported as a failed
+    /// signal, not as an unconfirmed identity.
+    // trace:TASK-1955 | ai:claude (TASK-1773)
+    #[test]
+    fn stop_now_reports_a_failed_kill_distinctly_from_an_unconfirmed_identity() {
+        let guard = spawn_sleep();
+        let pid = guard.0.id();
+        let real = aida_core::liveness::process_start_identity(pid).expect("identity");
+        let signal = signal_drain_stop_now_with(&lock_for(pid, Some(&real)), |_| false);
+        assert_eq!(signal, StopNowSignal::KillFailed);
+        let msg = stop_now_not_signalled_message(signal, pid).unwrap();
+        assert!(msg.contains("could not be signalled"), "{msg}");
+        assert!(!msg.contains("could not be confirmed"), "{msg}");
+
+        let msg = stop_now_not_signalled_message(StopNowSignal::Unconfirmed, pid).unwrap();
+        assert!(msg.contains("could not be confirmed"), "{msg}");
+        assert_eq!(
+            stop_now_not_signalled_message(StopNowSignal::Sent, pid),
+            None
+        );
     }
 }
 

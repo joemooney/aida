@@ -3004,6 +3004,12 @@ fn bug_2185_child_store_writes(store_root: &std::path::Path) -> String {
 /// dirty. (Host dirt from before the launch, such as the seat registry the
 /// standalone launcher writes, is not the child's and stays.)
 fn bug_2185_assert_store_committed(store_root: &std::path::Path) {
+    bug_2185_assert_store_committed_by(store_root, "reviewer");
+}
+
+/// [`bug_2185_assert_store_committed`] for the launcher of `child`'s phase.
+// trace:TASK-1955 | ai:claude (TASK-1929)
+fn bug_2185_assert_store_committed_by(store_root: &std::path::Path, child: &str) {
     let status = git(
         store_root,
         &["status", "--porcelain", "--untracked-files=all"],
@@ -3017,7 +3023,7 @@ fn bug_2185_assert_store_committed(store_root: &std::path::Path) {
         &["show", "--name-status", "--format=%s", "HEAD"],
     );
     assert!(
-        head.starts_with("reviewer: commit 2 store changes")
+        head.starts_with(&format!("{child}: commit 2 store changes"))
             && head.contains("D\tcoordination/leases/held.toml")
             && head.contains("A\tobjects/new.yaml"),
         "the deletion and the new object are one launcher commit:\n{head}"
@@ -3125,4 +3131,32 @@ fn bug_2185_standalone_reviewer_commits_child_store_writes_on_its_error_exit() {
     );
     bug_2185_assert_store_committed(&store_root);
     crate::session::set_headless_vendor_override(None);
+}
+
+/// TASK-1929: the phase driver's real implementer entry point commits the
+/// implementer child's store writes (a deletion included) as the launcher's
+/// own `implementer:` commit. The BUG-2140 sweep only runs for a contained
+/// drive, so this fails if `run_implementer` stops arming the commit.
+// trace:TASK-1955 | ai:claude (TASK-1929)
+#[cfg(unix)]
+#[test]
+fn bug_2185_phase_driver_implementer_commits_child_store_writes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (work, store_root) = bug_2185_project_with_store(tmp.path(), "");
+    let fake_aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &fake_aida,
+        format!(
+            "#!/bin/sh\n{}exit 1\n",
+            bug_2185_child_store_writes(&store_root)
+        ),
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_EXIT_POLL_MS", "1")]);
+    let mut d = driver(&work, "TASK-9");
+    d.aida_exe = fake_aida;
+    d.drain_tuning.no_progress = std::time::Duration::ZERO;
+    d.drain_tuning.ceiling = std::time::Duration::ZERO;
+
+    let _ = d.run_implementer();
+    bug_2185_assert_store_committed_by(&store_root, "implementer");
 }

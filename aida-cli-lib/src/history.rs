@@ -2677,14 +2677,15 @@ fn yaml_string(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(String::from)
 }
 
-/// Read `key` first; if absent or empty, fall back to `custom_key`. This
-/// mirrors `effective_status()` / `effective_priority()` semantics on the
-/// model side.
 /// The underlying lifecycle enum of a spec snapshot's `status` field.
 fn yaml_status(v: &Value) -> Option<aida_core::models::RequirementStatus> {
     serde_yaml::from_value(v.get("status")?.clone()).ok()
 }
 
+/// Read `key` first; if absent or empty, fall back to `custom_key`. This
+/// mirrors `effective_status()` / `effective_priority()` semantics on the
+/// model side.
+// trace:TASK-1953 | ai:claude — doc moved back above its own fn.
 fn effective(v: &Value, key: &str, custom_key: &str) -> Option<String> {
     if let Some(custom) = yaml_string(v, custom_key) {
         if !custom.is_empty() {
@@ -4393,6 +4394,38 @@ mod tests {
         assert_eq!(
             effective(&v, "status", "custom_status").as_deref(),
             Some("Awaiting Review")
+        );
+    }
+
+    /// The human (colored) line shows the authority clause after the status
+    /// transition, and omits it for an ungated flip.
+    // trace:TASK-1953 | ai:claude — human-rendering coverage for TASK-1737.
+    #[test]
+    fn format_event_body_renders_authority_clause() {
+        let mk = |authority: Option<EventAuthority>| Event {
+            sha: "abc".into(),
+            timestamp: "2026-05-04 12:00".into(),
+            author: "joe".into(),
+            spec_id: "FR-1".into(),
+            req_type: "FR".into(),
+            kind: EventKind::StatusChange {
+                from: "Approved".into(),
+                to: "Planned".into(),
+                authority,
+            },
+        };
+        let gated = mk(Some(EventAuthority {
+            kind: "grant".into(),
+            seat: Some("advisor".into()),
+            grant: Some("g-1".into()),
+        }));
+        assert_eq!(
+            crate::pr_lookup::strip_ansi_color(&format_event_body(&gated)),
+            "status: Approved → Planned (authority: grant (advisor, g-1))"
+        );
+        assert_eq!(
+            crate::pr_lookup::strip_ansi_color(&format_event_body(&mk(None))),
+            "status: Approved → Planned"
         );
     }
 
