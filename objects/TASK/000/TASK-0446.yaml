@@ -10,12 +10,12 @@ description: |-
   - Valid mappings link a reported consensus gap to the actual contract clause/spec and parent its amendment draft accordingly.
   - Missing, invalid and stale references remain explicit without invented links.
   - Fixtures cover valid, missing and stale mapping, and repeat filing remains idempotent.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T15:09:32.180659596Z
-modified_at: 2026-10-19T01:19:34.059523107Z
+modified_at: 2026-10-21T09:11:20.396356118Z
 req_type: Task
 tags:
 - from-implementer:STORY-1679
@@ -131,17 +131,28 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a15dba-b83e-70e0-9961-f06ed0beaaf8
+  author: aida-auto-bump
+  timestamp: 2026-10-21T09:11:20.382853300Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15dba-b84c-7632-addf-e5691e541fed
+  timestamp: 2026-10-21T09:11:20.396350378Z
+  agent: aida
+  commit_sha: 68d66b1e36a773168e6e7da649681eebee0a688b
+  summary: 'TASK-0446 conforms to advisor-signed sketch v2 and all 4 signoff conditions; all 4 acceptance criteria verified by consensus.rs fixtures (valid/missing/unavailable/invalid/stale/live-drift/idempotent/add-only/conflict/link-failure); CI green at 180cd721. Non-blocking: tests not anchored to criterion IDs; conflict message nit.'
+  review_verdict: approved
 filed_at:
   code_sha: dcc46d8298a7da6c5c8b3e899b8878db6fa20767
   branch: main
   dirty: false
   aida_version: 0.15.0
   aida_build_sha: 596a91dbc0
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'AC1 unmet: TASK-0446 sketch v1 is explicitly NOT SIGNED and no advisor signoff exists, yet code shipped; trust-anchor fallback to the aida-store branch and missing/stale fixture gaps also block. CI Build still pending at review time.'
-  recovery_hint: address the review findings, move TASK-0446 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T21:06:14.767300043Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T09:11:20.382847652Z
+  completion_sha: 68d66b1e36a773168e6e7da649681eebee0a688b
