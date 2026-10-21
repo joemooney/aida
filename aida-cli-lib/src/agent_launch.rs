@@ -1648,6 +1648,43 @@ pub(crate) fn refuse_unallowlisted_contained_passthrough(
     Ok(())
 }
 
+/// BUG-2169 S2: point a contained claude launch's `--settings` at the tree
+/// the seat will run in. The posture is resolved before the session's tree
+/// exists, so [`tool_contained_flags`] scoped the write boundary to the
+/// LAUNCHER's git root: a seat launched from the main checkout got the main
+/// checkout as its boundary, and a clone seat got none of its own. Once the
+/// plan names the tree, the settings are rebuilt from that tree's git root,
+/// exactly as `agent resume` does. A launch that is not a contained claude
+/// launch is left alone.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn rescope_contained_settings(
+    config: &mut AgentLaunchConfig,
+    tree: &std::path::Path,
+) -> Result<()> {
+    if config.agent_type != "claude" || !is_contained_launch(config) {
+        return Ok(());
+    }
+    let at: Vec<usize> = (0..config.default_args.len())
+        .filter(|&i| config.default_args[i] == "--settings")
+        .collect();
+    if at.is_empty() {
+        return Ok(());
+    }
+    let roots = session::contained_session_write_roots_from(tree);
+    let flags = session::claude_contained_flags_for_roots(&roots)?;
+    let settings = flags
+        .last()
+        .cloned()
+        .context("contained launch flags carry no settings document")?;
+    for i in at {
+        match config.default_args.get_mut(i + 1) {
+            Some(slot) => *slot = settings.clone(),
+            None => config.default_args.push(settings.clone()),
+        }
+    }
+    Ok(())
+}
+
 // trace:BUG-1178 | ai:codex
 pub(crate) fn tool_contained_flags(agent_type: &str) -> Result<Vec<String>> {
     Ok(match agent_type {
@@ -2561,6 +2598,8 @@ pub(crate) fn agent_new_with_config(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
+    // trace:BUG-2169 | ai:claude
+    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -2703,6 +2742,11 @@ pub(crate) fn agent_new_bg_dispatch(
     // Checked before any preview or side effect. trace:BUG-2151 | ai:claude
     refuse_uncontained_child_of_contained_parent(&config)?;
     guard_interactive_claude_dontask(config.agent_type, &config.default_args)?;
+    // BUG-2169 S2: refuse a contained `--bg` under os_wrap before any preview
+    // or side effect: no claim, lease, clone or pin is made for a launch that
+    // cannot run. `build_agent_new_bg_command` re-checks the planned tree.
+    // trace:BUG-2169 | ai:claude
+    refuse_bg_under_os_wrap(&config, &project_root)?;
 
     // STORY-495: surface the one-time faithful-launcher pointer when a Claude
     // launch lands on the native posture (no `--permission-mode` in the argv).
@@ -2808,6 +2852,8 @@ pub(crate) fn agent_new_bg_dispatch(
         // trace:BUG-2169 | ai:claude
         is_contained_launch(&config),
     )?;
+    // trace:BUG-2169 | ai:claude
+    rescope_contained_settings(&mut config, &plan.launch_cwd)?;
     config.default_args.extend(agent_seed_session_args(
         config.agent_type,
         plan.native_session_id.as_deref(),
@@ -4865,6 +4911,7 @@ pub(crate) fn build_agent_new_bg_command(
     prompt_args: &[String],
     launch_context: Option<&AgentLaunchContext>,
 ) -> Result<std::process::Command> {
+    refuse_bg_under_os_wrap(config, &plan.launch_cwd)?;
     let mut command = std::process::Command::new(binary);
     command
         .current_dir(&plan.launch_cwd)
@@ -4930,6 +4977,28 @@ pub(crate) fn build_agent_new_bg_command(
         review_authority::bind_worker_env(&mut command, lease_id);
     }
     Ok(command)
+}
+
+/// BUG-2169 S2: `claude --bg` hands the session to Claude Code's background
+/// daemon and returns, so the session runs in a process the dispatcher never
+/// parents. Wrapping the dispatcher in bubblewrap would confine only the
+/// hand-off, not the session. When `[contained] os_wrap` asks for the OS
+/// boundary, a contained `--bg` launch is refused instead of running the
+/// session outside it.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn refuse_bg_under_os_wrap(
+    config: &AgentLaunchConfig,
+    launch_cwd: &std::path::Path,
+) -> Result<()> {
+    if is_contained_launch(config) && session::os_wrap_enabled(launch_cwd) {
+        anyhow::bail!(
+            "`--bg` cannot run a contained session inside the `[contained] os_wrap` OS \
+             boundary: Claude Code's background supervisor starts the session itself, outside \
+             the bubblewrap sandbox around this launcher. Launch it in the foreground, or turn \
+             os_wrap off for this host."
+        );
+    }
+    Ok(())
 }
 
 // trace:BUG-2006 | ai:antigravity
