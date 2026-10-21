@@ -1,0 +1,27 @@
+id: 01a15f80-b439-7df0-a5e2-8f3ca7d2c7d3
+spec_id: TASK-1-414
+title: 'cosmetic: Entry.historical_keys is deserialized, validated and read in history(…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: Entry.historical_keys is deserialized, validated and read in history() but never written (review_watch.rs:186-188, 496-501); retained rounds live in history/<key>.json. Remove the dead field or write it.
+  Reviewed sha: f737aabdb43e0d811a44e67d028950895e1d9f34
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T17:27:12.697255536Z
+modified_at: 2026-10-21T17:27:12.697255536Z
+req_type: Task
+tags:
+- carried-from:TASK-1993
+- finding-hash:ba40a9d3
+- from-review:TASK-1993
+- kind:carried-forward
+filed_at:
+  code_sha: 98d19dceb3af3acaf538f2cfe952677c200fad0c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
