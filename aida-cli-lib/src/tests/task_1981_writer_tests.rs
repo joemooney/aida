@@ -309,6 +309,7 @@ fn task_1981_runtime_untracking_waits_and_commits_after_peer() {
     git_ops::configure_user(&store, "Test", "test@example.com").unwrap();
     let git = |args: &[&str]| {
         let output = git_ops::host_git_command(&store)
+            .args(["-c", "maintenance.auto=false", "-c", "gc.auto=0"])
             .args(args)
             .output()
             .unwrap();
