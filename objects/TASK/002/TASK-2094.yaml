@@ -1,0 +1,36 @@
+id: 01a16029-2dd0-7380-b1c3-dc481b59e78a
+spec_id: TASK-2094
+agreed_id: TASK-2094
+title: lane-liveness review_started ignores a live reviewer once its creator pid dies (BUG-2206 Stale arm, empty live list)
+description: |
+  lane_liveness.rs:1297-1305 calls lease_state_for(l, &[], now) with no live sessions. Since PR-2810, leases.rs:1179-1190 returns Stale for a review_verb lease whose creator is provably dead and that has no live session in its worktree, so here creator death alone marks the review not started. A reviewer still running whose creator shell exited triggers a false unpicked-ready-pr nudge. This also changes TASK-1665 behaviour without a test. Fix: pass the live-session probe (plus the BUG-2010 registry check for codex reviewers) and test both cases.
+
+  Raised in review of PR-2810: https://github.com/joemooney/aida/pull/2810#issuecomment-6325879491
+status: Superseded
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:31:13.872764178Z
+modified_at: 2026-10-21T20:31:58.351596862Z
+req_type: Task
+tags:
+- TASK-1955
+- from-review:PR-2810
+- severity:minor
+history:
+- id: 01a16029-db8f-7f61-918b-83fce5a804d1
+  author: joe
+  timestamp: 2026-10-21T20:31:58.351589229Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+filed_at:
+  code_sha: 396cb2bf3cdc964d4c5c07d6665d05ece4204880
+  branch: pr-2810
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16022c487
