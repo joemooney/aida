@@ -6,16 +6,25 @@ description: |
   review_record_template (aida-cli-lib/src/reviewer_summary.rs) builds the recovery `aida review record` command from pr_spec_ids.first(). A PR covering several specs gets a command that records only one, so an operator following it leaves the other specs unreviewed.
 
   Raised in review of PR-2781: https://github.com/joemooney/aida/pull/2781#issuecomment-6316283635
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T12:46:19.258865873Z
-modified_at: 2026-10-21T12:46:19.258865873Z
+modified_at: 2026-10-21T12:53:00.029964883Z
 req_type: Task
 tags:
 - from-review:PR-2781
 - severity:minor
+history:
+- id: 01a15e85-a7fd-7411-ac08-d0831bdcb8ff
+  author: joe
+  timestamp: 2026-10-21T12:53:00.029958942Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
   branch: pr-2781
