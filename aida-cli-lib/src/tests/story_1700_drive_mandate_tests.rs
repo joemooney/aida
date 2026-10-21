@@ -513,7 +513,7 @@ fn due_items_dedup_across_two_ticks() {
 // ── T7.9 / T7.11: gate layers ───────────────────────────────────────────────
 
 fn git(dir: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args([
             "-c",
             "user.name=t",
@@ -1737,7 +1737,7 @@ fn only_a_store_spec_awaiting_signoff_makes_a_blocked_relay_a_sketch_signoff() {
 fn the_gate_description_is_cached_on_the_origin_main_commit() {
     let repo = repo_with_committed_gates("[\"dispatch\"]");
     let oid = crate::mandate_gates::origin_main_oid(repo.path()).unwrap();
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["rev-parse", "refs/remotes/origin/main"])
         .current_dir(repo.path())
         .output()
