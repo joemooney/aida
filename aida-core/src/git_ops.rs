@@ -968,6 +968,11 @@ pub fn refuse_embedded_repos_for_push(store: &Path, rev: &str) -> Result<()> {
 
 /// Check if a directory is a git repository.
 pub fn is_git_repo(path: &Path) -> bool {
+    // BUG-2169: host git never runs in a contained seat's private clone, so
+    // to host code it is not a repository it may use. trace:TASK-2053 | ai:claude
+    if crate::seat_clone_detect::seat_clone_root(path).is_some() {
+        return false;
+    }
     // A hook refusal must never be misclassified as "not a repository".
     // raw-git-ok(BUG-1929): rev-parse is a read-only identity probe, with fsmonitor off.
     let mut command = Command::new("git");

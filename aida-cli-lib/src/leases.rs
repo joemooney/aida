@@ -3030,6 +3030,39 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         return false;
     }
 
+    // BUG-2169: a contained seat's private clone is not a worktree of main
+    // and host git never runs in it. `seat_clone::destroy` probes it in its
+    // sandbox, salvages unshipped work, and removes the clone, its cargo
+    // target and its base pin; the lease goes only once the clone is gone.
+    // trace:TASK-2053 | ai:claude
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        let kept = |why: String| {
+            eprintln!(
+                "  {} kept session {} and its seat clone {}: {why}",
+                "Warning:".yellow().bold(),
+                &lease.id[..lease.id.len().min(8)],
+                lease.worktree_path.display(),
+            );
+            false
+        };
+        return match crate::seat_clone::destroy(
+            project_root,
+            &lease.worktree_path,
+            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            None,
+        ) {
+            Ok(crate::seat_clone::Destroyed::Removed { salvage }) => {
+                if let Some(patch) = salvage {
+                    eprintln!("  salvage patch: {}", patch.display());
+                }
+                crate::session_reap::release_lease_files(project_root, &lease.id);
+                true
+            }
+            Ok(crate::seat_clone::Destroyed::Kept { reason, .. }) => kept(reason),
+            Err(error) => kept(format!("{error:#}")),
+        };
+    }
+
     // Snapshot the lease's authoritative on-disk path before we strip the
     // worktree's symlinks (which can break the symlink chain). Mirrors
     // BUG-56's pattern in `session_end`.

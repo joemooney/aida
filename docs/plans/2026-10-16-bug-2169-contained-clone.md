@@ -495,3 +495,31 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   tests join the live-bwrap CI gate.
 - **Still gated.** `seat_tree = "clone"` stays a development switch until S4 moves status and the
   other listing paths off plain git.
+
+## S4a as built (host git off seat clones)
+
+S4 ships in three PRs: S4a (this: no host git in a clone from routine paths), S4b (`seat_trees`
+visibility: status rows, unshipped detector, runaway sources, preflight, trace, gc/reclaim), and
+S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
+
+- **Raw git routed through `host_git_command`**, which refuses a seat clone without spawning git:
+  `dispatch_health_ps::git_stdout` (the `aida status` / `aida ps` / statusbar running-work probe,
+  `current_branch_at`, the untracked-parent `ls-files`), `worktree_gc::{current_branch_at,
+  detect_default_branch_ref, git_output_lossy}`, `burndown_run::worktree_last_activity` (its mtime
+  leg still answers), `lane_liveness::branch_latest_commit_ts`, and
+  `orchestrator_leases::git_output_checked` plus the PR-title `git log`. A refused read is "no
+  answer", which each caller already handles.
+- **`git_ops::is_git_repo`** is false for a seat clone, and the TUI's main-root resolver reads a
+  clone as its own directory.
+- **Clone-aware cleanup.** `force_cleanup_lease` (doctor's lease heal, pickup and review
+  stale-lease release, drain-retry predecessor, escalated cleanup) calls
+  `seat_clone::destroy(SalvageUnshipped)` for a clone lease after its holder check and releases
+  the lease only once the clone is gone. `salvage_worktree_patch` probes a clone and salvages it
+  through the sandbox; an unreadable clone is an error, so nothing is torn down.
+- **Implementer push.** `push_branch_from_implementer_worktree` refuses a clone: a host push would
+  run its seat-written pre-push hook. A clone seat pushes from its own sandbox.
+- **`agent new` re-entry** checks a clone lease's branch through `seat_clone::probe`.
+- **Tests.** `tests/task_2053_s4_host_git_tests.rs` runs every path above against a clone with a
+  logging `git` first on PATH and requires that no untagged git ran in the clone (negative
+  control included); `task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first`
+  covers heal/cleanup.
