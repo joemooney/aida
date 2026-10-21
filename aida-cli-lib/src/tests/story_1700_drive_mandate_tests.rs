@@ -286,6 +286,7 @@ fn concurrent_ticks_one_acts_other_skips() {
                 &fx.inputs(&now_clock, lanes(), "joe"),
                 &TickHooks {
                     before_action: Some(&hook),
+                    ..Default::default()
                 },
                 &mut fake,
             );
@@ -427,6 +428,7 @@ fn mandate_stopped_mid_tick_refuses_remaining() {
         &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
         &TickHooks {
             before_action: Some(&hook),
+            ..Default::default()
         },
         &mut fake,
     );
@@ -466,6 +468,7 @@ fn mandate_expired_mid_tick_refuses_remaining() {
         &fx.inputs(&clock, three_lanes(&fx), "joe"),
         &TickHooks {
             before_action: Some(&hook),
+            ..Default::default()
         },
         &mut fake,
     );
@@ -2166,6 +2169,7 @@ fn stop_before(fx: &Fixture, at: usize, advisor_live: bool) -> (TickReport, Fake
         &inputs,
         &TickHooks {
             before_action: Some(&hook),
+            ..Default::default()
         },
         &mut fake,
     );
@@ -2316,6 +2320,40 @@ fn a_corrupt_drive_state_fails_closed() {
     assert_eq!(fake.rows.len(), 1, "the refusal is ledgered");
     assert!(report.idle.is_some());
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "{not json");
+    assert_eq!(fake.notices.len(), 1, "the operator is told once");
+    // The same corrupt state is not re-ledgered or re-notified every tick...
+    let again = run_tick(
+        &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(again.rows.is_empty(), "{again:?}");
+    assert!(again.idle.is_some(), "it still refuses");
+    assert_eq!((fake.rows.len(), fake.notices.len()), (1, 1));
+    // ...but a differently corrupt one is.
+    std::fs::write(&path, "[still not a state]").unwrap();
+    let changed = run_tick(
+        &fx.inputs(&now_clock, three_lanes(&fx), "joe"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert_eq!(changed.rows.len(), 1);
+    assert!(fake.due.is_empty());
+
+    // With no own active mandate, nothing is ledgered under an empty id.
+    let other = Fixture::new();
+    drive_mandate(other.mandates.path(), "a");
+    let path = state_path(other.root.path());
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "{not json").unwrap();
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &other.inputs(&now_clock, Vec::new(), "b"),
+        &TickHooks::default(),
+        &mut fake,
+    );
+    assert!(fake.rows.is_empty(), "{:?}", fake.rows);
+    assert!(report.idle.is_some());
 }
 
 // F6: the mismatch notice is marked sent only once it is sent.
@@ -2408,7 +2446,8 @@ fn a_dead_fixers_spec_is_routed_again() {
     assert_eq!(fake.due[2].1.head, "approved#2");
 }
 
-// F8: a spec in a work queue or a live drain's spec set is owned.
+// F8: a spec in a fresh work-queue entry or a live drain's spec set is
+// owned; a stale queue entry is not.
 // trace:TASK-1915 | ai:claude
 #[test]
 fn queue_entries_and_a_live_drain_own_their_specs() {
@@ -2419,13 +2458,13 @@ fn queue_entries_and_a_live_drain_own_their_specs() {
     free.spec_id = Some("TASK-3".into());
     let queues = root.path().join(".aida-store/registry/queues");
     std::fs::create_dir_all(&queues).unwrap();
-    let entry = aida_core::QueueEntry {
+    let entry = |id: uuid::Uuid, added_at: DateTime<Utc>| aida_core::QueueEntry {
         user_id: "joe".into(),
-        requirement_id: queued.id,
+        requirement_id: id,
         position: 0,
         added_by: "joe".into(),
         note: None,
-        added_at: Utc::now(),
+        added_at,
         for_role: Some("implementer".into()),
         for_scope: None,
         for_session: None,
@@ -2433,7 +2472,13 @@ fn queue_entries_and_a_live_drain_own_their_specs() {
     };
     std::fs::write(
         queues.join("joe.yaml"),
-        serde_yaml::to_string(&vec![entry]).unwrap(),
+        serde_yaml::to_string(&vec![entry(queued.id, now_clock())]).unwrap(),
+    )
+    .unwrap();
+    // An abandoned queue (an entry months old) owns nothing.
+    std::fs::write(
+        queues.join("codex.yaml"),
+        serde_yaml::to_string(&vec![entry(free.id, now_clock() - Duration::days(90))]).unwrap(),
     )
     .unwrap();
     std::fs::create_dir_all(root.path().join(".aida")).unwrap();
@@ -2449,8 +2494,62 @@ fn queue_entries_and_a_live_drain_own_their_specs() {
         .to_string(),
     )
     .unwrap();
-    let held = queue_and_drain_claims(root.path(), &[queued, free]);
+    let held = queue_and_drain_claims(root.path(), &[queued, free], now_clock());
     assert!(held.contains("TASK-1"), "{held:?}");
     assert!(held.contains("TASK-2"), "{held:?}");
     assert!(!held.contains("TASK-3"), "{held:?}");
+}
+
+// F6: a state that cannot be saved on the principal-mismatch path is
+// reported, not swallowed. trace:TASK-1915 | ai:claude
+#[test]
+fn a_failed_save_on_the_mismatch_path_is_reported() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "a");
+    let fail = |_: &Path, _: &DriveState| -> Result<()> { anyhow::bail!("disk full") };
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &fx.inputs(&now_clock, Vec::new(), "b"),
+        &TickHooks {
+            save: Some(&fail),
+            ..Default::default()
+        },
+        &mut fake,
+    );
+    let idle = report.idle.as_deref().unwrap_or_default();
+    assert!(idle.contains("could not save the drive state"), "{idle}");
+    assert!(idle.contains("disk full"), "{idle}");
+}
+
+// F3: a failed recheck before the store check is a ledgered refusal.
+// trace:TASK-1915 | ai:claude
+#[test]
+fn a_recheck_failure_before_the_store_check_is_ledgered() {
+    let fx = Fixture::new();
+    drive_mandate(fx.mandates.path(), "joe");
+    let dir = fx.mandates.path().to_path_buf();
+    // Side effects: 0 = the reap, 1 = the store check.
+    let hook = move |n: usize| {
+        if n == 1 {
+            crate::mandate::stop(&dir, &ok_human, "joe", now_clock()).unwrap();
+        }
+    };
+    let mut inputs = fx.inputs(&now_clock, Vec::new(), "joe");
+    inputs.store_readable = false;
+    let mut fake = Fake::default();
+    let report = run_tick(
+        &inputs,
+        &TickHooks {
+            before_action: Some(&hook),
+            ..Default::default()
+        },
+        &mut fake,
+    );
+    assert_eq!(outcomes(&report), vec![("store".into(), Outcome::Refused)]);
+    assert_eq!(report.rows[0].action, "store-check");
+    assert_eq!(
+        report.rows[0].why.as_deref(),
+        Some("mandate stopped mid-tick")
+    );
+    assert!(fake.notices.is_empty());
 }

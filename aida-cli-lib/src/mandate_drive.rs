@@ -48,6 +48,9 @@ const ADVISOR_LIVE_WITHIN: Duration = Duration::minutes(30);
 /// A routed dispatch that no owner has taken up within this window is
 /// re-routed: the fixer died before it claimed (TASK-1915 F8).
 const DISPATCH_STALE: Duration = Duration::hours(2);
+/// A work-queue entry older than this is abandoned, not an owner: a spec
+/// left in a stale queue is dispatched again (TASK-1915 F8).
+const QUEUE_ENTRY_FRESH: Duration = Duration::days(7);
 /// The session variables a tick never acts on and scrubs from its children.
 pub(crate) const SESSION_ENV: [&str; 3] = [
     crate::seat_authority::GRANT_ENV,
@@ -727,6 +730,45 @@ fn save_state(project_root: &Path, state: &DriveState) -> Result<()> {
     Ok(())
 }
 
+/// The refusal already ledgered for an unreadable drive state, beside it.
+// trace:TASK-1915 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct StateRefusal {
+    fingerprint: String,
+    notified: bool,
+}
+
+fn state_refusal_path(project_root: &Path) -> PathBuf {
+    project_root
+        .join(".aida")
+        .join("mandate-drive-state.refused.json")
+}
+
+fn read_state_refusal(project_root: &Path) -> Option<StateRefusal> {
+    serde_json::from_slice(&std::fs::read(state_refusal_path(project_root)).ok()?).ok()
+}
+
+fn write_state_refusal(project_root: &Path, refusal: &StateRefusal) {
+    if let Ok(bytes) = serde_json::to_vec(refusal) {
+        let _ = aida_core::fs_atomic::write_atomic(&state_refusal_path(project_root), &bytes);
+    }
+}
+
+fn clear_state_refusal(project_root: &Path) {
+    let _ = std::fs::remove_file(state_refusal_path(project_root));
+}
+
+/// What identifies one unreadable state: its bytes (FNV-1a), or the read
+/// error when it has none.
+fn state_fingerprint(project_root: &Path, err: &anyhow::Error) -> String {
+    let bytes =
+        std::fs::read(state_path(project_root)).unwrap_or_else(|_| format!("{err:#}").into_bytes());
+    let hash = bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
+    });
+    format!("{hash:016x}")
+}
+
 /// A held drive lock. Drop releases it with an explicit unlock rather than
 /// by closing the file: a child forked by any concurrent thread holds a copy
 /// of the descriptor until its exec and would keep the lock held through it
@@ -827,6 +869,9 @@ pub(crate) struct TickInputs<'a> {
 pub(crate) struct TickHooks<'a> {
     /// Runs before side effect `n` (0-based), before the mandate re-check.
     pub before_action: Option<&'a dyn Fn(usize)>,
+    /// Replaces the state save.
+    // trace:TASK-1915 | ai:claude
+    pub save: Option<&'a dyn Fn(&Path, &DriveState) -> Result<()>>,
 }
 
 /// What one tick did.
@@ -948,27 +993,61 @@ pub(crate) fn run_tick(
     // An unreadable state fails closed: acting on a reset state would
     // re-route every deduplicated item and re-send every notice.
     // trace:TASK-1915 | ai:claude
+    let save = |state: &DriveState| match hooks.save {
+        Some(save) => save(inp.project_root, state),
+        None => save_state(inp.project_root, state),
+    };
     let mut state = match load_state(inp.project_root) {
-        Ok(state) => state,
+        Ok(state) => {
+            clear_state_refusal(inp.project_root);
+            state
+        }
         Err(e) => {
-            let id = mandate.as_ref().map(|m| m.id.clone()).unwrap_or_default();
             let why = format!(
                 "the drive state is unreadable ({e:#}); the tick refuses to act rather than reset its dedup, backoff and notices. Repair or remove the file"
             );
-            let row = ActionRow::new(
-                "tick",
-                "drive tick",
-                "state-check",
-                Outcome::Refused,
-                Some(why.clone()),
-            );
-            fx.ledger(&id, &row);
-            drop(lock);
-            return TickReport {
-                mandate_id: Some(id).filter(|i| !i.is_empty()),
-                idle: Some(why),
-                rows: vec![row],
+            let mut report = TickReport {
+                mandate_id: mandate.as_ref().map(|m| m.id.clone()),
+                idle: Some(why.clone()),
+                rows: Vec::new(),
             };
+            // One ledgered refusal per state fingerprint and one operator
+            // notice, never every tick; and no row without an own active
+            // mandate to ledger it under. trace:TASK-1915 | ai:claude
+            if let Some(m) = &mandate {
+                let fingerprint = state_fingerprint(inp.project_root, &e);
+                let mut seen = read_state_refusal(inp.project_root)
+                    .filter(|r| r.fingerprint == fingerprint)
+                    .unwrap_or_else(|| {
+                        let row = ActionRow::new(
+                            "tick",
+                            "drive tick",
+                            "state-check",
+                            Outcome::Refused,
+                            Some(why.clone()),
+                        );
+                        fx.ledger(&m.id, &row);
+                        report.rows.push(row);
+                        StateRefusal {
+                            fingerprint,
+                            notified: false,
+                        }
+                    });
+                if !seen.notified {
+                    seen.notified = fx
+                        .notify_operator(
+                            "AIDA drive: the drive state is unreadable",
+                            &format!(
+                                "{why}: {}. The drive tick does nothing until it reads again.",
+                                state_path(inp.project_root).display()
+                            ),
+                        )
+                        .is_ok();
+                }
+                write_state_refusal(inp.project_root, &seen);
+            }
+            drop(lock);
+            return report;
         }
     };
 
@@ -1011,7 +1090,7 @@ pub(crate) fn run_tick(
             report.rows.push(row);
         }
         // trace:TASK-1915 | ai:claude
-        if let Err(e) = save_state(inp.project_root, &state) {
+        if let Err(e) = save(&state) {
             report.idle = Some(format!(
                 "no active drive mandate; could not save the drive state: {e:#}"
             ));
@@ -1305,7 +1384,7 @@ pub(crate) fn run_tick(
             }
         }
     }
-    if let Err(e) = save_state(inp.project_root, &state) {
+    if let Err(e) = save(&state) {
         tick.report.idle = Some(format!("could not save the drive state: {e:#}"));
     }
     drop(lock);
@@ -1730,12 +1809,14 @@ fn branch_names_spec(branch: &str, id: &str) -> bool {
 }
 
 /// Specs a work queue or the live drain already holds, upper-cased (spec
-/// and agreed ids): a queue entry routes the spec to someone, and a live
-/// drain's spec set is being worked, so neither is unowned.
+/// and agreed ids): a queue entry added within [`QUEUE_ENTRY_FRESH`] routes
+/// the spec to someone, and a live drain's spec set is being worked, so
+/// neither is unowned. An older queue entry is abandoned and owns nothing.
 // trace:TASK-1915 | ai:claude
 pub(crate) fn queue_and_drain_claims(
     root: &Path,
     reqs: &[aida_core::Requirement],
+    now: DateTime<Utc>,
 ) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     if let Some(lock) = crate::drain_lock::read_pid_live_lock(root) {
@@ -1755,7 +1836,10 @@ pub(crate) fn queue_and_drain_claims(
         else {
             continue;
         };
-        for q in queue {
+        for q in queue
+            .into_iter()
+            .filter(|q| now - q.added_at <= QUEUE_ENTRY_FRESH)
+        {
             if let Some(r) = reqs.iter().find(|r| r.id == q.requirement_id) {
                 out.extend(
                     [r.spec_id.as_deref(), r.agreed_id.as_deref()]
@@ -1804,7 +1888,7 @@ fn collect_unowned_specs(root: &Path, reqs: &[aida_core::Requirement]) -> Vec<Un
     let is_live = crate::leases::lease_is_live(&live, Utc::now());
     let ids: Vec<String> = approved.iter().filter_map(|r| r.spec_id.clone()).collect();
     let open = crate::db_reconcile::specs_with_open_prs(root, ids.clone());
-    let held = queue_and_drain_claims(root, reqs);
+    let held = queue_and_drain_claims(root, reqs, Utc::now());
     approved
         .iter()
         .filter_map(|r| {

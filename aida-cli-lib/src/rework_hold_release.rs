@@ -603,7 +603,7 @@ fn auto_release_with(
         &ids,
         &store,
     )?;
-    release_with(
+    let released = release_with(
         root,
         hold,
         &release,
@@ -638,10 +638,23 @@ fn auto_release_with(
         },
         io.comment,
         io.labels,
-    )?;
-    // A release a mandate covered is a mandate-driven action: ledger it.
-    // trace:TASK-1915 | ai:claude
+    );
+    // A release a mandate covered is a mandate-driven action: ledger it,
+    // released or refused. trace:TASK-1915 | ai:claude
     if let Some(id) = &release.mandate {
+        let (outcome, why) = match &released {
+            Ok(()) => (
+                crate::mandate_drive::Outcome::Done,
+                format!(
+                    "rework hold released on the approval {}",
+                    release.verdict.path()
+                ),
+            ),
+            Err(e) => (
+                crate::mandate_drive::Outcome::Refused,
+                format!("rework hold release failed: {e:#}"),
+            ),
+        };
         crate::mandate_drive::emit_action(
             root,
             id,
@@ -650,14 +663,12 @@ fn auto_release_with(
                 &format!("pr:{}", hold.pr),
                 &format!("PR #{}", hold.pr),
                 "release-rework-hold",
-                crate::mandate_drive::Outcome::Done,
-                Some(format!(
-                    "rework hold released on the approval {}",
-                    release.verdict.path()
-                )),
+                outcome,
+                Some(why),
             ),
         );
     }
+    released?;
     Ok(Outcome::Released {
         mandate: release.mandate,
     })
