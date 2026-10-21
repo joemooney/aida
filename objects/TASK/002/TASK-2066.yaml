@@ -1,0 +1,26 @@
+id: 01a15e7f-a631-78d3-a2ff-cd398c69215b
+spec_id: TASK-2066
+agreed_id: TASK-2066
+title: Child agent identity labels now override lane names for implementer launches
+description: |
+  apply_child_agent_identity (aida-cli-lib/src/session.rs, called from spawn_vendor_headless_with_seat_granted and build_exec_vendor_headless_command) sets AIDA_AGENT_TYPE/NAME for every seat, not just reviewer. Implementer children launched from an `aida agent new` lane now get AIDA_AGENT_NAME=<vendor>-implementer instead of inheriting the lane name. BUG-2010 lease attribution is skipped for children that don't claim their own lease, so impact looks nil, but this wider scope is undocumented and untested. Confirm it's intended and pin it with a test, or limit it to reviewer launches.
+
+  Raised in review of PR-2781: https://github.com/joemooney/aida/pull/2781#issuecomment-6316283635
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:46:26.353047829Z
+modified_at: 2026-10-21T12:46:26.353047829Z
+req_type: Task
+tags:
+- from-review:PR-2781
+- severity:minor
+filed_at:
+  code_sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
+  branch: pr-2781
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e7502d1

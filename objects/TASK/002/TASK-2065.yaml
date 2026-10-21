@@ -1,0 +1,26 @@
+id: 01a15e7f-8a7a-7db2-87f8-9abb42e67fbd
+spec_id: TASK-2065
+agreed_id: TASK-2065
+title: Unrecorded-review recovery command names only the first covered spec
+description: |
+  review_record_template (aida-cli-lib/src/reviewer_summary.rs) builds the recovery `aida review record` command from pr_spec_ids.first(). A PR covering several specs gets a command that records only one, so an operator following it leaves the other specs unreviewed.
+
+  Raised in review of PR-2781: https://github.com/joemooney/aida/pull/2781#issuecomment-6316283635
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:46:19.258865873Z
+modified_at: 2026-10-21T12:46:19.258865873Z
+req_type: Task
+tags:
+- from-review:PR-2781
+- severity:minor
+filed_at:
+  code_sha: 09c3c45729d015f113ecd888916eeb8b1deb01fe
+  branch: pr-2781
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e7502d1
