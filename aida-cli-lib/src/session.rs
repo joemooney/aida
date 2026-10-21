@@ -3262,14 +3262,66 @@ pub(crate) fn contained_settings_json_with_boundary(
             }
         }
     }
+    let mut allow = crate::contained_boundary::write_allow_rules(write_roots);
+    // BUG-2201: `--setting-sources project` drops the operator's user-level
+    // allows, and a downstream project's `.claude/settings.json` never
+    // receives the template's (`permissions` is not a managed slot), so the
+    // session's own `aida`/git calls and its reads of the main checkout's
+    // store would be denied under `dontAsk`. The launcher grants them itself.
+    // Only beside a write grant: a fail-closed launch stays empty.
+    // trace:BUG-2201 | ai:claude
+    if !allow.is_empty() {
+        allow.extend(contained_baseline_allow_rules(
+            write_roots,
+            store_write_paths,
+        ));
+    }
     serde_json::json!({
         "permissions": {
-            "allow": crate::contained_boundary::write_allow_rules(write_roots),
+            "allow": allow,
             "deny": deny
         },
         "sandbox": sandbox
     })
     .to_string()
+}
+
+/// BUG-2201: the tool rules every contained AIDA session gets whatever its
+/// project's `.claude/settings.json` says: the `aida` CLI through Bash, and
+/// `Read` of the session's worktree and the main checkout's store and cache.
+/// No write tool appears here; the write boundary stays
+/// [`crate::contained_boundary::write_allow_rules`].
+///
+/// Deliberately no git rule. Plain git reads already run under
+/// `autoAllowBashIfSandboxed`, confined by the OS sandbox. An allow rule only
+/// adds the commands that auto-allow would refuse, and a `Bash(git …)` prefix
+/// rule cannot exclude git's option-borne exec and ref writes
+/// (`grep -O<cmd>`, `fetch --upload-pack=` or a `+src:dst` refspec,
+/// `diff --output=`/`--ext-diff`, `-c core.pager=`), which the deny list
+/// cannot enumerate either (TASK-2058).
+// trace:BUG-2201 | ai:claude
+pub(crate) fn contained_baseline_allow_rules(
+    write_roots: &[PathBuf],
+    store_paths: &[PathBuf],
+) -> Vec<String> {
+    let mut rules: Vec<String> = vec!["Bash(aida)".to_string(), "Bash(aida *)".to_string()];
+    let mut push = |rule: String| {
+        if !rules.contains(&rule) {
+            rules.push(rule);
+        }
+    };
+    for root in write_roots {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(root) {
+            push(format!("Read(/{abs}/**)"));
+        }
+    }
+    for path in store_paths {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(path) {
+            push(format!("Read(/{abs})"));
+            push(format!("Read(/{abs}/**)"));
+        }
+    }
+    rules
 }
 
 fn destructive_command_deny_rules() -> Vec<&'static str> {
@@ -7347,11 +7399,17 @@ mod tests {
         // BUG-1928: the allow list is the absolute rule set for the worktree
         // this process runs in, not the project-relative `Edit(/**)`.
         // trace:BUG-1928 | ai:claude
+        // BUG-2201: the baseline Bash/Read rules are not write rules.
         let allow: Vec<String> = settings["permissions"]["allow"]
             .as_array()
             .unwrap()
             .iter()
             .filter_map(|r| r.as_str().map(str::to_string))
+            .filter(|r| {
+                crate::contained_boundary::WRITE_TOOLS
+                    .iter()
+                    .any(|tool| r.starts_with(&format!("{tool}(")))
+            })
             .collect();
         assert!(!allow.contains(&"Edit(/**)".to_string()), "{allow:?}");
         assert!(

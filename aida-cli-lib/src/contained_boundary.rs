@@ -610,3 +610,7 @@ mod store_tests;
 #[cfg(test)]
 #[path = "tests/bug_1982_main_git_metadata_tests.rs"]
 mod main_git_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2201_contained_baseline_tests.rs"]
+mod baseline_tests;

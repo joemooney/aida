@@ -84,6 +84,44 @@ pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
     None
 }
 
+/// The tool calls the headless run's permission layer denied, one
+/// `Tool \`input\`` entry each, read from the final `result` event's
+/// `permission_denials`. Empty when the run had none or emitted no result.
+/// A reviewer that never records its verdict usually hit one of these, so
+/// the launcher names them instead of a bare "no verdict file".
+// trace:BUG-2201 | ai:claude
+pub fn parse_permission_denials(jsonl: &str) -> Vec<String> {
+    let Some(result) = jsonl.lines().rev().find_map(|line| {
+        serde_json::from_str::<serde_json::Value>(line.trim())
+            .ok()
+            .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("result"))
+    }) else {
+        return Vec::new();
+    };
+    let Some(denials) = result.get("permission_denials").and_then(|d| d.as_array()) else {
+        return Vec::new();
+    };
+    denials
+        .iter()
+        .map(|d| {
+            let tool = d
+                .get("tool_name")
+                .or_else(|| d.get("tool"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let input = d.get("tool_input");
+            let detail = ["command", "file_path", "pattern", "url"]
+                .iter()
+                .find_map(|key| input?.get(key)?.as_str())
+                .map(|s| first_line_trunc(s, 120));
+            match detail {
+                Some(detail) if !detail.is_empty() => format!("{tool} `{detail}`"),
+                _ => tool.to_string(),
+            }
+        })
+        .collect()
+}
+
 /// The `merge` field value a reviewer writes into its verdict file when it
 /// escalates the merge decision to a human rather than auto-deciding it.
 /// The orchestrator's phase-3 handshake keys off this exact string.
@@ -616,6 +654,35 @@ mod tests {
         assert!(!s.contains("implementation complexity:"), "{s}");
         assert!(!s.contains("complexity agreement:"), "{s}");
         assert!(!s.contains("implementation effort:"), "{s}");
+    }
+
+    // BUG-2201: the denied calls the launcher names when no verdict appears.
+    // trace:BUG-2201 | ai:claude
+    #[test]
+    fn permission_denials_name_each_denied_call() {
+        let log = concat!(
+            r#"{"type":"assistant","message":{"content":[]}}"#,
+            "\n",
+            r#"{"type":"result","subtype":"success","is_error":false,"permission_denials":[{"tool_name":"Bash","tool_use_id":"a","tool_input":{"command":"AIDA_AGENT_TYPE=claude aida review record TASK-119 --pr 96\nsecond line"}},{"tool_name":"Write","tool_use_id":"b","tool_input":{"file_path":"/p/.aida/review-verdicts/PR-96.json","content":"{}"}},{"tool_name":"Monitor","tool_use_id":"c","tool_input":{}}]}"#,
+        );
+        assert_eq!(
+            parse_permission_denials(log),
+            vec![
+                "Bash `AIDA_AGENT_TYPE=claude aida review record TASK-119 --pr 96`".to_string(),
+                "Write `/p/.aida/review-verdicts/PR-96.json`".to_string(),
+                "Monitor".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn permission_denials_empty_without_denials_or_result() {
+        assert!(parse_permission_denials(RESULT_LINE).is_empty());
+        assert!(parse_permission_denials("").is_empty());
+        assert!(parse_permission_denials(
+            r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#
+        )
+        .is_empty());
     }
 }
 

@@ -2378,6 +2378,49 @@ pub(crate) fn review_pr_handshake_path(
     review_verdict::verdict_path(project_root, &format!("PR-{pr_number}"))
 }
 
+/// BUG-2201 / TASK-2040: where a contained reviewer writes the phase-3
+/// handshake when `handshake` (the launcher's anchor, usually in the primary
+/// checkout) is not writable: the same file name under the reviewer's own
+/// `<project_root>/.aida/review-verdicts/`, which the launcher's BUG-2149
+/// collection reads. `None` uncontained or for a write that failed for any
+/// reason but the boundary (the caller passes `contained` only for a
+/// permission-denied or read-only error), or when the anchor already is that
+/// file.
+// trace:BUG-2201 | ai:claude
+pub(crate) fn contained_handshake_fallback(
+    project_root: &std::path::Path,
+    handshake: &std::path::Path,
+    contained: bool,
+) -> Option<std::path::PathBuf> {
+    if !contained {
+        return None;
+    }
+    let fallback = project_root
+        .join(".aida")
+        .join("review-verdicts")
+        .join(handshake.file_name()?);
+    (fallback != handshake).then_some(fallback)
+}
+
+#[cfg(test)]
+mod bug_2201_handshake_fallback_tests {
+    use super::contained_handshake_fallback;
+    use std::path::Path;
+
+    #[test]
+    fn contained_reviewer_falls_back_to_its_worktree() {
+        let wt = Path::new("/w/relay-pr-96");
+        let anchor = Path::new("/w/relay/.aida/review-verdicts/PR-96.json");
+        assert_eq!(
+            contained_handshake_fallback(wt, anchor, true).as_deref(),
+            Some(Path::new("/w/relay-pr-96/.aida/review-verdicts/PR-96.json"))
+        );
+        assert_eq!(contained_handshake_fallback(wt, anchor, false), None);
+        let same = Path::new("/w/relay-pr-96/.aida/review-verdicts/PR-96.json");
+        assert_eq!(contained_handshake_fallback(wt, same, true), None);
+    }
+}
+
 /// `aida review record` — emit the seat-tagged `ReviewVerdictRecorded` event
 /// naming the spec (as `Event.spec`), PR, verdict and reviewed sha. Split out
 /// for direct unit testing, same rationale as BUG-1423's `emit_ship_pr_merged`
@@ -3328,12 +3371,46 @@ pub(crate) fn handle_review_record_at(
                 serde_json::Value::String(recorded_at.to_string()),
             );
         }
-        review_verdict::write_verdict_object(&handshake, &handshake_obj).with_context(|| {
-            format!(
-                "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
-                handshake.display()
-            )
-        })?;
+        // BUG-2201 / TASK-2040: a contained reviewer cannot write the
+        // launcher's anchor in the primary checkout. Its launcher collects
+        // the handshake from the reviewer's worktree (BUG-2149), so land it
+        // there instead of failing the record. trace:BUG-2201 | ai:claude
+        let handshake = match review_verdict::write_verdict_object(&handshake, &handshake_obj) {
+            Ok(()) => handshake,
+            Err(err) => {
+                // Only a boundary refusal falls back; ENOSPC or a read-back
+                // mismatch fails with its real cause.
+                let refused = matches!(
+                    err.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
+                );
+                let contained = refused && crate::session::aida_contained_env().unwrap_or(false);
+                let Some(fallback) =
+                    contained_handshake_fallback(&project_root, &handshake, contained)
+                else {
+                    return Err(anyhow::Error::new(err).context(format!(
+                        "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                        handshake.display()
+                    )));
+                };
+                review_verdict::write_verdict_object(&fallback, &handshake_obj).with_context(
+                    || {
+                        format!(
+                            "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                            handshake.display(),
+                            fallback.display()
+                        )
+                    },
+                )?;
+                println!(
+                    "  {} {} is outside this contained session's write boundary ({err}); \
+                     wrote the handshake in the worktree for the launcher to collect",
+                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
+                    handshake.display()
+                );
+                fallback
+            }
+        };
         // Belt-and-suspenders: only ever print a path this process has just
         // confirmed exists. `write_verdict_object` already verified the
         // content by reading it back, but a missing/unreadable file at this
@@ -3432,6 +3509,89 @@ mod story_1405_review_marker_tests {
             review_marker::merge_gate(root.path(), 14051, || panic!("no marker, no lookup")),
             review_marker::MergeGate::Clear
         );
+    }
+
+    /// Record an approval for PR-14053 from `worktree` with the launcher's
+    /// anchor at `anchor`, `AIDA_CONTAINED` as given.
+    fn record_with_anchor(
+        worktree: &std::path::Path,
+        anchor: &std::path::Path,
+        contained: Option<&str>,
+    ) -> Result<()> {
+        let wt = worktree.to_str().unwrap();
+        let _pinned = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_PROJECT_ROOT", Some(wt)),
+            ("AIDA_DRIVE_ROOT", Some(wt)),
+            ("AIDA_REVIEW_VERDICT_FILE", Some(anchor.to_str().unwrap())),
+            ("AIDA_CONTAINED", contained),
+        ]);
+        let subject = ReviewPrSubject {
+            head_ref: "bug-14053-work".into(),
+            commit_subjects: vec![],
+        };
+        let reviewer = review_authority::IdentitySource {
+            session_ids: vec!["independent-reviewer".into()],
+            ..Default::default()
+        };
+        with_review_pr_subject(subject, || {
+            review_authority::with_identity_source(reviewer, || {
+                handle_review_record_at(
+                    worktree.to_path_buf(),
+                    "BUG-14053",
+                    "approved",
+                    Some("abc1234"),
+                    Some("bug-14053-work"),
+                    Some("looks right"),
+                    &[],
+                    &[],
+                    Some(14053),
+                )
+            })
+        })
+    }
+
+    // BUG-2201 / TASK-2040: a contained reviewer whose launcher anchor sits
+    // in a read-only directory (the primary checkout, outside its write
+    // boundary) writes the handshake into its own worktree for the launcher
+    // to collect, and leaves the anchor alone. Uncontained, the same refusal
+    // is still an error. trace:BUG-2201 | ai:claude
+    #[cfg(unix)]
+    #[test]
+    fn contained_record_falls_back_to_worktree_when_anchor_is_read_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = tempfile::tempdir().unwrap();
+        let worktree = base.path().join("relay-pr-14053");
+        std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+        let anchor_dir = base.path().join("relay/.aida/review-verdicts");
+        std::fs::create_dir_all(&anchor_dir).unwrap();
+        std::fs::set_permissions(&anchor_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let restore = |dir: &std::path::Path| {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755)).unwrap()
+        };
+        if std::fs::write(anchor_dir.join("probe"), b"").is_ok() {
+            // Running as root: a mode bit cannot make the directory read-only.
+            restore(&anchor_dir);
+            return;
+        }
+        let anchor = anchor_dir.join("PR-14053.json");
+        let fallback = worktree.join(".aida/review-verdicts/PR-14053.json");
+
+        let uncontained = record_with_anchor(&worktree, &anchor, None);
+        assert!(format!(
+            "{:#}",
+            uncontained.expect_err("uncontained refusal is an error")
+        )
+        .contains("handshake was NOT written"),);
+        assert!(!fallback.exists(), "uncontained never falls back");
+
+        record_with_anchor(&worktree, &anchor, Some("1"))
+            .expect("contained record falls back instead of failing");
+        restore(&anchor_dir);
+        assert!(!anchor.exists(), "the read-only anchor is untouched");
+        let body: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&fallback).unwrap()).unwrap();
+        assert_eq!(body["mode"], "orchestrator-phase-3", "{body}");
+        assert_eq!(body["reviewed_sha"], "abc1234", "{body}");
     }
 
     #[test]
