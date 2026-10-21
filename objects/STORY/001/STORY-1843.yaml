@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-21T18:00:30.444080303Z
+modified_at: 2026-10-21T18:04:10.602433002Z
 req_type: Story
 comments:
 - id: 01a15f00-6963-7640-93e7-f043fd18b5ff
@@ -124,6 +124,13 @@ comments:
     PR3 evidence gathered while builds run: actual installed Agy 1.4.2 SessionStart and PreInvocation hooks fired in an isolated real CLI smoke, with camelCase conversationId/workspacePaths payloads and injectSteps context. Exact shipped docs: ~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md. Evidence: /tmp/story1843-agy-probe-ases8lxf/.agents/payloads.jsonl. Cross-vendor delivery itself remains unimplemented/unverified.
   created_at: 2026-10-21T18:00:30.444080303Z
   modified_at: 2026-10-21T18:00:30.444080303Z
+- id: 01a15fa2-8bea-75e3-8068-d3fcfb858a36
+  author: ai:codex:joe
+  content: |
+    Advisor PR1 boundary ruling received in mailbox message 81b4a4f8 (2026-10-21 11:01 Phoenix): PR1 ships zero-reader, unknown/dead refusal and named multi-reader diagnostics with no --queue-for-role flag. Explicit queued-role assignment and private receipts move to PR2 with UUID delivery bindings; no sidecar schema in PR1. Open PR1 with Refs STORY-1843 once gates are green. Advisor also accepted actual agy 1.4.2 native SessionStart/PreInvocation evidence for PR3's event-capability gate; mailbox delivery/next-turn proof remains required.
+  created_at: 2026-10-21T18:04:10.602433002Z
+  modified_at: 2026-10-21T18:04:10.602433002Z
+  relayed_from: advisor
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
