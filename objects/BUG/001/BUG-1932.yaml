@@ -13,12 +13,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T00:05:24.430788370Z
-modified_at: 2026-10-12T05:55:31.408040216Z
+modified_at: 2026-10-21T04:32:10.033335582Z
 req_type: Bug
 tags:
 - forge
 - gitlab
 - groom:split
+- operator-held
 - sync
 - triaged:night
 comments:
@@ -65,6 +66,16 @@ comments:
   created_at: 2026-10-12T05:55:31.408040216Z
   modified_at: 2026-10-12T05:55:31.408040216Z
   session_id: bf898655-b7b8-4a63-8442-5d6507cfecd2
+history:
+- id: 01a15cbb-22d6-7543-a678-634c930b6d51
+  author: joe
+  timestamp: 2026-10-21T04:32:10.454622333Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:10.033335582Z
+deferred_until: Stores in sync now (remote status 2026-10-20); groom:split pending. Revisit when the 3-way split is cut or if aida-store diverges across hubs again.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 9822c16ccf747f9e94a9eba9edd547dfb9eea1bb
   branch: main
