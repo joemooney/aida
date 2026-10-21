@@ -13,6 +13,9 @@
 //! bare temp "remote", no network.
 // trace:BUG-1926 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::Mutex;
@@ -50,7 +53,7 @@ fn sanitized_path(first: Option<&Path>) -> String {
 }
 
 fn git_cmd(f: &Fixture, dir: &Path, path_env: &str) -> Command {
-    let mut c = Command::new("git");
+    let mut c = test_git::git_command();
     c.arg("-C")
         .arg(dir)
         .env("HOME", &f.home)
@@ -181,7 +184,7 @@ fn push_store(f: &Fixture, path_env: &str) -> Output {
 }
 
 fn remote_has_store_branch(f: &Fixture) -> bool {
-    Command::new("git")
+    test_git::git_command()
         .arg("--git-dir")
         .arg(&f.remote)
         .args(["rev-parse", "--verify", "--quiet", "refs/heads/aida-store"])

@@ -332,6 +332,31 @@ on = ["CronJobFailed:relay-stall-guard"]
 prompt = "A relay run is stopped (relay.status state=blocked or exited) with no `.done` acknowledgement. Use the routed trip evidence and `aida doctor check relay-stall` to find the run, read its handoff, then unblock it (answer the signoff or question it is waiting on and resume the relay) or retire it, escalating to the operator if it needs a human. Once handled, acknowledge it with `touch <handoff>.done` so the guard stops tripping."
 enabled = true
 
+# STORY-1700 (ADR-77): the drive-mandate tick. While a human-minted DRIVE
+# mandate is active (`aida mandate start --drive`), every 15 minutes (and at
+# once when one starts: the `when` edge) the model-free, grant-free tick
+# classifies every relay lane and held PR, does
+# the substrate actions itself (dead-lease expiry, operator notices) and
+# routes each seat action to the advisor as a deduplicated MandateDriveDue
+# item; the route job turns those into due items in `aida awaiting`. Every
+# action is ledgered (`aida mandate status`). Human gates: the optional
+# [mandate.human_gates] ops list, read from origin/main plus ~/.aida only.
+# With no drive mandate the tick is an idle no-op.
+# trace:STORY-1700 | ai:claude
+[[schedule.jobs]]
+name = "mandate-drive"
+command = "fleet drive --tick"
+every = "15m"
+when = "mandate.drive_active == true"
+enabled = true
+
+[[schedule.jobs]]
+name = "mandate-drive-route"
+seats = ["advisor"]
+on = ["MandateDriveDue"]
+prompt = "The drive tick routed a lane's next action to you under the active drive mandate. Read the MandateDriveDue item (and the matching advisor mail): it names the lane, the action and the exact command. Act on it: ship the approved PR with `aida pr ship <N>`, record the sketch signoff, answer the blocked relay's question, or dispatch a fixer as a SEPARATE session (`aida agent new --bg` or a relay), never an in-session subagent. Then acknowledge a handled relay with `touch <handoff>.done`."
+enabled = true
+
 [[schedule.jobs]]
 name = "night-shift"
 command = "shift tick"

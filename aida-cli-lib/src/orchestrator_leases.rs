@@ -1913,7 +1913,7 @@ mod forge_seam_tests {
         // to fail. Label sync only fails when a forge is declared but the repo
         // cannot be pinned (a pure-git root short-circuits to Ok): a git repo
         // with a github provider and no origin remote is unpinnable.
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(["init", "-q"])
@@ -1967,7 +1967,7 @@ mod forge_seam_tests {
         forge.author = Some("operator".into());
         let mut driver = driver_with(tmp.path(), &forge);
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(["init", "-q"])
@@ -2208,7 +2208,7 @@ mod bug_1628_pickup_resolver_tests {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join(name);
         std::fs::create_dir_all(&root).unwrap();
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("init")
             .arg("-q")
             .arg(&root)
@@ -2266,7 +2266,7 @@ mod bug_1628_pickup_resolver_tests {
     fn bug_1628_pickup_resolver_skips_a_taken_branch_for_both_paths() {
         let (_temp, root) = temp_project("qci");
         let git = |args: &[&str]| {
-            let status = std::process::Command::new("git")
+            let status = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])

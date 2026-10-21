@@ -3,6 +3,9 @@
 //! CLI rather than the guard/healer helpers, then inspect the canonical store.
 // trace:BUG-1252 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use aida_core::{Relationship, RelationshipType, Requirement, Storage};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -30,7 +33,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

@@ -64,6 +64,16 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.7.0` — two new event kinds come from the drive mandate.
+  `MandateDriveAction` records one action taken under a mandate (`mandate_id`,
+  `actor` = `tick` or `session`, `lane`, `subject`, `action`, `outcome` =
+  done | routed | gated | refused | skipped, optional `why`). It is not
+  actionable. `MandateDriveDue` records a lane's next action that the drive
+  tick routed to the advisor seat (`mandate_id`, `key`, `lane`, `action`,
+  `subject`, `command`, optional `detail`). It is emitted once per lane,
+  action and head, and it is actionable. An `aida watch` older than `1.7.0`
+  reads both kinds as `Unknown`, which is actionable. Additive only.
+  // trace:STORY-1700 | ai:claude
 - `1.6.0` — the new `PlanRecorded` event kind records a plan pinned for a
   spec (`aida plan promote`, `aida import-plan`) or verified (`aida plan
   verify` PASS), with one field, `verified`. It is not actionable (absorbed

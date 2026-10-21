@@ -316,7 +316,7 @@ mod tests {
     fn bug_1677_acquire_never_hides_project_files_through_the_shared_exclude() {
         use std::process::Command;
         fn git(cwd: &Path, args: &[&str]) -> std::process::Output {
-            Command::new("git")
+            crate::test_git::git_command()
                 .current_dir(cwd)
                 .args(args)
                 .output()
@@ -485,7 +485,7 @@ mod tests {
         use std::process::Command;
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()

@@ -84,7 +84,7 @@ fn duplicate_finding_text_in_one_verdict_files_once() {
 
 /// Tiny shell-out helper — setup only, panics loudly on failure.
 fn run_git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

@@ -576,7 +576,7 @@ mod task_1470 {
     // --- Review round 2: sidecars are per-checkout state under .aida/ ---
 
     fn git(dir: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)
@@ -689,7 +689,7 @@ mod task_1470 {
             "store detection must still resolve the main checkout's store"
         );
         // The sidecar is gitignored runtime state, not a tracked change.
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("-C")
             .arg(&linked)
             .args(["status", "--porcelain"])

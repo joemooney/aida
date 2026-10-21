@@ -195,7 +195,7 @@ fn bug_1656_probe_reports_newest_dirty_mtime_age() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)
@@ -537,7 +537,7 @@ fn one_file_repo() -> tempfile::TempDir {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(args)

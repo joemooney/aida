@@ -178,6 +178,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida mandate start` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mandate stop` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida mandate status` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
+| `aida fleet` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida fleet drive` | JSON honoured | fleet drive (preview; changes nothing without --tick) |
 | `aida tail` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida integrate` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida watch` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |

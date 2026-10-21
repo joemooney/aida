@@ -7,6 +7,9 @@
 // trace:TASK-1743 | ai:claude
 // trace:TASK-1368 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -44,7 +47,7 @@ fn show(o: &Output) -> String {
 }
 
 fn git(repo: &Path, home: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .env("HOME", home)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")

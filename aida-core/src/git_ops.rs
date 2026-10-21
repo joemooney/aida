@@ -267,6 +267,15 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
     Ok(Vec::new())
 }
 
+/// `-c` options that stop a git command from starting automatic maintenance
+/// (`maintenance run --auto`, or `gc --auto` on older git). Store writers use
+/// them under the write lock ([`transaction_git_config`]); test fixtures use
+/// them on every git call, because since git 2.54 the detached geometric
+/// repack can prune an object fanout dir while the fixture's next git call
+/// writes into it.
+// trace:TASK-1717 | ai:claude trace:BUG-2191 | ai:claude
+pub const NO_AUTO_MAINTENANCE: [&str; 4] = ["-c", "maintenance.auto=false", "-c", "gc.auto=0"];
+
 /// `-c` options for a git command run inside a store-writer transaction:
 /// no automatic maintenance. `git commit`, `fetch`, `merge` and `rebase`
 /// otherwise start `maintenance --auto` (or `gc --auto`), which would run
@@ -278,7 +287,7 @@ fn gitmodules_submodule_names(cwd: &Path) -> Result<Vec<String>> {
 // trace:TASK-1717 | ai:claude
 pub fn transaction_git_config() -> &'static [&'static str] {
     if crate::db::any_store_write_lock_held() {
-        &["-c", "maintenance.auto=false", "-c", "gc.auto=0"]
+        &NO_AUTO_MAINTENANCE
     } else {
         &[]
     }
@@ -6337,7 +6346,7 @@ mod tests {
     use std::process::Command;
 
     fn run_git(cwd: &Path, args: &[&str]) -> String {
-        let output = Command::new("git")
+        let output = crate::test_git::git_command()
             .current_dir(cwd)
             .args(args)
             .output()
@@ -6470,7 +6479,7 @@ mod tests {
 
     /// `git check-ignore --no-index -q`: true when `rel` is ignored.
     fn bug_2141_ignored(worktree: &Path, rel: &str) -> bool {
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(worktree)
             .args(["check-ignore", "--no-index", "-q", rel])
             .status()
@@ -10087,7 +10096,7 @@ mod tests {
         assert!(run_git(&store, &["ls-files", "--stage"]).contains("160000 "));
 
         // The plant is live: an unhardened `git status` runs the hook.
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&store)
             .args(["status", "--porcelain"])
             .output()
@@ -10220,7 +10229,7 @@ mod tests {
             &sub,
             &["config", "filter.evil.clean", driver.to_str().unwrap()],
         );
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&wt)
             .args(["add", "sub"])
             .output()
@@ -10251,7 +10260,7 @@ mod tests {
         let (_main, wt, marker) = bug_1985_planted_worktree(dir.path());
 
         // The plant is live: a plain host `git status` runs the driver.
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&wt)
             .args(["-c", "core.fsmonitor=false", "status", "--porcelain"])
             .output()
@@ -10294,7 +10303,7 @@ mod tests {
 
         // Positive control: the hardening `-c` flags alone (no per-submodule
         // override) let `ignore = none` re-enable recursion into the plant.
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&wt)
             .args(host_git_hardening(&wt))
             .args(["status", "--porcelain"])
@@ -10385,7 +10394,7 @@ mod tests {
     /// submodule URLs); panics on failure.
     // trace:BUG-1985 | ai:claude
     fn bug_1985_sub_git(cwd: &Path, args: &[&str]) {
-        let out = Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(cwd)
             .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
             .args(["-c", "protocol.file.allow=always"])
@@ -10495,7 +10504,7 @@ mod tests {
 
         // Positive control: the round-1 safety-check status (git recursing
         // with the hardening flags) runs the nested driver.
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&wt)
             .args(host_git_hardening(&wt))
             .args(["-c", "submodule.dep.ignore=dirty"])
@@ -10587,7 +10596,7 @@ mod tests {
         std::fs::write(nested.join("v.txt"), "v").unwrap();
         run_git(&nested, &["add", "v.txt"]);
         run_git(&nested, &["commit", "-qm", "v"]);
-        let _ = Command::new("git")
+        let _ = crate::test_git::git_command()
             .current_dir(&main)
             .args(["add", "vendor"])
             .output()

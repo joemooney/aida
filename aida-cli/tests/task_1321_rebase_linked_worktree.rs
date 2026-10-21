@@ -14,6 +14,9 @@
 //! local bare origin, `--no-fetch`, and no forge binary.
 // trace:TASK-1321 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -52,7 +55,7 @@ fn aida(cwd: &Path, home: &Path) -> Command {
 }
 
 fn git_out(dir: &Path, home: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(dir)
         .env("HOME", home)
         // Private global config, independent of any inherited

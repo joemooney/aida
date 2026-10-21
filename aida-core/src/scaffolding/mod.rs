@@ -3815,7 +3815,7 @@ mod tests {
     }
 
     fn run_git_in(dir: &Path, args: &[&str]) {
-        let mut cmd = std::process::Command::new("git");
+        let mut cmd = crate::test_git::git_command();
         cmd.args(args).current_dir(dir);
         for (key, _) in std::env::vars() {
             if key.starts_with("GIT_") {
@@ -3832,7 +3832,7 @@ mod tests {
     }
 
     fn git_stdout_in(dir: &Path, args: &[&str]) -> String {
-        let mut cmd = std::process::Command::new("git");
+        let mut cmd = crate::test_git::git_command();
         cmd.args(args).current_dir(dir);
         for (key, _) in std::env::vars() {
             if key.starts_with("GIT_") {
@@ -5214,7 +5214,7 @@ mod tests {
 
         // Helper to run git commands with cleared parent git environment variables
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5469,7 +5469,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5590,7 +5590,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(&store_root);
             for (key, _) in std::env::vars() {
@@ -5638,7 +5638,7 @@ mod tests {
         // Raw `git commit` simulates the stale binary: no marker on the
         // subprocess env. The bulk write must be REFUSED with a message.
         let raw_commit = |msg: &str| -> std::process::Output {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(["commit", "-m", msg]);
             cmd.current_dir(&store_root);
             for (key, _) in std::env::vars() {
@@ -5690,7 +5690,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5791,7 +5791,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
@@ -5889,7 +5889,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         let run_git = |args: &[&str]| {
-            let mut cmd = Command::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.args(args);
             cmd.current_dir(temp_dir.path());
             for (key, _) in std::env::vars() {
