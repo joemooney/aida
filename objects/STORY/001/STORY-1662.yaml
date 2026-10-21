@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-21T04:28:37.591822107Z
+modified_at: 2026-10-21T22:48:49.695332412Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -50,6 +50,12 @@ comments:
   content: 'Advisor triage 2026-10-20 21:30: folded TASK-1764 into this spec (Same problem (advisor-launched fixer inherits advisor grant, trips code guard); STORY-1662 owns it with operator decision A (queue work --no-human).). Its open acceptance items now belong here.'
   created_at: 2026-10-21T04:28:24.371858385Z
   modified_at: 2026-10-21T04:28:24.371858385Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160a7-271f-7b23-b4e4-b8a055182d73
+  author: joe
+  content: 'ADVISOR 15:55: unblocked. STORY-1654 is completed, and the operator decision (option A, queue work --no-human) stands, so the groom:needs-decision tag is stale. Dispatched lane fix-story-1662 for a SKETCH ONLY first; implementation waits for advisor signoff. Security change, so the operator merges.'
+  created_at: 2026-10-21T22:48:49.695332412Z
+  modified_at: 2026-10-21T22:48:49.695332412Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
