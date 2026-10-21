@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-1801",
+  "publishes": [
+    {
+      "at": "2026-10-21T11:41:01.282127615Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-17T05:34:42.620367502Z",
+      "spec": "TASK-1801",
+      "kind": {
+        "event": "PhaseEntered",
+        "idx": 1,
+        "slug": "implementer",
+        "attempt": 1
+      }
+    },
+    {
+      "ts": "2026-10-18T20:35:59.237922405Z",
+      "spec": "TASK-1801",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1801",
+        "branch": "pr-2712",
+        "first_seen": "2026-10-18T20:35:59.237861426+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-19T18:18:55.727929111Z",
+      "spec": "TASK-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2712,
+        "verdict": "APPROVED",
+        "reviewed_sha": "253d20fefe1d"
+      }
+    },
+    {
+      "ts": "2026-10-19T18:19:08.966244765Z",
+      "spec": "TASK-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2712,
+        "verdict": "APPROVED",
+        "reviewed_sha": "253d20fefe1d"
+      }
+    },
+    {
+      "ts": "2026-10-20T01:39:02.591662823Z",
+      "spec": "TASK-1801",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "TASK-1801",
+        "branch": "codex/task-1801",
+        "first_seen": "2026-10-20T01:39:02.591579927+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T11:40:30.426065736Z",
+      "spec": "TASK-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T11:40:44.068422676Z",
+      "spec": "TASK-1801",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2712
+      }
+    },
+    {
+      "ts": "2026-10-21T11:41:01.121931294Z",
+      "spec": "TASK-1801",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ed4168add1853ab65f9573e89f3f19a03aef6eb1",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
