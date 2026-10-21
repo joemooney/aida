@@ -1,0 +1,26 @@
+id: 01a15fe8-6ccc-7de0-b57b-b3dd480a9551
+spec_id: TASK-2086
+agreed_id: TASK-2086
+title: 'PR-2802: drop the no-op ship-failure ledger call in the non-mandate hold-gate arm'
+description: |
+  pr_cmd.rs:3560: the ledger_mandate_ship_failure call in the non-mandate Ok(false) arm never writes anything, because the preceding guard means mandate_release is always None there. It exists only to satisfy the TASK-1915 wiring pin. Remove it and teach the pin about the guarded arm, or comment why it stays.
+
+  Raised in review of PR-2802: https://github.com/joemooney/aida/pull/2802#issuecomment-6324517265
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:20:30.156286565Z
+modified_at: 2026-10-21T19:20:30.156286565Z
+req_type: Task
+tags:
+- from-review:PR-2802
+- severity:cosmetic
+filed_at:
+  code_sha: 4c4ac461aff5426fbc6e374a2e5a0fc21d739fbd
+  branch: pr-2802
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fe2aeb5

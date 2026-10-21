@@ -1,0 +1,26 @@
+id: 01a15fe8-9853-7283-b262-42820b31e02f
+spec_id: TASK-2088
+agreed_id: TASK-2088
+title: Behavioural test for the moved-base re-arm of a mandate-released hold
+description: |
+  The moved-base (TASK-1960) re-arm at pr_cmd.rs:3619-3627 is covered only by source pins: a rearm count, and story_1698_mandate_tests.rs:1041 matching the comment prose 'like every other post-release exit'. A comment rewording breaks the test, and a wrong (mandate, marker) arm would pass. Add a behavioural test or pin the code shape.
+
+  Raised in review of PR-2802: https://github.com/joemooney/aida/pull/2802#issuecomment-6324517265
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:20:41.299572217Z
+modified_at: 2026-10-21T19:20:41.299572217Z
+req_type: Task
+tags:
+- from-review:PR-2802
+- severity:minor
+filed_at:
+  code_sha: 4c4ac461aff5426fbc6e374a2e5a0fc21d739fbd
+  branch: pr-2802
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fe2aeb5

@@ -1,0 +1,26 @@
+id: 01a15fe8-85b0-7753-afb1-474f950702a2
+spec_id: TASK-2087
+agreed_id: TASK-2087
+title: TASK-1915 wiring pin misses ? early returns between mandate release and merge
+description: |
+  task_1915_mandate_ship_failure_ledger_tests.rs:52 counts only 'return Err(' and 'bail!(' exits. A ? propagation added between the mandate release decision and the merge would skip the MandateDriveAction ledger and leave the pin green. Extend the scan, or assert that the window contains no ? exits.
+
+  Raised in review of PR-2802: https://github.com/joemooney/aida/pull/2802#issuecomment-6324517265
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:20:36.528091389Z
+modified_at: 2026-10-21T19:20:36.528091389Z
+req_type: Task
+tags:
+- from-review:PR-2802
+- severity:minor
+filed_at:
+  code_sha: 4c4ac461aff5426fbc6e374a2e5a0fc21d739fbd
+  branch: pr-2802
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fe2aeb5
