@@ -1,0 +1,28 @@
+id: 01a15f32-e34a-7ee3-aced-be018d73ab62
+spec_id: TASK-1-405
+title: 'cosmetic: aida-cli-lib/src/tests/bug_2201_contained_baseline_tests.rs test outs…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on BUG-2201, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: aida-cli-lib/src/tests/bug_2201_contained_baseline_tests.rs test outside_project_reviewer_gets_aida_and_git_bash_rules now asserts there is NO git rule; rename it (e.g. ..._gets_aida_rules_and_no_git_rule).
+  Reviewed sha: 06191d581c3b5d105b73ae4a518198c6117f12df
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T16:02:12.938748318Z
+modified_at: 2026-10-21T16:02:12.938748318Z
+req_type: Task
+tags:
+- carried-from:BUG-2201
+- finding-hash:115ede95
+- from-review:BUG-2201
+- kind:carried-forward
+filed_at:
+  code_sha: 42007a47f646fc232f2ccad014d53b989eebd72c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7be4321436
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
