@@ -6,16 +6,25 @@ description: |
   aida-cli-lib/src/seat_authority.rs (issuance_roster_store, ~line 982): when a project store IS detected but AIDA_STORE points elsewhere, `aida team` (dispatcher uses detect_distributed_store(), which honors AIDA_STORE) and the seat check (roster_store(), deliberately ignores AIDA_STORE) read different rosters. The refusal then still says "not allowed by the team roster ... aida team allow-seat" without naming which store's registry/team.toml was read, which is the original BUG-2200 symptom (aida team shows the seat allowed, role enter refuses). The AIDA_STORE note only appears in the NotDetected branch. Ignoring AIDA_STORE for authority is a reasonable choice; the refusal should still name the roster path it read and mention an AIDA_STORE that resolves to a different store. The agreement test (seat_check_and_team_resolve_the_same_store_from_one_cwd) pins detect_distributed_store_from, not the dispatcher's AIDA_STORE-aware resolver.
 
   Raised in review of PR-2795: https://github.com/joemooney/aida/pull/2795
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T10:46:31.154325383Z
-modified_at: 2026-10-21T10:46:31.154325383Z
+modified_at: 2026-10-21T10:48:57.283079633Z
 req_type: Task
 tags:
 - from-review:PR-2795
 - severity:minor
+history:
+- id: 01a15e14-16c3-77b1-b32c-b8b9f16c22ad
+  author: joe
+  timestamp: 2026-10-21T10:48:57.283076352Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0066ef3ffe1a6abce8b9e1b07214917c4896c689
   branch: pr-2795
