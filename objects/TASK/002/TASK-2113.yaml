@@ -1,0 +1,26 @@
+id: 01a160b4-c7fb-7cf2-a509-748393ffeea6
+spec_id: TASK-2113
+agreed_id: TASK-2113
+title: 'PR-2813 nits: duplicated PR-body cell; brittle exact-count source grep in baseline_tag_git_calls_use_host_git_command'
+description: |
+  The PR body's BUG-2154 table row has a duplicated trailing test cell. aida-core/src/db/yaml_backend.rs baseline_tag_git_calls_use_host_git_command asserts exactly 3 occurrences of host_git_command(dir), so it breaks on any benign refactor. Asserting that no raw git builder is present would be enough.
+
+  Raised in review of PR-2813: https://github.com/joemooney/aida/pull/2813#issuecomment-6328499931
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:03:42.843525325Z
+modified_at: 2026-10-21T23:03:42.843525325Z
+req_type: Task
+tags:
+- from-review:PR-2813
+- severity:cosmetic
+filed_at:
+  code_sha: ae53df7c7251f9611eb03ca0de3054de80fbc26c
+  branch: pr-2813
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160ae795f

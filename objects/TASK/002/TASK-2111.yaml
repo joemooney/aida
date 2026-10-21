@@ -1,0 +1,27 @@
+id: 01a160b4-a50b-7dd0-a3c4-3c60242de261
+spec_id: TASK-2111
+agreed_id: TASK-2111
+title: verify_linked_worktree_main returns Ok when the tree's .git is a directory or a dir symlink (redirectable main)
+description: |
+  aida-cli-lib/src/session.rs verify_linked_worktree_main returns Ok early when <tree>/.git is not a regular file. A .git directory holding a commondir that names another repo's .git, or a .git symlink to another repo's .git directory, makes git worktree list (so main_worktree_root_from) report the other repo. claude_contained_settings_json would then grant that repo's .aida-store and cache. I reproduced the git redirect locally. Today the precondition (replacing the pointer file) is blocked by the TASK-1989 pointer deny, so this is defense in depth. Fix: when .git is not a file and the tree is not main itself, require a host-recorded seat clone or refuse. Add a fixture for each shape.
+
+  Raised in review of PR-2813: https://github.com/joemooney/aida/pull/2813#issuecomment-6328499931
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:03:33.899537260Z
+modified_at: 2026-10-21T23:03:33.899537260Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2813
+- severity:minor
+filed_at:
+  code_sha: ae53df7c7251f9611eb03ca0de3054de80fbc26c
+  branch: pr-2813
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160ae795f

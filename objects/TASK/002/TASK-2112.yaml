@@ -1,0 +1,27 @@
+id: 01a160b4-b618-75f2-8175-20fa52cadb0d
+spec_id: TASK-2112
+agreed_id: TASK-2112
+title: 'Contained resume cwd moved to the lease tree: unverified that claude --resume finds a transcript listed from main''s project store'
+description: |
+  aida-cli-lib/src/session.rs build_contained_resume_command now sets cwd to resume_lease_tree(target). resolve_resume_target lists sessions only from main's Claude project store (on this host every transcript there has cwd=main). Nothing shows that claude --resume <id> finds that transcript when run from the lease tree's cwd; contained_resume_is_bounded_to_the_lease_tree asserts only cwd and allow rules. The BUG-2157 doc comment on the function ("the directory whose Claude project store holds the transcript") is now stale. It fails closed (resume fails, nothing is granted). Verify live, or keep the transcript's checkout as cwd when the lease tree's store does not hold it, and update the comment.
+
+  Raised in review of PR-2813: https://github.com/joemooney/aida/pull/2813#issuecomment-6328499931
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:03:38.264290487Z
+modified_at: 2026-10-21T23:03:38.264290487Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2813
+- severity:minor
+filed_at:
+  code_sha: ae53df7c7251f9611eb03ca0de3054de80fbc26c
+  branch: pr-2813
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160ae795f
