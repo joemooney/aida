@@ -8,8 +8,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T03:56:15.742785142Z
-modified_at: 2026-10-21T03:56:42.790728210Z
+modified_at: 2026-10-21T04:33:11.124122954Z
 req_type: Bug
+tags:
+- operator-held
 history:
 - id: 01a15c9a-aba6-7c30-a233-ae4a94e3b662
   author: joe
@@ -19,6 +21,15 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a15cbc-117a-7922-8417-53ff0db5f04c
+  author: joe
+  timestamp: 2026-10-21T04:33:11.546441716Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:11.124122954Z
+deferred_until: Low, cosmetic misreport in aida ps. Revisit in the next ps/session hygiene pass or if it misleads a salvage.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
   branch: main
