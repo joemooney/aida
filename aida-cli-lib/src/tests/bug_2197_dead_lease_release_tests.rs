@@ -227,11 +227,7 @@ fn pidless_lease_is_never_attributed_to_the_inspector() {
     assert!(!lease_owner_unknown(&pidless, Some(555)));
 
     // A lease that records a pid keeps the full list; it is not "unknown".
-    let with_pid = lease_json(
-        "a0000000wpid",
-        &root,
-        serde_json::json!({ "creator_pid": 4_000_000_u32 }),
-    );
+    let with_pid = lease_json("a0000000wpid", &root, live_creator());
     assert_eq!(
         attributable_live_sessions(&with_pid, &sessions, &inspector).len(),
         1
@@ -260,11 +256,7 @@ fn pidless_lease_does_not_pin_handoff_compaction() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     let pidless = lease_json("a0000000pidl", &root, serde_json::json!({}));
-    let with_pid = lease_json(
-        "a0000000wpid",
-        &root,
-        serde_json::json!({ "creator_pid": 4_000_000_u32 }),
-    );
+    let with_pid = lease_json("a0000000wpid", &root, live_creator());
     let (pins, unknown) = crate::session_misc::active_handoff_leases(&[pidless], Some(&root));
     assert!(pins.is_empty());
     assert_eq!(unknown.len(), 1);
@@ -629,4 +621,51 @@ fn lane_is_off_for_the_pr_ship_pass() {
     assert!(out.is_empty(), "{out}");
     assert!(lease_path(&root, "dead00000001").exists());
     assert!(lease_path(&root, "0000a0000002").exists());
+}
+
+/// A creator pid that is provably still alive: this test process.
+fn live_creator() -> serde_json::Value {
+    let me = std::process::id();
+    serde_json::json!({
+        "creator_pid": me,
+        "creator_pid_start_time": process_probe::process_start_identity(me),
+    })
+}
+
+/// Round-2 review: ONE durable-owner rule. A lease whose only record is a dead
+/// creator shell is unknown owner on every surface — reap, `session leases` /
+/// `aida ps` (state, pid attribution, owner_unknown), and `handoff --check`.
+#[cfg(unix)]
+#[test]
+fn dead_creator_only_lease_is_unknown_owner_on_every_surface() {
+    let (_tmp, root) = primary_checkout();
+    let (pid, identity) = dead_pid_with_identity();
+    let now = chrono::Utc::now();
+    let lease = lease_json(
+        "dc00000000aa",
+        &root,
+        serde_json::json!({
+            "creator_pid": pid,
+            "creator_pid_start_time": identity,
+            "started_at": now.to_rfc3339(),
+        }),
+    );
+    write_lease(&root, &lease);
+    assert!(!lease_has_durable_owner(&lease));
+
+    // reap: unknown owner, not releasable.
+    let report = scan_reapable(&root);
+    assert!(report.releasable.is_empty());
+    assert_eq!(report.unknown_owner.len(), 1);
+
+    // leases / ps: never credited to the inspector, reported unknown owner.
+    let me = vec![live(std::process::id(), &root)];
+    assert!(attributable_live_sessions(&lease, &me, inspector_pids()).is_empty());
+    assert_eq!(lease_state_for(&lease, &me, now), LeaseState::Dormant);
+    assert!(lease_owner_unknown(&lease, None));
+
+    // handoff --check: not a compact pin.
+    let (pins, unknown) = crate::session_misc::active_handoff_leases(&[lease], Some(&root));
+    assert!(pins.is_empty());
+    assert_eq!(unknown.len(), 1);
 }

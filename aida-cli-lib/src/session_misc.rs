@@ -863,7 +863,7 @@ pub(crate) struct SessionHandoffFacts {
     pub(crate) live_drain: Option<String>,
     pub(crate) stale_drain: Option<String>,
     pub(crate) live_session_leases: Vec<String>,
-    /// BUG-2197: leases covering cwd that record no pid. Their owner is
+    /// BUG-2197: leases covering cwd with no durable owner. Their owner is
     /// unknown, so they are reported but never pin compaction: attributing
     /// them to this conversation is exactly the inspector-attribution bug.
     // trace:BUG-2197 | ai:claude
@@ -878,8 +878,8 @@ pub(crate) fn decide_session_handoff(facts: &SessionHandoffFacts) -> SessionHand
     }
 }
 
-/// Leases covering `cwd`, split into pins (record a pid) and unknown-owner
-/// leases (record none).
+/// Leases covering `cwd`, split into pins (a durable owner is recorded) and
+/// unknown-owner leases (none, or only a dead creator shell).
 // trace:BUG-2197 | ai:claude
 pub(crate) fn active_handoff_leases(
     leases: &[SessionLease],
@@ -896,7 +896,7 @@ pub(crate) fn active_handoff_leases(
                 lease.scope,
                 lease.branch
             );
-            if lease_records_pid(lease) {
+            if lease_has_durable_owner(lease) {
                 pins.push(row);
             } else {
                 unknown.push(row);
@@ -1068,7 +1068,7 @@ pub(crate) fn session_handoff_check(_check: bool) -> Result<()> {
     }
     // trace:BUG-2197 | ai:claude
     for lease in &facts.unknown_owner_leases {
-        println!("Note: lease with unknown owner (records no pid) is not a compact pin: {lease}");
+        println!("Note: lease with unknown owner (no live recorded process) is not a compact pin: {lease}");
     }
     println!(
         "CLI limit: conversation-only residue is unknowable here; run /aida-handoff or /aida-capture before ending the session."

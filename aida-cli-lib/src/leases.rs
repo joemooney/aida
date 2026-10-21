@@ -1170,7 +1170,7 @@ pub(crate) fn lease_state_for(
         };
     }
     let worktree_exists = l.worktree_path.exists();
-    // BUG-2197: a lease that records no pid is never read live on the
+    // BUG-2197: a lease without a durable owner is never read live on the
     // inspector's say-so — every caller gets the exclusion here.
     // trace:BUG-2197 | ai:claude
     let has_live_claude = attributable_live_sessions(l, live_sessions, inspector_pids())
@@ -1180,10 +1180,15 @@ pub(crate) fn lease_state_for(
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
 }
 
-/// BUG-2197: does this lease record any owner pid at all?
+/// BUG-2197: does this lease record a durable owner — an `active_pid`, or a
+/// `creator_pid` that is still alive (or cannot be proven dead)? The ONE rule
+/// behind reap's unknown-owner verdict, the inspector exclusion, the
+/// unknown-owner listing, and the handoff pin: a lease whose only record is a
+/// dead creator shell (a per-command `bash -c`) has no durable owner.
 // trace:BUG-2197 | ai:claude
-pub(crate) fn lease_records_pid(l: &SessionLease) -> bool {
-    l.active_pid.is_some() || l.creator_pid.is_some()
+pub(crate) fn lease_has_durable_owner(l: &SessionLease) -> bool {
+    l.active_pid.is_some()
+        || lease_recorded_owner(l) != aida_core::liveness::RecordedLeaseOwner::Unrecorded
 }
 
 /// BUG-2197: what the lease's recorded pids PROVE about its owner, using the
@@ -1200,11 +1205,11 @@ pub(crate) fn lease_recorded_owner(l: &SessionLease) -> aida_core::liveness::Rec
     )
 }
 
-/// BUG-2197: the live sessions a lease may be attributed to. A lease that
-/// records no pid is never attributed to the inspecting process or any of its
+/// BUG-2197: the live sessions a lease may be attributed to. A lease without a
+/// durable owner is never attributed to the inspecting process or any of its
 /// ancestors (`inspector`): on the primary checkout the inspecting claude is
-/// always "in the worktree", which made every pid-less lease there read live
-/// and borrow the inspector's pid. Leases that record a pid keep the full list.
+/// always "in the worktree", which made every such lease there read live and
+/// borrow the inspector's pid. Leases with a durable owner keep the full list.
 // trace:BUG-2197 | ai:claude
 pub(crate) fn attributable_live_sessions(
     l: &SessionLease,
@@ -1212,7 +1217,7 @@ pub(crate) fn attributable_live_sessions(
     inspector: &std::collections::HashSet<u32>,
 ) -> Vec<process_probe::LiveSession> {
     live.iter()
-        .filter(|s| lease_records_pid(l) || !inspector.contains(&s.pid))
+        .filter(|s| !inspector.contains(&s.pid) || lease_has_durable_owner(l))
         .cloned()
         .collect()
 }
@@ -2432,11 +2437,11 @@ pub(crate) fn lease_drain_xref(
     }))
 }
 
-/// BUG-2197: a lease that records no pid and that no live process was
+/// BUG-2197: a lease with no durable owner that no live process was
 /// attributed to has an unknown owner — neither live nor dead.
 // trace:BUG-2197 | ai:claude
 pub(crate) fn lease_owner_unknown(l: &SessionLease, attributed_pid: Option<u32>) -> bool {
-    !lease_records_pid(l) && attributed_pid.is_none()
+    attributed_pid.is_none() && !lease_has_durable_owner(l)
 }
 
 /// TASK-345: assemble the `aida session leases --json` rows. Pure over the
@@ -2807,7 +2812,7 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
             println!(
                 "{}",
                 format!(
-                    "{}? unknown owner — this lease records no pid, so it is neither live nor dead",
+                    "{}? unknown owner — no live process is recorded on this lease, so it is neither live nor dead",
                     " ".repeat(15)
                 )
                 .dimmed()

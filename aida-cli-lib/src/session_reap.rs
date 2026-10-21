@@ -403,7 +403,7 @@ pub(crate) struct ReapReport {
     // trace:BUG-2197 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub releasable: Vec<ReapRow>,
-    /// Leases on a protected checkout that record no pid: unknown owner,
+    /// Leases on a protected checkout with no durable owner: unknown owner,
     /// neither live nor dead. Released only with `--release-unknown-owner`.
     // trace:BUG-2197 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1890,7 +1890,9 @@ pub(crate) fn release_protected_leases_with(
                 return Ok(());
             }
             Some(false) => {
-                writeln!(out, "Aborted — nothing released.")?;
+                if !opts.json {
+                    writeln!(out, "Aborted — nothing released.")?;
+                }
                 return Ok(());
             }
             Some(true) => {}
