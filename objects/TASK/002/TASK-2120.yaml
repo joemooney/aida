@@ -6,16 +6,25 @@ description: |-
   lane_liveness.rs:1266 review_lease_running: the TASK-2094 test covers the crashed and agent-registry arms but not a live Claude session in the review worktree after its creator exits (the probe_live_claude_sessions arm). Add a seam or test.
 
   Raised in review of PR-2814 (TASK-1955 slice 5) at f18a4cd93b: https://github.com/joemooney/aida/pull/2814
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T23:29:13.553686517Z
-modified_at: 2026-10-21T23:29:13.553686517Z
+modified_at: 2026-10-21T23:30:28.277365932Z
 req_type: Task
 tags:
 - from-review:PR-2814
 - severity:minor
+history:
+- id: 01a160cd-4735-7472-a56a-d7d517a5a228
+  author: joe
+  timestamp: 2026-10-21T23:30:28.277363634Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f18a4cd93b32b2c844b33d1a1278caa43c07fb73
   branch: pr-2814
