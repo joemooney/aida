@@ -910,6 +910,23 @@ pub fn extract_trailing_spec_ids_from_subject(subject: &str) -> Vec<String> {
     parse_spec_id_group(inner)
 }
 
+/// BUG-2199: the spec ids a commit subject names for AUTHORSHIP — its
+/// trailing completion group (see [`extract_trailing_spec_ids_from_subject`])
+/// plus any `(Refs X[, Y...])` group, which names the work's spec without
+/// completing it. Never use this for completion: `Refs` must not close a spec.
+// trace:BUG-2199 | ai:claude
+pub(crate) fn extract_authorship_spec_ids_from_subject(subject: &str) -> Vec<String> {
+    let mut out = extract_trailing_spec_ids_from_subject(subject);
+    let mut rest = subject.trim();
+    while let Some((head, inner)) = trailing_paren_group(rest) {
+        // One Refs grammar for authorship and completion (BUG-2203).
+        // trace:BUG-2199 BUG-2203 | ai:claude
+        out.extend(refs_group_spec_ids(inner));
+        rest = head.trim_end();
+    }
+    out
+}
+
 /// BUG-2203: the ids of a subject's trailing `(Refs X[, Y])` group (the
 /// non-completing reference form), optionally followed by GitHub's `(#N)`.
 /// Empty when the trailing group is anything else.

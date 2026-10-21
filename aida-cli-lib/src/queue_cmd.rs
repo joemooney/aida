@@ -13551,7 +13551,13 @@ pub(crate) fn run_standalone_reviewer(
         println!("{summary}");
     }
 
-    let outcome = standalone_reviewer_outcome(pr, collected.err(), verdict_path)
+    // BUG-2201: a reviewer stopped by the permission layer is named as such.
+    // trace:BUG-2201 | ai:claude
+    let denials = log_body
+        .as_deref()
+        .map(reviewer_summary::parse_permission_denials)
+        .unwrap_or_default();
+    let outcome = standalone_reviewer_outcome(pr, collected.err(), verdict_path, &denials)
         .map_err(|err| format!("{err:#}\n{}", recovery.as_deref().unwrap_or_default()));
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
@@ -13588,19 +13594,35 @@ impl std::error::Error for ReviewerVendorExit {}
 /// BUG-2149: the launch command's result once the reviewer exited cleanly. A
 /// review that produced no verifiable verdict is a failure — a caller waiting
 /// on the exit status must never read a missing verdict as an approval.
+///
+/// BUG-2201: `denials` are the tool calls the reviewer's permission layer
+/// refused (see [`reviewer_summary::parse_permission_denials`]); when any
+/// exist the message names them, since a denied `aida review record` or
+/// verdict write is the usual reason no verdict exists.
 // trace:BUG-2149 | ai:claude
+// trace:BUG-2201 | ai:claude
 pub(crate) fn standalone_reviewer_outcome(
     pr: u64,
     rejection: Option<String>,
     verdict_path: &std::path::Path,
+    denials: &[String],
 ) -> Result<()> {
     let Some(why) = rejection else {
         return Ok(());
     };
+    let denied = if denials.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The permission layer denied {} of the reviewer's tool call(s): {}.",
+            denials.len(),
+            denials.join("; ")
+        )
+    };
     Err(anyhow::Error::new(NoReviewVerdict {
         message: format!(
             "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
-             nothing was collected into {}. Treat this as no approval and re-run the review.",
+             nothing was collected into {}.{denied} Treat this as no approval and re-run the review.",
             verdict_path.display()
         ),
     }))

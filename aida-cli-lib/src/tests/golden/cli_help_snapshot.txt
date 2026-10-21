@@ -12248,6 +12248,12 @@ session whose process is still alive owns its worktree as its cwd, so it is skip
 later pass once it exits on its own. Dirty worktrees, locked worktrees, and branches carrying unique
 unmerged commits are never removed — the same safety checks `aida worktree gc` applies.
 
+A lease held on the main checkout (or another protected checkout) is never reaped, but it is
+RELEASED — the lease file only, never a file of the checkout — when the agent process it recorded
+(pid plus start identity) is provably dead: gone, or its pid reused by a different process. A lease
+that records only the shell that created it, or no pid at all, has an unknown owner and is released
+only with --release-unknown-owner. A recorded process that is still running always keeps the lease.
+
 Usage: aida session reap [OPTIONS]
 
 Options:
@@ -12259,6 +12265,10 @@ Options:
 
       --json
           Emit machine-readable JSON
+
+      --release-unknown-owner
+          Also release main-checkout leases with an unknown owner (no recorded agent process).
+          Without it they are listed and kept
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -35725,6 +35735,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "release-unknown-owner",
+        "takes_value": false,
+        "help": "Also release main-checkout leases with an unknown owner (no recorded agent process). Without it they are listed and kept"
       },
       {
         "name": "yes",

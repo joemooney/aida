@@ -1795,9 +1795,13 @@ fn task_1800_alias_search_outside_a_store_repository_is_an_error() {
     assert!(crate::mandate::store_history_alias_ids(tmp.path(), "TASK 176;").is_err());
 }
 
+/// TASK-1800: ship a change whose trace names TASK-176, the agreed_id of a
+/// security-tagged spec TASK-1-152 that was stored at `stored_at` (relative
+/// to the store) and then deleted.
 // trace:TASK-1800 | ai:claude
-#[test]
-fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
+fn ship_tracing_deleted_agreed_id_spec(
+    stored_at: Option<&str>,
+) -> std::result::Result<crate::pr_cmd::MandateCover, MandateRefusal> {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let git_out = |dir: &Path, args: &[&str]| {
@@ -1871,8 +1875,9 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
 
     // Stored under spec_id TASK-1-152 with agreed_id TASK-176 and an excluded
     // tag, then deleted: only its store history under TASK-1-152 remains.
-    let rel_alias = aida_core::object_store::relative_object_path("TASK-1-152").unwrap();
-    let path_alias = store.join(&rel_alias);
+    let canonical = aida_core::object_store::relative_object_path("TASK-1-152").unwrap();
+    let rel_alias = stored_at.unwrap_or(&canonical);
+    let path_alias = store.join(rel_alias);
     std::fs::create_dir_all(path_alias.parent().unwrap()).unwrap();
     let mut req_alias = plain();
     req_alias.spec_id = Some("TASK-1-152".into());
@@ -1885,10 +1890,12 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
     git_out(&store, &["add", "-A"]);
     git_out(&store, &["commit", "-qm", "delete TASK-1-152"]);
 
-    assert_eq!(
-        crate::mandate::store_history_alias_ids(&store, "TASK-176").unwrap(),
-        vec!["TASK-1-152".to_string()]
-    );
+    let aliases = crate::mandate::store_history_alias_ids(&store, "TASK-176");
+    if stored_at.is_none() {
+        assert_eq!(aliases.unwrap(), vec!["TASK-1-152".to_string()]);
+    } else {
+        assert!(aliases.is_err(), "{aliases:?}");
+    }
 
     let gh = root.join("gh-stub");
     crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
@@ -1938,9 +1945,30 @@ fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
             )
         },
     );
+    result
+}
+
+// trace:TASK-1800 | ai:claude
+#[test]
+fn task_1800_deleted_spec_named_by_its_agreed_id_is_judged_by_its_history() {
+    let result = ship_tracing_deleted_agreed_id_spec(None);
     assert!(
         matches!(result, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
         "a deleted spec named by its agreed_id must be judged, not dropped: {result:?}"
+    );
+}
+
+/// TASK-1800 comment 24: the history read finds versions only at an
+/// object's canonical path. A deleted spec whose history sits anywhere else
+/// (here a wrong shard) used to read as no history and be dropped as a
+/// dangling trace ID; it must refuse instead.
+// trace:TASK-1800 | ai:claude
+#[test]
+fn task_1800_deleted_agreed_id_spec_at_a_non_canonical_path_refuses() {
+    let result = ship_tracing_deleted_agreed_id_spec(Some("objects/TASK/001/TASK-1-152.yaml"));
+    assert!(
+        matches!(result, Err(MandateRefusal::HistoryUnreadable { ref spec, .. }) if spec == "TASK-176"),
+        "a deleted spec named by its agreed_id must never be dropped as dangling: {result:?}"
     );
 }
 

@@ -2203,9 +2203,12 @@ pub(crate) fn build_running_work(
         .iter()
         .map(|l| {
             let state = lease_state_for(l, live, now);
+            // BUG-2197: a pid-less lease never borrows the inspector's pid.
+            // trace:BUG-2197 | ai:claude
+            let attributable = attributable_live_sessions(l, live, inspector_pids());
             // trace:BUG-1941 | ai:claude — deterministic pick among sessions
             // sharing the worktree.
-            let live_in_worktree = ps_live_in_worktree(live, &l.worktree_path);
+            let live_in_worktree = ps_live_in_worktree(&attributable, &l.worktree_path);
             let pid = l
                 .active_pid
                 .filter(|p| process_probe::pid_is_alive(*p))

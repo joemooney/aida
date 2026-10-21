@@ -525,9 +525,11 @@ fn bug_1941_movement_from_fresh_files_is_not_reframed_by_standing() {
         tmp.path().to_path_buf(),
         "task-1722-work",
     );
+    // BUG-2197: another claude's pid, not the test's own: a pid-less lease is
+    // never attributed to the inspector. trace:BUG-2197 | ai:claude
     let mut rows = rows_for(
         &[l],
-        &[live_at(std::process::id(), tmp.path())],
+        &[live_at(4_000_123, tmp.path())],
         WorktreeGitProbe {
             ahead_of_main: 2,
             head_commit_age_secs: Some(60),

@@ -136,6 +136,7 @@ fn no_allow_rule_is_broader_than_the_worktree() {
         .unwrap()
         .iter()
         .filter_map(|r| r.as_str())
+        .filter(|r| is_write_rule(r))
         .collect();
     assert!(
         !allow.contains(&"Edit(/**)"),
@@ -266,6 +267,7 @@ fn pool_worktree_announcement_matches_rule_path() {
         .unwrap()
         .iter()
         .filter_map(|r| r.as_str().map(str::to_string))
+        .filter(|r| is_write_rule(r))
         .collect();
     assert_eq!(allow, expected);
 }
@@ -373,7 +375,9 @@ fn real_claude_contained_session_write_boundary() {
     );
 }
 
-/// The `permissions.allow` rules in a contained flag set's `--settings` JSON.
+/// The write-tool `permissions.allow` rules in a contained flag set's
+/// `--settings` JSON (BUG-2201's baseline Bash/Read rules are not the write
+/// boundary, so they are left out).
 fn allow_rules_in_flags(flags: &[String]) -> Vec<String> {
     let pos = flags.iter().position(|f| f == "--settings").unwrap();
     let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
@@ -382,7 +386,16 @@ fn allow_rules_in_flags(flags: &[String]) -> Vec<String> {
         .unwrap()
         .iter()
         .filter_map(|r| r.as_str().map(str::to_string))
+        .filter(|r| is_write_rule(r))
         .collect()
+}
+
+/// Whether `rule` is one of the write boundary's `Tool(...)` rules.
+// trace:BUG-2201 | ai:claude
+fn is_write_rule(rule: &str) -> bool {
+    WRITE_TOOLS
+        .iter()
+        .any(|tool| rule.starts_with(&format!("{tool}(")))
 }
 
 /// The roots named by `write boundary: //a/**, //b/**`, in rule-path form.
