@@ -6,17 +6,26 @@ description: |-
   Tests 4d and 4e grep release.sh for line numbers and patterns (noclobber, ln $tmp). A refactor that keeps the semantics breaks them, and a behaviour regression with the same text passes. Replace them with behavioural probes, e.g. a fake prompt or read hook that snapshots the lease file.
 
   Raised in review of PR-2807: https://github.com/joemooney/aida/pull/2807#issuecomment-6325469771
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T20:10:20.571043128Z
-modified_at: 2026-10-21T20:10:20.571043128Z
+modified_at: 2026-10-21T20:16:54.729346510Z
 req_type: Task
 tags:
 - from-review:PR-2807
 - release
 - severity:cosmetic
+history:
+- id: 01a1601c-11c9-71d2-94d2-01857d17782f
+  author: joe
+  timestamp: 2026-10-21T20:16:54.729341449Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
   branch: pr-2807
