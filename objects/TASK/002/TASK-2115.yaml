@@ -1,0 +1,27 @@
+id: 01a160c2-e07a-7543-9102-811c0b4f410d
+spec_id: TASK-2115
+agreed_id: TASK-2115
+title: 'aida: no-complete squash-body marker is GitHub-only; GitLab and pure-git forges drop squash_body'
+description: |
+  PR-2815's ship side carries the non-completing declaration only in MergeOptions.squash_body. GitHubForge passes it to gh pr merge --body. GitLabForge (forge.rs ~3176) sends only squash_commit_message, and PureGitForge (forge.rs ~2935) commits with the subject only, so on those forges the marker never reaches main. Either carry the body on those forges or document that the declaration is GitHub-only.
+
+  Raised in review of PR-2815: https://github.com/joemooney/aida/pull/2815#issuecomment-6328724758
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:19:06.618990797Z
+modified_at: 2026-10-21T23:19:06.618990797Z
+req_type: Task
+tags:
+- from-review:PR-2815
+- reconcile
+- severity:minor
+filed_at:
+  code_sha: 25fd68b5ddd776e8395a3ab4e4c91d5eed5e1e1c
+  branch: pr-2815
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160b903fc

@@ -1,0 +1,27 @@
+id: 01a160c2-f323-76b1-815e-b8609c8d37a4
+spec_id: TASK-2116
+agreed_id: TASK-2116
+title: Explicit --no-complete squash body drops GitHub-derived Co-authored-by trailers
+description: |
+  pr_cmd.rs pr_ship_with_method: when the identity gate leaves the body to the forge, a --no-complete or body-marker ship now passes an explicit body (identity_gate::squash_commit_messages_body). With an explicit --body, GitHub no longer derives Co-authored-by trailers from other commit authors, so co-author credit an ordinary squash keeps is lost. Document the trade-off, or append those trailers (subject to the identity allowlist).
+
+  Raised in review of PR-2815: https://github.com/joemooney/aida/pull/2815#issuecomment-6328724758
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T23:19:11.395516Z
+modified_at: 2026-10-21T23:19:11.395516Z
+req_type: Task
+tags:
+- from-review:PR-2815
+- reconcile
+- severity:cosmetic
+filed_at:
+  code_sha: 25fd68b5ddd776e8395a3ab4e4c91d5eed5e1e1c
+  branch: pr-2815
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
+  session: 01a160b903fc
