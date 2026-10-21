@@ -22,12 +22,23 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-13T04:41:01.167108550Z
-modified_at: 2026-10-13T04:41:01.167108550Z
+modified_at: 2026-10-21T04:32:25.722220265Z
 req_type: Story
 tags:
 - cycle-time
+- operator-held
 - process
 - review
+history:
+- id: 01a15cbb-6037-7833-9bba-93026cbfd104
+  author: joe
+  timestamp: 2026-10-21T04:32:26.167891490Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:25.722220265Z
+deferred_until: Risk tiers adopted as discipline (fire-mode.md 'Risk tiers', ruling 2026-10-14). Revisit if review time stays dominant in cycle-time metrics after 2 weeks.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 4e11f0296c00e5688fe84b753b2a2ea7a4c8b005
   branch: main
