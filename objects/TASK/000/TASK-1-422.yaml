@@ -1,0 +1,27 @@
+id: 01a160e2-085a-78a0-a42c-496a35202e86
+spec_id: TASK-1-422
+title: 'cosmetic: lease temp files (main.XXXXXX) are created inside .aida/merge-locks/.…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic: lease temp files (main.XXXXXX) are created inside .aida/merge-locks/. merge_lock::status read_dir lists them as leases, and a SIGKILL between mktemp and rm orphans one; the EXIT trap does not clean it. Use a dot-prefixed name that status skips, or create the temp file outside the dir on the same filesystem.
+  Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T23:53:08.442182048Z
+modified_at: 2026-10-21T23:53:08.442182048Z
+req_type: Task
+tags:
+- carried-from:TASK-1721
+- finding-hash:e922962b
+- from-review:TASK-1721
+- kind:carried-forward
+filed_at:
+  code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
