@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-21T16:22:28.313055112Z
+modified_at: 2026-10-21T16:22:36.171336277Z
 req_type: Task
 tags:
 - closure-pending
@@ -750,6 +750,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: RequestChanges: CI red (BUG-1612 targeted-commit regression from oplog fix), unverified-HEAD rollback race at 16 sites, TASK-1332 acceptance items 2-5 and cross-process tests missing. No triage reason was given.'
   created_at: 2026-10-21T04:49:51.270448255Z
   modified_at: 2026-10-21T04:49:51.270448255Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15f45-8d8b-7793-9c9f-325ae1c83de6
+  author: joe
+  content: 'ADVISOR 09:23: completed per the TASK-1332 option-A ruling. It was deferred until the last TASK-1981 slice merged; #2796 merged at 09:22 and TASK-1981 is completed. Item 3 continues as TASK-2041.'
+  created_at: 2026-10-21T16:22:36.171336277Z
+  modified_at: 2026-10-21T16:22:36.171336277Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
