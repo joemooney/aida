@@ -3,12 +3,12 @@ spec_id: TASK-1800
 agreed_id: TASK-1800
 title: Measure and reduce mandate trace-exclusion fallback rate (semantic false positives)
 description: 'Follow-up from the TASK-1790 item 3 review (#2709). Trace-derived exclusions refuse about 24/50 ordinary-mandate PRs beyond the named checks; hunk scope gains 1 case and 46/50 fall back to the full file, so the mandate is close to inert. Acceptance: (1) classify the refusals on the frozen last-50 set as true supervised touches vs incidental co-location; (2) cut the full-file fallback rate (e.g. module-level item attribution, non-Rust hunk scoping) without dropping any true touch; (3) keep ADD-only and fail-closed. STANDARD review unless authority code changes.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-20T08:52:43.843444739Z
+modified_at: 2026-10-21T05:34:23.481420621Z
 req_type: Task
 relationships:
 - rel_type:
@@ -335,6 +335,12 @@ comments:
   created_at: 2026-10-20T08:52:43.843444739Z
   modified_at: 2026-10-20T08:52:43.843444739Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15cf4-18f9-7402-9714-09328bc04d2d
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-1800 ruling mostly implemented, but a deleted spec referenced by its agreed_id is dropped as dangling (fail-open on authority path, violates ruling item 3). TASK-1803 passes.. No triage reason was given.'
+  created_at: 2026-10-21T05:34:23.481412880Z
+  modified_at: 2026-10-21T05:34:23.481412880Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
@@ -361,6 +367,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a15cf4-18f9-7402-9714-092e2d0a5148
+  author: joe
+  timestamp: 2026-10-21T05:34:23.481401666Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 7dd7aee9de535329db3d4a8caf1883d7cf6c3c35
   branch: main
@@ -369,11 +383,3 @@ filed_at:
   aida_build_sha: 7dd7aee9de
   vendor: claude
   session: ee439801-a8a7-4cb8-9d7d-76c3de417ce8
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: TASK-1800 ruling mostly implemented, but a deleted spec referenced by its agreed_id is dropped as dangling (fail-open on authority path, violates ruling item 3). TASK-1803 passes.
-  recovery_hint: address the review findings, move TASK-1800 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-18T18:15:15.945715094Z
