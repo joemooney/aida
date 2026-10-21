@@ -7,12 +7,12 @@ description: |-
 
   cosmetic: aida-cli-lib/src/tests/bug_2201_contained_baseline_tests.rs test outside_project_reviewer_gets_aida_and_git_bash_rules now asserts there is NO git rule; rename it (e.g. ..._gets_aida_rules_and_no_git_rule).
   Reviewed sha: 06191d581c3b5d105b73ae4a518198c6117f12df
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T16:02:12.938748318Z
-modified_at: 2026-10-21T16:02:12.938748318Z
+modified_at: 2026-10-21T16:19:40.110222978Z
 req_type: Task
 tags:
 - carried-from:BUG-2201
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-21T16:11:55.278893546Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15f42-ddce-7400-aadc-fd49c345d6b5
+  author: joe
+  timestamp: 2026-10-21T16:19:40.110220223Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 42007a47f646fc232f2ccad014d53b989eebd72c
   branch: main
