@@ -1,0 +1,30 @@
+id: 01a15d1e-e42b-7fd2-a778-fc0ef61a6cba
+spec_id: BUG-2202
+agreed_id: BUG-2202
+title: 'Flaky: story_1661 history-indexer fixture git commit races auto-maintenance (unable to create temporary file)'
+description: |
+  CI run 39537482996 (PR #2735, lib-0 shard) failed history_views::tests::index_answers_the_whole_window_past_the_walk_cap. The panic was at aida-cli-lib/src/tests/story_1661_history_indexer_tests.rs:50, the Fixture::git assert: `git ["-c","commit.gpgsign=false","commit","-q","-m","fixture update"]: error: unable to create temporary file: No such file or directory / fatal: failed to write commit object`.
+
+  This is the BUG-2191 mechanism: since git 2.54, detached auto-maintenance runs `repack -d` and prunes loose-object fanout dirs while a fixture commit is writing. The story_1661 Fixture::git spawns /usr/bin/git without `-c maintenance.auto=false -c gc.auto=0`. BUG-2191 / PR #2779 left this file to drain through the ratchet; it is in scripts/git-maintenance-baseline.txt as `1 aida-cli-lib/src/tests/story_1661_history_indexer_tests.rs`. It has now flaked, which by the BUG-2191 signoff (rule 3) makes it a must-migrate file.
+
+  The failure is not caused by PR #2735: that PR does not touch history code or this file, and the file is byte-identical on origin/main. Local evidence: `cargo test --profile agent -p aida-cli-lib --lib index_answers_the_whole_window_past_the_walk_cap` passed 3/3 on the PR head (8095b03e6c-based merge) and 3/3 on an origin/main 88430e08c6 snapshot. So it is a load-dependent flake that shows up only under CI parallelism.
+
+  Acceptance: route Fixture::git in story_1661_history_indexer_tests.rs through the crate's test_git helper (or add the -c pair); drop the file's baseline entry to 0; the ratchet passes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T06:21:08.011528246Z
+modified_at: 2026-10-21T06:21:08.011528246Z
+req_type: Bug
+tags:
+- ci
+- flaky-test
+filed_at:
+  code_sha: f687736aa0674af02c12031f315b4ac882106c18
+  branch: agy/bug-2130
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 39f1f192-5ed0-4c01-98c5-b727dca6dff7
