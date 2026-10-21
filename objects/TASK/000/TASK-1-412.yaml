@@ -6,18 +6,27 @@ description: |-
 
   minor: Phase::Exited is permanent per head (review_watch.rs:863-866); a transient queue-work failure blocks that head until a new push, and the only documented recovery for ambiguous holds is hand-editing .aida/review-watch/state.json while no watcher runs (review_watch.rs:905). Add an operator recovery verb (e.g. release/retry a key).
   Reviewed sha: f737aabdb43e0d811a44e67d028950895e1d9f34
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T17:27:05.739317606Z
-modified_at: 2026-10-21T17:27:05.739317606Z
+modified_at: 2026-10-21T17:35:14.548022378Z
 req_type: Task
 tags:
 - carried-from:TASK-1993
 - finding-hash:9956f7d8
 - from-review:TASK-1993
 - kind:carried-forward
+history:
+- id: 01a15f88-0e74-7913-bbdd-128d7a3b1403
+  author: joe
+  timestamp: 2026-10-21T17:35:14.548016783Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 98d19dceb3af3acaf538f2cfe952677c200fad0c
   branch: main
