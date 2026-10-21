@@ -6,16 +6,25 @@ description: |
   The measurement in PR-2798 closes TASK-1800 (signoff 3), so the subject should carry (TASK-1800), not (Refs TASK-1800). The follow-up spec for resolving unresolved IDs via store history/aliases is not filed.
 
   Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T12:04:42.790001140Z
-modified_at: 2026-10-21T12:04:42.790001140Z
+modified_at: 2026-10-21T12:18:38.226436771Z
 req_type: Task
 tags:
 - from-review:PR-2798
 - severity:minor
+history:
+- id: 01a15e66-3212-77a1-b651-90afe6ec40b0
+  author: joe
+  timestamp: 2026-10-21T12:18:38.226429892Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0add137bc25547cbc420443409b8bbff3993a748
   branch: main
