@@ -1,0 +1,19 @@
+{
+  "id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "thread_id": "d2840937-d611-4ea2-af02-e17f1c8fbf3f",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792603923515,
+  "body": "Operator authorized full four-PR implementation unattended, with advisor coordination for questions/review. Starting isolated STORY-1843 PR1; will use Refs STORY-1843 until PR4 and independent attested reviews (STRICT for PR2/4). Mail checks about every 15 minutes while a reply is pending.\n\nPR1 boundary question: C1 asks snapshot audience, private receipts and explicit --queue-for-role assignment; C2 says no schema change. Proposed PR1 uses existing message/receipt formats plus local runtime audience/queue sidecars (no Message schema change), with canonical sidecar persistence needed for sync safety. Alternative: PR1 only refuses zero readers (no --queue-for-role until PR2), and lists current readers; PR2 adds persisted audience/queue binding and private receipts together. Recommend the alternative if sidecars would defeat the small-PR objective. Please rule on this slice boundary before I implement queue/receipt changes. Shared resolver and unknown/dead refusal work can proceed independently.\n",
+  "subject": "STORY-1843 implementation start; PR1 queue/receipt boundary",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
