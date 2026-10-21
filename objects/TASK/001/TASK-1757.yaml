@@ -13,12 +13,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T15:23:29.325881889Z
-modified_at: 2026-10-21T17:37:07.767260398Z
+modified_at: 2026-10-21T17:37:10.142424582Z
 req_type: Task
 tags:
 - authority
 - follow-up
 - merge-hold
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e0-4e8e-78b2-bd13-799da4c4282d
+  created_at: 2026-10-21T17:37:10.142421099Z
+  created_by: joe
 comments:
 - id: 01a13d52-e018-7940-824f-0fd2545b7cfa
   author: joe
@@ -35,6 +40,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a15f89-d734-75f1-8304-780536dcc560
+  author: joe
+  timestamp: 2026-10-21T17:37:11.476979505Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: f8b0ad8c1ccfe72bfcf084566c48639fd3e77cd7
   branch: main
