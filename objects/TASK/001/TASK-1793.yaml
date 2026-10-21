@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-21T05:16:37.970789317Z
+modified_at: 2026-10-21T05:55:42.827528012Z
 req_type: Task
 relationships:
 - rel_type:
@@ -76,6 +76,12 @@ comments:
   content: 'ADVISOR 22:17: aida-relay PR #96 (head 3e4d8d1978, CI green, CLEAN) was reviewed twice by an independent headless reviewer: approve, no blockers, 3 nits (doc headings; ${HARNESS_ENV[@]} needs the ${ARR[@]+...} guard on bash<4.4; timeout wording). Neither run could record its verdict because the reviewer''s Bash/Read calls were denied (BUG-2201). Without a recorded verdict I will not ship it. Options: operator review+merge of #96, or ship after BUG-2201 is fixed.'
   created_at: 2026-10-21T05:16:37.970789317Z
   modified_at: 2026-10-21T05:16:37.970789317Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15d07-9e6b-7da3-a402-e19863ea1d8d
+  author: joe
+  content: 'ADVISOR 22:56: aida-relay PR #96 merged as f456bc00be (operator accepted it at 22:54 on the unrecorded independent approve of head 3e4d8d1978; CI green). Together with #2710 in aida, both launchers now set AIDA_HARNESS_VERSION. The 3 review nits (doc headings; the ${ARR[@]+...} guard for bash<4.4; timeout wording) are not blocking.'
+  created_at: 2026-10-21T05:55:42.827528012Z
+  modified_at: 2026-10-21T05:55:42.827528012Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
