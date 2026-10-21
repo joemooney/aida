@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-21T04:28:54.688698058Z
+modified_at: 2026-10-21T04:29:17.385022364Z
 req_type: Task
 tags:
 - reconcile
@@ -135,6 +135,12 @@ comments:
   content: 'Advisor triage 2026-10-20 21:30: folded TASK-1765 into this spec (Ship/reconcile completion follow-ups; fits the approved ship/reconcile/auto-complete sweep. Item (3) stale comment already fixed on main.). Its open acceptance items now belong here.'
   created_at: 2026-10-21T04:28:43.439339256Z
   modified_at: 2026-10-21T04:28:43.439339256Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15cb8-7ec9-7dc2-83d6-ad5893f4cc26
+  author: joe
+  content: 'Advisor triage 2026-10-20 21:30: folded TASK-1920 into this spec (Items 4-5 already in TASK-1951 (TASK-1408/1411); item 1 largely done by BUG-2179 batched -G walk (4632c55b7d). Fold items 2-3 (forge.rs) into TASK-1951.). Its open acceptance items now belong here.'
+  created_at: 2026-10-21T04:29:17.385022364Z
+  modified_at: 2026-10-21T04:29:17.385022364Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
