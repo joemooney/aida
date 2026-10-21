@@ -542,13 +542,33 @@ fi
 # An agent may not bypass the host cargo-slot limiter. Setting
 # AIDA_CARGO_NO_SLOT skips the slot queue, so one agent's full suite runs beside
 # two slotted builds on a 6-core host (fix-2725: `make check` took 1h20m).
-# This scans the raw COMMAND, not SCAN_COMMAND: quoted bodies are commands too
-# (`bash -c "AIDA_CARGO_NO_SLOT=1 make check"`), so any assignment (`=`, `+=`,
-# `export`, `env`) anywhere is blocked, a mail body that spells one out included.
-# Unsetting it (`env -u`, `unset`) has no `=` and stays allowed. An indirect
-# name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope: that is
-# deliberate evasion, not an accident. trace:TASK-1948 | ai:claude
-if printf '%s' "$COMMAND" | grep -qE '(^|[^A-Za-z0-9_])AIDA_CARGO_NO_SLOT\+?='; then
+# Any assignment (`=`, `+=`, `export`, `env`) is blocked where it can run:
+# - the command with quoted text and heredoc bodies removed (SCAN_COMMAND);
+# - a quoted payload a shell will run: `bash -c "..."`, `sh -c '...'`,
+#   `eval "..."`, or a command substitution (`$(...)`, backticks);
+# - anywhere, when the command feeds a shell on stdin (`bash <<EOF`, `| sh`).
+# Quoted text nothing executes is prose, not an assignment (TASK-1643): an
+# `rg`/`grep` pattern, a `git commit -m` message, an `aida comment add` or
+# mailbox body. Unsetting it (`env -u`, `unset`) has no `=` and stays allowed.
+# An indirect name (`X=AIDA_CARGO_NO_SLOT; export "${X}=1"`) is out of scope:
+# that is deliberate evasion, not an accident.
+# trace:TASK-1948 | ai:claude
+# trace:TASK-1952 | trace:TASK-1643 | ai:claude
+NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
+NO_SLOT_SHELL='(^|[^A-Za-z0-9_./-])(bash|sh|zsh|dash|ksh)'
+no_slot_set() {
+    printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    printf '%s' "$COMMAND" | grep -qE \
+        "($NO_SLOT_SHELL|(^|[^A-Za-z0-9_])eval)([[:space:]]+[^;&|]*)?[^A-Za-z0-9_]$NO_SLOT_SET" \
+        && return 0
+    printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
+    if printf '%s' "$COMMAND" | grep -qE \
+        "$NO_SLOT_SHELL([[:space:]]+-[A-Za-z]+)*[[:space:]]*(<|\$)|\\|[[:space:]]*(bash|sh|zsh|dash|ksh)([^A-Za-z0-9_]|\$)"; then
+        printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
+    fi
+    return 1
+}
+if no_slot_set; then
     {
         echo "BLOCKED: AIDA_CARGO_NO_SLOT bypasses the cargo build-slot limiter."
         echo "Agents queue for a slot like everyone else: drop the variable and run long cargo"

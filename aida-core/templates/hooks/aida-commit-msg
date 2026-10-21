@@ -24,12 +24,28 @@ REQUIRE_AI_TAG="${AIDA_REQUIRE_AI_TAG:-true}"
 # is not the project's file and sourcing it would run that shell on the
 # host. A store commit is one an aida build makes (AIDA_STORE_WRITE_GUARD is
 # set on every such git call) or any commit on the `aida-store` branch (a
-# person committing by hand inside the store). Both are checked before
-# anything is sourced, while PATH is still the one git handed this hook.
+# person committing by hand inside the store), or any commit whose toplevel
+# is a store tree, detached HEAD included (BUG-2117): a `.aida-store`
+# toplevel, or a linked worktree at `<main>/.aida-store` / `<main>/aida-store`.
+# All are checked before anything is sourced, while PATH is still the one
+# git handed this hook.
 # trace:BUG-1929 | ai:claude
+# trace:TASK-1952 | trace:BUG-2117 | ai:claude
 AIDA_HOOK_BRANCH=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+AIDA_HOOK_TOP=$(git rev-parse --show-toplevel 2>/dev/null)
+AIDA_HOOK_COMMON=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+AIDA_HOOK_GITDIR=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
+AIDA_HOOK_STORE_TREE=""
+case "$AIDA_HOOK_TOP" in */.aida-store) AIDA_HOOK_STORE_TREE=1 ;; esac
+if [ -n "$AIDA_HOOK_COMMON" ] && [ "$AIDA_HOOK_GITDIR" != "$AIDA_HOOK_COMMON" ]; then
+    AIDA_HOOK_MAIN=$(dirname "$AIDA_HOOK_COMMON")
+    if [ "$AIDA_HOOK_TOP" = "$AIDA_HOOK_MAIN/.aida-store" ] \
+        || [ "$AIDA_HOOK_TOP" = "$AIDA_HOOK_MAIN/aida-store" ]; then
+        AIDA_HOOK_STORE_TREE=1
+    fi
+fi
 if [ -z "${AIDA_STORE_WRITE_GUARD:-}" ] && [ "$AIDA_HOOK_BRANCH" != "aida-store" ] \
-    && [ -f ".aida/commit-config" ]; then
+    && [ -z "$AIDA_HOOK_STORE_TREE" ] && [ -f ".aida/commit-config" ]; then
     source ".aida/commit-config"
 fi
 

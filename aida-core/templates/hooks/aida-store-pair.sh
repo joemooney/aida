@@ -27,8 +27,17 @@ COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 MAIN_ROOT=""
 [ -n "$COMMON_DIR" ] && MAIN_ROOT=$(dirname "$COMMON_DIR")
 
-CANDIDATES=("$PROJECT_ROOT/.aida-store" "$PROJECT_ROOT/aida-store")
-[ -n "$MAIN_ROOT" ] && [ "$MAIN_ROOT" != "$PROJECT_ROOT" ] && CANDIDATES+=("$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store")
+# BUG-2117: the store is resolved only from git's own common directory (the
+# main checkout), never from this commit's toplevel, whose tree a sandboxed
+# session may write: a commit inside the store itself (or a linked worktree)
+# would otherwise pick a planted nested `.aida-store/.git` and forge the
+# trailer. A store commit pairs with nothing.
+# trace:TASK-1952 | trace:BUG-2117 | ai:claude
+[ -z "$MAIN_ROOT" ] && exit 0
+case "$PROJECT_ROOT" in
+    "$MAIN_ROOT/.aida-store"|"$MAIN_ROOT/aida-store"|*/.aida-store) exit 0 ;;
+esac
+CANDIDATES=("$MAIN_ROOT/.aida-store" "$MAIN_ROOT/aida-store")
 
 STORE_PATH=""
 for candidate in "${CANDIDATES[@]}"; do

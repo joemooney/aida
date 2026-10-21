@@ -172,6 +172,16 @@ pub(crate) fn commit_store_writes_since(
                 );
             }
         }
+        // TASK-2009: a path staged-added before the launch and then deleted
+        // by the child is now unknown to both the index and HEAD, and one
+        // unknown pathspec aborts the whole `git commit -- <paths>`. It has
+        // nothing to commit, so it is dropped.
+        // trace:TASK-1952 | trace:TASK-2009 | trace:TASK-1652 | ai:claude
+        let known = known_to_git(store, &paths)?;
+        let paths: Vec<String> = paths.into_iter().filter(|p| known.contains(p)).collect();
+        if paths.is_empty() {
+            return Ok(paths);
+        }
         let refs: Vec<&str> = paths.iter().map(String::as_str).collect();
         let unchanged = aida_core::git_ops::host_git_command(store)
             .args(["diff", "--cached", "--quiet", "--"])
@@ -191,6 +201,45 @@ pub(crate) fn commit_store_writes_since(
         )?;
         Ok(paths)
     })
+}
+
+/// Which of `paths` the store's index or HEAD knows (a pathspec `git commit
+/// -- <paths>` accepts). A store with no commit yet has no HEAD paths.
+// trace:TASK-1952 | trace:TASK-2009 | ai:claude
+fn known_to_git(
+    store: &Path,
+    paths: &[String],
+) -> anyhow::Result<std::collections::HashSet<String>> {
+    let list = |args: &[&str], must_succeed: bool| -> anyhow::Result<Vec<String>> {
+        let out = aida_core::git_ops::host_git_command(store)
+            .arg("--literal-pathspecs")
+            .args(args)
+            .arg("--")
+            .args(paths)
+            .output()?;
+        if !out.status.success() {
+            anyhow::ensure!(
+                !must_succeed,
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+            return Ok(Vec::new());
+        }
+        Ok(out
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|p| !p.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect())
+    };
+    let mut known: std::collections::HashSet<String> =
+        list(&["ls-files", "-z"], true)?.into_iter().collect();
+    known.extend(list(
+        &["ls-tree", "-r", "-z", "--name-only", "HEAD"],
+        false,
+    )?);
+    Ok(known)
 }
 
 /// One `git status --porcelain=v2 -z` entry.
@@ -379,6 +428,37 @@ mod tests {
             porcelain(&store),
             "",
             "both sides of the rename are committed"
+        );
+    }
+
+    /// A path staged-added before the launch and deleted by the child is
+    /// known to neither the index nor HEAD; it is dropped, and the child's
+    /// other writes still commit.
+    // trace:TASK-1952 | trace:TASK-2009 | trace:TASK-1652 | ai:claude
+    #[test]
+    fn task_2009_a_host_staged_path_the_child_deleted_does_not_abort_the_commit() {
+        let (_g, store) = store_fixture();
+        std::fs::write(store.join("objects/staged.yaml"), "s: 1\n").unwrap();
+        git(&store, &["add", "objects/staged.yaml"]);
+        git(&store, &["mv", "objects/old.yaml", "objects/renamed.yaml"]);
+        let baseline = StoreBaseline::capture(&store);
+        std::fs::remove_file(store.join("objects/staged.yaml")).unwrap();
+        std::fs::remove_file(store.join("objects/renamed.yaml")).unwrap();
+        std::fs::write(store.join("objects/new.yaml"), "n: 1\n").unwrap();
+
+        let committed = commit_store_writes_since(&store, &baseline, "reviewer").unwrap();
+        assert!(
+            committed.contains(&"objects/new.yaml".to_string()),
+            "{committed:?}"
+        );
+        assert!(
+            !committed.contains(&"objects/staged.yaml".to_string()),
+            "{committed:?}"
+        );
+        assert!(
+            !porcelain(&store).contains("new.yaml"),
+            "the child's other write is committed: {}",
+            porcelain(&store)
         );
     }
 
