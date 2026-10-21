@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T16:19:51.260925456Z
+modified_at: 2026-10-21T16:19:53.688200242Z
 req_type: Task
 tags:
 - launch
@@ -226,6 +226,12 @@ comments:
   content: 'Folded TASK-2069 (PR-2782 non-blocking follow-up): claim CAS retry hard-fails when the store HEAD moved past our unpushed claim commit.'
   created_at: 2026-10-21T14:18:19.252012366Z
   modified_at: 2026-10-21T14:18:19.252012366Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15f43-12d8-7161-acd5-11edc88db9b5
+  author: joe
+  content: 'ADVISOR 09:20: folded the PR-2794 round-3 non-blocking notes. TASK-1674: cap the permission-denial list in the exit-30 message of queue_cmd.rs standalone_reviewer_outcome (first 5, then ''…N more''). TASK-1675: rename bug_2201_contained_baseline_tests::outside_project_reviewer_gets_aida_and_git_bash_rules to ..._gets_aida_rules_and_no_git_rule. TASK-1676 was PR-body only, no code; closed.'
+  created_at: 2026-10-21T16:19:53.688200242Z
+  modified_at: 2026-10-21T16:19:53.688200242Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
