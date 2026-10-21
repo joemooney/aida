@@ -3313,6 +3313,13 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &refusal,
             );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
             return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
         }
         // BUG-1532 criterion 4, re-checked HERE under the merge lease against
@@ -3348,6 +3355,13 @@ pub(crate) fn pr_ship_with_method(
                         Some(pr_number),
                         &refusal,
                     );
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &refusal,
+                    );
                     return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
                 }
             },
@@ -3379,6 +3393,13 @@ pub(crate) fn pr_ship_with_method(
                     Some(pr_number),
                     &refusal,
                 );
+                // trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
                 return Err(pr_ship::ShipRefusal::MergeHold.error(refusal));
             }
         }
@@ -3394,6 +3415,13 @@ pub(crate) fn pr_ship_with_method(
                 Some(pr_number),
                 &pr_ship::ShipStep::Merge { delete_branch },
                 &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
             );
             return Err(pr_ship::ShipRefusal::Review.error(refusal));
         }
@@ -3521,12 +3549,17 @@ pub(crate) fn pr_ship_with_method(
                         );
                         anyhow::bail!(refusal)
                     }
-                    Ok(false) => anyhow::bail!(
-                        "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
-                         180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
-                         inspect `gh pr checks {pr_number}`",
-                        crate::ci_gate::HOLD_GATE_CHECK
-                    ),
+                    Ok(false) => {
+                        let refusal = format!(
+                            "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                             180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                             inspect `gh pr checks {pr_number}`",
+                            crate::ci_gate::HOLD_GATE_CHECK
+                        );
+                        // trace:TASK-1915 | ai:claude
+                        ledger_mandate_ship_failure(&main_worktree, mandate_release.as_ref(), pr_number, &refusal);
+                        anyhow::bail!(refusal)
+                    }
                     Err(e) => eprintln!(
                         "  {} could not confirm `{}` re-ran green ({e:#}) — attempting the merge anyway",
                         crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
@@ -3582,6 +3615,21 @@ pub(crate) fn pr_ship_with_method(
                     crate::events::GATE_STALE_APPROVAL,
                     None,
                     Some(pr_number),
+                    &refusal,
+                );
+                // The hold a mandate released is re-armed and the refusal ledgered,
+                // like every other post-release exit. trace:TASK-1915 | ai:claude
+                let refusal = match (&mandate_release, &marker_reason) {
+                    (Some(_), Some(_)) => format!(
+                        "{refusal}{}",
+                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                    ),
+                    _ => refusal,
+                };
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
                     &refusal,
                 );
                 return Err(pr_ship::ShipRefusal::Review.error(refusal));
@@ -5210,10 +5258,10 @@ mod task_140_squash_subject_tests;
 #[path = "tests/bug_2203_refs_subject_tests.rs"]
 mod bug_2203_refs_subject_tests;
 
-/// A ship a mandate released that stops short of its merge (the hold gate
-/// not re-running green, the mandate ending, `gh pr merge` failing) is a
-/// mandate-driven action too: ledger its refusal under the mandate. A ship
-/// no mandate covered writes nothing.
+/// A ship a mandate covered that stops short of its merge is a
+/// mandate-driven action too: ledger its refusal under the mandate. Every
+/// exit between the mandate release decision and the merge calls this (a
+/// source pin keeps it so); a ship no mandate covered writes nothing.
 // trace:TASK-1915 | ai:claude
 pub(crate) fn ledger_mandate_ship_failure(
     root: &std::path::Path,
