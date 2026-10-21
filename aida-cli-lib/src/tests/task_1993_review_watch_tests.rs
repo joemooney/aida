@@ -394,7 +394,7 @@ while not (root / 'queue-release').exists():
     time.sleep(0.01)
 "#,
     );
-    let mut command = Command::new(std::env::current_exe().unwrap());
+    let mut command = Command::new(crate::aida_bin::current_executable_path().unwrap());
     command.current_dir(root).args([
         "--exact", "--nocapture", "--test-threads=1",
         "review_watch::tests::task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads",
@@ -559,7 +559,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
         };
         crate::test_exec::write_executable(&bin.join(if gitlab { "glab" } else { "gh" }), &script);
         let path = format!("{}:/usr/bin:/bin", bin.display());
-        let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
             &root,
             "advisor",
             &["reviewer"],
@@ -581,7 +581,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "advisor",
             &["reviewer"],
         );
-        std::env::set_var(crate::seat_authority::GRANT_ENV, parent);
+        env.set_key(crate::seat_authority::GRANT_ENV, parent); // trace:TASK-1993 | ai:claude
         let repo = forge::Repository::load(&root).unwrap();
         let mut changes = repo.discover(&root).unwrap();
         assert_eq!(changes.len(), 1);

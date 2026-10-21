@@ -573,6 +573,14 @@ impl AmbientGuard {
         }));
         Self { prev, _env: env }
     }
+
+    /// Re-pin one env key under this guard's held lock; restored on drop like
+    /// the keys applied at construction (the lock is not reentrant, so a
+    /// fixture that must reissue a value after its pins cannot stack a guard).
+    // trace:TASK-1993 | ai:claude
+    pub(crate) fn set_key(&mut self, key: &'static str, value: impl AsRef<OsStr>) {
+        self._env.set_key(key, value);
+    }
 }
 
 impl Drop for AmbientGuard {

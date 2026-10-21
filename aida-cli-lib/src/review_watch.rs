@@ -224,9 +224,21 @@ impl Directory {
     }
     fn lock(&self, name: &str) -> Result<File> {
         let file = self.file(name, true)?;
-        file.try_lock_exclusive()
-            .with_context(|| format!("review-watch lock busy: {name}"))?;
-        Ok(file)
+        // A forked child shares this lock's open file description until it
+        // execs, so a just-released lock can read busy for a moment. Retry
+        // briefly; a live holder still yields WouldBlock to the caller.
+        // trace:TASK-1993 | ai:claude
+        let mut attempts = 0;
+        loop {
+            match file.try_lock_exclusive() {
+                Ok(()) => return Ok(file),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
+                    attempts += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e) => return Err(e).with_context(|| format!("review-watch lock busy: {name}")),
+            }
+        }
     }
 }
 
