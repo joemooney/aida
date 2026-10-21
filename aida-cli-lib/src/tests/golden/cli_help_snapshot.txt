@@ -16795,6 +16795,11 @@ Options:
       --vendor <VENDOR>
           Vendor: claude, codex, or agy; omit for ordinary queue-work selection
 
+      --release <KEY>
+          Operator recovery: forget every recorded attempt for one change (`PR-N` or `MR-N`) so its
+          current head can be reviewed again, after confirming no reviewer for it is still running.
+          Refused while any recorded process for it is alive
+
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -40302,6 +40307,11 @@ Working on aida itself
         "name": "once",
         "takes_value": false,
         "help": "Discover and dispatch once, then leave admitted reviews running"
+      },
+      {
+        "name": "release",
+        "takes_value": true,
+        "help": "Operator recovery: forget every recorded attempt for one change (`PR-N` or `MR-N`) so its current head can be reviewed again, after confirming no reviewer for it is still running. Refused while any recorded process for it is alive"
       },
       {
         "name": "vendor",
