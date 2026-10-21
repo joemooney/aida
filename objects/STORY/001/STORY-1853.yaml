@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-20T10:57:59.458547540Z
+modified_at: 2026-10-21T04:33:14.243484275Z
 req_type: Story
 tags:
 - architecture
@@ -209,6 +209,47 @@ comments:
   created_at: 2026-10-20T10:57:59.458547540Z
   modified_at: 2026-10-20T10:57:59.458547540Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15cbc-1c03-7540-a4cc-755c2c643c49
+  author: joe
+  content: |
+    ## Final measurement: main CI before STORY-1853 S1 vs after #2785 (TASK-1988, nextest gating)
+
+    Measured by the integrator seat on 2026-10-20 from the GitHub Actions jobs/steps API. "Tests" is the `Run tests` step wall time; "Run" is run_started_at → updated_at.
+
+    ### After #2785: the first 3 green main runs
+
+    The Build job is now a 3s aggregator over 7 parallel lanes, so the comparable figure is the slowest job (critical path). In all 3 runs that is the `gates` lane, which runs no tests.
+
+    | Run | SHA | Run wall | Build job | Slowest job | lib-0 | lib-1 | cli-0 | cli-1 | rest | Slowest test lane |
+    |---|---|---|---|---|---|---|---|---|---|---|
+    | 39527203901 | c43d5444ad | 8:33 | 0:03 | 8:18 (gates) | 4:41 | 3:29 | 3:59 | 3:19 | 5:42 | 5:42 |
+    | 39529179840 | 2241f23360 | 9:03 | 0:03 | 8:44 (gates) | 3:27 | 3:46 | 4:42 | 4:02 | 3:16 | 4:42 |
+    | 39543779263 | 571dbfd65f | 8:00 | 0:03 | 7:49 (gates) | 3:46 | 4:56 | 5:28 | 3:55 | 5:54 | 5:54 |
+    | **Median** | | **8:33** | 0:03 | **8:18** | 3:46 | 3:46 | 4:42 | 3:55 | 5:42 | **5:42** |
+
+    Run 39529717757 (7a1a2077bd), which falls between these, was red. Its `gates` lane failed the BUG-2191 git auto-maintenance ratchet because of a semantic conflict with STORY-1700, fixed by 571dbfd65f. All of its test lanes passed (cli-0 6.3m, rest 6.6m, lib-1 7.7m, lib-0 8.0m job wall), so it is excluded as non-green, not as a test failure.
+
+    ### Before S1: the last 3 green main runs before TASK-1948 (128a5bb6eb, run 39348896342)
+
+    | Run | SHA | Run wall | Build job | Tests (single job) |
+    |---|---|---|---|---|
+    | 39321443991 | c416dbcc0b | 37:57 | 35:59 | 19:51 |
+    | 39316382047 | 414324970f | 36:22 | 36:16 | 19:22 |
+    | 39298927670 | dd4b6ed730 | 37:17 | 37:12 | 20:12 |
+    | **Median** | | **37:17** | **36:16** | **19:51** |
+
+    ### Result
+
+    - Run wall, median: 37:17 → 8:33 (**4.4× faster**, −28.7 min).
+    - Build job / critical path, median: 36:16 → 8:18 (gates lane).
+    - Test wall on the critical path, median: 19:51 → **5:42**. The CI target "Run tests ≤ 6 min" is **met** in every run; the worst lane was 5:54 (rest, 39543779263).
+    - Summed test-step time across lanes (medians 1191s before vs 1270s after) is about the same. The gain comes from parallel lanes, not from less test work.
+    - **The critical path is now the `gates` lane (7:49–8:44), not tests.** Further CI wall-time cuts should target gates, then the `rest` and `cli-0` test lanes.
+    - Caveat: before S1, `Run tests` ran after a separate `Build all packages` step (~1.5 min). In the lanes, compilation happens inside `Run tests`, so the "after" test figures include compile time and the comparison is conservative.
+    - The local "full run ≤ 10 min on 6 cores" half of this story is not covered by this measurement.
+  created_at: 2026-10-21T04:33:14.243484275Z
+  modified_at: 2026-10-21T04:33:14.243484275Z
+  session_id: f91fd366-4181-4735-8802-dfc810a1c42e
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
