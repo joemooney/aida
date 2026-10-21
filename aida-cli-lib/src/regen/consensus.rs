@@ -50,7 +50,10 @@ struct ResolvedCheckMapping {
 // trace:TASK-0446 | ai:antigravity
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CheckMapping {
-    Missing,
+    // A trust failure is Unavailable, never Missing: Missing only means the
+    // trusted map at the pinned commit does not cover the check.
+    // trace:TASK-0446 | ai:claude
+    Missing(&'static str),
     Unavailable(String),
     Invalid(String),
     Stale(String),
@@ -78,6 +81,27 @@ fn is_lower_hex_sha256(value: &str) -> bool {
 
 fn is_hex_commit_oid(value: &str) -> bool {
     matches!(value.len(), 40 | 64) && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+const MISSING_MAP_FILE: &str = "no .aida/regen-check-map.toml at the pinned oracle commit";
+const MISSING_CHECK_ENTRY: &str =
+    "check not listed in .aida/regen-check-map.toml at the pinned oracle commit";
+const MISSING_UNRESOLVED: &str = "mapping not resolved against a store";
+
+// Overlapping occurrence count, capped at 2: uniqueness is the contract, so
+// "aa" occurs twice in "aaa".
+// trace:TASK-0446 | ai:claude
+fn occurrences_up_to_two(haystack: &str, needle: &str) -> usize {
+    let mut found = 0;
+    for (start, _) in haystack.char_indices() {
+        if haystack[start..].starts_with(needle) {
+            found += 1;
+            if found == 2 {
+                break;
+            }
+        }
+    }
+    found
 }
 
 // trace:TASK-0446 | ai:antigravity
@@ -183,7 +207,7 @@ fn resolve_entry_against_requirement(
         ));
     }
     for clause in &entry.clauses {
-        let matches = req.description.matches(clause.text.as_str()).count();
+        let matches = occurrences_up_to_two(&req.description, &clause.text);
         if matches == 0 {
             return CheckMapping::Stale(format!(
                 "mapped clause text [{}] not found in {} ({}) description in {scope_label}",
@@ -194,7 +218,7 @@ fn resolve_entry_against_requirement(
         }
         if matches > 1 {
             return CheckMapping::Stale(format!(
-                "mapped clause text [{}] is ambiguous ({matches} occurrences) in {} ({}) description in {scope_label}",
+                "mapped clause text [{}] is ambiguous (occurs more than once) in {} ({}) description in {scope_label}",
                 &clause.sha256[..16],
                 req.display_id(),
                 entry.spec_uuid
@@ -208,37 +232,6 @@ fn resolve_entry_against_requirement(
         description_sha256: entry.description_sha256.clone(),
         clauses: entry.clauses.clone(),
     })
-}
-
-// trace:TASK-0446 | ai:antigravity
-fn code_repo_for_store(store: &Path) -> &Path {
-    if store.file_name() == Some(std::ffi::OsStr::new(".aida-store")) {
-        if let Some(parent) = store.parent() {
-            if parent.join(".git").exists() {
-                return parent;
-            }
-        }
-    }
-    store
-}
-
-// trace:TASK-0446 | ai:antigravity
-fn resolve_trusted_code_tip(code_repo: &Path, store: &Path) -> Option<String> {
-    if let Some(sha) = crate::trusted_config::trusted_default_branch_sha(code_repo) {
-        return Some(sha);
-    }
-    if code_repo == store {
-        if let Ok(out) = super::git(
-            store,
-            &["rev-parse", "--verify", "refs/heads/aida-store^{commit}"],
-        ) {
-            let sha = String::from_utf8_lossy(&out).trim().to_string();
-            if !sha.is_empty() {
-                return Some(sha);
-            }
-        }
-    }
-    None
 }
 
 // trace:TASK-0446 | ai:antigravity
@@ -256,27 +249,18 @@ fn resolve_consensus_mappings(
         gaps.iter().map(|g| (g.clone(), state.clone())).collect()
     };
 
-    let code_repo = code_repo_for_store(store);
-    // Preserve legacy unit-test fixtures that pass the placeholder `"oracle"`
-    // string with no commit in the repository.
-    if oracle_sha == "oracle" && !is_hex_commit_oid(oracle_sha) {
-        if super::git(
-            code_repo,
-            &["rev-parse", "--verify", &format!("{oracle_sha}^{{commit}}")],
-        )
-        .is_err()
-        {
-            return fill_all(CheckMapping::Missing);
-        }
-    }
-
+    // Same project root score::load_config pinned oracle_sha from; the only
+    // trust anchor is its default branch, never the agent-writable store branch.
+    // trace:TASK-0446 | ai:claude
+    let code_repo = crate::project_root_from_store_hint(store);
+    let code_repo = code_repo.as_path();
     if !is_hex_commit_oid(oracle_sha) {
         return fill_all(CheckMapping::Unavailable(
             "oracle_sha is not a valid commit OID".to_string(),
         ));
     }
 
-    let Some(trusted_tip) = resolve_trusted_code_tip(code_repo, store) else {
+    let Some(trusted_tip) = crate::trusted_config::trusted_default_branch_sha(code_repo) else {
         return fill_all(CheckMapping::Unavailable(
             "trusted default-branch tip could not be resolved".to_string(),
         ));
@@ -322,7 +306,7 @@ fn resolve_consensus_mappings(
     if tree_out.is_empty() {
         // Legacy trials whose pinned code commit has no mapping file keep the
         // explicit missing diagnostic and unparented draft behavior.
-        return fill_all(CheckMapping::Missing);
+        return fill_all(CheckMapping::Missing(MISSING_MAP_FILE));
     }
 
     let Ok(tree_line) = std::str::from_utf8(&tree_out) else {
@@ -332,7 +316,7 @@ fn resolve_consensus_mappings(
     };
     let mut rows = tree_line.lines().filter(|l| !l.trim().is_empty());
     let Some(first_row) = rows.next() else {
-        return fill_all(CheckMapping::Missing);
+        return fill_all(CheckMapping::Missing(MISSING_MAP_FILE));
     };
     if rows.next().is_some() {
         return fill_all(CheckMapping::Invalid(format!(
@@ -356,6 +340,25 @@ fn resolve_consensus_mappings(
         )));
     }
     let blob_oid = fields[2];
+    // Bound the blob before reading it into memory.
+    // trace:TASK-0446 | ai:claude
+    let blob_size = super::git(code_repo, &["cat-file", "-s", blob_oid])
+        .ok()
+        .and_then(|out| String::from_utf8(out).ok())
+        .and_then(|text| text.trim().parse::<usize>().ok());
+    match blob_size {
+        None => {
+            return fill_all(CheckMapping::Unavailable(format!(
+                "could not size {CHECK_MAP_RELPATH} blob {blob_oid}"
+            )))
+        }
+        Some(size) if size > MAX_CHECK_MAP_BYTES => {
+            return fill_all(CheckMapping::Invalid(format!(
+                "{CHECK_MAP_RELPATH} exceeds max size ({MAX_CHECK_MAP_BYTES} bytes)"
+            )))
+        }
+        Some(_) => {}
+    }
     let Ok(blob_bytes) = super::git(code_repo, &["cat-file", "blob", blob_oid]) else {
         return fill_all(CheckMapping::Unavailable(format!(
             "could not read {CHECK_MAP_RELPATH} blob {blob_oid}"
@@ -412,7 +415,7 @@ fn resolve_consensus_mappings(
     let mut resolved = BTreeMap::new();
     for gap in gaps {
         let mapping = match entries.get(gap) {
-            None => CheckMapping::Missing,
+            None => CheckMapping::Missing(MISSING_CHECK_ENTRY),
             Some(entry) => resolve_entry_against_requirement(
                 entry,
                 by_uuid.get(&entry.spec_uuid).copied(),
@@ -521,11 +524,7 @@ fn analyze<'a>(records: &'a [score::TrialRecord], ids: &[Uuid]) -> Result<Consen
         .iter()
         .map(|r| r.vendor.trim().to_ascii_lowercase())
         .collect();
-    let mappings = failures
-        .iter()
-        .filter(|(_, count)| **count == trials.len())
-        .map(|(name, _)| (name.clone(), CheckMapping::Missing))
-        .collect();
+    let mappings = BTreeMap::new();
     Ok(Consensus {
         trials,
         failures,
@@ -562,7 +561,9 @@ impl Consensus<'_> {
             .collect()
     }
     fn mapping_for(&self, check: &str) -> &CheckMapping {
-        self.mappings.get(check).unwrap_or(&CheckMapping::Missing)
+        self.mappings
+            .get(check)
+            .unwrap_or(&CheckMapping::Missing(MISSING_UNRESOLVED))
     }
     fn render(&self) -> String {
         let n = self.trials.len();
@@ -588,10 +589,10 @@ impl Consensus<'_> {
         }
         for gap in gaps {
             match self.mapping_for(gap) {
-                CheckMapping::Missing => {
+                CheckMapping::Missing(reason) => {
                     let _ = write!(
                         out,
-                        "\n  {}: {n}/{n} failures; contract mapping missing",
+                        "\n  {}: {n}/{n} failures; contract mapping missing ({reason})",
                         gap.escape_debug()
                     );
                 }
@@ -621,9 +622,9 @@ impl Consensus<'_> {
                         out,
                         "\n  {}: {n}/{n} failures; mapped to {} ({}, {}) — proposed investigation target, not proof of cause",
                         gap.escape_debug(),
-                        resolved.display_id,
+                        resolved.display_id.escape_debug(),
                         resolved.spec_uuid,
-                        resolved.title
+                        resolved.title.escape_debug()
                     );
                     for clause in &resolved.clauses {
                         let exact_clause =
@@ -685,10 +686,9 @@ fn gap_description(
         .collect::<Vec<_>>()
         .join(", ");
     let mapping_note = match effective_mapping {
-        CheckMapping::Missing => {
-            "Contract mapping missing; investigate and link the responsible contract clause before amending it."
-                .to_string()
-        }
+        CheckMapping::Missing(reason) => format!(
+            "Contract mapping missing ({reason}); investigate and link the responsible contract clause before amending it."
+        ),
         CheckMapping::Unavailable(reason) => format!(
             "Contract mapping unavailable ({reason}); investigate and link the responsible contract clause before amending it."
         ),
@@ -738,6 +738,8 @@ struct FileGapsOutcome {
     filed: Vec<String>,
     parent_linked: Vec<(String, String)>,
     parent_conflicts: Vec<String>,
+    // trace:TASK-0446 | ai:claude
+    link_failures: Vec<String>,
 }
 
 // Revalidate a corpus-resolved check mapping against the live RequirementsStore
@@ -783,6 +785,112 @@ fn existing_parent_uuids(graph: &aida_core::RequirementsStore, child_uuid: &Uuid
     parents.into_iter().collect()
 }
 
+fn draft_label(graph: &aida_core::RequirementsStore, id: &Uuid) -> String {
+    graph
+        .get_requirement_by_id(id)
+        .and_then(|r| r.spec_id.clone())
+        .unwrap_or_else(|| id.to_string())
+}
+
+// Add-only parenting of an existing deduplicated draft: never overwrites its
+// title/description/status and never replaces a different parent.
+// trace:TASK-0446 | ai:claude
+fn link_existing_draft(
+    graph: &mut aida_core::RequirementsStore,
+    existing_uuid: Uuid,
+    check: &str,
+    resolved: &ResolvedCheckMapping,
+    outcome: &mut FileGapsOutcome,
+) {
+    let parents = existing_parent_uuids(graph, &existing_uuid);
+    if parents.as_slice() == [resolved.spec_uuid] {
+        return;
+    }
+    let label = draft_label(graph, &existing_uuid);
+    if !parents.is_empty() {
+        outcome.parent_conflicts.push(format!(
+            "{label} ({}): existing parent {:?} conflicts with mapped parent {} ({}); kept existing parent",
+            check.escape_debug(),
+            parents,
+            resolved.display_id,
+            resolved.spec_uuid
+        ));
+        return;
+    }
+    if let Err(e) = graph.add_relationship(
+        &existing_uuid,
+        RelationshipType::Child,
+        &resolved.spec_uuid,
+        true,
+    ) {
+        outcome.link_failures.push(format!(
+            "{label} ({}): could not link parent {} ({}): {e}",
+            check.escape_debug(),
+            resolved.display_id,
+            resolved.spec_uuid
+        ));
+        return;
+    }
+    let exact_check = serde_json::to_string(check).expect("string serialization");
+    if let Some(existing_req) = graph.get_requirement_by_id_mut(&existing_uuid) {
+        existing_req.add_comment(Comment::new(
+            crate::get_default_author(),
+            format!(
+                "Linked parent {} ({}) from trusted regen check mapping for {exact_check}.",
+                resolved.display_id, resolved.spec_uuid
+            ),
+        ));
+    }
+    outcome
+        .parent_linked
+        .push((label, resolved.display_id.clone()));
+}
+
+// A new draft only claims a mapped contract target once the Parent link
+// exists; a failed link is reported and the description says so instead.
+// trace:TASK-0446 | ai:claude
+fn file_new_draft(
+    graph: &mut aida_core::RequirementsStore,
+    check: &str,
+    consensus: &Consensus<'_>,
+    effective_mapping: &CheckMapping,
+    outcome: &mut FileGapsOutcome,
+) {
+    let mut requirement = Requirement::new(
+        format!("Amend store for consensus failure: {check}"),
+        gap_description(check, consensus, effective_mapping),
+    );
+    requirement.req_type = RequirementType::Task;
+    requirement.status = RequirementStatus::Draft;
+    requirement.owner = crate::get_default_author();
+    requirement.tags.insert(gap_tag(check));
+    requirement.tags.insert("regenerability".into());
+    let prefix = graph.get_type_prefix(&RequirementType::Task);
+    let id = requirement.id;
+    graph.add_requirement_with_id(requirement, None, prefix.as_deref());
+    let label = draft_label(graph, &id);
+    if let CheckMapping::Valid(resolved) = effective_mapping {
+        if let Err(e) =
+            graph.add_relationship(&id, RelationshipType::Child, &resolved.spec_uuid, true)
+        {
+            let unlinked = CheckMapping::Unavailable(format!(
+                "parent link to {} ({}) failed: {e}",
+                resolved.display_id, resolved.spec_uuid
+            ));
+            if let Some(draft) = graph.get_requirement_by_id_mut(&id) {
+                draft.description = gap_description(check, consensus, &unlinked);
+            }
+            outcome.link_failures.push(format!(
+                "{label} ({}): could not link parent {} ({}): {e}",
+                check.escape_debug(),
+                resolved.display_id,
+                resolved.spec_uuid
+            ));
+        }
+    }
+    outcome.filed.push(label);
+}
+
 // The normal Storage atomic path uses GitBackend's store lock and delta writes.
 // Do not load/save a snapshot or deduplicate outside the write seam.
 fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<FileGapsOutcome> {
@@ -791,11 +899,8 @@ fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<FileGapsOutcome>
     storage.update_atomically(|graph| {
         for check in consensus.gaps() {
             let tag = gap_tag(check);
-            let effective_mapping = revalidate_mapping_on_live_graph(
-                graph,
-                consensus.mapping_for(check),
-                check,
-            );
+            let effective_mapping =
+                revalidate_mapping_on_live_graph(graph, consensus.mapping_for(check), check);
             let existing_id = graph
                 .requirements
                 .iter()
@@ -808,85 +913,15 @@ fn file_gaps(store: &Path, consensus: &Consensus<'_>) -> Result<FileGapsOutcome>
                         && r.tags.contains(&tag)
                 })
                 .map(|r| r.id);
-
-            if let Some(existing_uuid) = existing_id {
-                if let CheckMapping::Valid(resolved) = &effective_mapping {
-                    let parents = existing_parent_uuids(graph, &existing_uuid);
-                    if parents.is_empty() {
-                        if graph
-                            .add_relationship(
-                                &existing_uuid,
-                                RelationshipType::Child,
-                                &resolved.spec_uuid,
-                                true,
-                            )
-                            .is_ok()
-                        {
-                            let exact_check =
-                                serde_json::to_string(check).expect("string serialization");
-                            if let Some(existing_req) =
-                                graph.get_requirement_by_id_mut(&existing_uuid)
-                            {
-                                existing_req.add_comment(Comment::new(
-                                    crate::get_default_author(),
-                                    format!(
-                                        "Linked parent {} ({}) from trusted regen check mapping for {exact_check}.",
-                                        resolved.display_id, resolved.spec_uuid
-                                    ),
-                                ));
-                            }
-                            let draft_label = graph
-                                .get_requirement_by_id(&existing_uuid)
-                                .and_then(|r| r.spec_id.clone())
-                                .unwrap_or_else(|| existing_uuid.to_string());
-                            outcome
-                                .parent_linked
-                                .push((draft_label, resolved.display_id.clone()));
-                        }
-                    } else if parents.as_slice() != [resolved.spec_uuid] {
-                        let draft_label = graph
-                            .get_requirement_by_id(&existing_uuid)
-                            .and_then(|r| r.spec_id.clone())
-                            .unwrap_or_else(|| existing_uuid.to_string());
-                        outcome.parent_conflicts.push(format!(
-                            "{draft_label} ({}): existing parent {:?} conflicts with mapped parent {} ({}); kept existing parent",
-                            check.escape_debug(),
-                            parents,
-                            resolved.display_id,
-                            resolved.spec_uuid
-                        ));
-                    }
+            match (existing_id, &effective_mapping) {
+                (Some(existing_uuid), CheckMapping::Valid(resolved)) => {
+                    link_existing_draft(graph, existing_uuid, check, resolved, &mut outcome)
                 }
-                continue;
+                (Some(_), _) => {}
+                (None, _) => {
+                    file_new_draft(graph, check, consensus, &effective_mapping, &mut outcome)
+                }
             }
-
-            let description = gap_description(check, consensus, &effective_mapping);
-            let mut requirement = Requirement::new(
-                format!("Amend store for consensus failure: {check}"),
-                description,
-            );
-            requirement.req_type = RequirementType::Task;
-            requirement.status = RequirementStatus::Draft;
-            requirement.owner = crate::get_default_author();
-            requirement.tags.insert(tag);
-            requirement.tags.insert("regenerability".into());
-            let prefix = graph.get_type_prefix(&RequirementType::Task);
-            let id = requirement.id;
-            graph.add_requirement_with_id(requirement, None, prefix.as_deref());
-            if let CheckMapping::Valid(resolved) = &effective_mapping {
-                let _ = graph.add_relationship(
-                    &id,
-                    RelationshipType::Child,
-                    &resolved.spec_uuid,
-                    true,
-                );
-            }
-            outcome.filed.push(
-                graph
-                    .get_requirement_by_id(&id)
-                    .and_then(|r| r.spec_id.clone())
-                    .unwrap_or_else(|| id.to_string()),
-            );
         }
     })?;
     if !outcome.filed.is_empty() || !outcome.parent_linked.is_empty() {
@@ -911,6 +946,9 @@ pub(super) fn handle(store: &Path, ids: &[Uuid], file: bool) -> Result<()> {
         }
         for conflict in outcome.parent_conflicts {
             println!("Parent conflict: {conflict}");
+        }
+        for failure in outcome.link_failures {
+            println!("Parent link failed: {failure}");
         }
     }
     Ok(())
@@ -945,13 +983,71 @@ mod tests {
     fn ids() -> Vec<Uuid> {
         (1..=3).map(Uuid::from_u128).collect()
     }
-    fn store() -> tempfile::TempDir {
+    // Fixture git runs without detached auto-maintenance (BUG-2191 ratchet).
+    // trace:TASK-0446 | ai:claude
+    fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(out.stdout)
+    }
+    fn init_repo(dir: &Path, branch: &str) {
+        git(dir, &["init", "-b", branch]).unwrap();
+        git(dir, &["config", "user.name", "Test"]).unwrap();
+        git(dir, &["config", "user.email", "test@example.com"]).unwrap();
+        git(dir, &["commit", "--allow-empty", "-m", "fixture"]).unwrap();
+    }
+    /// The real layout: a project whose `main` is the trusted default branch,
+    /// with the store in `<project>/.aida-store` on its own `aida-store` branch.
+    // trace:TASK-0446 | ai:claude
+    struct Fixture {
+        _root: tempfile::TempDir,
+        project: std::path::PathBuf,
+        store: std::path::PathBuf,
+    }
+    impl Fixture {
+        fn path(&self) -> &Path {
+            &self.store
+        }
+        /// Trials pinned to a real trusted commit that carries no check map.
+        fn rows(&self) -> Vec<score::TrialRecord> {
+            let oracle = head(&self.project).unwrap();
+            let mut rows = rows();
+            for row in &mut rows {
+                row.oracle_sha = oracle.clone();
+            }
+            rows
+        }
+        fn commit_map(&self, contents: &str) -> String {
+            let path = self.project.join(CHECK_MAP_RELPATH);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let _ = std::fs::remove_file(&path);
+            std::fs::write(&path, contents).unwrap();
+            git(&self.project, &["add", CHECK_MAP_RELPATH]).unwrap();
+            git(&self.project, &["commit", "-m", "regen check map"]).unwrap();
+            head(&self.project).unwrap()
+        }
+    }
+    fn store() -> Fixture {
         let root = tempfile::tempdir().unwrap();
-        git(root.path(), &["init", "-b", "aida-store"]).unwrap();
-        git(root.path(), &["config", "user.name", "Test"]).unwrap();
-        git(root.path(), &["config", "user.email", "test@example.com"]).unwrap();
-        git(root.path(), &["commit", "--allow-empty", "-m", "fixture"]).unwrap();
-        root
+        let project = root.path().to_path_buf();
+        init_repo(&project, "main");
+        let store = project.join(".aida-store");
+        std::fs::create_dir(&store).unwrap();
+        init_repo(&store, "aida-store");
+        Fixture {
+            _root: root,
+            project,
+            store,
+        }
     }
     fn commit_rows(store: &Path, rows: &[score::TrialRecord]) {
         std::fs::create_dir_all(store.join("regen/trials")).unwrap();
@@ -974,7 +1070,7 @@ mod tests {
         assert_eq!(report.gaps(), ["gap"]);
         let out = report.render();
         assert!(out.contains("N=3, 3 distinct models, 2 distinct vendors"));
-        assert!(out.contains("gap: 3/3 failures; contract mapping missing"));
+        assert!(out.contains("gap: 3/3 failures; contract mapping missing ("));
         assert!(out.contains("partial: 1/3 failures"));
         assert!(!out.contains("excluded: ") && !out.contains("pass: "));
         assert!(!out.contains("consensus is weaker"));
@@ -1030,7 +1126,7 @@ mod tests {
     #[test]
     fn explicit_file_is_idempotent_and_report_default_does_not_write() {
         let store = store();
-        let rows = rows();
+        let rows = store.rows();
         commit_rows(store.path(), &rows);
         let sha = head(store.path()).unwrap();
         handle(store.path(), &ids(), false).unwrap();
@@ -1047,7 +1143,9 @@ mod tests {
         assert!(gap
             .description
             .contains("Exact oracle check (JSON): \"gap\""));
-        assert!(gap.description.contains("Contract mapping missing"));
+        assert!(gap.description.contains(
+            "Contract mapping missing (no .aida/regen-check-map.toml at the pinned oracle commit)"
+        ));
         assert!(gap.relationships.is_empty());
         let first_id = gap.id;
         handle(store.path(), &ids(), true).unwrap();
@@ -1090,7 +1188,7 @@ mod tests {
     #[test]
     fn consensus_accepts_committed_json_fraction_43_of_44() {
         let store = store();
-        let mut rows = rows();
+        let mut rows = store.rows();
         for row in &mut rows {
             row.checks = (0..44)
                 .map(|i| score::CheckOutcome {
@@ -1126,7 +1224,7 @@ mod tests {
             (RequirementStatus::Approved, true),
         ] {
             let store = store();
-            commit_rows(store.path(), &rows());
+            commit_rows(store.path(), &store.rows());
             handle(store.path(), &ids(), true).unwrap();
             let storage = aida_core::Storage::new(store.path());
             let closed_id = storage.load().unwrap().requirements[0].id;
@@ -1158,7 +1256,7 @@ mod tests {
     fn consensus_reads_committed_trials_and_cli_excludes_execution_flags() {
         use clap::Parser;
         let store = store();
-        commit_rows(store.path(), &rows());
+        commit_rows(store.path(), &store.rows());
         let path = store.path().join(format!("regen/trials/{}.json", ids()[0]));
         std::fs::write(&path, "invalid dirty JSON").unwrap();
         handle(store.path(), &ids(), false).unwrap();
@@ -1230,228 +1328,630 @@ mod tests {
         }
     }
 
-    // trace:TASK-0446 | ai:antigravity
+    // trace:TASK-0446 | ai:claude
     #[test]
-    fn valid_mapping_links_consensus_gap_parents_amendment_and_handles_existing_drafts() {
-        let store = store();
-        let storage = aida_core::Storage::new(store.path());
+    fn check_map_size_entry_and_clause_bounds_hold_at_their_limits() {
+        let mut at_limit = b"format_version = 1\n#".to_vec();
+        at_limit.resize(MAX_CHECK_MAP_BYTES, b'x');
+        assert!(validate_check_map(&at_limit).is_ok());
+        at_limit.push(b'x');
+        let err = validate_check_map(&at_limit).unwrap_err();
+        assert!(err.contains("exceeds max size"), "{err}");
 
-        let clause = "When a consensus gap is mapped, --file shall parent the draft under the contract spec.";
-        let desc = format!("Contract specification.\n\n## Acceptance\n\n- {clause}\n");
-        let desc_sha = sha256_hex(desc.as_bytes());
-        let clause_sha = sha256_hex(clause.as_bytes());
+        let clause_sha = sha256_hex(b"x");
+        let entries = |n: usize, clauses: usize| {
+            let clause_list = (0..clauses)
+                .map(|i| {
+                    let text = format!("x{i}");
+                    format!(
+                        "{{text=\"{text}\",sha256=\"{}\"}}",
+                        sha256_hex(text.as_bytes())
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            let mut out = "format_version = 1\n".to_string();
+            for i in 0..n {
+                let _ = write!(
+                    out,
+                    "[[checks]]\nname=\"c{i}\"\nspec_uuid=\"{}\"\ndescription_sha256=\"{clause_sha}\"\nclauses=[{clause_list}]\n",
+                    Uuid::nil()
+                );
+            }
+            out
+        };
+        let max_entries = entries(MAX_CHECK_MAP_ENTRIES, 1);
+        let over_entries = entries(MAX_CHECK_MAP_ENTRIES + 1, 1);
+        // The entry bound, not the size bound, rejects the larger map.
+        assert!(over_entries.len() <= MAX_CHECK_MAP_BYTES);
+        assert_eq!(
+            validate_check_map(max_entries.as_bytes()).unwrap().len(),
+            MAX_CHECK_MAP_ENTRIES
+        );
+        let err = validate_check_map(over_entries.as_bytes()).unwrap_err();
+        assert!(err.contains("max check count"), "{err}");
 
-        let mut owner_id = Uuid::nil();
-        let mut other_parent_id = Uuid::nil();
+        assert!(validate_check_map(entries(1, MAX_CLAUSES_PER_CHECK).as_bytes()).is_ok());
+        let err = validate_check_map(entries(1, MAX_CLAUSES_PER_CHECK + 1).as_bytes()).unwrap_err();
+        assert!(err.contains("clauses"), "{err}");
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn clause_uniqueness_counts_overlapping_occurrences() {
+        assert_eq!(occurrences_up_to_two("ab ab ab", "ab ab"), 2);
+        assert_eq!(occurrences_up_to_two("aaa", "aa"), 2);
+        assert_eq!(occurrences_up_to_two("ab ab", "ab ab"), 1);
+        assert_eq!(occurrences_up_to_two("é ab", "ab"), 1);
+        assert_eq!(occurrences_up_to_two("none", "ab"), 0);
+    }
+
+    const CLAUSE: &str =
+        "When a consensus gap is mapped, --file shall parent the draft under the contract spec.";
+
+    fn contract_description(clause: &str) -> String {
+        format!("Contract specification.\n\n## Acceptance\n\n- {clause}\n")
+    }
+
+    fn map_toml(check: &str, owner: Uuid, description: &str, clauses: &[&str]) -> String {
+        let clauses = clauses
+            .iter()
+            .map(|c| {
+                format!(
+                    "{{ text = {}, sha256 = \"{}\" }}",
+                    serde_json::to_string(c).unwrap(),
+                    sha256_hex(c.as_bytes())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "format_version = 1\n[[checks]]\nname = {}\nspec_uuid = \"{owner}\"\ndescription_sha256 = \"{}\"\nclauses = [{clauses}]\n",
+            serde_json::to_string(check).unwrap(),
+            sha256_hex(description.as_bytes())
+        )
+    }
+
+    /// A store holding one contract owner (agreed id STORY-900), its exported
+    /// corpus, and an unrelated second spec usable as a conflicting parent.
+    struct Scenario {
+        fx: Fixture,
+        owner: Uuid,
+        other: Uuid,
+        description: String,
+        manifest: super::super::CorpusManifest,
+    }
+
+    fn scenario_with(title: &str, description: &str) -> Scenario {
+        let fx = store();
+        let storage = aida_core::Storage::new(fx.path());
+        let (mut owner, mut other) = (Uuid::nil(), Uuid::nil());
         storage
             .update_atomically(|graph| {
-                let mut req = Requirement::new("Consensus contract".into(), desc.clone());
+                let prefix = graph.get_type_prefix(&RequirementType::Story);
+                let mut req = Requirement::new(title.into(), description.into());
                 req.req_type = RequirementType::Story;
                 req.status = RequirementStatus::Completed;
                 req.agreed_id = Some("STORY-900".into());
-                owner_id = req.id;
-                let prefix = graph.get_type_prefix(&RequirementType::Story);
+                owner = req.id;
                 graph.add_requirement_with_id(req, None, prefix.as_deref());
-
-                let mut other = Requirement::new("Unrelated parent".into(), "Other spec.".into());
-                other.req_type = RequirementType::Story;
-                other.status = RequirementStatus::Approved;
-                other_parent_id = other.id;
-                graph.add_requirement_with_id(other, None, prefix.as_deref());
+                let mut unrelated = Requirement::new("Unrelated parent".into(), "Other.".into());
+                unrelated.req_type = RequirementType::Story;
+                other = unrelated.id;
+                graph.add_requirement_with_id(unrelated, None, prefix.as_deref());
             })
             .unwrap();
-
-        let corpus_dir = tempfile::tempdir().unwrap();
-        let manifest = super::super::export_corpus(store.path(), corpus_dir.path(), false).unwrap();
-
-        // Commit `.aida/regen-check-map.toml` into the repository and record its commit as oracle_sha.
-        std::fs::create_dir_all(store.path().join(".aida")).unwrap();
-        let map_toml = format!(
-            "format_version = 1\n\
-             [[checks]]\n\
-             name = \"gap\"\n\
-             spec_uuid = \"{owner_id}\"\n\
-             description_sha256 = \"{desc_sha}\"\n\
-             clauses = [{{ text = {}, sha256 = \"{clause_sha}\" }}]\n",
-            serde_json::to_string(clause).unwrap()
-        );
-        std::fs::write(store.path().join(CHECK_MAP_RELPATH), map_toml).unwrap();
-        git(store.path(), &["add", CHECK_MAP_RELPATH]).unwrap();
-        git(store.path(), &["commit", "-m", "add regen check map"]).unwrap();
-        let oracle_sha = head(store.path()).unwrap();
-
-        let mut rows = rows();
-        for row in &mut rows {
-            row.store_sha = manifest.store_sha.clone();
-            row.content_sha256 = manifest.content_sha256.clone();
-            row.oracle_sha = oracle_sha.clone();
+        let corpus = tempfile::tempdir().unwrap();
+        let manifest = super::super::export_corpus(fx.path(), corpus.path(), false).unwrap();
+        Scenario {
+            fx,
+            owner,
+            other,
+            description: description.into(),
+            manifest,
         }
-        commit_rows(store.path(), &rows);
+    }
 
-        let committed = score::read_committed_trials(store.path()).unwrap();
-        let consensus = analyze_for_store(store.path(), &committed, &ids()).unwrap();
-        let rendered = consensus.render();
+    fn scenario() -> Scenario {
+        scenario_with("Consensus contract", &contract_description(CLAUSE))
+    }
+
+    impl Scenario {
+        fn valid_map(&self) -> String {
+            map_toml("gap", self.owner, &self.description, &[CLAUSE])
+        }
+        fn pin(&self, oracle_sha: &str) {
+            let mut rows = rows();
+            for row in &mut rows {
+                row.store_sha = self.manifest.store_sha.clone();
+                row.content_sha256 = self.manifest.content_sha256.clone();
+                row.oracle_sha = oracle_sha.into();
+            }
+            commit_rows(self.fx.path(), &rows);
+        }
+        fn report(&self) -> String {
+            let committed = score::read_committed_trials(self.fx.path()).unwrap();
+            analyze_for_store(self.fx.path(), &committed, &ids())
+                .unwrap()
+                .render()
+        }
+        fn file(&self) -> FileGapsOutcome {
+            let committed = score::read_committed_trials(self.fx.path()).unwrap();
+            let consensus = analyze_for_store(self.fx.path(), &committed, &ids()).unwrap();
+            file_gaps(self.fx.path(), &consensus).unwrap()
+        }
+        fn storage(&self) -> aida_core::Storage {
+            aida_core::Storage::new(self.fx.path())
+        }
+        fn draft(&self) -> Requirement {
+            self.storage()
+                .load()
+                .unwrap()
+                .requirements
+                .into_iter()
+                .find(|r| r.tags.contains(&gap_tag("gap")))
+                .expect("draft filed")
+        }
+        fn parents_of_draft(&self) -> Vec<Uuid> {
+            let graph = self.storage().load().unwrap();
+            existing_parent_uuids(&graph, &self.draft().id)
+        }
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn valid_mapping_from_trusted_default_branch_parents_draft_idempotently() {
+        let sc = scenario();
+        let oracle = sc.fx.commit_map(&sc.valid_map());
+        sc.pin(&oracle);
+        let rendered = sc.report();
         assert!(
             rendered.contains(&format!(
-                "gap: 3/3 failures; mapped to STORY-900 ({owner_id}, Consensus contract) — proposed investigation target, not proof of cause"
+                "gap: 3/3 failures; mapped to STORY-900 ({}, Consensus contract) — proposed investigation target, not proof of cause",
+                sc.owner
             )),
-            "rendered report: {rendered}"
+            "{rendered}"
         );
-        assert!(rendered.contains(&clause_sha[..16]));
+        assert!(rendered.contains(&sha256_hex(CLAUSE.as_bytes())[..16]));
 
-        // Report-only default does not write.
-        let before = head(store.path()).unwrap();
-        handle(store.path(), &ids(), false).unwrap();
-        assert_eq!(head(store.path()).unwrap(), before);
+        let before = head(sc.fx.path()).unwrap();
+        handle(sc.fx.path(), &ids(), false).unwrap();
+        assert_eq!(head(sc.fx.path()).unwrap(), before, "report-only writes");
 
-        // Opt-in `--file` creates the draft and parents it under `owner_id`.
-        handle(store.path(), &ids(), true).unwrap();
-        let graph = storage.load().unwrap();
-        let draft = graph
-            .requirements
-            .iter()
-            .find(|r| r.tags.contains(&gap_tag("gap")))
-            .expect("draft filed");
+        let outcome = sc.file();
+        assert_eq!(outcome.filed.len(), 1);
+        assert!(outcome.link_failures.is_empty());
+        let draft = sc.draft();
         assert_eq!(draft.status, RequirementStatus::Draft);
-        assert!(draft.description.contains("STORY-900"));
         assert!(draft
-            .relationships
-            .iter()
-            .any(|rel| { rel.rel_type == RelationshipType::Child && rel.target_id == owner_id }));
-        let owner_after = graph.get_requirement_by_id(&owner_id).unwrap();
-        assert_eq!(owner_after.status, RequirementStatus::Completed);
-        assert_eq!(owner_after.description, desc);
-        assert!(owner_after
-            .relationships
-            .iter()
-            .any(|rel| { rel.rel_type == RelationshipType::Parent && rel.target_id == draft.id }));
+            .description
+            .contains("Mapped contract target: STORY-900"));
+        assert_eq!(sc.parents_of_draft(), [sc.owner]);
+        let graph = sc.storage().load().unwrap();
+        let owner = graph.get_requirement_by_id(&sc.owner).unwrap();
+        assert_eq!(owner.status, RequirementStatus::Completed);
+        assert_eq!(owner.description, sc.description);
 
-        // Repeat `--file` is idempotent (no new commit or duplicate draft).
-        let after_first_file = head(store.path()).unwrap();
-        handle(store.path(), &ids(), true).unwrap();
-        assert_eq!(head(store.path()).unwrap(), after_first_file);
+        // Repeat filing with the same parent is a no-op.
+        let after_first = head(sc.fx.path()).unwrap();
+        let outcome = sc.file();
+        assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
+        assert_eq!(head(sc.fx.path()).unwrap(), after_first);
+        assert_eq!(sc.storage().load().unwrap().requirements.len(), 3);
+    }
 
-        // If an existing unparented draft exists, `--file` links the validated parent once and records provenance.
-        let draft_uuid = draft.id;
-        storage
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn existing_deduplicated_draft_gains_parent_add_only_and_keeps_different_parent() {
+        let sc = scenario();
+        // First filing happens before any mapping exists: unparented.
+        sc.pin(&head(&sc.fx.project).unwrap());
+        assert_eq!(sc.file().filed.len(), 1);
+        assert!(sc.parents_of_draft().is_empty());
+        let draft_id = sc.draft().id;
+        sc.storage()
             .update_atomically(|graph| {
-                for r in &mut graph.requirements {
-                    r.relationships.clear();
-                }
+                let draft = graph.get_requirement_by_id_mut(&draft_id).unwrap();
+                draft.title = "Groomed title".into();
+                draft.description = "Groomed description".into();
+                draft.status = RequirementStatus::Approved;
             })
             .unwrap();
-        let outcome = file_gaps(store.path(), &consensus).unwrap();
+
+        // The mapping lands later: the existing draft gains the parent only.
+        let oracle = sc.fx.commit_map(&sc.valid_map());
+        sc.pin(&oracle);
+        let outcome = sc.file();
         assert!(outcome.filed.is_empty());
         assert_eq!(outcome.parent_linked.len(), 1);
-        let graph = storage.load().unwrap();
-        let relinked = graph.get_requirement_by_id(&draft_uuid).unwrap();
-        assert!(relinked
-            .relationships
-            .iter()
-            .any(|rel| { rel.rel_type == RelationshipType::Child && rel.target_id == owner_id }));
-        assert!(relinked
+        let draft = sc.draft();
+        assert_eq!(draft.id, draft_id);
+        assert_eq!(draft.title, "Groomed title");
+        assert_eq!(draft.description, "Groomed description");
+        assert_eq!(draft.status, RequirementStatus::Approved);
+        assert_eq!(sc.parents_of_draft(), [sc.owner]);
+        assert!(draft
             .comments
             .iter()
             .any(|c| c.content.contains("Linked parent STORY-900")));
+        let after_link = head(sc.fx.path()).unwrap();
+        assert!(sc.file().parent_linked.is_empty());
+        assert_eq!(head(sc.fx.path()).unwrap(), after_link);
 
-        // If an existing draft already has a different parent, `--file` keeps it and reports a conflict.
-        storage
+        // A different existing parent is never replaced and no duplicate is filed.
+        sc.storage()
             .update_atomically(|graph| {
                 for r in &mut graph.requirements {
                     r.relationships.clear();
                 }
                 graph
-                    .add_relationship(&draft_uuid, RelationshipType::Child, &other_parent_id, true)
+                    .add_relationship(&draft_id, RelationshipType::Child, &sc.other, true)
                     .unwrap();
             })
             .unwrap();
-        let before_conflict = head(store.path()).unwrap();
-        let outcome = file_gaps(store.path(), &consensus).unwrap();
-        assert_eq!(head(store.path()).unwrap(), before_conflict);
-        assert!(outcome.filed.is_empty());
-        assert!(outcome.parent_linked.is_empty());
+        let before = head(sc.fx.path()).unwrap();
+        let outcome = sc.file();
+        assert_eq!(head(sc.fx.path()).unwrap(), before);
+        assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
         assert_eq!(outcome.parent_conflicts.len(), 1);
+        assert_eq!(sc.parents_of_draft(), [sc.other]);
     }
 
-    // trace:TASK-0446 | ai:antigravity
+    // trace:TASK-0446 | ai:claude
     #[test]
-    fn stale_invalid_and_unavailable_mappings_remain_explicit_and_file_unparented() {
-        let store = store();
-        let storage = aida_core::Storage::new(store.path());
+    fn remapped_display_alias_still_parents_by_uuid_and_titles_render_single_line() {
+        let sc = scenario_with("Consensus\ncontract", &contract_description(CLAUSE));
+        let oracle = sc.fx.commit_map(&sc.valid_map());
+        sc.pin(&oracle);
+        let rendered = sc.report();
+        assert!(rendered.contains("Consensus\\ncontract"), "{rendered}");
+        assert!(!rendered.contains("Consensus\ncontract"));
 
-        let clause = "Unique acceptance clause.";
-        let desc_with_dup = format!("Body.\n{clause}\n{clause}\n");
-        let desc_dup_sha = sha256_hex(desc_with_dup.as_bytes());
-        let clause_sha = sha256_hex(clause.as_bytes());
+        sc.storage()
+            .update_atomically(|graph| {
+                graph
+                    .get_requirement_by_id_mut(&sc.owner)
+                    .unwrap()
+                    .agreed_id = Some("STORY-901".into());
+            })
+            .unwrap();
+        let outcome = sc.file();
+        assert_eq!(outcome.filed.len(), 1);
+        assert_eq!(sc.parents_of_draft(), [sc.owner]);
+        assert!(sc
+            .draft()
+            .description
+            .contains("Mapped contract target: STORY-901"));
+    }
 
-        let mut owner_id = Uuid::nil();
+    fn assert_unparented_with(sc: &Scenario, note: &str) {
+        let outcome = sc.file();
+        assert_eq!(outcome.filed.len(), 1);
+        let draft = sc.draft();
+        assert!(sc.parents_of_draft().is_empty());
+        assert!(draft.description.contains(note), "{}", draft.description);
+        assert!(!draft.description.contains("Mapped contract target"));
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn missing_mapping_names_absent_file_or_absent_check() {
+        let sc = scenario();
+        sc.pin(&head(&sc.fx.project).unwrap());
+        let rendered = sc.report();
+        assert!(
+            rendered.contains("gap: 3/3 failures; contract mapping missing (no .aida/regen-check-map.toml at the pinned oracle commit)"),
+            "{rendered}"
+        );
+
+        let sc = scenario();
+        let oracle = sc.fx.commit_map(&map_toml(
+            "other-check",
+            sc.owner,
+            &sc.description,
+            &[CLAUSE],
+        ));
+        sc.pin(&oracle);
+        let rendered = sc.report();
+        assert!(
+            rendered.contains("gap: 3/3 failures; contract mapping missing (check not listed in .aida/regen-check-map.toml at the pinned oracle commit)"),
+            "{rendered}"
+        );
+        assert_unparented_with(&sc, "Contract mapping missing (check not listed");
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn untrusted_or_unresolvable_oracle_commit_is_unavailable_never_missing() {
+        // Store-only repository: its only branch is the agent-writable
+        // aida-store branch, which carries a well-formed map. No trust anchor.
+        let root = tempfile::tempdir().unwrap();
+        init_repo(root.path(), "aida-store");
+        let storage = aida_core::Storage::new(root.path());
+        let description = contract_description(CLAUSE);
+        let mut owner = Uuid::nil();
         storage
             .update_atomically(|graph| {
-                let mut req = Requirement::new("Ambiguous spec".into(), desc_with_dup.clone());
+                let mut req = Requirement::new("Consensus contract".into(), description.clone());
                 req.req_type = RequirementType::Story;
-                req.status = RequirementStatus::Approved;
-                owner_id = req.id;
+                owner = req.id;
                 let prefix = graph.get_type_prefix(&RequirementType::Story);
                 graph.add_requirement_with_id(req, None, prefix.as_deref());
             })
             .unwrap();
-
-        let corpus_dir = tempfile::tempdir().unwrap();
-        let manifest = super::super::export_corpus(store.path(), corpus_dir.path(), false).unwrap();
-
-        std::fs::create_dir_all(store.path().join(".aida")).unwrap();
-        let map_toml = format!(
-            "format_version = 1\n\
-             [[checks]]\n\
-             name = \"gap\"\n\
-             spec_uuid = \"{owner_id}\"\n\
-             description_sha256 = \"{desc_dup_sha}\"\n\
-             clauses = [{{ text = \"{clause}\", sha256 = \"{clause_sha}\" }}]\n"
-        );
-        std::fs::write(store.path().join(CHECK_MAP_RELPATH), map_toml).unwrap();
-        git(store.path(), &["add", CHECK_MAP_RELPATH]).unwrap();
-        git(store.path(), &["commit", "-m", "map with ambiguous clause"]).unwrap();
-        let oracle_sha = head(store.path()).unwrap();
-
-        let mut rows = rows();
-        for row in &mut rows {
+        let corpus = tempfile::tempdir().unwrap();
+        let manifest = super::super::export_corpus(root.path(), corpus.path(), false).unwrap();
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(CHECK_MAP_RELPATH),
+            map_toml("gap", owner, &description, &[CLAUSE]),
+        )
+        .unwrap();
+        git(root.path(), &["add", CHECK_MAP_RELPATH]).unwrap();
+        git(root.path(), &["commit", "-m", "untrusted map"]).unwrap();
+        let oracle = head(root.path()).unwrap();
+        let mut trials = rows();
+        for row in &mut trials {
             row.store_sha = manifest.store_sha.clone();
             row.content_sha256 = manifest.content_sha256.clone();
-            row.oracle_sha = oracle_sha.clone();
+            row.oracle_sha = oracle.clone();
         }
-        commit_rows(store.path(), &rows);
-
-        let committed = score::read_committed_trials(store.path()).unwrap();
-        let consensus = analyze_for_store(store.path(), &committed, &ids()).unwrap();
+        commit_rows(root.path(), &trials);
+        let committed = score::read_committed_trials(root.path()).unwrap();
+        let rendered = analyze_for_store(root.path(), &committed, &ids())
+            .unwrap()
+            .render();
         assert!(
-            consensus
-                .render()
-                .contains("gap: 3/3 failures; contract mapping stale (mapped clause text"),
-            "rendered: {}",
-            consensus.render()
+            rendered.contains("gap: 3/3 failures; contract mapping unavailable (trusted default-branch tip could not be resolved)"),
+            "{rendered}"
         );
-
-        // Filing a stale mapping creates an unparented draft with an explicit stale note.
-        handle(store.path(), &ids(), true).unwrap();
+        handle(root.path(), &ids(), true).unwrap();
         let graph = storage.load().unwrap();
         let draft = graph
             .requirements
             .iter()
             .find(|r| r.tags.contains(&gap_tag("gap")))
             .unwrap();
-        assert!(draft.relationships.is_empty());
-        assert!(draft.description.contains("Contract mapping stale"));
+        assert!(existing_parent_uuids(&graph, &draft.id).is_empty());
+        assert!(!draft.description.contains("Mapped contract target"));
 
-        // Unavailable oracle_sha is diagnosed explicitly.
-        let mut unavailable_rows = rows;
-        for row in &mut unavailable_rows {
-            row.oracle_sha = "0123456789abcdef0123456789abcdef01234567".into();
+        let sc = scenario();
+        // A map committed on a side branch is not in trusted history.
+        git(&sc.fx.project, &["checkout", "-b", "side"]).unwrap();
+        let side = sc.fx.commit_map(&sc.valid_map());
+        git(&sc.fx.project, &["checkout", "main"]).unwrap();
+        for (oracle, reason) in [
+            (side.as_str(), "is not an ancestor of trusted tip"),
+            ("oracle", "oracle_sha is not a valid commit OID"),
+            (
+                "0123456789abcdef0123456789abcdef01234567",
+                "is not available in trusted repository",
+            ),
+        ] {
+            sc.pin(oracle);
+            let rendered = sc.report();
+            assert!(
+                rendered.contains("gap: 3/3 failures; contract mapping unavailable (")
+                    && rendered.contains(reason)
+                    && !rendered.contains("mapping missing"),
+                "{oracle}: {rendered}"
+            );
         }
-        commit_rows(store.path(), &unavailable_rows);
-        let committed = score::read_committed_trials(store.path()).unwrap();
-        let consensus = analyze_for_store(store.path(), &committed, &ids()).unwrap();
-        assert!(consensus
-            .render()
-            .contains("gap: 3/3 failures; contract mapping unavailable"));
+        assert_unparented_with(&sc, "Contract mapping unavailable (");
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn invalid_map_blob_at_oracle_commit_is_explicit() {
+        let sc = scenario();
+        let valid = sc.valid_map();
+        let mut oversize = valid.clone().into_bytes();
+        oversize.push(b'#');
+        oversize.resize(MAX_CHECK_MAP_BYTES + 1, b'x');
+        for (contents, reason) in [
+            (
+                "format_version = ".to_string(),
+                "malformed .aida/regen-check-map.toml",
+            ),
+            (
+                format!("{valid}{}", valid.replace("format_version = 1\n", "")),
+                "duplicate check name",
+            ),
+            (String::from_utf8(oversize).unwrap(), "exceeds max size"),
+        ] {
+            let oracle = sc.fx.commit_map(&contents);
+            sc.pin(&oracle);
+            let rendered = sc.report();
+            assert!(
+                rendered.contains("gap: 3/3 failures; contract mapping invalid (")
+                    && rendered.contains(reason),
+                "{reason}: {rendered}"
+            );
+        }
+
+        // A symlink is refused by its tree mode before any blob is parsed:
+        // its target text would otherwise be read as TOML.
+        let path = sc.fx.project.join(CHECK_MAP_RELPATH);
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink("format_version = 1", &path).unwrap();
+        git(&sc.fx.project, &["add", CHECK_MAP_RELPATH]).unwrap();
+        git(&sc.fx.project, &["commit", "-m", "symlink map"]).unwrap();
+        sc.pin(&head(&sc.fx.project).unwrap());
+        let rendered = sc.report();
+        assert!(
+            rendered.contains("must be a regular blob (found mode 120000)"),
+            "{rendered}"
+        );
+        assert_unparented_with(&sc, "Contract mapping invalid (");
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn stale_references_against_the_selected_corpus_are_explicit() {
+        // Wrong description hash, unknown owner UUID, overlapping clause text.
+        let sc = scenario();
+        let overlapping = scenario_with("Overlap", "Body: ab ab ab.\n");
+        for (sc, map, reason) in [
+            (
+                &sc,
+                map_toml("gap", sc.owner, "a different description", &[CLAUSE]),
+                "description_sha256 changed in selected corpus",
+            ),
+            (
+                &sc,
+                map_toml("gap", Uuid::from_u128(7), &sc.description, &[CLAUSE]),
+                "not found in selected corpus",
+            ),
+            (
+                &overlapping,
+                map_toml(
+                    "gap",
+                    overlapping.owner,
+                    &overlapping.description,
+                    &["ab ab"],
+                ),
+                "is ambiguous (occurs more than once)",
+            ),
+        ] {
+            let oracle = sc.fx.commit_map(&map);
+            sc.pin(&oracle);
+            let rendered = sc.report();
+            assert!(
+                rendered.contains("gap: 3/3 failures; contract mapping stale (")
+                    && rendered.contains(reason),
+                "{reason}: {rendered}"
+            );
+        }
+        assert_unparented_with(&overlapping, "Contract mapping stale (");
+
+        // Trials whose corpus hash does not match the reconstructed corpus.
+        let oracle = sc.fx.commit_map(&sc.valid_map());
+        let mut trials = rows();
+        for row in &mut trials {
+            row.store_sha = sc.manifest.store_sha.clone();
+            row.content_sha256 = "f".repeat(64);
+            row.oracle_sha = oracle.clone();
+        }
+        commit_rows(sc.fx.path(), &trials);
+        let rendered = sc.report();
+        assert!(
+            rendered.contains("contract mapping stale (reconstructed corpus content_sha256"),
+            "{rendered}"
+        );
+
+        // An owner archived in the selected corpus.
+        let archived = scenario();
+        archived
+            .storage()
+            .update_atomically(|graph| {
+                graph
+                    .get_requirement_by_id_mut(&archived.owner)
+                    .unwrap()
+                    .archived = true;
+            })
+            .unwrap();
+        let corpus = tempfile::tempdir().unwrap();
+        let manifest =
+            super::super::export_corpus(archived.fx.path(), corpus.path(), false).unwrap();
+        let archived = Scenario {
+            manifest,
+            ..archived
+        };
+        let oracle = archived.fx.commit_map(&archived.valid_map());
+        archived.pin(&oracle);
+        let rendered = archived.report();
+        assert!(
+            rendered.contains("is archived in selected corpus"),
+            "{rendered}"
+        );
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn live_graph_drift_between_trial_and_file_leaves_draft_unparented() {
+        for drift in ["description", "archived"] {
+            let sc = scenario();
+            let oracle = sc.fx.commit_map(&sc.valid_map());
+            sc.pin(&oracle);
+            assert!(sc.report().contains("mapped to STORY-900"));
+            sc.storage()
+                .update_atomically(|graph| {
+                    let owner = graph.get_requirement_by_id_mut(&sc.owner).unwrap();
+                    match drift {
+                        "description" => owner.description.push_str("\nAmended."),
+                        _ => owner.archived = true,
+                    }
+                })
+                .unwrap();
+            let expected = match drift {
+                "description" => "description_sha256 changed in live store",
+                _ => "is archived in live store",
+            };
+            assert_unparented_with(&sc, expected);
+        }
+    }
+
+    // trace:TASK-0446 | ai:claude
+    #[test]
+    fn failed_parent_links_surface_and_never_claim_a_mapped_target() {
+        // New draft: the mapped owner is absent from the graph being written.
+        let trials = rows();
+        let consensus = analyze(&trials, &ids()).unwrap();
+        let resolved = ResolvedCheckMapping {
+            spec_uuid: Uuid::from_u128(99),
+            display_id: "STORY-900".into(),
+            title: "Gone".into(),
+            description_sha256: "0".repeat(64),
+            clauses: vec![],
+        };
+        let mut graph = aida_core::RequirementsStore::new();
+        let mut outcome = FileGapsOutcome::default();
+        file_new_draft(
+            &mut graph,
+            "gap",
+            &consensus,
+            &CheckMapping::Valid(resolved),
+            &mut outcome,
+        );
+        assert_eq!(outcome.filed.len(), 1);
+        assert_eq!(
+            outcome.link_failures.len(),
+            1,
+            "{:?}",
+            outcome.link_failures
+        );
+        let draft = &graph.requirements[0];
+        assert!(draft.relationships.is_empty());
+        assert!(!draft.description.contains("Mapped contract target"));
+        assert!(draft
+            .description
+            .contains("parent link to STORY-900 (00000000-0000-0000-0000-000000000063) failed"));
+
+        // Existing draft: the trusted map names the draft itself as owner, so
+        // the link is refused; the failure is reported, the draft untouched.
+        let sc = scenario();
+        sc.pin(&head(&sc.fx.project).unwrap());
+        sc.file();
+        let draft = sc.draft();
+        let corpus = tempfile::tempdir().unwrap();
+        let manifest = super::super::export_corpus(sc.fx.path(), corpus.path(), false).unwrap();
+        let sc = Scenario { manifest, ..sc };
+        let clause = "Investigate the named check against the intended contract.";
+        let oracle = sc
+            .fx
+            .commit_map(&map_toml("gap", draft.id, &draft.description, &[clause]));
+        sc.pin(&oracle);
+        let outcome = sc.file();
+        assert!(outcome.filed.is_empty() && outcome.parent_linked.is_empty());
+        assert_eq!(
+            outcome.link_failures.len(),
+            1,
+            "{:?}",
+            outcome.link_failures
+        );
+        assert!(outcome.link_failures[0].contains("Cannot create relationship to self"));
+        let after = sc.draft();
+        assert_eq!(after.description, draft.description);
+        assert!(after.comments.is_empty());
     }
 }
