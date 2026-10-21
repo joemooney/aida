@@ -898,11 +898,16 @@ pub(crate) fn acquire_claim_receipted(
 // is rebased out from under the newer HEAD (TASK-1981's rule), keeping the
 // peer's commit. The strict identity check still applies when HEAD is ours.
 // trace:TASK-1955 | ai:claude (TASK-2069)
+// The HEAD read and the rollback it selects run under one (re-entrant) store
+// write lock, so no writer can commit between the decision and the reset.
+// trace:TASK-1955 | ai:claude (TASK-2069, PR-2809 r1)
 fn drop_unpushed_claim_commit(store_root: &Path, claim_sha: &str, expected: &Claim) -> Result<()> {
-    if aida_core::git_ops::head_sha(store_root)? == claim_sha {
-        return rollback_claim_commit(store_root, claim_sha, expected);
-    }
-    aida_core::git_ops::rollback_commit_if_head_matches(store_root, claim_sha).map(|_| ())
+    aida_core::db::with_store_write_lock(store_root, || {
+        if aida_core::git_ops::head_sha(store_root)? == claim_sha {
+            return rollback_claim_commit(store_root, claim_sha, expected);
+        }
+        aida_core::git_ops::rollback_commit_if_head_matches(store_root, claim_sha).map(|_| ())
+    })
 }
 
 // Drop only the exact clean commit this acquisition just made. A concurrent

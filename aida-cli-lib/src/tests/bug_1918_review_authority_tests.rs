@@ -1069,7 +1069,7 @@ fn implementer_claim_via_worktree_add_cannot_self_approve_from_main() {
     // TASK-1772: and it is a self-claim, so a lane working it is attributed.
     // trace:TASK-1955 | ai:claude (TASK-1772)
     assert!(
-        body.contains("/* self_claim */ true,"),
+        body.contains("/* self_claim: the caller works it (BUG-2010) */ true,"),
         "worktree add/enter/do-guided must pass self_claim=true"
     );
 

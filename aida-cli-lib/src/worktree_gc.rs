@@ -2040,15 +2040,12 @@ pub(crate) fn ensure_spec_worktree(
                 /* launch_contained */ false,
                 /* role */ Some("implementer".to_string()),
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
-                // self_claim: the caller works this lease itself, so an
-                // `aida agent new` lane running it is attributed in `aida ps`
-                // (BUG-2010). trace:TASK-1955 | ai:claude (TASK-1772)
-                /* use_pool */
-                Some(false),
-                /* self_claim */ true,
+                /* use_pool */ Some(false),
+                /* self_claim: the caller works it (BUG-2010) */ true,
                 /* review_coexistence */ None,
                 /* contained_seat */ false,
             )?;
+            // trace:TASK-1955 | ai:claude (TASK-1772): self_claim above
             let lease = list_leases(&main_root)
                 .into_iter()
                 .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))

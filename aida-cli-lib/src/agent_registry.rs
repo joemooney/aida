@@ -620,6 +620,7 @@ pub(crate) fn touch_session_start_agent(
     let id = agent_id(&agent_type, pid);
     let path = registry_path(project_root, &id);
     let session_id = session_id.filter(|s| !s.trim().is_empty());
+    let current_start = crate::process_probe::process_start_identity(pid);
     let linked = session_id.and_then(|sid| lease_linked_to_session(project_root, sid));
     let env_scope = env_nonempty("AIDA_SESSION_SCOPE").filter(|s| looks_like_spec_id(s));
     let env_name = match &linked {
@@ -629,11 +630,20 @@ pub(crate) fn touch_session_start_agent(
     let mut entry = std::fs::read_to_string(&path)
         .ok()
         .and_then(|body| toml::from_str::<AgentRegistryEntry>(&body).ok())
-        // A recycled pid's entry belongs to another session.
-        .filter(|old| match (session_id, old.claude_session_id.as_deref()) {
-            (Some(new), Some(old)) => new == old,
-            _ => true,
-        })
+        // A recycled pid's entry belongs to another process: keep it only
+        // while its recorded start identity is this process's. A live
+        // process that starts a new session (`/clear`, a new conversation)
+        // keeps its launcher entry. Without a recorded start, fall back to
+        // the session id. trace:TASK-1955 | ai:claude (BUG-2167)
+        .filter(
+            |old| match (old.pid_start.as_deref(), current_start.as_deref()) {
+                (Some(recorded), Some(current)) => recorded == current,
+                _ => match (session_id, old.claude_session_id.as_deref()) {
+                    (Some(new), Some(old)) => new == old,
+                    _ => true,
+                },
+            },
+        )
         .unwrap_or_else(|| AgentRegistryEntry {
             id: id.clone(),
             agent_type: agent_type.clone(),
@@ -2863,7 +2873,11 @@ mod tests {
                 ("AIDA_AGENT_TYPE", "codex"),
                 ("AIDA_AGENT_NAME", "first-seat"),
             ]);
-            touch_session_start_agent(tmp.path(), &worktree, Some("sid-one"), &binary).unwrap();
+            let mut old =
+                touch_session_start_agent(tmp.path(), &worktree, Some("sid-one"), &binary).unwrap();
+            // The entry an earlier process with this pid left behind.
+            old.pid_start = Some("linux-starttime:1".into());
+            write_entry(tmp.path(), &old).unwrap();
         }
         let _env = crate::test_env::EnvVarsGuard::set(&[
             ("AIDA_AGENT_TYPE", "codex"),
@@ -2873,6 +2887,32 @@ mod tests {
             touch_session_start_agent(tmp.path(), &worktree, Some("sid-two"), &binary).unwrap();
         assert_eq!(entry.name.as_deref(), Some("second-seat"));
         assert_eq!(entry.worktree_path, worktree);
+    }
+
+    /// PR-2809 r1: the same live process starting a new session (`/clear`,
+    /// a new conversation) keeps its `agent new` launcher entry.
+    // trace:TASK-1955 | ai:claude (BUG-2167)
+    #[test]
+    fn same_process_new_session_keeps_its_launcher_entry() {
+        let tmp = TempDir::new().unwrap();
+        let worktree = tmp.path().join("wt");
+        let binary = AgentBinaryIdentity::new("0.16.0".into(), "abc".into());
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_AGENT_TYPE", "codex"),
+            ("AIDA_AGENT_NAME", "lane-7"),
+        ]);
+        let mut launched =
+            touch_session_start_agent(tmp.path(), &worktree, Some("sid-one"), &binary).unwrap();
+        launched.source = "agent-launcher".into();
+        launched.description = Some("lane seven".into());
+        write_entry(tmp.path(), &launched).unwrap();
+
+        let entry =
+            touch_session_start_agent(tmp.path(), &worktree, Some("sid-two"), &binary).unwrap();
+        assert_eq!(entry.source, "agent-launcher");
+        assert_eq!(entry.name.as_deref(), Some("lane-7"));
+        assert_eq!(entry.description.as_deref(), Some("lane seven"));
+        assert_eq!(entry.claude_session_id.as_deref(), Some("sid-two"));
     }
 
     // trace:STORY-994 | ai:codex
