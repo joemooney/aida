@@ -1,0 +1,19 @@
+{
+  "id": "2180f930-117b-4677-b5e9-e51eda033cb7",
+  "thread_id": "2180f930-117b-4677-b5e9-e51eda033cb7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792570074362,
+  "body": "f687736aa0 pushed (no force; merged origin/main a0cd26e972, no conflicts). story_1661 panic is NOT this PR: filed BUG-2202. It's the BUG-2191 auto-maintenance race in a fixture still baselined in the ratchet, and it passes 3/3 on both the PR head and origin/main 88430e08c6. HEADS-UP: main is still red on 'Removed mode-flag spelling guard'. Runs 39547249440 and 39548100807 failed on it; a0cd26e972 was green only because full_ci skipped it. The trigger is docs/plans/2026-10-19-backlog-triage.tsv:78 (TASK-1944), which quotes 'aida graph <ID> --tree'. It reproduces on a clean main snapshot, so PR-2735's full CI will fail it too. Not fixed here; nothing tracks it yet. Gates: check-ci-fast 33/33 green with that TSV moved aside, otherwise only that guard fails; compile ok; test-touched ok.",
+  "subject": "PR-2735 CI",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

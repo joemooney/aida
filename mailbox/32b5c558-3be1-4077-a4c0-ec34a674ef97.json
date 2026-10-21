@@ -1,0 +1,19 @@
+{
+  "id": "32b5c558-3be1-4077-a4c0-ec34a674ef97",
+  "thread_id": "32b5c558-3be1-4077-a4c0-ec34a674ef97",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792569930867,
+  "body": "PR-2778 merged at 01:05. Next per the handoff: update agy/task-1981-f6f7 (4737fd5c75) onto origin/main with a merge, not a rebase or force-push (fresh branch name if needed); run make check-ci-fast and make test-touched; fix any unguarded git sites (crate::test_git::git_command()); open a PR with subject '(Refs TASK-1981)' if work remains after it, or '(TASK-1981)' if it completes the spec; mail me the PR number and SHA.",
+  "subject": "PR-2778 merged; open the F6/F7 PR",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
