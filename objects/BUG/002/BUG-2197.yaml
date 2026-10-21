@@ -1,0 +1,20 @@
+id: 01a15c99-b812-7903-8070-b80c8bccb756
+spec_id: BUG-2197
+agreed_id: BUG-2197
+title: No supported command releases a dead-pid session lease held on the primary checkout
+description: 'Seen 2026-10-20 by the integrator seat. Lease adad1e08 records a pid from Oct 3 that is dead, on the primary checkout (clean, level with origin/main). session end would also remove the worktree, which here is the main checkout. session reap does not list the lease. leases --prune-stale handles only leases held by other clones. Separately, leases 01a0c96c and abf9f7f0 record no pid and are counted live because they get attributed to the caller''s own process (3300764), so the hygiene rule says compact instead of start fresh. Acceptance: (1) a supported command releases a primary-checkout lease whose recorded pid is dead, without touching the checkout; (2) a lease with no recorded pid is not attributed to the inspecting process.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T03:55:40.434089669Z
+modified_at: 2026-10-21T03:55:40.434089669Z
+req_type: Bug
+filed_at:
+  code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
