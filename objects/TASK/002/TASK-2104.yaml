@@ -1,0 +1,27 @@
+id: 01a16066-3b44-7bf2-af2a-9e821860a07f
+spec_id: TASK-2104
+agreed_id: TASK-2104
+title: Test the un-shelvable failure paths of record_result_after_latched_halt
+description: |
+  auto_complete.rs:5214-5245: the Failed and EnvironmentBlocked arms of record_result_after_latched_halt have no test. Neither does the serial-finish call site at auto_complete.rs:5476, where a second member's finish fails un-shelvably after a halt has latched. The new test covers only Held and Inconclusive on the through-CI path, but TASK-1617 names un-shelvable failures explicitly.
+
+  Raised in review of PR-2812: https://github.com/joemooney/aida/pull/2812#issuecomment-6327116401
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:37:55.012874152Z
+modified_at: 2026-10-21T21:37:55.012874152Z
+req_type: Task
+tags:
+- from-review:PR-2812
+- severity:minor
+- test-coverage
+filed_at:
+  code_sha: 0dd6fb919744cdbe94c86f82c9b85a8a4dc40b79
+  branch: pr-2812
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a16064658e

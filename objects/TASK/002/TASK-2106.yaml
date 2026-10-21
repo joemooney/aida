@@ -1,0 +1,27 @@
+id: 01a16066-69f0-7343-bcba-ec22967d41ce
+spec_id: TASK-2106
+agreed_id: TASK-2106
+title: Update the BatchDrainResult.skipped doc to cover post-halt members
+description: |
+  auto_complete.rs:4851-4859: the doc on BatchDrainResult.skipped says the field holds only members blocked by a shelved spec. It now also holds members skipped for a broken serial leg or a stalled queue, and members whose held, inconclusive or failed result arrived after the halt latched.
+
+  Raised in review of PR-2812: https://github.com/joemooney/aida/pull/2812#issuecomment-6327116401
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:38:06.960445055Z
+modified_at: 2026-10-21T21:38:06.960445055Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2812
+- severity:cosmetic
+filed_at:
+  code_sha: 0dd6fb919744cdbe94c86f82c9b85a8a4dc40b79
+  branch: pr-2812
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a16064658e

@@ -1,0 +1,26 @@
+id: 01a16066-50e4-75e3-91c6-fe52e107316e
+spec_id: TASK-2105
+agreed_id: TASK-2105
+title: record_result_after_latched_halt should forget prior dispositions (BUG-852)
+description: |
+  auto_complete.rs:5235: record_result_after_latched_halt deduplicates by checking list membership (shelved.contains / skipped.any) instead of calling forget_batch_disposition, which every other recorder uses. Example: a spec is shelved earlier in the drain, requeued (STORY-1429) and relaunched, and after the halt latches it comes back Held or Inconclusive. It stays reported as shelved. A punted spec that is requeued would appear in both punted and skipped. Fix: gate on the result's own shelved_reason rather than list membership, and call forget_batch_disposition before pushing.
+
+  Raised in review of PR-2812: https://github.com/joemooney/aida/pull/2812#issuecomment-6327116401
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T21:38:00.548734906Z
+modified_at: 2026-10-21T21:38:00.548734906Z
+req_type: Task
+tags:
+- from-review:PR-2812
+- severity:minor
+filed_at:
+  code_sha: 0dd6fb919744cdbe94c86f82c9b85a8a4dc40b79
+  branch: pr-2812
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d603592bfe
+  vendor: claude
+  session: 01a16064658e
