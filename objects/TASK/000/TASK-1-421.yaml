@@ -1,0 +1,27 @@
+id: 01a160e1-fc46-7182-a6ac-d2956e497bf9
+spec_id: TASK-1-421
+title: 'minor: round-1 finding 1 only half fixed. merge_lock.rs::acquire still creates …'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1721, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  minor: round-1 finding 1 only half fixed. merge_lock.rs::acquire still creates the lease with create_new and then write_all, so release.sh lease_is_live reads an empty file as acquired_at=0, judges it TTL-stale and deletes a live ship's lease (scripts/release.sh lease_acquire stale branch). Treat an empty or partial lease as live for a short grace period, or make merge_lock.rs publish atomically too.
+  Reviewed sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T23:53:05.350569322Z
+modified_at: 2026-10-21T23:53:05.350569322Z
+req_type: Task
+tags:
+- carried-from:TASK-1721
+- finding-hash:3ac200a8
+- from-review:TASK-1721
+- kind:carried-forward
+filed_at:
+  code_sha: 4361fbd4562e557b8adecf04051f013cd940cdca
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 612d9b792d
+  vendor: claude
