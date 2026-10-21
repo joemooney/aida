@@ -1,5 +1,6 @@
 id: 01a15e43-ed39-7d01-80d6-28989f63ac34
 spec_id: TASK-1-402
+agreed_id: TASK-1669
 title: '[cosmetic][non-blocking] review_verdict.rs set_errno_zero is a no-op off Linux/…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1801, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   author: joe
   timestamp: 2026-10-21T11:48:43.979185801Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15e4b-26c8-7eb2-b8a0-b5a27b373d6d
+  author: joe
+  timestamp: 2026-10-21T11:49:05.864498539Z
   changes: []
 filed_at:
   code_sha: ed4168add1853ab65f9573e89f3f19a03aef6eb1
