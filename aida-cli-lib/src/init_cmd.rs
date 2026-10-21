@@ -5805,6 +5805,9 @@ pub(crate) fn handle_init_distributed_sibling(
 fn commit_initial_store(store_dir: &std::path::Path) -> Result<(String, String)> {
     use aida_core::git_ops;
     aida_core::db::with_store_write_lock(store_dir, || {
+        // Resolve the publish target before committing, so a detached store
+        // fails closed with nothing written. trace:TASK-1981 | ai:claude
+        let branch = git_ops::attached_branch(store_dir)?;
         git_ops::add(store_dir, &["metadata.yaml"])?;
         std::fs::create_dir_all(store_dir.join("objects"))?;
         // Create a .gitkeep so objects/ is tracked
@@ -5828,10 +5831,7 @@ fn commit_initial_store(store_dir: &std::path::Path) -> Result<(String, String)>
 
         git_ops::commit(store_dir, "chore: initialize AIDA distributed store")?;
 
-        Ok((
-            git_ops::current_branch(store_dir)?,
-            git_ops::head_sha(store_dir)?,
-        ))
+        Ok((branch, git_ops::head_sha(store_dir)?))
     })
 }
 

@@ -327,3 +327,23 @@ fn task_1981_initial_remote_refusal_does_not_retry() {
     assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), captured);
     assert!(git_at(&fixture.bare, &["for-each-ref", "refs/heads/"]).is_empty());
 }
+
+// A detached store (for example one left mid-rebase) must fail closed: no
+// commit, no push, and never a bogus `refs/heads/HEAD` on the shared remote.
+// trace:TASK-1981 | ai:claude
+#[test]
+fn task_1981_detached_store_refuses_capture_and_publication() {
+    let fixture = Fixture::new();
+    let head = fixture.advance("detached.txt");
+    git_at(&fixture.store, &["checkout", "-q", "--detach", &head]);
+    std::fs::write(fixture.store.join("objects/pending.yaml"), "pending").unwrap();
+    let error = capture_snapshot(&fixture.store).unwrap_err();
+    // The store write lock or `attached_branch` refuses, whichever sees it first.
+    assert!(format!("{error:#}").contains("detached"), "{error:#}");
+    assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), head);
+    // The push chokepoint refuses the literal `HEAD` that `current_branch`
+    // reports for a detached checkout, before any remote I/O.
+    let error = publish_snapshot(&fixture.store, "HEAD", &head).unwrap_err();
+    assert!(format!("{error:#}").contains("named `HEAD`"), "{error:#}");
+    assert!(git_at(&fixture.bare, &["for-each-ref", "refs/heads/"]).is_empty());
+}

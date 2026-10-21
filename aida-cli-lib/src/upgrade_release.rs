@@ -1893,6 +1893,9 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
 fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(String, String)> {
     use aida_core::git_ops;
     aida_core::db::with_store_write_lock(store, || {
+        // Resolve the publish target before committing, so a detached store
+        // fails closed with nothing written. trace:TASK-1981 | ai:claude
+        let branch = git_ops::attached_branch(store)?;
         if git_ops::has_changes_checked(store)? {
             for dir in ["objects", "registry"] {
                 if store.join(dir).exists() {
@@ -1904,7 +1907,7 @@ fn capture_dev_release_store(store: &std::path::Path, tag: &str) -> Result<(Stri
             }
             git_ops::commit(store, &format!("chore: sync store for release {tag}"))?;
         }
-        Ok((git_ops::current_branch(store)?, git_ops::head_sha(store)?))
+        Ok((branch, git_ops::head_sha(store)?))
     })
 }
 
