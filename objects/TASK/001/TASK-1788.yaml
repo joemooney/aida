@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T05:17:58.748873512Z
-modified_at: 2026-10-16T05:17:58.748873512Z
+modified_at: 2026-10-21T04:32:39.224540350Z
 req_type: Task
+tags:
+- operator-held
+history:
+- id: 01a15cbb-950b-7482-86af-ea679241a796
+  author: joe
+  timestamp: 2026-10-21T04:32:39.691397310Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:39.224540350Z
+deferred_until: Needs operator/security ruling. Revisit when TASK-1952's session-resume scoping item is implemented; rule on cross-root refusal in that PR.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 251f99e7ef50bfc1537ce57ef7e88ff6975eaa85
   branch: main
