@@ -11,11 +11,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:37:40.165475401Z
-modified_at: 2026-10-20T21:37:40.165475401Z
+modified_at: 2026-10-21T04:32:58.370005261Z
 req_type: Task
 tags:
 - from-review:PR-2786
+- operator-held
 - severity:minor
+history:
+- id: 01a15cbb-dffb-77c0-af05-9a76000da758
+  author: joe
+  timestamp: 2026-10-21T04:32:58.875055363Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:58.370005261Z
+deferred_until: 'Targets PR #2786 code (open); stacked #2788 memoises lookups and may change what to pin. Revisit when BUG-2192 merges.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
   branch: main
