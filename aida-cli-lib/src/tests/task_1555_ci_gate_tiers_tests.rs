@@ -284,9 +284,11 @@ fn task_1763_compile_tier_is_wired_and_derives_from_ci_run_tests() {
         .to_string();
     // Four matrix lanes share one planner; its compile mode covers their
     // workspace union without executing tests. trace:TASK-1949 | ai:codex
+    // The lanes run under nextest, whose test targets are cargo test's, so
+    // `cargo test --no-run` still compiles them all. trace:TASK-1988 | ai:claude
     assert_eq!(
         run_tests,
-        r#"python3 scripts/ci-test-shards.py --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log"#,
+        r#"python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log"#,
         "update the compile derivation when the CI test planner changes"
     );
     let planner = std::fs::read_to_string(root.join("scripts/ci-test-shards.py"))

@@ -165,36 +165,50 @@ jobs:
         if: ${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}
         run: cargo build -p aida-cli --bin aida
 
+      # Pinned action commit (v2.87.22) and nextest version: a prebuilt
+      # binary, no `cargo install`. trace:TASK-1957 | ai:claude
+      - name: Install cargo-nextest
+        if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-nextest@0.9.146
+
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
       - name: Run tests
         if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (steps.changes.outputs.full_ci == 'true') }}
-        # --no-fail-fast: one run reports every failing test binary across
-        # crates, instead of stopping at the first (BUG-1021).
+        # cargo-nextest runs each lane's selection (.config/nextest.toml `ci`
+        # profile: no fail-fast, no retries, the serial test-group, a per-test
+        # hang guard); doctests stay on cargo test. The shadow period showed
+        # the same tests, by name, as cargo test on every lane.
+        # trace:TASK-1988 | ai:claude
         # AIDA_REQUIRE_ZSH: zsh is installed above, so the BUG-2005 leak proof
         # must run its zsh leg rather than skip. trace:TASK-1363 | ai:claude
-        # The tee'd log feeds the per-binary timings and budget gate below
-        # (pipefail keeps cargo's exit status). trace:STORY-1853 | ai:claude
+        # The tee'd log feeds the totals and the doctest timings below
+        # (pipefail keeps the runner's exit status). trace:STORY-1853 | ai:claude
         env:
           AIDA_REQUIRE_ZSH: ${{ runner.os == 'Linux' && '1' || '' }}
-        run: python3 scripts/ci-test-shards.py --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log
+        run: python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/test-run.log
 
       # trace:TASK-1949 | ai:codex
       - name: Test shard root hygiene
         if: ${{ !cancelled() && matrix.shard != 'gates' && matrix.shard != 'contracts' && steps.changes.outputs.full_ci == 'true' }}
         run: python3 scripts/ci-test-shards.py --check-root
 
-      # Per-binary test timings (job summary + artifact) and the slow-test
-      # budget: a binary over 10 s needs an entry in scripts/test-time-budget.toml,
-      # and a budgeted binary may not exceed it. Runs after a red test step too,
-      # so a failing run still reports its timings. trace:STORY-1853 | ai:claude
+      # Per-test timings (job summary + artifact) and the slow-test budget,
+      # from nextest's JUnit reports (doctests from the log): a test over
+      # 10 s needs an entry in scripts/test-time-budget.toml, and a budgeted
+      # test may not exceed it. Runs after a red test step too, so a failing
+      # run still reports its timings and totals. trace:STORY-1853 | ai:claude
+      # trace:TASK-1988 | ai:claude
       - name: Test time budget
         if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
-        run: >-
-          python3 scripts/test-timings.py target/test-run.log
-          --budget scripts/test-time-budget.toml --lane "${{ matrix.shard }}"
-          --json target/test-timings.json
-          --summary "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 scripts/ci-test-shards.py --totals target/test-run.log --summary "$GITHUB_STEP_SUMMARY"
+          python3 scripts/test-timings.py target/test-run.log --junit target/nextest/ci/junit-*.xml \
+            --budget scripts/test-time-budget.toml \
+            --json target/test-timings.json \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test timings
         if: ${{ matrix.shard != 'gates' && matrix.shard != 'contracts' && (!cancelled() && steps.changes.outputs.full_ci == 'true' && runner.os == 'Linux') }}
@@ -204,6 +218,7 @@ jobs:
           path: |
             target/test-timings.json
             target/test-run.log
+            target/nextest/ci/junit-*.xml
           if-no-files-found: warn
 
       # Keep the live-smoke workflow's perimeter-auth contract testable without
@@ -718,111 +733,6 @@ jobs:
         env:
           RESULT: ${{ needs.build.result }}
         run: test "$RESULT" = success
-
-  # STORY-1853 S2, shadow period: run the cargo-test lanes' shard set again
-  # under cargo-nextest (.config/nextest.toml `ci` profile, per-test slow and
-  # kill budget) and report pass/ignore totals for comparison with the
-  # cargo-test lanes. NON-GATING: build-result does not need this job, so no
-  # outcome of it blocks a merge. Only the test step continues on error: a
-  # nextest test failure shows as a warning and in the job summary, while a
-  # setup, totals or upload step failure (or the timeout) still turns this
-  # job's own check red. A later PR swaps it in.
-  # trace:TASK-1957 | ai:claude
-  nextest-shadow:
-    name: Nextest shadow (${{ matrix.shard }})
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash --noprofile --norc -e -o pipefail {0}
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [lib-0, lib-1, cli-0, cli-1, rest]
-
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Detect full-CI changes
-        id: changes
-        uses: dorny/paths-filter@v4
-        with:
-          predicate-quantifier: some-with-excludes
-          filters: |
-            full_ci:
-              - '**'
-              - '!docs/**'
-              - '!**/*.md'
-              - '!LICENSE'
-              - '!.gitignore'
-
-      - name: Install Rust toolchain
-        if: steps.changes.outputs.full_ci == 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Pin stable toolchain & verify cargo
-        if: steps.changes.outputs.full_ci == 'true'
-        run: |
-          mkdir -p target
-          rustup default stable
-          cargo --version | grep -q '^cargo '
-
-      - name: Install Linux dependencies
-        if: steps.changes.outputs.full_ci == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libssl-dev libgtk-3-dev bubblewrap ripgrep zsh
-
-      # Pinned action commit (v2.87.22) and nextest version: a prebuilt
-      # binary, no `cargo install`. trace:TASK-1957 | ai:claude
-      - name: Install cargo-nextest
-        if: steps.changes.outputs.full_ci == 'true'
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
-        with:
-          tool: cargo-nextest@0.9.146
-
-      # Restore the matching cargo-test lane's cache; only those lanes save it.
-      - name: Cache Rust dependencies
-        if: steps.changes.outputs.full_ci == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: ci-dev-profile${{ (startsWith(matrix.shard, 'lib-') && '-lib') || (startsWith(matrix.shard, 'cli-') && '-cli') || (matrix.shard == 'rest' && '-rest') || '' }}
-          save-if: false
-
-      - name: Build aida binary for lib unit tests
-        if: ${{ startsWith(matrix.shard, 'lib-') && steps.changes.outputs.full_ci == 'true' }}
-        run: cargo build -p aida-cli --bin aida
-
-      - name: Run tests under nextest
-        id: nextest
-        if: steps.changes.outputs.full_ci == 'true'
-        continue-on-error: true
-        env:
-          AIDA_REQUIRE_ZSH: '1'
-        run: python3 scripts/ci-test-shards.py --runner nextest --shard "${{ matrix.shard }}" < /dev/null 2>&1 | tee target/nextest-run.log
-
-      - name: Nextest totals
-        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' }}
-        env:
-          OUTCOME: ${{ steps.nextest.outcome }}
-        run: |
-          python3 scripts/ci-test-shards.py --totals target/nextest-run.log --summary "$GITHUB_STEP_SUMMARY"
-          echo "Nextest step outcome: $OUTCOME" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$OUTCOME" != success ]; then
-            echo "::warning::nextest shadow (${{ matrix.shard }}) did not pass: $OUTCOME (non-gating)"
-          fi
-
-      # One JUnit report per nextest invocation (the rest shard runs up to
-      # three); the shard script renames each before the next run.
-      - name: Upload nextest report
-        if: ${{ !cancelled() && steps.changes.outputs.full_ci == 'true' }}
-        uses: actions/upload-artifact@v5
-        with:
-          name: nextest-shadow-${{ matrix.shard }}
-          path: |
-            target/nextest/ci/junit-*.xml
-            target/nextest-run.log
-          if-no-files-found: warn
 
   # Create release artifacts for tags
   release:

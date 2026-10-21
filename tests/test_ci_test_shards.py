@@ -108,6 +108,7 @@ class ShardsTest(unittest.TestCase):
         # trace:TASK-1957 | ai:claude
         with patch.object(shards, 'lib_test_names', return_value=names), \
                 patch.object(shards.subprocess, 'call', return_value=0) as call, \
+                patch.object(shards, 'nextest_installed', return_value=True), \
                 patch.object(shards, 'keep_junit') as keep:
             self.assertEqual(shards.main(['--shard', 'lib-1', '--runner', 'nextest', '--profile', 'agent']), 0)
         command = call.call_args.args[0]
@@ -158,7 +159,7 @@ class ShardsTest(unittest.TestCase):
         listing = subprocess.run(['python3', 'scripts/check-ci-gates.py', '--list', '--tier', 'all'],
                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
         line = next(l for l in listing.splitlines() if l.startswith('PLAN  Run tests  '))
-        self.assertIn('(local: python3 scripts/ci-test-shards.py --shard all --profile agent', line)
+        self.assertIn('(local: python3 scripts/ci-test-shards.py --runner nextest --shard all --profile agent', line)
         self.assertNotIn('(local: cargo test --profile agent)', listing)
 
     def test_rest_keeps_core_features_supplied_by_excluded_cli(self):
@@ -190,7 +191,7 @@ class ShardsTest(unittest.TestCase):
         steps = {s.get('name'): s for s in build['steps']}
         source = steps['Run tests']['run']
         self.assertEqual(gates.derive_compile_command('Run tests', source), 'python3 scripts/ci-test-shards.py --compile --profile agent')
-        self.assertIn('--shard all --profile agent', gates.local_test_command(source))
+        self.assertIn('--runner nextest --shard all --profile agent', gates.local_test_command(source))
         self.assertEqual(steps['Build aida binary for lib unit tests']['if'],
                          "${{ startsWith(matrix.shard, 'lib-') && (steps.changes.outputs.full_ci == 'true') }}")
         self.assertIn('!cancelled()', steps['Test shard root hygiene']['if'])
@@ -279,29 +280,61 @@ class ShardsTest(unittest.TestCase):
             self.assertEqual(sorted(p.read_text() for p in report.parent.glob('junit-*.xml')),
                              ['<run 0/>', '<run 1/>', '<run 2/>'])
 
-    def test_nextest_shadow_job_is_parallel_and_non_gating(self):
+    # trace:TASK-1988 | ai:claude
+    def test_nextest_gates_the_test_lanes(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
-        shadow = workflow['jobs']['nextest-shadow']
-        self.assertNotIn('needs', shadow)
-        self.assertNotIn('nextest-shadow', workflow['jobs']['build-result']['needs'])
-        self.assertEqual(shadow['strategy']['matrix']['shard'], list(shards.SHARDS))
-        steps = {s.get('name'): s for s in shadow['steps']}
-        self.assertTrue(steps['Run tests under nextest']['continue-on-error'])
+        self.assertNotIn('nextest-shadow', workflow['jobs'])
+        steps = {s.get('name'): s for s in workflow['jobs']['build']['steps']}
+        run = steps['Run tests']
+        self.assertNotIn('continue-on-error', run)
+        self.assertIn('--runner nextest --shard "${{ matrix.shard }}"', run['run'])
         install = steps['Install cargo-nextest']
+        self.assertEqual(install['if'], run['if'])
         self.assertRegex(install['uses'], r'^taiki-e/install-action@[0-9a-f]{40}$')
         self.assertRegex(install['with']['tool'], r'^cargo-nextest@\d+\.\d+\.\d+$')
-        self.assertFalse(steps['Cache Rust dependencies']['with']['save-if'])
+        budget = steps['Test time budget']['run']
+        self.assertIn('--junit target/nextest/ci/junit-*.xml', budget)
+        self.assertNotIn('--lane', budget)
+        self.assertIn('target/nextest/ci/junit-*.xml', steps['Upload test timings']['with']['path'])
         config = tomllib.loads((ROOT / '.config/nextest.toml').read_text())['profile'][shards.NEXTEST_PROFILE]
         self.assertEqual(config['retries'], 0)
+        self.assertFalse(config['fail-fast'])
         self.assertEqual(config['slow-timeout']['period'], '10s')
-        self.assertIn('terminate-after', config['slow-timeout'])
         self.assertEqual(config['junit']['path'], 'junit.xml')
-        upload = steps['Upload nextest report']['with']['path']
-        self.assertIn('target/nextest/ci/junit-*.xml', upload)
         nextest = tomllib.loads((ROOT / '.config/nextest.toml').read_text())
         self.assertEqual(nextest['test-groups']['serial'], {'max-threads': 1})
         self.assertTrue(config['overrides'])
         self.assertTrue(all(o['test-group'] == 'serial' for o in config['overrides']))
+        # No budget entry may outlast nextest's kill: it would never be reached.
+        kill = 10 * config['slow-timeout']['terminate-after']
+        budgets = tomllib.loads((ROOT / 'scripts/test-time-budget.toml').read_text())['budget']
+        self.assertTrue(budgets)
+        self.assertLessEqual(max(budgets.values()), kill)
+
+    def test_missing_nextest_falls_back_locally_and_fails_in_ci(self):
+        packages = [dict(name='aida-cli', targets=[target('one'), target('two')]),
+                    dict(name='aida-cli-lib', targets=[dict(target('lib', 'lib'), doctest=True)])]
+        metadata = json.dumps(dict(packages=[dict(p, id=p['name']) for p in packages],
+                                   workspace_members=['aida-cli', 'aida-cli-lib'], target_directory='t'))
+        for ci, expected_status, ran in (('', 0, 'test'), ('true', 1, None)):
+            with self.subTest(ci=ci), patch.dict(shards.os.environ, {'CI': ci}), \
+                    patch.object(shards.subprocess, 'check_output', return_value=metadata), \
+                    patch.object(shards, 'union_problems', return_value=([], [])), \
+                    patch.object(shards, 'nextest_installed', return_value=False), \
+                    patch.object(shards.subprocess, 'call', return_value=0) as call:
+                self.assertEqual(shards.main(['--shard', 'cli-0', '--runner', 'nextest']), expected_status)
+                self.assertEqual(call.call_args.args[0][1] if call.called else None, ran)
+
+    def test_lib_weights_read_nextest_junit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            report = pathlib.Path(tmp) / 'junit-lib-0-0.xml'
+            report.write_text(
+                '<testsuites><testsuite name="aida-cli-lib">'
+                '<testcase name="a::x" time="1.25"/><testcase name="a::y" time="2.0"/>'
+                '<testcase name="b::z" time="0.04"/></testsuite>'
+                '<testsuite name="aida-cli::journey"><testcase name="a::w" time="9"/></testsuite>'
+                '</testsuites>')
+            self.assertEqual(shards.lib_weights([str(report)], 4), ['"a" = 3.2'])
 
     def test_root_guard_detects_loose_files_and_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -375,6 +408,22 @@ class TallyTest(unittest.TestCase):
         for jobs, expected in cases:
             with patch.object(tally, 'gh_json', return_value={'jobs': jobs}):
                 self.assertEqual(tally.classify({'id': 123}), expected)
+
+    # trace:TASK-1988 | ai:claude
+    def test_failing_tests_names_libtest_and_nextest_failures(self):
+        spec = importlib.util.spec_from_file_location('ci_tally', ROOT / 'scripts/ci-flake-tally.py')
+        tally = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tally)
+        log = b"\n".join([
+            b"2026-10-20T18:40:00.1Z test a::b ... FAILED",
+            b"2026-10-20T18:40:01.1Z         FAIL [   0.204s] (  3/120) aida-cli::journey slow::one",
+            b"2026-10-20T18:40:02.1Z      TIMEOUT [ 180.002s] aida-cli-lib x::hangs",
+            b"2026-10-20T18:40:03.1Z         FAIL [   0.204s] aida-cli::journey slow::one",
+            b"2026-10-20T18:40:03.1Z         PASS [   0.204s] aida-cli::journey fine",
+        ])
+        with patch.object(tally, 'gh_raw', return_value=log):
+            names, _ = tally.failing_tests(1)
+        self.assertEqual(names, ['a::b', 'aida-cli-lib x::hangs', 'aida-cli::journey slow::one'])
 
 
 if __name__ == '__main__':

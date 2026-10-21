@@ -137,4 +137,4 @@
 "Doc-intent gate (surface changes mark doc-impact)" = "same `.aida-store` fetch-and-fast-forward as the trace gate above"
 # trace:STORY-1853 | ai:claude
 "Test shard root hygiene" = "asserts an ephemeral CI checkout has no untracked root entries; local worktrees can contain operator scratch files"
-"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py target/test-run.log` still prints local timings"
+"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py <log> --junit <target dir>/nextest/ci/junit-*.xml` still prints local per-test timings"
