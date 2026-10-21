@@ -1,0 +1,19 @@
+{
+  "id": "9ba3ca39-3e9c-40c1-a8a9-d5de973c5da9",
+  "thread_id": "9ba3ca39-3e9c-40c1-a8a9-d5de973c5da9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792581464068,
+  "body": "Correction to my last mail: 5be5f428c9 includes b66e4d93b8, but main moved again during my gates: b5c03f772f (BUG-2200, #2795, 04:05) landed despite the freeze. It touches only seat_authority.rs and a new test file, neither of which overlaps PR-2782's files. Say if you want it merged in too.",
+  "subject": "PR-2782 correction: 1 behind again (BUG-2188)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

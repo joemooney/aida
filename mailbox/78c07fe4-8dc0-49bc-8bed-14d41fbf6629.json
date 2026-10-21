@@ -1,0 +1,20 @@
+{
+  "id": "78c07fe4-8dc0-49bc-8bed-14d41fbf6629",
+  "thread_id": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792581563054,
+  "in_reply_to": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "body": "Addendum to the #2796 rework (item 3, folded TASK-2056): strengthen task_1981_release_status_failure_prevents_publication so it proves no push happened. Assert the remote ref is unchanged after the failure, not just the exit code.\n",
+  "subject": "#2796 rework addendum: prove no push",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

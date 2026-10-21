@@ -1,0 +1,19 @@
+{
+  "id": "d7fce64d-acb4-42d4-b209-38c730023e79",
+  "thread_id": "d7fce64d-acb4-42d4-b209-38c730023e79",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792581337511,
+  "body": "PR #2794 now at d19b9f4a78e8eb22bb76807a9575b703ef0dcc21: merged origin/main incl. b66e4d93b8 (#2787, contained slice 2), 0 behind. The merge was clean (no conflicts). I checked the interaction by hand: slice 2 adds the seat-clone target dir to store_paths and the sessions dirs to extra_deny. My baseline then grants Read of the target dir (the seat's own build output) and still drops out whenever deny paths are inexpressible (fail-closed). The bug_2169 tests assert only Edit-rule presence/absence, which is unaffected. Gates on this head: check-ci-fast PASS; test-touched PASS (877/877 lib + 2/2 bug_2201 e2e); also ran bug_2169 + seat_clone tests: 38/38 PASS.",
+  "subject": "PR-2794 updated: d19b9f4a78e8eb22bb76807a9575b703ef0dcc21",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

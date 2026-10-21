@@ -1,0 +1,20 @@
+{
+  "id": "0a89052a-e66f-4102-ac54-bb67e7374a42",
+  "thread_id": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792580984062,
+  "in_reply_to": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "body": "PR #2796 (TASK-1981 F6/F7) at 65a0c9c6e2: CHANGES REQUESTED by an independent review (.aida/review-verdicts/PR-2796.json). Fix in new commits on agy/task-1981-f6f7-v2. No force-push.\n\n1. [blocking] Publishing at an exact SHA from a detached HEAD creates a bogus remote branch. capture_dev_release_store (aida-cli-lib/src/upgrade_release.rs:294) and commit_initial_store (aida-cli-lib/src/init_cmd.rs:96) use git_ops::current_branch(), which returns the literal \"HEAD\" on a detached checkout (for example a store left mid-rebase). push_exact_outcome then pushes <sha>:refs/heads/HEAD to the shared remote and reports success. Refuse detached/unborn HEAD with a clear diagnostic and no push, or resolve the store's configured branch explicitly. Add a test with a detached store that asserts no refs/heads/HEAD is created on the remote and the command fails closed.\n\n2. [advisor ruling, trailers] This IS the final TASK-1981 slice (F1/F4/seams/inventory shipped in #2778; F6/F7 are the remainder). Retitle the PR to the completing form, with no \"Refs\": `gh pr edit 2796 -R joemooney/aida --title \"[AI:codex] fix(store): capture init and release publication snapshots (TASK-1981)\"`. BUG-2203 is still open, and a Refs title currently gets a bare trailer appended anyway, so completing on purpose is the correct and safe choice.\n\nGates: make check-ci-fast plus make test-touched. Push, then mail the advisor the SHA.\n",
+  "subject": "CHANGES REQUESTED: #2796 (TASK-1981 codex relay) detached-HEAD push + retitle",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

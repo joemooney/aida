@@ -1,0 +1,18 @@
+{
+  "id": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "thread_id": "d7b5f068-9bea-4d9d-94e8-de75c44f6eb6",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792580898298,
+  "body": "PR #2796 (TASK-1981 F6/F7 follow-up to merged #2778) is ready for review at 65a0c9c6e2.\nIt makes init and upgrade/release capture the publication snapshot under the store writer lock, and adds regression tests.\nCI is green: Build plus all 7 lanes. The only red check is merge-hold-gate, which is the expected supervised hold (aida:merge-hold) and needs your clearance after review.\nRound 1 failed the git auto-maintenance ratchet. I fixed it by adding the -c guard pair to the writer-test git closure.\nLocal check-ci-fast never ran: it sat in the cargo slot queue for 2.5h behind advisor builds. CI is the gate.\n",
+  "subject": "READY: #2796 TASK-1981 F6/F7 green at 65a0c9c6e2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}
