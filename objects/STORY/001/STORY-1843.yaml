@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-21T17:31:54.517684575Z
+modified_at: 2026-10-21T18:00:30.444080303Z
 req_type: Story
 comments:
 - id: 01a15f00-6963-7640-93e7-f043fd18b5ff
@@ -114,6 +114,16 @@ comments:
   created_at: 2026-10-21T17:24:44.424352586Z
   modified_at: 2026-10-21T17:24:44.424352586Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15f9f-2fec-7a23-a218-b41c343a19d7
+  author: ai:codex:joe
+  content: |
+    Implementation checkpoint: PR1 is in isolated branch codex/story-1843-routing, lease 01a15f84fa7c. Shared live resolver now drives CLI/MCP explicit sends and mentions; unknown/dead/ambiguous private names and empty role/vendor audiences refuse before writing; human offline inboxes and historical inspection remain available. Author checker rounds found and fixed ID destination-name ambiguity, synthetic role-shell readers, historical names shadowing active people/groups, and omitted supported web routing. Initial resolver suite: 5 passed; expanded current-source mailbox/mention tests and required fast gate are still running. No PR, push, independent approval, or completion claim yet.
+
+    Advisor question sent in mailbox thread d2840937: PR1 can remain schema-free if explicit role queue assignment/private multi-reader receipts move to PR2's UUID-bound delivery. Pending that ruling; current PR1 has zero-reader refusal and live-reader diagnostics only. Do not mistake this checkpoint for C1 completion.
+
+    PR3 evidence gathered while builds run: actual installed Agy 1.4.2 SessionStart and PreInvocation hooks fired in an isolated real CLI smoke, with camelCase conversationId/workspacePaths payloads and injectSteps context. Exact shipped docs: ~/.gemini/antigravity-cli/builtin/skills/agy-customizations/docs/hooks.md. Evidence: /tmp/story1843-agy-probe-ases8lxf/.agents/payloads.jsonl. Cross-vendor delivery itself remains unimplemented/unverified.
+  created_at: 2026-10-21T18:00:30.444080303Z
+  modified_at: 2026-10-21T18:00:30.444080303Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
