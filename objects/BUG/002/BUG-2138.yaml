@@ -8,11 +8,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-15T00:43:19.695580202Z
-modified_at: 2026-10-15T00:43:19.695580202Z
+modified_at: 2026-10-21T04:32:13.123018185Z
 req_type: Bug
 tags:
 - capture
 - coordination
+- operator-held
+history:
+- id: 01a15cbb-2f23-7d50-a3d1-23a6d0a257a7
+  author: joe
+  timestamp: 2026-10-21T04:32:13.603859392Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:13.123018185Z
+deferred_until: Single incident (2026-10-14), investigation-only AC. Revisit if a claimed spec gets a duplicate PR again, or after STORY-1662 moves fixers to separate processes.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 3850eda5ad546b0e8197d9215042e06a797952bb
   branch: main
