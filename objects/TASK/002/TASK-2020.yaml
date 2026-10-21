@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T20:08:51.552079826Z
-modified_at: 2026-10-20T22:24:53.582631064Z
+modified_at: 2026-10-21T04:28:06.333789082Z
 req_type: Task
 tags:
 - from-review:PR-2785
@@ -23,6 +23,12 @@ comments:
   created_at: 2026-10-20T22:24:53.582631064Z
   modified_at: 2026-10-20T22:24:53.582631064Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+- id: 01a15cb7-693d-76a3-ba93-e735daa23b52
+  author: joe
+  content: 'Advisor triage 2026-10-20 21:30: folded TASK-1658 into this spec (Same finding as TASK-2023 (stall waiver fail-open for unbudgeted/multi-test rows), already folded into TASK-2020 on 2026-10-20 15:25.). Its open acceptance items now belong here.'
+  created_at: 2026-10-21T04:28:06.333789082Z
+  modified_at: 2026-10-21T04:28:06.333789082Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 filed_at:
   code_sha: 629f813b0c1a72d0f0e36b759853bd66d5e124aa
   branch: pr-2785
