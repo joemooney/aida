@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T16:23:46.939062947Z
+modified_at: 2026-10-21T17:22:14.338373464Z
 req_type: Task
 tags:
 - launch
@@ -238,6 +238,18 @@ comments:
   content: 'ADVISOR 09:27 finding: ''aida edit TASK-1332 --status completed'' on a deferred spec prints ''Updated: TASK-1332'' (twice, also with --force), but the status stays deferred until ''aida undefer''. Either apply the status and clear the deferral, or refuse with a hint to undefer first. Never report Updated for a no-op.'
   created_at: 2026-10-21T16:23:46.939062947Z
   modified_at: 2026-10-21T16:23:46.939062947Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15f7c-26c2-7d60-8a15-e05953050e41
+  author: joe
+  content: |-
+    ADVISOR 10:24: PR-2789 round-6 non-blocking follow-ups (review_watch.rs etc.; deferred until 2789 merges). - minor: stale-overlap notice is addressed to the forge login (review_watch_forge.rs:409-415, review_watch.rs:952 Recipient::Agent(change.author)); mailbox addressed_to is an exact match on the AIDA identity, so where forge logins differ from AIDA identities (this repo: joemooney vs joe/seat names) the notice likely reaches no inbox and the stale PR stalls silently. Consider mapping forge author to an AIDA identity or copying the advisor.
+    - minor/efficiency: watch_change runs repo.probe (git fetch of base+head refs plus ref create/delete) for every open change on every poll (default 10s) BEFORE select (review_watch.rs:1347), even for heads already reviewed, notified, Exited or at the round cap. Gate the probe behind a cheap state/history pre-check.
+    - minor: Phase::Exited is permanent per head (review_watch.rs:863-866); a transient queue-work failure blocks that head until a new push, and the only documented recovery for ambiguous holds is hand-editing .aida/review-watch/state.json while no watcher runs (review_watch.rs:905). Add an operator recovery verb (e.g. release/retry a key).
+    - minor: probe refs refs/aida/review-watch/<uuid>/{base,head} leak if the watcher is killed between fetch and update-ref -d (review_watch_forge.rs:302-355); no sweep of stale refs exists.
+    - cosmetic: Entry.historical_keys is deserialized, validated and read in history() but never written (review_watch.rs:186-188, 496-501); retained rounds live in history/<key>.json. Remove the dead field or write it.
+    - cosmetic: reviewer_launch_context runs twice per watch-launched queue work (queue_cmd.rs:12858 and again via reviewer_launch_prompt in run_standalone_reviewer), each doing a forge query, git fetch and round_for transaction; pass the first result through.
+  created_at: 2026-10-21T17:22:14.338373464Z
+  modified_at: 2026-10-21T17:22:14.338373464Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
