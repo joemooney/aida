@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-21T17:37:34.722873999Z
+modified_at: 2026-10-21T21:19:06.596869759Z
 req_type: Task
 tags:
 - reconcile
@@ -186,6 +186,10 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a15959-fdb4-7843-93b7-d0d041af80c3
   created_at: 2026-10-21T17:37:31.075548271Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a16054-2dd4-7c31-87f6-99c92df8872a
+  created_at: 2026-10-21T21:19:06.596864133Z
   created_by: joe
 comments:
 - id: 01a155b8-aff7-7662-b55d-ebe18a71b2db
@@ -418,6 +422,11 @@ history:
 - id: 01a15f8a-2910-79b2-888e-4f59ccfe03b5
   author: joe
   timestamp: 2026-10-21T17:37:32.432724780Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a16055-0933-79f2-a67b-f8c146475afa
+  author: joe
+  timestamp: 2026-10-21T21:19:08.083824390Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
