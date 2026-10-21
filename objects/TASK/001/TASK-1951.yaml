@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-21T07:20:09.696047845Z
+modified_at: 2026-10-21T09:53:47.952684921Z
 req_type: Task
 tags:
 - reconcile
@@ -215,6 +215,12 @@ comments:
   content: 'ADVISOR 00:20 burndown: folded TASK-1-394 (""[cosmetic, untested-path] forge.rs parse_ls_remote_symref_head has no direct un…"") into this spec as an item.'
   created_at: 2026-10-21T07:20:09.696047845Z
   modified_at: 2026-10-21T07:20:09.696047845Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15de1-97b0-7933-8922-0fffc63aea48
+  author: joe
+  content: 'ADVISOR 02:55: the TASK-2035 item folded here is promoted to its own high-priority bug BUG-2203, because it caused a wrong completion (BUG-2169 via PR-2787).'
+  created_at: 2026-10-21T09:53:47.952684921Z
+  modified_at: 2026-10-21T09:53:47.952684921Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
