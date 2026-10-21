@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:09:33.757932560Z
-modified_at: 2026-10-21T07:18:59.235824668Z
+modified_at: 2026-10-21T07:19:02.651469853Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -21,6 +21,12 @@ comments:
   content: 'Advisor 2026-10-20 21:20 (operator OK): archived the three stale main-checkout harness-worktree leases (abf9f7f087dbb254e-c3a7f12a9af4d18b + its activity.toml, 01a0c96c2f117c239cfd2acf11a8f59a-3716d304824b58e5, adad1e083ece1fe50-b7d818ea6397d66a) to .aida/sessions-archive/2026-10-20-bug-2199/ (mv, reversible) because no supported command can release them (BUG-2197). This unblocks Refs-only ships now; the code fix is still needed since the harness can mint new ones.'
   created_at: 2026-10-21T04:17:46.436452573Z
   modified_at: 2026-10-21T04:17:46.436452573Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15d53-e8fb-7ef2-b02b-64f9bb2f3b48
+  author: joe
+  content: 'ADVISOR 00:20 burndown: folded TASK-2043 ("Recorder identity still binds every main-checkout lease via project_root (BUG-2199 path 2)") into this spec as an item.'
+  created_at: 2026-10-21T07:19:02.651469853Z
+  modified_at: 2026-10-21T07:19:02.651469853Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15ca6-a6e3-7441-ab58-520125142a08
