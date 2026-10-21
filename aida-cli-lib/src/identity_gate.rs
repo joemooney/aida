@@ -788,6 +788,38 @@ pub(crate) fn squash_coauthor_body_override(
     if allowlist.is_empty() {
         return Ok(None);
     }
+    let commits = branch_commit_identities(repo, base_branch, head)?;
+    let violations = commit_identity_violations(&commits, allowlist);
+    if violations.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((
+        squash_bullet_body(&commits, |message| {
+            strip_disallowed_coauthor_lines(message, allowlist)
+        }),
+        violations,
+    )))
+}
+
+/// The forge's default squash body, rebuilt locally: the branch's commit
+/// messages, oldest first, each as a `* subject` bullet, unmodified. Used when
+/// ship must add a line to a body it would otherwise leave to the forge.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+pub(crate) fn squash_commit_messages_body(
+    repo: &Path,
+    base_branch: &str,
+    head: &str,
+) -> Result<String> {
+    let commits = branch_commit_identities(repo, base_branch, head)?;
+    Ok(squash_bullet_body(&commits, str::to_owned))
+}
+
+// trace:TASK-1330 | ai:claude
+fn branch_commit_identities(
+    repo: &Path,
+    base_branch: &str,
+    head: &str,
+) -> Result<Vec<CommitIdentity>> {
     let range = format!("origin/{base_branch}..{head}");
     let commits = match git_log_identities(repo, &[&range]) {
         Ok(c) => c,
@@ -796,18 +828,19 @@ pub(crate) fn squash_coauthor_body_override(
             git_log_identities(repo, &[&format!("{base_branch}..{head}")]).with_context(|| {
                 format!(
                     "identity gate: could not inspect commits {base_branch}..{head} to \
-                     sanitize the squash body — fetch the base branch and retry"
+                     build the squash body — fetch the base branch and retry"
                 )
             })?
         }
     };
-    let violations = commit_identity_violations(&commits, allowlist);
-    if violations.is_empty() {
-        return Ok(None);
-    }
+    Ok(commits)
+}
+
+// trace:TASK-1330 | ai:claude
+fn squash_bullet_body(commits: &[CommitIdentity], transform: impl Fn(&str) -> String) -> String {
     let mut entries = Vec::new();
     for c in commits.iter().rev() {
-        let sanitized = strip_disallowed_coauthor_lines(c.message.trim_end(), allowlist);
+        let sanitized = transform(c.message.trim_end());
         let mut lines = sanitized.lines();
         let subject = lines.next().unwrap_or("").trim();
         if subject.is_empty() {
@@ -822,7 +855,7 @@ pub(crate) fn squash_coauthor_body_override(
             entries.push(format!("* {subject}\n\n{rest}"));
         }
     }
-    Ok(Some((entries.join("\n\n"), violations)))
+    entries.join("\n\n")
 }
 
 // ---------------------------------------------------------------------------

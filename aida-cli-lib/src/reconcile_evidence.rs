@@ -39,6 +39,10 @@ pub(crate) enum EvidenceUnavailable {
     BadRow,
     /// A diagnostic row lacked the string `title` and `body` it was asked for.
     BadDiagnosticRow,
+    /// The search filled its whole page without a match, so a PR naming the
+    /// spec may sit past the page.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    PageFull(usize),
 }
 
 impl std::fmt::Display for EvidenceUnavailable {
@@ -71,6 +75,10 @@ impl std::fmt::Display for EvidenceUnavailable {
             Self::BadDiagnosticRow => write!(
                 f,
                 "`gh pr list` returned a row without string `title` and `body` fields"
+            ),
+            Self::PageFull(limit) => write!(
+                f,
+                "`gh pr list` returned a full page of {limit} hits without a match"
             ),
         }
     }
@@ -182,7 +190,7 @@ fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChang
             "--search",
             spec_id,
             "--limit",
-            "30",
+            OPEN_CHANGE_SEARCH_LIMIT.to_string().as_str(),
             "--json",
             // BUG-2163: `state` is read live, unlike the `--state open`
             // filter, which goes through GitHub's lagging search index.
@@ -200,7 +208,31 @@ fn query_open_change(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChang
     if !out.status.success() {
         return OpenChangeCheck::Unavailable(exit_failure(&out));
     }
-    parse_open_change_rows(&out.stdout, spec_id)
+    parse_open_change_page(&out.stdout, spec_id, OPEN_CHANGE_SEARCH_LIMIT)
+}
+
+/// Hits fetched per open-change search. The search is token-fuzzy, so a busy
+/// spec id can fill a small page with comment-only matches.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+const OPEN_CHANGE_SEARCH_LIMIT: usize = 100;
+
+/// [`parse_open_change_rows`] for one page of `limit` hits: a full page with
+/// no match is unknown, never Clear, since the naming PR may be past it.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+pub(crate) fn parse_open_change_page(
+    stdout: &[u8],
+    spec_id: &str,
+    limit: usize,
+) -> OpenChangeCheck {
+    let check = parse_open_change_rows(stdout, spec_id);
+    let full = serde_json::from_slice::<serde_json::Value>(stdout)
+        .ok()
+        .and_then(|v| v.as_array().map(Vec::len))
+        .is_some_and(|rows| rows >= limit);
+    if check == OpenChangeCheck::Clear && full {
+        return OpenChangeCheck::Unavailable(EvidenceUnavailable::PageFull(limit));
+    }
+    check
 }
 
 fn exit_failure(out: &std::process::Output) -> EvidenceUnavailable {
@@ -289,19 +321,23 @@ fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
     credited.iter().any(|id| id.eq_ignore_ascii_case(spec_id))
 }
 
-/// BUG-2134: is `branch` named for `spec_id`? A path segment of the branch
-/// must equal the id or start with it followed by `-` (`bug-1994-work`), so
-/// `bug-19945` does not match `BUG-1994`.
+/// BUG-2134: is `branch` named for `spec_id`? The id must start the branch or
+/// follow a `/`, `-` or `_` (`bug-1994-work`, `fix-bug-1994`), and end it or be
+/// followed by one of those, so `bug-19945` and `debug-1994` do not match
+/// `BUG-1994`.
 // trace:BUG-2134 | ai:claude
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
 fn branch_names_spec(branch: &str, spec_id: &str) -> bool {
     let id = spec_id.to_ascii_lowercase();
     if id.is_empty() {
         return false;
     }
-    branch.to_ascii_lowercase().split('/').any(|segment| {
-        segment
-            .strip_prefix(id.as_str())
-            .is_some_and(|rest| rest.is_empty() || rest.starts_with('-'))
+    let branch = branch.to_ascii_lowercase();
+    let is_sep = |c: char| matches!(c, '/' | '-' | '_');
+    branch.match_indices(id.as_str()).any(|(at, _)| {
+        let before_ok = branch[..at].chars().next_back().is_none_or(is_sep);
+        let after_ok = branch[at + id.len()..].chars().next().is_none_or(is_sep);
+        before_ok && after_ok
     })
 }
 
@@ -751,6 +787,41 @@ mod tests {
         assert_eq!(
             check(br#"[{"number":7,"title":"x","body":""}]"#),
             OpenChangeCheck::Clear
+        );
+        // TASK-1765: the id need not start a path segment.
+        // trace:TASK-1951 trace:TASK-1765 | ai:claude
+        assert_eq!(
+            check(br#"[{"number":8,"title":"x","body":"","headRefName":"fix-bug-1994"}]"#),
+            OpenChangeCheck::Open(8)
+        );
+        assert_eq!(
+            check(br#"[{"number":8,"title":"x","body":"","headRefName":"claude/fix_bug-1994_retry"}]"#),
+            OpenChangeCheck::Open(8)
+        );
+        assert_eq!(
+            check(br#"[{"number":8,"title":"x","body":"","headRefName":"debug-1994"}]"#),
+            OpenChangeCheck::Clear
+        );
+    }
+
+    /// TASK-1765: a full page of fuzzy hits with no match is unknown, not
+    /// Clear; a short page, or a match on a full page, keeps its answer.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    #[test]
+    fn open_change_full_page_without_a_match_is_unavailable() {
+        let miss = br#"[{"number":1,"title":"x","body":""},{"number":2,"title":"y","body":""}]"#;
+        assert_eq!(
+            parse_open_change_page(miss, "BUG-1994", 2),
+            OpenChangeCheck::Unavailable(EvidenceUnavailable::PageFull(2))
+        );
+        assert_eq!(
+            parse_open_change_page(miss, "BUG-1994", 3),
+            OpenChangeCheck::Clear
+        );
+        let hit = br#"[{"number":1,"title":"x (BUG-1994)","body":""},{"number":2,"title":"y","body":""}]"#;
+        assert_eq!(
+            parse_open_change_page(hit, "BUG-1994", 2),
+            OpenChangeCheck::Open(1)
         );
     }
 
