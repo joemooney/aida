@@ -1,0 +1,27 @@
+id: 01a15cee-90fe-7791-90ad-b4bb7f2b3cfc
+spec_id: TASK-2042
+agreed_id: TASK-2042
+title: 'TASK-1800 semantic audit: trace_lines text is trimmed but documented as exact'
+description: |
+  In docs/testing/task-1800-semantic-audit.json, every blockers[].occurrences[].trace_lines[].text has its leading whitespace stripped (e.g. PR2647 BUG-1978 lib_part5.rs:3036 stores '// trace:BUG-1978 | ai:claude', but the blob line is indented). docs/testing/task-1800-semantic-audit.md:297 calls these "exact trace lines". Line numbers and content otherwise match all 1607 lines. Either store the raw lines or document the normalization.
+
+  Raised in review of PR-2721: https://github.com/joemooney/aida/pull/2721#issuecomment-6308797693
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T05:28:20.990312013Z
+modified_at: 2026-10-21T05:28:20.990312013Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2721
+- severity:cosmetic
+filed_at:
+  code_sha: 2481458f0b2a0bc0c4d5d69051529afc2c4f3590
+  branch: pr-2721
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: d29b69c35c
+  vendor: claude
+  session: 01a15cea94c2
