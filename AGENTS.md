@@ -1,3 +1,15 @@
+Every production verdict reader (record, archive, ship and merge gates,
+orchestrator phase handshake, drain, status) pins the non-symlink
+review-verdicts directory and archive subdirectories, then validates and reads
+bounded, singly linked regular files by handle. The record and archive
+writers read the existing file that way first and fail closed when it is
+refused, but they still write by path (`create_dir_all`, rename), so they do
+not themselves refuse links. Reviewer coexistence checks
+the anchor against current change credit; direct reviewer starts keep ordinary
+source-lease conflict handling.
+<!-- trace:TASK-1801 | ai:codex -->
+<!-- trace:TASK-1801 | ai:claude -->
+
 Store config, compaction history rewrites and doctor heals use the existing
 store writer lock. GC runs outside that lock using Git’s own maintenance locks. Legacy ID retirement reloads
 through `update_atomically`, and doc/finding filing uses its atomic persistence

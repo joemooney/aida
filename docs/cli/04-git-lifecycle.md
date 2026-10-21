@@ -96,9 +96,17 @@ declaration at all, the branch-name fallback is skipped when the spec carries
 `closure:pending` or still has open slice children (a Done child counts as
 finished). An explicit title trailer is always honoured. Before merging, ship
 prints the trailer it derived and its source — `from the PR title`, `from the
-branch name`, or `none` with the reason it was withheld; `--dry-run` prints
-the same line.
+branch name`, or `none` with the reason it was withheld — and names the ids
+the merge will complete; `--dry-run` prints the same line.
 <!-- trace:BUG-1919 | ai:claude -->
+
+A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
+appends no completion trailer to it, not even from the branch name, and the
+merge completes nothing. Merge-time completion reads intent from the line
+carrying the trailer: an id the subject names in a `(Refs …)` group is not
+completed even when a bare `(SPEC-ID)` group follows it, while a squash-body
+bullet such as `* slice (Refs SPEC-ID)` never suppresses the subject's trailer.
+<!-- trace:BUG-2203 | ai:claude -->
 
 **Drive-owned PRs.** A live drive's PR remains protected by its independent
 reviewer. A direct human terminal invocation reports the owning wave/PID

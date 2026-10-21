@@ -3079,7 +3079,8 @@ pub(crate) fn corpus_gate_bodies(
                 continue;
             }
             seen.push(canon);
-            match std::fs::read_to_string(&path) {
+            // trace:TASK-1801 | ai:claude
+            match crate::review_verdict::read_verdict_body(&path) {
                 Ok(body) => out.push((key.clone(), body)),
                 Err(e) => {
                     return Err(format!(
@@ -4358,6 +4359,73 @@ mod tests {
         assert!(matches!(release(Some(HEAD)), RefusalRelease::Held(_)));
         // Deciding the condition never touches the marker.
         assert_eq!(std::fs::read(hold_path(root, 2049)).unwrap(), before);
+    }
+
+    // TASK-1801: a current verdict file the anchored reader refuses (here an
+    // extra hard link) is not evidence, and the per-sha archive must not
+    // answer in its place, neither in `read_verdict_for_sha` nor in the
+    // refusal release that `aida pr ship` and `merge-hold list` consult.
+    // trace:TASK-1801 | ai:claude
+    #[test]
+    fn a_refused_current_verdict_does_not_fall_back_to_its_archive() {
+        use crate::review_verdict::{
+            archived_verdict_file_for_sha, read_recorded_verdict, read_verdict_for_sha,
+            record_verdict, verdict_file_for_sha, verdict_path,
+        };
+        const HEAD: &str = "cd21a1dc0a9e1111111111111111111111111111";
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let mut hold = typed_hold(
+            2712,
+            HoldReasonKind::Rework,
+            "CHANGES REQUESTED for TASK-1801",
+            None,
+        );
+        hold.verdict_ref = Some(VerdictRef::new(
+            "task-1801",
+            Some(2712),
+            None,
+            Some("claude-reviewer-1".into()),
+        ));
+        record_verdict(
+            root,
+            "TASK-1801",
+            Some("approved"),
+            Some(HEAD),
+            None,
+            None,
+            &[],
+            "claude-reviewer-1",
+        )
+        .unwrap();
+        let current = verdict_path(root, "TASK-1801");
+        assert!(
+            archived_verdict_file_for_sha(&current, HEAD).is_some(),
+            "the fixture needs an archive that could answer for the head"
+        );
+        let release = || {
+            refusal_release(
+                &hold,
+                Some(HEAD),
+                |k| read_recorded_verdict(root, k),
+                |k, sha| read_verdict_for_sha(root, k, sha),
+            )
+        };
+        assert!(matches!(release(), RefusalRelease::Released(_)));
+        assert!(matches!(
+            crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD)),
+            RefusalRelease::Released(_)
+        ));
+
+        // Link only the current file: the archive stays singly linked.
+        std::fs::hard_link(&current, root.join("current-link")).unwrap();
+        assert!(verdict_file_for_sha(root, "TASK-1801", HEAD).is_none());
+        assert!(read_verdict_for_sha(root, "TASK-1801", HEAD).is_none());
+        assert!(matches!(release(), RefusalRelease::Held(_)));
+        assert!(matches!(
+            crate::pr_cmd::ship_refusal_release(&[root], &hold, Some(HEAD)),
+            RefusalRelease::Held(_)
+        ));
     }
 
     // BUG-1532 criterion 11: a refusal whose verdict has NO sha is released

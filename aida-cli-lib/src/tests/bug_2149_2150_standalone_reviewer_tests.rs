@@ -667,7 +667,7 @@ fn reviewer_coexistence_requires_explicit_role_and_backing_spec() {
 // trace:TASK-1786 | ai:codex
 #[test]
 fn queue_work_coexistence_input_preserves_explicit_intent() {
-    use crate::queue_cmd::QueueWorkRoleInput;
+    use crate::queue_cmd::{rework_role_input, QueueWorkRoleInput};
 
     let mut spec = aida_core::Requirement::new("Fix the widget".into(), String::new());
     spec.spec_id = Some("STORY-77".into());
@@ -688,17 +688,17 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
         ),
         (
             "rework inherited reviewer route, no --for",
-            QueueWorkRoleInput::rework(None, Some("reviewer")),
+            rework_role_input(None, Some("reviewer")),
             LeaseConflictDecision::Refuse,
         ),
         (
             "rework explicit --for reviewer",
-            QueueWorkRoleInput::rework(Some("reviewer"), Some("reviewer")),
+            rework_role_input(Some("reviewer"), Some("reviewer")),
             LeaseConflictDecision::Coexist,
         ),
         (
             "rework explicit --for any",
-            QueueWorkRoleInput::rework(Some("any"), None),
+            rework_role_input(Some("any"), None),
             LeaseConflictDecision::Refuse,
         ),
     ] {
@@ -904,4 +904,157 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
     )
     .unwrap();
     assert!(status.success(), "the resumed reviewer saw no identity");
+}
+
+/// The behavioral input test above must cover the adapter actually used by
+/// rework's --work chain. Pin that dispatch seam too: replacing it with direct
+/// would otherwise leave the adapter's unit tests green.
+// trace:TASK-1801 | ai:codex
+#[test]
+fn rework_work_dispatch_uses_intent_preserving_adapter() {
+    let source = include_str!("../queue_cmd.rs");
+    let handler = source
+        .split("pub(crate) fn handle_queue_rework(")
+        .nth(1)
+        .unwrap();
+    let body = handler.split("/// Keep route inheritance").next().unwrap();
+    assert!(body.contains("rework_role_input(for_role, for_role_resolved.as_deref())"));
+    assert!(!body.contains("QueueWorkRoleInput::direct("));
+}
+
+// trace:TASK-1801 | ai:codex
+#[test]
+fn task1801_review_anchor_must_be_credited_by_change() {
+    use crate::session_start::review_anchor_matches_change;
+    let mut backing = aida_core::Requirement::new("backing".into(), String::new());
+    backing.spec_id = Some("STORY-77".into());
+    backing.agreed_id = Some("STORY-1-77".into());
+    let mut other = aida_core::Requirement::new("unrelated".into(), String::new());
+    other.spec_id = Some("TASK-88".into());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![backing, other],
+        ..Default::default()
+    };
+    for anchor in ["STORY-77", "STORY-1-77"] {
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix (STORY-77)",
+            "widget"
+        ));
+        assert!(review_anchor_matches_change(
+            &store,
+            anchor,
+            "Fix",
+            "codex/story-77"
+        ));
+    }
+    assert!(!review_anchor_matches_change(
+        &store,
+        "TASK-88",
+        "Fix (STORY-77)",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Mentions STORY-77 but fixes other (TASK-88)",
+        "story-77"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-77",
+        "Unidentified",
+        "widget"
+    ));
+    assert!(!review_anchor_matches_change(
+        &store,
+        "STORY-99",
+        "Fix (STORY-99)",
+        "widget"
+    ));
+}
+
+/// The live coexistence branch: unavailable or uncrediting change metadata
+/// refuses a headless reviewer beside a live implementer lease, and the forge
+/// is only asked once every other coexistence condition already holds.
+// trace:TASK-1801 | ai:claude
+#[test]
+fn task1801_pickup_decision_refuses_without_credited_metadata() {
+    use crate::session_start::review_pickup_conflict_decision;
+    let mut backing = aida_core::Requirement::new("backing".into(), String::new());
+    backing.spec_id = Some("STORY-77".into());
+    let mut other = aida_core::Requirement::new("unrelated".into(), String::new());
+    other.spec_id = Some("TASK-88".into());
+    let store = aida_core::RequirementsStore {
+        requirements: vec![backing, other],
+        ..Default::default()
+    };
+    let pickup = Some(("reviewer", "STORY-77"));
+    let decide = |title: anyhow::Result<String>| {
+        review_pickup_conflict_decision(
+            true,
+            true,
+            Some("implementer"),
+            pickup,
+            Some(&store),
+            "widget",
+            || title,
+        )
+    };
+    assert_eq!(
+        decide(Ok("Fix (STORY-77)".into())),
+        LeaseConflictDecision::Coexist
+    );
+    assert_eq!(
+        decide(Err(anyhow::anyhow!("forge unreachable"))),
+        LeaseConflictDecision::Refuse,
+        "unavailable metadata"
+    );
+    assert_eq!(
+        decide(Ok("Fix (TASK-88)".into())),
+        LeaseConflictDecision::Refuse,
+        "metadata credits another spec"
+    );
+    // The already-resolved source branch can credit the anchor on its own.
+    assert_eq!(
+        review_pickup_conflict_decision(
+            true,
+            true,
+            Some("implementer"),
+            pickup,
+            Some(&store),
+            "codex/story-77",
+            || Ok("Untitled".into()),
+        ),
+        LeaseConflictDecision::Coexist
+    );
+
+    // Lazy: no forge read when coexistence is already impossible.
+    let unreachable = || -> anyhow::Result<String> { panic!("forge must not be queried") };
+    for (live, holder, pickup, store) in [
+        (false, Some("implementer"), pickup, Some(&store)),
+        (true, Some("reviewer"), pickup, Some(&store)),
+        (
+            true,
+            Some("implementer"),
+            Some(("implementer", "STORY-77")),
+            Some(&store),
+        ),
+        (true, Some("implementer"), None, Some(&store)),
+        (true, Some("implementer"), pickup, None),
+    ] {
+        assert_ne!(
+            review_pickup_conflict_decision(
+                true,
+                live,
+                holder,
+                pickup,
+                store,
+                "widget",
+                unreachable
+            ),
+            LeaseConflictDecision::Coexist
+        );
+    }
 }
