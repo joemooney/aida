@@ -1,5 +1,6 @@
 id: 01a15f80-a66b-72f0-80ad-cbf9cbe7ef6b
 spec_id: TASK-1-413
+agreed_id: TASK-1682
 title: 'minor: probe refs refs/aida/review-watch/<uuid>/{base,head} leak if the watcher…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15f88-404e-77b2-ab6f-0a1ac837d9e3
   author: joe
   timestamp: 2026-10-21T17:35:27.310260895Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-0480-78a0-a192-bda98e9b9808
+  author: joe
+  timestamp: 2026-10-21T17:39:34.144796726Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

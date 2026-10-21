@@ -1,5 +1,6 @@
 id: 01a15f80-990b-7a22-8a03-123a93994d5d
 spec_id: TASK-1-412
+agreed_id: TASK-1681
 title: 'minor: Phase::Exited is permanent per head (review_watch.rs:863-866); a transie…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15f88-1b5e-7673-9e36-5e7db408c5f0
   author: joe
   timestamp: 2026-10-21T17:35:17.854821166Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-045e-7e92-b959-e8a958cf0017
+  author: joe
+  timestamp: 2026-10-21T17:39:34.110587057Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

@@ -1,5 +1,6 @@
 id: 01a15f80-8c86-72d0-8902-9eb153bb53a9
 spec_id: TASK-1-411
+agreed_id: TASK-1680
 title: 'minor/efficiency: watch_change runs repo.probe (git fetch of base+head refs plu…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1993, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15f87-313c-73f2-8d48-014fa2e10127
   author: joe
   timestamp: 2026-10-21T17:34:17.916581599Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f8c-045a-75a2-8d35-8d970bef951a
+  author: joe
+  timestamp: 2026-10-21T17:39:34.106673304Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
