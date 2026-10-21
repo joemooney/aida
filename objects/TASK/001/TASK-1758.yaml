@@ -8,8 +8,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T23:34:11.997358746Z
-modified_at: 2026-10-14T23:34:11.997358746Z
+modified_at: 2026-10-21T04:32:35.864913185Z
 req_type: Task
+tags:
+- operator-held
+history:
+- id: 01a15cbb-880f-7083-919f-4db761108ff0
+  author: joe
+  timestamp: 2026-10-21T04:32:36.367399523Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:35.864913185Z
+deferred_until: Needs an authority decision; grant half depends on BUG-1934 binding. Revisit once BUG-1934 lands.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: b6ba49699119e94ef5204b90c4bcc9c23f055d83
   branch: main
