@@ -13615,13 +13615,24 @@ pub(crate) fn standalone_reviewer_outcome(
     let Some(why) = rejection else {
         return Ok(());
     };
+    // A run with dozens of denials must not produce a screen-long error
+    // line: name the first few and count the rest. trace:TASK-1955 | ai:claude (TASK-1674)
+    const SHOWN_DENIALS: usize = 5;
     let denied = if denials.is_empty() {
         String::new()
     } else {
+        let mut listed = denials
+            .iter()
+            .take(SHOWN_DENIALS)
+            .map(String::as_str)
+            .collect::<Vec<_>>()
+            .join("; ");
+        if denials.len() > SHOWN_DENIALS {
+            listed.push_str(&format!("; …{} more", denials.len() - SHOWN_DENIALS));
+        }
         format!(
-            " The permission layer denied {} of the reviewer's tool call(s): {}.",
+            " The permission layer denied {} of the reviewer's tool call(s): {listed}.",
             denials.len(),
-            denials.join("; ")
         )
     };
     Err(anyhow::Error::new(NoReviewVerdict {
