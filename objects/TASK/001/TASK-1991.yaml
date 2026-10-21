@@ -6,17 +6,26 @@ description: |
   TASK-1968's corpus-gate carry-over is tested only at merge_hold::enforce_corpus_gate_before_merge (task_1960_carryover_tests.rs corpus_gate_*). The advisor asked for "approve, update-branch, then ship passes both gates". Nothing runs the approval-head gate (merge_path_approval_gate / ship_preflight_gates) and the corpus gate together on one carried-over head, for example through PureGitForge::merge_change with a bare origin. Also untested: corpus_carry_over (merge_hold.rs ~3007) refusing when an approving verdict has no reviewed_sha, or when a live body is unparseable next to an approval.
 
   Raised in review of PR-2768: https://github.com/joemooney/aida/pull/2768
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T06:39:30.632223802Z
-modified_at: 2026-10-20T06:39:30.632223802Z
+modified_at: 2026-10-21T04:29:56.012852541Z
 req_type: Task
 tags:
 - from-review:PR-2768
 - severity:minor
 - test
+history:
+- id: 01a15cb9-15ac-7542-8df5-43f4f075ebaf
+  author: joe
+  timestamp: 2026-10-21T04:29:56.012849476Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 9a0efe103da498a1fb7a1dbbd77ae0647fa853e4
   branch: pr-2768
