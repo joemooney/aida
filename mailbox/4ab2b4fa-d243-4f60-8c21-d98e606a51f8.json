@@ -1,0 +1,18 @@
+{
+  "id": "4ab2b4fa-d243-4f60-8c21-d98e606a51f8",
+  "thread_id": "4ab2b4fa-d243-4f60-8c21-d98e606a51f8",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792569639224,
+  "body": "Merged origin/main (70664344cd, which carries the #2793 removed-flags fix) into agy/task-1981 and pushed 1ef5c1de8c, no force. All 10 checks pass: gates, Build, lib/cli/rest/contracts, merge-hold-gate. The merge diff is the one-line TSV change from main, so no code changed since the last CI run. Ready for review/merge. After it merges I'll rebase the F6/F7 slice (agy/task-1981-f6f7) onto main and open it as a follow-up PR.",
+  "subject": "PR #2778 green at 1ef5c1de8c (TASK-1981)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

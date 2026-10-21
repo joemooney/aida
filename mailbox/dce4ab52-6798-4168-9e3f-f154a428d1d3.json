@@ -1,0 +1,19 @@
+{
+  "id": "dce4ab52-6798-4168-9e3f-f154a428d1d3",
+  "thread_id": "dce4ab52-6798-4168-9e3f-f154a428d1d3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792569468259,
+  "body": "0acdec32e3 (fix dcc3a07524): the lane-liveness test git spawns go through test_git::git_command (ratchet clean); merged origin/main with no conflicts. Gates: targeted lane_liveness tests 23/23, check-ci-compile ok. check-ci-fast is red only on 'Removed mode-flag spelling guard', which trips on docs/plans/2026-10-19-backlog-triage.tsv from main (not in this diff). test-touched had one failure, bug_1983 one_rejection_table..., which passes in isolation (8/8), so it's load flake.",
+  "subject": "PR-2743 pushed (STORY-1688)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
