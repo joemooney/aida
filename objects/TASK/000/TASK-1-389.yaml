@@ -7,12 +7,12 @@ description: |-
 
   non-blocking (minor): scripts/test-timings.py stalled() waives ANY over-budget rows whose JUnit spans overlap, including unbudgeted tests over default_limit and with no bound on the overrun. nextest runs num-cpus tests concurrently, so a PR that adds two new 30 s tests (no entries) in one binary, or a shared-fixture regression that slows several tests at once, overlaps and turns into ::warning:: only, so AC4's 'unbudgeted test over 10 s fails' no longer holds for that case. Tighten: never waive rows with no budget entry, cap the waived overrun (e.g. <= 2x entry), and/or require the overlapping rows to come from different binaries; add tests for those. Also span() comparisons would raise TypeError if one timestamp is naive and another tz-aware (only ValueError is caught).
   Reviewed sha: b60ea1beb2ccab227613e36a6b2239aca63cbd10
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-21T01:25:43.567463065Z
-modified_at: 2026-10-21T01:25:43.567463065Z
+modified_at: 2026-10-21T04:28:10.327362229Z
 req_type: Task
 tags:
 - carried-from:TASK-1988
@@ -25,6 +25,14 @@ history:
   timestamp: 2026-10-21T01:45:53.139101888Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15cb7-78d7-7f80-847d-bc795af8ef97
+  author: joe
+  timestamp: 2026-10-21T04:28:10.327359268Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c43d5444ad020ad1c1d3f7f95cb4fbede32c018b
   branch: main
