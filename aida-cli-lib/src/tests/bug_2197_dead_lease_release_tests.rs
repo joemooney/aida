@@ -102,26 +102,44 @@ fn same_or_unknown_identity_is_not_dead() {
 }
 
 #[test]
-fn recorded_owner_requires_every_recorded_pid_dead() {
+fn only_a_durable_owner_identity_proves_death() {
     let dead = |pid: u32, _: Option<&str>| pid != 7;
+    let id = Some("linux-starttime:1");
     assert_eq!(
         recorded_lease_owner(None, None, dead),
         RecordedLeaseOwner::Unrecorded
     );
+    // active_pid + start identity, dead: proven.
     assert_eq!(
-        recorded_lease_owner(Some((1, None)), Some((2, None)), dead),
+        recorded_lease_owner(Some((1, id)), None, dead),
         RecordedLeaseOwner::Dead
     );
     assert_eq!(
-        recorded_lease_owner(None, Some((2, None)), dead),
+        recorded_lease_owner(Some((1, id)), Some((2, id)), dead),
         RecordedLeaseOwner::Dead
     );
+    // A dead creator shell alone is NOT durable: a per-command `bash -c`
+    // exits seconds after minting a lease whose session keeps running.
     assert_eq!(
-        recorded_lease_owner(Some((1, None)), Some((7, None)), dead),
+        recorded_lease_owner(None, Some((2, id)), dead),
+        RecordedLeaseOwner::Unrecorded
+    );
+    // A dead active pid without its start identity is not durable either.
+    assert_eq!(
+        recorded_lease_owner(Some((1, None)), None, dead),
+        RecordedLeaseOwner::Unrecorded
+    );
+    // Any recorded pid still alive keeps the lease, unknown-owner or not.
+    assert_eq!(
+        recorded_lease_owner(Some((1, id)), Some((7, id)), dead),
         RecordedLeaseOwner::NotProvablyDead
     );
     assert_eq!(
-        recorded_lease_owner(Some((7, None)), None, dead),
+        recorded_lease_owner(Some((7, id)), None, dead),
+        RecordedLeaseOwner::NotProvablyDead
+    );
+    assert_eq!(
+        recorded_lease_owner(None, Some((7, None)), dead),
         RecordedLeaseOwner::NotProvablyDead
     );
 }
@@ -219,6 +237,22 @@ fn pidless_lease_is_never_attributed_to_the_inspector() {
         1
     );
     assert!(!lease_owner_unknown(&with_pid, None));
+}
+
+/// The exclusion lives inside `lease_state_for`, so every caller (`aida ps`,
+/// status, role, driver views) gets it without pre-filtering.
+#[test]
+fn lease_state_for_excludes_the_inspector_for_pidless_leases() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let now = chrono::Utc::now();
+    let fresh = serde_json::json!({ "started_at": now.to_rfc3339() });
+    let pidless = lease_json("a0000000pidl", &root, fresh);
+    let me = vec![live(std::process::id(), &root)];
+    assert_eq!(lease_state_for(&pidless, &me, now), LeaseState::Dormant);
+    // Another live claude in the tree still makes it live.
+    let other = vec![live(4_000_001, &root)];
+    assert_eq!(lease_state_for(&pidless, &other, now), LeaseState::Live);
 }
 
 #[test]
@@ -329,7 +363,7 @@ fn dead_pid_lease_on_primary_checkout_is_released_and_checkout_untouched() {
     let dead = lease_json(
         "adad1e080000",
         &root,
-        serde_json::json!({ "creator_pid": pid, "creator_pid_start_time": identity }),
+        serde_json::json!({ "active_pid": pid, "active_pid_start_time": identity }),
     );
     // A lease whose recorded pid is this very test process: alive, kept.
     let me = std::process::id();
@@ -399,7 +433,7 @@ fn lease_restamped_live_after_scan_is_kept() {
     let mut lease = lease_json(
         "adad1e080001",
         &root,
-        serde_json::json!({ "creator_pid": pid, "creator_pid_start_time": identity }),
+        serde_json::json!({ "active_pid": pid, "active_pid_start_time": identity }),
     );
     write_lease(&root, &lease);
     assert_eq!(scan_reapable(&root).releasable.len(), 1);
@@ -410,4 +444,189 @@ fn lease_restamped_live_after_scan_is_kept() {
     write_lease(&root, &lease);
     assert!(release_protected_lease(&root, "adad1e080001", true).starts_with("kept"));
     assert!(lease_path(&root, "adad1e080001").exists());
+}
+
+/// Review finding 1: `aida session start` from an agent's shell tool records
+/// `creator_pid` = a per-command `bash -c` that exits seconds later, with no
+/// `active_pid`, while the session itself is LIVE. That lease is unknown owner:
+/// never released by the default lane, even with `--yes`.
+#[cfg(unix)]
+#[test]
+fn shell_minted_lease_of_a_live_session_is_not_released() {
+    let (_tmp, root) = primary_checkout();
+    let mut shell = std::process::Command::new("bash")
+        .args(["-c", "sleep 30"])
+        .spawn()
+        .expect("spawn bash -c");
+    let shell_pid = shell.id();
+    let shell_identity = process_probe::process_start_identity(shell_pid);
+    let lease = lease_json(
+        "5e11000000aa",
+        &root,
+        serde_json::json!({
+            "creator_pid": shell_pid,
+            "creator_pid_start_time": shell_identity,
+        }),
+    );
+    write_lease(&root, &lease);
+    // The shell exits; the session it minted keeps working.
+    shell.kill().unwrap();
+    shell.wait().unwrap();
+
+    let mut report = scan_reapable(&root);
+    assert!(report.releasable.is_empty());
+    assert_eq!(report.unknown_owner.len(), 1);
+    let mut out = Vec::new();
+    release_protected_leases_with(&root, &mut report, &lane_opts(), &mut out, |_| {
+        panic!("--yes never prompts")
+    })
+    .unwrap();
+    assert!(lease_path(&root, "5e11000000aa").exists());
+    assert!(report.unknown_owner[0].outcome.is_none());
+}
+
+fn lane_opts() -> ReapOptions {
+    ReapOptions {
+        dry_run: false,
+        yes: true,
+        json: false,
+        quiet_when_empty: false,
+        release_unknown_owner: false,
+        release_protected: true,
+    }
+}
+
+/// A checkout holding one dead-owner lease and one unknown-owner lease.
+#[cfg(unix)]
+fn lane_fixture() -> (tempfile::TempDir, PathBuf) {
+    let (tmp, root) = primary_checkout();
+    let (pid, identity) = dead_pid_with_identity();
+    write_lease(
+        &root,
+        &lease_json(
+            "dead00000001",
+            &root,
+            serde_json::json!({ "active_pid": pid, "active_pid_start_time": identity }),
+        ),
+    );
+    write_lease(
+        &root,
+        &lease_json("0000a0000002", &root, serde_json::json!({})),
+    );
+    (tmp, root)
+}
+
+fn run_lane(
+    root: &Path,
+    opts: &ReapOptions,
+    confirm: impl FnOnce(usize) -> anyhow::Result<Option<bool>>,
+) -> (ReapReport, String) {
+    let mut report = scan_reapable(root);
+    let mut out = Vec::new();
+    release_protected_leases_with(root, &mut report, opts, &mut out, confirm).unwrap();
+    (report, String::from_utf8(out).unwrap())
+}
+
+#[cfg(unix)]
+#[test]
+fn lane_dry_run_releases_nothing() {
+    let (_tmp, root) = lane_fixture();
+    let opts = ReapOptions {
+        dry_run: true,
+        release_unknown_owner: true,
+        ..lane_opts()
+    };
+    let (report, out) = run_lane(&root, &opts, |_| panic!("dry run never prompts"));
+    assert!(out.contains("--dry-run: no lease was released."), "{out}");
+    assert!(lease_path(&root, "dead00000001").exists());
+    assert!(lease_path(&root, "0000a0000002").exists());
+    assert!(report.releasable.iter().all(|r| r.outcome.is_none()));
+}
+
+#[cfg(unix)]
+#[test]
+fn lane_without_yes_off_a_tty_releases_nothing() {
+    let (_tmp, root) = lane_fixture();
+    let opts = ReapOptions {
+        yes: false,
+        ..lane_opts()
+    };
+    let (_, out) = run_lane(&root, &opts, |_| Ok(None));
+    assert!(out.contains("Re-run with --yes to release them."), "{out}");
+    assert!(lease_path(&root, "dead00000001").exists());
+    // An operator who answers no also releases nothing.
+    let (_, out) = run_lane(&root, &opts, |_| Ok(Some(false)));
+    assert!(out.contains("Aborted"), "{out}");
+    assert!(lease_path(&root, "dead00000001").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn lane_releases_dead_owner_and_unknown_only_with_the_flag() {
+    let (_tmp, root) = lane_fixture();
+    let (report, _) = run_lane(&root, &lane_opts(), |_| panic!("--yes never prompts"));
+    assert!(!lease_path(&root, "dead00000001").exists());
+    assert!(lease_path(&root, "0000a0000002").exists());
+    assert!(report.unknown_owner[0].outcome.is_none());
+
+    let opts = ReapOptions {
+        release_unknown_owner: true,
+        ..lane_opts()
+    };
+    let (report, _) = run_lane(&root, &opts, |_| panic!("--yes never prompts"));
+    assert!(!lease_path(&root, "0000a0000002").exists());
+    assert!(report.unknown_owner[0]
+        .outcome
+        .as_deref()
+        .is_some_and(|o| o.starts_with("released")));
+}
+
+#[cfg(unix)]
+#[test]
+fn lane_json_carries_outcome_and_prints_no_human_lines() {
+    let (_tmp, root) = lane_fixture();
+    let opts = ReapOptions {
+        json: true,
+        ..lane_opts()
+    };
+    let (report, out) = run_lane(&root, &opts, |_| panic!("--yes never prompts"));
+    assert!(out.is_empty(), "json mode writes no human lines: {out}");
+    let json = serde_json::to_value(&report).unwrap();
+    let outcome = json["releasable"][0]["outcome"].as_str().unwrap();
+    assert!(outcome.starts_with("released"), "{outcome}");
+    assert_eq!(json["unknown_owner"][0]["verdict"], "unknown-owner");
+    assert!(json["unknown_owner"][0].get("outcome").is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn lane_quiet_pass_names_only_what_it_acts_on() {
+    let (_tmp, root) = lane_fixture();
+    let opts = ReapOptions {
+        quiet_when_empty: true,
+        ..lane_opts()
+    };
+    let (_, out) = run_lane(&root, &opts, |_| panic!("--yes never prompts"));
+    assert!(out.contains("dead0000"), "{out}");
+    assert!(
+        !out.contains("0000a000"),
+        "unknown-owner rows stay quiet: {out}"
+    );
+}
+
+/// The post-merge pass inside `aida pr ship` never runs the release lane.
+#[cfg(unix)]
+#[test]
+fn lane_is_off_for_the_pr_ship_pass() {
+    let (_tmp, root) = lane_fixture();
+    let opts = ReapOptions {
+        quiet_when_empty: true,
+        release_protected: false,
+        release_unknown_owner: true,
+        ..lane_opts()
+    };
+    let (_, out) = run_lane(&root, &opts, |_| panic!("never prompts"));
+    assert!(out.is_empty(), "{out}");
+    assert!(lease_path(&root, "dead00000001").exists());
+    assert!(lease_path(&root, "0000a0000002").exists());
 }

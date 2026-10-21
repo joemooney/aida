@@ -3949,6 +3949,8 @@ pub(crate) fn pr_ship_with_method(
             json: false,
             quiet_when_empty: true,
             release_unknown_owner: false,
+            // trace:BUG-2197 | ai:claude — never release leases unconfirmed.
+            release_protected: false,
         }) {
             eprintln!(
                 "  {} post-merge session reap failed or was partially applied: {e:#}",

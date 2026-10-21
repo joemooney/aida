@@ -244,11 +244,11 @@ pub(crate) fn classify_protected_lease(
     }
     match owner {
         RecordedLeaseOwner::Dead => ProtectedLeaseVerdict::Release(
-            "protected checkout — every recorded pid is dead; lease released, checkout untouched"
+            "protected checkout — its recorded agent process is dead; lease released, checkout untouched"
                 .to_string(),
         ),
         RecordedLeaseOwner::Unrecorded => ProtectedLeaseVerdict::UnknownOwner(
-            "unknown owner — lease records no pid (neither live nor dead); \
+            "unknown owner — lease records no durable owner pid (neither live nor dead); \
              release with --release-unknown-owner"
                 .to_string(),
         ),
@@ -1156,11 +1156,11 @@ pub(crate) fn release_protected_lease(
     match verdict {
         ProtectedLeaseVerdict::Release(_) => {
             release_lease_files(project_root, &lease.id);
-            "released — recorded pid(s) dead; checkout untouched".to_string()
+            "released — recorded agent process dead; checkout untouched".to_string()
         }
         ProtectedLeaseVerdict::UnknownOwner(_) if allow_unknown_owner => {
             release_lease_files(project_root, &lease.id);
-            "released — unknown owner (no recorded pid); checkout untouched".to_string()
+            "released — unknown owner (no durable pid); checkout untouched".to_string()
         }
         ProtectedLeaseVerdict::UnknownOwner(r) | ProtectedLeaseVerdict::Keep(r) => {
             format!("kept — {r}")
@@ -1489,9 +1489,14 @@ pub(crate) struct ReapOptions {
     /// Print nothing when there is nothing to reap (for the post-merge hook,
     /// which should stay quiet on the common no-op).
     pub quiet_when_empty: bool,
-    /// Also release protected-checkout leases that record no pid.
+    /// Also release protected-checkout leases that record no durable pid.
     // trace:BUG-2197 | ai:claude
     pub release_unknown_owner: bool,
+    /// Run the protected-checkout release lane at all. Off for the
+    /// post-merge pass inside `aida pr ship`: a lease is released only from an
+    /// operator-typed `aida session reap`.
+    // trace:BUG-2197 | ai:claude
+    pub release_protected: bool,
 }
 
 // CHAIN slice (FR-284 child, per ADR-24): after a reap actually removes a
@@ -1791,39 +1796,76 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
 /// releasable and unknown-owner leases, then (unless `--dry-run`, and behind
 /// the same `--yes` / TTY confirmation as the reap) releases the dead-owner
 /// ones, plus the unknown-owner ones when `--release-unknown-owner` is set.
+/// Never runs when `release_protected` is off (the `aida pr ship` pass).
 // trace:BUG-2197 | ai:claude
 fn release_protected_leases(
     project_root: &std::path::Path,
     report: &mut ReapReport,
     opts: &ReapOptions,
 ) -> Result<()> {
-    if report.releasable.is_empty() && report.unknown_owner.is_empty() {
+    release_protected_leases_with(
+        project_root,
+        report,
+        opts,
+        &mut std::io::stdout(),
+        |count| {
+            if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                return Ok(None);
+            }
+            use std::io::Write;
+            eprint!("\nRelease the {count} lease(s)? Only lease files are removed. [y/N] ");
+            std::io::stderr().flush()?;
+            let mut ans = String::new();
+            std::io::stdin().read_line(&mut ans)?;
+            Ok(Some(matches!(
+                ans.trim().to_ascii_lowercase().as_str(),
+                "y" | "yes"
+            )))
+        },
+    )
+}
+
+/// The release lane with its output sink and its confirmation injected.
+/// `confirm(count)` answers `None` when no one can be asked (stdin is not a
+/// TTY), else the operator's yes/no. It is consulted only without `--yes`.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn release_protected_leases_with(
+    project_root: &std::path::Path,
+    report: &mut ReapReport,
+    opts: &ReapOptions,
+    out: &mut dyn std::io::Write,
+    confirm: impl FnOnce(usize) -> Result<Option<bool>>,
+) -> Result<()> {
+    if !opts.release_protected || (report.releasable.is_empty() && report.unknown_owner.is_empty())
+    {
         return Ok(());
     }
     if !opts.json {
         for row in &report.releasable {
-            println!(
+            writeln!(
+                out,
                 "  {} {} {} — {}",
                 "release".cyan(),
                 short_id(&row.session),
                 row.scope.cyan(),
                 row.reason
-            );
+            )?;
         }
-        // The post-merge hook's quiet pass names only what it will act on.
+        // A quiet pass names only what it will act on.
         let unknown_rows: &[ReapRow] = if opts.quiet_when_empty && !opts.release_unknown_owner {
             &[]
         } else {
             &report.unknown_owner
         };
         for row in unknown_rows {
-            println!(
+            writeln!(
+                out,
                 "  {} {} {} — {}",
                 "unknown".yellow(),
                 short_id(&row.session),
                 row.scope.cyan(),
                 row.reason
-            );
+            )?;
         }
     }
     let mut targets: Vec<&mut ReapRow> = report.releasable.iter_mut().collect();
@@ -1835,39 +1877,35 @@ fn release_protected_leases(
     }
     if opts.dry_run {
         if !opts.json {
-            println!("--dry-run: no lease was released.");
+            writeln!(out, "--dry-run: no lease was released.")?;
         }
         return Ok(());
     }
     if !opts.yes {
-        if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
-            if !opts.json {
-                println!("\nRe-run with --yes to release them.");
+        match confirm(targets.len())? {
+            None => {
+                if !opts.json {
+                    writeln!(out, "\nRe-run with --yes to release them.")?;
+                }
+                return Ok(());
             }
-            return Ok(());
-        }
-        use std::io::Write;
-        eprint!(
-            "\nRelease the {} lease(s)? Only lease files are removed. [y/N] ",
-            targets.len()
-        );
-        std::io::stderr().flush()?;
-        let mut ans = String::new();
-        std::io::stdin().read_line(&mut ans)?;
-        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("Aborted — nothing released.");
-            return Ok(());
+            Some(false) => {
+                writeln!(out, "Aborted — nothing released.")?;
+                return Ok(());
+            }
+            Some(true) => {}
         }
     }
     for row in targets {
         let outcome =
             release_protected_lease(project_root, &row.session, opts.release_unknown_owner);
         if !opts.json {
-            println!(
+            writeln!(
+                out,
                 "  {} {} — {outcome}",
                 short_id(&row.session),
                 row.scope.cyan()
-            );
+            )?;
         }
         row.outcome = Some(outcome);
     }

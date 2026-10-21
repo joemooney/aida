@@ -978,18 +978,23 @@ pub fn process_provably_dead_with(
 // trace:BUG-2197 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecordedLeaseOwner {
-    /// The lease records no pid at all: unknown owner, neither live nor dead.
-    /// Never attribute it to whichever process happens to be inspecting it.
+    /// No DURABLE owner identity is recorded: no `active_pid`, or one without
+    /// its kernel start identity. Unknown owner, neither live nor dead. A
+    /// `creator_pid` alone is never durable: from an agent's shell tool it is
+    /// a per-command `bash -c` that exits seconds after minting the lease
+    /// while the session it belongs to keeps running.
     Unrecorded,
-    /// Every recorded pid is provably dead (see [`process_provably_dead`]).
+    /// The durable owner (`active_pid` + start identity) is provably dead
+    /// (see [`process_provably_dead`]) and no recorded pid is still alive.
     Dead,
-    /// At least one recorded pid is alive or cannot be proven dead.
+    /// A recorded pid is alive or cannot be proven dead.
     NotProvablyDead,
 }
 
-/// Classify a lease's recorded owner pids. BOTH `active_pid` and `creator_pid`
-/// must be provably dead when both are recorded: a release that rests on pid
-/// death alone must not leave a live recorded process holding nothing.
+/// Classify a lease's recorded owner pids. Only `active_pid` WITH its recorded
+/// start identity can prove the owner dead. Any recorded pid that is not
+/// provably dead (the durable owner, or a still-running creator shell) keeps
+/// the lease, even under an explicit unknown-owner release.
 /// `provably_dead` is injected so the matrix is testable without real
 /// processes; production callers pass [`process_provably_dead`].
 // trace:BUG-2197 | ai:claude
@@ -998,17 +1003,16 @@ pub fn recorded_lease_owner(
     creator: Option<(u32, Option<&str>)>,
     provably_dead: impl Fn(u32, Option<&str>) -> bool,
 ) -> RecordedLeaseOwner {
-    let recorded: Vec<(u32, Option<&str>)> = active.into_iter().chain(creator).collect();
-    if recorded.is_empty() {
-        return RecordedLeaseOwner::Unrecorded;
+    let any_alive = active
+        .into_iter()
+        .chain(creator)
+        .any(|(pid, start)| !provably_dead(pid, start));
+    if any_alive {
+        return RecordedLeaseOwner::NotProvablyDead;
     }
-    if recorded
-        .iter()
-        .all(|(pid, start)| provably_dead(*pid, *start))
-    {
-        RecordedLeaseOwner::Dead
-    } else {
-        RecordedLeaseOwner::NotProvablyDead
+    match active {
+        Some((_, Some(_))) => RecordedLeaseOwner::Dead,
+        _ => RecordedLeaseOwner::Unrecorded,
     }
 }
 

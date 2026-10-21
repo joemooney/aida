@@ -751,9 +751,12 @@ pub enum SessionCommand {
     ///
     /// A lease held on the main checkout (or another protected checkout) is
     /// never reaped, but it is RELEASED — the lease file only, never a file of
-    /// the checkout — when every pid it recorded is provably dead (gone, or
-    /// reused by a different process). A lease that records no pid has an
-    /// unknown owner and is released only with --release-unknown-owner.
+    /// the checkout — when the agent process it recorded (pid plus start
+    /// identity) is provably dead: gone, or its pid reused by a different
+    /// process. A lease that records only the shell that created it, or no pid
+    /// at all, has an unknown owner and is released only with
+    /// --release-unknown-owner. A recorded process that is still running
+    /// always keeps the lease.
     // trace:TASK-1177 | ai:claude
     // trace:BUG-2197 | ai:claude
     Reap {
@@ -771,8 +774,8 @@ pub enum SessionCommand {
         #[clap(long)]
         json: bool,
 
-        /// Also release main-checkout leases that record no pid (unknown
-        /// owner). Without it they are listed and kept.
+        /// Also release main-checkout leases with an unknown owner (no
+        /// recorded agent process). Without it they are listed and kept.
         #[clap(long)]
         release_unknown_owner: bool,
     },

@@ -1170,10 +1170,10 @@ pub(crate) fn lease_state_for(
         };
     }
     let worktree_exists = l.worktree_path.exists();
-    // BUG-2197: callers that may run from inside the lease's own tree pass
-    // `live_sessions` through `attributable_live_sessions` first, so a lease
-    // that records no pid is never read live on the inspector's say-so.
-    let has_live_claude = live_sessions
+    // BUG-2197: a lease that records no pid is never read live on the
+    // inspector's say-so — every caller gets the exclusion here.
+    // trace:BUG-2197 | ai:claude
+    let has_live_claude = attributable_live_sessions(l, live_sessions, inspector_pids())
         .iter()
         .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
     let age_hours = now.signed_duration_since(l.started_at).num_hours();
@@ -1219,10 +1219,16 @@ pub(crate) fn attributable_live_sessions(
 
 /// BUG-2197: the inspecting process and its ancestors.
 // trace:BUG-2197 | ai:claude
-pub(crate) fn inspector_pids() -> std::collections::HashSet<u32> {
-    process_probe::walk_ancestor_pids(std::process::id())
-        .into_iter()
-        .collect()
+/// Walked once per process: the ancestry of a running process does not change.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn inspector_pids() -> &'static std::collections::HashSet<u32> {
+    static INSPECTOR: std::sync::OnceLock<std::collections::HashSet<u32>> =
+        std::sync::OnceLock::new();
+    INSPECTOR.get_or_init(|| {
+        process_probe::walk_ancestor_pids(std::process::id())
+            .into_iter()
+            .collect()
+    })
 }
 
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
@@ -2633,12 +2639,11 @@ pub(crate) fn classify_session_leases(
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
     let live_agents = agent_registry::load_live_entries(project_root);
-    let inspector = inspector_pids();
     leases
         .iter()
         .map(|l| {
             // trace:BUG-2197 | ai:claude
-            let live = attributable_live_sessions(l, &live, &inspector);
+            let live = attributable_live_sessions(l, &live, inspector_pids());
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });

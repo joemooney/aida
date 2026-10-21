@@ -298,6 +298,7 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             quiet_when_empty: false,
             // trace:BUG-2197 | ai:claude
             release_unknown_owner: *release_unknown_owner,
+            release_protected: true,
         }),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
         // trace:TASK-1607 | ai:claude
