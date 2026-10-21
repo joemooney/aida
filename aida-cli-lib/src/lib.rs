@@ -169,6 +169,7 @@ mod freshness_gate;
 mod git_arg_guard;
 mod git_backend_cmd;
 // trace:TASK-1522 | ai:antigravity
+mod fleet_lanes;
 pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
@@ -424,6 +425,9 @@ mod memories_cmd;
 mod merge_hold;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
+mod mandate_drive;
+mod mandate_gates;
+mod mandate_ship;
 mod mandate_traces;
 mod merge_lock;
 mod metrics;

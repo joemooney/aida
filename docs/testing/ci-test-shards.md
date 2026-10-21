@@ -2,6 +2,7 @@
 
 <!-- trace:TASK-1949 | ai:codex -->
 <!-- trace:TASK-1979 | ai:claude -->
+<!-- trace:TASK-1988 | ai:claude -->
 
 The `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
 dependency cache. Gates and contracts share the base cache, which gates saves.
@@ -48,11 +49,21 @@ Gates and contracts set `AIDA_CI_PREBUILT_CLI=1`: their shell contract tests
 use the workspace binary those lanes already built instead of running
 `cargo build -p aida-cli`, whose different feature set recompiled the CLI.
 
+The test lanes run their selections under cargo-nextest
+(`scripts/ci-test-shards.py --runner nextest`, the `ci` profile in
+`.config/nextest.toml`): every test in its own process, no fail-fast, no
+retries, a `serial` test-group for tests that guard a resource outside the
+process, and a 180-second hang guard. Doctests stay on `cargo test`, which
+nextest cannot run. Before the swap, a non-gating shadow lane ran nextest
+beside cargo test; on main runs 39455014512, 39475194172 and 39476669725 each
+lane ran the same tests, by name, under both runners.
+
 Docs-only changes skip the test execution and expensive gates; the existing
 unconditional documentation guards still execute in their respective gate lanes. Every test
-lane uploads its own log and timing JSON, enforces the same per-binary budget,
-and checks untracked root entries even after a test failure. Ignored build and
-runtime files remain allowed.
+lane uploads its log, its nextest JUnit reports and its timing JSON, enforces
+the per-test budget in `scripts/test-time-budget.toml` (read from the JUnit
+reports; doctests per crate, from the log), and checks untracked root entries
+even after a test failure. Ignored build and runtime files remain allowed.
 
 Both store-attach guards compare Git's discovered top-level directory with
 `$PWD/.aida-store` before resetting the store. A plain directory inside the
@@ -61,13 +72,17 @@ checkout fails rather than inheriting the enclosing checkout's Git discovery.
 `make check-ci-fast` still reads workflow step bodies. `make check-ci-compile`
 uses the shard planner's `--compile --profile agent` mode to compile the whole
 workspace without running tests. An explicit full local check selects all lanes
-on the agent profile; it is not a pre-push requirement.
+on the agent profile, under the same runner (`make test`, or one lane with
+`make test-lane LANE=cli-0`); without cargo-nextest installed it falls back
+to `cargo test` with a note. It is not a pre-push requirement.
 
-For coverage comparisons, run `scripts/test-timings.py` separately on each test
-lane's raw log and add `passed + ignored` across their JSON rows. For an older
-unsharded main run, use `gh run view RUN --log` and pass `--step 'Run tests'`.
+For coverage comparisons, run `scripts/ci-test-shards.py --totals` on each test
+lane's raw log (the job summary prints the same line) and add
+`passed + ignored` across the lanes. It reads both runners' output, so a
+nextest lane compares with an older cargo-test lane by count. For an older
+unsharded main run, use `gh run view RUN --log`.
 Do not concatenate interleaved multi-job logs before parsing them.
 
-Baseline: main `128a5bb6eb`, run `39348896342`, 85 binaries and **11,721 passed +
-ignored** tests. PR timing and coverage evidence belongs in the PR body; the
+Baseline: main `6657ffff6d`, run `39476669725`, **11,799 passed + ignored**
+tests (lib-0 3,887, lib-1 5,404, cli-0 188, cli-1 143, rest 2,177). PR timing and coverage evidence belongs in the PR body; the
 12-minute target requires an actual completed PR run.

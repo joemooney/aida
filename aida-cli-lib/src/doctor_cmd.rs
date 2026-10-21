@@ -103,6 +103,19 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-1700: the drive-mandate check reads the AIDA home and the
+            // schedule driver only. trace:STORY-1700 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::mandate_drive::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::mandate_drive::DOCTOR_CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
@@ -726,6 +739,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::relay_stall::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:STORY-1700 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::mandate_drive::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::mandate_drive::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
@@ -1099,6 +1120,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1699 | ai:claude
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
+        // trace:STORY-1700 | ai:claude
+        crate::mandate_drive::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
