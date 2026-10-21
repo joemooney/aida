@@ -6,17 +6,26 @@ description: |-
   scripts/release.sh drops the main merge-lease before the confirm prompt and retakes it before commit (~line 642) without checking that HEAD still equals the commit the bump, cargo check, CHANGELOG and tag notes were computed on. A concurrent aida pr ship that fast-forwards the primary checkout during the prompt changes release/vX's base and leaves CHANGELOG/tag notes stale. Record HEAD before the prompt; after the retake, abort with the git restore hint if it moved.
 
   Raised in review of PR-2807: https://github.com/joemooney/aida/pull/2807#issuecomment-6325469771
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T20:10:08.487482082Z
-modified_at: 2026-10-21T20:10:08.487482082Z
+modified_at: 2026-10-21T20:16:34.862864512Z
 req_type: Task
 tags:
 - from-review:PR-2807
 - release
 - severity:minor
+history:
+- id: 01a1601b-c42e-7931-a2d8-96e8ec80755d
+  author: joe
+  timestamp: 2026-10-21T20:16:34.862858732Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
   branch: pr-2807
