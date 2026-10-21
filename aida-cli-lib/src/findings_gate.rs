@@ -2020,7 +2020,7 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     pr_hint: Option<u64>,
 ) -> anyhow::Result<usize> {
     let verdict_file = review_verdict::verdict_path(project_root, spec_id);
-    let Ok(body) = std::fs::read_to_string(&verdict_file) else {
+    let Ok(body) = review_verdict::read_verdict_body(&verdict_file) else {
         return Ok(0);
     };
     let Some(verdict) = review_verdict::parse_recorded_verdict(&body) else {

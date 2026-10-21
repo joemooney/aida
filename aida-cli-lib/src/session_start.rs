@@ -67,6 +67,65 @@ impl ReviewForge {
     }
 }
 
+/// Compare canonical requirement identity, so aliases work but an unrelated
+/// existing requirement cannot authorize coexistence on this change.
+// trace:TASK-1801 | ai:codex
+pub(crate) fn review_anchor_matches_change(
+    store: &aida_core::RequirementsStore,
+    anchor: &str,
+    title: &str,
+    branch: &str,
+) -> bool {
+    let Some(anchor) = store.get_requirement_unambiguous(anchor).ok().flatten() else {
+        return false;
+    };
+    crate::pr_ship::derive_squash_subject_spec_ids(title, branch, "")
+        .iter()
+        .any(|id| {
+            store
+                .get_requirement_unambiguous(id)
+                .ok()
+                .flatten()
+                .is_some_and(|backing| backing.id == anchor.id)
+        })
+}
+
+/// How a reviewer pickup meets the lease holding the PR's source branch. The
+/// change title (a forge round trip) is fetched only once every other
+/// coexistence condition holds; the branch is the source branch the caller
+/// already resolved. Unavailable or uncrediting metadata withholds the
+/// coexistence exception, so ordinary conflict handling applies.
+// trace:TASK-1801 | ai:claude
+pub(crate) fn review_pickup_conflict_decision(
+    headless: bool,
+    lease_live: bool,
+    holder_role: Option<&str>,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+    source_branch: &str,
+    change_title: impl FnOnce() -> anyhow::Result<String>,
+) -> LeaseConflictDecision {
+    let explicit_role = review_coexistence.map(|(role, _)| role);
+    let decide = |backing| {
+        review_source_branch_conflict_decision(
+            headless,
+            lease_live,
+            holder_role,
+            explicit_role,
+            backing,
+        )
+    };
+    let backing = review_coexistence
+        .map(|(_, id)| id)
+        .filter(|id| decide(Some(id)) == LeaseConflictDecision::Coexist)
+        .and_then(|id| {
+            let store = store?;
+            let title = change_title().ok()?;
+            review_anchor_matches_change(store, id, &title, source_branch).then_some(id)
+        });
+    decide(backing)
+}
+
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
 /// Recorded into the lease so `aida session show` can display it without
 /// re-querying the forge, and so a reviewer can recompute the diff range
@@ -1621,19 +1680,22 @@ pub(crate) fn session_start(
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude
-                let decision = review_source_branch_conflict_decision(
+                // An existing spec alone is insufficient: the PR/MR must
+                // actually credit that spec at this boundary. Unknown metadata
+                // cannot grant the coexistence exception.
+                // trace:TASK-1801 | ai:codex
+                let decision = review_pickup_conflict_decision(
                     headless,
                     is_live,
                     l.role.as_deref(),
-                    review_coexistence.map(|(explicit_role, _)| explicit_role),
-                    review_coexistence.and_then(|(_, id)| {
-                        preflight_store
-                            .as_ref()?
-                            .get_requirement_unambiguous(id)
-                            .ok()
-                            .flatten()
-                            .map(|_| id)
-                    }),
+                    review_coexistence,
+                    preflight_store.as_ref(),
+                    &source_branch,
+                    || {
+                        crate::forge::forge_for_kind(&project_root, forge.forge_kind())
+                            .change_metadata(n, &mut crate::network_retry::NoopSink)
+                            .map(|meta| meta.title)
+                    },
                 );
                 match decision {
                     LeaseConflictDecision::Coexist => {
