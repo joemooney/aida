@@ -1,3 +1,15 @@
+Agent launch setup validates delegation before allocation, honors explicit
+working directories in launch and preview paths, and retains an invocation-owned
+setup receipt until foreground spawn or successful background dispatch. Fresh
+worktrees allocate under a private name and publish with an atomic no-replace
+rename followed by Git admin repair. Rollback verifies the `.git` pointer,
+retains the original branch start SHA for compare-and-delete, and releases only
+the exact newly acquired shared claim ID under the store lock. Claims adopted
+from a prior invocation carry no rollback authority. Changed or occupied resources
+are retained with recovery instructions; failed children revoke only the grant
+issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
 CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
 run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
