@@ -29,13 +29,14 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-09-23T04:44:59.122261809Z
-modified_at: 2026-10-12T19:33:05.902128459Z
+modified_at: 2026-10-21T04:33:14.353597802Z
 req_type: ChangeRequest
 tags:
 - cross-vendor
 - heartbeat
 - incident:2026-09-22
 - intake:requester
+- operator-held
 - parked:night
 - plan:night
 - seat-discipline
@@ -141,6 +142,16 @@ comments:
   created_at: 2026-10-12T19:33:04.606731420Z
   modified_at: 2026-10-12T19:33:04.606731420Z
   session_id: 2057f093-34f4-4dd8-8426-9a0077db8580
+history:
+- id: 01a15cbc-268e-74a1-9737-f038aeb8534b
+  author: joe
+  timestamp: 2026-10-21T04:33:16.942622300Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:14.353597802Z
+deferred_until: Parked by advisor (2026-09-27); unpark needs advisor + operator rulings. Revisit after STORY-1688 lane-liveness ships, if idle seats still miss routed work.
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 decision_request:
   question: Allow idle agent seats to self-resume via held Stop hooks (CR-7)?
   choices:
