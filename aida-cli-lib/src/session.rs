@@ -3296,43 +3296,25 @@ pub(crate) fn contained_settings_json_with_boundary(
     .to_string()
 }
 
-/// BUG-2201: the read-only git subcommands a contained session may run
-/// whatever its project allows. Deliberately not `Bash(git *)`: a prefix rule
-/// cannot exclude `push +ref`, `push --mirror`, or `git -c k=v push -f`, so
-/// anything that writes a ref or a remote stays unlisted (TASK-2058).
-// trace:BUG-2201 | ai:claude
-pub(crate) const CONTAINED_READ_ONLY_GIT: &[&str] = &[
-    "status",
-    "diff",
-    "log",
-    "show",
-    "rev-parse",
-    "rev-list",
-    "merge-base",
-    "ls-files",
-    "grep",
-    "blame",
-    "cat-file",
-    "fetch",
-];
-
 /// BUG-2201: the tool rules every contained AIDA session gets whatever its
-/// project's `.claude/settings.json` says: the `aida` CLI and the
-/// [`CONTAINED_READ_ONLY_GIT`] subcommands through Bash (still confined by
-/// the OS sandbox and `destructive_command_deny_rules`), and `Read` of the
-/// session's worktree and the main checkout's store and cache. No write tool
-/// appears here; the write boundary stays
+/// project's `.claude/settings.json` says: the `aida` CLI through Bash, and
+/// `Read` of the session's worktree and the main checkout's store and cache.
+/// No write tool appears here; the write boundary stays
 /// [`crate::contained_boundary::write_allow_rules`].
+///
+/// Deliberately no git rule. Plain git reads already run under
+/// `autoAllowBashIfSandboxed`, confined by the OS sandbox. An allow rule only
+/// adds the commands that auto-allow would refuse, and a `Bash(git …)` prefix
+/// rule cannot exclude git's option-borne exec and ref writes
+/// (`grep -O<cmd>`, `fetch --upload-pack=` or a `+src:dst` refspec,
+/// `diff --output=`/`--ext-diff`, `-c core.pager=`), which the deny list
+/// cannot enumerate either (TASK-2058).
 // trace:BUG-2201 | ai:claude
 pub(crate) fn contained_baseline_allow_rules(
     write_roots: &[PathBuf],
     store_paths: &[PathBuf],
 ) -> Vec<String> {
     let mut rules: Vec<String> = vec!["Bash(aida)".to_string(), "Bash(aida *)".to_string()];
-    for sub in CONTAINED_READ_ONLY_GIT {
-        rules.push(format!("Bash(git {sub})"));
-        rules.push(format!("Bash(git {sub} *)"));
-    }
     let mut push = |rule: String| {
         if !rules.contains(&rule) {
             rules.push(rule);

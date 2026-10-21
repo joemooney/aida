@@ -78,18 +78,14 @@ fn outside_project_reviewer_gets_aida_and_git_bash_rules() {
         "the fixture project grants nothing itself"
     );
     let allow = rules(&launch_settings(&worktree, &main), "allow");
-    for rule in [
-        "Bash(aida)",
-        "Bash(aida *)",
-        "Bash(git status)",
-        "Bash(git diff *)",
-        "Bash(git log *)",
-        "Bash(git show *)",
-        "Bash(git rev-parse *)",
-        "Bash(git fetch *)",
-    ] {
+    for rule in ["Bash(aida)", "Bash(aida *)"] {
         assert!(allow.contains(&rule.to_string()), "{rule}: {allow:?}");
     }
+    // TASK-2058: no git rule at all; plain reads run under sandbox auto-allow.
+    assert!(
+        !allow.iter().any(|r| r.starts_with("Bash(git")),
+        "{allow:?}"
+    );
 }
 
 #[test]
@@ -167,8 +163,12 @@ fn bash_rule_matches(rule: &str, command: &str) -> bool {
 }
 
 // TASK-2058: no baseline rule allows a git command that writes a ref or a
-// remote, in any spelling: a refspec force, the lease/includes forces, global
-// options before the subcommand, mirror and delete pushes, or a bare prefix.
+// remote or runs another program, in any spelling: a refspec force, the
+// lease/includes forces, global options before the subcommand, mirror and
+// delete pushes, a bare prefix, or the exec/write options of read-only
+// subcommands (`grep -O`, `fetch --upload-pack`, `diff --output`, `-c k=v`).
+// The baseline carries no git rule at all, so every git form here, read-only
+// ones included, is left to the sandbox's own auto-allow.
 #[test]
 fn baseline_allows_no_ref_or_remote_writing_git() {
     let (_tmp, main, worktree) = outside_project_fixture();
@@ -194,6 +194,26 @@ fn baseline_allows_no_ref_or_remote_writing_git() {
         "git remote set-url origin x",
         "git config core.hooksPath /x",
         "git worktree remove --force /x",
+        // Option-borne exec and writes in otherwise read-only subcommands.
+        "git grep -Ogit foo",
+        "git grep -O\"git push --force origin main\" foo",
+        "git grep --open-files-in-pager=sh foo",
+        "git fetch . +abc123:refs/heads/main",
+        "git fetch origin +refs/heads/*:refs/heads/*",
+        "git fetch --upload-pack=sh origin",
+        "git fetch --prune origin",
+        "git fetch origin",
+        "git diff --output=/x/evil HEAD",
+        "git diff HEAD --output=/x/evil",
+        "git diff --ext-diff HEAD",
+        "git log --output=/x/evil",
+        "git show --textconv HEAD:file",
+        "git -c diff.external=sh diff",
+        "git -c core.pager=sh log",
+        "git -c core.sshCommand=sh fetch origin",
+        "git -c core.fsmonitor=sh status",
+        "git status",
+        "git diff main...HEAD",
     ] {
         let hits: Vec<&String> = allow
             .iter()
@@ -201,8 +221,14 @@ fn baseline_allows_no_ref_or_remote_writing_git() {
             .collect();
         assert!(hits.is_empty(), "`{command}` is allowed by {hits:?}");
     }
-    // Mutation control: the matcher does match what the baseline grants.
-    for command in ["git diff main...HEAD", "git status", "aida review record X"] {
+    // Mutation control: the matcher does match what the baseline grants, and
+    // would catch a broad git rule.
+    assert!(bash_rule_matches("Bash(git *)", "git grep -Ogit foo"));
+    assert!(bash_rule_matches(
+        "Bash(git fetch *)",
+        "git fetch --prune origin"
+    ));
+    for command in ["aida review record X", "aida show TASK-1"] {
         assert!(
             allow.iter().any(|rule| bash_rule_matches(rule, command)),
             "`{command}` must be allowed: {allow:?}"
