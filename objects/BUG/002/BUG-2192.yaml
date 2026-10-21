@@ -14,12 +14,12 @@ description: |
   ## Acceptance
   - Bisect 95f15a20d4..main on piped `aida show <ID>`, timed interleaved under equal load, and name the commit or commits that doubled the cost.
   - Fix the commit(s) found, or show piped show within its 1000 ms budget at load < 8, with the measurements posted.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T09:38:39.133926548Z
-modified_at: 2026-10-21T05:12:47.329539321Z
+modified_at: 2026-10-21T05:12:52.505279505Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -183,6 +183,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: InProgress
+- id: 01a15ce0-6619-71b0-8837-03a803328e3c
+  author: joe
+  timestamp: 2026-10-21T05:12:52.505274290Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: 28cefc9db50094124223e7cf6c216cd64b67ab05
   branch: claude/bug-1993
@@ -191,3 +199,6 @@ filed_at:
   aida_build_sha: 419579e7c4
   vendor: claude
   session: bdc37ec9-42ce-4216-93b7-c928e1221a32
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T05:12:52.505255124Z
