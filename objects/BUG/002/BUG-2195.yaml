@@ -8,8 +8,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T19:49:43.999048649Z
-modified_at: 2026-10-20T19:49:43.999048649Z
+modified_at: 2026-10-21T05:48:34.439533918Z
 req_type: Bug
+relationships:
+- rel_type: Supersedes
+  target_id: 01a15acc-acef-79a0-b712-e6355d6c5359
+  created_at: 2026-10-21T05:48:34.439522551Z
+  created_by: joe
+history:
+- id: 01a15d01-1cbe-7c50-89b0-dd2a13ce1a72
+  author: joe
+  timestamp: 2026-10-21T05:48:36.414715526Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 6657ffff6d1cd57668bb53cc262b05c3f994cfc8
   branch: main
