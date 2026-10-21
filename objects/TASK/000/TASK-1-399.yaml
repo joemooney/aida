@@ -1,0 +1,27 @@
+id: 01a15e43-c9f8-70e2-906a-ff055f539e6f
+spec_id: TASK-1-399
+title: '[minor][non-blocking] review_verdict.rs close_verdict_on_merge (~L2393-2402) wr…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on TASK-1801, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  [minor][non-blocking] review_verdict.rs close_verdict_on_merge (~L2393-2402) writes the closed current file, then archive_round_by_sha refuses a refused archive entry with '?'. The current file is left closed and the archive still open; a re-run sees already_closed and never closes the archive. Fail-closed (refusal stays visible), but OVERVIEW.md's 'a refused file fails the record (or a merge close) before anything is written' is false for merge close. Call prepare_archive_round before write_verdict_atomic, as write_verdict_object does.
+  Reviewed sha: d5cdd8a5763bcafc8077d26430286e1683e3c948
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-21T11:41:03.352940766Z
+modified_at: 2026-10-21T11:41:03.352940766Z
+req_type: Task
+tags:
+- carried-from:TASK-1801
+- finding-hash:ff97dc3c
+- from-review:TASK-1801
+- kind:carried-forward
+filed_at:
+  code_sha: ed4168add1853ab65f9573e89f3f19a03aef6eb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
