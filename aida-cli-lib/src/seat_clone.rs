@@ -562,6 +562,107 @@ fn verified_main(clone_root: &Path) -> Option<PathBuf> {
     leased.then_some(main)
 }
 
+/// A seat clone the HOST recorded, as the S2 sandbox boundary sees it.
+// trace:BUG-2169 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HostRecordedClone {
+    /// The clone root, canonical.
+    pub(crate) root: PathBuf,
+    /// The main checkout whose `.aida/sessions` holds the clone's lease.
+    pub(crate) main: PathBuf,
+    /// The seat's own cargo target directory, `<main>/target/worktrees/<dir>`,
+    /// from the lease; `None` when main has no `target/`.
+    pub(crate) cargo_target_dir: Option<PathBuf>,
+}
+
+/// `root` as a seat clone the host itself created, or `None`. This is the
+/// only thing that lets a contained boundary treat a write root's own `.git`
+/// as the seat's (BUG-2012 otherwise denies a real `.git` under a write root
+/// as a main checkout's).
+///
+/// The trust comes from the `clone` lease in `<main>/.aida/sessions`, which
+/// the host writes and which sits outside every root a contained seat may
+/// write. The main itself must be one THIS host process resolved
+/// ([`aida_core::seat_clone_detect::is_host_main`]): [`main_for`] reads main
+/// from the seat-writable marker, so without that anchor a seat could point
+/// its marker at a forged "main" in a directory it can write and plant a
+/// lease there. On top of that, `root` must be the clone root itself (not a
+/// directory inside one), be named `aida-seat-*`, and neither contain the
+/// main checkout nor sit inside it. The cargo target directory is accepted
+/// only at exactly `<main>/target/worktrees/<clone dir>`, as a real
+/// directory, never a symlink.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn host_recorded_clone(root: &Path) -> Option<HostRecordedClone> {
+    let root = root.canonicalize().ok()?;
+    if seat_clone_root(&root).as_deref() != Some(root.as_path()) {
+        return None;
+    }
+    let named = root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with(CLONE_DIR_PREFIX));
+    if !named {
+        return None;
+    }
+    let MainFor::Verified(main) = main_for(&root) else {
+        return None;
+    };
+    if !aida_core::seat_clone_detect::is_host_main(&main) {
+        return None;
+    }
+    if main.starts_with(&root) || root.starts_with(&main) {
+        return None;
+    }
+    let lease = crate::list_leases(&main).into_iter().find(|lease| {
+        lease.tree_kind == TreeKind::Clone
+            && lease.worktree_path.canonicalize().is_ok_and(|p| p == root)
+    })?;
+    // The target directory is the seat's alone, at the one place the host
+    // puts it, and a real directory (a symlink there would grant its target).
+    let expected = main
+        .join("target")
+        .join("worktrees")
+        .join(root.file_name()?);
+    let cargo_target_dir = lease.cargo_target_dir.filter(|dir| {
+        *dir == expected && std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_dir())
+    });
+    Some(HostRecordedClone {
+        root,
+        main,
+        cargo_target_dir,
+    })
+}
+
+/// The extra paths a host-recorded clone seat writes beyond its own root: its
+/// cargo target directory, as recorded and canonical. sccache's shared cache
+/// is never one of them (advisor ruling O2: a compile cache a contained seat
+/// can write poisons every other seat and the host).
+// trace:BUG-2169 | ai:claude
+pub(crate) fn seat_extra_write_paths(clone: &HostRecordedClone) -> Vec<PathBuf> {
+    clone
+        .cargo_target_dir
+        .as_deref()
+        .map(crate::contained_boundary::contained_write_roots)
+        .unwrap_or_default()
+}
+
+/// The environment a clone seat's tools run with: cargo builds into the
+/// seat's own target directory, and with no compiler wrapper, so a configured
+/// `rustc-wrapper = sccache` never reaches the host's shared sccache server
+/// (ruling O2). An empty `RUSTC_WRAPPER` overrides `build.rustc-wrapper`.
+// trace:BUG-2169 | ai:claude
+pub(crate) fn seat_build_env(clone: &HostRecordedClone) -> Vec<(&'static str, String)> {
+    let mut env = vec![("RUSTC_WRAPPER", String::new())];
+    if let Some(dir) = &clone.cargo_target_dir {
+        env.push(("CARGO_TARGET_DIR", dir.display().to_string()));
+    }
+    env
+}
+
 #[cfg(test)]
 #[path = "tests/bug_2169_seat_clone_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2169_contained_clone_bwrap_tests.rs"]
+mod bwrap_tests;

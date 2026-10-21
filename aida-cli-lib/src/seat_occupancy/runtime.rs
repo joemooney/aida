@@ -40,15 +40,17 @@ pub(crate) fn current_caller(project_root: &Path) -> Caller {
             rc.own(),
             &leases,
             aida_core::liveness::process_start_identity,
+            aida_core::liveness::process_identity_matches_strict,
         )
     });
     caller
 }
 
-fn lease_scope_for_own(
+pub(crate) fn lease_scope_for_own(
     own: &[aida_core::process_probe::ProcFacts],
     leases: &[aida_core::liveness::SessionLeaseLite],
     start: impl Fn(u32) -> Option<String>,
+    strict_match: impl Fn(u32, &str) -> bool,
 ) -> Option<String> {
     // Nearest process wins. Conflicting scopes for one identity fail closed.
     for proc in own {
@@ -59,9 +61,12 @@ fn lease_scope_for_own(
                     Some(pid) => (Some(pid), l.active_pid_start_time.as_deref()),
                     None => (l.creator_pid, l.creator_pid_start_time.as_deref()),
                 };
+                // trace:BUG-2130 | ai:agy
                 pid == Some(proc.identity.pid)
-                    && recorded.is_some()
-                    && start(proc.identity.pid).as_deref() == recorded
+                    && recorded.is_some_and(|rec| {
+                        start(proc.identity.pid).as_deref() == Some(rec)
+                            || strict_match(proc.identity.pid, rec)
+                    })
             })
             .map(|l| l.scope.as_str())
             .filter(|s| !s.is_empty())
@@ -663,6 +668,7 @@ mod tests {
             .unwrap()
         };
         let start = |_: u32| Some("current-start".to_string());
+        let strict_match = |_: u32, _: &str| false;
         let own = [fact];
         for leases in [
             vec![lease(1, Some("current-start"), "PARENT")],
@@ -673,10 +679,29 @@ mod tests {
                 lease(7, Some("current-start"), "TASK-8"),
             ],
         ] {
-            assert_eq!(lease_scope_for_own(&own, &leases, start), None);
+            assert_eq!(
+                lease_scope_for_own(&own, &leases, start, strict_match),
+                None
+            );
         }
         assert_eq!(
-            lease_scope_for_own(&own, &[lease(7, Some("current-start"), "TASK-7")], start),
+            lease_scope_for_own(
+                &own,
+                &[lease(7, Some("current-start"), "TASK-7")],
+                start,
+                strict_match,
+            ),
+            Some("TASK-7".into())
+        );
+        // Pre-upgrade lease with legacy RFC3339 start identity still matches when
+        // strict_match validates against the live process.
+        assert_eq!(
+            lease_scope_for_own(
+                &own,
+                &[lease(7, Some("2026-10-07T00:00:00+00:00"), "TASK-7")],
+                |_| Some("linux-starttime:42".to_string()),
+                |pid, rec| pid == 7 && rec == "2026-10-07T00:00:00+00:00",
+            ),
             Some("TASK-7".into())
         );
     }

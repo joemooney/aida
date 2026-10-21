@@ -2,6 +2,11 @@
 #[path = "tests/queue_work_resume_tests.rs"]
 mod queue_work_resume_tests;
 
+// trace:BUG-2130 | ai:agy
+#[cfg(test)]
+#[path = "tests/bug_2130_liveness_identity_tests.rs"]
+mod bug_2130_liveness_identity_tests;
+
 #[cfg(test)]
 #[path = "tests/drain_reliability_wiring_tests.rs"]
 mod drain_reliability_wiring_tests;
