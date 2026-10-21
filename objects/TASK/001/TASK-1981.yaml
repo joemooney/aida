@@ -9,12 +9,12 @@ description: |-
   3. Test gaps: add a barrier and error-preservation test for write_batch_cas_opts, plus an add-vs-sync barrier test for run_add's agreed-id dispense (the dispenser path A1 names). Also cover hijack_node, unregister_node and set_node_*.
   4. Seams: PR-2756 added AIDA_TEST_STORE_LOCK_CONTENDED_FILE (store_lock.rs) and AIDA_TEST_TEAM_WRITER_CHILD_DONE/_STORE (team.rs), test-only env reads in production code. Drain them with TASK-1751's injected context when it un-defers. Until then, don't add more.
   Full findings are in .aida/review-verdicts/PR-2756.json.
-status: NeedsAttention
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T04:14:19.180648731Z
-modified_at: 2026-10-21T13:05:04.183423201Z
+modified_at: 2026-10-21T16:21:18.242858570Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -161,6 +161,20 @@ history:
   timestamp: 2026-10-21T13:05:04.364545018Z
   session_id: 01a15e88d1e6
   changes: []
+- id: 01a15f44-5d1c-7b41-8314-a535aac6a375
+  author: aida-auto-bump
+  timestamp: 2026-10-21T16:21:18.236122414Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Completed
+processing_record:
+- id: 01a15f44-5d22-7393-beb6-f61e0d3d2ea4
+  timestamp: 2026-10-21T16:21:18.242853924Z
+  agent: aida
+  commit_sha: 7fbd67c3144d2d1d04a3f8dec95b8342fc94696a
+  summary: 'Round 3 PASS: F4 caller coverage, F6 exact-SHA init/dev-release publication with detached-HEAD refusal, F7 barrier tests, seams drained, inventory rows updated; folded TASK-2056 now proves a status failure publishes nothing to a real bare origin (with positive control). All 7 CI lanes + Build green at 0677b9d164.'
+  review_verdict: approved
 filed_at:
   code_sha: 3c7e184d14f171218ad70453efee47cd99730122
   branch: main
@@ -169,11 +183,7 @@ filed_at:
   aida_build_sha: f801433bcd
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 detached-HEAD blocker is fixed and tested and CI is green (7/7 lanes + Build), but the advisor-folded TASK-2056 test strengthening was not done: task_1981_release_status_failure_prevents_publication still has no origin and asserts a tautology.'
-  recovery_hint: address the review findings, move TASK-1981 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T13:05:04.183423201Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T16:21:18.236116660Z
+  completion_sha: 7fbd67c3144d2d1d04a3f8dec95b8342fc94696a
