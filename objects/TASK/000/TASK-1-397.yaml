@@ -1,5 +1,6 @@
 id: 01a15e24-035b-7b60-8487-16a08fd120a3
 spec_id: TASK-1-397
+agreed_id: TASK-1666
 title: 'minor (non-blocking): when AIDA_STORE points at a usable store other than the p…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on BUG-2200, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -38,6 +39,10 @@ history:
   author: joe
   timestamp: 2026-10-21T11:19:07.663327546Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15e43-9a31-7111-a2e3-60b9d9b14c86
+  author: joe
+  timestamp: 2026-10-21T11:40:51.121728128Z
   changes: []
 filed_at:
   code_sha: b5c03f772f0d611131d4d5d6138d3be1e783d393
