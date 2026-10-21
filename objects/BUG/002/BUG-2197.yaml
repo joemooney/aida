@@ -3,12 +3,12 @@ spec_id: BUG-2197
 agreed_id: BUG-2197
 title: No supported command releases a dead-pid session lease held on the primary checkout
 description: 'Seen 2026-10-20 by the integrator seat. Lease adad1e08 records a pid from Oct 3 that is dead, on the primary checkout (clean, level with origin/main). session end would also remove the worktree, which here is the main checkout. session reap does not list the lease. leases --prune-stale handles only leases held by other clones. Separately, leases 01a0c96c and abf9f7f0 record no pid and are counted live because they get attributed to the caller''s own process (3300764), so the hygiene rule says compact instead of start fresh. Acceptance: (1) a supported command releases a primary-checkout lease whose recorded pid is dead, without touching the checkout; (2) a lease with no recorded pid is not attributed to the inspecting process.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T03:55:40.434089669Z
-modified_at: 2026-10-21T15:40:55.027952694Z
+modified_at: 2026-10-21T16:42:52.150139858Z
 req_type: Bug
 comments:
 - id: 01a15cae-15b0-7ea0-ae51-524babd8c473
@@ -36,6 +36,21 @@ history:
   timestamp: 2026-10-21T15:40:55.202647066Z
   session_id: 01a15f15325d
   changes: []
+- id: 01a15f58-1b6d-74f0-b018-7e75e45bd25a
+  author: aida-auto-bump
+  timestamp: 2026-10-21T16:42:52.141553164Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15f58-1b76-7ba2-8327-2c526d33f93c
+  timestamp: 2026-10-21T16:42:52.150133645Z
+  agent: aida
+  commit_sha: 9fcf4634996f1fe4d713ccc8f80eb31eb66390b2
+  summary: 'Round 3: all four round-2 findings addressed (help snapshot refreshed, one durable-owner rule lease_has_durable_owner across reap/leases/ps/handoff, Aborted line gated on --json, docs updated); both BUG-2197 ACs verified by tests; PR CI green except expected merge-hold-gate.'
+  review_verdict: approved
 filed_at:
   code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
   branch: main
@@ -44,11 +59,7 @@ filed_at:
   aida_build_sha: 6657ffff6d
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2: all three round-1 findings are addressed (durable-owner proof, inspector exclusion inside lease_state_for, release-lane tests), but CI lib-0 is red on every head of this branch while main is green. The likely cause is the golden CLI help snapshot, which was not regenerated for the new reap flag and docs.'
-  recovery_hint: address the review findings, move BUG-2197 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T15:40:55.027952694Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T16:42:52.141548433Z
+  completion_sha: 9fcf4634996f1fe4d713ccc8f80eb31eb66390b2
