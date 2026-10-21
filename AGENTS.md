@@ -1,3 +1,9 @@
+Mailbox explicit sends and mentions share live-recipient resolution. Unknown or
+dead agent recipients and role/vendor addresses with zero live readers refuse
+before writing; group sends list current readers. Known human inboxes and
+historical inspection remain available. See docs/cli/06-roles-sessions.md.
+<!-- trace:STORY-1843 | ai:codex -->
+
 `aida review watch` dispatches attested reviews without waiting for CI. Shared
 versioned runtime state reserves at most two reviews before spawning; ambiguous
 receipts retain capacity. Stale overlapping heads notify the forge author once;

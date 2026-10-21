@@ -389,29 +389,40 @@ pub(crate) fn resolve_comment_mentions(
 ) -> (Vec<String>, Vec<String>) {
     // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
     // are known too, and delivery uses the identity's stored spelling.
-    let known = crate::known_mailbox_recipients(store_root);
+    // trace:STORY-1843 | ai:codex
+    let candidates = extract_mention_candidates(text);
+    if candidates.is_empty() {
+        return (Vec::new(), Vec::new());
+    }
+    let project_root = store_root.parent().unwrap_or(store_root);
+    let directory =
+        match crate::mailbox_resolver::RecipientDirectory::load(project_root, store_root) {
+            Ok(directory) => directory,
+            Err(error) => {
+                return (
+                    Vec::new(),
+                    vec![format!("mention delivery refused: {error}")],
+                )
+            }
+        };
     let author_trimmed = comment_author.trim();
     let mut deliverable = Vec::new();
     let mut warnings = Vec::new();
-    for handle in extract_mention_candidates(text) {
+    for handle in candidates {
         let trimmed = handle.trim();
         if trimmed.eq_ignore_ascii_case(author_trimmed) {
             continue;
         }
-        if let Some(canonical) = known.get(&trimmed.to_lowercase()) {
-            if !deliverable.contains(canonical) {
-                deliverable.push(canonical.clone());
+        match directory.resolve(trimmed) {
+            Ok(resolved) => {
+                if let Some(note) = resolved.reader_notice {
+                    warnings.push(note);
+                }
+                if !deliverable.contains(&resolved.address) {
+                    deliverable.push(resolved.address);
+                }
             }
-        } else if !trimmed.chars().any(|c| c.is_lowercase()) {
-            warnings.push(format!(
-                "@{} is an all-uppercase handle matching no known person, role or registered agent — mention dropped",
-                trimmed
-            ));
-        } else {
-            warnings.push(format!(
-                "@{} matches no known person, role or registered agent — mention dropped",
-                trimmed
-            ));
+            Err(error) => warnings.push(format!("@{trimmed}: {error}; mention dropped")),
         }
     }
     (deliverable, warnings)
