@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T05:16:14.397684799Z
-modified_at: 2026-10-21T09:29:20.733718576Z
+modified_at: 2026-10-21T11:25:50.265166566Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -54,6 +54,11 @@ history:
   timestamp: 2026-10-21T05:47:46.028067346Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15e35-dbc1-7db0-953c-1b0d18fa1275
+  author: joe
+  timestamp: 2026-10-21T11:25:50.401833906Z
+  session_id: 01a15e2dc97f
+  changes: []
 filed_at:
   code_sha: b381e35218398635c9367100ebd0fdd1d3cfc9d8
   branch: main
@@ -62,3 +67,11 @@ filed_at:
   aida_build_sha: d29b69c35c
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'AC1-3 implemented and tested, but CI (rest) is red on all three PR heads: the 5-line AIDA_AGENT_TYPE insertion at session.rs:1463 pushes ceiling_key out of the TASK-1169 guardrail''s 12-line window; TASK-2040 fallback branch untested'
+  recovery_hint: address the review findings, move BUG-2201 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-21T11:25:50.265166566Z

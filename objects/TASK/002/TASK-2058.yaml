@@ -1,0 +1,28 @@
+id: 01a15e36-5eb3-7f03-888f-4ed4890a1853
+spec_id: TASK-2058
+agreed_id: TASK-2058
+title: Contained destructive-git deny list misses forced-push forms now reachable via Bash(git *)
+description: |
+  PR-2794 (BUG-2201) adds Bash(git *) to every contained session's --settings allow list, including downstream projects that previously had no git allow at all. destructive_command_deny_rules (aida-cli-lib/src/session.rs ~3341) denies `git push --force *` and `git push -f *`, but not the other forced-push spellings: `git push origin +branch`, `git push --force-with-lease`, `git -c x=y push --force`, or a flag placed after the remote (`git push origin branch --force`). Consider anchoring the denies on push plus any force spelling, or denying `git push` from contained seats that never push.
+
+  Raised in review of PR-2794: https://github.com/joemooney/aida/pull/2794#issuecomment-6314758978
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T11:26:23.923829126Z
+modified_at: 2026-10-21T11:26:23.923829126Z
+req_type: Task
+tags:
+- contained
+- from-review:PR-2794
+- sandbox
+- severity:minor
+filed_at:
+  code_sha: b5c03f772f0d611131d4d5d6138d3be1e783d393
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b66e4d93b8
+  vendor: claude
+  session: 01a15e2dc97f
