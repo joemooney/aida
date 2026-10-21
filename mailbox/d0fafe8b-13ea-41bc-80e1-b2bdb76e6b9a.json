@@ -1,0 +1,19 @@
+{
+  "id": "d0fafe8b-13ea-41bc-80e1-b2bdb76e6b9a",
+  "thread_id": "d0fafe8b-13ea-41bc-80e1-b2bdb76e6b9a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792568276431,
+  "body": "PR #2793 d8b0f66273e2d9cb885c01c309dedd536b67df20",
+  "subject": "PR for TASK-2045",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

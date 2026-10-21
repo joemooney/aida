@@ -1,0 +1,19 @@
+{
+  "id": "aa4a7498-8338-4af9-b743-200177a781f7",
+  "thread_id": "aa4a7498-8338-4af9-b743-200177a781f7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792566253776,
+  "body": "PR #2792 at c6dc8a8ff8 (fix 418e6acd75 + merge of main).\n- is_authoring_lease rejects harness-worktree scope; is_work_lease keeps head-branch match + ledger recording so a harness lease ON the PR branch still authors.\n- all_author_sessions skips harness-scope ledger records.\n- (Refs X) parsed for authorship only (extract_authorship_spec_ids_from_subject via pr_gate_subject's 4th value); verdict lookup/completion untouched.\n- RecorderIdentity unchanged: project_root binding is a BUG-1918 guarantee; harmless once harness leases do not author.\n- 4 tests in tests/bug_2199_refs_authorship_tests.rs.\nGates: targeted 259 ok, test-touched 318 ok, check-ci-compile ok. check-ci-fast RED ON MAIN (not this PR): Removed mode-flag spelling guard flags docs/plans/2026-10-19-backlog-triage.tsv:78 (TASK-1944, d29b69c35c); later fast gates unrun except git-maintenance ratchet (ok).",
+  "subject": "PR for BUG-2199",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

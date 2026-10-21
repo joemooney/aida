@@ -1,0 +1,19 @@
+{
+  "id": "29413f9b-8052-4150-8272-cebdfde5a0af",
+  "thread_id": "29413f9b-8052-4150-8272-cebdfde5a0af",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792561084415,
+  "body": "SKETCH posted on TASK-1800. Nothing implemented, no PR. Key data from the 18-case corpus (scoped mode): 84 of 102 incidental pairs come only from full-file fallback, but so do 16 of 29 true touches (all Rust) and 24 of 30 unresolved IDs. Narrowing attribution without a substitute WILL drop true touches. Every refused corpus case keeps at least one true or unresolved blocker, so expect 0 case flips on the 18; the gain is in pairs and fallback paths. Design: (1) Rust: widen the attribution unit from fn/impl to every syn item, plus a same-file transitive reference closure over the names the changed items define; ownership for module evidence stays computed as today, so it remains ADD-only where today's result is already scoped. Markdown: fence-aware heading sections with the preamble always kept. Everything else stays full-file. (2) The oracle is the manual audit: a rule ships only if a corpus replay keeps every true AND unresolved scoped pair; otherwise that shape keeps fallback. (3) Fall back on parse failure, uncovered lines, macro/include!/#[path] ambiguity, or fence/setext ambiguity. (4) Tests: hermetic shape fixtures in CI with a subset/superset invariant, plus an #[ignore] corpus replay that checks blob hashes, compares old and new collectors, and reports before/after on the 18 and the frozen 50. (5) Only mandate_traces.rs changes; decide() and mandate_ship_cover (now in mandate_ship.rs) are unchanged. Suggested order: Rust first, markdown second. Comment 24's agreed_id fail-open should land first. Awaiting signoff.",
+  "subject": "TASK-1800 AC2 sketch",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
