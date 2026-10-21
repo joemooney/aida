@@ -8,20 +8,20 @@ use tempfile::TempDir;
 fn init_repo_with_gitignore() -> TempDir {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["init", "--initial-branch=main", "--quiet"])
         .status()
         .unwrap();
     std::fs::write(p.join(".gitignore"), "target/\n.aida/cache.db\n").unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["add", ".gitignore"])
         .status()
         .unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["commit", "-m", "init", "--quiet"])

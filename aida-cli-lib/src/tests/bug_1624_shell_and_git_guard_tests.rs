@@ -9,7 +9,7 @@
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.email=t@example.com", "-c", "user.name=Test"])

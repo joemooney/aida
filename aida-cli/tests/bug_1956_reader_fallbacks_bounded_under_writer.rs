@@ -15,6 +15,9 @@
 // trace:BUG-1956 | ai:claude
 // trace:BUG-1995 | ai:antigravity
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
@@ -44,7 +47,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

@@ -985,7 +985,7 @@ mod tests {
         }
 
         fn git(&self, args: &[&str]) {
-            let ok = Command::new("git")
+            let ok = crate::test_git::git_command()
                 .arg("-C")
                 .arg(self.path())
                 .args(args)
@@ -1003,7 +1003,7 @@ mod tests {
         }
 
         fn pin_main(&self) {
-            let output = Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(self.path())
                 .args(["rev-parse", "HEAD"])

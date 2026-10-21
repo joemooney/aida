@@ -9,6 +9,9 @@
 //! `aida show`'s default view and `aida do`'s pickup banner reflecting it.
 // trace:STORY-1434 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -19,7 +22,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()

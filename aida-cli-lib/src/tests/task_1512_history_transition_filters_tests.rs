@@ -22,7 +22,7 @@ use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
 fn git(store: &Path, args: &[&str]) {
-    let out = ProcessCommand::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(store)
         .args(args)

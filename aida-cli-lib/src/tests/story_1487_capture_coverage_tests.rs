@@ -33,7 +33,7 @@ fn tokens(criterion: &[&str], comments: usize) -> TraceTokens {
 
 fn git(root: &Path, args: &[&str]) {
     // trace:TASK-1546 | ai:codex
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .env("HOME", root)
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .arg("-C")

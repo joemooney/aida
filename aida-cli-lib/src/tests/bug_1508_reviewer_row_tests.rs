@@ -14,7 +14,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

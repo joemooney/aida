@@ -8,6 +8,9 @@
 //! same warning on `aida done`. BUG-1996 adds the same warning on `aida queue advance` closing a parent.
 // trace:STORY-1649 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -20,7 +23,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

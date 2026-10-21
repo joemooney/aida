@@ -11,12 +11,15 @@
 //! post-merge subprocess would resolve.
 // trace:BUG-1953 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
 fn git(repo: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()
@@ -122,7 +125,7 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "AIDA Test"]);
     git(&repo, &["add", "."]);
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(&repo)
         .args(["commit", "-q", "-m", "base"])
         .env("GIT_COMMITTER_DATE", HEAD_COMMITTED_AT)
@@ -131,7 +134,7 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         .unwrap();
     assert!(out.status.success(), "{out:?}");
     let head_sha = String::from_utf8(
-        Command::new("git")
+        test_git::git_command()
             .current_dir(&repo)
             .args(["rev-parse", "HEAD"])
             .output()

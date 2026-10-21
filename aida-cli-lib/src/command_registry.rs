@@ -65,6 +65,7 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
     &crate::store_push_pull::FETCH,
     &crate::field_study_cmd::FIELD_STUDY,
     &crate::findings_gate::FINDINGS,
+    &crate::mandate_drive::FLEET,
     &crate::focus_cmd::FOCUS,
     &crate::gate_cmd::GATE,
     &crate::tracker_cmd::GITHUB,

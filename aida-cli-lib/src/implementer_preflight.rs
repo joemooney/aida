@@ -1048,13 +1048,13 @@ mod tests {
     #[test]
     fn github_base_ref_uses_repository_default_branch() {
         let root = tempfile::tempdir().unwrap();
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root.path())
             .status()
             .unwrap()
             .success());
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args([
                 "symbolic-ref",
                 "refs/remotes/origin/HEAD",
@@ -1091,7 +1091,7 @@ mod tests {
             "x\";>injected;\"",
         ] {
             let root = tempfile::tempdir().unwrap();
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .args(["init", "-q"])
                 .current_dir(root.path())
                 .status()
@@ -1099,7 +1099,7 @@ mod tests {
                 .success());
             let target = format!("refs/remotes/origin/{payload}");
             assert!(
-                Command::new("git")
+                crate::test_git::git_command()
                     .args(["symbolic-ref", "refs/remotes/origin/HEAD", &target])
                     .current_dir(root.path())
                     .status()
@@ -1149,13 +1149,13 @@ mod tests {
     #[test]
     fn bug_1624_hostile_default_branch_is_not_exported() {
         let root = tempfile::tempdir().unwrap();
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root.path())
             .status()
             .unwrap()
             .success());
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args([
                 "symbolic-ref",
                 "refs/remotes/origin/HEAD",
@@ -1330,7 +1330,7 @@ mod tests {
         }
 
         let git = |args: &[&str], cwd: &Path| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .args(args)
                 .current_dir(cwd)
                 .env("GIT_AUTHOR_NAME", "t")

@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn run_git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = crate::test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()

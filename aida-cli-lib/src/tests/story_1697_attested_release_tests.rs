@@ -34,6 +34,8 @@ fn mandate(include_supervised: bool) -> Mandate {
         expires_at: Utc::now() + chrono::Duration::hours(7),
         revoked_at: None,
         revoked_by: None,
+        scopes: Default::default(),
+        kind: None,
     }
 }
 
@@ -207,6 +209,9 @@ impl Case {
                         ledger: &ledger,
                         hold: &HoldFacts::of(hold.as_ref(), None),
                         carry_over: None,
+                        changed_paths: Some(&[]),
+                        ship_gate: None,
+                        hold_clear_gate: None,
                     })
                     .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(PR)))
                 },

@@ -657,6 +657,13 @@ jobs:
         if: matrix.shard == 'gates'
         run: python3 -m unittest tests/test_executable_fixture_ratchet.py
 
+      # BUG-2191: test fixtures run write-class git through the test_git
+      # helper (no detached auto-maintenance); unguarded sites only go down.
+      # trace:BUG-2191 | ai:claude
+      - name: Test git auto-maintenance ratchet
+        if: matrix.shard == 'gates'
+        run: python3 -m unittest tests/test_git_maintenance_ratchet.py
+
       - name: Verify pure-move slice stack fixtures
         if: matrix.shard == 'gates'
         run: python3 -m unittest discover scripts/split-lib/tests/
