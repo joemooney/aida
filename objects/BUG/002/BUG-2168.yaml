@@ -3,12 +3,12 @@ spec_id: BUG-2168
 agreed_id: BUG-2168
 title: aida agent new --bg --cwd <worktree> without --spec dispatches into the primary checkout instead of the given cwd
 description: 'Seen 2026-10-16 01:18 twice: ''aida agent new claude --bg --role implementer --cwd /home/joe/ai/aida-story-1699 --name fix-story-1699 --prompt-file F'' (also when run with that dir as the shell cwd) prints ''dispatching claude ... in /home/joe/ai/aida''. The Claude sandbox then makes the intended worktree and .git read-only, so the seat cannot commit there (first attempt blocked for that reason). With --spec the pool worktree is used. Expected: an explicit --cwd is honoured (or refused with a reason). Related: with --spec X --force --cwd D, dispatch refuses ''already owned by session <lease> (worktree: D)'' even though D is the very worktree requested; adopting the dormant lease for that worktree would be the useful behaviour.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:17:29.126764215Z
-modified_at: 2026-10-20T18:16:10.077088763Z
+modified_at: 2026-10-21T14:02:05.835853120Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -38,6 +38,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15ec4-ea39-7752-a96b-a7d29dee6fad
+  author: aida-auto-bump
+  timestamp: 2026-10-21T14:02:05.753425996Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a15ec4-ea8b-7700-925e-37b86262ea48
+  timestamp: 2026-10-21T14:02:05.835843733Z
+  agent: aida
+  commit_sha: 0cc97d963b3d294920db4dd454a461f9226c9b5c
+  summary: All 3 BUG-2188 criteria and BUG-2168 explicit-cwd behaviour verified by traced tests; round-1/2 findings fixed; CI green at head. One minor non-blocking follow-up (claim CAS rollback regression) filed.
+  review_verdict: approved
 filed_at:
   code_sha: 5fb188c5221a3609af83b197c1fef2e99a47fcfc
   branch: main
@@ -46,3 +61,7 @@ filed_at:
   aida_build_sha: 5fb188c522
   vendor: claude
   session: b0657c59-d482-4ef7-a931-e3c7b919e148
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T14:02:05.753411528Z
+  completion_sha: 0cc97d963b3d294920db4dd454a461f9226c9b5c
