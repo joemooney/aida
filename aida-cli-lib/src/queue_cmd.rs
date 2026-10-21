@@ -13219,6 +13219,22 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-1607 | ai:claude
     launch_vendor: session::HeadlessVendor,
 ) -> Result<()> {
+    // Keep a recoverable final draft even if a tool refuses the recording.
+    // No command from the draft is automatically replayed by this launcher.
+    // Headless only: an interactive reviewer has a human watching, and its
+    // prompt is echoed in the launch line. trace:BUG-2187 | ai:codex
+    // trace:BUG-2187 | ai:claude
+    let recovery_prompt;
+    let prompt = if no_human {
+        recovery_prompt = format!(
+            "{prompt}\n\nIf recording the verdict fails, include your final verdict draft and the exact \
+             `aida review record` command you attempted (including the reviewed SHA, summary, and findings) \
+             in your final response. Do not report a successful recording when it failed."
+        );
+        recovery_prompt.as_str()
+    } else {
+        prompt
+    };
     // BUG-2149: only verdict files written after the reviewer starts belong
     // to this run. trace:BUG-2149 | ai:claude
     let launched_at = reviewer_spawn_instant(worktree);
@@ -13435,10 +13451,14 @@ pub(crate) fn run_standalone_reviewer(
     // canonical PR-N.json never appears. Collect it (and mirror the
     // spec-keyed records) into the launcher project, where `aida review
     // verdict` and `aida pr ship` read. trace:BUG-2149 | ai:claude
+    let head_sha = standalone_review_pr_head(project_root, pr);
+    // trace:BUG-2187 | ai:claude
+    let record_template =
+        reviewer_summary::review_record_template(&pr_spec_ids, pr, head_sha.as_deref());
     let checks = StandaloneVerdictChecks {
         project_root,
         pr,
-        head_sha: standalone_review_pr_head(project_root, pr),
+        head_sha,
         launcher_grant,
         child_grant,
     };
@@ -13496,12 +13516,29 @@ pub(crate) fn run_standalone_reviewer(
     // `/aida-review` skill wrote and (headless only) the JSONL log.
     // `--quiet` suppresses it for scripted consumers that read the
     // verdict file directly. trace:BUG-226 | ai:claude
-    if !quiet {
-        let verdict_json = review_verdict::read_verdict_body(verdict_path).ok();
-        let result_event = log_path
+    // Failure evidence is available in quiet mode too. It is diagnostic only;
+    // the collector above remains the sole acceptance decision.
+    // trace:BUG-2187 | ai:codex
+    let log_body = if !quiet || collected.is_err() {
+        log_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| reviewer_summary::parse_result_event(&s));
+    } else {
+        None
+    };
+    let result_event = log_body
+        .as_deref()
+        .and_then(reviewer_summary::parse_result_event);
+    let recovery = collected.as_ref().err().map(|_| {
+        reviewer_summary::unrecorded_review_recovery(
+            worktree,
+            log_path.as_deref(),
+            log_body.as_deref(),
+            &record_template,
+        )
+    });
+    if !quiet {
+        let verdict_json = review_verdict::read_verdict_body(verdict_path).ok();
         let summary = reviewer_summary::format_reviewer_summary(
             pr,
             verdict_json.as_deref(),
@@ -13514,30 +13551,78 @@ pub(crate) fn run_standalone_reviewer(
         println!("{summary}");
     }
 
+    // BUG-2201: a reviewer stopped by the permission layer is named as such.
+    // trace:BUG-2201 | ai:claude
+    let denials = log_body
+        .as_deref()
+        .map(reviewer_summary::parse_permission_denials)
+        .unwrap_or_default();
+    let outcome = standalone_reviewer_outcome(pr, collected.err(), verdict_path, &denials)
+        .map_err(|err| format!("{err:#}\n{}", recovery.as_deref().unwrap_or_default()));
     // Propagate claude's exit code so a scripted consumer can branch on
     // it; a clean exit returns `Ok(())` so `main` records telemetry.
     if let Some(code) = status.code().filter(|c| *c != 0) {
+        // No verdict: return the vendor's code with the recovery text, so
+        // the draft reaches the caller like any other error.
+        // trace:BUG-2187 | ai:claude
+        if let Err(message) = outcome {
+            return Err(anyhow::Error::new(ReviewerVendorExit { code, message }));
+        }
         std::process::exit(code);
     }
-    standalone_reviewer_outcome(pr, collected.err(), verdict_path)
+    outcome.map_err(|message| anyhow::Error::new(NoReviewVerdict { message }))
 }
+
+/// BUG-2187: a reviewer that exited non-zero without a collectable verdict.
+/// `exit_code_for_error` maps it to the vendor's own `code`; the message
+/// carries the unrecorded-review recovery text.
+// trace:BUG-2187 | ai:claude
+#[derive(Debug)]
+pub(crate) struct ReviewerVendorExit {
+    pub(crate) code: i32,
+    pub(crate) message: String,
+}
+
+impl std::fmt::Display for ReviewerVendorExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ReviewerVendorExit {}
 
 /// BUG-2149: the launch command's result once the reviewer exited cleanly. A
 /// review that produced no verifiable verdict is a failure — a caller waiting
 /// on the exit status must never read a missing verdict as an approval.
+///
+/// BUG-2201: `denials` are the tool calls the reviewer's permission layer
+/// refused (see [`reviewer_summary::parse_permission_denials`]); when any
+/// exist the message names them, since a denied `aida review record` or
+/// verdict write is the usual reason no verdict exists.
 // trace:BUG-2149 | ai:claude
+// trace:BUG-2201 | ai:claude
 pub(crate) fn standalone_reviewer_outcome(
     pr: u64,
     rejection: Option<String>,
     verdict_path: &std::path::Path,
+    denials: &[String],
 ) -> Result<()> {
     let Some(why) = rejection else {
         return Ok(());
     };
+    let denied = if denials.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " The permission layer denied {} of the reviewer's tool call(s): {}.",
+            denials.len(),
+            denials.join("; ")
+        )
+    };
     Err(anyhow::Error::new(NoReviewVerdict {
         message: format!(
             "the reviewer for PR-{pr} exited without recording a verifiable verdict ({why}); \
-             nothing was collected into {}. Treat this as no approval and re-run the review.",
+             nothing was collected into {}.{denied} Treat this as no approval and re-run the review.",
             verdict_path.display()
         ),
     }))

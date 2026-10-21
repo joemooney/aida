@@ -84,6 +84,44 @@ pub fn parse_result_event(jsonl: &str) -> Option<ResultEvent> {
     None
 }
 
+/// The tool calls the headless run's permission layer denied, one
+/// `Tool \`input\`` entry each, read from the final `result` event's
+/// `permission_denials`. Empty when the run had none or emitted no result.
+/// A reviewer that never records its verdict usually hit one of these, so
+/// the launcher names them instead of a bare "no verdict file".
+// trace:BUG-2201 | ai:claude
+pub fn parse_permission_denials(jsonl: &str) -> Vec<String> {
+    let Some(result) = jsonl.lines().rev().find_map(|line| {
+        serde_json::from_str::<serde_json::Value>(line.trim())
+            .ok()
+            .filter(|v| v.get("type").and_then(|t| t.as_str()) == Some("result"))
+    }) else {
+        return Vec::new();
+    };
+    let Some(denials) = result.get("permission_denials").and_then(|d| d.as_array()) else {
+        return Vec::new();
+    };
+    denials
+        .iter()
+        .map(|d| {
+            let tool = d
+                .get("tool_name")
+                .or_else(|| d.get("tool"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let input = d.get("tool_input");
+            let detail = ["command", "file_path", "pattern", "url"]
+                .iter()
+                .find_map(|key| input?.get(key)?.as_str())
+                .map(|s| first_line_trunc(s, 120));
+            match detail {
+                Some(detail) if !detail.is_empty() => format!("{tool} `{detail}`"),
+                _ => tool.to_string(),
+            }
+        })
+        .collect()
+}
+
 /// The `merge` field value a reviewer writes into its verdict file when it
 /// escalates the merge decision to a human rather than auto-deciding it.
 /// The orchestrator's phase-3 handshake keys off this exact string.
@@ -616,5 +654,333 @@ mod tests {
         assert!(!s.contains("implementation complexity:"), "{s}");
         assert!(!s.contains("complexity agreement:"), "{s}");
         assert!(!s.contains("implementation effort:"), "{s}");
+    }
+
+    // BUG-2201: the denied calls the launcher names when no verdict appears.
+    // trace:BUG-2201 | ai:claude
+    #[test]
+    fn permission_denials_name_each_denied_call() {
+        let log = concat!(
+            r#"{"type":"assistant","message":{"content":[]}}"#,
+            "\n",
+            r#"{"type":"result","subtype":"success","is_error":false,"permission_denials":[{"tool_name":"Bash","tool_use_id":"a","tool_input":{"command":"AIDA_AGENT_TYPE=claude aida review record TASK-119 --pr 96\nsecond line"}},{"tool_name":"Write","tool_use_id":"b","tool_input":{"file_path":"/p/.aida/review-verdicts/PR-96.json","content":"{}"}},{"tool_name":"Monitor","tool_use_id":"c","tool_input":{}}]}"#,
+        );
+        assert_eq!(
+            parse_permission_denials(log),
+            vec![
+                "Bash `AIDA_AGENT_TYPE=claude aida review record TASK-119 --pr 96`".to_string(),
+                "Write `/p/.aida/review-verdicts/PR-96.json`".to_string(),
+                "Monitor".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn permission_denials_empty_without_denials_or_result() {
+        assert!(parse_permission_denials(RESULT_LINE).is_empty());
+        assert!(parse_permission_denials("").is_empty());
+        assert!(parse_permission_denials(
+            r#"{"type":"assistant","permission_denials":[{"tool_name":"Bash"}]}"#
+        )
+        .is_empty());
+    }
+}
+
+/// Preserve useful evidence after a failed recording without treating log text
+/// as a verdict or replaying a command under the launcher's authority.
+// trace:BUG-2187 | ai:codex
+pub(crate) fn unrecorded_review_recovery(
+    worktree: &Path,
+    log_path: Option<&Path>,
+    jsonl: Option<&str>,
+    record_template: &str,
+) -> String {
+    let mut out = format!(
+        "Unrecorded review artifacts: {}. No approval was accepted.\n",
+        worktree.display()
+    );
+    if let Some(path) = log_path {
+        out.push_str(&format!("Full reviewer log: {}\n", path.display()));
+    }
+    if let Some(log) = jsonl {
+        if let Some(text) = final_review_draft(log) {
+            if !text.trim().is_empty() {
+                out.push_str("Unrecorded final draft (informational):\n");
+                out.push_str(&recovery_excerpt(&text));
+                out.push('\n');
+            }
+        }
+        if let Some(command) = last_record_command(log) {
+            out.push_str("Last tool command mentioning review record (retry only from an attested reviewer session):\n");
+            out.push_str(&recovery_excerpt(&command));
+            out.push('\n');
+        }
+    }
+    // The reviewer may never have reached a record attempt; the launcher
+    // still knows the spec, PR and head, so hand over a ready command.
+    // trace:BUG-2187 | ai:claude
+    out.push_str("Record it from an attested reviewer seat with:\n");
+    out.push_str(record_template);
+    out.push('\n');
+    out.push_str("Inspect the retained draft/log before retrying; the launcher must not record a verdict on the reviewer's behalf.");
+    out
+}
+
+/// The `aida review record` command for this PR, filled in with what the
+/// launcher knows; only the verdict, summary and findings are left to choose.
+// trace:BUG-2187 | ai:claude
+pub(crate) fn review_record_template(
+    spec_ids: &[String],
+    pr: u64,
+    head_sha: Option<&str>,
+) -> String {
+    let spec = spec_ids
+        .first()
+        .cloned()
+        .unwrap_or_else(|| format!("PR-{pr}"));
+    format!(
+        "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected> \
+         --summary '<one line>' [--finding '<finding>' ...]",
+        head_sha.unwrap_or("<PR-HEAD-SHA>")
+    )
+}
+
+// Claude emits a terminal result (or, cut short, assistant text blocks);
+// Codex emits completed agent messages.
+// Agy's current -p argv emits plain response text (no JSON output flag).
+// Unknown/truncated formats retain the raw excerpt rather than losing evidence.
+// trace:BUG-2187 | ai:codex
+fn final_review_draft(log: &str) -> Option<String> {
+    if let Some(text) = parse_result_event(log).and_then(|e| e.result_text) {
+        if !text.trim().is_empty() {
+            return Some(text);
+        }
+    }
+    for line in log.lines().rev() {
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if event["type"] == "item.completed" && event["item"]["type"] == "agent_message" {
+            if let Some(text) = event["item"]["text"]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+            {
+                return Some(text.to_string());
+            }
+        }
+        // A Claude run killed before its result event: the last assistant
+        // text block is the latest draft. trace:BUG-2187 | ai:claude
+        if event["type"] == "assistant" {
+            let text = event["message"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .rev()
+                .filter(|b| b["type"] == "text")
+                .find_map(|b| b["text"].as_str().filter(|t| !t.trim().is_empty()));
+            if let Some(text) = text {
+                return Some(text.to_string());
+            }
+        }
+    }
+    (!log.trim().is_empty()).then(|| {
+        format!(
+            "Captured reviewer output (format unrecognized or plain text):\n{}",
+            log.trim()
+        )
+    })
+}
+
+// Display-only: this does not parse or accept a verdict, and never executes
+// any text found in a vendor log. trace:BUG-2187 | ai:codex
+fn last_record_command(jsonl: &str) -> Option<String> {
+    for line in jsonl.lines().rev() {
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        if event["type"] == "item.completed" && event["item"]["type"] == "command_execution" {
+            if let Some(command) = event["item"]["command"]
+                .as_str()
+                .filter(|s| s.contains("review record"))
+            {
+                return Some(command.to_string());
+            }
+        }
+        if event.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+            continue;
+        }
+        let content = event
+            .get("message")
+            .and_then(|m| m.get("content"))
+            .or_else(|| event.get("content"))
+            .and_then(|c| c.as_array());
+        for block in content.into_iter().flatten().rev() {
+            if block.get("type").and_then(|v| v.as_str()) != Some("tool_use")
+                || block.get("name").and_then(|v| v.as_str()) != Some("Bash")
+            {
+                continue;
+            }
+            if let Some(command) = block
+                .get("input")
+                .and_then(|v| v.get("command"))
+                .and_then(|v| v.as_str())
+                .filter(|s| s.contains("review record"))
+            {
+                return Some(command.to_string());
+            }
+        }
+    }
+    None
+}
+
+// The complete, unmodified evidence stays in the named log. A final draft
+// sits at the end of the output, so the excerpt keeps the tail.
+// trace:BUG-2187 | ai:codex
+// trace:BUG-2187 | ai:claude
+fn recovery_excerpt(text: &str) -> String {
+    const LIMIT: usize = 8192;
+    let total = text.chars().count();
+    if total <= LIMIT {
+        return text.to_string();
+    }
+    let tail: String = text.chars().skip(total - LIMIT).collect();
+    format!("[earlier output truncated; see full reviewer log]\n{tail}")
+}
+
+#[cfg(test)]
+mod bug2187_recovery_tests {
+    use super::*;
+
+    // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn recovery_keeps_the_draft_attempted_command_and_log_location() {
+        let command = "aida review record STORY-77 --verdict request-changes --sha 1234567 --summary 'fix the leak' --pr 59";
+        let tool = serde_json::json!({"type":"assistant","message":{"content":[
+            {"type":"tool_use","name":"Bash","input":{"command":command}}
+        ]}});
+        let result = serde_json::json!({"type":"result","result":"Request changes: fix the leak. Recording was refused."});
+        let log = format!("{tool}\n{result}\n{{truncated");
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/logs/review.jsonl")),
+            Some(&log),
+            "TEMPLATE",
+        );
+        assert!(out.contains(command));
+        assert!(out.contains("Request changes: fix the leak"));
+        assert!(out.contains("/logs/review.jsonl"));
+        assert!(out.contains("No approval was accepted"));
+        assert!(out.contains("attested reviewer session"));
+    }
+
+    // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn codex_and_plain_agy_recovery_preserve_the_final_draft() {
+        let command = "aida review record STORY-77 --verdict rejected --sha 1234567 --summary fix";
+        let log = format!(
+            "{}\n{}\n{{partial",
+            serde_json::json!({"type":"item.completed","item":{"type":"command_execution","command":command}}),
+            serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"Rejected: fix the leak"}})
+        );
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&log),
+            "T",
+        );
+        assert!(out.contains(command));
+        assert!(out.contains("Rejected: fix the leak"));
+        let agy = format!("Request changes: fix the leak. Recording failed. Retry {command}");
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&agy),
+            "T",
+        );
+        assert!(out.contains(&agy));
+        assert!(out.contains("No approval was accepted"));
+    }
+
+    // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn missing_or_large_draft_still_names_the_preserved_evidence() {
+        let missing = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some("invalid"),
+            "T",
+        );
+        assert!(missing.contains("/review"));
+        assert!(missing.contains("/log"));
+        let text = "é".repeat(9000);
+        let excerpt = recovery_excerpt(&text);
+        assert!(excerpt.starts_with("[earlier output truncated; see full reviewer log]"));
+        assert!(excerpt.len() < text.len());
+    }
+
+    /// Over-limit output keeps its end, where the final draft is.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn oversized_plain_output_keeps_the_final_draft_at_its_tail() {
+        let agy = format!(
+            "{}\nFINAL DRAFT: request changes, fix the leak",
+            "x".repeat(20_000)
+        );
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&agy),
+            "T",
+        );
+        assert!(
+            out.contains("FINAL DRAFT: request changes, fix the leak"),
+            "{out}"
+        );
+        assert!(out.contains("[earlier output truncated; see full reviewer log]"));
+        assert!(out.len() < agy.len());
+    }
+
+    /// A Claude log cut off before its result event falls back to the last
+    /// assistant text, not the head of the raw JSONL.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn claude_log_without_result_recovers_the_last_assistant_text() {
+        let log = [
+            serde_json::json!({"type":"system","subtype":"init","session_id":"s"}),
+            serde_json::json!({"type":"assistant","message":{"content":[{"type":"text","text":"Looking at the diff."}]}}),
+            serde_json::json!({"type":"assistant","message":{"content":[
+                {"type":"text","text":"Verdict draft: request-changes, the leak is unfixed."},
+                {"type":"tool_use","name":"Bash","input":{"command":"ls"}}
+            ]}}),
+        ]
+        .map(|v| v.to_string())
+        .join("\n");
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&log),
+            "T",
+        );
+        assert!(
+            out.contains("Verdict draft: request-changes, the leak is unfixed."),
+            "{out}"
+        );
+        assert!(!out.contains("\"subtype\":\"init\""), "{out}");
+    }
+
+    /// With no attempted command, the launcher's own template is printed.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn recovery_prints_a_ready_record_command_when_none_was_attempted() {
+        let template = review_record_template(&["STORY-77".into()], 59, Some("abc1234"));
+        assert!(template.starts_with(
+            "aida review record STORY-77 --pr 59 --sha abc1234 --verdict <approved|request-changes|rejected>"
+        ));
+        let out = unrecorded_review_recovery(Path::new("/review"), None, Some("draft"), &template);
+        assert!(out.contains(&template), "{out}");
+        assert!(review_record_template(&[], 59, None).contains("PR-59 --pr 59 --sha <PR-HEAD-SHA>"));
     }
 }

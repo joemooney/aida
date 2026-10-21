@@ -1468,6 +1468,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1646,6 +1648,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
+        // trace:BUG-2187 | ai:claude
+        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1844,6 +1848,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2187 | ai:claude
+    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -3256,14 +3262,66 @@ pub(crate) fn contained_settings_json_with_boundary(
             }
         }
     }
+    let mut allow = crate::contained_boundary::write_allow_rules(write_roots);
+    // BUG-2201: `--setting-sources project` drops the operator's user-level
+    // allows, and a downstream project's `.claude/settings.json` never
+    // receives the template's (`permissions` is not a managed slot), so the
+    // session's own `aida`/git calls and its reads of the main checkout's
+    // store would be denied under `dontAsk`. The launcher grants them itself.
+    // Only beside a write grant: a fail-closed launch stays empty.
+    // trace:BUG-2201 | ai:claude
+    if !allow.is_empty() {
+        allow.extend(contained_baseline_allow_rules(
+            write_roots,
+            store_write_paths,
+        ));
+    }
     serde_json::json!({
         "permissions": {
-            "allow": crate::contained_boundary::write_allow_rules(write_roots),
+            "allow": allow,
             "deny": deny
         },
         "sandbox": sandbox
     })
     .to_string()
+}
+
+/// BUG-2201: the tool rules every contained AIDA session gets whatever its
+/// project's `.claude/settings.json` says: the `aida` CLI through Bash, and
+/// `Read` of the session's worktree and the main checkout's store and cache.
+/// No write tool appears here; the write boundary stays
+/// [`crate::contained_boundary::write_allow_rules`].
+///
+/// Deliberately no git rule. Plain git reads already run under
+/// `autoAllowBashIfSandboxed`, confined by the OS sandbox. An allow rule only
+/// adds the commands that auto-allow would refuse, and a `Bash(git …)` prefix
+/// rule cannot exclude git's option-borne exec and ref writes
+/// (`grep -O<cmd>`, `fetch --upload-pack=` or a `+src:dst` refspec,
+/// `diff --output=`/`--ext-diff`, `-c core.pager=`), which the deny list
+/// cannot enumerate either (TASK-2058).
+// trace:BUG-2201 | ai:claude
+pub(crate) fn contained_baseline_allow_rules(
+    write_roots: &[PathBuf],
+    store_paths: &[PathBuf],
+) -> Vec<String> {
+    let mut rules: Vec<String> = vec!["Bash(aida)".to_string(), "Bash(aida *)".to_string()];
+    let mut push = |rule: String| {
+        if !rules.contains(&rule) {
+            rules.push(rule);
+        }
+    };
+    for root in write_roots {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(root) {
+            push(format!("Read(/{abs}/**)"));
+        }
+    }
+    for path in store_paths {
+        if let Some(abs) = crate::contained_boundary::root_rule_path(path) {
+            push(format!("Read(/{abs})"));
+            push(format!("Read(/{abs}/**)"));
+        }
+    }
+    rules
 }
 
 fn destructive_command_deny_rules() -> Vec<&'static str> {
@@ -3817,6 +3875,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     // grant minted for this launch, or `""` for a baseline child — never
     // inherited from the launcher, whose grant may carry delegable seats.
     apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut child_cmd, vendor, seat);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3885,6 +3945,21 @@ pub(crate) fn apply_headless_child_seat_env(
     cmd.env("AIDA_SESSION_ROLE", seat)
         .env(crate::seat_authority::GRANT_ENV, grant_env);
     scrub_launcher_session_env(cmd);
+}
+
+/// Attribution comes from this launch's vendor and seat, never the launcher
+/// (headless and interactive child launches alike).
+/// These labels confer no authority: recording still requires its existing
+/// reviewer grant and independent-session attestation.
+// trace:BUG-2187 | ai:codex
+fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
+    let agent_type = match vendor {
+        HeadlessVendor::Claude => "claude",
+        HeadlessVendor::Codex => "codex",
+        HeadlessVendor::Agy => "antigravity",
+    };
+    cmd.env("AIDA_AGENT_TYPE", agent_type)
+        .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
 }
 
 /// BUG-2139: strip the launcher-session env a child must not inherit.
@@ -4338,6 +4413,9 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value);
+    // A resume launches Claude even when the launcher is another harness.
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -7321,11 +7399,17 @@ mod tests {
         // BUG-1928: the allow list is the absolute rule set for the worktree
         // this process runs in, not the project-relative `Edit(/**)`.
         // trace:BUG-1928 | ai:claude
+        // BUG-2201: the baseline Bash/Read rules are not write rules.
         let allow: Vec<String> = settings["permissions"]["allow"]
             .as_array()
             .unwrap()
             .iter()
             .filter_map(|r| r.as_str().map(str::to_string))
+            .filter(|r| {
+                crate::contained_boundary::WRITE_TOOLS
+                    .iter()
+                    .any(|tool| r.starts_with(&format!("{tool}(")))
+            })
             .collect();
         assert!(!allow.contains(&"Edit(/**)".to_string()), "{allow:?}");
         assert!(

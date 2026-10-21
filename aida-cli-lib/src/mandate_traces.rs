@@ -509,3 +509,7 @@ fn source_ids(
 #[cfg(test)]
 #[path = "tests/task_1790_mandate_traces_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/task_1800_trace_replay_tests.rs"]
+mod replay_tests;
