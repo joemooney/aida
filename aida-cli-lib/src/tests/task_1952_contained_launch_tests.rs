@@ -178,20 +178,41 @@ fn contained_resume_is_bounded_to_the_lease_tree() {
         None
     );
 
-    let tree = crate::session::resume_lease_tree(&target("claude-a"));
+    // The real contained `aida session resume` path: the target lists main
+    // (the store the transcript was found in), the command runs in and is
+    // bounded to the lease tree.
+    let launcher = main.clone();
     let cmd = aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
-        crate::session::build_claude_resume_exec_command_in(
-            "claude-a",
-            None,
-            true,
-            None,
-            tree.as_deref(),
-        )
+        crate::session::build_contained_resume_command(&target("claude-a"), &launcher)
     })
     .unwrap();
+    assert_eq!(
+        cmd.get_current_dir(),
+        Some(wt.as_path()),
+        "cwd is the lease tree"
+    );
     assert_eq!(
         resume_allow_rules(&cmd),
         vec![format!("Edit(/{}/**)", wt.display())],
         "the resume boundary is the lease tree"
     );
+    // A lease naming another repository's tree keeps the listed checkout.
+    let cmd = aida_core::git_ops::with_host_git_version("git version 2.43.0", || {
+        crate::session::build_contained_resume_command(&target("claude-b"), &launcher)
+    })
+    .unwrap();
+    assert_eq!(cmd.get_current_dir(), Some(main.as_path()));
+}
+
+// BUG-2016 (r1 minor): a relative gitdir back-pointer (`git worktree add
+// --relative-paths`, git 2.48+) resolves against the gitdir, so an intact
+// worktree still verifies.
+// trace:TASK-1952 | trace:BUG-2016 | ai:claude
+#[cfg(unix)]
+#[test]
+fn relative_gitdir_back_pointer_verifies() {
+    let (_tmp, main, wt, _other) = fixture();
+    let gitdir = main.join(".git/worktrees/wt");
+    std::fs::write(gitdir.join("gitdir"), "../../../../wt/.git\n").unwrap();
+    crate::session::verify_linked_worktree_main(&wt, &main).expect("relative back-pointer");
 }

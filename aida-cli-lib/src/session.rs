@@ -672,10 +672,13 @@ pub(crate) fn build_contained_resume_command(
     }
     // trace:BUG-2131 | ai:claude
     aida_core::git_ops::ensure_git_supports_contained()?;
-    let worktree = target
-        .worktree
-        .clone()
-        .filter(|p| p.is_dir())
+    // TASK-2031: a session minted by a lease resumes in that lease's tree
+    // (cwd and write boundary both), not in the main checkout whose store
+    // listed it: a cwd of main would leave main inside Claude Code's own
+    // working-directory permissions.
+    // trace:TASK-1952 | trace:TASK-2031 | ai:claude
+    let worktree = resume_lease_tree(target)
+        .or_else(|| target.worktree.clone().filter(|p| p.is_dir()))
         .unwrap_or_else(|| launcher_cwd.to_path_buf());
     let mut cmd = std::process::Command::new("claude");
     cmd.args(["--resume", &target.id]);
@@ -2989,9 +2992,11 @@ pub(crate) fn verify_linked_worktree_main(worktree: &Path, main: &Path) -> Resul
     let common_ok = crate::contained_boundary::is_linked_worktree_gitdir(&gitdir)
         && canon(&gitdir).and_then(|g| g.parent().and_then(Path::parent).map(Path::to_path_buf))
             == main_common.as_deref().and_then(canon);
+    // `worktree.useRelativePaths` (git 2.48+) writes the back-pointer
+    // relative to the gitdir itself.
     let back_ok = std::fs::read_to_string(gitdir.join("gitdir"))
         .ok()
-        .and_then(|body| canon(Path::new(body.trim())))
+        .and_then(|body| canon(&gitdir.join(body.trim())))
         == canon(&git_entry);
     if common_ok && back_ok {
         Ok(())
@@ -5835,20 +5840,7 @@ fn exec_resume_command(
     contained: bool,
 ) -> Result<()> {
     if target.agent == "claude" {
-        // trace:TASK-1952 | trace:TASK-2031 | ai:claude
-        let tree = if contained {
-            resume_lease_tree(target)
-        } else {
-            None
-        };
-        let mut cmd = build_claude_resume_exec_command_in(
-            &target.id,
-            permission_mode,
-            contained,
-            None,
-            tree.as_deref(),
-        )?;
-        return exec_or_spawn_claude(&mut cmd);
+        return exec_claude_resume(&target.id, permission_mode, contained, None);
     }
     let (program, args) = resume_command_for(target);
     println!("{} {}", program, crate::shell_join_display(&args));
@@ -5866,40 +5858,17 @@ pub(crate) fn build_claude_resume_exec_command(
     contained: bool,
     grant_id: Option<&str>,
 ) -> Result<std::process::Command> {
-    build_claude_resume_exec_command_in(id, permission_mode, contained, grant_id, None)
-}
-
-/// [`build_claude_resume_exec_command`] with the contained boundary (the
-/// `--settings` write roots and the os_wrap scope) taken from `tree` instead
-/// of the process cwd. The process cwd is unchanged: Claude Code finds the
-/// transcript by it.
-// trace:TASK-1952 | trace:TASK-2031 | ai:claude
-pub(crate) fn build_claude_resume_exec_command_in(
-    id: &str,
-    permission_mode: Option<&str>,
-    contained: bool,
-    grant_id: Option<&str>,
-    tree: Option<&Path>,
-) -> Result<std::process::Command> {
     use std::process::Command;
     let mut args = vec!["--resume".to_string(), id.to_string()];
     if let Some(m) = permission_mode {
         args.extend(["--permission-mode".to_string(), m.to_string()]);
     }
     if contained {
-        match tree {
-            Some(tree) => args.extend(claude_contained_flags_for_roots(
-                &contained_session_write_roots_from(tree),
-            )?),
-            None => args.extend(claude_contained_flags()?),
-        }
+        args.extend(claude_contained_flags()?);
     }
     // BUG-2169 S2: a contained interactive resume runs inside os_wrap too.
     // trace:BUG-2169 | ai:claude
-    let (program, args) = match (contained, tree) {
-        (true, Some(tree)) => os_wrapped_program_and_args(tree, "claude", args)?,
-        _ => interactive_claude_program_and_args(contained, args)?,
-    };
+    let (program, args) = interactive_claude_program_and_args(contained, args)?;
     let mut cmd = Command::new(program);
     cmd.args(args);
     if let Some(grant) = grant_id {
