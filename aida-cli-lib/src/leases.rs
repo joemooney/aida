@@ -1170,11 +1170,59 @@ pub(crate) fn lease_state_for(
         };
     }
     let worktree_exists = l.worktree_path.exists();
+    // BUG-2197: callers that may run from inside the lease's own tree pass
+    // `live_sessions` through `attributable_live_sessions` first, so a lease
+    // that records no pid is never read live on the inspector's say-so.
     let has_live_claude = live_sessions
         .iter()
         .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
     let age_hours = now.signed_duration_since(l.started_at).num_hours();
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
+}
+
+/// BUG-2197: does this lease record any owner pid at all?
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_records_pid(l: &SessionLease) -> bool {
+    l.active_pid.is_some() || l.creator_pid.is_some()
+}
+
+/// BUG-2197: what the lease's recorded pids PROVE about its owner, using the
+/// kernel start identity so a reused pid counts as dead and an unreadable
+/// identity does not.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_recorded_owner(l: &SessionLease) -> aida_core::liveness::RecordedLeaseOwner {
+    aida_core::liveness::recorded_lease_owner(
+        l.active_pid
+            .map(|p| (p, l.active_pid_start_time.as_deref())),
+        l.creator_pid
+            .map(|p| (p, l.creator_pid_start_time.as_deref())),
+        aida_core::liveness::process_provably_dead,
+    )
+}
+
+/// BUG-2197: the live sessions a lease may be attributed to. A lease that
+/// records no pid is never attributed to the inspecting process or any of its
+/// ancestors (`inspector`): on the primary checkout the inspecting claude is
+/// always "in the worktree", which made every pid-less lease there read live
+/// and borrow the inspector's pid. Leases that record a pid keep the full list.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn attributable_live_sessions(
+    l: &SessionLease,
+    live: &[process_probe::LiveSession],
+    inspector: &std::collections::HashSet<u32>,
+) -> Vec<process_probe::LiveSession> {
+    live.iter()
+        .filter(|s| lease_records_pid(l) || !inspector.contains(&s.pid))
+        .cloned()
+        .collect()
+}
+
+/// BUG-2197: the inspecting process and its ancestors.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn inspector_pids() -> std::collections::HashSet<u32> {
+    process_probe::walk_ancestor_pids(std::process::id())
+        .into_iter()
+        .collect()
 }
 
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
@@ -2378,6 +2426,13 @@ pub(crate) fn lease_drain_xref(
     }))
 }
 
+/// BUG-2197: a lease that records no pid and that no live process was
+/// attributed to has an unknown owner — neither live nor dead.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_owner_unknown(l: &SessionLease, attributed_pid: Option<u32>) -> bool {
+    !lease_records_pid(l) && attributed_pid.is_none()
+}
+
 /// TASK-345: assemble the `aida session leases --json` rows. Pure over the
 /// classified leases + optional live drain snapshot so the JSON shape is
 /// unit-testable. Each row mirrors the human columns (id/scope/branch/role/
@@ -2399,6 +2454,8 @@ pub(crate) fn leases_json_rows(
                 "worktree": l.worktree_path.display().to_string(),
                 "state": state.label(),
                 "pid": pid,
+                // trace:BUG-2197 | ai:claude
+                "owner_unknown": lease_owner_unknown(l, *pid),
                 "drain": lease_drain_xref(&l.scope, drain),
             })
         })
@@ -2576,9 +2633,12 @@ pub(crate) fn classify_session_leases(
     let now = chrono::Utc::now();
     let live = process_probe::probe_live_claude_sessions();
     let live_agents = agent_registry::load_live_entries(project_root);
+    let inspector = inspector_pids();
     leases
         .iter()
         .map(|l| {
+            // trace:BUG-2197 | ai:claude
+            let live = attributable_live_sessions(l, &live, &inspector);
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
@@ -2724,8 +2784,12 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
             LeaseState::Stale => label.yellow(),
         };
         row.push_str(&format!(" {:<10}", colored));
+        let owner_unknown = lease_owner_unknown(l, *pid);
         if verbose {
-            let pid_col = pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
+            // trace:BUG-2197 | ai:claude
+            let pid_col = pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| if owner_unknown { "unknown" } else { "-" }.into());
             let cc = cc_session_id_for_worktree(&l.worktree_path)
                 .map(|s| s.chars().take(20).collect::<String>())
                 .unwrap_or_else(|| "-".into());
@@ -2733,6 +2797,17 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         }
         row.push_str(&format!(" {}", l.worktree_path.display()));
         println!("{}", row);
+        // trace:BUG-2197 | ai:claude
+        if owner_unknown {
+            println!(
+                "{}",
+                format!(
+                    "{}? unknown owner — this lease records no pid, so it is neither live nor dead",
+                    " ".repeat(15)
+                )
+                .dimmed()
+            );
+        }
         // STORY-301: annotate the lease the orchestrator is currently driving.
         if let Some((cur, phase)) = &drain_current {
             if &l.scope == cur {

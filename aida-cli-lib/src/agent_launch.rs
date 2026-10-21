@@ -286,14 +286,19 @@ pub(crate) fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         } => session_prune(*days, *dry_run, *yes, *orphans, *escalations),
         SessionCommand::Gc { dry_run, yes } => session_gc(*dry_run, *yes),
         // trace:TASK-1177 | ai:claude
-        SessionCommand::Reap { dry_run, yes, json } => {
-            session_reap::run_session_reap(session_reap::ReapOptions {
-                dry_run: *dry_run,
-                yes: *yes,
-                json: *json,
-                quiet_when_empty: false,
-            })
-        }
+        SessionCommand::Reap {
+            dry_run,
+            yes,
+            json,
+            release_unknown_owner,
+        } => session_reap::run_session_reap(session_reap::ReapOptions {
+            dry_run: *dry_run,
+            yes: *yes,
+            json: *json,
+            quiet_when_empty: false,
+            // trace:BUG-2197 | ai:claude
+            release_unknown_owner: *release_unknown_owner,
+        }),
         SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
         // trace:TASK-1607 | ai:claude
         SessionCommand::Seat { cmd } => seat_occupancy::cmd::dispatch(cmd),

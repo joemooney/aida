@@ -863,6 +863,11 @@ pub(crate) struct SessionHandoffFacts {
     pub(crate) live_drain: Option<String>,
     pub(crate) stale_drain: Option<String>,
     pub(crate) live_session_leases: Vec<String>,
+    /// BUG-2197: leases covering cwd that record no pid. Their owner is
+    /// unknown, so they are reported but never pin compaction: attributing
+    /// them to this conversation is exactly the inspector-attribution bug.
+    // trace:BUG-2197 | ai:claude
+    pub(crate) unknown_owner_leases: Vec<String>,
 }
 
 pub(crate) fn decide_session_handoff(facts: &SessionHandoffFacts) -> SessionHandoffRecommendation {
@@ -873,25 +878,36 @@ pub(crate) fn decide_session_handoff(facts: &SessionHandoffFacts) -> SessionHand
     }
 }
 
+/// Leases covering `cwd`, split into pins (record a pid) and unknown-owner
+/// leases (record none).
+// trace:BUG-2197 | ai:claude
 pub(crate) fn active_handoff_leases(
     leases: &[SessionLease],
     cwd: Option<&std::path::Path>,
-) -> Vec<String> {
-    let mut out = Vec::new();
+) -> (Vec<String>, Vec<String>) {
+    let mut pins = Vec::new();
+    let mut unknown = Vec::new();
     for lease in leases {
         let covers_cwd = cwd.is_some_and(|cwd| lease_covers_cwd(lease, cwd));
         if covers_cwd {
-            out.push(format!(
+            let row = format!(
                 "{} {} ({})",
                 &lease.id[..8.min(lease.id.len())],
                 lease.scope,
                 lease.branch
-            ));
+            );
+            if lease_records_pid(lease) {
+                pins.push(row);
+            } else {
+                unknown.push(row);
+            }
         }
     }
-    out.sort();
-    out.dedup();
-    out
+    for out in [&mut pins, &mut unknown] {
+        out.sort();
+        out.dedup();
+    }
+    (pins, unknown)
 }
 
 pub(crate) fn collect_session_handoff_facts(project_root: &std::path::Path) -> SessionHandoffFacts {
@@ -915,11 +931,13 @@ pub(crate) fn collect_session_handoff_facts(project_root: &std::path::Path) -> S
     let cwd = std::env::current_dir()
         .ok()
         .map(|cwd| cwd.canonicalize().unwrap_or(cwd));
-    let live_session_leases = active_handoff_leases(&list_leases(project_root), cwd.as_deref());
+    let (live_session_leases, unknown_owner_leases) =
+        active_handoff_leases(&list_leases(project_root), cwd.as_deref());
     SessionHandoffFacts {
         live_drain,
         stale_drain,
         live_session_leases,
+        unknown_owner_leases,
     }
 }
 
@@ -1048,6 +1066,10 @@ pub(crate) fn session_handoff_check(_check: bool) -> Result<()> {
     if let Some(stale) = &facts.stale_drain {
         println!("Note: stale drain lock present but not a compact pin: {stale}");
     }
+    // trace:BUG-2197 | ai:claude
+    for lease in &facts.unknown_owner_leases {
+        println!("Note: lease with unknown owner (records no pid) is not a compact pin: {lease}");
+    }
     println!(
         "CLI limit: conversation-only residue is unknowable here; run /aida-handoff or /aida-capture before ending the session."
     );
@@ -1063,6 +1085,7 @@ mod session_handoff_tests {
             live_drain: None,
             stale_drain: None,
             live_session_leases: Vec::new(),
+            unknown_owner_leases: Vec::new(),
         }
     }
 

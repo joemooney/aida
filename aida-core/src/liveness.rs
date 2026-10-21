@@ -934,6 +934,84 @@ fn process_identity_is_alive_with(
         != IdentityMatch::Different
 }
 
+/// Is `pid` PROVABLY dead? True when the pid is absent from the process table,
+/// or when it is alive but its live start identity positively differs from
+/// `recorded_start_time` (the pid was reused by another process).
+///
+/// Every "cannot tell" case is NOT dead: a live pid with no recorded identity,
+/// an unrecognised record, an unreadable live identity, or one in another
+/// scheme. This is the gate for releasing a lease without any other evidence,
+/// so it fails closed toward keeping the lease. A pid of 0 is never a real
+/// recorded owner and is not proof of anything.
+// trace:BUG-2197 | ai:claude
+pub fn process_provably_dead(pid: u32, recorded_start_time: Option<&str>) -> bool {
+    process_provably_dead_with(
+        pid,
+        recorded_start_time,
+        pid_is_alive,
+        process_start_identity_legacy,
+        process_start_identity_exact,
+    )
+}
+
+// trace:BUG-2197 | ai:claude
+pub fn process_provably_dead_with(
+    pid: u32,
+    recorded_start_time: Option<&str>,
+    is_pid_alive: impl FnOnce(u32) -> bool,
+    live_start_time: impl FnOnce(u32) -> Option<String>,
+    live_exact_start_time: impl FnOnce(u32) -> Option<String>,
+) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    if !is_pid_alive(pid) {
+        return true;
+    }
+    recorded_start_time.is_some_and(|recorded| {
+        compare_recorded_identity(pid, recorded, live_start_time, live_exact_start_time)
+            == IdentityMatch::Different
+    })
+}
+
+/// What a lease's recorded pids prove about its owner.
+// trace:BUG-2197 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordedLeaseOwner {
+    /// The lease records no pid at all: unknown owner, neither live nor dead.
+    /// Never attribute it to whichever process happens to be inspecting it.
+    Unrecorded,
+    /// Every recorded pid is provably dead (see [`process_provably_dead`]).
+    Dead,
+    /// At least one recorded pid is alive or cannot be proven dead.
+    NotProvablyDead,
+}
+
+/// Classify a lease's recorded owner pids. BOTH `active_pid` and `creator_pid`
+/// must be provably dead when both are recorded: a release that rests on pid
+/// death alone must not leave a live recorded process holding nothing.
+/// `provably_dead` is injected so the matrix is testable without real
+/// processes; production callers pass [`process_provably_dead`].
+// trace:BUG-2197 | ai:claude
+pub fn recorded_lease_owner(
+    active: Option<(u32, Option<&str>)>,
+    creator: Option<(u32, Option<&str>)>,
+    provably_dead: impl Fn(u32, Option<&str>) -> bool,
+) -> RecordedLeaseOwner {
+    let recorded: Vec<(u32, Option<&str>)> = active.into_iter().chain(creator).collect();
+    if recorded.is_empty() {
+        return RecordedLeaseOwner::Unrecorded;
+    }
+    if recorded
+        .iter()
+        .all(|(pid, start)| provably_dead(*pid, *start))
+    {
+        RecordedLeaseOwner::Dead
+    } else {
+        RecordedLeaseOwner::NotProvablyDead
+    }
+}
+
 /// BUG-613: liveness must be O(1), not a full process-table walk. The old
 /// implementation built a fresh `sysinfo::System` and refreshed EVERY process
 /// (and, on Linux, every thread via `/proc/<pid>/task/<tid>/...`) just to test

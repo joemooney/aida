@@ -207,6 +207,57 @@ pub(crate) fn session_process_exited(
         && !worktree_has_live_process
 }
 
+/// What the pass may do with a lease held on a protected checkout or branch.
+// trace:BUG-2197 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ProtectedLeaseVerdict {
+    /// Every recorded pid is provably dead: release the lease file only.
+    Release(String),
+    /// No pid recorded: unknown owner. Release only on explicit request.
+    UnknownOwner(String),
+    /// Leave the lease exactly as it is.
+    Keep(String),
+}
+
+/// Classify a lease on the protected floor. The checkout itself is never a
+/// removal target, so the only question is whether the LEASE may go, and the
+/// only evidence accepted is the lease's own recorded pids: whoever happens to
+/// be running inside the main checkout (including the inspecting process) says
+/// nothing about who owns the lease. Pids recorded on another host cannot be
+/// probed here, and a worktree-less advisory lease (`aida claim` /
+/// `aida review`) keeps its own lifecycle.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn classify_protected_lease(
+    has_worktree: bool,
+    same_host: bool,
+    owner: aida_core::liveness::RecordedLeaseOwner,
+) -> ProtectedLeaseVerdict {
+    use aida_core::liveness::RecordedLeaseOwner;
+    const FLOOR: &str = "protected checkout/branch — never reaped";
+    if !has_worktree {
+        return ProtectedLeaseVerdict::Keep(FLOOR.to_string());
+    }
+    if !same_host {
+        return ProtectedLeaseVerdict::Keep(format!(
+            "{FLOOR}; lease was taken on another host, its pids cannot be checked here"
+        ));
+    }
+    match owner {
+        RecordedLeaseOwner::Dead => ProtectedLeaseVerdict::Release(
+            "protected checkout — every recorded pid is dead; lease released, checkout untouched"
+                .to_string(),
+        ),
+        RecordedLeaseOwner::Unrecorded => ProtectedLeaseVerdict::UnknownOwner(
+            "unknown owner — lease records no pid (neither live nor dead); \
+             release with --release-unknown-owner"
+                .to_string(),
+        ),
+        RecordedLeaseOwner::NotProvablyDead => ProtectedLeaseVerdict::Keep(format!(
+            "{FLOOR}; a recorded pid is alive or cannot be proven dead"
+        )),
+    }
+}
+
 /// Branches the pass will never delete, whatever else holds. A session lease
 /// pointing at one of these is a bookkeeping oddity, not a disposable branch.
 const PROTECTED_BRANCHES: &[&str] = &["main", "master", "aida-store", "HEAD"];
@@ -346,6 +397,17 @@ pub(crate) struct ReapReport {
     // trace:FR-284 | ai:claude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notifiable: Vec<NotifyRow>,
+    /// Leases on a protected checkout (the main checkout, the store tree, a
+    /// protected branch) whose recorded pids are all provably dead. Never
+    /// reaped: only the lease file is released, the checkout is untouched.
+    // trace:BUG-2197 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub releasable: Vec<ReapRow>,
+    /// Leases on a protected checkout that record no pid: unknown owner,
+    /// neither live nor dead. Released only with `--release-unknown-owner`.
+    // trace:BUG-2197 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unknown_owner: Vec<ReapRow>,
     /// CHAIN slice (TASK-1179): the next queued spec's display id, set only
     /// after the pass actually reaped ≥1 session AND a next spec is queued.
     /// Suggest-only — the operator runs the launch; the reap pass never spawns.
@@ -805,6 +867,7 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
     let project_canon = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
+    let this_host = crate::coordination::hostname();
 
     for lease in &leases {
         let lease = &reap_view(lease, project_root);
@@ -825,17 +888,33 @@ pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
         let branch = reap_branch(lease, default_ref.as_deref());
         let protected_branch = branch_is_protected(branch, default_ref.as_deref());
         if is_project_or_store_tree || protected_branch {
-            report.skipped.push(ReapRow {
+            // trace:BUG-2197 | ai:claude
+            let verdict = classify_protected_lease(
+                has_worktree,
+                lease.hostname == this_host,
+                lease_recorded_owner(lease),
+            );
+            let (verdict_label, reason) = match &verdict {
+                ProtectedLeaseVerdict::Release(r) => ("release", r.clone()),
+                ProtectedLeaseVerdict::UnknownOwner(r) => ("unknown-owner", r.clone()),
+                ProtectedLeaseVerdict::Keep(r) => ("skip", r.clone()),
+            };
+            let row = ReapRow {
                 session: lease.id.clone(),
                 scope: lease.scope.clone(),
                 worktree: lease.worktree_path.display().to_string(),
                 branch: lease.branch.clone(),
-                verdict: "skip",
-                reason: "protected checkout/branch — never reaped".to_string(),
+                verdict: verdict_label,
+                reason,
                 spec_finished: finished.contains(&lease.scope.to_ascii_uppercase()),
                 branch_tip: None,
                 outcome: None,
-            });
+            };
+            match verdict {
+                ProtectedLeaseVerdict::Release(_) => report.releasable.push(row),
+                ProtectedLeaseVerdict::UnknownOwner(_) => report.unknown_owner.push(row),
+                ProtectedLeaseVerdict::Keep(_) => report.skipped.push(row),
+            }
             continue;
         }
 
@@ -1049,6 +1128,43 @@ fn reap_one_with_clear_hooks(
         format!("reaped — worktree removed, lease released, branch `{branch}` deleted")
     } else {
         format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
+    }
+}
+
+/// BUG-2197: release ONE protected-checkout lease. Re-reads the lease from disk
+/// and re-proves the verdict immediately before deleting, so a lease that was
+/// re-stamped with a live pid since the scan is kept. Only the lease and its
+/// companion files go; no worktree, branch, or checkout file is touched.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn release_protected_lease(
+    project_root: &std::path::Path,
+    lease_id: &str,
+    allow_unknown_owner: bool,
+) -> String {
+    let Some(lease) = list_leases(project_root)
+        .into_iter()
+        .find(|l| l.id == lease_id)
+    else {
+        return "skipped — lease already gone".to_string();
+    };
+    let lease = reap_view(&lease, project_root);
+    let verdict = classify_protected_lease(
+        !lease.worktree_path.as_os_str().is_empty(),
+        lease.hostname == crate::coordination::hostname(),
+        lease_recorded_owner(&lease),
+    );
+    match verdict {
+        ProtectedLeaseVerdict::Release(_) => {
+            release_lease_files(project_root, &lease.id);
+            "released — recorded pid(s) dead; checkout untouched".to_string()
+        }
+        ProtectedLeaseVerdict::UnknownOwner(_) if allow_unknown_owner => {
+            release_lease_files(project_root, &lease.id);
+            "released — unknown owner (no recorded pid); checkout untouched".to_string()
+        }
+        ProtectedLeaseVerdict::UnknownOwner(r) | ProtectedLeaseVerdict::Keep(r) => {
+            format!("kept — {r}")
+        }
     }
 }
 
@@ -1373,6 +1489,9 @@ pub(crate) struct ReapOptions {
     /// Print nothing when there is nothing to reap (for the post-merge hook,
     /// which should stay quiet on the common no-op).
     pub quiet_when_empty: bool,
+    /// Also release protected-checkout leases that record no pid.
+    // trace:BUG-2197 | ai:claude
+    pub release_unknown_owner: bool,
 }
 
 // CHAIN slice (FR-284 child, per ADR-24): after a reap actually removes a
@@ -1445,7 +1564,12 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     }
     let mut report = scan_reapable(&project_root);
 
-    if report.reapable.is_empty() && report.skipped.is_empty() && report.unshipped_work.is_empty() {
+    if report.reapable.is_empty()
+        && report.skipped.is_empty()
+        && report.unshipped_work.is_empty()
+        && report.releasable.is_empty()
+        && report.unknown_owner.is_empty()
+    {
         if opts.json {
             println!("{}", serde_json::to_string_pretty(&report)?);
         } else if !opts.quiet_when_empty {
@@ -1567,6 +1691,9 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
         }
     }
 
+    // trace:BUG-2197 | ai:claude
+    release_protected_leases(&project_root, &mut report, &opts)?;
+
     if report.reapable.is_empty() {
         if opts.json {
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1660,6 +1787,97 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
     Ok(())
 }
 
+/// BUG-2197: the protected-checkout release lane of `aida session reap`. Lists
+/// releasable and unknown-owner leases, then (unless `--dry-run`, and behind
+/// the same `--yes` / TTY confirmation as the reap) releases the dead-owner
+/// ones, plus the unknown-owner ones when `--release-unknown-owner` is set.
+// trace:BUG-2197 | ai:claude
+fn release_protected_leases(
+    project_root: &std::path::Path,
+    report: &mut ReapReport,
+    opts: &ReapOptions,
+) -> Result<()> {
+    if report.releasable.is_empty() && report.unknown_owner.is_empty() {
+        return Ok(());
+    }
+    if !opts.json {
+        for row in &report.releasable {
+            println!(
+                "  {} {} {} — {}",
+                "release".cyan(),
+                short_id(&row.session),
+                row.scope.cyan(),
+                row.reason
+            );
+        }
+        // The post-merge hook's quiet pass names only what it will act on.
+        let unknown_rows: &[ReapRow] = if opts.quiet_when_empty && !opts.release_unknown_owner {
+            &[]
+        } else {
+            &report.unknown_owner
+        };
+        for row in unknown_rows {
+            println!(
+                "  {} {} {} — {}",
+                "unknown".yellow(),
+                short_id(&row.session),
+                row.scope.cyan(),
+                row.reason
+            );
+        }
+    }
+    let mut targets: Vec<&mut ReapRow> = report.releasable.iter_mut().collect();
+    if opts.release_unknown_owner {
+        targets.extend(report.unknown_owner.iter_mut());
+    }
+    if targets.is_empty() {
+        return Ok(());
+    }
+    if opts.dry_run {
+        if !opts.json {
+            println!("--dry-run: no lease was released.");
+        }
+        return Ok(());
+    }
+    if !opts.yes {
+        if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+            if !opts.json {
+                println!("\nRe-run with --yes to release them.");
+            }
+            return Ok(());
+        }
+        use std::io::Write;
+        eprint!(
+            "\nRelease the {} lease(s)? Only lease files are removed. [y/N] ",
+            targets.len()
+        );
+        std::io::stderr().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted — nothing released.");
+            return Ok(());
+        }
+    }
+    for row in targets {
+        let outcome =
+            release_protected_lease(project_root, &row.session, opts.release_unknown_owner);
+        if !opts.json {
+            println!(
+                "  {} {} — {outcome}",
+                short_id(&row.session),
+                row.scope.cyan()
+            );
+        }
+        row.outcome = Some(outcome);
+    }
+    Ok(())
+}
+
+fn short_id(id: &str) -> &str {
+    &id[..id.len().min(8)]
+}
+
 /// STORY-1218: the night-shift tick's reap — the same scan and the same
 /// per-lease reap as `aida session reap --yes`, returning the reaped count and
 /// printing nothing. A live process is never touched (the predicate requires
@@ -1721,3 +1939,9 @@ mod task_1543_reap_polish_tests;
 #[cfg(test)]
 #[path = "tests/bug_1694_registration_clear_claim_tests.rs"]
 mod bug_1694_registration_clear_claim_tests;
+
+// Protected-checkout lease release + no-pid owner attribution.
+// trace:BUG-2197 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2197_dead_lease_release_tests.rs"]
+mod bug_2197_dead_lease_release_tests;

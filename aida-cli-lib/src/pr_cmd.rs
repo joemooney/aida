@@ -3948,6 +3948,7 @@ pub(crate) fn pr_ship_with_method(
             yes: true,
             json: false,
             quiet_when_empty: true,
+            release_unknown_owner: false,
         }) {
             eprintln!(
                 "  {} post-merge session reap failed or was partially applied: {e:#}",
