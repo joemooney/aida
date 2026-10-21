@@ -1,0 +1,29 @@
+id: 01a15cb1-60a7-79c3-84db-fa9391a7ce7f
+spec_id: TASK-2038
+agreed_id: TASK-2038
+title: Record the git 2.55 LD_PRELOAD repro run for converted git fixtures (BUG-2191.ac490e38)
+description: |
+  BUG-2191's criterion ac490e38 asks for the docs/testing/bug-2118-history-fixture-object-write.md reproduction (git 2.55 + LD_PRELOAD mkdir widening) to show no failure for a sample of fixtures converted to test_git::git_command(). No traced test or recorded run exists; `aida criteria BUG-2191` lists it as untested. The bug is marked Completed anyway.
+
+  Follow-up: run the recipe against a sample of converted fixtures (history fixture plus a few from the migration) and attach the result to BUG-2191.
+
+  Raised in review of PR-2791: https://github.com/joemooney/aida/pull/2791#issuecomment-6307964385
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T04:21:30.919680820Z
+modified_at: 2026-10-21T04:21:30.919680820Z
+req_type: Task
+tags:
+- from-review:PR-2791
+- severity:minor
+- testing
+filed_at:
+  code_sha: 3c116d8919d1294c220c0127d70405d871c956ca
+  branch: pr-2791
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 01a15ca7b061
