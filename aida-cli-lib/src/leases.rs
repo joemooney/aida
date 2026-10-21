@@ -1176,6 +1176,18 @@ pub(crate) fn lease_state_for(
     let has_live_claude = attributable_live_sessions(l, live_sessions, inspector_pids())
         .iter()
         .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
+    // BUG-2206: an attested-reviewer lease (review verb, with its own review
+    // worktree) whose recorded creator is provably dead, and with no live
+    // session in that worktree, is over — never Dormant on a 24h age clock.
+    // trace:TASK-1955 | ai:claude (BUG-2206)
+    if l.review_verb
+        && !has_live_claude
+        && l.creator_pid.is_some_and(|pid| {
+            aida_core::liveness::process_provably_dead(pid, l.creator_pid_start_time.as_deref())
+        })
+    {
+        return LeaseState::Stale;
+    }
     let age_hours = now.signed_duration_since(l.started_at).num_hours();
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
 }

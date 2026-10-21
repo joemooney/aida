@@ -1201,7 +1201,11 @@ pub(crate) fn session_end(
     // Capture before `git worktree remove` deletes the shim. The pure guard
     // prevents malformed or legacy fallback values from targeting parent `target/`.
     // trace:TASK-1577 | ai:codex
-    let session_target_dir = has_worktree
+    // TASK-2053: never for a seat clone, whose `.aida/session-env.sh` is
+    // seat-written (a FIFO would block the read, a symlink redirect it);
+    // destroy removes the clone whole.
+    // trace:TASK-2053 | ai:claude
+    let session_target_dir = (has_worktree && !is_clone)
         .then(|| session_cargo_target_dir(&target.worktree_path))
         .flatten()
         .filter(|path| is_session_cargo_target_dir(path, &target.worktree_path));
@@ -1524,7 +1528,11 @@ pub(crate) fn session_end(
     //     session_start created. trace:BUG-52 | ai:claude
     // BUG-734: no worktree ⇒ no session symlinks to strip (an empty path
     // would resolve the checks against the caller's cwd). trace:BUG-734 | ai:claude
-    if has_worktree {
+    // TASK-2053: a seat clone's `.aida` is seat-writable, so a symlink there
+    // would aim these host unlinks outside the clone. Its links are never
+    // stripped: destroy removes the whole clone without following symlinks.
+    // trace:TASK-2053 | ai:claude
+    if has_worktree && !is_clone {
         let store_link = target.worktree_path.join(".aida-store");
         if store_link.is_symlink() {
             let _ = std::fs::remove_file(&store_link);
