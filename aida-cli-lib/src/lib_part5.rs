@@ -3385,8 +3385,7 @@ pub(crate) fn handle_review_record_at(
                     err.kind(),
                     std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
                 );
-                let contained =
-                    refused && crate::session::aida_contained_env().unwrap_or(false);
+                let contained = refused && crate::session::aida_contained_env().unwrap_or(false);
                 let Some(fallback) =
                     contained_handshake_fallback(&project_root, &handshake, contained)
                 else {
@@ -3578,10 +3577,11 @@ mod story_1405_review_marker_tests {
         let fallback = worktree.join(".aida/review-verdicts/PR-14053.json");
 
         let uncontained = record_with_anchor(&worktree, &anchor, None);
-        assert!(
-            format!("{:#}", uncontained.expect_err("uncontained refusal is an error"))
-                .contains("handshake was NOT written"),
-        );
+        assert!(format!(
+            "{:#}",
+            uncontained.expect_err("uncontained refusal is an error")
+        )
+        .contains("handshake was NOT written"),);
         assert!(!fallback.exists(), "uncontained never falls back");
 
         record_with_anchor(&worktree, &anchor, Some("1"))
