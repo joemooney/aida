@@ -8,7 +8,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-18T17:22:54.157793882Z
+modified_at: 2026-10-21T04:16:17.837082345Z
 req_type: Task
 tags:
 - closure-pending
@@ -693,6 +693,47 @@ comments:
   created_at: 2026-10-12T15:08:19.313950835Z
   modified_at: 2026-10-12T15:08:19.313950835Z
   session_id: 2260a307-a73f-4f18-b7da-137e3109fd2e
+- id: 01a15cac-99ad-7621-91ac-494c2f63ba22
+  author: joe
+  content: |
+    SKETCH (needs advisor signoff): TASK-1332 acceptance re-check on origin/main 7a1a2077bd, and closure plan
+
+    Author: claude implementer session 2026-10-20, brief from the advisor 21:25. Analysis only; no code or status change. The acceptance list is the five MISSING items in the 2026-10-12 advisor NOT SATISFIED comment (comments[12]). TASK-1717 (#2502) already covers the title and description.
+
+    ## Evidence table
+
+    | # | Item | Status on origin/main | Code | Proof (test) |
+    |---|---|---|---|---|
+    | 1a | coordination.rs: claim/lock-claim acquire, release, heartbeat | MET (#2756) | `aida-cli-lib/src/coordination.rs:700,901,1168,1412,1460`, each inside `with_store_write_lock`; release and heartbeat re-check `clone_path` after `refresh_store_or_stop` (the post-refresh identity check that A2 asks for) | TASK-1930 PR-2756 coverage; the inventory doc §4 coordination row |
+    | 1b | schedule_ledger.rs `pull_rebase_auto_merge` writers | MET (#2756) | `schedule_ledger.rs:340` `write_cas_opts`, `:500` `write_batch_cas_opts` | `write_batch_cas_opts` barrier and error-preservation test (round-3 advisor note on TASK-1981) |
+    | 1c | aida-core team.rs roster CAS | MET (#2756) | `aida-core/src/team.rs:223,310,396` | team cross-process lock test (`AIDA_TEST_TEAM_WRITER_CHILD_*`) |
+    | 1d | alias.rs `link_cas` | MET (#2756) | `aida-core/src/alias.rs:219` | (no dedicated barrier test found) |
+    | 1e | init_cmd.rs existing-store retry | LOCK MET (#2756); exact-SHA push and test OPEN, owned by TASK-1981 F6/F7 | `init_cmd.rs` `handle_init_distributed_sibling`, retry `pull_rebase` under the lock; still calls plain `git_ops::push(branch)` | none on main. TASK-1981 slice 2 is committed locally at 4737fd5c75, not pushed |
+    | 1f | git_ops.rs node registration, identity, hijack | LOCK MET (#2756); barrier tests OPEN, owned by TASK-1981 F7 | `git_ops.rs:4533,4739,4851,4996,5173` | none on main for `hijack_node`, `unregister_node`, `register_node_remote_only`, `set_node_*`. TASK-1981 slice 2 local |
+    | 1g | doctor and compaction maintenance writers | PARTLY MET (#2756: relationship, stale-block and counter-scope repairs, `squash_orphan_to_snapshot`). Remaining work is owned by TASK-1981 (TASK-1975 was folded into it): heal_doctor_parent_tag_drift, store_tracked_runtime and staging_ignore (`doctor_cmd.rs:7393,7936,8190`), `handle_retire_legacy_ids` (`lib_part2.rs:15`), the post-lock `write_object` callers, and GC placement | inventory doc §6.1 | PR-2778 (open, approved per TASK-1981 c[10]) adds parent-tag, orphan-queue and compaction barriers and moves GC outside the lock |
+    | 2 | A1: dispenser order (store lock before blocks.lock), add-vs-sync barrier, deadlock tests | ORDER MET; add-vs-sync barrier OPEN, owned by TASK-1981 F7 | `aida-core/src/db/store_lock.rs:152` refuses store-lock acquisition while `dispense_lock_held()`; `requirements_cli.rs` `run_add` takes store before `with_dispense_lock` | `store_lock.rs:508` `task_1930_a1_refuses_store_write_lock_inside_dispense_lock_and_allows_store_then_dispense`. The add-vs-sync barrier is in TASK-1981 slice 2 (local) |
+    | 3 | Conditional-push writers and the A2 owner-join (private-candidate publication, family authority at remote acceptance, accepted-remote/failed-local-install, ambiguous transport, HIJACKED.toml ordering) | NOT MET. NOT owned by TASK-1981 | The CAS writers still commit on canonical HEAD, `push_exact` the commit, and on rejection run `rollback_commit_if_head_matches` (`git_ops.rs:2407`). That is the ordinary S/L shape, not the private-candidate algorithm. `hijack_node` (`git_ops.rs:4996`) still writes the peer HIJACKED.toml before the push and removes it by pathname on rejection (about +150 in that fn), which is exactly the A2(5) lifecycle the signoff called out. BUG-1808 is `done`, but its A2 V3 proposal (comments[10] here) never got an independent signoff. No spec owns it now | none |
+    | 4a | A4: private-ref instead of FETCH_HEAD | MET | `git_ops.rs:1365` `fetch_rebase_target`: `refs/aida/store-pull/<uuid>`, `--no-write-fetch-head`, the ref is deleted even on failure | `git_ops.rs:8772` `store_pull_pins_single_branch_and_preserves_shared_fetch_head`; `:8907` `pull_helpers_refuse_option_like_remote_or_branch` |
+    | 4b | A4: rebase-abort | MET | `git_ops.rs:1435` `rebase_onto` aborts only an invocation-owned rebase and reports both errors | `git_ops.rs:8722` `failed_pull_rebase_aborts_and_restores_branch`; `aida-cli/tests/task_1717_store_writer_lock.rs:2473` `owned_rebase_abort_failure_is_reported_and_preserved`; `:816` `sync_refuses_and_preserves_a_pre_existing_rebase` |
+    | 4c | A4: competing cache, GC, full phase coverage | Competing cache MET (`task_1717_store_writer_lock.rs:2614` `stale_cache_with_a_competing_refresh_holder`). GC is being reworked in PR-2778 (TASK-1981), and `gc_runs_after_the_store_window` (`:2659`) is the regression for it. Phase coverage is shown by the commit/rebase/push-unlocked/hook tests at `:716,755,793,845,943,1063,1404,2271`. It still needs the advisor's independent judgment that these close "full phase coverage" | as listed |
+    | 5 | TASK-1333 dependency | NOT MET. NOT owned by TASK-1981 | TASK-1333 is `deferred` on a technical dependency (vendor profile plus the common publisher/P4/C joins). Nothing in the store-lock work can unblock it | none |
+
+    Summary: items 1, 2 and 4 are met on main, apart from pieces that TASK-1981 owns (PR-2778 open and approved; slice 2 local at 4737fd5c75). Items 3 and 5 are open, and TASK-1981 does not own them.
+
+    ## Proposed disposition (needs advisor signoff)
+
+    Item 3 is not a small code gap. It is the whole A2 store-CAS design, about 125 KB of V3 proposal relayed on BUG-1808 with no signoff. Item 5 is blocked outside this area entirely. Neither fits a TASK-1332 implementation slice without first getting an A2 signoff. I propose option (A) from comments[11], with the files named:
+
+    1. File a new task, "Store-CAS private-candidate publication and hijack marker lifecycle (A2)". It carries item 3 and links to the V2 review and V3 proposal on BUG-1808 and TASK-1332 comments[7] and [10]. Its first gate is an independent A2 V3 signoff. Code it would touch once signed: `aida-core/src/git_ops.rs` (`push_exact_outcome`, `rollback_commit_if_head_matches`, `hijack_node`, the node writers), `aida-cli-lib/src/coordination.rs`, `aida-core/src/team.rs`, `aida-core/src/alias.rs`, `aida-cli-lib/src/db_block.rs`. Approach, as already selected by the 10-08 signoff: pin L/R/preimage/intent, build candidate C in private storage that no canonical ref and no wildcard push can reach, recompute the family predicate on each fresh base, push exact C, and install against the current locked H while preserving peers. Report accepted/incomplete when the local install fails. Treat an unknown transport outcome as unknown. Hijack: replace the peer marker only after the push is accepted. Tests are the CAS-peer-barrier and hijack witnesses in comments[4] "Preserved and expanded acceptance".
+    2. Remove TASK-1333 as a TASK-1332 closure prerequisite and keep it as its own deferred spec with a `references` link. It already records its own resume condition.
+    3. When TASK-1981 ships (PR-2778, then the slice-2 PR), TASK-1332 closes as satisfied by TASK-1717 + TASK-1930 + TASK-1981, with item 3 moved to the new task.
+
+    Alternative (B): keep TASK-1332 open as the umbrella until the A2 task ships. That only adds tracking; it does not add any coverage.
+
+    No implementation is proposed under TASK-1332 itself. Nothing will be filed or changed until the advisor rules.
+  created_at: 2026-10-21T04:16:17.837082345Z
+  modified_at: 2026-10-21T04:16:17.837082345Z
+  session_id: 5153cc4c-e6fe-439d-b2b2-dc09e14e43cb
 history:
 - id: 01a1189e-5d79-75b3-9bf1-b40d1676e775
   author: joe
