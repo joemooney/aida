@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-21T09:51:49.937791094Z
+modified_at: 2026-10-21T09:53:44.659065656Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -90,6 +90,12 @@ comments:
   content: 'ADVISOR 01:16 burndown: folded TASK-2048 (""BUG-2169 trust tests: assert main/.git deny under a forged main; cover a mismatched cargo_target_dir lease"") into this spec as an item.'
   created_at: 2026-10-21T08:16:16.315367308Z
   modified_at: 2026-10-21T08:16:16.315367308Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15de1-8ad3-7c03-a7f0-ac826978c8ef
+  author: joe
+  content: 'ADVISOR 02:55: auto-completed in error by the PR-2787 ship (Refs subject got a bare (BUG-2169) trailer appended; filed as BUG-2203). Slices S1 and S2 are done. The remaining S3-S5 plus the folded TASK-2046/2047/2048 hardening moved to TASK-2053 (approved). Leaving this spec completed for S1 and S2.'
+  created_at: 2026-10-21T09:53:44.659065656Z
+  modified_at: 2026-10-21T09:53:44.659065656Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a143cc-f836-7583-b190-7823068c7b77
