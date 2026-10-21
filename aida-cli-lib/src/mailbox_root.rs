@@ -397,7 +397,9 @@ pub(crate) fn known_mailbox_recipients(
 ) -> std::collections::HashMap<String, String> {
     let project_root = store_root.parent().unwrap_or(store_root);
     let mut map = known_identity_spellings(project_root);
-    map.extend(known_mailbox_people(store_root));
+    for (key, spelling) in known_mailbox_people(store_root) {
+        map.entry(key).or_insert(spelling);
+    }
     map
 }
 

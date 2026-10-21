@@ -394,6 +394,30 @@ mod tests {
     }
 
     #[test]
+    fn historical_catalog_preserves_precedence_while_live_sends_refuse_ambiguity() {
+        let tmp = tempfile::tempdir().unwrap();
+        let store = tmp.path().join(".aida-store");
+        std::fs::create_dir_all(store.join("registry")).unwrap();
+        std::fs::write(
+            store.join("registry/team.toml"),
+            "[members]\nJoe = ['advisor']\nAdvisor = []\n",
+        )
+        .unwrap();
+        registry(tmp.path(), "codex-one", "joe", "implementer", false);
+        let historical = crate::known_mailbox_recipients(&store);
+        assert_eq!(
+            historical["joe"], "joe",
+            "registry spelling keeps its original precedence"
+        );
+        assert_eq!(
+            historical["advisor"], "advisor",
+            "role spelling keeps its original precedence"
+        );
+        let live = RecipientDirectory::load(tmp.path(), &store).unwrap();
+        assert!(live.resolve("joe").is_err());
+    }
+
+    #[test]
     fn humans_remain_addressable_and_registry_corruption_refuses() {
         let tmp = tempfile::tempdir().unwrap();
         let store = tmp.path().join(".aida-store");
