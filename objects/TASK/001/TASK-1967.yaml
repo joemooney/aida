@@ -18,7 +18,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T19:47:09.301864104Z
-modified_at: 2026-10-20T10:58:04.602592051Z
+modified_at: 2026-10-21T16:23:25.861453776Z
 req_type: Task
 tags:
 - story-1854
@@ -88,6 +88,11 @@ history:
   timestamp: 2026-10-20T10:57:45.213689054Z
   session_id: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
   changes: []
+- id: 01a15f46-501f-7130-b025-77f4b0d4249e
+  author: joe
+  timestamp: 2026-10-21T16:23:25.983407173Z
+  session_id: 01a15f43d5af
+  changes: []
 filed_at:
   code_sha: dd4b6ed7306b2c207116f23e727c4a1b7295a5c9
   branch: main
@@ -96,3 +101,11 @@ filed_at:
   aida_build_sha: dd4b6ed730
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Rust timeout reasons, [preflight] docs and Cargo.toml comment pass; the hook's new make-target skip makes it go silent on compound commands that run cargo under timeout (a regression vs main), and the sh -c and Makefile resolution have false-silence gaps.
+  recovery_hint: address the review findings, move TASK-1967 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-21T16:23:25.861453776Z
