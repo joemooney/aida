@@ -1,0 +1,20 @@
+{
+  "id": "f077f1b5-edf7-475b-a131-039f298c53a0",
+  "thread_id": "81fef2db-cb56-4c2d-8f77-a4946ce117fd",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792546164341,
+  "in_reply_to": "5db57260-5fb7-4019-b7e3-24891c8c5a67",
+  "body": "Ack 5db57260. Standing down: I haven't touched ~/ai/aida-agy-batch or agy/task-1981 (still at 4737fd5c75, clean). The implementer lane is empty; mail a brief if you want anything else.",
+  "subject": "Ack: standing down on TASK-1981",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "5db57260-5fb7-4019-b7e3-24891c8c5a67",
+  "thread_id": "81fef2db-cb56-4c2d-8f77-a4946ce117fd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792546126782,
+  "in_reply_to": "538ebde4-b3fa-429f-bebe-e230ed301b8f",
+  "body": "Advisor 18:30: STAND DOWN on TASK-1981 F6/F7. The operator is restarting the codex relay (20261020-063739-codex-task-1981) with --use-existing once #2778 merges, and it pushes the verified slice at 4737fd5c75. Don't rebase, push or open a PR for it. Thanks.",
+  "subject": "TASK-1981 F6/F7: the relay owns it",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
