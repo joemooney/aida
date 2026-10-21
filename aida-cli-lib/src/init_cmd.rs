@@ -5636,49 +5636,19 @@ pub(crate) fn handle_init_distributed_sibling(
             format!("{store_rel}/objects/").white().bold()
         );
 
-        // Create initial commit
-        git_ops::add(&store_dir, &["metadata.yaml"])?;
-        std::fs::create_dir_all(store_dir.join("objects"))?;
-        // Create a .gitkeep so objects/ is tracked
-        std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
-        git_ops::add(&store_dir, &["objects/.gitkeep"])?;
+        // trace:TASK-1981 | ai:codex — stage, commit and capture one locked snapshot.
+        let (branch, initial_sha) = commit_initial_store(&store_dir)?;
 
-        // Create .gitignore for node-local files.
-        // The staging-file ignores come from `fs_atomic`, which owns the
-        // staging name, so a lock-free `git add -A .` (db sync, auto-push) can
-        // never stage one. They live in the STORE's tracked `.gitignore`, never
-        // the project's `info/exclude`: a store attached as a linked worktree
-        // shares the project's exclude file, so an ignore written there would
-        // hide the user's own files too. Existing stores are TASK-1547.
-        // trace:BUG-1677 | ai:claude
-        let gitignore_content = format!(
-            "# Node-local state (not shared)\n.aida/\n*.lock\n{}",
-            aida_core::fs_atomic::store_staging_ignore_block()
-        );
-        std::fs::write(store_dir.join(".gitignore"), &gitignore_content)?;
-        git_ops::add(&store_dir, &[".gitignore"])?;
-
-        git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;
-
-        // If we have a remote, push the initial commit and register the node
+        // If we have a remote, push the initial commit and register the node.
         if registry_remote.is_some() {
-            let branch = git_ops::current_branch(&store_dir).unwrap_or_else(|_| "main".to_string());
-
-            // Push initial commit
-            match git_ops::push(&store_dir, "origin", &branch) {
-                Ok(true) => {
-                    println!("  {} initial commit to remote", "Pushed".green(),);
+            match publish_initial_store_snapshot(&store_dir, &branch, &initial_sha)? {
+                InitialStorePublication::Pushed => {
+                    println!("  {} initial commit to remote", "Pushed".green())
                 }
-                Ok(false) => {
-                    // Remote has content — pull first then push
-                    // trace:TASK-1930 | ai:agy
-                    aida_core::db::with_store_write_lock(&store_dir, || {
-                        git_ops::pull_rebase(&store_dir, "origin", &branch)
-                    })?;
-                    git_ops::push(&store_dir, "origin", &branch)?;
-                    println!("  {} with remote and pushed", "Synced".green(),);
+                InitialStorePublication::Rebased => {
+                    println!("  {} with remote and pushed", "Synced".green())
                 }
-                Err(e) => {
+                InitialStorePublication::Deferred(e) => {
                     eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
                     eprintln!(
                         "  You can push later with: cd {} && git push -u origin {}",
@@ -5829,6 +5799,91 @@ pub(crate) fn handle_init_distributed_sibling(
     println!();
 
     Ok(())
+}
+
+// trace:TASK-1981 | ai:codex
+fn commit_initial_store(store_dir: &std::path::Path) -> Result<(String, String)> {
+    use aida_core::git_ops;
+    aida_core::db::with_store_write_lock(store_dir, || {
+        // Resolve the publish target before committing, so a detached store
+        // fails closed with nothing written. trace:TASK-1981 | ai:claude
+        let branch = git_ops::attached_branch(store_dir)?;
+        git_ops::add(store_dir, &["metadata.yaml"])?;
+        std::fs::create_dir_all(store_dir.join("objects"))?;
+        // Create a .gitkeep so objects/ is tracked
+        std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
+        git_ops::add(store_dir, &["objects/.gitkeep"])?;
+
+        // Create .gitignore for node-local files.
+        // The staging-file ignores come from `fs_atomic`, which owns the
+        // staging name, so a lock-free `git add -A .` (db sync, auto-push) can
+        // never stage one. They live in the STORE's tracked `.gitignore`, never
+        // the project's `info/exclude`: a store attached as a linked worktree
+        // shares the project's exclude file, so an ignore written there would
+        // hide the user's own files too. Existing stores are TASK-1547.
+        // trace:BUG-1677 | ai:claude
+        let gitignore_content = format!(
+            "# Node-local state (not shared)\n.aida/\n*.lock\n{}",
+            aida_core::fs_atomic::store_staging_ignore_block()
+        );
+        std::fs::write(store_dir.join(".gitignore"), &gitignore_content)?;
+        git_ops::add(store_dir, &[".gitignore"])?;
+
+        git_ops::commit(store_dir, "chore: initialize AIDA distributed store")?;
+
+        Ok((branch, git_ops::head_sha(store_dir)?))
+    })
+}
+
+// An initial remote failure retains init's offline warning path. Once a
+// rejected publication starts a rebase, every retry failure propagates.
+// trace:TASK-1981 | ai:codex
+enum InitialStorePublication {
+    Pushed,
+    Rebased,
+    Deferred(anyhow::Error),
+}
+
+// Capture each snapshot
+// under the lock; publish after unlocking so hooks/network never hold it.
+// trace:TASK-1981 | ai:codex
+fn rebase_initial_store_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
+    aida_core::db::with_store_write_lock(store, || {
+        aida_core::git_ops::pull_rebase(store, "origin", branch)?;
+        aida_core::git_ops::head_sha(store)
+    })
+}
+
+// trace:TASK-1981 | ai:codex
+fn publish_initial_store_snapshot(
+    store_dir: &std::path::Path,
+    branch: &str,
+    sha: &str,
+) -> Result<InitialStorePublication> {
+    use aida_core::git_ops::{self, PushFailure, PushOutcome};
+    let initial = match git_ops::push_exact_outcome(store_dir, "origin", sha, branch) {
+        Ok(outcome) => outcome,
+        Err(e) if git_ops::is_evidence_refusal(&e) => return Err(e),
+        Err(e) => return Ok(InitialStorePublication::Deferred(e)),
+    };
+    match initial {
+        PushOutcome::Pushed => Ok(InitialStorePublication::Pushed),
+        PushOutcome::Failed {
+            kind: PushFailure::NonFastForward,
+            ..
+        } => {
+            let retry_sha = rebase_initial_store_snapshot(store_dir, branch)?;
+            match git_ops::push_exact_outcome(store_dir, "origin", &retry_sha, branch)? {
+                PushOutcome::Pushed => Ok(InitialStorePublication::Rebased),
+                PushOutcome::Failed { kind, stderr } => {
+                    anyhow::bail!("initial store push failed after rebase ({kind:?}): {stderr}")
+                }
+            }
+        }
+        PushOutcome::Failed { kind, stderr } => Ok(InitialStorePublication::Deferred(
+            anyhow::anyhow!("initial store push failed ({kind:?}): {stderr}"),
+        )),
+    }
 }
 
 fn sibling_init_marker_exists(project_root: &std::path::Path) -> bool {
@@ -6893,3 +6948,48 @@ pub(crate) static INIT: crate::command_registry::CommandReg = crate::command_reg
     },
     run: crate::command_registry::Handler::Early(run_init),
 };
+
+#[cfg(test)]
+mod task_1981_publication_tests {
+    use super::*;
+    fn capture_snapshot(store: &std::path::Path) -> Result<(String, String)> {
+        commit_initial_store(store)
+    }
+    fn publish_snapshot(store: &std::path::Path, branch: &str, sha: &str) -> Result<bool> {
+        match publish_initial_store_snapshot(store, branch, sha)? {
+            InitialStorePublication::Pushed => Ok(false),
+            InitialStorePublication::Rebased => Ok(true),
+            InitialStorePublication::Deferred(e) => Err(e),
+        }
+    }
+    fn retry_snapshot(store: &std::path::Path, branch: &str) -> Result<String> {
+        rebase_initial_store_snapshot(store, branch)
+    }
+    include!("tests/task_1981_publication_tests.rs");
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_init_initial_outage_retains_offline_deferred_result() {
+        let fixture = Fixture::new();
+        let (branch, captured) = commit_initial_store(&fixture.store).unwrap();
+        git_at(
+            &fixture.store,
+            &[
+                "remote",
+                "set-url",
+                "origin",
+                "/nonexistent/task-1981-origin",
+            ],
+        );
+        match publish_initial_store_snapshot(&fixture.store, &branch, &captured).unwrap() {
+            InitialStorePublication::Deferred(error) => {
+                assert!(
+                    format!("{error:#}").contains("initial store push failed"),
+                    "{error:#}"
+                );
+            }
+            _ => panic!("unreachable initial remote must remain deferred"),
+        }
+        assert_eq!(git_ops::head_sha(&fixture.store).unwrap(), captured);
+    }
+}

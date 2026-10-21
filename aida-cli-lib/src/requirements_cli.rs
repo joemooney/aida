@@ -9562,3 +9562,7 @@ pub(crate) static SEARCH: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Store(run_search),
     };
+
+#[cfg(test)]
+#[path = "tests/task_1981_add_tests.rs"]
+mod task_1981_add_tests;

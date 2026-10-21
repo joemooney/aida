@@ -1383,6 +1383,12 @@ pub fn push_exact_outcome(
         "push_exact requires a non-empty commit SHA"
     );
     reject_option_like("branch", branch)?;
+    // `current_branch` reports a detached HEAD as the literal `HEAD`; never
+    // turn that into a remote `refs/heads/HEAD`. trace:TASK-1981 | ai:claude
+    anyhow::ensure!(
+        branch.trim() != "HEAD",
+        "refusing to push to a branch named `HEAD`: the local checkout is detached"
+    );
     refuse_embedded_repos_for_push(repo, sha)?; // trace:BUG-1929 | ai:claude
     let refspec = format!("{sha}:refs/heads/{branch}");
     // The failure is classified from stderr prose, so pin git's (and ssh's /
@@ -2716,6 +2722,24 @@ pub fn changed_object_files(
         changes.push((kind, PathBuf::from(path)));
     }
     Ok(changes)
+}
+
+/// The branch `HEAD` is attached to, for a writer that will publish to it.
+/// Unlike [`current_branch`], which prints the literal `HEAD` on a detached
+/// checkout (a store left mid-rebase), this fails closed: publishing to that
+/// name would create a bogus `refs/heads/HEAD` on the shared remote. An unborn
+/// but attached branch (a fresh store before its first commit) is accepted.
+// trace:TASK-1981 | ai:claude
+pub fn attached_branch(repo: &Path) -> Result<String> {
+    let result = git(repo, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+    if !result.success || result.stdout.is_empty() {
+        anyhow::bail!(
+            "refusing to publish {}: HEAD is detached (is a rebase in progress?); \
+             check out the store branch and retry",
+            repo.display()
+        );
+    }
+    Ok(result.stdout)
 }
 
 /// Get the current branch name.
@@ -11484,6 +11508,14 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "tests/task_1981_node_writer_tests.rs"]
+mod task_1981_node_writer_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1981_gc_config_tests.rs"]
+mod task_1981_gc_config_tests;
 
 // trace:BUG-2188 | ai:codex
 #[cfg(test)]
