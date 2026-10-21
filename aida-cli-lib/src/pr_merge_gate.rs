@@ -234,9 +234,14 @@ pub(crate) fn stamp_pr_review_verdict(
     ci_terminal_sha: Option<&str>,
     ci_terminal_green: Option<bool>,
 ) -> std::io::Result<std::path::PathBuf> {
-    let path = review_verdict::record_verdict(
+    // One verified write through the anchored boundary: the CI fields are
+    // folded onto the built object, so they also reach the per-sha archive
+    // and nothing re-reads or rewrites the verdict by path.
+    // trace:TASK-1951 trace:TASK-1668 | ai:claude
+    let path = review_verdict::verdict_path(project_root, &format!("PR-{pr}"));
+    let mut object = review_verdict::build_verdict_object(
         project_root,
-        &format!("PR-{pr}"),
+        &path,
         None,
         reviewed_sha,
         reviewed_branch,
@@ -244,27 +249,16 @@ pub(crate) fn stamp_pr_review_verdict(
         &[],
         "aida drain reviewer",
     )?;
-    if ci_terminal_sha.is_some() || ci_terminal_green.is_some() {
-        let body = std::fs::read_to_string(&path)?;
-        let mut value: serde_json::Value = serde_json::from_str(&body)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        let object = value.as_object_mut().ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "review verdict is not an object",
-            )
-        })?;
-        if let Some(sha) = ci_terminal_sha {
-            object.insert(
-                "ci_terminal_sha".into(),
-                serde_json::Value::String(sha.into()),
-            );
-        }
-        if let Some(green) = ci_terminal_green {
-            object.insert("ci_terminal_green".into(), serde_json::Value::Bool(green));
-        }
-        std::fs::write(&path, serde_json::to_vec_pretty(&value)?)?;
+    if let Some(sha) = ci_terminal_sha {
+        object.insert(
+            "ci_terminal_sha".into(),
+            serde_json::Value::String(sha.into()),
+        );
     }
+    if let Some(green) = ci_terminal_green {
+        object.insert("ci_terminal_green".into(), serde_json::Value::Bool(green));
+    }
+    review_verdict::write_verdict_object(&path, &object)?;
     Ok(path)
 }
 
@@ -447,6 +441,27 @@ mod task_168_pr_verdict_metadata_tests {
         assert_eq!(value["ci_terminal_green"], true);
         assert_eq!(value["recorded_by"], "aida drain reviewer");
         assert!(value["recorded_at"].as_str().is_some());
+    }
+
+    /// TASK-1668: the CI stamp is part of the single write, so the per-sha
+    /// archive entry carries it too.
+    // trace:TASK-1951 trace:TASK-1668 | ai:claude
+    #[test]
+    fn stamped_ci_fields_reach_the_per_sha_archive() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let sha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+        let path = review_verdict::verdict_path(tmp.path(), "PR-1966");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{"verdict":"approved","summary":"clean"}"#).unwrap();
+
+        stamp_pr_review_verdict(tmp.path(), 1966, Some(sha), None, Some(sha), Some(true)).unwrap();
+
+        let archive = review_verdict::archived_verdict_file_for_sha(&path, sha)
+            .expect("the round is archived by sha");
+        let value: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(archive).unwrap()).unwrap();
+        assert_eq!(value["ci_terminal_sha"], sha);
+        assert_eq!(value["ci_terminal_green"], true);
     }
 }
 

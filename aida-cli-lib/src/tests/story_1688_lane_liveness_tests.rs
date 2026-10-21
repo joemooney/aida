@@ -1327,3 +1327,30 @@ fn routed_seat_job_is_due_for_its_seat_and_cleared_by_schedule_done() {
     crate::maintenance_schedule::done(root, "lane-liveness-reviewer", None).unwrap();
     assert!(!due("reviewer").contains(&"lane-liveness-reviewer".to_string()));
 }
+
+/// TASK-1670: a verdict reached through a symlink is not evidence that a
+/// review started, so the ready PR is still reported.
+// trace:TASK-1951 trace:TASK-1670 | ai:claude
+#[test]
+fn linked_verdict_does_not_count_as_review_started() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let green = Some(now - Duration::minutes(40));
+    let outside = tempfile::tempdir().unwrap();
+    record_verdict(outside.path(), "TASK-2801", HEAD_A);
+    let real = crate::review_verdict::verdict_path(outside.path(), "TASK-2801");
+    let linked = crate::review_verdict::verdict_path(root, "TASK-2801");
+    std::fs::create_dir_all(linked.parent().unwrap()).unwrap();
+    std::os::unix::fs::symlink(&real, &linked).unwrap();
+
+    let feed = prs_json(vec![gh_pr(2801, HEAD_A, green, false)]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    assert_eq!(
+        ids(&findings_at(root, now, &prs)),
+        [format!(
+            "lane-liveness:unpicked-ready-pr:PR-2801@{}",
+            &HEAD_A[..8]
+        )]
+    );
+}

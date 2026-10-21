@@ -1219,18 +1219,13 @@ fn rollup_green_at(
 }
 
 /// Every `reviewed_sha` on record under `.aida/review-verdicts/`.
+// Read through the anchored verdict reader, so a symlinked or hard-linked
+// verdict (or a FIFO named `*.json`) never counts as a started review.
+// trace:TASK-1951 trace:TASK-1670 | ai:claude
 fn recorded_verdict_shas(project_root: &Path) -> Vec<String> {
-    let dir = project_root.join(".aida").join("review-verdicts");
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    entries
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .filter_map(|p| std::fs::read_to_string(p).ok())
-        .filter_map(|body| crate::review_verdict::parse_recorded_verdict(&body))
-        .filter_map(|v| v.reviewed_sha)
+    crate::review_verdict::list_active_verdicts(project_root)
+        .into_iter()
+        .filter_map(|(_, v)| v.reviewed_sha)
         .collect()
 }
 
