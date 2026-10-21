@@ -3020,10 +3020,9 @@ pub(crate) fn handle_review_record_at(
     // shell calls and lease release, never free-text labels.
     // trace:BUG-1918 | ai:claude
     let recorder_grant = crate::seat_authority::current_grant(&project_root);
-    let recorder = review_authority::RecorderIdentity::current(
+    let recorder = review_authority::RecorderIdentity::current(&review_authority::visible_leases(
         &project_root,
-        &review_authority::visible_leases(&project_root),
-    );
+    ));
     let approving = kind == review_verdict::VerdictKind::Approved;
     let mut solo_human = false;
     if approving {
@@ -3899,7 +3898,7 @@ pub(crate) fn review_recorder_authors(
     branch: Option<&str>,
 ) -> Vec<pr_ship::AuthorSession> {
     if subject_ids.is_empty() {
-        return review_authority::all_author_sessions(project_root);
+        return review_authority::all_author_sessions(project_root, branch);
     }
     review_authority::author_sessions_at(project_root, subject_ids, branch)
 }
