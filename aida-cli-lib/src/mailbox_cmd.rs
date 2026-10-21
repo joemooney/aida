@@ -872,9 +872,14 @@ pub(crate) struct PhantomGcReport {
 /// Archive live mail addressed to a phantom recipient — a junk shape `--to`
 /// refuses, a commit SHA, or an `@mention` notice for a handle that is no known
 /// person, role or agent. A recipient that is only whitespace-padded around a
-/// known id is re-addressed to that id (archive + a copy) rather than lost.
+/// deliverable id is re-addressed to that id (archive + a copy) rather than
+/// lost: a known id under its stored spelling, and direct (non-mention) mail
+/// to an unknown id under the trimmed id, since `--to` itself would have sent
+/// it there. A known identity is never read as a SHA, so an agent named like
+/// `cafe1234` keeps its mail.
 // trace:TASK-1766 | ai:antigravity
 // trace:TASK-1766 | ai:claude
+// trace:TASK-1955 | ai:claude (TASK-1918)
 pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<PhantomGcReport> {
     use aida_core::mailbox::{merge_dedup, Message, Recipient};
     use anyhow::Context as _;
@@ -894,19 +899,20 @@ pub(crate) fn archive_phantom_inboxes(store_root: &std::path::Path) -> Result<Ph
             continue;
         };
         let trimmed = r.trim();
-        let padded_known = (r != trimmed)
-            .then(|| known.get(&trimmed.to_lowercase()))
-            .flatten()
-            .cloned();
-        let is_phantom = r != trimmed
+        let known_spelling = known.get(&trimmed.to_lowercase()).cloned();
+        // The roster wins over the SHA shape. trace:TASK-1955 | ai:claude (TASK-1918)
+        let junk = trimmed.is_empty()
             || aida_core::mailbox::recipient_id_rejection(trimmed).is_some()
-            || aida_core::mailbox::looks_like_hex_sha(trimmed)
-            || (msg.body.starts_with("You were mentioned on ")
-                && !known.contains_key(&trimmed.to_lowercase()));
-        if !is_phantom {
+            || (known_spelling.is_none() && aida_core::mailbox::looks_like_hex_sha(trimmed));
+        let unknown_mention =
+            msg.body.starts_with("You were mentioned on ") && known_spelling.is_none();
+        let padded = r != trimmed;
+        if !(padded || junk || unknown_mention) {
             continue;
         }
-        if let Some(target) = &padded_known {
+        let readdress_to =
+            (!junk && !unknown_mention).then(|| known_spelling.unwrap_or_else(|| trimmed.into()));
+        if let Some(target) = &readdress_to {
             let copy = Message {
                 id: format!("{}-readdressed", msg.id),
                 to: Recipient::Agent(target.clone()),
@@ -2085,6 +2091,66 @@ mod tests {
         // Idempotent: a second pass finds nothing left to touch.
         let again = archive_phantom_inboxes(&store).unwrap();
         assert_eq!((again.archived, again.readdressed), (0, 0));
+    }
+
+    /// TASK-1918: a registered agent whose name is SHA-shaped keeps its
+    /// mail; padded direct mail to an unknown id is re-addressed to the
+    /// trimmed id, while a padded mention of an unknown handle is archived.
+    // trace:TASK-1955 | ai:claude (TASK-1918)
+    #[test]
+    fn archive_phantom_inboxes_checks_the_roster_before_the_sha_rule_and_reroutes_padded_direct_mail(
+    ) {
+        let (project, store) = store_with_person_joe();
+        let roles = project.path().join(".aida").join("roles");
+        std::fs::create_dir_all(&roles).unwrap();
+        std::fs::write(
+            roles.join("cafe1234.toml"),
+            "name = \"cafe1234\"\ncreated_at = \"2026-10-18T00:00:00Z\"\nlast_active_at = \"2026-10-18T00:00:00Z\"\n",
+        )
+        .unwrap();
+        for (id, to, body) in [
+            ("sha-direct", "cafe1234", "direct hi"),
+            (
+                "sha-mention",
+                "cafe1234",
+                "You were mentioned on TASK-1 by joe: @cafe1234",
+            ),
+            ("padded-direct", " newagent ", "direct hi"),
+            (
+                "padded-mention",
+                "stranger ",
+                "You were mentioned on TASK-1 by joe: @stranger",
+            ),
+            ("real-sha", "6e5727ce3c", "direct hi"),
+        ] {
+            let mut m = message(id, &format!("thread-{id}"));
+            m.to = aida_core::mailbox::Recipient::Agent(to.into());
+            m.body = body.into();
+            mailbox_store::write_message(project.path(), &m).unwrap();
+        }
+
+        let report = archive_phantom_inboxes(&store).unwrap();
+        assert_eq!(
+            (report.archived, report.readdressed),
+            (2, 1),
+            "{:?}",
+            report.lines
+        );
+        let merged = aida_core::mailbox::merge_dedup(
+            &mailbox_store::read_local_messages(project.path()).unwrap(),
+            &mailbox_store::read_canonical_messages(&store).unwrap(),
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("cafe1234", &merged, None).len(),
+            2,
+            "a known SHA-shaped agent keeps its mail"
+        );
+        assert_eq!(
+            aida_core::mailbox::unread_inbox("newagent", &merged, None).len(),
+            1,
+            "padded direct mail reaches the trimmed id"
+        );
+        assert!(aida_core::mailbox::unread_inbox("stranger", &merged, None).is_empty());
     }
 
     // F1: a human's existing mention mail is never archived as a phantom.

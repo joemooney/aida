@@ -2750,7 +2750,16 @@ impl<'a> McpServer<'a> {
             if let Some(why) = aida_core::mailbox::recipient_id_rejection(a) {
                 return Err(format!("send refused: `to` {why}"));
             }
-            Recipient::Agent(a.to_string())
+            // Same stored-spelling rule as the CLI `--to` (a known identity
+            // is delivered under its stored spelling; `addressed_to` is
+            // case-sensitive). trace:TASK-1955 | ai:claude (TASK-1928)
+            let known = crate::known_mailbox_recipients(&self.mailbox_store_root());
+            Recipient::Agent(
+                known
+                    .get(&a.to_lowercase())
+                    .cloned()
+                    .unwrap_or_else(|| a.to_string()),
+            )
         } else {
             return Err("specify `to` (an agent) or `broadcast: true`".to_string());
         };
@@ -10699,6 +10708,34 @@ mod tests {
         // Neither `to` nor `broadcast` is a clean error, not a panic.
         let err = server.tool_send_message(&json!({ "body": "orphan" }));
         assert!(err.is_err(), "must require to/broadcast: {err:?}");
+    }
+
+    /// TASK-1928 / TASK-1918: MCP `send_message` trims `to` and stores a
+    /// known identity under its stored spelling, exactly as the CLI does.
+    // trace:TASK-1955 | ai:claude (TASK-1928, TASK-1918)
+    #[test]
+    fn mcp_send_message_trims_and_canonicalizes_a_known_recipient() {
+        let dir = tempdir().unwrap();
+        let server = mk_server(dir.path());
+        server
+            .tool_send_message(&json!({ "to": "ADVISOR", "body": "upper", "from": "codex" }))
+            .unwrap();
+        server
+            .tool_send_message(&json!({ "to": "  newagent  ", "body": "padded", "from": "codex" }))
+            .unwrap();
+        let mut to: Vec<_> = crate::mailbox_store::read_local_messages(dir.path())
+            .unwrap()
+            .into_iter()
+            .map(|m| m.to)
+            .collect();
+        to.sort_by_key(|r| format!("{r:?}"));
+        assert_eq!(
+            to,
+            vec![
+                aida_core::mailbox::Recipient::Agent("advisor".into()),
+                aida_core::mailbox::Recipient::Agent("newagent".into()),
+            ]
+        );
     }
 
     /// send_message → read_inbox round-trip for `subject` (BUG-1461): the CLI

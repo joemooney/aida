@@ -1255,3 +1255,178 @@ fn replay_2026_10_13_incidents_each_produce_a_finding_in_one_tick() {
     fired.sort();
     assert_eq!(fired, ["lane-liveness-advisor", "lane-liveness-reviewer"]);
 }
+
+/// TASK-2030 (a): with a required-check set, only required checks are the
+/// readiness signal; a failing optional check no longer blocks pickup, a
+/// missing or red required check still does, and an unknown or empty set
+/// keeps every check in play.
+// trace:TASK-1955 | ai:claude (TASK-2030)
+#[test]
+fn readiness_counts_only_required_checks_when_the_set_is_known() {
+    let now = Utc::now();
+    let green_at = now - Duration::minutes(30);
+    let mut pr = gh_pr(1, HEAD_A, Some(green_at), false);
+    let optional_red = serde_json::json!({
+        "__typename": "CheckRun",
+        "completedAt": rfc(now - Duration::minutes(10)),
+        "conclusion": "FAILURE",
+        "name": "optional-lint",
+        "startedAt": rfc(now - Duration::minutes(20)),
+        "status": "COMPLETED",
+        "workflowName": "Lint"
+    });
+    pr["statusCheckRollup"]
+        .as_array_mut()
+        .unwrap()
+        .push(optional_red);
+    let rollup = pr["statusCheckRollup"].as_array().unwrap().clone();
+    let build = ["Build".to_string()];
+    let ready = rollup_green_at(&rollup, false, Some(&build)).expect("required Build is green");
+    assert_eq!(ready.timestamp(), green_at.timestamp());
+    assert_eq!(rollup_green_at(&rollup, false, None), None, "unknown set");
+    assert_eq!(
+        rollup_green_at(&rollup, false, Some(&[])),
+        None,
+        "unprotected"
+    );
+    let missing = ["Build".to_string(), "Deploy".to_string()];
+    assert_eq!(rollup_green_at(&rollup, false, Some(&missing)), None);
+    let red = ["optional-lint".to_string()];
+    assert_eq!(rollup_green_at(&rollup, false, Some(&red)), None);
+}
+
+/// TASK-2030 (b): a routed `lane-liveness-<seat>` job surfaces through the
+/// seat's due jobs and clears with `aida schedule done lane-liveness-<seat>`.
+// trace:TASK-1955 | ai:claude (TASK-2030)
+#[test]
+fn routed_seat_job_is_due_for_its_seat_and_cleared_by_schedule_done() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let now = Utc::now();
+    let feed = prs_json(vec![gh_pr(
+        2730,
+        HEAD_A,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let prs = move |_: &Path| Ok(feed.clone());
+    scan_and_route_at(root, now, true, &prs);
+    let due = |seat: &str| {
+        crate::maintenance_schedule::due_seat_jobs(root, Some(seat))
+            .into_iter()
+            .map(|j| j.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(
+        due("reviewer").contains(&"lane-liveness-reviewer".to_string()),
+        "{:?}",
+        due("reviewer")
+    );
+    assert!(!due("advisor").contains(&"lane-liveness-reviewer".to_string()));
+
+    crate::maintenance_schedule::done(root, "lane-liveness-reviewer", None).unwrap();
+    assert!(!due("reviewer").contains(&"lane-liveness-reviewer".to_string()));
+}
+
+/// TASK-2094 / TASK-1665: an attested reviewer whose creator shell exited is
+/// read with the live probes. A crashed reviewer (nothing live in its
+/// worktree) no longer suppresses unpicked-ready-pr; a Codex-style reviewer
+/// registered inside its worktree still counts as the review started.
+// trace:TASK-1955 | ai:claude (TASK-2094, TASK-1665)
+#[test]
+fn reviewer_lease_with_a_dead_creator_is_read_with_live_probes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let now = Utc::now();
+    let worktree = root.join("aida-pr-2730");
+    std::fs::create_dir_all(&worktree).unwrap();
+    let mut review = lease("rv30", "PR-2730", &dead_pid(), now);
+    review.role = Some("reviewer".into());
+    review.review_verb = true;
+    review.claim_verb = false;
+    review.worktree_path = worktree.clone();
+    review.active_pid = None;
+    review.active_pid_start_time = None;
+    let creator = dead_pid();
+    review.creator_pid = Some(creator.0);
+    review.creator_pid_start_time = creator.1;
+    review.pr_head_sha = Some(HEAD_A.into());
+    write_lease(&root, &review);
+    let feed = prs_json(vec![gh_pr(
+        2730,
+        HEAD_A,
+        Some(now - Duration::minutes(40)),
+        false,
+    )]);
+    let prs = move |_: &Path| Ok(feed.clone());
+
+    assert_eq!(
+        ids(&findings_at(&root, now, &prs)),
+        ["lane-liveness:unpicked-ready-pr:PR-2730@a1b2c3d4"],
+        "a crashed reviewer does not hold the PR"
+    );
+
+    // A Codex reviewer's SessionStart registration: this live process,
+    // inside the review worktree.
+    let me = std::process::id();
+    crate::agent_registry::write_entry(
+        &root,
+        &crate::agent_registry::AgentRegistryEntry {
+            id: format!("codex-{me}"),
+            agent_type: "codex".into(),
+            pid: me,
+            pid_start: crate::process_probe::process_start_identity(me),
+            name: Some("codex-reviewer".into()),
+            description: None,
+            tty: None,
+            terminal: None,
+            started_at: now,
+            last_active_at: now,
+            role: Some("reviewer".into()),
+            current_spec: None,
+            worktree_path: worktree.clone(),
+            source: "session-start-hook".into(),
+            binary_version: None,
+            build_sha: None,
+            availability: crate::agent_registry::Availability::Available,
+            paused_since: None,
+            paused_reason: None,
+            expected_back: None,
+            native_session_id: None,
+            claude_session_id: None,
+            ended_at: None,
+            spec_status_at_end: None,
+            resumed_from: None,
+        },
+    )
+    .unwrap();
+    assert!(
+        ids(&findings_at(&root, now, &prs)).is_empty(),
+        "a live registered reviewer in the worktree has started the review"
+    );
+}
+
+/// TASK-2025 / TASK-1664: an operator notice counts as delivered only when a
+/// configured notify command sent or queued it; with `[notify]` unconfigured
+/// the finding stays unrouted and the tick warns that it reaches no one.
+// trace:TASK-1955 | ai:claude (TASK-2025, TASK-1664)
+#[test]
+fn operator_notice_is_routed_only_when_delivered_and_warns_when_notify_is_missing() {
+    use crate::notify::DirectNotifyOutcome;
+    let outcome = |configured, sent, suppressed, pending| DirectNotifyOutcome {
+        configured,
+        sent,
+        suppressed,
+        pending,
+    };
+    assert!(operator_notice_delivered(&outcome(true, 1, 0, 0)));
+    assert!(operator_notice_delivered(&outcome(true, 0, 0, 1)));
+    assert!(!operator_notice_delivered(&outcome(true, 0, 0, 0)));
+    assert!(!operator_notice_delivered(&outcome(true, 1, 1, 0)));
+    assert!(!operator_notice_delivered(&outcome(false, 0, 0, 0)));
+
+    let warning = notify_unreachable_warning(&outcome(false, 0, 0, 0), 2).unwrap();
+    assert!(warning.contains("2 merge hold(s)"), "{warning}");
+    assert!(warning.contains("[notify] command"), "{warning}");
+    assert_eq!(notify_unreachable_warning(&outcome(true, 0, 1, 0), 2), None);
+}

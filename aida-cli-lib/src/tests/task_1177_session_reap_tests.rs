@@ -15,6 +15,7 @@ use super::*;
 fn reapable_facts() -> ReapFacts {
     ReapFacts {
         spec_finished: true,
+        review_pr_terminal: false,
         process_exited: true,
         locked: false,
         head_on_branch: true,
@@ -242,4 +243,45 @@ fn a_live_process_inside_the_worktree_blocks_the_exit_verdict() {
     // Covers an agent that holds no lease of its own but is sitting in the
     // worktree — removing its cwd would strand it.
     assert!(!session_process_exited(LeaseState::Stale, Some(true), true));
+}
+
+/// BUG-2206: a dead attested reviewer whose PR is merged or closed is
+/// reaped without a finished spec or a merge signal for its local review
+/// branch; it still never touches a running, dirty or locked session.
+// trace:TASK-1955 | ai:claude (BUG-2206)
+#[test]
+fn dead_reviewer_of_a_terminal_pr_is_reaped_without_a_spec() {
+    let reviewer = || {
+        let mut f = reapable_facts();
+        f.spec_finished = false;
+        f.review_pr_terminal = true;
+        f.worktree.ancestor_of_main = false;
+        f.worktree.unique_unmerged_commits = 3;
+        f
+    };
+    assert!(matches!(
+        classify_session_reap(&reviewer()),
+        ReapVerdict::Reap(_)
+    ));
+    let mut running = reviewer();
+    running.process_exited = false;
+    assert!(matches!(
+        classify_session_reap(&running),
+        ReapVerdict::Skip(_)
+    ));
+    let mut dirty = reviewer();
+    dirty.worktree.dirty = true;
+    assert!(matches!(
+        classify_session_reap(&dirty),
+        ReapVerdict::Skip(_)
+    ));
+    let mut locked = reviewer();
+    locked.locked = true;
+    assert!(matches!(
+        classify_session_reap(&locked),
+        ReapVerdict::Skip(_)
+    ));
+    let mut open = reviewer();
+    open.review_pr_terminal = false;
+    assert!(matches!(classify_session_reap(&open), ReapVerdict::Skip(_)));
 }
