@@ -56,7 +56,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:59:11.076757281Z
-modified_at: 2026-10-21T10:48:40.560546465Z
+modified_at: 2026-10-21T10:48:44.470714576Z
 req_type: Task
 tags:
 - docs
@@ -143,6 +143,12 @@ comments:
   content: 'Folded TASK-2051: Anchor TASK-0446 consensus mapping tests to their acceptance criterion IDs'
   created_at: 2026-10-21T10:48:34.550016240Z
   modified_at: 2026-10-21T10:48:34.550016240Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e13-e4b6-7380-8044-753e8ba3bfd6
+  author: joe
+  content: 'Folded TASK-2052: Consensus parent-conflict message is misleading when the mapped owner is already among several parents'
+  created_at: 2026-10-21T10:48:44.470714576Z
+  modified_at: 2026-10-21T10:48:44.470714576Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e3-a2f8-70b3-bd25-285f82bcaae8
