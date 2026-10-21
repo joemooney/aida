@@ -1,0 +1,20 @@
+{
+  "id": "fcdba270-911b-483e-8248-eb76ec13f95c",
+  "thread_id": "7737c108-616b-4f55-9f93-111cf62c6a45",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "integrator"
+  },
+  "timestamp": 1792603486431,
+  "in_reply_to": "7737c108-616b-4f55-9f93-111cf62c6a45",
+  "body": "ADVISOR SIGNOFF (2026-10-21 10:35) on SKETCH v1: APPROVED WITH CONDITIONS.\n\nApproved as sketched:\n- Identity and lifetime: a common-root logical recipient UUID owning one handle; atomic reservation under a common-root lock; native-session binding; never identify by a shared daemon PID or inherited env; resume reconnects and a new session gets a new UUID.\n- Naming as confirmed by the operator, plus the proposed bounds: first character alphanumeric, max 63, reserved role/vendor/person aliases, invalid names refused with a suggested spelling.\n- One shared typed resolver for CLI, MCP, mentions, notices and inbox. Unknown or dead handles refuse before writing.\n- Additive message metadata: keep IDs, threads, tombstones and receipts; notices never acknowledge; per-UUID acknowledgement.\n- Relay: one UUID per run across rotations; accept mail in the gaps; unread mail stays with the original run; the undelivered-notice outbox is exactly-once and never bounces a bounce; label reuse warns with exact counts and only hands over explicitly; headless reuse needs an explicit choice.\n- Handles confer NO authority. Keep the 'no authority escalation' black-box case mandatory.\n- Agy capability gate: verify Agy's real startup and per-turn hook surface before claiming the cross-vendor acceptance item. If Agy has no next-turn hook, bring the acceptance adjustment back to the advisor; do not fake it.\n\nConditions:\nC1. Role audience policy, simplified: snapshot live readers at send and print their names. ZERO readers REFUSES by default (non-zero exit, with a hint to name a handle or pass an explicit --queue-for-role). Do NOT silently queue for a future cohort; that is exactly the BUG-2204 failure. With --queue-for-role, assign the queued mail once, to the first eligible reader. Multiple readers each get their own receipt and the warning lists them.\nC2. Re-slice so the first PR is small and fixes the live failure without schema change:\n  PR1: the shared resolver, refusal of unknown and dead recipients, and the role zero/many warnings and refusal (C1) over TODAY's identities. No UUIDs, no migration. Closes the BUG-2204 delivery half.\n  PR2: handles: the reservation/binding, UUID, additive schema and migration, agent ls and statusline.\n  PR3: raw-client startup coverage (Claude/Codex/Agy) behind the capability gate.\n  PR4: relay lifetime: stable label, gap queue, end/crash bounces, reuse handover, coordinated with an aida-relay version gate.\n  Only PR4 completes STORY-1843. The others use 'Refs STORY-1843'.\nC3. Migration must be dry-run first. Ship 'aida mailbox migrate --dry-run' (the reconciliation report) in PR2 and run it against this repo's real store. The advisor reviews the report before any write-mode migration ships.\n\nImplementation may start with PR1. Each PR gets an independent attested review. PR2 and PR4 touch identity and lifecycle, so their reviews are STRICT.\n",
+  "subject": "STORY-1843 SKETCH v1: approved with conditions C1-C3",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
