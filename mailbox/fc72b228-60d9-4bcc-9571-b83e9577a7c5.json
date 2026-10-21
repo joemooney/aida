@@ -1,0 +1,19 @@
+{
+  "id": "fc72b228-60d9-4bcc-9571-b83e9577a7c5",
+  "thread_id": "fc72b228-60d9-4bcc-9571-b83e9577a7c5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792560136587,
+  "body": "PR #2721 head 2481458f0b (merge of origin/main d29b69c35c, normal push). The PR diff against main is now docs-only: 5 docs/testing files. Code, AGENTS, OVERVIEW and docs/cli conflicts: the branch had #2714's pre-merge head, so I took main's versions. Commit uses (Refs TASK-1800) because ACs remain unmet.\n\nAC1 (classify the frozen-50 refusals): UNMET. 18 of 50 are done in docs/testing/task-1800-semantic-audit.{md,json}; 32 remain. It is not mechanical: each case needs manual source and contract adjudication, and the per-case inputs are in codex's local relay evidence/session*, not the doc. Your 10-17 ruling also stops further audit slices, so I did not extend it.\nAC2 (cut the full-file fallback rate without dropping a true touch): UNMET. #2711 and #2714 (merged) only ADD evidence; per their own remeasurement fallback stays at 50 cases / 290 pairs. Non-Rust files still always use full-file fallback (aida-cli-lib/src/mandate_traces.rs:417) and the Rust fallback logic is unchanged. #2741 (merged, dangling trace ids) cuts refusals, not fallbacks. Remaining: enclosing-module item attribution plus non-Rust hunk scoping; regression check that the 17 inventoried cases keep every true ID, including full-file-only STORY-1218@2669 and TASK-1731@2686; before/after refusal and fallback counts on the same frozen 50 (none has been recorded since #2741).\nAC3 (ADD-only, fail-closed): MET. #2711 and #2714 are additive with regressions. #2741's dangling-trace-id drop follows your operator-approved 10-17 ruling; named ids still fail closed.\n\nGate: make check-ci-fast passed every gate except 'Removed mode-flag spelling guard'. That guard fails on main itself: docs/plans/2026-10-19-backlog-triage.tsv:78, from d29b69c35c (TASK-1944), quotes 'aida graph <ID> --tree'. CI runs that guard only when full_ci is set, and that docs-only commit skipped it, so the next code PR's CI will go red on it. That file is not in this PR. I ran the 9 gates after it from ci.yml's step bodies (portability with the PR context substituted); all passed. Not merged, not self-approved.",
+  "subject": "PR-2721 updated (TASK-1800)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
