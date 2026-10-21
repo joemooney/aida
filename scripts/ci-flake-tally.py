@@ -41,6 +41,11 @@ TEST_STEP = "Run tests"
 
 # `test some::path ... FAILED`, as libtest prints it.
 FAILED_TEST = re.compile(rb"test ([A-Za-z0-9_:]+) \.\.\. FAILED")
+# `   FAIL [   0.123s] ( 3/120) aida-cli::journey some::path`, as nextest (the
+# test lanes' runner since TASK-1988) prints a failed, timed-out or crashed
+# test; the name is `<binary id> <test>`. trace:TASK-1988 | ai:claude
+NEXTEST_FAILED = re.compile(
+    rb"\s(?:FAIL|TIMEOUT|SIG[A-Z]+|ABORT) \[ *[\d.]+s\](?: \( *\d+/ *\d+\))? ([\w:.-]+ [\w:]+)")
 # `test result: FAILED. 7380 passed; 1 failed; ...`
 RESULT_LINE = re.compile(rb"test result: FAILED\. (\d+) passed; (\d+) failed")
 
@@ -114,7 +119,8 @@ def failing_tests(job_id: int) -> tuple[list[str], list[tuple[int, int]]]:
     instead of the test step.
     """
     log = gh_raw(f"repos/{REPO}/actions/jobs/{job_id}/logs")
-    names = sorted({m.group(1).decode() for m in FAILED_TEST.finditer(log)})
+    names = sorted({m.group(1).decode() for pattern in (FAILED_TEST, NEXTEST_FAILED)
+                    for m in pattern.finditer(log)})
     counts = [(int(a), int(b)) for a, b in RESULT_LINE.findall(log)]
     return names, counts
 
