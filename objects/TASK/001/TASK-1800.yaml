@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T07:04:54.760519737Z
+modified_at: 2026-10-21T08:18:49.763401805Z
 req_type: Task
 relationships:
 - rel_type:
@@ -442,6 +442,18 @@ comments:
   content: 'ADVISOR 22:48 backlog burndown: folded TASK-2042 (""TASK-1800 semantic audit: trace_lines text is trimmed but documented as exact"") into this spec; treat it as an item here.'
   created_at: 2026-10-21T05:47:34.624432386Z
   modified_at: 2026-10-21T05:47:34.624432386Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15d8a-a523-7ff1-999e-ada4ead31e3c
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 2026-10-21 01:25 on the AC2 SKETCH (claude, 2026-10-20), with conditions:
+    0. FIRST, in the same PR, fix the comment-24 request-changes finding: a deleted spec referenced by its agreed_id is dropped as dangling, which fails open on the authority path. It must refuse or exclude fail-closed. Add a regression test.
+    1. Slice 1 is Rust only: widen the Items visitor to every syn item kind, add the same-file reference closure, and use the fail-closed fallback list in §3 exactly as written. Markdown sections are NOT in slice 1.
+    2. Gate: the corpus replay (§4b) must show zero loss of true-touch and unresolved pairs that today's scoped collector keeps. Shape fixtures (§4a) and the subset/superset invariant are CI tests.
+    3. Measurement decides what comes next. The PR must include the before/after on all 50 frozen endpoints (task-1800-trace-exclusions.json). If case-level refusals do not change across the 50, TASK-1800 closes after slice 1, markdown scoping is dropped, and further mandate-coverage work moves to resolving unresolved IDs (store history and aliases), filed as its own spec. If case-level refusals improve, markdown can follow as slice 2 with its own replay.
+    4. decide() and mandate_ship_cover: no authority change beyond (0). STRICT review. Subject '(Refs TASK-1800)' unless the measurement in (3) closes the spec.
+  created_at: 2026-10-21T08:18:49.763401805Z
+  modified_at: 2026-10-21T08:18:49.763401805Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
