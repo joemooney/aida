@@ -1,0 +1,20 @@
+id: 01a15c9a-41fe-7281-a67c-3170635749e9
+spec_id: BUG-2198
+agreed_id: BUG-2198
+title: aida ps 'salvageable' reports a plain non-git directory copy as uncommitted work and suggests git add/commit in it
+description: 'Seen 2026-10-20: /home/joe/ai/aida-bug1987 has no .git (a 67M plain copy of main from Oct 12 with 8 edited files) and its spec BUG-1987 shipped in #2561, yet aida ps lists it as salvageable ''uncommitted work'' with a git -C ... add -A && commit recipe that cannot work. Acceptance: a directory that is not a git worktree is reported as ''not a git worktree, archive or delete'' (or omitted), and a salvage hint is suppressed when the session''s spec is completed and merged.'
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T03:56:15.742785142Z
+modified_at: 2026-10-21T03:56:15.742785142Z
+req_type: Bug
+filed_at:
+  code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6657ffff6d
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
