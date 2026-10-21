@@ -1468,11 +1468,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
-    // BUG-2201: the seat is the vendor this launcher spawns, so it carries
-    // that identity; without it `aida review record` refuses (BUG-1978)
-    // and the reviewer's `AIDA_AGENT_TYPE=… aida …` retry is a denied
-    // call under `dontAsk`. trace:BUG-2201 | ai:claude
-    cmd.env("AIDA_AGENT_TYPE", vendor.agent_type());
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1651,6 +1648,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
+        // trace:BUG-2187 | ai:claude
+        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1849,6 +1848,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2187 | ai:claude
+    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -1904,17 +1905,6 @@ impl HeadlessVendor {
             HeadlessVendor::Claude => "claude",
             HeadlessVendor::Codex => "codex",
             HeadlessVendor::Agy => "agy",
-        }
-    }
-
-    /// The `AIDA_AGENT_TYPE` spelling of this vendor (`claude` / `codex` /
-    /// `antigravity`).
-    // trace:BUG-2201 | ai:claude
-    pub fn agent_type(self) -> &'static str {
-        match self {
-            HeadlessVendor::Claude => "claude",
-            HeadlessVendor::Codex => "codex",
-            HeadlessVendor::Agy => "antigravity",
         }
     }
 
@@ -3885,6 +3875,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     // grant minted for this launch, or `""` for a baseline child — never
     // inherited from the launcher, whose grant may carry delegable seats.
     apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut child_cmd, vendor, seat);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3953,6 +3945,21 @@ pub(crate) fn apply_headless_child_seat_env(
     cmd.env("AIDA_SESSION_ROLE", seat)
         .env(crate::seat_authority::GRANT_ENV, grant_env);
     scrub_launcher_session_env(cmd);
+}
+
+/// Attribution comes from this launch's vendor and seat, never the launcher
+/// (headless and interactive child launches alike).
+/// These labels confer no authority: recording still requires its existing
+/// reviewer grant and independent-session attestation.
+// trace:BUG-2187 | ai:codex
+fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
+    let agent_type = match vendor {
+        HeadlessVendor::Claude => "claude",
+        HeadlessVendor::Codex => "codex",
+        HeadlessVendor::Agy => "antigravity",
+    };
+    cmd.env("AIDA_AGENT_TYPE", agent_type)
+        .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
 }
 
 /// BUG-2139: strip the launcher-session env a child must not inherit.
@@ -4406,6 +4413,9 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         // paths must never diverge on env.
         .env("AIDA_DRIVE_ROOT", headless_worktree_root())
         .env(ceiling_key, ceiling_value);
+    // A resume launches Claude even when the launcher is another harness.
+    // trace:BUG-2187 | ai:codex
+    apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
