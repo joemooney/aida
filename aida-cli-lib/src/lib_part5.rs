@@ -3739,7 +3739,7 @@ pub(crate) fn review_recorder_authors(
     branch: Option<&str>,
 ) -> Vec<pr_ship::AuthorSession> {
     if subject_ids.is_empty() {
-        return review_authority::all_author_sessions(project_root);
+        return review_authority::all_author_sessions(project_root, branch);
     }
     review_authority::author_sessions_at(project_root, subject_ids, branch)
 }

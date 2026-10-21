@@ -94,6 +94,36 @@ fn reviewer_approval(identity: Vec<String>) -> RecordedVerdict {
     }
 }
 
+/// A non-author reviewer recording with the main checkout as its cwd: it
+/// binds `lease` (pinned there), sharing no process with its creator.
+fn main_checkout_recorder(root: &Path, lease: &SessionLease) -> RecorderIdentity {
+    let recorder = RecorderIdentity::with_context(
+        with_identity_source(source(101, 201, 301), || {
+            IdentitySource::live().recorder_tokens()
+        }),
+        std::slice::from_ref(lease),
+        &[root.to_path_buf()],
+        None,
+    );
+    assert!(recorder.tokens.contains(&format!("lease:{}", lease.id)));
+    recorder
+}
+
+fn spec_less_subject() -> crate::ReviewPrSubject {
+    crate::ReviewPrSubject {
+        head_ref: "claude/spec-less".into(),
+        commit_subjects: vec!["[AI:claude] chore(x): tidy".into()],
+    }
+}
+
+fn ship_policy(subject: crate::ReviewPrSubject, root: &Path) -> crate::pr_ship::ShipApprovalPolicy {
+    let head = subject.head_ref.clone();
+    crate::with_review_pr_subject(subject, || {
+        crate::pr_cmd::merge_approval_inputs(&[root], root, PR, &[], Some(&head), Some(HEAD))
+    })
+    .1
+}
+
 fn refs_only_subject() -> crate::ReviewPrSubject {
     crate::ReviewPrSubject {
         head_ref: "claude/fixture-hygiene".into(),
@@ -153,6 +183,10 @@ fn refs_subject_names_authorship_ids_but_never_completion_ids() {
         crate::pr_ship::extract_authorship_spec_ids_from_subject(&both),
         vec!["TASK-91903".to_string(), SPEC.to_string()]
     );
+    assert_eq!(
+        crate::pr_ship::extract_authorship_spec_ids_from_subject("fix(x): y (Refs:BUG-1)"),
+        vec!["BUG-1".to_string()]
+    );
     assert!(
         crate::pr_ship::extract_authorship_spec_ids_from_subject("fix(x): (Refsy BUG-1)")
             .is_empty()
@@ -161,7 +195,8 @@ fn refs_subject_names_authorship_ids_but_never_completion_ids() {
 
 /// The PR-2791 shape: a Refs-only PR, a stale `harness-worktree` lease pinned
 /// to the main checkout (live and in the ledger), and a non-author reviewer
-/// whose identity binds that lease because it records from the main checkout.
+/// whose cwd is the main checkout. Its cwd still binds that lease (the
+/// remaining behaviour); the lease just no longer authors the PR.
 #[test]
 fn refs_only_pr_with_a_main_checkout_harness_lease_ships_a_non_author_approval() {
     let root = tempfile::tempdir().unwrap();
@@ -175,10 +210,7 @@ fn refs_only_pr_with_a_main_checkout_harness_lease_ships_a_non_author_approval()
     with_identity_source(source(100, 200, 300), || {
         record_authoring_lease(root.path(), &stale)
     });
-    let recorder = with_identity_source(source(101, 201, 301), || {
-        RecorderIdentity::current(root.path(), std::slice::from_ref(&stale))
-    });
-    assert!(recorder.tokens.contains(&format!("lease:{}", stale.id)));
+    let recorder = main_checkout_recorder(root.path(), &stale);
     let v = [reviewer_approval(recorder.tokens.clone())];
 
     let (_, policy) = crate::with_review_pr_subject(refs_only_subject(), || {
@@ -239,4 +271,82 @@ fn refs_only_pr_still_refuses_the_refs_specs_author() {
         approval_authority_refusal(&v, &policy),
         Some(ApprovalAuthorityRefusal::AuthorSession { .. })
     ));
+}
+
+/// Leases bind a recorder by its actual cwd, not by the project root it names:
+/// a recorder outside the main checkout is not bound to a lease pinned there.
+#[test]
+fn recorder_binds_leases_by_cwd_not_project_root() {
+    let root = tempfile::tempdir().unwrap();
+    let claim = lease(
+        "aaaa00006666",
+        SPEC,
+        root.path().canonicalize().unwrap(),
+        "main",
+    );
+    let recorder = RecorderIdentity::current(root.path(), std::slice::from_ref(&claim));
+    assert!(
+        !recorder.tokens.contains(&format!("lease:{}", claim.id)),
+        "{recorder:?}"
+    );
+}
+
+/// Fail-closed path (the PR maps to NO spec): a stale main-checkout harness
+/// lease on another branch does not author it, so a non-author approval ships.
+#[test]
+fn spec_less_pr_ignores_a_harness_lease_on_another_branch() {
+    let root = tempfile::tempdir().unwrap();
+    let stale = lease(
+        "hhhh00007777",
+        HARNESS_WORKTREE_SCOPE,
+        root.path().into(),
+        "main",
+    );
+    write_lease(root.path(), &stale);
+    with_identity_source(source(100, 200, 300), || {
+        record_authoring_lease(root.path(), &stale)
+    });
+    let v = [reviewer_approval(
+        main_checkout_recorder(root.path(), &stale).tokens,
+    )];
+    let policy = ship_policy(spec_less_subject(), root.path());
+    assert!(policy.author_sessions.is_empty(), "{policy:?}");
+    assert!(!matches!(
+        approval_authority_refusal(&v, &policy),
+        Some(ApprovalAuthorityRefusal::AuthorSession { .. })
+    ));
+}
+
+/// Fail-closed path: a harness lease working ON the PR's head branch authored
+/// it, live or only in the ledger, so its own approval is refused.
+#[test]
+fn spec_less_pr_refuses_the_harness_lease_on_its_head_branch() {
+    for live in [true, false] {
+        let root = tempfile::tempdir().unwrap();
+        let author = lease(
+            "hhhh00008888",
+            HARNESS_WORKTREE_SCOPE,
+            root.path().join("wt"),
+            "claude/spec-less",
+        );
+        if live {
+            write_lease(root.path(), &author);
+        }
+        with_identity_source(source(100, 200, 300), || {
+            record_authoring_lease(root.path(), &author)
+        });
+        let recorder = with_identity_source(source(101, 201, 300), || {
+            RecorderIdentity::current(root.path(), &[])
+        });
+        let v = [reviewer_approval(recorder.tokens)];
+        let policy = ship_policy(spec_less_subject(), root.path());
+        assert!(!policy.author_sessions.is_empty(), "live={live}");
+        assert!(
+            matches!(
+                approval_authority_refusal(&v, &policy),
+                Some(ApprovalAuthorityRefusal::AuthorSession { .. })
+            ),
+            "live={live}: {policy:?}"
+        );
+    }
 }

@@ -881,8 +881,11 @@ pub(crate) fn extract_authorship_spec_ids_from_subject(subject: &str) -> Vec<Str
         let refs = inner
             .get(..4)
             .filter(|w| w.eq_ignore_ascii_case("refs"))
-            .map(|_| inner[4..].trim_start_matches(':'))
-            .filter(|r| r.starts_with(char::is_whitespace));
+            .map(|_| &inner[4..])
+            .and_then(|r| match r.strip_prefix(':') {
+                Some(after_colon) => Some(after_colon),
+                None => r.starts_with(char::is_whitespace).then_some(r),
+            });
         if let Some(ids) = refs.map(parse_spec_id_group) {
             out.extend(ids);
         }

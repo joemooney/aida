@@ -1991,7 +1991,7 @@ pub(crate) fn ship_approval_policy(
     let ids = normalized_spec_ids(spec_ids);
     crate::review_authority::warn_on_ledger_read(main_worktree);
     let author_sessions = if ids.is_empty() {
-        crate::review_authority::all_author_sessions(main_worktree)
+        crate::review_authority::all_author_sessions(main_worktree, head_branch)
     } else {
         crate::review_authority::author_sessions_at(main_worktree, &ids, head_branch)
     };
