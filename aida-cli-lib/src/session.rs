@@ -3138,7 +3138,19 @@ pub(crate) fn contained_settings_json_with_boundary(
         }
         sandbox["network"] = serde_json::Value::Object(network);
     }
-    let extra_entries = crate::contained_boundary::sandbox_allow_write_entries(extra_deny);
+    let extra_entries = {
+        // TASK-2007: the BUG-2012 main-checkout `.git` denies reach the OS
+        // sandbox's `denyWrite` explicitly, as BUG-1982's `extra_deny` does,
+        // not only `permissions.deny` via Claude Code's implicit merge.
+        // trace:TASK-1952 | trace:TASK-2007 | ai:antigravity
+        let mut layer_deny = extra_deny.to_vec();
+        for path in crate::contained_boundary::contained_main_checkout_git_deny_paths(write_roots) {
+            if !layer_deny.contains(&path) {
+                layer_deny.push(path);
+            }
+        }
+        crate::contained_boundary::sandbox_allow_write_entries(&layer_deny)
+    };
     match crate::contained_boundary::sandbox_filesystem(store_write_paths) {
         Some(mut filesystem) => {
             if let Some(entries) = filesystem["denyWrite"].as_array_mut() {
