@@ -469,16 +469,18 @@ pub(crate) struct RecorderIdentity {
 }
 
 impl RecorderIdentity {
-    /// Resolve the current process's identity against `leases`.
-    pub(crate) fn current(project_root: &Path, leases: &[SessionLease]) -> Self {
-        let dirs: Vec<PathBuf> = [
-            std::env::current_dir().ok(),
-            Some(project_root.to_path_buf()),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|p| p.canonicalize().unwrap_or(p))
-        .collect();
+    /// Resolve the current process's identity against `leases`. Leases bind
+    /// by the process's actual cwd, never by the project root it names: a
+    /// recorder elsewhere is not bound to every main-checkout lease. (One
+    /// whose cwd IS the main checkout still is; harness leases there do not
+    /// author, see [`is_authoring_lease`].)
+    // trace:BUG-2199 | ai:claude
+    pub(crate) fn current(leases: &[SessionLease]) -> Self {
+        let dirs: Vec<PathBuf> = std::env::current_dir()
+            .ok()
+            .into_iter()
+            .map(|p| p.canonicalize().unwrap_or(p))
+            .collect();
         let session_id = std::env::var("AIDA_SESSION_ID").ok();
         Self::with_context(
             IdentitySource::live().recorder_tokens(),
@@ -509,8 +511,22 @@ impl RecorderIdentity {
 // ── Authorship ──────────────────────────────────────────────────────────────
 
 /// Is `lease` an authoring (implementer/claim) lease? Review leases and
-/// PR-scoped leases belong to reviewers and never are.
+/// PR-scoped leases belong to reviewers and never are; nor is a generic
+/// `harness-worktree` lease, which names no spec — it authors only the branch
+/// it works on (see [`is_work_lease`]).
+// trace:BUG-2199 | ai:claude
 pub(crate) fn is_authoring_lease(lease: &SessionLease) -> bool {
+    is_work_lease(lease)
+        && !lease
+            .scope
+            .trim()
+            .eq_ignore_ascii_case(crate::worktree_lease::HARNESS_WORKTREE_SCOPE)
+}
+
+/// Is `lease` doing (non-review) work on its branch? An authoring lease, or a
+/// generic `harness-worktree` lease — whose authorship is its branch alone.
+// trace:BUG-2199 | ai:claude
+fn is_work_lease(lease: &SessionLease) -> bool {
     let scope = lease.scope.trim();
     !lease.review_verb && !scope.is_empty() && !scope.to_ascii_uppercase().starts_with("PR-")
 }
@@ -656,7 +672,9 @@ fn append_authorship_as(
     extra: Vec<String>,
     with_creator_shell: bool,
 ) {
-    if !is_authoring_lease(lease) {
+    // Harness leases are recorded too: their branch still names an author.
+    // trace:BUG-2199 | ai:claude
+    if !is_work_lease(lease) {
         return;
     }
     let mut tokens = lease_tokens(lease, manifest_session_id(project_root, lease).as_deref());
@@ -793,7 +811,7 @@ pub(crate) fn author_sessions(
     let mut out: Vec<crate::pr_ship::AuthorSession> = Vec::new();
     for lease in leases {
         if is_authoring_lease_for(lease, spec_ids)
-            || (is_authoring_lease(lease) && branch_is(&lease.branch, head_branch))
+            || (is_work_lease(lease) && branch_is(&lease.branch, head_branch))
         {
             let mut tokens = lease_tokens(lease, manifest_session(lease).as_deref());
             // The claim record says whether the creating shell is the
@@ -837,22 +855,29 @@ pub(crate) fn author_sessions_at(
 }
 
 /// BUG-1918: the fail-closed author set, used when the work under review
-/// maps to no spec or branch — every live authoring lease and every
-/// authorship-ledger record, whatever it claimed.
-pub(crate) fn all_author_sessions(project_root: &Path) -> Vec<crate::pr_ship::AuthorSession> {
+/// maps to no spec — every live authoring lease and every authorship-ledger
+/// record, whatever it claimed, plus any work lease or record on
+/// `head_branch`. A generic `harness-worktree` lease or record names no spec,
+/// so it counts only on `head_branch` (the stale main-checkout ones do not).
+// trace:BUG-2199 | ai:claude
+pub(crate) fn all_author_sessions(
+    project_root: &Path,
+    head_branch: Option<&str>,
+) -> Vec<crate::pr_ship::AuthorSession> {
     let leases: Vec<SessionLease> = visible_leases(project_root)
         .into_iter()
-        .filter(is_authoring_lease)
+        .filter(is_work_lease)
         .collect();
     let ledger = load_ledger(project_root);
     let mut ids: Vec<String> = leases
         .iter()
         .map(|l| l.scope.trim().to_string())
         .chain(ledger.iter().map(|r| r.scope.trim().to_string()))
+        .filter(|s| !s.eq_ignore_ascii_case(crate::worktree_lease::HARNESS_WORKTREE_SCOPE))
         .collect();
     ids.sort();
     ids.dedup();
-    author_sessions(&leases, &ledger, &ids, None, |l| {
+    author_sessions(&leases, &ledger, &ids, head_branch, |l| {
         manifest_session_id(project_root, l)
     })
 }
@@ -1043,3 +1068,7 @@ pub(crate) fn verified_solo_keys(
 #[cfg(test)]
 #[path = "tests/bug_1918_review_authority_tests.rs"]
 mod bug_1918_review_authority_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2199_refs_authorship_tests.rs"]
+mod bug_2199_refs_authorship_tests;

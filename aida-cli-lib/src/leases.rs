@@ -1170,11 +1170,70 @@ pub(crate) fn lease_state_for(
         };
     }
     let worktree_exists = l.worktree_path.exists();
-    let has_live_claude = live_sessions
+    // BUG-2197: a lease without a durable owner is never read live on the
+    // inspector's say-so — every caller gets the exclusion here.
+    // trace:BUG-2197 | ai:claude
+    let has_live_claude = attributable_live_sessions(l, live_sessions, inspector_pids())
         .iter()
         .any(|s| !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path)));
     let age_hours = now.signed_duration_since(l.started_at).num_hours();
     classify_lease_state(worktree_exists, has_live_claude, age_hours)
+}
+
+/// BUG-2197: does this lease record a durable owner — an `active_pid`, or a
+/// `creator_pid` that is still alive (or cannot be proven dead)? The ONE rule
+/// behind reap's unknown-owner verdict, the inspector exclusion, the
+/// unknown-owner listing, and the handoff pin: a lease whose only record is a
+/// dead creator shell (a per-command `bash -c`) has no durable owner.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_has_durable_owner(l: &SessionLease) -> bool {
+    l.active_pid.is_some()
+        || lease_recorded_owner(l) != aida_core::liveness::RecordedLeaseOwner::Unrecorded
+}
+
+/// BUG-2197: what the lease's recorded pids PROVE about its owner, using the
+/// kernel start identity so a reused pid counts as dead and an unreadable
+/// identity does not.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_recorded_owner(l: &SessionLease) -> aida_core::liveness::RecordedLeaseOwner {
+    aida_core::liveness::recorded_lease_owner(
+        l.active_pid
+            .map(|p| (p, l.active_pid_start_time.as_deref())),
+        l.creator_pid
+            .map(|p| (p, l.creator_pid_start_time.as_deref())),
+        aida_core::liveness::process_provably_dead,
+    )
+}
+
+/// BUG-2197: the live sessions a lease may be attributed to. A lease without a
+/// durable owner is never attributed to the inspecting process or any of its
+/// ancestors (`inspector`): on the primary checkout the inspecting claude is
+/// always "in the worktree", which made every such lease there read live and
+/// borrow the inspector's pid. Leases with a durable owner keep the full list.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn attributable_live_sessions(
+    l: &SessionLease,
+    live: &[process_probe::LiveSession],
+    inspector: &std::collections::HashSet<u32>,
+) -> Vec<process_probe::LiveSession> {
+    live.iter()
+        .filter(|s| !inspector.contains(&s.pid) || lease_has_durable_owner(l))
+        .cloned()
+        .collect()
+}
+
+/// BUG-2197: the inspecting process and its ancestors.
+// trace:BUG-2197 | ai:claude
+/// Walked once per process: the ancestry of a running process does not change.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn inspector_pids() -> &'static std::collections::HashSet<u32> {
+    static INSPECTOR: std::sync::OnceLock<std::collections::HashSet<u32>> =
+        std::sync::OnceLock::new();
+    INSPECTOR.get_or_init(|| {
+        process_probe::walk_ancestor_pids(std::process::id())
+            .into_iter()
+            .collect()
+    })
 }
 
 /// BUG-98: cheap lease count for the `aida session list` footer hint.
@@ -2378,6 +2437,13 @@ pub(crate) fn lease_drain_xref(
     }))
 }
 
+/// BUG-2197: a lease with no durable owner that no live process was
+/// attributed to has an unknown owner — neither live nor dead.
+// trace:BUG-2197 | ai:claude
+pub(crate) fn lease_owner_unknown(l: &SessionLease, attributed_pid: Option<u32>) -> bool {
+    attributed_pid.is_none() && !lease_has_durable_owner(l)
+}
+
 /// TASK-345: assemble the `aida session leases --json` rows. Pure over the
 /// classified leases + optional live drain snapshot so the JSON shape is
 /// unit-testable. Each row mirrors the human columns (id/scope/branch/role/
@@ -2399,6 +2465,8 @@ pub(crate) fn leases_json_rows(
                 "worktree": l.worktree_path.display().to_string(),
                 "state": state.label(),
                 "pid": pid,
+                // trace:BUG-2197 | ai:claude
+                "owner_unknown": lease_owner_unknown(l, *pid),
                 "drain": lease_drain_xref(&l.scope, drain),
             })
         })
@@ -2579,6 +2647,8 @@ pub(crate) fn classify_session_leases(
     leases
         .iter()
         .map(|l| {
+            // trace:BUG-2197 | ai:claude
+            let live = attributable_live_sessions(l, &live, inspector_pids());
             let live_in_worktree = live.iter().find(|s| {
                 !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
@@ -2724,8 +2794,12 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
             LeaseState::Stale => label.yellow(),
         };
         row.push_str(&format!(" {:<10}", colored));
+        let owner_unknown = lease_owner_unknown(l, *pid);
         if verbose {
-            let pid_col = pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
+            // trace:BUG-2197 | ai:claude
+            let pid_col = pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| if owner_unknown { "unknown" } else { "-" }.into());
             let cc = cc_session_id_for_worktree(&l.worktree_path)
                 .map(|s| s.chars().take(20).collect::<String>())
                 .unwrap_or_else(|| "-".into());
@@ -2733,6 +2807,17 @@ pub(crate) fn session_leases(verbose: bool, all: bool, json: bool) -> Result<()>
         }
         row.push_str(&format!(" {}", l.worktree_path.display()));
         println!("{}", row);
+        // trace:BUG-2197 | ai:claude
+        if owner_unknown {
+            println!(
+                "{}",
+                format!(
+                    "{}? unknown owner — no live process is recorded on this lease, so it is neither live nor dead",
+                    " ".repeat(15)
+                )
+                .dimmed()
+            );
+        }
         // STORY-301: annotate the lease the orchestrator is currently driving.
         if let Some((cur, phase)) = &drain_current {
             if &l.scope == cur {
