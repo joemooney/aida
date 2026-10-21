@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-21T10:00:09.238316213Z
+modified_at: 2026-10-21T10:00:14.074827175Z
 req_type: Task
 tags:
 - contained
@@ -262,6 +262,12 @@ comments:
   content: 'Advisor triage 2026-10-20 21:30: folded TASK-2037 into this spec (deny_expressible gap in contained_settings_json_with_boundary, from PR #2790 (TASK-1952 S1) review; next slice.). Its open acceptance items now belong here.'
   created_at: 2026-10-21T04:31:54.668821122Z
   modified_at: 2026-10-21T04:31:54.668821122Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15de7-7bfa-7de1-a1ba-a86e3dec7ec2
+  author: joe
+  content: 'ADVISOR 03:01: re-opened with --force. The PR-2790 ship (88430e08c6) appended a bare (TASK-1952) to the ''(Refs TASK-1952)'' subject and completed this sweep in error (BUG-2203). Only S1 (TASK-2004..2007) shipped; the other folded items (TASK-1781, 1989, 2001, 2009, 2031, 2034, 2036, 2037 and the rest listed in the comments) are still open. Status back to approved.'
+  created_at: 2026-10-21T10:00:14.074827175Z
+  modified_at: 2026-10-21T10:00:14.074827175Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
