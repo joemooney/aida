@@ -4,7 +4,8 @@ use super::*;
 use std::time::{Duration, Instant};
 
 fn git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = aida_core::git_ops::host_git_command(repo)
+    let out = crate::test_git::git_command()
+        .current_dir(repo)
         .args(args)
         .output()
         .unwrap();
