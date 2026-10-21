@@ -422,6 +422,18 @@ pub(crate) fn known_mailbox_recipients(
     map
 }
 
+/// The spelling a direct message to `id` is stored under: a known identity's
+/// stored spelling (`ADVISOR` -> `advisor`), else `id` as given. One rule for
+/// the CLI `--to` and the MCP `send_message` `to`, so neither opens a
+/// case-variant phantom inbox (`Message::addressed_to` is case-sensitive).
+// trace:TASK-1955 | ai:claude (TASK-1928)
+pub(crate) fn deliverable_recipient_spelling(store_root: &std::path::Path, id: &str) -> String {
+    known_mailbox_recipients(store_root)
+        .get(&id.to_lowercase())
+        .cloned()
+        .unwrap_or_else(|| id.to_string())
+}
+
 /// Render an unread-mail notice as plain, agent-facing context text (no ANSI —
 /// it is injected into a context window by a hook, not painted on a terminal).
 /// Framed so the agent knows it is interpreted INPUT, not a command, and how to
