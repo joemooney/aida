@@ -145,10 +145,17 @@ fn settings_allow_write_is_exactly_store_and_cache() {
     }
 
     // The Edit/Write tool boundary is still the worktree alone.
+    // BUG-2201's baseline Bash/Read rules are not write rules; skip them.
     let allow = settings["permissions"]["allow"].as_array().unwrap();
     assert!(!allow.is_empty());
     for rule in allow {
         let rule = rule.as_str().unwrap();
+        if !crate::contained_boundary::WRITE_TOOLS
+            .iter()
+            .any(|tool| rule.starts_with(&format!("{tool}(")))
+        {
+            continue;
+        }
         assert!(
             rule.contains(&worktree.display().to_string()),
             "tool rule outside the worktree: {rule}"
@@ -348,8 +355,9 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
     );
     assert_eq!(
         json.matches(".aida-store").count(),
-        2 + 2 * WRITE_TOOLS.len(),
-        "only this main's store and the sandbox/tool denies for its .git pointer: {json}"
+        // BUG-2201: plus the store's two baseline `Read` rules.
+        2 + 2 * WRITE_TOOLS.len() + 2,
+        "only this main's store, its reads, and the sandbox/tool denies for its .git pointer: {json}"
     );
 }
 
