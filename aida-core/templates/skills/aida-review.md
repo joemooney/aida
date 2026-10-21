@@ -105,11 +105,58 @@ ordering explicit so the model cannot drift past it.
    When `aida orchestrator status` = `orchestrated`, phase 4 reads the
    verdict file and performs the merge. When standalone-headless (no
    orchestrator), the verdict file is written and the reviewer exits;
-   a human merges later. Either way, the reviewer's job under headless
+   the session that launched it (or a human) ships later with
+   `aida pr ship`. Either way, the reviewer's job under headless
    ends at "verdict file on disk + comment posted + sentinel touched."
 
 The interactive workflow still walks steps 1–11 in order; this contract
 only takes effect when `AIDA_HEADLESS=1`.
+
+## Reviewer independence — who may record a verdict
+
+<!-- trace:STORY-1654 | ai:claude -->
+
+An approval counts at ship only when it was recorded by the reviewer
+**process** launched for that PR, from its own reviewer seat. When an
+orchestrator, relay, burndown or fire-mode session needs a review, it runs
+this from **Bash** and waits for the command to exit:
+
+```bash
+aida queue work PR-<n> --role reviewer --no-human
+```
+
+That command starts a separate headless reviewer: its own session id and
+process, a PR-scoped lease, a review worktree, and a child reviewer grant.
+It writes its prompt from this skill. The reviewer runs `aida review record`
+itself (step 6a) and writes `.aida/review-verdicts/PR-<n>.json`, which the
+launcher reads after the command exits.
+
+- **Never review through the Agent tool.** An Agent-tool subagent runs inside
+  the launching session, so it shares that session's identity. If that session
+  authored or dispatched the work, `aida pr ship` refuses the approval as an
+  author-session approval.
+- **The launcher never records a verdict.** It does not run
+  `aida review record` and does not copy a subagent's verdict into the ledger.
+  A verdict relayed by the orchestrator is refused at ship.
+- **No hand-rolled reviewer prompts.** Don't launch `claude -p "<your text>"`
+  or `aida agent new --role reviewer --prompt "<brief>"` as the review of
+  record. Don't pass verdict guidance or pre-digested conclusions to the
+  reviewer. The launcher may point only at checklist comments the operator
+  left on the spec; the reviewer reads them itself.
+- **Delegation.** The launching seat must have been entered with
+  `aida role enter <seat> --delegate-seat reviewer` (add
+  `--delegate-seat implementer` if it also launches implementers as
+  processes). Without it the reviewer launch fails closed and tells you to
+  re-enter the role. That is an operator action at a terminal.
+- **A stale approval means a new reviewer.** When the head moves after an
+  approval (rework push, merge from main), launch a new reviewer at the new
+  head. Relays and orchestrators never use `--override-stale-approval`; it
+  stays a human-operator tool.
+- **Concurrency.** One reviewer process per PR, at most 3 at once per
+  launcher. Don't pass `--sandbox` to reviewers yet.
+
+This gate prevents accidents and keeps the review independent. It is **not**
+a defence against an orchestrator that deliberately subverts it.
 
 ## Headless waiting rule (`AIDA_HEADLESS=1`) — trace:BUG-1063 | ai:codex
 
@@ -474,7 +521,7 @@ For each non-informational spec in the checklist, in order:
 1. **Read the diff against acceptance criteria** — the merge-base diff from
    step 2b above, never a raw tree diff against `main`'s tip — does each
    `- [ ]` line in the spec have matching code?
-2. **Run the per-spec test plan** — exact commands depend on the spec, but typically `cargo test -p <crate> <test_name>` or a focused subset. Use `cargo test --workspace` only when you can't narrow down.
+2. **Run the per-spec test plan** — exact commands depend on the spec, but typically `cargo test --profile agent -p <crate> <test_name>` or a focused subset (`make test-touched` on the PR branch picks them). Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`.
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
    - ✅ **PASS** — every acceptance bullet covered, tests green, no obvious regression
    - ⚠️ **PARTIAL** — some bullets covered, others missing; name the gap precisely (file + line + which bullet)
@@ -530,6 +577,15 @@ PR-15's bug_010 (TASK-81) was N>1 leases vs --steal-ends-one.
 - Concurrent writers to the same file (race on read/modify/write)
 
 If you can construct a plausible breaking input that the test plan didn't cover, that's a ⚠️ PARTIAL — file a follow-up bug rather than passing on the assumption.
+
+**Probe 5 (authority, gates, sandbox, seats, containment): strict tier.** When the diff touches any of these, also:
+
+- Enumerate every path in the diff that grants, checks or bypasses authority. For each, name who can reach it and what stops a seat without the grant.
+- Look for fail-open: an error, a missing file, an env var or a timeout that turns a refusal into an allow.
+- Check that no existing test was weakened, deleted or marked ignored to pass.
+- Name the test that proves the refusal path, not only the happy path. When the refusal path is untested, default to ⚠️ PARTIAL.
+
+<!-- trace:STORY-1654 | ai:claude -->
 
 **Record findings inline.** Each probe finding goes in the review-prompt worksheet as an additional ⚠️ PARTIAL or ❌ FAIL row against the spec whose code it affects (or a new "deep-pass findings" section when the bug touches code outside any covered spec). Step 7's consolidated PR comment renders these alongside the per-spec verdicts — same structure, different provenance label.
 

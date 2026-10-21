@@ -40,7 +40,7 @@ pub fn migrate_yaml_to_sqlite<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     // Save to SQLite
     sqlite_backend
-        .save(&store)
+        .save_imported(&store)
         .context("Failed to save to SQLite database")?;
 
     // Update YAML with migration marker
@@ -78,7 +78,7 @@ pub fn migrate_sqlite_to_yaml<P1: AsRef<Path>, P2: AsRef<Path>>(
 
     // Save to YAML
     yaml_backend
-        .save(&store)
+        .save_imported(&store)
         .context("Failed to save to YAML file")?;
 
     Ok(req_count)
@@ -138,7 +138,7 @@ pub fn migrate_to_postgres(source: &dyn DatabaseBackend, connection_string: &str
 
     // Save to PostgreSQL
     postgres_backend
-        .save(&store)
+        .save_imported(&store)
         .context("Failed to save to PostgreSQL database")?;
 
     Ok(req_count)
@@ -170,7 +170,7 @@ pub fn migrate_from_postgres(
 
     // Save to target
     target
-        .save(&store)
+        .save_imported(&store)
         .context("Failed to save to target database")?;
 
     Ok(req_count)

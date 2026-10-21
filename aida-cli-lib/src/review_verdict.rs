@@ -241,6 +241,13 @@ pub struct RecorderAttestation {
     /// gate re-reads it rather than trusting `human_at_tty` on its own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_id: Option<String>,
+    /// STORY-1655: true when this approval was a solo-human self-approval
+    /// (the global `[review] solo_human_self_approval` key was on, the human
+    /// passed the TTY floor and the typed terminal challenge). Omitted when
+    /// false, so a default-mode attestation serializes unchanged.
+    // trace:STORY-1655 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub solo_human: bool,
 }
 
 impl RecorderAttestation {
@@ -980,8 +987,7 @@ pub fn read_recorded_verdict_any(project_root: &Path, ids: &[&str]) -> Option<Re
 ///
 /// The unidentifiable case is live rather than historical: the PR-keyed
 /// handshake writer still emits verdicts with no reviewed commit recorded.
-// trace:BUG-1466 | ai:claude
-// trace:STORY-1391 | ai:claude
+// trace:BUG-1466 trace:STORY-1391 trace:TASK-1766 | ai:claude
 fn archive_current_round(
     obj: &mut serde_json::Map<String, serde_json::Value>,
     incoming: &RecordingKey,
@@ -992,16 +998,9 @@ fn archive_current_round(
     if verdict.trim().is_empty() {
         return;
     }
-    if round_sha(obj).is_none() {
-        // Unidentifiable round — see the note above. Refusing is the safe side.
-        return;
-    }
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
-    let mut rounds = obj
-        .get("rounds")
-        .and_then(|v| v.as_array().cloned())
-        .unwrap_or_default();
+    snapshot.remove("unarchived_rounds");
     // Retain iff something would otherwise be LOST. A byte-identical
     // re-recording carries nothing new; anything else does — including a
     // second reviewer at the SAME commit, which is the collision this spec
@@ -1010,6 +1009,26 @@ fn archive_current_round(
     if &key == incoming {
         return;
     }
+    if round_sha(obj).is_none() {
+        // Unidentifiable round — see the note above. Refusing to push to
+        // `rounds` avoids false surviving-finding attribution, while
+        // counting the displaced round preserves `record_outcome`'s round
+        // number when a commit-identified review replaces a PR-keyed
+        // handshake verdict.
+        let prev = obj
+            .get("unarchived_rounds")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+        obj.insert(
+            "unarchived_rounds".to_string(),
+            serde_json::Value::Number((prev + 1).into()),
+        );
+        return;
+    }
+    let mut rounds = obj
+        .get("rounds")
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default();
     if rounds
         .iter()
         .filter_map(|r| r.as_object())
@@ -1496,9 +1515,60 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     if let Some(rounds) = existing.remove("rounds") {
         snapshot.insert("rounds".to_string(), rounds);
     }
+    // TASK-1766: carry the displaced shaless-round count the same way, never
+    // lowering one this archive already holds. trace:TASK-1766 | ai:claude
+    let unarchived = |o: &JsonObj| o.get("unarchived_rounds").and_then(|v| v.as_u64());
+    if let Some(n) = unarchived(&existing).max(unarchived(&snapshot)) {
+        snapshot.insert("unarchived_rounds".to_string(), n.into());
+    }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(&archive, &format!("{body}\n"))
+}
+
+/// BUG-2186: every recording [`archive_round_by_sha`] kept for the verdict
+/// file at `path` — each `<stem>/<sha>.json` round plus the `rounds` it
+/// retained, in file-name order. The reviewer launchers clear the current
+/// file before each run, so its inline `rounds` restart every round; this
+/// archive is where the writer keeps a change's refusal history. A missing
+/// archive is empty; an unreadable or malformed one is an error, never a
+/// silently shorter history.
+// trace:BUG-2186 | ai:claude
+pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>, String> {
+    let Some(dir) = verdict_archive_dir(path) else {
+        return Ok(Vec::new());
+    };
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
+    };
+    let mut files = Vec::new();
+    for entry in entries {
+        let file = entry
+            .map_err(|e| format!("could not read {}: {e}", dir.display()))?
+            .path();
+        if file.extension().is_some_and(|ext| ext == "json") {
+            files.push(file);
+        }
+    }
+    files.sort();
+    let mut recordings = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(&file)
+            .map_err(|e| format!("could not read {}: {e}", file.display()))?;
+        let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&text) else {
+            return Err(format!("{} is not a JSON object", file.display()));
+        };
+        let rounds = match obj.remove("rounds") {
+            None => Vec::new(),
+            Some(serde_json::Value::Array(rounds)) => rounds,
+            Some(_) => return Err(format!("`rounds` in {} is not an array", file.display())),
+        };
+        recordings.push(serde_json::Value::Object(obj));
+        recordings.extend(rounds);
+    }
+    Ok(recordings)
 }
 
 /// BUG-1539: the verdict recorded under `key` (a `PR-<N>` or spec id) for the
@@ -1673,7 +1743,17 @@ const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 /// and neither is anything but a regular file of bounded size — a symlink to
 /// a FIFO or device must not be able to hang or flood the launcher.
 fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
-    let meta = std::fs::symlink_metadata(path).ok()?;
+    // Validate and read the same opened inode. O_NONBLOCK prevents a FIFO
+    // replacement from hanging open; O_NOFOLLOW rejects final-component links.
+    // trace:TASK-1786 | ai:codex
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    let meta = file.metadata().ok()?;
     if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }
@@ -1681,7 +1761,10 @@ fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictC
     if modified < since {
         return None;
     }
-    let body = std::fs::read_to_string(path).ok()?;
+    let mut body = String::new();
+    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
+        .read_to_string(&mut body)
+        .ok()?;
     if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }
@@ -2386,10 +2469,13 @@ pub(crate) enum RecordOutcome {
 /// when there was no file) with the object about to be written (`after`).
 /// Uses the same [`recording_key`] that decides round retention, so the
 /// printed outcome can never disagree with what the record kept.
-// trace:BUG-2136 | ai:claude
+// trace:BUG-2136 trace:TASK-1766 | ai:claude
 pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
     let identical = before.is_some_and(|prev| {
-        round_sha(prev).is_some() && recording_key(prev) == recording_key(after)
+        prev.get("verdict")
+            .and_then(|v| v.as_str())
+            .is_some_and(|v| !v.trim().is_empty())
+            && recording_key(prev) == recording_key(after)
     });
     if identical {
         return RecordOutcome::Unchanged;
@@ -2398,8 +2484,12 @@ pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> Recor
         .get("rounds")
         .and_then(|v| v.as_array())
         .map_or(0, Vec::len);
+    let unarchived = after
+        .get("unarchived_rounds")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as usize;
     RecordOutcome::Recorded {
-        round: retained + 1,
+        round: retained + unarchived + 1,
     }
 }
 

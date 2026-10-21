@@ -117,37 +117,18 @@ pub(crate) fn run_on_distributed_store(
     store_path: &std::path::Path,
     project_root_hint: Option<&std::path::Path>,
 ) -> Result<()> {
-    let storage = Storage::new(store_path);
-    match command {
-        // Immutable corpus reads bypass cache/dispenser setup.
-        // trace:TASK-1729 | ai:codex
-        Command::Regen(cmd) => crate::regen::handle_command(store_path, cmd),
-        // MCP server reads/writes through the same canonical git store the CLI
-        // uses. The previous YAML-snapshot approach wrote to
-        // `.aida/mcp-cache.yaml` only — invisible to the CLI and overwritten on
-        // every MCP restart. trace:BUG-310 | ai:claude
-        Command::McpServe => {
-            let project_root =
-                mcp_serve_project_root(store_path, project_root_hint, find_project_root().ok());
-            mcp::run_mcp_server(&storage, project_root)
-        }
-        // Tracker imports (`aida jira/github pull`) write new requirements
-        // through this `Storage`, same as every other distributed-store
-        // write path — they need the same node id and per-write auto-push
-        // `handle_git_backend_command` gives its own callers, just reached
-        // through a different signature (`&Storage`, not `&GitBackend`).
-        // trace:TASK-1487 | ai:claude
-        Command::Jira(cmd) => run_tracker_command(store_path, command, |storage| {
-            tracker_cmd::handle_jira_command(cmd, storage)
-        }),
-        Command::Github(cmd) => run_tracker_command(store_path, command, |storage| {
-            tracker_cmd::handle_github_command(cmd, storage)
-        }),
-        Command::Gitlab(cmd) => run_tracker_command(store_path, command, |storage| {
-            tracker_cmd::handle_gitlab_command(cmd, storage)
-        }),
-        _ => git_backend_cmd::handle_git_backend_command(store_path, command),
+    // Registered commands that serve the store before its backend opens
+    // finish here; the rest fall through to the git-backend dispatcher.
+    // trace:STORY-1728 | ai:claude
+    let Command::Registered(invocation) = command;
+    let store = crate::command_registry::StoreCtx::Distributed {
+        store_path,
+        project_root_hint,
+    };
+    if invocation.run_store(store, None)? == crate::command_registry::Flow::Return {
+        return Ok(());
     }
+    git_backend_cmd::handle_git_backend_command(store_path, command)
 }
 
 /// Pure decision for `mcp-serve`'s project root: an explicit hint (the
@@ -249,12 +230,12 @@ pub(crate) fn looks_like_project_root(dir: &std::path::Path) -> bool {
 // trace:TASK-1487 | ai:claude
 pub(crate) fn run_tracker_command(
     store_path: &std::path::Path,
-    command: &Command,
+    per_write_auto_push: bool,
     handler: impl FnOnce(&Storage) -> Result<()>,
 ) -> Result<()> {
     let storage = Storage::new(store_path).with_dispenser(load_dispenser(store_path)?);
     handler(&storage)?;
-    if command_triggers_per_write_auto_push(command) {
+    if per_write_auto_push {
         maybe_auto_push_store(store_path, StoreAutoPushMode::PerWrite, "per-write");
     }
     Ok(())
@@ -1113,6 +1094,15 @@ pub(crate) fn pull_store_before_id_allocation(
         return ensure_no_spec_id_collisions(store_path);
     }
 
+    // BUG-2140: inside a contained sandbox (or when the store's git directory
+    // is not writable), git commit and pull --rebase cannot touch `.git`.
+    // Emit the deferral notice once and run only the local collision check.
+    // trace:BUG-2140 | ai:antigravity
+    if git_ops::store_commit_deferred_to_host(store_path) {
+        git_ops::notice_store_commit_deferred(store_path);
+        return ensure_no_spec_id_collisions(store_path);
+    }
+
     // trace:TASK-1717 | ai:claude — the pending commit is a store-writer
     // transaction of its own; the commit is kept whatever the network does.
     // A failed stage/commit (a refusing hook) stops the allocation with the
@@ -1185,6 +1175,9 @@ pub(crate) fn pull_store_before_id_allocation(
         });
         match pulled {
             Ok(checked) => return checked,
+            // Refused evidence is not transient and has no rebase to abort.
+            // trace:BUG-2162 | ai:claude
+            Err(e) if git_ops::is_evidence_refusal(&e) => return Err(e),
             Err(e) if attempt + 1 < cfg.retry_max => {
                 eprintln!(
                     "{} store allocation pull failed ({}) — retrying ({}/{})",
@@ -1223,6 +1216,14 @@ pub(crate) fn push_store_after_id_allocation(
     // will publish on the next online `aida add` / `aida db sync --push`.
     // trace:TASK-857 | ai:claude
     if add_remote_sync_disabled() {
+        return Ok(());
+    }
+
+    // BUG-2140: when store commits are deferred to the host, the new spec is
+    // queued on disk without a git commit yet, so skip the store push too.
+    // trace:BUG-2140 | ai:antigravity
+    if git_ops::store_commit_deferred_to_host(store_path) {
+        git_ops::notice_store_commit_deferred(store_path);
         return Ok(());
     }
 

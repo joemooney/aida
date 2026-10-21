@@ -3,6 +3,7 @@ use std::process::Command;
 
 fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
@@ -36,7 +37,7 @@ fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionL
 }
 
 fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

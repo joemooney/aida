@@ -456,3 +456,90 @@ mod tests {
         }
     }
 }
+
+/// Do one spec: dispatch it to the right harness based on its groomed
+/// execution mode (drain, drive, guided, operator, or decide), printing
+/// what will be asked of you before anything starts.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "do")]
+pub(crate) struct DoArgs {
+    /// Requirement ID (UUID or SPEC-ID) to dispatch.
+    pub spec: String,
+
+    // trace:STORY-776 | ai:claude
+    /// One-shot execution-mode override (drain, drive, guided, operator,
+    /// decide). Overriding toward MORE human involvement always wins;
+    /// toward LESS additionally needs --force. Never persisted — use
+    /// `aida edit <spec> --mode` to change the groomed mode durably.
+    #[clap(long, value_name = "MODE")]
+    pub mode: Option<String>,
+
+    // trace:STORY-776 | ai:claude
+    /// Allow a --mode override that LOOSENS the human contract (e.g.
+    /// guided → drain). A groomed `decide` mode can never be overridden.
+    #[clap(long)]
+    pub force: bool,
+}
+
+fn run_do(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DoArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // BUG-735: TASK-1155 wired `aida do` only into the legacy dispatch, so
+                // the git-canonical path fell through to the catch-all refusal. Mirror
+                // the Zen arm: same storage, same thin delegate.
+                // trace:BUG-735 | ai:claude
+                DoArgs { spec, mode, force } => {
+                    let storage = Storage::new(store_path.to_path_buf());
+                    return crate::command_registry::returned(run_do_drive(
+                        &storage,
+                        spec,
+                        mode.as_deref(),
+                        *force,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DoArgs { spec, mode, force } => {
+                    run_do_drive(&storage, spec, mode.as_deref(), *force)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DO: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "do",
+    help_after: "",
+    command: <DoArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: true,
+    },
+    run: crate::command_registry::Handler::Store(run_do),
+};

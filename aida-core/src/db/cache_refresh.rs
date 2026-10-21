@@ -145,7 +145,7 @@ impl RefreshLock {
     /// `Ok(None)` means another holder kept it the whole time.
     // trace:BUG-1940 | ai:claude
     pub fn acquire_within(cache_path: &Path, bound: Duration) -> std::io::Result<Option<Self>> {
-        let deadline = std::time::Instant::now() + bound;
+        let deadline = std::time::Instant::now() + capped_lock_wait(bound);
         loop {
             if let Some(lock) = Self::try_acquire(cache_path)? {
                 return Ok(Some(lock));
@@ -160,6 +160,26 @@ impl RefreshLock {
     pub fn is_nested(&self) -> bool {
         self.nested
     }
+}
+
+/// `bound`, shortened to `AIDA_TEST_CACHE_LOCK_WAIT_MS` when that is set. A
+/// test seam (like `AIDA_TEST_GH_BINARY`): a binary-driving test that holds
+/// the refresh lock for the whole wait gets the refusal without sitting out
+/// the production bound. It can only shorten the wait, never lengthen it.
+// trace:TASK-1959 | ai:claude
+fn capped_lock_wait(bound: Duration) -> Duration {
+    cap_lock_wait(
+        bound,
+        std::env::var("AIDA_TEST_CACHE_LOCK_WAIT_MS")
+            .ok()
+            .as_deref(),
+    )
+}
+
+fn cap_lock_wait(bound: Duration, cap_ms: Option<&str>) -> Duration {
+    cap_ms
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map_or(bound, |ms| bound.min(Duration::from_millis(ms)))
 }
 
 /// `registry_entry=None` beside a contended `direct_flock` looks
@@ -264,14 +284,12 @@ fn lock_holders(_sidecar: &Path) -> String {
 /// `try_acquire` then reports contention against an empty registry until the
 /// child reaches `exec`.
 ///
-/// That is the kernel's contract, not a defect here: nothing in `RefreshLock`
-/// can stop a sibling thread from forking, `O_CLOEXEC` is already the strongest
-/// available mitigation, and in production the caller simply loses the
-/// single-flight race and serves stale — the designed degradation. It is only a
-/// problem for a test that demands the lock be free at the instant the last
-/// guard drops, which is not something the kernel promises. Such a test waits
-/// for the window to close, bounded, and reports the diagnostic for a
-/// descriptor that never comes back.
+/// Nothing in `RefreshLock` can stop a sibling thread from forking, but its
+/// drop now releases the lock with an explicit `LOCK_UN` before closing, which
+/// frees the description for every copy (BUG-2156), so no window remains once
+/// the last guard drops. Tests written before the unlock still wait for it,
+/// bounded, as a backstop that reports the diagnostic for a descriptor that
+/// never comes back.
 ///
 /// The bound is a coarse backstop, not a measurement: the window closes as soon
 /// as the racing child reaches `exec`, which is microseconds on an idle host,
@@ -334,7 +352,15 @@ impl Drop for RefreshLock {
         let lock = held.get_mut(&self.path).unwrap();
         lock.depth -= 1;
         if lock.depth == 0 {
-            held.remove(&self.path);
+            if let Some(lock) = held.remove(&self.path) {
+                // Unlock before closing: a child a sibling thread forked while
+                // this guard was alive holds a copy of the locked description
+                // until its exec, and a bare close would leave the flock held
+                // by that copy, so the next reader loses the lock and serves
+                // stale (BUG-2156). LOCK_UN on any copy releases it for all.
+                // trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
+                let _ = fs2::FileExt::unlock(&lock._file);
+            }
         }
     }
 }
@@ -452,6 +478,91 @@ impl StaleServe {
     }
 }
 
+static TUI_OWNS_TERMINAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mark whether a full-screen TUI currently owns the terminal (raw mode /
+/// alternate screen). While set, [`emit_cache_note`] routes cache notes into
+/// [`cache_read_note`] for the TUI status line instead of writing raw bytes to
+/// stderr.
+// trace:TASK-1739 | ai:codex
+pub fn set_tui_owns_terminal(owns: bool) -> bool {
+    TUI_OWNS_TERMINAL.swap(owns, std::sync::atomic::Ordering::SeqCst)
+}
+
+/// Serializes tests that toggle the process-wide [`TUI_OWNS_TERMINAL`] flag or
+/// read the process-wide recorded note, so parallel tests cannot observe each
+/// other's state. Those tests take it for writing; every other
+/// [`emit_cache_note`] in the test binary takes it for reading, so an unrelated
+/// test's rebind or quarantine note can never overwrite the note a TUI test is
+/// asserting on while that test has the flag set (TASK-1956).
+// trace:TASK-1739 | ai:claude trace:TASK-1956 | ai:claude
+#[cfg(test)]
+pub(crate) static TUI_TERMINAL_TEST_LOCK: std::sync::RwLock<()> = std::sync::RwLock::new(());
+
+#[cfg(test)]
+thread_local! {
+    static TUI_TEST_EMITTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` as the emitting side of a test that holds [`TUI_TERMINAL_TEST_LOCK`]
+/// for writing: its notes skip the read gate that would otherwise wait for
+/// that very lock.
+// trace:TASK-1956 | ai:claude
+#[cfg(test)]
+pub(crate) fn as_tui_test_emitter<T>(f: impl FnOnce() -> T) -> T {
+    // Restore the prior value even if `f` panics, so nesting stays correct.
+    struct Restore(bool);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            TUI_TEST_EMITTER.with(|e| e.set(self.0));
+        }
+    }
+    let _restore = Restore(TUI_TEST_EMITTER.with(|e| e.replace(true)));
+    f()
+}
+
+// trace:TASK-1739 | ai:codex
+pub fn tui_owns_terminal() -> bool {
+    TUI_OWNS_TERMINAL.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// The latest cache note recorded while a TUI owned the terminal. Process-wide
+/// rather than thread-local: a rebind or reopen note can fire on a background
+/// refresh thread, and the TUI reads it on its render thread.
+// trace:TASK-1739 | ai:claude
+static TUI_CACHE_NOTE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+fn tui_cache_note() -> std::sync::MutexGuard<'static, Option<String>> {
+    TUI_CACHE_NOTE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Record a cache note for [`cache_read_note`], from any thread.
+// trace:TASK-1739 | ai:codex trace:TASK-1739 | ai:claude
+pub fn record_cache_note(note: impl Into<String>) {
+    *tui_cache_note() = Some(note.into());
+}
+
+/// Emit a one-line cache note: to `cache_read_note()` while a TUI owns the
+/// terminal, or to stderr otherwise.
+// trace:TASK-1739 | ai:codex
+pub fn emit_cache_note(note: impl Into<String>) {
+    let note = note.into();
+    // trace:TASK-1956 | ai:claude
+    #[cfg(test)]
+    let _gate = (!TUI_TEST_EMITTER.with(std::cell::Cell::get)).then(|| {
+        TUI_TERMINAL_TEST_LOCK
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+    if tui_owns_terminal() {
+        record_cache_note(note);
+    } else {
+        eprintln!("{note}");
+    }
+}
+
 // trace:TASK-1526 | ai:codex
 #[derive(Default)]
 struct Collected {
@@ -524,11 +635,20 @@ pub fn reset_cache_read_observations() {
         c.wait_deadline = None;
         c.ladder_waited = Duration::ZERO;
     });
+    // trace:TASK-1739 | ai:claude
+    *tui_cache_note() = None;
 }
 
-// trace:TASK-1526 | ai:codex
+/// The status-line note for the current read: the stale-serve note and any
+/// recorded cache note, joined so neither hides the other.
+// trace:TASK-1526 | ai:codex trace:TASK-1739 | ai:claude
 pub fn cache_read_note() -> Option<String> {
-    COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note))
+    let stale = COLLECTED.with(|c| c.borrow().stale.as_ref().map(StaleServe::note));
+    let recorded = tui_cache_note().clone();
+    match (stale, recorded) {
+        (Some(stale), Some(recorded)) => Some(format!("{stale} | {recorded}")),
+        (stale, recorded) => stale.or(recorded),
+    }
 }
 
 // trace:TASK-1526 | ai:codex
@@ -706,13 +826,14 @@ mod tests {
     /// host, made deterministic. `pre_exec` runs in the child after `fork` and
     /// before `exec`, with the parent's descriptors — including the guard's —
     /// still open, so holding the child there reproduces a descheduled
-    /// pre-exec child exactly. Dropping the guard in that window must leave the
-    /// lock held, with an empty registry, and the diagnostic must say SELF
-    /// rather than implicate an unrelated holder.
-    // trace:BUG-1729 | ai:claude
+    /// pre-exec child exactly. Dropping the guard in that window used to leave
+    /// the lock held by the child's copy, so the next reader lost it and served
+    /// stale (BUG-2156). The drop now unlocks explicitly: the lock is free at
+    /// once, with the child still holding its copy of the descriptor.
+    // trace:BUG-1729 | ai:claude trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
     #[cfg(target_os = "linux")]
     #[test]
-    fn a_forked_child_holds_the_lock_past_its_guard_until_exec() {
+    fn a_forked_child_does_not_hold_the_lock_past_its_guard() {
         use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
         use std::os::unix::process::CommandExt;
         let d = tempfile::tempdir().unwrap();
@@ -802,33 +923,16 @@ mod tests {
         );
 
         drop(guard);
-        let report = RefreshLock::diagnose_unavailable(&path);
         assert!(
-            RefreshLock::try_acquire(&path).unwrap().is_none(),
-            "the inherited descriptor did not hold the lock past the guard; {report}"
+            RefreshLock::try_acquire(&path).unwrap().is_some(),
+            "the inherited descriptor held the lock past the guard; {}",
+            RefreshLock::diagnose_unavailable(&path)
         );
-        assert!(report.contains("registry_entry=None"), "{report}");
-        assert!(report.contains("WouldBlock"), "{report}");
-        // The lock record keeps the pid that CREATED it, so the holder reads as
-        // this process even though the descriptor keeping it alive belongs to a
-        // child. That pair is what a CI log has to go on: a holder of SELF with
-        // an empty `own_fds` says an inherited descriptor, not a leak here,
-        // though it cannot say whose fork produced it; a holder of SELF with a
-        // descriptor still listed is a leak, which
-        // `the_diagnostic_names_a_descriptor_no_guard_owns` pins.
-        assert!(report.contains("SELF/pid="), "{report}");
-        assert!(report.contains("own_fds=[]"), "{report}");
 
         // Release the child: its `poll` sees EOF and it proceeds to `exec`.
         // trace:BUG-1939 | ai:claude
         drop(release_w);
         spawner.join().unwrap();
-        // Once the child execs, its copy closes and the lock is free again.
-        assert!(
-            acquire_past_fork_window(&path).unwrap().is_some(),
-            "the lock stayed held after the forked child exited; {}",
-            RefreshLock::diagnose_unavailable(&path)
-        );
     }
 
     /// A diagnostic is worth only what it says at the one moment it is read.
@@ -1104,6 +1208,41 @@ except OSError:
         drop(outer);
     }
 
+    /// A note recorded on a background thread reaches the render thread, and a
+    /// stale-serve note does not hide it.
+    // trace:TASK-1739 | ai:claude
+    #[test]
+    fn recorded_note_crosses_threads_and_joins_the_stale_note() {
+        let _serial = TUI_TERMINAL_TEST_LOCK
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _scope = CacheReadScope::new();
+        reset_cache_read_observations();
+        let prev = set_tui_owns_terminal(true);
+        std::thread::spawn(|| as_tui_test_emitter(|| emit_cache_note("note: background rebind")))
+            .join()
+            .unwrap();
+        set_tui_owns_terminal(prev);
+        assert_eq!(
+            cache_read_note().as_deref(),
+            Some("note: background rebind")
+        );
+
+        record_read(Some(StaleServe {
+            stale: true,
+            cache_head: Some("old".into()),
+            store_head: "new".into(),
+            built_at: None,
+            refreshing: RefreshState::Deferred,
+        }));
+        let note = cache_read_note().unwrap();
+        assert!(note.contains("refresh is deferred"), "{note}");
+        assert!(note.ends_with(" | note: background rebind"), "{note}");
+
+        reset_cache_read_observations();
+        assert_eq!(cache_read_note(), None);
+    }
+
     // trace:TASK-1526 | ai:codex
     #[test]
     fn stale_note_wording_matches_refresh_state() {
@@ -1132,5 +1271,19 @@ except OSError:
             assert_eq!(nested.metadata()["stale"], false);
         }
         assert_eq!(scope.metadata()["stale"], true);
+    }
+
+    // trace:TASK-1959 | ai:claude
+    #[test]
+    fn task_1959_lock_wait_cap_only_shortens() {
+        let ten = Duration::from_secs(10);
+        assert_eq!(cap_lock_wait(ten, None), ten);
+        assert_eq!(cap_lock_wait(ten, Some("200")), Duration::from_millis(200));
+        assert_eq!(cap_lock_wait(ten, Some("60000")), ten, "never lengthens");
+        assert_eq!(
+            cap_lock_wait(ten, Some("soon")),
+            ten,
+            "unparsable is ignored"
+        );
     }
 }

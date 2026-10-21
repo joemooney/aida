@@ -1239,7 +1239,7 @@ mod git_integration_tests {
     use std::process::Command;
 
     fn git(dir: &Path, args: &[&str]) {
-        let ok = Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(dir)
             .args(args)
             .output()
@@ -1313,6 +1313,46 @@ mod git_integration_tests {
         assert_eq!(read_state(root).unwrap().entries.len(), 1);
     }
 
+    /// BUG-1985 review F2: an uncommitted edit inside a registered submodule
+    /// of a pool worktree (contained-writable: a linked worktree) is dirty, so
+    /// the pool never resets it away. The return refuses and keeps the edit,
+    /// and the tree is not offered for reuse.
+    // trace:BUG-1985.acba0e36 | ai:claude
+    // trace:BUG-1985 | ai:claude
+    #[test]
+    fn submodule_edit_in_a_pool_tree_is_dirty_and_never_reset() {
+        let (repo, _sub) = init_repo_with_submodule();
+        let root = repo.path();
+        let _env = crate::test_env::EnvVarGuard::set("GIT_ALLOW_PROTOCOL", "file");
+        let path = acquire(root, &opts()).unwrap();
+        let edited = path.join("external/dep/README.md");
+        assert!(edited.is_file(), "the submodule is checked out");
+        assert!(git_ops::is_contained_writable_tree(&path));
+        assert!(!git_ops::worktree_is_dirty(&path), "a fresh tree is clean");
+
+        std::fs::write(&edited, "unsaved submodule edit").unwrap();
+        assert!(git_ops::refuse_untrusted_gitlinks(&path).is_ok());
+        assert!(
+            git_ops::worktree_is_dirty(&path),
+            "an uncommitted submodule edit must read as dirty"
+        );
+        let status = git_ops::worktree_status_porcelain(&path).unwrap();
+        assert!(status.contains("external/dep"), "{status}");
+
+        let err = return_to_pool(root, &path).expect_err("the reset must refuse");
+        assert!(format!("{err:#}").contains("submodule"), "{err:#}");
+        assert_eq!(
+            std::fs::read_to_string(&edited).unwrap(),
+            "unsaved submodule edit",
+            "the submodule edit must survive"
+        );
+        let pool = read_state(root).unwrap();
+        assert!(
+            !pool.entries[0].is_idle(),
+            "the tree is not offered for reuse"
+        );
+    }
+
     /// A failed salvage keeps the tree: no reset, the uncommitted edit is
     /// still there, and the entry stays leased.
     // trace:BUG-1986 | ai:claude
@@ -1383,7 +1423,7 @@ mod git_integration_tests {
             !root.join(".gitignore").exists(),
             "pool acquire must not touch the product .gitignore"
         );
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(&path)
             .args(["status", "--short"])
             .output()
@@ -1449,7 +1489,7 @@ mod git_integration_tests {
         // Re-acquire the same warm tree: must be detached at base, NOT stacked.
         let p2 = acquire(root, &opts()).unwrap();
         assert_eq!(p1, p2);
-        let head_branch = Command::new("git")
+        let head_branch = crate::test_git::git_command()
             .current_dir(&p2)
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .output()
@@ -1457,7 +1497,7 @@ mod git_integration_tests {
         let head = String::from_utf8_lossy(&head_branch.stdout);
         assert_eq!(head.trim(), "HEAD", "acquire must hand out a detached HEAD");
 
-        let log = Command::new("git")
+        let log = crate::test_git::git_command()
             .current_dir(&p2)
             .args(["log", "--oneline"])
             .output()
@@ -1770,7 +1810,7 @@ mod git_integration_tests {
         // 1. acquire — pool hands out a detached tree at the base.
         let path = acquire(root, &opts()).unwrap();
         let head_branch = |p: &Path| -> String {
-            let o = Command::new("git")
+            let o = crate::test_git::git_command()
                 .current_dir(p)
                 .args(["rev-parse", "--abbrev-ref", "HEAD"])
                 .output()
@@ -1798,7 +1838,7 @@ mod git_integration_tests {
             "HEAD",
             "return must leave the tree detached at the base, not on the session branch"
         );
-        let log = Command::new("git")
+        let log = crate::test_git::git_command()
             .current_dir(&path)
             .args(["log", "--oneline"])
             .output()

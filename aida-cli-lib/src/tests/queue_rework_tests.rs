@@ -233,8 +233,12 @@ fn covers_every_status_variant() {
 /// implementer from seeing only already-satisfied acceptance and producing a
 /// no-change loop.
 // trace:BUG-814 | ai:codex
+// trace:TASK-1970 | ai:antigravity
 #[test]
 fn rework_writes_blocking_review_findings_comment() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let _guard = crate::test_env::env_lock();
     let prev_cwd = std::env::current_dir().unwrap();
     let tmp = tempfile::tempdir().unwrap();
@@ -1203,6 +1207,7 @@ fn parked(spec_id: &str) -> aida_core::Requirement {
 
 fn lease_for(scope: &str, active_pid: Option<u32>) -> crate::SessionLease {
     crate::SessionLease {
+        tree_kind: Default::default(),
         id: format!("lease-{}-0000", scope.to_ascii_lowercase()),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

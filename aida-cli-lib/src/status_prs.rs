@@ -2955,7 +2955,7 @@ mod story_1043_unshipped_work_tests {
     use super::*;
 
     fn git(root: &std::path::Path, args: &[&str]) {
-        let output = std::process::Command::new("git")
+        let output = crate::test_git::git_command()
             .args(args)
             .current_dir(root)
             .output()
@@ -3076,6 +3076,7 @@ mod story_1043_unshipped_work_tests {
 
     fn write_live_lease(root: &std::path::Path, spec: &str, branch: &str) {
         let lease = SessionLease {
+            tree_kind: Default::default(),
             id: "live1043".to_string(),
             scope: spec.to_string(),
             slug: slugify(spec),

@@ -45,6 +45,10 @@ pub struct GitBackend {
     auto_commit: bool,
     /// Whether to record operations in the append-only oplog
     oplog_enabled: bool,
+    /// Whether the staged write under the current store lock includes an
+    /// advisor-gated status advance (`TASK-1737`).
+    // trace:TASK-1737 | ai:antigravity
+    pending_authority_advance: std::sync::atomic::AtomicBool,
 }
 
 /// What a whole-store `save()` left alone.
@@ -523,6 +527,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: true,
             oplog_enabled: true,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         })
     }
 
@@ -577,29 +582,70 @@ impl GitBackend {
         }
     }
 
+    // trace:TASK-1737 | ai:antigravity
+    fn with_authority_trailers(&self, message: &str, record_authority: bool) -> String {
+        if !record_authority {
+            return message.to_string();
+        }
+        match crate::lifecycle::resolve_commit_authority(&self.root) {
+            Some(auth) => format!("{message}{}", auth.format_trailers()),
+            None => message.to_string(),
+        }
+    }
+
     /// Stage every YAML the backend is responsible for and commit. Used by
     /// the bulk `save()` path that legitimately touches the entire object
     /// tree. For per-operation paths, prefer `auto_commit_paths` so we don't
     /// pull in unrelated drift from sibling files.
     /// trace:BUG-1-040 | ai:claude
+    fn path_present_or_tracked(&self, rel: &str) -> bool {
+        self.root.join(rel).exists()
+            || crate::git_ops::host_git_command(&self.root)
+                .args(["ls-files", "--error-unmatch", "--", rel])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+    }
+
     fn auto_commit(&self, message: &str) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
         // A contained session leaves the commit to the host, and says so.
-        // trace:BUG-1929 | ai:claude
+        // trace:BUG-1929 trace:BUG-2140 | ai:antigravity
         if crate::git_ops::store_commit_deferred_to_host(&self.root) {
-            crate::git_ops::notice_store_commit_deferred();
+            crate::git_ops::notice_store_commit_deferred(&self.root);
             return;
         }
-        let _ = crate::git_ops::add_all(&self.root, "objects");
+        if let Err(e) = crate::git_ops::refuse_embedded_repos(&self.root) {
+            eprintln!("warning: store change written but not committed: {e:#}");
+            return;
+        }
+        if self.path_present_or_tracked("objects") {
+            if let Err(e) = crate::git_ops::add_all(&self.root, "objects") {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
+        }
         if self.metadata_path.exists() {
-            let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
+            if let Err(e) = crate::git_ops::add(&self.root, &["metadata.yaml"]) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         if self.root.join("oplog.yaml").exists() {
-            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
+            if let Err(e) = crate::git_ops::add(&self.root, &["oplog.yaml"]) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
-        if let Err(e) = crate::git_ops::commit(&self.root, message) {
+        let commit_message = self.with_authority_trailers(message, record_authority);
+        if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
             // Never succeed silently: the write is on disk but uncommitted.
             // trace:BUG-1929 | ai:claude
             eprintln!("warning: store change written but not committed: {e:#}");
@@ -610,27 +656,47 @@ impl GitBackend {
     /// the commit when nothing is staged so no-op operations don't churn
     /// commit history. Use `git add -A <path>` semantics so deletions are
     /// captured along with adds/modifications.
-    /// trace:BUG-1-040 | ai:claude
+    // trace:BUG-1-040 trace:BUG-2140 | ai:antigravity
     fn auto_commit_paths(&self, message: &str, paths: &[&str]) {
+        let record_authority = self
+            .pending_authority_advance
+            .swap(false, std::sync::atomic::Ordering::SeqCst);
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
-        // trace:BUG-1929 | ai:claude
+        // trace:BUG-1929 trace:BUG-2140 | ai:antigravity
         if crate::git_ops::store_commit_deferred_to_host(&self.root) {
-            crate::git_ops::notice_store_commit_deferred();
+            crate::git_ops::notice_store_commit_deferred(&self.root);
+            return;
+        }
+        if let Err(e) = crate::git_ops::refuse_embedded_repos(&self.root) {
+            eprintln!("warning: store change written but not committed: {e:#}");
             return;
         }
         for p in paths {
+            if !self.path_present_or_tracked(p) {
+                continue;
+            }
             // `git add -A <path>` so a removed file is staged as a deletion
             // (plain `git add` only handles add/modify).
             // Route through the shared git helper so targeted store writes get
             // the same stale-index-lock recovery as bulk saves. trace:BUG-1164 | ai:codex
-            let _ = crate::git_ops::add_all(&self.root, p);
+            if let Err(e) = crate::git_ops::add_all(&self.root, p) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         // Always include oplog.yaml when present — every targeted op records
         // an op and we want it captured in the same commit.
+        // BUG-2140: when staging oplog.yaml, also stage any object/metadata/block
+        // files from earlier deferred oplog operations (whose target_id is in
+        // uncommitted `oplog.yaml` entries not already covered by `paths`),
+        // without staging unrelated concurrent object writes (BUG-1612).
         if self.root.join("oplog.yaml").exists() {
-            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
+            if let Err(e) = self.stage_oplog_and_deferred_targets(paths) {
+                eprintln!("warning: store change written but not committed: {e:#}");
+                return;
+            }
         }
         // Don't make an empty commit if nothing was actually staged.
         // Store git goes through the hardened host builder (TASK-1775).
@@ -641,11 +707,170 @@ impl GitBackend {
             .map(|s| !s.success()) // non-zero exit means there ARE staged changes
             .unwrap_or(false);
         if staged {
-            if let Err(e) = crate::git_ops::commit(&self.root, message) {
+            let commit_message = self.with_authority_trailers(message, record_authority);
+            if let Err(e) = crate::git_ops::commit(&self.root, &commit_message) {
                 // trace:BUG-1929 | ai:claude
                 eprintln!("warning: store change written but not committed: {e:#}");
             }
         }
+    }
+
+    /// Read and parse a requirement YAML from `HEAD:<rel_path>` when that path
+    /// exists in `HEAD`. Returns `Ok(None)` when `HEAD` or `HEAD:<rel_path>`
+    /// does not exist; propagates git or YAML parse failures as `Err`.
+    // trace:BUG-2140 | ai:antigravity
+    fn read_head_object(&self, rel_path: &str) -> Result<Option<Requirement>> {
+        let spec = format!("HEAD:{rel_path}");
+        let exists = crate::git_ops::host_git_command(&self.root)
+            .args(["cat-file", "-e", &spec])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !exists {
+            return Ok(None);
+        }
+        let out = crate::git_ops::host_git_command(&self.root)
+            .args(["show", &spec])
+            .output()
+            .with_context(|| format!("failed to run git show {spec}"))?;
+        if !out.status.success() {
+            anyhow::bail!(
+                "git show {spec} failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
+        let req = serde_yaml::from_slice::<Requirement>(&out.stdout)
+            .with_context(|| format!("failed to parse {spec}"))?;
+        Ok(Some(req))
+    }
+
+    /// Stage `oplog.yaml` along with any object/metadata/block files belonging
+    /// to earlier deferred oplog operations whose `target_id` is not already
+    /// covered by `paths` (BUG-2140), while preserving BUG-1612's targeted
+    /// commit invariant so unrelated unlogged object writes are never staged.
+    ///
+    /// Propagates any `oplog.yaml`, `HEAD:oplog.yaml`, or dirty object parse
+    /// failure as `Err` so `auto_commit_paths` never commits `oplog.yaml`
+    /// without its companion objects, and skips the `HEAD` probe when
+    /// `oplog.yaml` is clean relative to `HEAD`.
+    // trace:BUG-2140 trace:BUG-1612 | ai:antigravity
+    fn stage_oplog_and_deferred_targets(&self, paths: &[&str]) -> Result<()> {
+        let head_has_oplog = crate::git_ops::host_git_command(&self.root)
+            .args(["cat-file", "-e", "HEAD:oplog.yaml"])
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if head_has_oplog {
+            let oplog_clean = crate::git_ops::host_git_command(&self.root)
+                .args(["diff", "--quiet", "HEAD", "--", "oplog.yaml"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false);
+            if oplog_clean {
+                return Ok(());
+            }
+        }
+
+        let oplog_path = self.root.join("oplog.yaml");
+        let log = crate::oplog::OpLog::load(&oplog_path).context("failed to load oplog.yaml")?;
+        if !log.operations.is_empty() {
+            let committed_ids: std::collections::HashSet<uuid::Uuid> = if head_has_oplog {
+                let out = crate::git_ops::host_git_command(&self.root)
+                    .args(["show", "HEAD:oplog.yaml"])
+                    .output()
+                    .context("failed to run git show HEAD:oplog.yaml")?;
+                if !out.status.success() {
+                    anyhow::bail!(
+                        "git show HEAD:oplog.yaml failed: {}",
+                        String::from_utf8_lossy(&out.stderr).trim()
+                    );
+                }
+                let head_log: crate::oplog::OpLog = serde_yaml::from_slice(&out.stdout)
+                    .context("failed to parse HEAD:oplog.yaml")?;
+                head_log.operations.into_iter().map(|op| op.id).collect()
+            } else {
+                std::collections::HashSet::new()
+            };
+
+            let mut uncommitted_targets: std::collections::HashSet<uuid::Uuid> = log
+                .operations
+                .iter()
+                .filter(|op| !committed_ids.contains(&op.id))
+                .map(|op| op.target_id)
+                .collect();
+
+            for p in paths {
+                if p.starts_with("objects/") {
+                    let disk_path = self.root.join(p);
+                    if disk_path.exists() {
+                        let req = object_store::read_object_from_path(&disk_path)?;
+                        uncommitted_targets.remove(&req.id);
+                    } else if let Some(req) = self.read_head_object(p)? {
+                        uncommitted_targets.remove(&req.id);
+                    }
+                }
+            }
+
+            if !uncommitted_targets.is_empty() {
+                if self.objects_root.exists() {
+                    let status_out = crate::git_ops::host_git_command(&self.root)
+                        .args([
+                            "status",
+                            "--porcelain",
+                            "-z",
+                            "--untracked-files=all",
+                            "--",
+                            "objects",
+                        ])
+                        .output()
+                        .context("failed to inspect dirty store object paths")?;
+                    if !status_out.status.success() {
+                        anyhow::bail!(
+                            "git status -- objects failed: {}",
+                            String::from_utf8_lossy(&status_out.stderr).trim()
+                        );
+                    }
+                    let mut entries = status_out
+                        .stdout
+                        .split(|&b| b == 0)
+                        .filter(|s| !s.is_empty());
+                    while let Some(entry) = entries.next() {
+                        if entry.len() < 4 {
+                            continue;
+                        }
+                        let status_x = entry[0];
+                        let rel = std::str::from_utf8(&entry[3..])
+                            .context("non-UTF-8 path in store git status")?;
+                        if matches!(status_x, b'R' | b'C') {
+                            let _ = entries.next();
+                        }
+                        if !rel.ends_with(".yaml") || paths.contains(&rel) {
+                            continue;
+                        }
+                        let disk_path = self.root.join(rel);
+                        let req_opt = if disk_path.exists() {
+                            Some(object_store::read_object_from_path(&disk_path)?)
+                        } else {
+                            self.read_head_object(rel)?
+                        };
+                        if let Some(req) = req_opt {
+                            if uncommitted_targets.contains(&req.id) {
+                                crate::git_ops::add_all(&self.root, rel)?;
+                            }
+                        }
+                    }
+                }
+                if self.metadata_path.exists() {
+                    crate::git_ops::add(&self.root, &["metadata.yaml"])?;
+                }
+                if self.root.join("registry/blocks.yaml").exists() {
+                    crate::git_ops::add(&self.root, &["registry/blocks.yaml"])?;
+                }
+            }
+        }
+        crate::git_ops::add(&self.root, &["oplog.yaml"])
     }
 
     /// Read a user's queue file, PROPAGATING any parse error instead of
@@ -758,6 +983,7 @@ impl GitBackend {
             dispenser: None,
             auto_commit: false,
             oplog_enabled: false,
+            pending_authority_advance: std::sync::atomic::AtomicBool::new(false),
         };
         backend.load_metadata_only()
     }
@@ -889,16 +1115,8 @@ impl GitBackend {
             incoming.failure_reason = disk.failure_reason.clone();
         }
 
-        for comment in &mut incoming.comments {
-            if comment.session_id.is_some() {
-                continue;
-            }
-            if let Some(old) = disk.comments.iter().find(|old| old.id == comment.id) {
-                comment.session_id = old.session_id.clone();
-            }
-        }
-        // CR-8: filing provenance is write-once — the on-disk stamp wins.
-        // trace:CR-8 | ai:claude
+        // Context preservation/stamping is shared with targeted and transaction writes.
+        // trace:STORY-1674 | ai:codex
         crate::provenance::preserve_from_disk(&mut incoming, disk);
         if disk.hypothesis_lock.is_some() {
             incoming.hypothesis_lock = disk.hypothesis_lock.clone();
@@ -1052,17 +1270,25 @@ impl GitBackend {
         // differs from the on-disk one (dropped by a caller that built the
         // struct fresh, or rewritten), write the on-disk stamp back instead.
         // trace:CR-8 | ai:claude
-        let existing = object_store::read_object(&self.objects_root, spec_id).ok();
-        let provenance_fixed: Option<Requirement> = match &existing {
-            Some(old) if old.filed_at != requirement.filed_at => {
-                let mut fixed = requirement.clone();
-                crate::provenance::preserve_from_disk(&mut fixed, old);
-                Some(fixed)
-            }
-            _ => None,
+        let existing = if object_store::object_exists(&self.objects_root, spec_id)? {
+            Some(object_store::read_object(&self.objects_root, spec_id)?)
+        } else {
+            None
         };
+        let mut stamped = requirement.clone();
+        crate::provenance::stamp_write(
+            &mut stamped,
+            existing.as_ref(),
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
         // Record ops for changed fields (compare with existing if possible).
+        let authority_advance = existing.as_ref().is_some_and(|old| {
+            crate::lifecycle::status_advance_records_authority_trailers(
+                &old.status,
+                &requirement.status,
+            )
+        });
         if let Some(old) = existing {
             if old.title != requirement.title {
                 self.record_op(
@@ -1127,8 +1353,11 @@ impl GitBackend {
             }
         }
 
-        let to_write = provenance_fixed.as_ref().unwrap_or(requirement);
-        let wrote = object_store::write_object_if_changed(&self.objects_root, to_write)?;
+        let wrote = object_store::write_object_if_changed(&self.objects_root, &stamped)?;
+        if wrote && authority_advance {
+            self.pending_authority_advance
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
         Ok(if wrote { Some(spec_id) } else { None })
     }
 
@@ -1273,8 +1502,16 @@ impl GitBackend {
             if let Some(written) = self.stage_requirement_update(&next)? {
                 changed.push(written.to_string());
             }
+            // Report the stamped object as persisted, not the caller's copy.
+            // trace:STORY-1674 | ai:claude
             if accepted.contains(&next.id) {
-                report.written.push(next);
+                let sid = next
+                    .spec_id
+                    .as_deref()
+                    .expect("planned updates are keyed by spec_id");
+                report
+                    .written
+                    .push(object_store::read_object(&self.objects_root, sid)?);
             }
         }
         if !changed.is_empty() {
@@ -1304,6 +1541,8 @@ impl GitBackend {
         // waiting; a sync holding the lock can leave a failed rebase behind
         // in between, so the outermost holder checks again once it owns it.
         if guard.is_outermost() {
+            self.pending_authority_advance
+                .store(false, std::sync::atomic::Ordering::SeqCst);
             crate::git_ops::ensure_store_write_safe(&self.root)?;
         }
         Ok(guard)
@@ -1360,6 +1599,14 @@ impl GitBackend {
     /// newer than the incoming copy is a conflict (TASK-1161).
     // trace:BUG-1612 | ai:claude
     pub(crate) fn save_reporting(&self, store: &RequirementsStore) -> Result<SaveReport> {
+        self.save_reporting_with_origin(store, false)
+    }
+
+    fn save_reporting_with_origin(
+        &self,
+        store: &RequirementsStore,
+        imported: bool,
+    ) -> Result<SaveReport> {
         crate::git_ops::ensure_store_write_safe(&self.root)?;
         let _lock = self.lock_store()?;
 
@@ -1380,6 +1627,19 @@ impl GitBackend {
                                                                   // filing provenance. Captured lazily, once per save.
                                                                   // trace:CR-8 | ai:claude
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+
+        // A new path may be an existing UUID renamed by ID migration. Resolve
+        // that identity once per full save, so old unknown events remain old.
+        // trace:STORY-1674 | ai:codex
+        // Only an on-disk spec missing from the incoming store can be a
+        // rename's old path, so the map reads just those (none: no reads).
+        // trace:STORY-1674 | ai:claude
+        let incoming_specs: std::collections::HashSet<&str> = store
+            .requirements
+            .iter()
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        let mut previous_by_uuid: Option<std::collections::HashMap<uuid::Uuid, Requirement>> = None;
 
         for req in &store.requirements {
             let Some(ref spec_id) = req.spec_id else {
@@ -1425,16 +1685,64 @@ impl GitBackend {
                         conflicts.push(spec_id.clone());
                         continue;
                     }
-                    Self::preserve_full_save_only_fields(req.clone(), &disk)
+                    let mut next = Self::preserve_full_save_only_fields(req.clone(), &disk);
+                    if imported {
+                        crate::provenance::stamp_import_write(&mut next, Some(&disk))?;
+                    } else {
+                        crate::provenance::stamp_write(
+                            &mut next,
+                            Some(&disk),
+                            &crate::provenance::WriteContext::capture(),
+                        )?;
+                    }
+                    next
                 }
                 // Absent (or unparseable, as before): this save creates it.
                 _ => {
-                    let mut created = req.clone();
-                    if created.filed_at.is_none() {
-                        let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
-                        crate::provenance::stamp_with(&mut created, p);
+                    if previous_by_uuid.is_none() {
+                        let mut by_uuid = std::collections::HashMap::new();
+                        for (old_id, _) in existing
+                            .iter()
+                            .filter(|(id, _)| !incoming_specs.contains(id.as_str()))
+                        {
+                            if let Ok(old) = object_store::read_object(&self.objects_root, old_id) {
+                                if by_uuid.insert(old.id, old).is_some() {
+                                    anyhow::bail!("cannot resolve renamed requirement: duplicate UUID in store");
+                                }
+                            }
+                        }
+                        previous_by_uuid = Some(by_uuid);
                     }
-                    created
+                    if let Some(old) = previous_by_uuid.as_ref().and_then(|m| m.get(&req.id)) {
+                        let mut renamed = Self::preserve_full_save_only_fields(req.clone(), old);
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut renamed, Some(old))?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut renamed,
+                                Some(old),
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        renamed
+                    } else {
+                        let mut created = req.clone();
+                        if !imported && created.filed_at.is_none() {
+                            let p =
+                                filing_provenance.get_or_insert_with(crate::provenance::capture);
+                            crate::provenance::stamp_with(&mut created, p);
+                        }
+                        if imported {
+                            crate::provenance::stamp_import_write(&mut created, None)?;
+                        } else {
+                            crate::provenance::stamp_write(
+                                &mut created,
+                                None,
+                                &crate::provenance::WriteContext::capture(),
+                            )?;
+                        }
+                        created
+                    }
                 }
             };
             let caller_fp = match snapshot {
@@ -1544,8 +1852,21 @@ impl GitBackend {
         let mut written_specs: Vec<String> = Vec::new();
         for (req, caller_fp) in &to_write {
             let spec_id = req.spec_id.as_deref().unwrap_or_default();
+            let authority_advance = !imported
+                && object_store::read_object(&self.objects_root, spec_id)
+                    .ok()
+                    .is_some_and(|old| {
+                        crate::lifecycle::status_advance_records_authority_trailers(
+                            &old.status,
+                            &req.status,
+                        )
+                    });
             if object_store::write_object_if_changed(&self.objects_root, req)? {
                 written_specs.push(spec_id.to_string());
+                if authority_advance {
+                    self.pending_authority_advance
+                        .store(true, std::sync::atomic::Ordering::SeqCst);
+                }
             }
             if let (Some(snapshot), Some(caller_fp)) = (snapshot, caller_fp) {
                 if let Some(text) = object_store::read_object_text(&self.objects_root, spec_id)? {
@@ -1693,7 +2014,10 @@ impl GitBackend {
                 &paths.iter().map(String::as_str).collect::<Vec<_>>(),
             );
         }
-        Ok(Some(next))
+        Ok(Some(object_store::read_object(
+            &self.objects_root,
+            &spec_id,
+        )?))
     }
 
     /// Compare-and-swap check: the object at `path` must still hold `before`.
@@ -1845,16 +2169,34 @@ impl GitBackend {
         for req in &changed {
             if let Some(sid) = self.stage_requirement_update(req)? {
                 paths.push(object_store::relative_object_path(sid)?);
-                summary.written.push((*req).clone());
+                summary
+                    .written
+                    .push(object_store::read_object(&self.objects_root, sid)?);
             }
         }
         let mut filing_provenance: Option<crate::models::FilingProvenance> = None;
+        // A spec_id change is a delete + create of the same UUID. Stamp it
+        // against its old copy, as the full-save path does, so legacy events
+        // keep their unknown context instead of acquiring this session's.
+        // trace:STORY-1674 | ai:claude
+        let mut renamed_from: HashMap<uuid::Uuid, Requirement> = HashMap::new();
+        for (sid, id) in &removed {
+            if let Some((_, yaml)) = before.get(sid.as_str()) {
+                renamed_from.insert(*id, serde_yaml::from_str(yaml)?);
+            }
+        }
         for req in &created {
             let mut new_req = (*req).clone();
-            if new_req.filed_at.is_none() {
+            let previous = renamed_from.get(&new_req.id);
+            if previous.is_none() && new_req.filed_at.is_none() {
                 let p = filing_provenance.get_or_insert_with(crate::provenance::capture);
                 crate::provenance::stamp_with(&mut new_req, p);
             }
+            crate::provenance::stamp_write(
+                &mut new_req,
+                previous,
+                &crate::provenance::WriteContext::capture(),
+            )?;
             self.record_op(
                 new_req.id,
                 crate::oplog::OpKind::Create {
@@ -1880,7 +2222,7 @@ impl GitBackend {
         // that was written to disk.
         for written in &summary.written {
             if let Some(slot) = store.requirements.iter_mut().find(|r| r.id == written.id) {
-                slot.filed_at = written.filed_at.clone();
+                *slot = written.clone();
             }
         }
 
@@ -1957,6 +2299,13 @@ impl DatabaseBackend for GitBackend {
 
     fn save(&self, store: &RequirementsStore) -> Result<()> {
         self.save_reporting(store).map(|_| ())
+    }
+
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        // Keep the destination-loaded import's optimistic/deletion baseline.
+        // Foreign exporters clear their source baseline at the transfer call site.
+        self.save_reporting_with_origin(store, true).map(|_| ())
     }
 
     /// Per-spec compare-and-swap.
@@ -2088,6 +2437,11 @@ impl DatabaseBackend for GitBackend {
         // CR-8: stamp filing provenance at creation (write-once; a caller that
         // already stamped keeps its stamp). trace:CR-8 | ai:claude
         crate::provenance::stamp_if_absent(&mut req);
+        crate::provenance::stamp_write(
+            &mut req,
+            None,
+            &crate::provenance::WriteContext::capture(),
+        )?;
 
         let mut new_metadata = None;
         if req.spec_id.is_none() {
@@ -2118,10 +2472,13 @@ impl DatabaseBackend for GitBackend {
         let mut planned = vec![req.clone()];
         self.prepare_hypothesis_updates(&mut planned, &[])?;
         req = planned.iter().find(|r| r.id == req.id).unwrap().clone();
+        let mut paths = Vec::new();
         if let Some(meta) = new_metadata {
             self.save_metadata(&meta)?;
+            paths.push("metadata.yaml".to_string());
+        } else if self.metadata_path.exists() {
+            paths.push("metadata.yaml".to_string());
         }
-        let mut paths = vec!["metadata.yaml".to_string()];
         for row in planned.iter().filter(|r| r.id != req.id) {
             if let Some(sid) = self.stage_requirement_update(row)? {
                 paths.push(object_store::relative_object_path(sid)?);
@@ -2674,12 +3031,20 @@ impl<'a> BulkWriter<'a> {
                 continue;
             }
             let mut stamped = staged.clone();
-            let is_new = stamped.spec_id.as_deref().is_none_or(|sid| {
-                object_store::read_object(&self.backend.objects_root, sid).is_err()
-            });
-            if is_new {
+            let previous = match stamped.spec_id.as_deref() {
+                Some(sid) if object_store::object_exists(&self.backend.objects_root, sid)? => {
+                    Some(object_store::read_object(&self.backend.objects_root, sid)?)
+                }
+                _ => None,
+            };
+            if previous.is_none() {
                 crate::provenance::stamp_with(&mut stamped, &provenance);
             }
+            crate::provenance::stamp_write(
+                &mut stamped,
+                previous.as_ref(),
+                &crate::provenance::WriteContext::capture(),
+            )?;
             let req = &stamped;
             if object_store::write_object_if_changed(&self.backend.objects_root, req)? {
                 if let Some(spec) = &req.spec_id {
@@ -3328,7 +3693,7 @@ mod tests {
         // outside a git repo — so make the store a real repo, else there are
         // no commits to count. (This is the property under test.)
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3347,7 +3712,7 @@ mod tests {
         }
 
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -3400,7 +3765,7 @@ mod tests {
         let backend = GitBackend::new(&root).unwrap();
         backend.save(&RequirementsStore::new()).unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -3426,7 +3791,7 @@ mod tests {
 
         let targets = vec![reqs[0].clone(), reqs[1].clone(), impostor];
         let count_commits = || -> usize {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["rev-list", "--count", "HEAD"])
@@ -3981,7 +4346,7 @@ mod tests {
         crate::git_ops::add(&root, &["metadata.yaml"]).unwrap();
         crate::git_ops::commit(&root, "seed").unwrap();
         let before = crate::git_ops::head_sha(&root).unwrap();
-        let detached = std::process::Command::new("git")
+        let detached = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["checkout", "--detach"])
@@ -4108,6 +4473,195 @@ mod tests {
         );
     }
 
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_canonical_write_routes_persist_context_and_return_stamped_rows() {
+        use crate::models::{Comment, HistoryEntry};
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "session1674"),
+            ("AIDA_HARNESS_VERSION", "harness1674"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut req = Requirement::new("new".into(), "body".into());
+        req.comments
+            .push(Comment::new("writer".into(), "new comment".into()));
+        let added = backend.add_requirement(req).unwrap();
+        assert_eq!(
+            added.filed_at.as_ref().unwrap().harness_version.as_deref(),
+            Some("harness1674")
+        );
+        assert_eq!(added.comments[0].session_id.as_deref(), Some("session1674"));
+        let sid = added.spec_id.as_deref().unwrap();
+        let read = || object_store::read_object(&backend.objects_root, sid).unwrap();
+        let check = |req: &Requirement| {
+            let event = req.history.last().expect("write must have an event");
+            assert_eq!(event.session_id.as_deref(), Some("session1674"));
+            assert_eq!(event.harness_version.as_deref(), Some("harness1674"));
+        };
+        let mut edit = added.clone();
+        edit.title = "direct edit".into();
+        edit.history
+            .push(HistoryEntry::new("writer".into(), Vec::new()));
+        backend.update_requirement(&edit).unwrap();
+        check(&read());
+        // A retry with a pre-stamp copy must produce identical persisted bytes.
+        let prior = serde_yaml::to_string(&read()).unwrap();
+        backend.update_requirement(&edit).unwrap();
+        assert_eq!(serde_yaml::to_string(&read()).unwrap(), prior);
+        // Full save, per-spec atomic, bulk CAS, whole-store transaction.
+        let mut store = backend.load().unwrap();
+        store.requirements[0].description = "full save".into();
+        backend.save(&store).unwrap();
+        check(&read());
+        let current = read();
+        let next = backend
+            .update_spec_atomically(&current, |r| r.title = "per-spec".into())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&next).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        check(&next);
+        let report = backend
+            .bulk_update_atomically(&[next], "test", |r| {
+                r.title = "bulk CAS".into();
+                true
+            })
+            .unwrap();
+        assert_eq!(
+            serde_yaml::to_string(&report.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let (store, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].title = "transaction".into())
+            .unwrap();
+        check(&store.requirements[0]);
+        assert_eq!(
+            serde_yaml::to_string(&store.requirements[0]).unwrap(),
+            serde_yaml::to_string(&summary.written[0]).unwrap()
+        );
+        assert_eq!(
+            serde_yaml::to_string(&summary.written[0]).unwrap(),
+            serde_yaml::to_string(&read()).unwrap()
+        );
+        let mut writer = backend.bulk_writer().unwrap();
+        let mut new = Requirement::new("bulk created".into(), "body".into());
+        let mut c = Comment::new("writer".into(), "parent".into());
+        c.replies
+            .push(Comment::new_reply("writer".into(), "reply".into(), c.id));
+        new.comments.push(c);
+        let created_id = writer.add(new).unwrap().spec_id.clone().unwrap();
+        writer.finish("test provenance").unwrap();
+        let new = object_store::read_object(&backend.objects_root, &created_id).unwrap();
+        assert_eq!(
+            new.comments[0].replies[0].harness_version.as_deref(),
+            Some("harness1674")
+        );
+        // The shared Storage facade used by MCP must persist the same metadata.
+        let storage = crate::storage::Storage::new(root);
+        let store = storage
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == added.id)
+                    .unwrap()
+                    .title = "facade edit".into()
+            })
+            .unwrap();
+        check(
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == added.id)
+                .unwrap(),
+        );
+    }
+
+    // trace:STORY-1674 | ai:codex
+    #[test]
+    fn story1674_full_save_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy
+            .history
+            .push(crate::models::HistoryEntry::new("old".into(), Vec::new()));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let mut store = backend.load().unwrap();
+        store.requirements[0].spec_id = Some("TASK-2".into());
+        backend.save(&store).unwrap();
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none());
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert_eq!(
+            renamed.history.last().unwrap().session_id.as_deref(),
+            Some("renamer")
+        );
+        assert_eq!(
+            renamed.history.last().unwrap().harness_version.as_deref(),
+            Some("rename-harness")
+        );
+    }
+
+    // A spec_id change inside a whole-store transaction is delete + create of
+    // the same UUID: legacy events keep unknown context, filing provenance is
+    // not invented, and only the new write event carries this session.
+    // trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_transaction_id_rename_preserves_legacy_event_context() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "renamer"),
+            ("AIDA_HARNESS_VERSION", "rename-harness"),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("store");
+        let backend = GitBackend::new(&root).unwrap().with_auto_commit(false);
+        let mut legacy = Requirement::new("legacy".into(), "body".into());
+        legacy.spec_id = Some("TASK-1".into());
+        legacy.history.push(crate::models::HistoryEntry::new(
+            "old".into(),
+            vec![crate::models::FieldChange {
+                field_name: "title".into(),
+                old_value: "a".into(),
+                new_value: "legacy".into(),
+            }],
+        ));
+        legacy.comments.push(crate::models::Comment::new(
+            "old".into(),
+            "old comment".into(),
+        ));
+        object_store::write_object(&backend.objects_root, &legacy).unwrap();
+        let (_, summary) = backend
+            .update_atomically_tracked(|s| s.requirements[0].spec_id = Some("TASK-2".into()))
+            .unwrap();
+        assert_eq!(summary.created, vec!["TASK-2".to_string()]);
+        assert!(!object_store::object_exists(&backend.objects_root, "TASK-1").unwrap());
+        let renamed = object_store::read_object(&backend.objects_root, "TASK-2").unwrap();
+        assert!(renamed.filed_at.is_none(), "no invented filing provenance");
+        assert!(renamed.history[0].session_id.is_none());
+        assert!(renamed.history[0].harness_version.is_none());
+        assert!(renamed.comments[0].session_id.is_none());
+        assert!(renamed.comments[0].harness_version.is_none());
+        let event = renamed.history.last().unwrap();
+        assert!(event.is_write_event());
+        assert_eq!(event.session_id.as_deref(), Some("renamer"));
+    }
+
     // ---- BUG-1612: per-spec compare-and-swap, no whole-store rewrite -------
 
     /// A git-initialized store with `n` seeded specs (TASK-1..TASK-n).
@@ -4122,7 +4676,7 @@ mod tests {
             &["config", "user.email", "test@example.com"][..],
             &["config", "user.name", "Test"][..],
         ] {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -4139,7 +4693,7 @@ mod tests {
     }
 
     fn bug1612_head_files(root: &Path) -> Vec<String> {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args([
@@ -4410,7 +4964,7 @@ mod tests {
         // A no-op transaction writes and commits nothing.
         let head = |root: &Path| {
             String::from_utf8(
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .arg("-C")
                     .arg(root)
                     .args(["rev-parse", "HEAD"])
@@ -4626,7 +5180,7 @@ mod tests {
         );
 
         let git = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -5239,7 +5793,7 @@ mod tests {
     fn bug1641_spec_only_save_leaves_metadata_alone() {
         let (_dir, root, backend, _) = bug1612_git_store(2);
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -5668,7 +6222,7 @@ mod tests {
             &["config", "user.name", "t"],
             &["commit", "-q", "--allow-empty", "-m", "seed"],
         ] {
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .current_dir(&root)
                 .args(args)
                 .status()
@@ -5698,5 +6252,89 @@ mod tests {
         );
         std::fs::remove_dir_all(root.join(".git").join("rebase-merge")).unwrap();
         assert!(backend.queue_list("fay", false).unwrap().is_empty());
+    }
+
+    // trace:BUG-2140 | ai:antigravity
+    #[cfg(unix)]
+    #[test]
+    fn bug_2140_stage_oplog_and_deferred_targets_stages_deferred_objects_and_refuses_corrupt_state()
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use std::process::Command;
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        std::fs::create_dir_all(&root).unwrap();
+        for args in [
+            &["init", "-q", "-b", "aida-store"][..],
+            &["config", "user.email", "t@example.com"],
+            &["config", "user.name", "t"],
+        ] {
+            assert!(crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let backend = GitBackend::new(&root)
+            .unwrap()
+            .with_auto_commit(true)
+            .with_oplog(true);
+        let r1 = backend
+            .add_requirement(Requirement::new("Seed".into(), "seed".into()))
+            .unwrap();
+        assert_eq!(r1.spec_id.as_deref(), Some("FR-001"));
+
+        // Defer a second requirement write by locking `.git/objects` read-only.
+        let git_objects = root.join(".git/objects");
+        std::fs::set_permissions(&git_objects, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let r2 = backend
+            .add_requirement(Requirement::new("Deferred".into(), "deferred".into()))
+            .unwrap();
+        std::fs::set_permissions(&git_objects, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let r2_rel = object_store::relative_object_path(r2.spec_id.as_deref().unwrap()).unwrap();
+        let r2_disk = root.join(&r2_rel);
+        let r2_valid = std::fs::read_to_string(&r2_disk).unwrap();
+
+        // Corrupt the deferred object on disk: `stage_oplog_and_deferred_targets`
+        // must return `Err` instead of silently committing `oplog.yaml` without
+        // its companion object (F4).
+        std::fs::write(&r2_disk, "id: [corrupt yaml").unwrap();
+        assert!(
+            backend.stage_oplog_and_deferred_targets(&[]).is_err(),
+            "corrupt deferred object must fail stage_oplog_and_deferred_targets"
+        );
+        std::fs::write(&r2_disk, &r2_valid).unwrap();
+
+        // Corrupt `oplog.yaml` on disk: `stage_oplog_and_deferred_targets` must
+        // return `Err` as well.
+        let oplog_path = root.join("oplog.yaml");
+        let oplog_valid = std::fs::read_to_string(&oplog_path).unwrap();
+        std::fs::write(&oplog_path, "operations: [corrupt yaml").unwrap();
+        assert!(
+            backend.stage_oplog_and_deferred_targets(&[]).is_err(),
+            "corrupt oplog.yaml must fail stage_oplog_and_deferred_targets"
+        );
+        std::fs::write(&oplog_path, &oplog_valid).unwrap();
+
+        // Once valid, a targeted host update on `r1` commits `r1`, `oplog.yaml`,
+        // AND the earlier deferred `r2` object in the same commit.
+        let mut r1_edit = r1.clone();
+        r1_edit.title = "Seed updated".into();
+        backend.update_requirement(&r1_edit).unwrap();
+
+        let status = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&status.stdout).trim().is_empty(),
+            "deferred object + oplog must be committed cleanly alongside targeted update"
+        );
     }
 }

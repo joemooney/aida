@@ -259,6 +259,64 @@ pub(crate) fn grant_check(project_root: &Path) -> GrantCheck {
     grant_check_at(project_root, Utc::now())
 }
 
+/// Register the CLI's commit-authority resolver with `aida_core::lifecycle`.
+// trace:TASK-1737 | ai:antigravity
+pub(crate) fn ensure_commit_authority_resolver_registered() {
+    aida_core::lifecycle::register_commit_authority_resolver(resolve_commit_authority);
+}
+
+/// Resolve the project root that owns a `store_root` (`<project_root>/.aida-store`)
+/// without changing the shared `store_root()` helper or reading process cwd.
+// trace:TASK-1737 | ai:antigravity
+fn project_root_for_store_root(store_root: &Path) -> PathBuf {
+    store_root
+        .parent()
+        .filter(|parent| crate::detect_distributed_store_from(parent).is_some())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| store_root.to_path_buf())
+}
+
+/// Resolve the active authority (`Aida-Authority: grant|orchestrator`) for a
+/// store commit rooted at `store_root`, built on [`grant_check`] and
+/// [`crate::orchestrator::detect`]. Emits trailers only when the advance is
+/// authorized by a validated `advisor` seat grant or a live corroborated
+/// orchestrator run; human-at-TTY advances without an advisor grant or with a
+/// non-advisor grant emit no authority trailer.
+// trace:TASK-1737 | ai:antigravity
+pub(crate) fn resolve_commit_authority(
+    store_root: &Path,
+) -> Option<aida_core::lifecycle::CommitAuthority> {
+    use aida_core::lifecycle::CommitAuthority;
+
+    if crate::role::current_role_instance_is_companion() {
+        return None;
+    }
+
+    let project_root = project_root_for_store_root(store_root);
+    if let GrantCheck::Valid(grant) = grant_check(&project_root) {
+        let seat = crate::canonical_role_name(&grant.seat);
+        if seat == "advisor" {
+            let grant_prefix: String = grant.id.chars().take(8).collect();
+            return Some(CommitAuthority::Grant { seat, grant_prefix });
+        }
+    }
+
+    let mut candidate_roots = vec![project_root];
+    if candidate_roots[0] != store_root {
+        candidate_roots.push(store_root.to_path_buf());
+    }
+    if candidate_roots.iter().any(|root| {
+        matches!(
+            crate::orchestrator::detect(root),
+            crate::orchestrator::OrchestratorContext::Orchestrated
+        )
+    }) {
+        return Some(CommitAuthority::Orchestrator);
+    }
+
+    None
+}
+
 // Shared clock seam; notices never implement a second authority validator.
 // trace:BUG-2014 | ai:codex
 pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCheck {
@@ -364,6 +422,16 @@ pub(crate) fn validated_grant(
 
 pub(crate) fn current_seat(project_root: &Path) -> Option<String> {
     current_grant(project_root).map(|grant| grant.seat)
+}
+
+/// The raw grant handle this process exports, when it is set and non-blank,
+/// UNVALIDATED. Only for callers that compare the handle or look its record up
+/// themselves; every authority decision goes through [`grant_check`].
+// trace:TASK-1752 | ai:claude
+pub(crate) fn current_grant_id() -> Option<String> {
+    std::env::var(GRANT_ENV)
+        .ok()
+        .filter(|id| !id.trim().is_empty())
 }
 
 /// What a display surface (the statusline) should show as the session's
@@ -1786,3 +1854,8 @@ mod bug_2011_grant_expiry_verdict_tests;
 #[cfg(test)]
 #[path = "tests/task_1787_grant_ttl_tests.rs"]
 mod task_1787_grant_ttl_tests;
+
+// trace:TASK-1752 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_1752_grant_env_guard_tests.rs"]
+mod task_1752_grant_env_guard_tests;

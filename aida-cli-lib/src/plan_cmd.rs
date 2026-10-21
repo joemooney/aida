@@ -14,6 +14,11 @@
 use crate::process_retry::RetryEtxtbsy;
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "plan_cmd_args.rs"]
+pub(crate) mod plan_cmd_args;
+pub(crate) use plan_cmd_args::*;
+
 pub(crate) fn handle_plan_command(cmd: &PlanCommand) -> Result<()> {
     match cmd {
         PlanCommand::Verify { file, fix, quiet } => verify_plan(file, *fix, *quiet),
@@ -1457,6 +1462,7 @@ fn plan_scan(
             replies: Vec::new(),
             reactions: Vec::new(),
             session_id: resolve_current_session_id(), // trace:TASK-330
+            harness_version: None,
             relayed_from: None,
         });
         req.modified_at = now;
@@ -1805,5 +1811,65 @@ trailing prose after the block, also skipped\n";
         assert!(find_plan_file_for_spec(dir, "STORY-999").is_none());
         // a spec only present in the template is NOT matched
         assert!(find_plan_file_for_spec(dir, "BUG-99").is_some()); // (real plan)
+    }
+}
+
+/// Work with implementation plans archived under `docs/plans/`:
+/// `verify` lints a plan against the structured template, `helpers`
+/// derives a reusable-helpers section from the trace graph, `promote`
+/// moves Approved -> Planned when a plan file exists, and `fan-out`
+/// plans a whole set. Run `aida plan --help` for the full subcommand list.
+// trace:TASK-93 | ai:claude
+// trace:TASK-778
+#[derive(clap::Parser, Debug)]
+#[clap(name = "plan")]
+pub(crate) struct PlanArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PlanCommand,
+}
+
+// Plan tooling is self-contained: `verify` reads a markdown file +
+// source files; `helpers` loads the store itself via
+// `load_store_for_lookup`. Neither needs the shared storage handle, so
+// dispatch the whole group early. trace:TASK-93 TASK-94 | ai:claude
+fn run_plan(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PlanArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let plan_cmd = &args.inner;
+    return self::handle_plan_command(plan_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PLAN: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "plan",
+    help_after: "lifecycle",
+    command: <PlanArgs as clap::CommandFactory>::command,
+    policy: plan_cli_policy,
+    run: crate::command_registry::Handler::Early(run_plan),
+};
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Write. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn plan_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::PlanCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <PlanArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            PlanCommand::Verify { fix: false, .. } | PlanCommand::Helpers { append: None, .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
     }
 }

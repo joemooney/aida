@@ -15,6 +15,14 @@ const DEFAULT_GUARD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 /// is paid at most once per preflight, and only when a guard actually runs.
 // trace:BUG-1714 | ai:claude
 const DEFAULT_BUILD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+/// STORY-1854: a guard or build budget is a RUN budget, handed to the cargo
+/// wrapper as `AIDA_CARGO_TIMEOUT`, which, once aida-host STORY-100 ships,
+/// starts the clock when a build slot is acquired. The outer deadline here
+/// starts at spawn, so it counts slot-queue wait; it stays only as a backstop
+/// and allows a queue wait as long as the budget itself. Until then the
+/// variable is ignored, and this backstop is the only bound.
+// trace:STORY-1854 | ai:claude
+const QUEUE_ALLOWANCE_FACTOR: u32 = 2;
 const CI_BASH_SHELL: &str = "bash --noprofile --norc -e -o pipefail {0}";
 
 const DEFAULT_GUARD_NAMES: &[&str] = &[
@@ -380,6 +388,26 @@ fn output_text(out: &Output) -> String {
     text.trim().to_string()
 }
 
+/// The run budget in the wrapper's duration grammar: whole seconds, rounded
+/// up, because the wrapper reads `0` as unlimited.
+// trace:STORY-1854 | ai:claude
+fn cargo_run_budget(budget: Duration) -> String {
+    let secs = budget.as_secs() + u64::from(budget.subsec_nanos() > 0);
+    format!("{}s", secs.max(1))
+}
+
+/// Run a cargo-backed command with its run budget handed to the wrapper and
+/// the outer deadline widened to a backstop.
+// trace:STORY-1854 | ai:claude
+fn run_cargo_budgeted(command: &mut Command, budget: Duration) -> Result<Option<Output>, String> {
+    command.env("AIDA_CARGO_TIMEOUT", cargo_run_budget(budget));
+    run_bounded(command, cargo_backstop(budget))
+}
+
+fn cargo_backstop(budget: Duration) -> Duration {
+    budget.saturating_mul(QUEUE_ALLOWANCE_FACTOR)
+}
+
 fn run_bounded(command: &mut Command, timeout: Duration) -> Result<Option<Output>, String> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
     #[cfg(unix)]
@@ -501,7 +529,7 @@ fn build_worktree_binary(
     build
         .args(["build", "-p", "aida-cli", "--bin", "aida"])
         .current_dir(project_root);
-    match run_bounded(&mut build, timeout) {
+    match run_cargo_budgeted(&mut build, timeout) {
         Ok(Some(out)) if out.status.success() => Ok(describe_binary(path)),
         Ok(Some(out)) => Err(format!(
             "{} (build failed: {})",
@@ -511,7 +539,7 @@ fn build_worktree_binary(
         Ok(None) => Err(format!(
             "{} (build timed out after {}s)",
             path.display(),
-            timeout.as_secs()
+            cargo_backstop(timeout).as_secs()
         )),
         Err(err) => Err(format!("{} (build could not start: {err})", path.display())),
     }
@@ -628,7 +656,7 @@ fn execute(
             Some(branch) => child.env("AIDA_PREFLIGHT_DEFAULT_BRANCH", branch),
             None => child.env_remove("AIDA_PREFLIGHT_DEFAULT_BRANCH"),
         };
-        results.push(match run_bounded(&mut child, timeout) {
+        results.push(match run_cargo_budgeted(&mut child, timeout) {
             Ok(Some(out)) if out.status.success() => GuardResult::Passed(guard.name),
             Ok(Some(out)) => GuardResult::Failed {
                 name: guard.name,
@@ -640,7 +668,7 @@ fn execute(
                 name: guard.name,
                 reason: format!(
                     "timed out after {}s; binary: {binary_label}",
-                    timeout.as_secs()
+                    cargo_backstop(timeout).as_secs()
                 ),
             },
             Err(err) => GuardResult::Inconclusive {
@@ -910,6 +938,31 @@ mod tests {
         assert!(detail.contains("not shell-safe"), "{detail}");
     }
 
+    /// STORY-1854: guards receive their budget as `AIDA_CARGO_TIMEOUT` (whole
+    /// seconds, never `0`, which the wrapper reads as unlimited), and the
+    /// outer deadline is a wider backstop rather than the budget itself.
+    // trace:STORY-1854 | ai:claude
+    #[test]
+    fn guard_hands_its_run_budget_to_the_cargo_wrapper() {
+        assert_eq!(cargo_run_budget(Duration::from_secs(900)), "900s");
+        assert_eq!(cargo_run_budget(Duration::from_millis(1500)), "2s");
+        assert_eq!(cargo_run_budget(Duration::from_millis(50)), "1s");
+        assert_eq!(
+            cargo_backstop(Duration::from_secs(900)),
+            Duration::from_secs(1800)
+        );
+        let root = tempfile::tempdir().unwrap();
+        let results = execute(
+            root.path(),
+            vec![ResolvedGuard::Found(Guard {
+                name: "Budget probe".into(),
+                command: "test \"$AIDA_CARGO_TIMEOUT\" = 900s".into(),
+            })],
+            test_budgets(Duration::from_secs(900)),
+        );
+        assert_eq!(results, vec![GuardResult::Passed("Budget probe".into())]);
+    }
+
     /// BUG-1714 AC4: budgets come from `[preflight]` configuration; the
     /// defaults are cold-worktree sized rather than bare literals.
     // trace:BUG-1714 | ai:claude
@@ -995,13 +1048,13 @@ mod tests {
     #[test]
     fn github_base_ref_uses_repository_default_branch() {
         let root = tempfile::tempdir().unwrap();
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root.path())
             .status()
             .unwrap()
             .success());
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args([
                 "symbolic-ref",
                 "refs/remotes/origin/HEAD",
@@ -1038,7 +1091,7 @@ mod tests {
             "x\";>injected;\"",
         ] {
             let root = tempfile::tempdir().unwrap();
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .args(["init", "-q"])
                 .current_dir(root.path())
                 .status()
@@ -1046,7 +1099,7 @@ mod tests {
                 .success());
             let target = format!("refs/remotes/origin/{payload}");
             assert!(
-                Command::new("git")
+                crate::test_git::git_command()
                     .args(["symbolic-ref", "refs/remotes/origin/HEAD", &target])
                     .current_dir(root.path())
                     .status()
@@ -1096,13 +1149,13 @@ mod tests {
     #[test]
     fn bug_1624_hostile_default_branch_is_not_exported() {
         let root = tempfile::tempdir().unwrap();
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root.path())
             .status()
             .unwrap()
             .success());
-        assert!(Command::new("git")
+        assert!(crate::test_git::git_command()
             .args([
                 "symbolic-ref",
                 "refs/remotes/origin/HEAD",
@@ -1277,7 +1330,7 @@ mod tests {
         }
 
         let git = |args: &[&str], cwd: &Path| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .args(args)
                 .current_dir(cwd)
                 .env("GIT_AUTHOR_NAME", "t")

@@ -87,7 +87,7 @@ fn bug_1718_missing_agent_worktree_registration_is_left_untouched_silently() {
 }
 
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(args)
@@ -117,7 +117,7 @@ fn commit_file_at(root: &Path, file: &str, content: &str, message: &str, date: &
     let path = root.join(file);
     std::fs::write(&path, content).unwrap();
     git(root, &["add", file]);
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["commit", "-q", "-m", message])

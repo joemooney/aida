@@ -2,6 +2,7 @@
 // trace:STORY-1488 | ai:claude
 
 use crate::*;
+use aida_core::git_ops::RemoteCredentialsExt as _;
 
 /// BUG-1629: the workspace phase 1 launches. `fresh` marks a branch the
 /// pickup resolver chose as free that has not been launched yet; see
@@ -919,6 +920,8 @@ pub(crate) fn remote_branch_gone(project_root: &std::path::Path, branch: &str) -
             "origin",
             &format!("refs/heads/{branch}"),
         ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
         .output()
         .ok()?;
     match out.status.code() {
@@ -1017,6 +1020,8 @@ pub(crate) fn push_branch_from_implementer_worktree(
     let out = std::process::Command::new("git")
         .current_dir(worktree)
         .args(["push", "-u", "origin", &refspec])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(worktree, "origin")
         .output()
         .map_err(|e| {
             auto_complete::PhaseFailure::of(
@@ -1672,6 +1677,8 @@ pub(crate) fn prepare_graded_review(
         let fetched = std::process::Command::new("git")
             .current_dir(project_root)
             .args(["fetch", git_arg_guard::END_OF_OPTIONS, "origin", branch])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(project_root, "origin")
             .output();
         if !fetched.as_ref().is_ok_and(|o| o.status.success()) {
             return Err(auto_complete::PhaseFailure::new(format!(
@@ -1906,7 +1913,7 @@ mod forge_seam_tests {
         // to fail. Label sync only fails when a forge is declared but the repo
         // cannot be pinned (a pure-git root short-circuits to Ok): a git repo
         // with a github provider and no origin remote is unpinnable.
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(["init", "-q"])
@@ -1960,7 +1967,7 @@ mod forge_seam_tests {
         forge.author = Some("operator".into());
         let mut driver = driver_with(tmp.path(), &forge);
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(["init", "-q"])
@@ -2201,7 +2208,7 @@ mod bug_1628_pickup_resolver_tests {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join(name);
         std::fs::create_dir_all(&root).unwrap();
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .arg("init")
             .arg("-q")
             .arg(&root)
@@ -2259,7 +2266,7 @@ mod bug_1628_pickup_resolver_tests {
     fn bug_1628_pickup_resolver_skips_a_taken_branch_for_both_paths() {
         let (_temp, root) = temp_project("qci");
         let git = |args: &[&str]| {
-            let status = std::process::Command::new("git")
+            let status = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])

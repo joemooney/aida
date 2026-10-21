@@ -223,7 +223,7 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 ### `aida export`
 
-*(Covered in [Chapter 10 — Storage & data](10-storage.md).)* Tree-shaped export of a requirement hierarchy for sharing between projects (`export --format tree --id FOLDER-001 -o templates.json`). It's *setup-adjacent* — exporting a template tree to seed another project is a setup act — but it lives with the storage commands; pair it with `aida import` on the receiving side.
+*(Covered in [Chapter 10 — Storage & data](10-storage.md).)* Tree-shaped export of a requirement hierarchy for sharing between projects (`export --export-format tree --id FOLDER-001 -o templates.json`). It's *setup-adjacent* — exporting a template tree to seed another project is a setup act — but it lives with the storage commands; pair it with `aida import` on the receiving side.
 
 ---
 

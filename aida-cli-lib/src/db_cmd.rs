@@ -13,6 +13,11 @@
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "db_cmd_args.rs"]
+pub(crate) mod db_cmd_args;
+pub(crate) use db_cmd_args::*;
+
 use aida_core::DatabaseBackend;
 
 use crate::cli::DbCommand;
@@ -395,7 +400,10 @@ pub(crate) fn handle_db_command(
                 aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
             }
 
-            target.save(&store)?;
+            // trace:STORY-1674 | ai:codex — source snapshots do not fence destination writes.
+            let mut transferred = store.clone();
+            transferred.loaded_objects = None;
+            target.save_imported(&transferred)?;
             println!(
                 "{} Exported {} requirements to git store at {}",
                 crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -406,4 +414,514 @@ pub(crate) fn handle_db_command(
     }
 
     Ok(())
+}
+
+/// Database management commands
+#[derive(clap::Parser, Debug)]
+#[clap(name = "db")]
+#[clap(hide = true)]
+pub(crate) struct DbArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::DbCommand,
+}
+
+fn run_db(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DbArgs {
+                    inner: DbCommand::Path,
+                } => {
+                    // trace:FR-1-076 | ai:claude
+                    println!("{}", store_path.display());
+                }
+                DbArgs {
+                    inner: DbCommand::Info,
+                } => {
+                    let store = backend.load()?;
+                    println!("{}: Git (sharded YAML)", "Backend".bold());
+                    println!("{}: {}", "Path".bold(), store_path.display());
+                    println!("{}: {}", "Requirements".bold(), store.requirements.len());
+                    println!("{}: {}", "Users".bold(), store.users.len());
+
+                    let file_count =
+                        aida_core::object_store::list_objects(&store_path.join("objects"))
+                            .map(|l| l.len())
+                            .unwrap_or(0);
+                    println!("{}: {}", "Object files".bold(), file_count);
+
+                    // Show git status
+                    if aida_core::git_ops::is_git_repo(store_path) {
+                        let has_changes =
+                            aida_core::git_ops::has_changes(store_path).unwrap_or(false);
+                        let status_str = if has_changes {
+                            "uncommitted changes"
+                        } else {
+                            "clean"
+                        };
+                        println!("{}: {}", "Git".bold(), status_str);
+                        if let Ok(sha) = aida_core::git_ops::head_sha(store_path) {
+                            println!("{}: {}", "HEAD".bold(), sha);
+                        }
+                    }
+
+                    // TASK-36: surface agreed-id block utilization so users spot
+                    // imminent exhaustion before it bites at `aida add` time.
+                    // Aggregates across nodes (sum within each type prefix).
+                    //
+                    // BUG-115: remaining sums across every non-exhausted block
+                    // of the type. The pre-fix code reported only the highest-
+                    // numbered block's `remaining`, so a near-empty lower block
+                    // looked invisible and a near-empty higher block masked
+                    // healthy lower ones.
+                    // trace:TASK-36 | trace:BUG-115 | ai:claude
+                    let blocks_path = store_path.join("registry").join("blocks.yaml");
+                    if let Ok(registry) = aida_core::BlockRegistry::load(&blocks_path) {
+                        if !registry.blocks.is_empty() {
+                            println!();
+                            println!("{}", "Agreed-id blocks".bold());
+                            use std::collections::BTreeMap;
+                            let mut by_prefix: BTreeMap<String, Vec<&aida_core::AgreedIdBlock>> =
+                                BTreeMap::new();
+                            for b in &registry.blocks {
+                                by_prefix
+                                    .entry(b.type_prefix.to_uppercase())
+                                    .or_default()
+                                    .push(b);
+                            }
+                            for (prefix, blocks) in &by_prefix {
+                                let pad = format!("{:<8}", format!("{}:", prefix));
+                                let total: u32 =
+                                    blocks.iter().map(|b| b.range_end - b.range_start + 1).sum();
+                                let remaining: u32 = blocks
+                                    .iter()
+                                    .filter(|b| !b.is_exhausted())
+                                    .map(|b| b.remaining())
+                                    .sum();
+                                let active_count =
+                                    blocks.iter().filter(|b| !b.is_exhausted()).count();
+                                if active_count == 0 {
+                                    let last_end =
+                                        blocks.iter().map(|b| b.range_end).max().unwrap_or(0);
+                                    println!(
+                                        "  {} {}  (last: {}-{}; falling back to node-aware)",
+                                        pad,
+                                        "EXHAUSTED".red().bold(),
+                                        prefix,
+                                        last_end
+                                    );
+                                } else {
+                                    let issued = total - remaining;
+                                    println!(
+                                        "  {} {}/{}  ({} remaining, {} block{})",
+                                        pad,
+                                        issued,
+                                        total,
+                                        remaining,
+                                        blocks.len(),
+                                        if blocks.len() == 1 { "" } else { "s" }
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                // Phase 1: Sync command
+                DbArgs {
+                    inner:
+                        DbCommand::Sync {
+                            pull,
+                            push,
+                            message,
+                        },
+                } => {
+                    if !aida_core::git_ops::is_git_repo(store_path) {
+                        anyhow::bail!("Not a git repository: {}", store_path.display());
+                    }
+
+                    // trace:TASK-1717 | ai:claude — the pending commit, the pull
+                    // --rebase and its own cleanup, the collision scan and the
+                    // capture of the commit to push are ONE store-writer transaction
+                    // under the store write lock, so no spec edit, queue write,
+                    // mailbox digest or second sync can touch the index/HEAD between
+                    // them. The push, mirrors, auto-bump and maintenance run after
+                    // the lock is released.
+                    let window = aida_core::db::with_store_write_lock(store_path, || {
+                        db_sync_local_window(store_path, *pull, *push, message.as_deref())
+                    })?;
+                    let branch = window.branch.clone();
+                    let mut push_sha = window.head;
+
+                    if let Some(conflicts) = &window.conflicts {
+                        if !conflicts.is_empty() {
+                            println!();
+                            println!("{}", "Conflicts detected:".red().bold());
+                            for conflict in conflicts {
+                                println!();
+                                print!("{}", conflict);
+                            }
+                            println!();
+                            println!(
+                            "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
+                        );
+                        }
+
+                        // STORY-86: also scan the code repo's default
+                        // branch for any spec-referencing commits that
+                        // arrived (possibly via a separate `git pull`)
+                        // and bump matching Done specs. `db sync --pull`
+                        // is decoupled from `git pull`, so we don't know
+                        // a pre_sha here — fall back to HEAD~50. The
+                        // `status == Done` guard inside the helper keeps
+                        // this idempotent. trace:STORY-86 | ai:claude
+                        if auto_bump_enabled() {
+                            if let Some(project_root) = store_path.parent() {
+                                let storage = Storage::new(store_path);
+                                match auto_bump_done_to_completed(
+                                    project_root,
+                                    store_path,
+                                    None,
+                                    &storage,
+                                ) {
+                                    Ok(flips) => print_auto_bump_summary(&flips),
+                                    Err(e) => {
+                                        eprintln!(
+                                            "  {} auto-bump failed: {}",
+                                            "Warning:".yellow().bold(),
+                                            e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if *push {
+                        println!("Pushing to origin/{}...", branch);
+                        // trace:TASK-1717 | ai:claude — push the commit captured under
+                        // the lock, by SHA. A rejection retakes the lock, rebases the
+                        // CURRENT store (keeping any commit another writer made since)
+                        // and pushes the new head once; a second rejection fails.
+                        let pushed = match push_sha.as_deref() {
+                            None => Err(anyhow::anyhow!("store has no commit to push")),
+                            Some(sha) => {
+                                aida_core::git_ops::push_exact(store_path, "origin", sha, &branch)
+                            }
+                        };
+                        let origin_sha = match pushed {
+                            Ok(true) => {
+                                println!("  Push complete.");
+                                push_sha.clone()
+                            }
+                            Ok(false) => {
+                                println!("  Push rejected. Pulling and retrying...");
+                                let sha = aida_core::db::with_store_write_lock(store_path, || {
+                                    aida_core::git_ops::pull_rebase(store_path, "origin", &branch)
+                                        .map_err(|e| {
+                                            anyhow::anyhow!(
+                                                "Pull failed: {}",
+                                                crate::store_pull_failure_hint(
+                                                    store_path,
+                                                    &e.to_string()
+                                                )
+                                            )
+                                        })?;
+                                    crate::ensure_no_spec_id_collisions_canonical(store_path)?;
+                                    aida_core::git_ops::head_sha(store_path)
+                                })?;
+                                if !aida_core::git_ops::push_exact(
+                                    store_path, "origin", &sha, &branch,
+                                )? {
+                                    anyhow::bail!(
+                                    "Push rejected again after rebasing onto origin/{branch}; \
+                                     your commits are kept locally. Re-run `aida db sync --pull --push`."
+                                );
+                                }
+                                println!("  Push complete after rebase.");
+                                push_sha = Some(sha);
+                                push_sha.clone()
+                            }
+                            Err(e) => {
+                                eprintln!("  Push failed: {}", e);
+                                None
+                            }
+                        };
+
+                        // TASK-1096: fan out the store push to every configured mirror
+                        // remote so a clone can't silently leave one hub behind — the
+                        // drift-prevention leg. trace:TASK-1096 | ai:claude
+                        // trace:TASK-1717 | ai:claude — only the commit origin accepted.
+                        if let Some(sha) = origin_sha {
+                            if let Some(project_root) = store_path.parent() {
+                                crate::fan_out_store_mirror_push(
+                                    store_path,
+                                    &branch,
+                                    &sha,
+                                    project_root,
+                                );
+                            }
+                        }
+                    }
+
+                    if !pull && !push {
+                        println!("Use --pull and/or --push to sync with remote.");
+                        println!("  aida db sync --pull --push");
+                    }
+
+                    // TASK-1033: opportunistic store maintenance after a sync that
+                    // touched the store — ensure the lowered gc.auto is set, then
+                    // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
+                    // Best-effort; never fails the sync.
+                    if *pull || *push {
+                        aida_core::git_ops::opportunistic_store_gc(store_path);
+                    }
+                }
+                // Status
+                DbArgs {
+                    inner: DbCommand::Status,
+                } => {
+                    let store = backend.load()?;
+
+                    let total = store.requirements.len();
+                    let with_agreed = store
+                        .requirements
+                        .iter()
+                        .filter(|r| r.agreed_id.is_some())
+                        .count();
+                    let without_agreed = total - with_agreed;
+
+                    println!("{}", "Distributed Store Status".bold());
+                    println!("{}", "─".repeat(45));
+                    println!("{:<20} {}", "Path:", store_path.display());
+                    println!("{:<20} {}", "Requirements:", total);
+                    println!("{:<20} {}", "With agreed ID:", with_agreed);
+                    println!("{:<20} {}", "Pending merge-gate:", without_agreed);
+
+                    if aida_core::git_ops::is_git_repo(store_path) {
+                        let has_changes =
+                            aida_core::git_ops::has_changes(store_path).unwrap_or(false);
+                        let head =
+                            aida_core::git_ops::head_sha(store_path).unwrap_or_else(|_| "?".into());
+                        let branch = aida_core::git_ops::current_branch(store_path)
+                            .unwrap_or_else(|_| "?".into());
+
+                        println!("{:<20} {}", "Branch:", branch);
+                        println!("{:<20} {}", "HEAD:", head);
+                        println!(
+                            "{:<20} {}",
+                            "Working tree:",
+                            if has_changes {
+                                "uncommitted changes"
+                            } else {
+                                "clean"
+                            }
+                        );
+
+                        let remote_ok =
+                            aida_core::git_ops::is_remote_reachable(store_path, "origin");
+                        println!(
+                            "{:<20} {}",
+                            "Remote:",
+                            if remote_ok {
+                                "reachable"
+                            } else {
+                                "not configured or unreachable"
+                            }
+                        );
+                    }
+
+                    // Show dispenser state
+                    if let Ok(disp) = load_dispenser(store_path) {
+                        if let Ok(state) = disp.state() {
+                            let mode_str = match &state.mode {
+                                aida_core::IdMode::Centralized => "centralized".to_string(),
+                                aida_core::IdMode::Distributed { node_id } => {
+                                    format!("distributed (node {})", node_id)
+                                }
+                            };
+                            println!("{:<20} {}", "ID mode:", mode_str);
+                            let total_dispensed: u32 = state.sequences.values().sum();
+                            println!("{:<20} {}", "IDs dispensed:", total_dispensed);
+                        }
+                    }
+                }
+                // Merge gate: assign agreed IDs
+                DbArgs {
+                    inner: DbCommand::MergeGate,
+                } => {
+                    if !aida_core::git_ops::is_git_repo(store_path) {
+                        anyhow::bail!("Not a git repository: {}", store_path.display());
+                    }
+
+                    // STORY-647: team RBAC guardrail — the merge gate assigns the agreed
+                    // short IDs (an advisor act by default, tunable via
+                    // `[team.permissions] merge_gate`). Advisor authority (TTY / live
+                    // drain / advisor role) bypasses; `merge-gate` carries no `--force`
+                    // flag, so a non-advisor seats the role to proceed. trace:STORY-647
+                    enforce_team_gate(permissions::GatedOp::MergeGate, false)?;
+
+                    let assignments = aida_core::git_ops::merge_gate(store_path)?;
+
+                    if assignments.is_empty() {
+                        println!("All objects already have agreed IDs.");
+                    } else {
+                        println!("Assigned {} agreed ID(s):", assignments.len());
+                        for (node_id, agreed_id) in &assignments {
+                            println!("  {} → {}", node_id, agreed_id.green().bold());
+                        }
+                    }
+                }
+                // trace:FR-2-005 | ai:claude
+                DbArgs {
+                    inner: DbCommand::Block { subcommand },
+                } => {
+                    handle_block_command(subcommand, store_path)?;
+                }
+                // trace:FR-1-071 | ai:claude
+                DbArgs {
+                    inner: DbCommand::RetireLegacyIds { dry_run },
+                } => {
+                    handle_retire_legacy_ids(backend, store_path, *dry_run)?;
+                }
+                // trace:TASK-226 | ai:claude
+                DbArgs {
+                    inner:
+                        DbCommand::ReconcileStatus {
+                            since,
+                            spec,
+                            dry_run,
+                        },
+                } => {
+                    handle_db_reconcile_status(
+                        store_path,
+                        since.as_deref(),
+                        spec.as_deref(),
+                        *dry_run,
+                    )?;
+                }
+                // trace:TASK-80 | ai:claude
+                DbArgs {
+                    inner: DbCommand::Check { collisions, repair },
+                } => {
+                    if !*collisions {
+                        anyhow::bail!(
+                        "`aida db check` requires a check flag. Try `--collisions` (currently the only supported audit)."
+                    );
+                    }
+                    handle_db_check_collisions(backend, store_path, *repair)?;
+                }
+                // trace:TASK-1426 | ai:claude
+                DbArgs {
+                    inner: DbCommand::MigrateRelatedEdges { dry_run, json },
+                } => {
+                    let outcome = crate::related_edge_migration::run_migration(backend, *dry_run)?;
+                    if *json {
+                        println!("{}", crate::cache_output::json_pretty(&outcome)?);
+                    } else {
+                        print!(
+                            "{}",
+                            crate::related_edge_migration::render_outcome(&outcome)
+                        );
+                    }
+                }
+                // Phase 3: Export to git backend
+                DbArgs {
+                    inner: DbCommand::ExportGit { output },
+                } => {
+                    let output_path = std::path::PathBuf::from(output);
+
+                    // Load from whatever backend we're using (this handler is already git,
+                    // but the export command is also available from the main CLI path)
+                    let store = backend.load()?;
+
+                    // Create the target git backend
+                    let target = aida_core::GitBackend::new(&output_path)?;
+
+                    // Initialize git repo if not already
+                    if !aida_core::git_ops::is_git_repo(&output_path) {
+                        aida_core::git_ops::init(&output_path)?;
+                        let git_name = aida_core::git_ops::git_config_get("user.name")
+                            .unwrap_or_else(|_| "AIDA".to_string());
+                        let git_email = aida_core::git_ops::git_config_get("user.email")
+                            .unwrap_or_else(|_| "aida@localhost".to_string());
+                        aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
+                    }
+
+                    // trace:STORY-1674 | ai:codex — source snapshots do not fence destination writes.
+                    let mut transferred = store.clone();
+                    transferred.loaded_objects = None;
+                    target.save_imported(&transferred)?;
+                    println!(
+                        "Exported {} requirements to {}",
+                        store.requirements.len(),
+                        output_path.display()
+                    );
+                }
+                _ => crate::git_backend_cmd::exit_unsupported_on_git_backend(),
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                DbArgs { inner: db_cmd } => {
+                    self::handle_db_command(db_cmd, &requirements_path.to_path_buf())?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DB: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "db",
+    help_after: "feature",
+    command: <DbArgs as clap::CommandFactory>::command,
+    policy: db_cli_policy,
+    run: crate::command_registry::Handler::Store(run_db),
+};
+
+// Per-verb policy, carried over from the legacy stakeholder and per-write
+// auto-push tables. An unparseable invocation gets the fail-closed answer.
+// trace:STORY-1728 | ai:claude
+fn db_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::{BlockCommand, DbCommand};
+    use crate::stakeholder_role::StakeholderAction as SA;
+    let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
+    let inner = args.as_ref().map(|args| &args.inner);
+    crate::command_registry::CmdPolicy {
+        stakeholder: match inner {
+            Some(
+                DbCommand::Path
+                | DbCommand::Info
+                | DbCommand::Status
+                | DbCommand::Block {
+                    subcommand: BlockCommand::List | BlockCommand::Status | BlockCommand::Verify,
+                },
+            ) => SA::Read,
+            Some(DbCommand::MergeGate) => SA::MergeGate,
+            _ => SA::Database,
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
 }

@@ -10,6 +10,9 @@
 //! `criteria_gate` helper functions (unit-tested separately).
 // trace:TASK-1290 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -17,10 +20,12 @@ use std::process::{Command, Output};
 // steps ride a validated seat grant.
 mod support;
 
-static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// No process-wide test lock: every test owns its tempdir (repo, HOME,
+// worktree) and drives only child processes, so the tests run in parallel.
+// trace:TASK-1959 | ai:claude
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()
@@ -66,10 +71,13 @@ struct Project {
     _temp: tempfile::TempDir,
     repo: PathBuf,
     home: PathBuf,
+    // trace:TASK-1959 | ai:claude
+    _checkout: support::CheckoutGuard,
 }
 
 impl Project {
     fn new() -> Self {
+        let checkout = support::CheckoutGuard::new();
         let temp = tempfile::tempdir().expect("tempdir");
         let root = temp.path().canonicalize().expect("canonical tempdir");
         let repo = root.join("repo");
@@ -110,6 +118,7 @@ impl Project {
             _temp: temp,
             repo,
             home,
+            _checkout: checkout,
         }
     }
 
@@ -164,7 +173,6 @@ const UNTRACED_DESCRIPTION: &str =
 
 #[test]
 fn queue_done_warns_and_names_the_untraced_criterion_verbatim() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let spec = p.add_with_description("task", "gate warn fixture", UNTRACED_DESCRIPTION);
 
@@ -193,7 +201,6 @@ fn queue_done_warns_and_names_the_untraced_criterion_verbatim() {
 
 #[test]
 fn queue_done_refuses_under_enforce_refuse() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     p.set_protocol_enforce_refuse();
     let spec = p.add_with_description("task", "gate refuse fixture", UNTRACED_DESCRIPTION);
@@ -219,7 +226,6 @@ fn queue_done_refuses_under_enforce_refuse() {
 
 #[test]
 fn queue_done_force_overrides_and_ledgers_the_override() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     p.set_protocol_enforce_refuse();
     let spec = p.add_with_description("task", "gate force fixture", UNTRACED_DESCRIPTION);
@@ -255,7 +261,6 @@ fn queue_done_force_overrides_and_ledgers_the_override() {
 
 #[test]
 fn queue_done_is_quiet_when_all_criteria_are_traced() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let spec = p.add_with_description(
         "task",
@@ -286,7 +291,6 @@ fn queue_done_is_quiet_when_all_criteria_are_traced() {
 
 #[test]
 fn reviewer_prompt_round_one_cites_the_untraced_criteria_list() {
-    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let p = Project::new();
     let spec = p.add_with_description("bug", "reviewer prompt fixture", UNTRACED_DESCRIPTION);
 

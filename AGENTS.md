@@ -1,13 +1,55 @@
+CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
+`Build (ubuntu-latest)` remains the required check. CLI halves use committed
+main-run timings; each shard keeps its timing budget and root hygiene check.
+See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
 comments of unchanged sibling fn/impl items retain their scope; attribution
 fallback is unchanged. See OVERVIEW.md.
 <!-- trace:TASK-1800 | ai:codex -->
 
+Contained plan-only queue pickups select Claude plan mode while retaining
+contained flags and AIDA_CONTAINED=1; ordinary contained pickups keep dontAsk.
+Plan-only rejects headless flags before setup; headless drains use --with-plan.
+<!-- trace:TASK-1794 | ai:codex -->
+
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
+Standalone reviewer coexistence requires an explicit queue-work role flag plus
+an unambiguous backing spec. Verdict collection reads a size-bounded regular
+file through an O_NOFOLLOW/O_NONBLOCK handle; its FIFO regression has a child
+process watchdog.
+<!-- trace:TASK-1786 | ai:codex -->
+
+No-number `pr ship` protects main/master, then uses only origin/HEAD as local
+default-branch evidence before a bounded, read-only forge probe. Unknown evidence
+requires a PR number. PR-base callers retain conventional-ref/main fallbacks.
+Refusal suggestions show numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
+Regen generated-command execution defaults to a 30-second timeout per call;
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` accepts 1–86400 seconds. The scoring runner
+kills the process group and failed records retain timeout reasons. Each output
+stream is capped at 1 MiB; overflow fails without retaining child diagnostics.
+See OVERVIEW.md for pipe-collection deadlines and survivor limitations.
+<!-- trace:TASK-1791 | ai:codex -->
+
 Pooled-worktree lease cleanup revokes its stamped headless child grant before
 removing the lease. Headless drains refuse unresolved project roots before
 queueing or phase startup; delegated child expiry matches its parent.
 <!-- trace:TASK-1789 | ai:codex -->
+
+`aida usage show <SPEC> --provenance` reports persisted write context and
+read-only session-ledger evidence at or before each write. Harness versions
+come only from `AIDA_HARNESS_VERSION`; missing model/effort/token evidence stays
+unknown. Session totals overlap between events and must not be summed.
+See [provenance reporting](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
 
 Mandate exclusion-ledger reads validate the opened non-symlink regular file,
 mode 0600 and current uid. Mandate TTY refusals name mandate commands; failed
@@ -50,6 +92,11 @@ once a references/verified-by neighbor is Completed (either direction). Persiste
 `hypothesis_lock` timestamp/hash survive tag/link removal and result reopening;
 amendments use comments. See [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+Store rebase/union-merge/fast-forward (`git_ops::pull_rebase*`, `merge_union_auto`,
+`fast_forward_store`) take the store lock, refuse incompatible evidence before
+Git, and commit combined-graph locks before success; check refusals with
+`git_ops::is_evidence_refusal` and never publish after one.
+<!-- trace:BUG-2162 | ai:claude -->
 
 Regeneration scoring requires a declared/default installer for actual systems.
 The oracle may write v1 per-failure JSONL to `AIDA_REGEN_CHECK_RESULTS`; invalid
@@ -135,12 +182,14 @@ again before releasing labels and the marker.
 See [clearance policy](docs/cli/08-reporting.md#merge-hold-gate-and-clearance-limits).
 <!-- trace:STORY-1687 | ai:codex -->
 
-Claude tool-only sessions receive informational grant expiry context at the
-2h, 30m and expired crossings. The hook skips the CLI without a grant and caps
-it below 2s; a grant-local locked ledger deduplicates notices. Ledger failures
-produce no context and leave SessionStart/statusline as fallback. See
+Claude, Codex, and Antigravity (`--client agy`) tool-only sessions receive
+informational grant expiry context at the 2h, 30m and expired crossings. The
+hook skips the CLI without a grant and caps it below 2s; a grant-local locked
+ledger deduplicates notices. Ledger failures produce no context (`{}` for
+Antigravity) and leave SessionStart/statusline as fallback. See
 [expiry notice evidence](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+<!-- trace:TASK-1744 | ai:antigravity -->
 
 An existing history index catches up through the inline maintenance job
 `cache refresh --history --if-behind`, with a 30-second chunk budget. It takes
@@ -337,6 +386,15 @@ context, `CLAUDE.md` for the broad repository guide, and
 `docs/agents/cross-agent-onboarding.md` for shared MCP operating
 context, and `docs/agents/session-communication.md` for Claude/Codex/
 Antigravity session communication semantics.
+
+## Child launch containment
+
+Headless and interactive reviewer/resume launches strictly inherit
+`AIDA_CONTAINED`, even when a caller passes `contained=false`. Compete pins
+`dontAsk` and validates all vendors before any arm or artifact. Arms use their
+child worktree; judges use the project root with the same write boundary.
+Burndown and intake share the headless Claude posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
 
 ## Cache read behavior
 
@@ -664,6 +722,13 @@ Rules:
 
 Set `AIDA_COMMIT_STRICT=true` (or commit through the `/aida-commit` skill) to
 enforce; otherwise the commit-msg hook just warns on non-conforming messages.
+
+## Where change notes go
+
+Do not add per-change notes to `AGENTS.md` or `OVERVIEW.md`; record them in
+the PR body and an `aida comment add` on the spec. Edit these files only for a
+real architecture change. A paragraph prepended by every PR makes each merge
+conflict with every other open PR.
 
 ## Capture proactively, not reactively
 

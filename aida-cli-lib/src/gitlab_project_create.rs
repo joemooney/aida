@@ -242,14 +242,21 @@ pub(crate) fn create_gitlab_project(
 }
 
 /// Run `git push` with `args` in `dir`, returning stderr on failure.
-fn git_push(dir: &Path, args: &[&str]) -> Result<std::result::Result<(), String>> {
-    let out = Command::new("git")
-        .arg("-C")
+// trace:BUG-2119 | ai:agy
+fn git_push(
+    dir: &Path,
+    remote: &str,
+    url: &str,
+    args: &[&str],
+) -> Result<std::result::Result<(), String>> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(dir)
         .arg("push")
         .args(args)
-        .output()
-        .context("could not launch `git push`")?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, Some(url));
+    let out = cmd.output().context("could not launch `git push`")?;
     if out.status.success() {
         Ok(Ok(()))
     } else {
@@ -275,7 +282,7 @@ pub(crate) fn push_with_create_fallback(
     }
     args.push(remote);
     args.push(branch);
-    let stderr = match git_push(dir, &args)? {
+    let stderr = match git_push(dir, remote, url, &args)? {
         Ok(()) => return Ok(()),
         Err(stderr) => stderr,
     };
@@ -300,7 +307,7 @@ pub(crate) fn push_with_create_fallback(
         crate::glyph(crate::glyphs::Glyph::Warning)
     );
     create_gitlab_project(&host, &namespace, &name, public)?;
-    match git_push(dir, &args)? {
+    match git_push(dir, remote, url, &args)? {
         Ok(()) => Ok(()),
         Err(stderr) => bail!(
             "`git push {}` still failed after creating the project: {}",
@@ -335,28 +342,71 @@ pub(crate) fn redact_url_userinfo(text: &str) -> String {
     out
 }
 
+// The credential gate lives in `aida_core::git_ops` so every host remote
+// call shares it; these names stay here for existing callers.
+// trace:BUG-2181 | ai:claude
+pub(crate) use aida_core::git_ops::{percent_decode, split_http_url_userinfo};
+
+/// [`aida_core::git_ops::configure_remote_credentials_with`] plus the GitLab
+/// fallback: with no token in the stored URL or `url_hint`, a GitLab host
+/// falls back to the glab / env token only when the operator has no
+/// credential helper for it. Their helper (glab, a store, a keychain) keeps
+/// answering and is never overridden.
+// trace:BUG-2119 | ai:agy
+// trace:BUG-2119 trace:BUG-2181 | ai:claude
+pub(crate) fn configure_git_remote_credentials(
+    cmd: &mut Command,
+    dir: &Path,
+    remote: &str,
+    url_hint: Option<&str>,
+) {
+    let gitlab_token = |dir: &Path, clean_url: &str| {
+        if crate::forge::detect_forge_kind(clean_url) != crate::forge::ForgeKind::GitLab
+            || aida_core::git_ops::operator_credential_helper_configured(dir, clean_url)
+        {
+            return None;
+        }
+        let host = crate::forge::forge_host_of(clean_url)?;
+        let (token, _) = crate::remote_create::gitlab_token_for_host(&host)?;
+        Some(("oauth2".to_string(), token))
+    };
+    aida_core::git_ops::configure_remote_credentials_with(
+        cmd,
+        dir,
+        remote,
+        url_hint,
+        Some(&gitlab_token),
+    );
+}
+
 /// The `git ls-remote --heads <remote>` probe. `GIT_TERMINAL_PROMPT=0` makes an
 /// HTTPS URL without stored credentials fail instead of blocking on a
 /// username prompt.
 // trace:BUG-1972 | ai:claude
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn ls_remote_probe(dir: &Path, remote: &str) -> Command {
+    ls_remote_probe_with_url(dir, remote, None)
+}
+
+// trace:BUG-2119 | ai:agy
+fn ls_remote_probe_with_url(dir: &Path, remote: &str, url_hint: Option<&str>) -> Command {
     let mut cmd = Command::new("git");
     cmd.arg("-C")
         .arg(dir)
         .args(["ls-remote", "--heads", remote])
         .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, url_hint);
     cmd
 }
 
 /// Construct the `git ls-remote` probe command for a GitLab project existence check.
 /// Returns None for non-GitLab URLs.
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn mirror_probe_command(dir: &Path, remote_name: &str, url: &str) -> Option<Command> {
     if crate::forge::detect_forge_kind(url) != crate::forge::ForgeKind::GitLab {
         return None;
     }
-    Some(ls_remote_probe(dir, remote_name))
+    Some(ls_remote_probe_with_url(dir, remote_name, Some(url)))
 }
 
 /// `aida remote mirror --url`: probe a GitLab URL with `git ls-remote`; when
@@ -364,7 +414,7 @@ pub(crate) fn mirror_probe_command(dir: &Path, remote_name: &str, url: &str) -> 
 /// project was created. Non-GitLab URLs and non-refusal probe errors are left
 /// alone (the mirror is still wired; the first push reports the real error).
 // trace:STORY-1656 | ai:claude
-// trace:BUG-2004 | ai:antigravity
+// trace:BUG-2004 trace:BUG-2119 | ai:antigravity
 pub(crate) fn ensure_gitlab_project_exists(
     dir: &Path,
     remote_name: &str,
@@ -396,13 +446,15 @@ pub(crate) fn ensure_gitlab_project_exists(
 }
 
 /// The tip of `branch` on `remote` as the remote itself reports it, or None.
+// trace:BUG-2119 | ai:agy
 fn remote_tip(dir: &Path, remote: &str, branch: &str) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(dir)
         .args(["ls-remote", remote, &format!("refs/heads/{branch}")])
-        .output()
-        .ok()?;
+        .env("GIT_TERMINAL_PROMPT", "0");
+    configure_git_remote_credentials(&mut cmd, dir, remote, None);
+    let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -456,3 +508,8 @@ mod story_1656_multi_forge_init_tests;
 #[cfg(test)]
 #[path = "tests/bug_2004_token_leak_argv_tests.rs"]
 mod bug_2004_token_leak_argv_tests;
+
+// trace:BUG-2181 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2181_host_remote_credentials_tests.rs"]
+mod bug_2181_host_remote_credentials_tests;

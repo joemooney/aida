@@ -2,7 +2,7 @@ use clap::{CommandFactory, Parser};
 
 /// Render the --help for a nested `queue <sub>` subcommand.
 fn queue_sub_help(sub: &str) -> String {
-    let mut cli = crate::cli::Cli::command();
+    let mut cli = crate::command_registry::built_command();
     let queue = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "queue")
@@ -55,7 +55,7 @@ fn queue_gc_help_cross_references_prune() {
 fn queue_prune_no_predicate_error_names_the_verbs() {
     // Parse-level: `aida queue prune` (no predicate) is accepted by clap —
     // the guard is a runtime bail, not a clap constraint.
-    let parsed = crate::cli::Cli::try_parse_from(["aida", "queue", "prune"]);
+    let parsed = crate::command_registry::try_parse_from(["aida", "queue", "prune"]);
     assert!(
         parsed.is_ok(),
         "aida queue prune (no flag) must parse; the guard is a runtime bail"

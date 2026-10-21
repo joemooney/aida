@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "leases_args.rs"]
+pub(crate) mod leases_args;
+pub(crate) use leases_args::*;
+
 // trace:TASK-714
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs_forge::TS)]
 pub(crate) struct SessionLease {
@@ -187,6 +192,15 @@ pub(crate) struct SessionLease {
     // trace:STORY-1653 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) driver: Option<String>,
+    /// BUG-2169: whether `worktree_path` is a linked worktree of the main
+    /// checkout or a contained seat's private clone. Absent on older leases,
+    /// which read as `worktree`; a worktree lease never writes the key.
+    // trace:BUG-2169 | ai:claude
+    #[serde(
+        default,
+        skip_serializing_if = "crate::seat_clone::TreeKind::is_worktree"
+    )]
+    pub(crate) tree_kind: crate::seat_clone::TreeKind,
     /// BUG-2139 / BUG-2165: child grant id stamped on the lease for a
     /// headless child session. Preserved across lease updates so
     /// `update_lease_branch` and `mark_lease_escalated_to_human` do not drop it.
@@ -275,6 +289,7 @@ pub(crate) fn session_harness_worktree_register(
         .unwrap_or_else(|| "unknown".to_string());
     let active_pid = process_probe::nearest_claude_ancestor_pid(std::process::id());
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: spec.scope.clone(),
         slug: slugify(&spec.scope),
@@ -1668,7 +1683,7 @@ pub(crate) fn lease_conflict_decision(headless: bool, lease_live: bool) -> Lease
 
 /// BUG-2150: the decision for a review whose PR source branch is held by
 /// another lease. A review lease is a different kind from an implementer
-/// claim, so an explicit reviewer pickup (`pickup_role` = reviewer) coexists
+/// claim, so an explicit reviewer pickup with a backing spec coexists
 /// with a LIVE non-reviewer holder. Every other case — a non-reviewer pickup,
 /// a holder that is itself a reviewer, or a dead holder (ended as before) —
 /// keeps the BUG-1205 prompt / auto-end / refuse handling.
@@ -1677,12 +1692,18 @@ pub(crate) fn review_source_branch_conflict_decision(
     headless: bool,
     lease_live: bool,
     holder_role: Option<&str>,
-    pickup_role: Option<&str>,
+    explicit_pickup_role: Option<&str>,
+    backing_spec: Option<&str>,
 ) -> LeaseConflictDecision {
     let is_reviewer = |r: Option<&str>| {
         r.is_some_and(|r| crate::canonical_role_name(r.trim()).eq_ignore_ascii_case("reviewer"))
     };
-    if lease_live && is_reviewer(pickup_role) && !is_reviewer(holder_role) {
+    // trace:TASK-1786 | ai:codex
+    if lease_live
+        && is_reviewer(explicit_pickup_role)
+        && backing_spec.is_some_and(|id| !id.trim().is_empty())
+        && !is_reviewer(holder_role)
+    {
         LeaseConflictDecision::Coexist
     } else {
         lease_conflict_decision(headless, lease_live)
@@ -4301,3 +4322,176 @@ pub(crate) fn humanize_secs_short(secs: i64) -> String {
     let days = hours / 24;
     format!("{}d", days)
 }
+
+/// File a small change into the fasttrack lane in one shot
+///
+/// The fasttrack lane is for genuinely trivial work — a doc tweak, a
+/// one-line UX papercut, or a string fix. It files the spec Approved,
+/// queues it, and tags it `batch:fasttrack` + `lifecycle:no-review`.
+///
+/// This is a thin wrapper over `aida add ... --status approved --queue`
+/// — it owns the lane's filing convention in one place so the
+/// `/aida-fasttrack` skill can call it instead of re-typing the tags.
+///
+/// CI is never skipped, and merging still needs an approval from a
+/// session that did not author the work; no tag opts a PR out of that.
+/// The lane drops only the reviewer model session.
+// trace:TASK-777 | ai:claude — plain `//` keeps the marker out of `--help`.
+// trace:TASK-905 | ai:claude — `status` subcommand added below; the bare
+// `aida fasttrack <title>` filing form stays the default (title optional so
+// `aida fasttrack status` parses as the subcommand, not a titled file).
+// trace:TASK-1267 | ai:codex — `--express` is a mode=drain alias.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "fasttrack")]
+#[clap(args_conflicts_with_subcommands = true)]
+pub(crate) struct FasttrackArgs {
+    /// One-line description of the small change (becomes the title).
+    ///
+    /// Omit it (and pass no subcommand) and you get a usage error; pass a
+    /// subcommand instead (`aida fasttrack status`) for the lane view.
+    #[clap(value_name = "TITLE")]
+    pub title: Option<String>,
+
+    /// Requirement type: use `bug` for a papercut/defect, `task` for a
+    /// chore or doc tweak. Defaults to `task`.
+    #[clap(long, default_value = "task")]
+    pub r#type: String,
+
+    /// Deprecated compatibility alias: file Approved + queued with
+    /// execution mode `drain` and no fasttrack lifecycle tag. This flag
+    /// will be removed in a future release; prefer `aida add ... --status
+    /// approved --queue --mode drain`.
+    // trace:TASK-1267 | ai:codex
+    #[clap(long)]
+    pub express: bool,
+
+    /// Lane-introspection subcommand (e.g. `status`). When absent, the
+    /// positional title files a small change as before.
+    #[clap(subcommand)]
+    pub command: Option<crate::cli::FasttrackCommand>,
+}
+
+fn run_fasttrack(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <FasttrackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                // TASK-777: `aida fasttrack <title>` is a thin primitive that owns the
+                // fasttrack-lane filing convention in ONE place — Approved + queued +
+                // `batch:fasttrack` + `lifecycle:no-review` — so the /aida-fasttrack
+                // skill delegates to it instead of hardcoding the tag string in
+                // markdown (the same anti-drift DRY discipline as the CLI↔MCP mirror).
+                // It rewrites to the equivalent `Command::Add` and recurses, reusing
+                // the entire add+queue path. The lane skips human review only; CI still
+                // gates merge (lifecycle:no-review, never no-ci-wait). trace:TASK-777
+                //
+                // TASK-1267: `--express` remains for one compatibility release, but it
+                // now delegates to ordinary Approved + queued intake with mode=drain.
+                // It creates no batch:express tag. Existing tagged specs remain
+                // readable by the drain compatibility path in auto_complete.rs.
+                FasttrackArgs {
+                    title,
+                    r#type,
+                    express,
+                    command,
+                } => {
+                    // TASK-905: the `status` subcommand is a read-only lane projection,
+                    // not a filing. Dispatch it before the Add delegation.
+                    // trace:TASK-905 | ai:claude
+                    if let Some(crate::cli::FasttrackCommand::Status { json }) = command {
+                        return crate::command_registry::returned(handle_fasttrack_status(
+                            store_path, backend, *json,
+                        ));
+                    }
+                    // Bare `aida fasttrack <title>` files a small change. With the
+                    // title now optional (so `status` parses as a subcommand), guard the
+                    // missing-title case with the same guidance `aida add` gives.
+                    let title = title.clone().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "title is required — `aida fasttrack \"<one-line change>\"`. \
+                         For the lane view, run `aida fasttrack status`."
+                        )
+                    })?;
+                    let (batch_bucket, lane_tags, mode) = fasttrack_lane_filing(*express);
+                    // Re-dispatch as the equivalent `aida add`, so the filing gets the
+                    // git-backend dispatcher's preamble and per-write auto-push.
+                    // `--flag=value` keeps a dash-led value from reading as a flag.
+                    // trace:STORY-1728 | ai:claude
+                    let mut argv = vec![
+                        "aida".to_string(),
+                        "add".to_string(),
+                        format!("--title={title}"),
+                        "--status=approved".to_string(),
+                        format!("--type={}", r#type),
+                        "--queue".to_string(),
+                    ];
+                    if let Some(tags) = lane_tags {
+                        argv.push(format!("--tags={tags}"));
+                    }
+                    if let Some(batch) = batch_bucket {
+                        argv.push(format!("--batch={batch}"));
+                    }
+                    if let Some(mode) = mode {
+                        argv.push(format!("--mode={mode}"));
+                    }
+                    let add = crate::command_registry::try_parse_from(argv).map_err(|err| {
+                        anyhow::anyhow!("fasttrack could not build its `aida add`: {err}")
+                    })?;
+                    return crate::command_registry::returned(
+                        crate::git_backend_cmd::handle_git_backend_command(
+                            store_path,
+                            &add.command,
+                        ),
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // TASK-777: the fasttrack lane is a distributed-mode convention (it
+                // queues + batches), so it isn't wired into the deprecated legacy
+                // storage path. trace:TASK-777
+                FasttrackArgs { .. } => {
+                    anyhow::bail!(
+                    "`aida fasttrack` is available in the default (distributed) mode. In legacy \
+                     --centralized mode, use `aida add \"<title>\" --status approved`."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static FASTTRACK: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "fasttrack",
+        help_after: "add",
+        command: <FasttrackArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_fasttrack),
+    };

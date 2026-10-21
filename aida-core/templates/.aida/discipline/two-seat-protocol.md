@@ -56,12 +56,17 @@ six of these conditions hold:
 6. **Audit comment.** After merging, comment on the PR or spec with who
    approved which head, the merged SHA and the CI run.
 
-`aida pr ship` is the default merge path. Verified mechanical slice stacks are
-the one exception: they may rebase-merge with `gh pr merge <n> --rebase
---match-head-commit <full sha>` only when `scripts/split-lib/verify_stack.py`,
-taken from origin/main, passes against the PR's base, the slice tags carry
-their proofs, and conditions 1–6 hold. The exception lasts until `aida pr ship`
-gains a rebase-merge mode (STORY-1663).
+`aida pr ship` is the required merge path for both squash and rebase merges.
+Verified mechanical slice stacks ship via `aida pr ship <n> --rebase` (or
+`--merge-method rebase`), which runs the same preflight, independent approval,
+merge-hold, and head-pin gates as squash and leaves the owning spec's status
+unchanged until the final slice passes `--final-slice` (`--complete-spec`). When
+`scripts/split-lib/verify_stack.py` is present and the PR contains
+`refactor(cli-lib): extract|extend <m>.rs` slice commits, `aida pr ship --rebase`
+runs the stack verifier (`scripts/split-lib/verify_stack.py <base> <head>`)
+automatically before merging. Raw `gh pr merge --rebase` is no longer an
+exception (STORY-1663).
+<!-- trace:STORY-1663 | ai:antigravity -->
 
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not

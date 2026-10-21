@@ -118,7 +118,7 @@ fn bug_1929_unverified_host_hooks_refuse_store_writes() {
             Some("host-owned AIDA store hooks could not be verified"),
             "{corruption}"
         );
-        let staged = Command::new("git")
+        let staged = crate::test_git::git_command()
             .current_dir(&store)
             .args(["diff", "--cached", "--name-only"])
             .output()
@@ -706,7 +706,7 @@ fn bug_2131_old_git_contained_project_refuses_store_git() {
                 );
             });
             assert_eq!(git(&store, &["rev-parse", "HEAD"]).unwrap().stdout, before);
-            let staged = Command::new("git")
+            let staged = crate::test_git::git_command()
                 .current_dir(&store)
                 .args(["diff", "--cached", "--name-only"])
                 .output()
@@ -770,4 +770,110 @@ fn task_1775_git_version_cache_expires() {
         "an expired cache re-reads git"
     );
     assert!(crate::store_hooks::attr_source_supported_by(&reread));
+}
+
+// BUG-2140: deferral notice names the unwritable path without "sandboxed session",
+// `commit_pending_store_changes_on_host` commits deferred writes and loudly
+// refuses embedded git repositories, and `auto_commit_paths` stages deferred
+// objects alongside `oplog.yaml`.
+// trace:BUG-2140 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn bug_2140_deferral_notice_and_host_commit_and_oplog_coherence() {
+    use crate::db::DatabaseBackend;
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: root ignores directory write bits");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let (main, store) = bug_1929_main_with_store(dir.path());
+    let objects = main.join(".git/objects");
+
+    // 1. Simulate a contained / unwritable store git directory and add a requirement.
+    let backend = crate::db::GitBackend::new(&store).unwrap();
+    let head_before = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let notice = format_store_commit_deferred_notice(&store);
+    let r1 = crate::models::Requirement::new(
+        "Contained spec".to_string(),
+        "written while git dir unwritable".to_string(),
+    );
+    let added1 = backend.add_requirement(r1).unwrap();
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert!(
+        notice.contains("cannot write ")
+            && notice.contains(": store change queued for host commit")
+            && !notice.contains("sandboxed session"),
+        "unexpected deferral notice: {notice}"
+    );
+    assert_eq!(
+        git(&store, &["rev-parse", "HEAD"]).unwrap().stdout,
+        head_before,
+        "deferred write must not commit while git dir is unwritable"
+    );
+
+    // 2. Problem 4 regression: a subsequent host-side targeted write to a
+    // DIFFERENT spec must stage the prior deferred object alongside `oplog.yaml`,
+    // never committing `oplog.yaml` while leaving `added1`'s YAML untracked.
+    let r2 = crate::models::Requirement::new(
+        "Host spec".to_string(),
+        "written on host after contained write".to_string(),
+    );
+    let added2 = backend.add_requirement(r2).unwrap();
+    let rel1 =
+        crate::object_store::relative_object_path(added1.spec_id.as_deref().unwrap()).unwrap();
+    let rel2 =
+        crate::object_store::relative_object_path(added2.spec_id.as_deref().unwrap()).unwrap();
+    let committed_files = git(&store, &["show", "--name-only", "--format=", "HEAD"])
+        .unwrap()
+        .stdout;
+    assert!(
+        committed_files.lines().any(|l| l == rel1)
+            && committed_files.lines().any(|l| l == rel2)
+            && committed_files.lines().any(|l| l == "oplog.yaml"),
+        "host targeted commit must include prior deferred object + oplog: {committed_files}"
+    );
+
+    // 3. Problem 1 regression: another deferred write is committed by
+    // `commit_pending_store_changes_on_host`, and an embedded `.git` plant is
+    // refused loudly (returns Err).
+    let head_mid = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let r3 = crate::models::Requirement::new(
+        "Second contained spec".to_string(),
+        "committed by host boundary".to_string(),
+    );
+    let _added3 = backend.add_requirement(r3).unwrap();
+    std::fs::set_permissions(&objects, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        git(&store, &["rev-parse", "HEAD"]).unwrap().stdout,
+        head_mid
+    );
+
+    // Plant an embedded `.git` inside the store; host commit must fail loudly.
+    let planted_git = store.join("objects/evil/.git");
+    std::fs::create_dir_all(&planted_git).unwrap();
+    std::fs::write(planted_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+    let err = commit_pending_store_changes_on_host(&store).unwrap_err();
+    assert!(
+        format!("{err:#}").contains("embedded git repository"),
+        "expected loud embedded-repo refusal, got: {err:#}"
+    );
+    assert_eq!(
+        git(&store, &["rev-parse", "HEAD"]).unwrap().stdout,
+        head_mid,
+        "refused host commit must not advance HEAD"
+    );
+
+    // Remove the plant; now `commit_pending_store_changes_on_host` succeeds and
+    // advances HEAD.
+    std::fs::remove_dir_all(store.join("objects/evil")).unwrap();
+    assert!(commit_pending_store_changes_on_host(&store).unwrap());
+    assert_ne!(
+        git(&store, &["rev-parse", "HEAD"]).unwrap().stdout,
+        head_mid
+    );
+    assert!(!commit_pending_store_changes_on_host(&store).unwrap());
 }

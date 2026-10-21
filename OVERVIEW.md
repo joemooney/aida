@@ -1,9 +1,40 @@
+CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
+run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
+lanes succeed. Test timing budgets remain per binary, and each test lane checks
+for untracked root entries. See [CI fan-out](docs/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 | ai:codex -->
+
+`aida agent new` supplies the selected executable's reported `--version` to
+foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
+invalid probes clear inherited context; previews perform no version probe.
+<!-- trace:TASK-1793 | ai:codex -->
+
+No-number `aida pr ship` protects main/master and uses only the local origin/HEAD
+symref before asking the forge. A stale origin/HEAD wins over forge evidence;
+refresh it after a remote default change. Without that symref, the read-only
+GitHub probe uses a three-second child-exit deadline. Unknown evidence (including
+timeout, errors, or unsupported forges) requires an explicit PR number. Output
+collection retains the shared helper's existing bounds. PR-base callers retain
+conventional local/remote refs and a final main fallback after the probe fails.
+Approved-change suggestions use numeric ship commands.
+<!-- trace:TASK-1795 | ai:codex -->
+
 Headless drains validate every headless phase seat before queue mutation or
 plan startup, including refusing when the project root cannot be resolved.
 Pooled-worktree reuse revokes the prior occupant's stamped child grant before
 removing its lease, while leaving sibling worktrees and the parent grant intact.
 Delegated children retain exactly their parent's expiration timestamp.
 <!-- trace:TASK-1789 | ai:codex -->
+
+Spec creation, history and comments carry small optional write context.
+`aida usage show <SPEC> --provenance` joins exact session IDs to the existing
+read-only token ledger through each write timestamp; it never reads transcripts
+or infers model/effort. `AIDA_HARNESS_VERSION` is the sole harness-version source.
+Missing evidence remains unknown, including legacy rows. Per-event session
+usage is cumulative and overlapping. See
+[write provenance](docs/cli/08-reporting.md#write-provenance).
+<!-- trace:STORY-1674 | ai:codex -->
 
 Mandate exclusion ledgers require a regular file owned by the current uid with
 exact mode 0600, checked on the opened handle with nonblocking, no-follow flags.
@@ -353,6 +384,59 @@ Regression and mutation evidence: `aida-core/src/git_ops/tests/store_hook_tests.
 and `tests/test_bug_1929_hook_templates.py`.
 <!-- trace:BUG-1929 | ai:codex -->
 
+A contained session has no write access to the main git directory. Launch
+settings deny all of `<main>/.git` in both the sandbox (`denyWrite`) and the
+direct tool rules, whether or not the store write paths are granted, under
+every spelling of the path (as given and canonical, so a symlinked checkout is
+covered). When some spelling cannot be written as an exact rule (it holds a
+character such as `( [ ! {`), the contained launch is refused with an error
+naming the path: no settings are built and no session starts, because Claude
+Code's own sandbox would otherwise leave `<main>/.git` writable to a
+linked-worktree session. That
+covers `worktrees/<wt>/commondir`, `gitdir` and `config.worktree`, which would
+otherwise let a session point host git at a git directory it controls. It also
+covers the shared config, hooks, refs and objects. Claude Code itself denies
+writes to a worktree's own `.git` pointer. While these denies are in place,
+Claude Code (verified on 2.1.302) leaves no writable path under `<main>/.git`.
+This is conditional: it holds only for sessions launched with AIDA's contained
+settings on a Claude Code whose sandbox applies `denyWrite` over its own grants.
+As a consequence, a contained session in a linked worktree cannot commit,
+because its index and objects live under the denied directory. A contained seat
+commits in its own private clone instead (BUG-2169). Real-sandbox and unit
+evidence: `aida-cli-lib/src/tests/bug_1982_main_git_metadata_tests.rs`.
+<!-- trace:BUG-1982 | ai:claude -->
+
+Host git over a code tree a contained session may have written (a linked
+worktree, or any tree of a repository a contained session was launched
+against) runs with `diff.ignoreSubmodules=dirty`, `submodule.recurse=false` and
+`fetch.recurseSubmodules=false`, plus `submodule.<name>.ignore=dirty` for
+every name in the `.gitmodules` git would read (the file, else the index or
+`HEAD` copy), because a `.gitmodules` `ignore = none` outranks
+`diff.ignoreSubmodules`. A `.gitmodules` that cannot be read, or that names a
+submodule the override cannot express, makes host git refuse. So incidental
+status and diff never enter a submodule, where a planted repository's own
+config (a filter driver, for example) would run on the host. Before any safety
+check in such a tree (pool, adopt, destroy, salvage, session reap, doctor
+heal, worktree gc) and before host staging (`aida compete`), every gitlink
+must be a host-owned submodule: registered in `.gitmodules`, with a `.git`
+pointer that resolves to a submodule git directory (`<common>/modules/...` or
+`<common>/worktrees/<wt>/modules/...`) inside the sandbox-denied common git
+directory. Staging also refuses an untracked nested repository at any depth.
+A tree that fails this is kept and treated as dirty, and so is a tree whose
+`git status` fails: no dirty check reads a git error as clean. Git itself never recurses into a
+submodule there, even once every gitlink passes, because it would read each
+submodule's session-writable work-tree `.gitmodules`. The checks inspect each
+checked-out submodule themselves instead: policy B again over that
+submodule's own index, then its status through the git directory validated a
+moment earlier (`--git-dir`, never re-reading the `.git` pointer), nested
+submodules likewise. So uncommitted edits there still keep the tree. A
+submodule with no `.git` is skipped. The non-destructive `aida ps` probe
+never looks inside a submodule. Salvage refuses edits inside a submodule, because a patch cannot
+hold them. Other checkouts keep git's submodule handling. Every host
+`git status` goes through `git_ops::host_git_command`, directly or via a
+wrapper; a guard test enforces it.
+<!-- trace:BUG-1985 | ai:claude -->
+
 ### Distributed identity (EPIC-1-052)
 
 Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
@@ -409,6 +493,21 @@ For how this control plane — queue, drain, orchestrator phases, leases, verdic
 
 ---
 
+### Child launch containment
+
+Headless composition and spawn, interactive reviewer plans, and Claude resumes
+strictly inherit `AIDA_CONTAINED` before creating logs or issuing child grants.
+A literal `false` cannot downgrade the child. Stale uncontained reviewer plans
+refuse at spawn. Compete validates every arm and the selected judge before any
+brief, worktree cleanup or arm run; unsupported vendors refuse the whole run.
+Contained arms and judges replace generated bypass arguments with explicit
+`dontAsk` and containment flags, propagating `AIDA_CONTAINED=1`. Arms scope writes
+to their child worktree; judges run at the project root and retain that root's
+write boundary. Dry-run arm output shows the composed vendor posture with
+settings and OS-wrapper preparation explicitly deferred to launch. Burndown and
+intake share the permission-posture resolver.
+<!-- trace:BUG-2172 | ai:codex -->
+
 ## Workspace layout
 
 ```
@@ -435,6 +534,14 @@ edits direct amendments to comments. CLI and MCP share this preflight, including
 indirect lock writes when an experiment completes. See
 [pre-registration](docs/cli/02-specs.md#pre-registering-a-hypothesis).
 <!-- trace:STORY-1675 | ai:codex -->
+AIDA-owned store syncs keep that evidence across clones: rebase, union merge
+and reconcile fast-forward pin both tips and their merge bases, refuse a
+changed, deleted or divergent locked description before Git runs, and commit
+any lock the combined graph first establishes before reporting success. A
+failure after Git is reported with exact commits and is never reset. Raw Git,
+older binaries and lock-free readers are outside this guarantee. See
+[store sync](docs/cli/10-storage.md#store-sync-and-pre-registration).
+<!-- trace:BUG-2162 | ai:claude -->
 
 ## Feature surface (high level)
 
@@ -463,6 +570,21 @@ targets and submodules are refused. The content-addressed bundle lives under
 `$XDG_CACHE_HOME/aida/regen/oracle/<hash>` (default `~/.cache`), outside `/tmp`, `/dev`, `/proc`,
 project worktrees and the trial root. Its hash (sorted, length-framed paths,
 modes and bytes) is rechecked before execution; tampering refuses scoring.
+
+Generated commands have a 30-second execution timeout per invocation. Set
+`AIDA_REGEN_COMMAND_TIMEOUT_SECS` to an integer from 1 to 86400 before scoring
+to change it for the run (including reference/stub controls and R2). Invalid
+values refuse scoring. Timeouts kill the child process group and retain a
+failure reason in the trial, without scoring partial oracle output. The deadline
+includes stdout/stderr collection even if the direct child exits before its
+descendants. Each stream has a 1 MiB capture limit; exceeding either limit kills
+the group and records an output-limit failure without child diagnostics. The
+best-effort survivor probe runs after a successful installation; installer
+failure paths (including timeout) return before that probe, so escaped
+descendants on those paths are not detected by it. A completeness `--help`
+probe that times out marks its component incomplete with the reason
+`--help timed out`; the trial still runs the oracle and keeps its record.
+<!-- trace:TASK-1791 | ai:codex trace:TASK-1791 | ai:claude -->
 
 `oracle_command[0]` must name an executable inside the bundle (for example
 `tests/oracle.sh`, with a shebang); it is resolved to an absolute bundle path,
@@ -933,14 +1055,16 @@ store-location checks are covered by `scripts/config-trust.toml`; the probe adds
 no executable, command, or credential selection.
 <!-- trace:BUG-1807 | ai:codex -->
 
-Claude Code tool hooks deliver informational seat-grant expiry notices once at
+Claude Code, Codex (`PreToolUse`), and Antigravity (`PreInvocation` via
+`--client agy`) hooks deliver informational seat-grant expiry notices once at
 the 2h, 30m and expired crossings, without requiring a user prompt. A local
 grant-id ledger uses a permanent flock sidecar and atomic replacement. No
 requirements graph or cache is initialized; the shared authority validator
-retains its local roster lookup. Failed ledger access emits no context and
-leaves SessionStart/statusline warnings as fallback. See
+retains its local roster lookup. Failed ledger access emits no context (`{}` for
+Antigravity) and leaves SessionStart/statusline warnings as fallback. See
 [verification and limits](docs/testing/bug-2014-grant-expiry-notices.md).
 <!-- trace:BUG-2014 | ai:codex -->
+<!-- trace:TASK-1744 | ai:antigravity -->
 
 Existing history indexes also catch up through the inline `history-index-tick`
 maintenance job (`cache refresh --history --if-behind`). It uses only the index
@@ -967,3 +1091,20 @@ the protected canonical edit flow; YAML row roundtrips preserve the data, while
 archived writers refuse unsupported blocks. See the
 [manual](docs/cli/08-reporting.md#aida-verify) for the exact schema and types.
 <!-- trace:STORY-1673 | ai:codex -->
+
+Contained `queue work --plan-only` selects Claude's `plan` permission mode
+alongside the existing contained settings and `AIDA_CONTAINED=1`. This applies
+to inherited, explicit sandbox and configured containment. Ordinary contained
+pickups retain `dontAsk`; caller permission overrides under contained parents
+and bypass/contained combinations still refuse. The documented interactive-only
+plan lane rejects headless flags at parsing, before lifecycle setup; headless
+planning remains the separate `--with-plan` drain phase.
+<!-- trace:TASK-1794 | ai:codex -->
+
+Standalone reviewer pickup coexists with a live implementer only with explicit
+`queue work --role reviewer` and an unambiguous backing spec. An inferred role
+and direct session starts retain ordinary source-branch conflict handling.
+Verdict collection validates metadata and reads bytes from the same opened
+regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
+regression runs under an exact-test subprocess watchdog.
+<!-- trace:TASK-1786 | ai:codex -->

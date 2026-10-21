@@ -216,6 +216,7 @@ fn update_lease_branch_rewrites_only_the_branch() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: "019eabcd-1234".to_string(),
         scope: "EPIC-23".to_string(),
         slug: "epic-23".to_string(),
@@ -272,7 +273,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let root = dir.path();
 
     let git = |args: &[&str]| {
-        let ok = std::process::Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .output()
@@ -292,6 +293,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let sessions = leases_dir(root);
     std::fs::create_dir_all(&sessions).unwrap();
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: "019eaaaa-bbbb".to_string(),
         scope: "EPIC-23".into(),
         slug: "epic-23".into(),

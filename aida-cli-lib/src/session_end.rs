@@ -967,6 +967,16 @@ mod bug_2005_wrapper_staleness_tests;
 /// pre-fix behavior.
 // trace:BUG-1952 | ai:claude
 pub(crate) fn resolve_session_end_root(invocation_root: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a seat clone also has a real `.git` directory, but its leases
+    // live in the main checkout its marker, alternates and lease agree on.
+    // trace:BUG-2169 | ai:claude
+    match crate::seat_clone::main_for(invocation_root) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(_) => {
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     if invocation_root.join(".git").is_dir() {
         return invocation_root.to_path_buf();
     }
@@ -1005,7 +1015,15 @@ pub(crate) fn session_end(
     // the runtime symlinks are stripped, so the mcp-claim, manifest, BUG-483
     // peer guard, pool checks and store detection below never resolve against
     // the dying tree. trace:BUG-1952 | ai:claude
-    let project_root = resolve_session_end_root(&find_project_root()?);
+    let invocation_root = find_project_root()?;
+    // BUG-2169: a seat clone that does not verify is refused outright.
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) =
+        crate::seat_clone::main_for(&invocation_root)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
+    let project_root = resolve_session_end_root(&invocation_root);
     let leases = list_leases(&project_root);
     if leases.is_empty() {
         // BUG-779: a BARE `session end` with nothing to end is a benign no-op
@@ -1025,6 +1043,22 @@ pub(crate) fn session_end(
     }
 
     let target = resolve_session_to_end(id_query, spec_query, branch_query, &leases, yes)?;
+    // BUG-2169: ending a seat clone (probe, salvage, remove, unpin) is slice
+    // S3. Everything below runs git in the session's tree, which for a clone
+    // would execute seat-controlled config on the host, so refuse first.
+    // trace:BUG-2169 | ai:claude
+    if target.tree_kind == crate::seat_clone::TreeKind::Clone {
+        anyhow::bail!(
+            "session {} works in a contained seat's private clone ({}). `session end` cannot \
+             end a seat clone yet; the clone and its base pin are left in place. Push its branch \
+             from inside the seat, then remove the directory and run `git update-ref -d {}` in \
+             the main checkout.",
+            &target.id[..target.id.len().min(8)],
+            target.worktree_path.display(),
+            crate::seat_clone::pin_ref(&target.worktree_path)
+                .unwrap_or_else(|| format!("{}<seat>", crate::seat_clone::PIN_PREFIX)),
+        );
+    }
 
     // BUG-361: visibility-first guard for the ceiling variant where an agent
     // commits locally and exits without any lifecycle command (`queue done`,
@@ -1904,7 +1938,31 @@ pub(crate) fn session_end(
         }
     }
 
-    if let Some(store_path) = detect_distributed_store_from(&project_root) {
+    finish_session_end_store_and_shell_cleanup(
+        &project_root,
+        cwd_was_inside_worktree && shared_peer.is_none(),
+        !std::io::IsTerminal::is_terminal(&std::io::stdout()),
+        |line| println!("{line}"),
+        |line| eprintln!("{line}"),
+    )
+}
+
+/// BUG-2140: run the post-teardown host store commit + optional auto-push and
+/// ALWAYS emit the caller shell's `unset AIDA_SESSION_ID` / `cd '<parent>'`
+/// eval block (or direct-invocation stale-cwd hint) before returning any store
+/// commit refusal. Because the worktree has already been removed by the time
+/// this runs, returning early on a store commit error would strand the calling
+/// shell inside a deleted cwd with a stale `AIDA_SESSION_ID`.
+// trace:BUG-2140 trace:STORY-73 trace:TASK-68 | ai:antigravity
+pub(crate) fn finish_session_end_store_and_shell_cleanup(
+    project_root: &std::path::Path,
+    removed_worktree_containing_cwd: bool,
+    stdout_is_wrapped: bool,
+    mut emit_stdout: impl FnMut(&str),
+    mut emit_stderr: impl FnMut(&str),
+) -> Result<()> {
+    let mut store_commit_err = None;
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
         // STORY-493: durably digest this session's local mailbox traffic into
         // the git-canonical orphan store before the store is pushed, so a
         // session's inter-agent messages are replayable/shareable once it
@@ -1912,52 +1970,51 @@ pub(crate) fn session_end(
         // session cleanup. Runs before the push so the digest commit rides the
         // same push. trace:STORY-493 | ai:claude
         maybe_digest_mailbox_best_effort(&store_path, "session-end");
-        maybe_auto_push_store(&store_path, StoreAutoPushMode::SessionEnd, "session-end");
+        // BUG-2140: unconditionally commit any pending store changes on the
+        // host (including writes deferred by a contained session under default
+        // `auto_push = manual`), surfacing embedded-repo / gitlink refusals
+        // loudly after shell cleanup output is emitted.
+        // trace:BUG-2140 | ai:antigravity
+        match aida_core::git_ops::commit_pending_store_changes_on_host(&store_path) {
+            Ok(_) => {
+                maybe_auto_push_store(&store_path, StoreAutoPushMode::SessionEnd, "session-end");
+            }
+            Err(e) => {
+                store_commit_err = Some(e);
+            }
+        }
     }
 
-    // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
-    // shell helper's `eval "$(...)"`, so the calling shell's env var
-    // doesn't go stale after the lease it pointed at is gone.
-    // trace:STORY-73 | ai:claude
-    //
-    // TASK-68 Layer 2: if the user's shell was sitting inside the
-    // worktree we just removed, their cwd is now a dangling (deleted)
-    // inode — every path-relative command would fail until they
-    // manually cd out. Emit a `cd <parent>` to stdout so the shell
-    // wrapper's `eval` lands them in the parent project naturally.
-    // No-op for users running `aida session end` from outside the
-    // worktree (and for direct (non-wrapped) invocation, since stdout
-    // is a TTY then). trace:TASK-68 | ai:claude
-    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+    if stdout_is_wrapped {
         // trace:TASK-1171 | ai:claude — stdout inside this scope is shell code
         // (the interleaved `eprintln!` below is stderr, so it stays prose).
         let _eval = crate::shell_eval::EvalBlock::open();
-        println!("unset AIDA_SESSION_ID");
+        emit_stdout("unset AIDA_SESSION_ID");
         // BUG-483: only emit a `cd` out when we actually removed the worktree.
         // When a peer lease shares it we left it standing, so the shell's cwd
         // is still valid — yanking the user out of it would be a surprise.
         // trace:BUG-483 | ai:claude
-        if cwd_was_inside_worktree && shared_peer.is_none() {
+        if removed_worktree_containing_cwd {
             let escaped = project_root.display().to_string().replace('\'', "'\\''");
-            println!("cd '{}'", escaped);
-            eprintln!(
+            emit_stdout(&format!("cd '{}'", escaped));
+            emit_stderr(&format!(
                 "  {} cd'd back to parent project {}",
                 "↩".dimmed(),
                 project_root.display().to_string().cyan()
-            );
+            ));
         }
-    } else if cwd_was_inside_worktree && shared_peer.is_none() {
+    } else if removed_worktree_containing_cwd {
         // BUG-59: direct (non-wrapped) invocation can't `eval` a `cd` into
         // the parent shell, so the caller's cwd is left dangling on the
-        // now-deleted worktree inode. Any subsequent process spawn from that
-        // shell — notably Claude Code's Stop hook firing `/bin/sh` — then
-        // fails with a noisy `ENOENT ... posix_spawn '/bin/sh'`. We can't
-        // mutate the parent shell from here, so surface a clear `cd` hint
-        // and let the caller move out before their next command.
+        // now-deleted worktree inode.
         // trace:BUG-59 | ai:claude
-        for line in session_end_stale_cwd_hint_lines(&project_root) {
-            eprintln!("{}", line);
+        for line in session_end_stale_cwd_hint_lines(project_root) {
+            emit_stderr(&line);
         }
+    }
+
+    if let Some(err) = store_commit_err {
+        return Err(err);
     }
     Ok(())
 }
@@ -2039,9 +2096,8 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
 /// `None` when git cannot answer, so the caller keeps the collapsed entry.
 // trace:BUG-1988 | ai:claude
 fn untracked_entries_under(worktree: &std::path::Path, dir: &str) -> Option<Vec<String>> {
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(worktree)
+    // trace:BUG-1985 | ai:claude
+    let out = aida_core::git_ops::host_git_command(worktree)
         .args(["status", "--porcelain", "--untracked-files=all", "--", dir])
         .output()
         .ok()

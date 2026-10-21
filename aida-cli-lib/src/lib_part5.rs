@@ -838,6 +838,7 @@ pub(crate) fn acquire_review_lease_with_mode(
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: spec_id.to_string(),
         slug: slugify(spec_id),
@@ -1572,77 +1573,6 @@ pub(crate) fn handle_review_spec(
     }
 
     Ok(())
-}
-
-pub(crate) fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
-    match cmd {
-        ReviewCommand::Prompt {
-            specs,
-            pr,
-            forge,
-            write,
-        } => generate_review_prompt(
-            storage,
-            specs.as_deref(),
-            *pr,
-            forge.as_deref(),
-            write.as_deref(),
-        ),
-        ReviewCommand::Assemble { output } => {
-            let project_root = find_project_root()?;
-            let out_path = rules_sync::assemble_review_md(&project_root, output.as_deref())?;
-            println!(
-                "{} Assembled root REVIEW.md at {}",
-                crate::glyph(crate::glyphs::Glyph::Check),
-                out_path.display()
-            );
-            Ok(())
-        }
-        // trace:BUG-775 | ai:claude
-        ReviewCommand::Record {
-            spec,
-            verdict,
-            sha,
-            branch,
-            summary,
-            finding,
-            finding_class,
-            pr,
-        } => handle_review_record(
-            spec,
-            verdict,
-            sha.as_deref(),
-            branch.as_deref(),
-            summary.as_deref(),
-            finding,
-            finding_class,
-            *pr,
-        ),
-        // trace:STORY-1417 | ai:claude
-        ReviewCommand::Classes { since, json } => handle_review_classes(since.as_deref(), *json),
-        // trace:STORY-1405 | ai:claude
-        ReviewCommand::Claim {
-            pr,
-            sha,
-            spec,
-            ttl_mins,
-            release,
-        } => handle_review_claim(*pr, sha.as_deref(), spec.as_deref(), *ttl_mins, *release),
-        // trace:BUG-775 | ai:claude
-        ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
-        ReviewCommand::List { json } => handle_review_list(*json),
-        // trace:BUG-1516 | ai:claude
-        ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
-        // trace:TASK-1307 | ai:claude
-        // trace:TASK-1423 | ai:claude
-        ReviewCommand::Stranded { json, fix, age } => handle_review_stranded(*json, *fix, *age),
-        // trace:STORY-1415 | ai:claude
-        ReviewCommand::Mode { mode } => match mode {
-            cli::ReviewModeCommand::MassChange { action, days, json } => {
-                mass_change::handle_mass_change_command(action.as_str(), *days, *json)
-            }
-        },
-    }
 }
 
 /// `aida review normalize-shas` — BUG-1516 criterion 3's repair verb: expand
@@ -3052,6 +2982,7 @@ pub(crate) fn handle_review_record_at(
         &review_authority::visible_leases(&project_root),
     );
     let approving = kind == review_verdict::VerdictKind::Approved;
+    let mut solo_human = false;
     if approving {
         // BUG-1918: an approval must name WHO recorded it — a session id or a
         // process — or the ship gate can never tell it from the author's.
@@ -3069,8 +3000,28 @@ pub(crate) fn handle_review_record_at(
             review_pr_subject_from_forge(&project_root, n)
         })?;
         let authors = review_recorder_authors(&project_root, &subjects, author_branch.as_deref());
-        if let Some(refusal) = review_author_refusal(&authors, &recorder, !subjects.is_empty()) {
-            anyhow::bail!(refusal);
+        // STORY-1655: the solo mode is consulted only when the author gate
+        // would refuse, so its warnings never touch an independent approval.
+        // trace:STORY-1655 | ai:claude
+        match review_author_gate(
+            &authors,
+            &recorder,
+            !subjects.is_empty(),
+            human_at_tty,
+            || crate::solo_review::effective(&project_root),
+        ) {
+            ReviewAuthorGate::Independent => {}
+            ReviewAuthorGate::Refused(refusal) => anyhow::bail!(refusal),
+            ReviewAuthorGate::SoloSelfApproval => {
+                let n = pr.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "refused: a solo-human self-approval must name `--pr <N>` so it can be \
+                         confirmed against the pull request"
+                    )
+                })?;
+                crate::solo_review::run_challenge(spec, n)?;
+                solo_human = true;
+            }
         }
     }
     // BUG-1918: a human who passed the TTY floor leaves a receipt in the
@@ -3083,6 +3034,7 @@ pub(crate) fn handle_review_record_at(
                 resolved_sha.as_deref().unwrap_or_default(),
                 spec,
                 &recorder.tokens,
+                solo_human,
             )
             .context("could not write the human-review receipt")?,
         )
@@ -3096,6 +3048,7 @@ pub(crate) fn handle_review_record_at(
         human_at_tty,
         identity: recorder.tokens.clone(),
         receipt_id,
+        solo_human,
     })
     .context("could not serialize the review recorder attestation")?;
 
@@ -3505,7 +3458,7 @@ mod story_1405_review_marker_tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
         let git = |args: &[&str]| {
-            assert!(std::process::Command::new("git")
+            assert!(crate::test_git::git_command()
                 .arg("-C")
                 .arg(repo)
                 .args(args)
@@ -3533,7 +3486,7 @@ mod story_1405_review_marker_tests {
     fn marker_head_best_effort_is_none_with_no_forge_and_no_local_ref() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(["init", "-q"])
@@ -3815,6 +3768,38 @@ pub(crate) fn review_author_refusal(
             author.label
         )
     })
+}
+
+/// STORY-1655: what the author gate decides for an approval.
+// trace:STORY-1655 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ReviewAuthorGate {
+    /// The recorder is not one of the work's authors.
+    Independent,
+    /// Refused, with the BUG-1918 text unchanged.
+    Refused(String),
+    /// The recorder authored the work, but solo-human mode is in force and the
+    /// recorder passed the human-at-TTY floor: the typed terminal challenge
+    /// decides.
+    SoloSelfApproval,
+}
+
+/// STORY-1655: the author gate with solo-human mode. Solo applies only to a
+/// recorder that passed the human-at-TTY floor (`human_at_tty`), never to an
+/// agent; `solo_mode` is consulted only when the BUG-1918 check refuses.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn review_author_gate(
+    authors: &[pr_ship::AuthorSession],
+    recorder: &review_authority::RecorderIdentity,
+    subject_resolved: bool,
+    human_at_tty: bool,
+    solo_mode: impl FnOnce() -> bool,
+) -> ReviewAuthorGate {
+    match review_author_refusal(authors, recorder, subject_resolved) {
+        None => ReviewAuthorGate::Independent,
+        Some(_) if human_at_tty && solo_mode() => ReviewAuthorGate::SoloSelfApproval,
+        Some(refusal) => ReviewAuthorGate::Refused(refusal),
+    }
 }
 
 /// Error for `aida review record` when no agent identity is set and the

@@ -20,6 +20,10 @@ pub(crate) struct Evidence {
     /// Paths for which an item could not safely be attributed. Full-file
     /// union is the conservative fallback, never an empty evidence set.
     pub full_file_fallbacks: BTreeSet<String>,
+    /// STORY-1700 (R1): every path the pinned diff changes (both names of a
+    /// rename), for the mandate's gate-touching check.
+    // trace:STORY-1700 | ai:claude
+    pub paths: BTreeSet<String>,
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<Vec<u8>> {
@@ -140,6 +144,7 @@ pub(crate) fn collect(repo: &Path, base: &str, head: &str, scope: Scope) -> Resu
         );
         let path = std::str::from_utf8(fields.next().context("missing raw diff path")?)
             .context("non-UTF8 changed path")?;
+        out.paths.insert(path.to_owned());
         let mut sides = Vec::new();
         for (mode, id) in [(words[0], words[2]), (words[1], words[3])] {
             ensure!(oid(id), "invalid blob ID for {path}");
@@ -224,7 +229,7 @@ fn trace_ids(text: &str) -> BTreeSet<String> {
 /// raw strings and test fixtures. Rust doc-comment tokens carry the ORIGINAL
 /// comment span; retain those rather than masking their synthesized #[doc].
 /// If tokenization fails, raw full-file tokens are conservative fallback evidence.
-fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
+pub(crate) fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
     let stream: proc_macro2::TokenStream = text.parse().ok()?;
     let mut offsets = vec![0];
     for (i, b) in text.bytes().enumerate() {
@@ -297,6 +302,28 @@ fn rust_comments(text: &str) -> Option<Vec<(usize, String)>> {
             })
             .collect(),
     )
+}
+
+/// Plain leading comments are not part of syn's item span. Extend an item
+/// starting at 0-based line `start` over its uninterrupted comment/blank
+/// prefix; `comments` is `rust_comments` output for the same text.
+// trace:TASK-1785 | ai:claude — shared with `aida lint constants`.
+pub(crate) fn leading_comment_start(
+    mut start: usize,
+    lines: &[&str],
+    comments: &[(usize, String)],
+) -> usize {
+    while start > 0 {
+        let i = start - 1;
+        if lines[i].trim().is_empty()
+            || (!comments[i].1.trim().is_empty() && lines[i].trim() == comments[i].1.trim())
+        {
+            start -= 1;
+        } else {
+            break;
+        }
+    }
+    start
 }
 
 #[derive(Default)]
@@ -409,19 +436,8 @@ fn source_ids(
     let mut items = Items::default();
     items.visit_file(&file);
     let lines: Vec<_> = text.lines().collect();
-    // Plain leading comments are not part of syn's item span. Attach an
-    // uninterrupted comment/blank prefix to its following function/impl.
     for range in &mut items.ranges {
-        while range.start > 0 {
-            let i = range.start - 1;
-            if lines[i].trim().is_empty()
-                || (!comments[i].1.trim().is_empty() && lines[i].trim() == comments[i].1.trim())
-            {
-                range.start -= 1;
-            } else {
-                break;
-            }
-        }
+        range.start = leading_comment_start(range.start, &lines, &comments);
     }
     // Select item ranges first, then parse each selected comment ONCE. A new
     // large file must not rescan an entire impl for every changed source line.

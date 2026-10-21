@@ -6,6 +6,9 @@
 //! `aida cache rebuild` instead of the raw sqlite error.
 // trace:BUG-1940 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -16,7 +19,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()
@@ -25,12 +28,26 @@ fn git(dir: &Path, args: &[&str]) {
 }
 
 fn aida(fixture: &Fixture, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_aida"))
-        .current_dir(&fixture.repo)
+    aida_command(fixture, args).output().expect("run aida")
+}
+
+fn aida_command(fixture: &Fixture, args: &[&str]) -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_aida"));
+    cmd.current_dir(&fixture.repo)
         .env("HOME", &fixture.home)
         .env("AIDA_TELEMETRY", "0")
         .env("AIDA_OUTPUT_FORMAT", "human")
-        .args(args)
+        .args(args);
+    cmd
+}
+
+/// [`aida`] while a [`HeldRefreshLock`] holds the refresh lock for the whole
+/// run: the lock waits (2 s auto-heal, 10 s rebuild) are capped, because the
+/// holder never releases inside them and the refusal is the same either way.
+// trace:TASK-1959 | ai:claude
+fn aida_while_locked(fixture: &Fixture, args: &[&str]) -> Output {
+    aida_command(fixture, args)
+        .env("AIDA_TEST_CACHE_LOCK_WAIT_MS", "200")
         .output()
         .expect("run aida")
 }
@@ -283,7 +300,7 @@ fn notadb_read_prints_the_rebuild_hint_when_auto_heal_cannot_lock() {
     let fx = fixture();
     write_garbage_cache(&fx);
     let held = HeldRefreshLock::hold(&fx);
-    let out = aida(&fx, &["list"]);
+    let out = aida_while_locked(&fx, &["list"]);
     drop(held);
     let (stdout, stderr) = text(&out);
     let all = format!("{stdout}{stderr}");
@@ -314,7 +331,7 @@ fn rebuild_waits_for_and_respects_the_refresh_lock() {
     let fx = fixture();
     break_fts(&fx);
     let held = HeldRefreshLock::hold(&fx);
-    let out = aida(&fx, &["cache", "rebuild"]);
+    let out = aida_while_locked(&fx, &["cache", "rebuild"]);
     drop(held);
     let (stdout, stderr) = text(&out);
     let all = format!("{stdout}{stderr}");

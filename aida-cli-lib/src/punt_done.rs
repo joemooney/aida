@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "punt_done_args.rs"]
+pub(crate) mod punt_done_args;
+pub(crate) use punt_done_args::*;
+
 pub(crate) fn locate_for_status(
     reg: &advisor::AdvisorRegistration,
 ) -> Option<advisor::LiveAdvisor> {
@@ -186,6 +191,9 @@ pub(crate) fn send_notification(
     body: String,
 ) {
     use aida_core::mailbox::{Intent, Message, Recipient};
+    // TASK-1766: trim recipient id so Recipient::Agent stores the same trimmed
+    // id that recipient_id_rejection validates. trace:TASK-1766 | ai:antigravity
+    let recipient = recipient.trim();
     // BUG-2132: never open a mailbox for a junk id (a flag, a number, a spec
     // ID, a line ref) — that mail is never read. trace:BUG-2132 | ai:claude
     if aida_core::mailbox::recipient_id_rejection(recipient).is_some() {
@@ -227,20 +235,82 @@ pub(crate) fn send_notification(
 
 /// Extract distinct `@mention` handles from free text (STORY-644). Conservative
 /// word-boundary parse: a `@` that is NOT preceded by a word char (so `foo@bar`
-/// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`. The
+/// email locals and `a@b` are ignored) followed by `[A-Za-z0-9_.-]+`, ignoring
+/// any `@` inside Markdown backtick code spans/fences (TASK-1766). The
 /// trailing run is trimmed of `.` and `-` so sentence punctuation (`@bob.`) and
 /// hyphen-tails don't leak into the handle. Returns handles in first-seen order,
 /// deduped. trace:STORY-644 | ai:claude
+// trace:TASK-1766 | ai:antigravity
 pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
+    extract_raw_mention_tokens(text)
+        .into_iter()
+        .filter(|h| is_mention_handle(h))
+        .collect()
+}
+
+/// Extract all `@token` candidates outside backtick code spans that pass
+/// non-code/non-spec/non-numeric shape checks, including all-uppercase handles
+/// such as `@QA` or `@ADVISOR`.
+// trace:TASK-1766 | ai:antigravity
+pub(crate) fn extract_mention_candidates(text: &str) -> Vec<String> {
+    extract_raw_mention_tokens(text)
+        .into_iter()
+        .filter(|h| is_mention_candidate(h))
+        .collect()
+}
+
+// trace:TASK-1766 | ai:antigravity
+fn extract_raw_mention_tokens(text: &str) -> Vec<String> {
     let chars: Vec<char> = text.chars().collect();
     let mut out: Vec<String> = Vec::new();
     let mut i = 0usize;
     while i < chars.len() {
+        // TASK-1766: skip backtick-delimited inline code spans (`...`, ``...``)
+        // and fenced code blocks (```...```) so `@param`, `@dataclass`, etc.
+        // inside code spans are never extracted as mentions.
+        if chars[i] == '`' {
+            let mut tick_len = 0usize;
+            while i + tick_len < chars.len() && chars[i + tick_len] == '`' {
+                tick_len += 1;
+            }
+            let mut k = i + tick_len;
+            let mut close_end = None;
+            while k < chars.len() {
+                if chars[k] == '`' {
+                    let mut run = 0usize;
+                    while k + run < chars.len() && chars[k + run] == '`' {
+                        run += 1;
+                    }
+                    if run == tick_len || (tick_len >= 3 && run >= tick_len) {
+                        close_end = Some(k + run);
+                        break;
+                    }
+                    k += run;
+                } else {
+                    k += 1;
+                }
+            }
+            if let Some(end) = close_end {
+                i = end;
+                continue;
+            } else if tick_len >= 3 {
+                // Unclosed fenced code block extends to end of text.
+                break;
+            } else {
+                i += tick_len;
+                continue;
+            }
+        }
         if chars[i] == '@' {
-            // Word-boundary: skip `foo@bar` (email local-part / handle-in-word).
+            // Word-boundary: skip `foo@bar` (email local-part / handle-in-word)
+            // and a `:`/`/` that ends a line-ref or path (`main.rs:@L4425`,
+            // `src/x/@y`), while prose such as `cc:@advisor` still mentions.
+            // trace:TASK-1766 | ai:claude
             let prev_is_word = i > 0 && {
                 let p = chars[i - 1];
-                p.is_alphanumeric() || p == '_'
+                p.is_alphanumeric()
+                    || p == '_'
+                    || ((p == ':' || p == '/') && follows_line_ref_shape(&chars[..i - 1]))
             };
             if !prev_is_word {
                 let mut j = i + 1;
@@ -255,7 +325,7 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
                 let raw: String = chars[i + 1..j].iter().collect();
                 // Trim trailing sentence punctuation so `@bob.` -> `bob`.
                 let handle = raw.trim_end_matches(['.', '-']).to_string();
-                if !handle.is_empty() && is_mention_handle(&handle) && !out.contains(&handle) {
+                if !handle.is_empty() && !out.contains(&handle) {
                     out.push(handle);
                 }
                 i = j;
@@ -267,20 +337,84 @@ pub(crate) fn extract_mentions(text: &str) -> Vec<String> {
     out
 }
 
-/// BUG-2132: whether an `@token` in comment prose is plausibly a person or
-/// agent rather than code-ish text. Comments quoting `@-include`,
-/// `@33492/34424`, `@BUG-52`, `@SCOPE`, `@L4425` (a thread-local selector)
-/// or `@main.rs:47359` each opened a junk mailbox that nobody reads. Refused:
-/// every shape `--to` refuses, a token with no lower-case letter (upper-case
-/// words and selectors such as `SPEC`, `L`), and a source file name.
+/// Whether the non-whitespace run ending `before` looks like a source path or
+/// line ref (`main.rs`, `main.rs:47`, `src/x`), so a `:`/`/` after it and
+/// before `@` is part of that reference rather than prose.
+// trace:TASK-1766 | ai:claude
+fn follows_line_ref_shape(before: &[char]) -> bool {
+    let start = before
+        .iter()
+        .rposition(|c| c.is_whitespace())
+        .map_or(0, |k| k + 1);
+    let run = &before[start..];
+    run.last().is_some_and(|c| c.is_ascii_digit()) || run.iter().any(|c| *c == '.' || *c == '/')
+}
+
+/// BUG-2132 / TASK-1766: whether an `@token` in comment prose is a candidate
+/// mention handle (excluding flags, bare numbers, spec IDs, line refs, source
+/// filenames, and hex commit SHAs).
 // trace:BUG-2132 | ai:claude
-fn is_mention_handle(handle: &str) -> bool {
+// trace:TASK-1766 | ai:antigravity
+fn is_mention_candidate(handle: &str) -> bool {
     const SOURCE_EXTS: &[&str] = &[
         ".rs", ".md", ".toml", ".json", ".yaml", ".yml", ".ts", ".tsx", ".js", ".py", ".sh",
     ];
     aida_core::mailbox::recipient_id_rejection(handle).is_none()
-        && handle.chars().any(|c| c.is_lowercase())
         && !SOURCE_EXTS.iter().any(|ext| handle.ends_with(ext))
+        && !aida_core::mailbox::looks_like_hex_sha(handle)
+}
+
+/// BUG-2132: whether an `@token` in comment prose is plausibly a person or
+/// agent rather than code-ish text when no roster/registry is consulted.
+// trace:BUG-2132 | ai:claude
+fn is_mention_handle(handle: &str) -> bool {
+    is_mention_candidate(handle) && handle.chars().any(|c| c.is_lowercase())
+}
+
+/// TASK-1766: resolve `@mention` tokens in comment text against the project's
+/// known mailbox recipients (canonical roles, role files, registered agents,
+/// and the people roster), delivering each under its stored spelling.
+/// Returns `(deliverable_handles, warnings)`:
+/// - Known handles (including all-uppercase handles like `@QA` or `@ADVISOR`
+///   when present in the roster/registry) are returned in `deliverable_handles`.
+/// - Unknown handles (including unknown all-uppercase handles like `@QA`) are
+///   dropped with a warning and NEVER delivered, preventing phantom inboxes.
+/// - Spec-ID-shaped, numeric, flag, line-ref, source-file, and hex-SHA tokens
+///   never count as mentions at all.
+// trace:TASK-1766 | ai:antigravity
+pub(crate) fn resolve_comment_mentions(
+    store_root: &std::path::Path,
+    comment_author: &str,
+    text: &str,
+) -> (Vec<String>, Vec<String>) {
+    // trace:TASK-1766 | ai:claude — people (team roster, user handles, aliases)
+    // are known too, and delivery uses the identity's stored spelling.
+    let known = crate::known_mailbox_recipients(store_root);
+    let author_trimmed = comment_author.trim();
+    let mut deliverable = Vec::new();
+    let mut warnings = Vec::new();
+    for handle in extract_mention_candidates(text) {
+        let trimmed = handle.trim();
+        if trimmed.eq_ignore_ascii_case(author_trimmed) {
+            continue;
+        }
+        if let Some(canonical) = known.get(&trimmed.to_lowercase()) {
+            if !deliverable.contains(canonical) {
+                deliverable.push(canonical.clone());
+            }
+        } else if !trimmed.chars().any(|c| c.is_lowercase()) {
+            warnings.push(format!(
+                "@{} is an all-uppercase handle matching no known person, role or registered agent — mention dropped",
+                trimmed
+            ));
+        } else {
+            warnings.push(format!(
+                "@{} matches no known person, role or registered agent — mention dropped",
+                trimmed
+            ));
+        }
+    }
+    (deliverable, warnings)
 }
 
 /// One-line snippet of `text` for a mention notice: collapsed whitespace,
@@ -967,3 +1101,229 @@ pub(crate) fn handle_punts_command(cmd: PuntsCommand) -> Result<()> {
 
     Ok(())
 }
+
+/// Browse and analyze the local design-fork punt ledger.
+// trace:STORY-325 | ai:claude
+// trace:TASK-956 | ai:claude — hidden from top-level --help (still runs).
+#[derive(clap::Parser, Debug)]
+#[clap(name = "punts")]
+#[clap(hide = true)]
+pub(crate) struct PuntsArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PuntsCommand,
+}
+
+// STORY-325: punt ledger CLI command. Dispatched before storage init —
+// it reads only `.aida/punts.jsonl`, no requirement store.
+// trace:STORY-325 | ai:antigravity
+fn run_punts(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let punts_cmd = &args.inner;
+    return handle_punts_command(punts_cmd.clone());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUNTS: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "punts",
+        help_after: "punt",
+        command: <PuntsArgs as clap::CommandFactory>::command,
+        policy: punts_cli_policy,
+        run: crate::command_registry::Handler::Early(run_punts),
+    };
+
+// The read-only verbs stay open to guest stakeholders; every other verb is
+// gated as Write. An unparseable invocation is not treated as a read.
+// trace:STORY-1728 | ai:claude
+fn punts_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+    use crate::cli::PuntsCommand;
+    use crate::stakeholder_role::StakeholderAction;
+    let read = <PuntsArgs as clap::FromArgMatches>::from_arg_matches(matches).is_ok_and(|args| {
+        matches!(
+            args.inner,
+            PuntsCommand::List { .. } | PuntsCommand::Read { .. }
+        )
+    });
+    crate::command_registry::CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
+
+/// Mark a spec done — the simple "I finished it". e.g. `aida done <SPEC>`.
+/// A newcomer-friendly shortcut for completing a task without the
+/// `edit --status completed` jargon.
+// trace:TASK-727 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "done")]
+pub(crate) struct DoneArgs {
+    /// The spec to mark done.
+    pub spec: String,
+}
+
+fn run_done(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <DoneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                DoneArgs { spec } => {
+                    // TASK-728: the newcomer's "I finished it" verb. trace:TASK-727
+                    handle_done_command(spec, backend, store_path)?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // TASK-728: `aida done` is a distributed-mode (default) verb. Legacy
+                // --centralized mode keeps the explicit edit path. trace:TASK-727
+                DoneArgs { .. } => {
+                    anyhow::bail!(
+                        "`aida done` is available in the default (distributed) mode. In legacy \
+                     --centralized mode, use `aida edit <spec> --status completed`."
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static DONE: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "done",
+    help_after: "reconstitute",
+    command: <DoneArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_done),
+};
+
+/// Punt a spec to Needs Attention — pause it with a structured reason
+/// instead of guessing past a design-fork. The safety net an autonomous
+/// drain reaches for when it hits a decision it cannot safely make.
+// trace:STORY-332 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "punt")]
+pub(crate) struct PuntArgs {
+    /// The spec (UUID or SPEC-ID) to punt. Must currently be In Progress.
+    pub id: String,
+
+    /// The kind of obstacle. One of: design-fork, ambiguous-spec,
+    /// missing-context, blocked-dependency, other.
+    #[clap(long, short = 'c')]
+    pub category: String,
+
+    /// Human-readable description of the fork / obstacle that stopped you.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'r', allow_hyphen_values = true)]
+    pub reason: String,
+
+    /// Optional best-guess answer if forced to choose — recorded
+    /// distinctly from the reason so triage can see the agent's lean.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'l', allow_hyphen_values = true)]
+    pub lean: Option<String>,
+}
+
+fn run_punt(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <PuntArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                PuntArgs {
+                    id,
+                    category,
+                    reason,
+                    lean,
+                } => {
+                    handle_punt_command(
+                        id,
+                        category,
+                        reason,
+                        lean.as_deref(),
+                        backend,
+                        store_path,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                PuntArgs { .. } => {
+                    // `aida punt` writes the NeedsAttention status + structured punt
+                    // metadata; the deprecated SQLite backend does not persist it.
+                    // trace:STORY-332 | ai:claude
+                    anyhow::bail!(
+                        "aida punt requires the distributed git-canonical store \
+                     (run `aida init` to migrate, or this project is on the \
+                     deprecated --centralized backend)"
+                    );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PUNT: crate::command_registry::CommandReg = crate::command_registry::CommandReg {
+    name: "punt",
+    help_after: "advisor",
+    command: <PuntArgs as clap::CommandFactory>::command,
+    policy: |_| crate::command_registry::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: true,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::command_registry::Handler::Store(run_punt),
+};

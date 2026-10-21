@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn run_git(dir: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = crate::test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()
@@ -29,6 +29,7 @@ fn run_git(dir: &Path, args: &[&str]) {
 
 fn mock_lease(id: &str, scope: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),

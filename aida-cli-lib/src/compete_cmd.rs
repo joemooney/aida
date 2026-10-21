@@ -79,6 +79,9 @@ pub(crate) fn handle_compete_command(
              headless; antigravity is emitted as a human-run brief)"
         );
     }
+    // Refuse the entire run before briefs, worktrees, branches or any arm run.
+    // trace:BUG-2172 | ai:codex
+    preflight_compete_containment(vendors, judge.then_some(judge_vendor))?;
     let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
@@ -212,16 +215,25 @@ pub(crate) fn handle_compete_command(
         let argv = compete::headless_argv(&adapter, &brief).expect("headless adapter");
 
         if dry_run {
+            // Preview vendor posture without preparing settings or an OS wrapper:
+            // both operational helpers can write artifacts in an existing tree.
+            let actual_args =
+                compete_arm_argv(&argv, vendor, session::aida_contained_env()?, || {
+                    Ok(vec![
+                        "--setting-sources".into(),
+                        "project".into(),
+                        "--settings".into(),
+                        "<contained settings resolved at launch>".into(),
+                    ])
+                })?;
             println!(
-                "  {}: would create worktree on `{}` and run: {} {}",
+                "  {}: would create worktree on `{}` and run vendor argv (settings/OS wrapper resolved at launch): {} {}",
                 vendor,
                 branch,
                 command,
-                argv.iter()
-                    .take(argv.len().saturating_sub(1))
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(" ")
+                actual_args.iter()
+                    .take(actual_args.len().saturating_sub(1))
+                    .cloned().collect::<Vec<_>>().join(" ")
             );
             results.push(ArmResult {
                 vendor: vendor.clone(),
@@ -415,6 +427,15 @@ fn run_compete_judge(
 pub(crate) fn handle_zen_compete(spec_arg: &str, dry_run: bool) -> Result<()> {
     use compete::{ArmResult, Ran, ReportGlyphs, VendorAdapter};
 
+    // The fixed bake-off includes Codex, which has no contained adapter.
+    // trace:BUG-2172 | ai:codex
+    preflight_compete_containment(
+        &compete::BAKEOFF_VENDORS
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+        None,
+    )?;
     let project_root = find_project_root()?;
     let store = load_store_for_lookup(&project_root)
         .ok_or_else(|| anyhow::anyhow!("could not load the AIDA requirements store"))?;
@@ -801,7 +822,7 @@ fn spawn_judge(
     let (cmd_bin, cmd_args) =
         compete::judge_command(judge_vendor, binary_override.as_deref(), prompt);
     let mut judge_cmd =
-        build_compete_judge_command(project_root, &cmd_bin, &cmd_args, judge_vendor);
+        build_compete_judge_command(project_root, &cmd_bin, &cmd_args, judge_vendor)?;
     let o = judge_cmd
         .output_retrying_etxtbsy()
         .context("failed to spawn the judge")?;
@@ -816,22 +837,17 @@ pub(crate) fn build_compete_judge_command(
     cmd_bin: &str,
     cmd_args: &[String],
     judge_vendor: compete::JudgeVendor,
-) -> std::process::Command {
-    let mut judge_cmd = std::process::Command::new(cmd_bin);
-    judge_cmd.args(cmd_args).current_dir(project_root);
-    if judge_vendor.needs_stdin_closed() {
-        judge_cmd.stdin(std::process::Stdio::null());
-    }
+) -> Result<std::process::Command> {
     let headless_vendor = match judge_vendor {
         compete::JudgeVendor::Claude => session::HeadlessVendor::Claude,
         compete::JudgeVendor::Codex => session::HeadlessVendor::Codex,
     };
-    if session::containment_applied(headless_vendor, false) {
-        judge_cmd.env("AIDA_CONTAINED", "1");
-    } else {
-        judge_cmd.env_remove("AIDA_CONTAINED");
+    let mut judge_cmd =
+        build_compete_arm_command(project_root, cmd_bin, cmd_args, headless_vendor.as_str())?;
+    if judge_vendor.needs_stdin_closed() {
+        judge_cmd.stdin(std::process::Stdio::null());
     }
-    judge_cmd
+    Ok(judge_cmd)
 }
 
 /// Run a single headless vendor arm: create the worktree, spawn the vendor,
@@ -913,7 +929,7 @@ fn run_compete_arm(
     let log_dir = compete_log_dir(project_root, branch);
     let _ = std::fs::create_dir_all(&log_dir);
     let log_path = log_dir.join(format!("{vendor}.log"));
-    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor);
+    let mut arm_cmd = build_compete_arm_command(&worktree_dir, command, argv, vendor)?;
     let vendor_out = arm_cmd.output_retrying_etxtbsy();
     let ran = match &vendor_out {
         Ok(o) if o.status.success() => Ran::Ok,
@@ -934,16 +950,24 @@ fn run_compete_arm(
 
     // Ensure the work is committed on the per-vendor branch even if the vendor
     // left changes uncommitted.
-    let _ = std::process::Command::new("git")
-        .args(["add", "-A"])
-        .current_dir(&worktree_dir)
-        .output();
-    let has_staged = !std::process::Command::new("git")
-        .args(["diff", "--cached", "--quiet"])
-        .current_dir(&worktree_dir)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(true);
+    // BUG-1985: the vendor ran contained in this tree, so host staging first
+    // refuses a planted embedded repository; host git staging into it would
+    // run the repository's own filter drivers.
+    // trace:BUG-1985 | ai:claude
+    let staging_refused = aida_core::git_ops::refuse_untrusted_staging(&worktree_dir).err();
+    if let Some(err) = &staging_refused {
+        eprintln!("     not committing the vendor's leftover changes: {err:#}");
+    } else {
+        let _ = aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["add", "-A"])
+            .output();
+    }
+    let has_staged = staging_refused.is_none()
+        && !aida_core::git_ops::host_git_command(&worktree_dir)
+            .args(["diff", "--cached", "--quiet"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(true);
     if has_staged {
         let _ = std::process::Command::new("git")
             .args([
@@ -998,24 +1022,80 @@ fn run_compete_arm(
     ))
 }
 
+/// Validate all children together, before any run artifacts or destructive cleanup.
+// trace:BUG-2172 | ai:codex
+fn preflight_compete_containment(
+    vendors: &[String],
+    judge: Option<compete::JudgeVendor>,
+) -> Result<()> {
+    if !session::aida_contained_env()? {
+        return Ok(());
+    }
+    for name in vendors
+        .iter()
+        .map(String::as_str)
+        .chain(judge.map(|v| match v {
+            compete::JudgeVendor::Claude => "claude",
+            compete::JudgeVendor::Codex => "codex",
+        }))
+    {
+        let vendor = session::HeadlessVendor::parse(name).ok_or_else(|| {
+            anyhow::anyhow!("[contained] unsupported compete vendor `{name}` — refusing the run before launch artifacts")
+        })?;
+        session::require_vendor_containment(vendor, true, "compete child")?;
+    }
+    Ok(())
+}
+
 // trace:BUG-2124 | ai:antigravity
 pub(crate) fn build_compete_arm_command(
     worktree_dir: &std::path::Path,
     command: &str,
     argv: &[String],
     vendor: &str,
-) -> std::process::Command {
-    let mut cmd = std::process::Command::new(command);
-    cmd.args(argv).current_dir(worktree_dir);
-    let contained = session::HeadlessVendor::parse(vendor)
-        .map(|v| session::containment_applied(v, false))
-        .unwrap_or(false);
-    if contained {
+) -> Result<std::process::Command> {
+    // trace:BUG-2172 | ai:codex
+    let contained = session::aida_contained_env()?;
+    let headless_vendor = session::HeadlessVendor::parse(vendor);
+    let args = compete_arm_argv(argv, vendor, contained, || {
+        session::claude_contained_flags_for(worktree_dir)
+    })?;
+    let (program, args) = if contained {
+        session::os_wrapped_program_and_args(worktree_dir, command, args)?
+    } else {
+        (command.to_string(), args)
+    };
+    let mut cmd = std::process::Command::new(program);
+    cmd.args(args).current_dir(worktree_dir);
+    if headless_vendor.is_some_and(|v| session::containment_applied(v, contained)) {
         cmd.env("AIDA_CONTAINED", "1");
     } else {
         cmd.env_remove("AIDA_CONTAINED");
     }
-    cmd
+    Ok(cmd)
+}
+
+/// Shared posture composition; only launch supplies an operational settings builder.
+// trace:BUG-2172 | ai:codex
+fn compete_arm_argv(
+    argv: &[String],
+    vendor: &str,
+    contained: bool,
+    contained_flags: impl FnOnce() -> Result<Vec<String>>,
+) -> Result<Vec<String>> {
+    if !contained {
+        return Ok(argv.to_vec());
+    }
+    let parsed = session::HeadlessVendor::parse(vendor)
+        .ok_or_else(|| anyhow::anyhow!("[contained] unknown compete vendor `{vendor}`"))?;
+    session::require_vendor_containment(parsed, true, "compete child")?;
+    // Generated argv ends with the prompt. Never parse flags inside it.
+    let split = argv.len().saturating_sub(1);
+    let (mut args, _) = crate::agent_launch::split_posture_flags(vendor, argv[..split].to_vec());
+    args.extend(["--permission-mode".to_string(), "dontAsk".to_string()]);
+    args.extend(contained_flags()?);
+    args.extend_from_slice(&argv[split..]);
+    Ok(args)
 }
 
 /// The worktree directory a compete arm uses for `branch` — a sibling of the
@@ -1095,3 +1175,317 @@ fn binary_on_path(name: &str) -> bool {
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
+
+// trace:BUG-2172 | ai:codex
+#[cfg(test)]
+mod containment_tests {
+    use super::*;
+
+    #[test]
+    fn compete_children_inherit_containment_and_replace_bypass_argv() {
+        let dir = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", Some("1")),
+            ("AIDA_OS_WRAP", Some("0")),
+        ]);
+        let prompt = "preserve --permission-mode in prompt";
+        let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
+        let judge =
+            build_compete_judge_command(dir.path(), &bin, &argv, compete::JudgeVendor::Claude)
+                .unwrap();
+        let arm = build_compete_arm_command(dir.path(), &bin, &argv, "claude").unwrap();
+        let exec = session::build_exec_vendor_headless_command(
+            session::HeadlessVendor::Claude,
+            prompt,
+            "sid",
+            false,
+            None,
+            None,
+            "implementer",
+            "",
+        )
+        .unwrap();
+        for cmd in [judge, arm, exec] {
+            let args: Vec<_> = cmd
+                .get_args()
+                .map(|a| a.to_string_lossy().to_string())
+                .collect();
+            assert_eq!(args.last().map(String::as_str), Some(prompt));
+            assert!(args.iter().any(|a| a == "--settings"));
+            assert!(!args.iter().any(|a| a == "bypassPermissions"));
+            assert!(args
+                .windows(2)
+                .any(|a| a == ["--permission-mode", "dontAsk"]));
+            assert!(cmd
+                .get_envs()
+                .any(|(k, v)| k == "AIDA_CONTAINED" && v == Some(std::ffi::OsStr::new("1"))));
+        }
+        assert!(build_compete_arm_command(dir.path(), "codex", &[], "codex").is_err());
+        assert!(
+            build_compete_judge_command(dir.path(), "codex", &[], compete::JudgeVendor::Codex)
+                .is_err()
+        );
+        assert!(build_compete_arm_command(dir.path(), "unknown", &[], "unknown").is_err());
+    }
+
+    // trace:BUG-2172 | ai:codex
+    #[test]
+    fn compete_dry_run_vendor_argv_is_contained_and_does_not_prepare_wrapper() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        let policy = dir.path().join(".aida/contained-managed-settings.json");
+        std::fs::write(&policy, "preserve policy").unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_CONTAINED", Some("1")),
+            ("AIDA_OS_WRAP", Some("1")),
+        ]);
+        let prompt = "--permission-mode bypassPermissions inside prompt";
+        let (bin, argv) = compete::judge_command(compete::JudgeVendor::Claude, None, prompt);
+        assert_eq!(bin, "claude");
+        let preview = compete_arm_argv(&argv, "claude", true, || {
+            Ok(vec![
+                "--setting-sources".into(),
+                "project".into(),
+                "--settings".into(),
+                "<contained settings resolved at launch>".into(),
+            ])
+        })
+        .unwrap();
+        assert!(preview
+            .windows(2)
+            .any(|a| a == ["--permission-mode", "dontAsk"]));
+        assert!(!preview.iter().any(|a| a == "bypassPermissions"));
+        assert_eq!(preview.last().unwrap(), prompt);
+        assert_eq!(std::fs::read_to_string(policy).unwrap(), "preserve policy");
+        assert_eq!(
+            std::fs::read_dir(dir.path().join(".aida")).unwrap().count(),
+            1
+        );
+    }
+
+    // trace:BUG-2172 | ai:codex
+    #[test]
+    fn contained_compete_refuses_all_unsupported_children_before_side_effects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("repo");
+        std::fs::create_dir(&root).unwrap();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .arg("-C")
+                .arg(&root)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+            out.stdout
+        };
+        git(&["init", "-q"]);
+        git(&["commit", "--allow-empty", "-qm", "initial"]);
+        let branch = compete::vendor_branch("TASK-1", "codex");
+        let child = compete_worktree_dir(&root, &branch);
+        git(&["worktree", "add", "-b", &branch, child.to_str().unwrap()]);
+        let sentinel = child.join("uncommitted-work");
+        std::fs::write(&sentinel, "preserve me").unwrap();
+        let before_refs = git(&["show-ref"]);
+        let before_worktrees = git(&["worktree", "list", "--porcelain"]);
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            &[],
+            &[("AIDA_CONTAINED", Some("1"))],
+        );
+        for (vendors, judge) in [
+            (vec!["claude".to_string(), "codex".to_string()], false),
+            (vec!["claude".to_string()], true),
+            (vec!["antigravity".to_string()], false),
+            (vec!["unknown".to_string()], false),
+        ] {
+            for dry_run in [false, true] {
+                let err = handle_compete_command("TASK-1", &vendors, None, dry_run, judge, "codex")
+                    .unwrap_err();
+                assert!(err.to_string().contains("[contained]"), "{err:#}");
+                assert_eq!(git(&["show-ref"]), before_refs);
+                assert_eq!(git(&["worktree", "list", "--porcelain"]), before_worktrees);
+                assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "preserve me");
+                assert!(!root.join(".aida").join("agent-briefs").exists());
+            }
+        }
+        assert!(handle_zen_compete("TASK-1", false)
+            .unwrap_err()
+            .to_string()
+            .contains("[contained]"));
+        assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "preserve me");
+        assert!(preflight_compete_containment(
+            &["claude".into()],
+            Some(compete::JudgeVendor::Claude)
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn malformed_containment_refuses_even_an_explicit_contained_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("typo"))]);
+        assert!(session::compose_headless_command(
+            session::HeadlessVendor::Claude,
+            "prompt",
+            "sid",
+            true,
+            None,
+            None
+        )
+        .is_err());
+        assert!(build_compete_arm_command(dir.path(), "claude", &[], "claude").is_err());
+        assert!(build_compete_judge_command(
+            dir.path(),
+            "claude",
+            &[],
+            compete::JudgeVendor::Claude
+        )
+        .is_err());
+        assert!(session::interactive_reviewer_launch_plan(
+            session::HeadlessVendor::Claude,
+            None,
+            None,
+            "prompt",
+            "sid",
+            false,
+        )
+        .is_err());
+        assert!(session::spawn_claude_resume_with_grant("sid", None, true, None).is_err());
+        assert!(
+            handle_compete_command("TASK-1", &["claude".into()], None, false, false, "claude")
+                .is_err()
+        );
+        let log = dir.path().join("must-not-exist.log");
+        assert!(session::spawn_vendor_headless_with_seat_granted(
+            session::HeadlessVendor::Claude,
+            aida_core::agents_config::AgentSeat::Implementer,
+            "prompt",
+            "sid",
+            &log,
+            &crate::headless_tee::TeeOptions {
+                enabled: false,
+                label: None
+            },
+            true,
+        )
+        .is_err());
+        assert!(session::spawn_claude_headless_resume_granted(
+            "prompt",
+            "sid",
+            &log,
+            dir.path(),
+            &crate::headless_tee::TeeOptions {
+                enabled: false,
+                label: None
+            },
+            true,
+            "implementer",
+        )
+        .is_err());
+        assert!(!log.exists());
+    }
+}
+
+/// Run one spec through N vendors headless, in isolated worktrees, then an
+/// objective gate — the neutral cross-vendor quality layer. For each vendor
+/// AIDA creates a per-vendor worktree+branch, assembles the implementer
+/// brief from the spec, runs the vendor headless (claude/codex), commits the
+/// result, and runs a deterministic gate that mirrors PR CI by default
+/// (fmt-check + build + tests + clippy + glyph-lint, so a gate-passing
+/// winner is actually mergeable). Reports a
+/// table, ranks the gate-passers (smaller/focused diff first), optionally
+/// runs a rubric LLM judge (--judge), and leaves every branch in place to
+/// pick. Report-only: it recommends a winner but never merges.
+// trace:STORY-659 trace:STORY-660 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "compete")]
+pub(crate) struct CompeteArgs {
+    /// SPEC-ID (or UUID) to run through the vendors.
+    pub spec: String,
+
+    /// Comma-separated vendors to run, e.g. `claude,codex`. Headless
+    /// vendors run directly; a non-headless vendor (antigravity) is emitted
+    /// as a human-run brief instead.
+    #[clap(long, value_delimiter = ',')]
+    pub vendors: Vec<String>,
+
+    /// Override the deterministic gate command run in each worktree.
+    /// Default mirrors PR CI: fmt-check + build + the aida-cli test suite +
+    /// clippy correctness + glyph-lint, so a gate-passing winner is
+    /// mergeable. Pass your own command for non-Rust repos / custom CI.
+    #[clap(long)]
+    pub gate: Option<String>,
+
+    /// Assemble the briefs + plan the run and print what WOULD happen
+    /// without spawning any vendor or touching git.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Add a rubric LLM judge after the gate: spawn a `claude -p` judge over
+    /// the spec + each candidate's diff, scoring spec-adherence / correctness
+    /// / simplicity / test-coverage (1-5) and recommending a winner. Opt-in
+    /// and REPORT-ONLY — it never merges; the human/advisor still picks. The
+    /// cheap deterministic ranking (smaller, focused diff first) is always
+    /// shown regardless of this flag.
+    // trace:STORY-660 | ai:claude
+    #[clap(long)]
+    pub judge: bool,
+
+    /// Which vendor renders the rubric judgment (claude or codex). The judge
+    /// PROMPT is identical for both — only the executing model changes — so a
+    /// codex judge over a claude-vs-codex run is no longer the same model
+    /// grading itself, removing the self-evaluation caveat. Defaults to
+    /// claude (unchanged behaviour). Set AIDA_COMPETE_JUDGE to override the
+    /// judge binary. Only applies with --judge.
+    // trace:TASK-869 | ai:claude
+    #[clap(long = "judge-vendor", default_value = "claude")]
+    pub judge_vendor: String,
+}
+
+// `aida compete` self-loads the store (to assemble the brief) and
+// orchestrates worktrees + headless vendor runs + the objective gate.
+// Dispatch early alongside ultraplan — it doesn't need the shared storage
+// handle. trace:STORY-659 | ai:claude
+fn run_compete(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <CompeteArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let CompeteArgs {
+        spec,
+        vendors,
+        gate,
+        dry_run,
+        judge,
+        judge_vendor,
+    } = &args;
+    return self::handle_compete_command(
+        spec,
+        vendors,
+        gate.as_deref(),
+        *dry_run,
+        *judge,
+        judge_vendor,
+    );
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static COMPETE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "compete",
+        help_after: "brief",
+        command: <CompeteArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_compete),
+    };

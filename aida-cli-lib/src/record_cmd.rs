@@ -8,6 +8,11 @@ use aida_core::{DatabaseBackend, Storage};
 use anyhow::Result;
 use colored::Colorize;
 
+// trace:STORY-1728 | ai:claude
+#[path = "record_cmd_args.rs"]
+pub(crate) mod record_cmd_args;
+pub(crate) use record_cmd_args::*;
+
 pub(crate) fn handle_record_command(
     cmd: &crate::cli::RecordCommand,
     backend: &aida_core::CachedGitBackend,
@@ -141,3 +146,74 @@ pub(crate) fn handle_record_command(
         }
     }
 }
+
+/// Inspect or prune the durable per-spec processing record — the audit
+/// trail of what was done + why, captured at completion time.
+// trace:STORY-582 | ai:claude — plain `//` keeps the id out of `--help`.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "record")]
+#[clap(hide = true)]
+pub(crate) struct RecordArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::RecordCommand,
+}
+
+fn run_record(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <RecordArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                RecordArgs { inner: record_cmd } => {
+                    // STORY-582: inspect / prune the durable processing-record trail.
+                    return crate::command_registry::returned(self::handle_record_command(
+                        record_cmd, &backend, store_path,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                RecordArgs { inner: _ } => {
+                    // STORY-582: the processing-record trail is a git-canonical field.
+                    anyhow::bail!(
+                    "aida record commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static RECORD: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "record",
+        help_after: "cache",
+        command: <RecordArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_record),
+    };

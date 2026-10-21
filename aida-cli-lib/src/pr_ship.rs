@@ -186,6 +186,46 @@ impl ShipRefusal {
     }
 }
 
+/// CLI value enum for `aida pr ship --merge-method <squash|rebase>`.
+// trace:STORY-1663 | ai:antigravity
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShipMergeMethod {
+    #[default]
+    Squash,
+    Rebase,
+}
+
+/// Resolve the merge method from `--rebase` and `--merge-method`.
+// trace:STORY-1663 | ai:antigravity
+pub fn resolved_merge_method(
+    rebase: bool,
+    merge_method: Option<ShipMergeMethod>,
+) -> crate::forge::MergeMethod {
+    if rebase || matches!(merge_method, Some(ShipMergeMethod::Rebase)) {
+        crate::forge::MergeMethod::Rebase
+    } else {
+        crate::forge::MergeMethod::Squash
+    }
+}
+
+/// STORY-1663: resolve the requested merge method and reject `--final-slice`
+/// (`--complete-spec`) unless the effective merge method is `rebase`.
+// trace:STORY-1663 | ai:antigravity
+pub fn validate_ship_merge_method(
+    rebase: bool,
+    merge_method: Option<ShipMergeMethod>,
+    final_slice: bool,
+) -> Result<crate::forge::MergeMethod, String> {
+    let method = resolved_merge_method(rebase, merge_method);
+    if final_slice && method != crate::forge::MergeMethod::Rebase {
+        return Err(
+            "`--final-slice` (`--complete-spec`) requires `--rebase` or `--merge-method rebase`"
+                .to_string(),
+        );
+    }
+    Ok(method)
+}
+
 /// Flags / mode the handler resolves from the parsed clap subcommand.
 /// Kept as a value type so dry-run plan formatting can be exercised in
 /// unit tests without invoking the full handler.
@@ -487,6 +527,137 @@ pub(crate) fn derive_squash_trailer(
             notes,
         }
     }
+}
+
+/// STORY-1663: completion trailer derivation for `aida pr ship` across merge
+/// methods. Rebase merges produce no squash subject, so slices never
+/// auto-complete their spec from the PR title or branch name unless
+/// `--final-slice` is explicitly passed.
+// trace:STORY-1663 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn derive_ship_trailer_for_method(
+    method: crate::forge::MergeMethod,
+    final_slice: bool,
+    pr_title: &str,
+    branch: &str,
+    pr_body: &str,
+    no_complete: bool,
+    resolves: impl Fn(&str) -> bool,
+    completion_held: impl Fn(&str) -> Option<String>,
+) -> SquashTrailer {
+    if method == crate::forge::MergeMethod::Rebase && !final_slice {
+        return SquashTrailer::none(vec![
+            "rebase merge (slice; pass `--final-slice` to complete the spec) — no spec is completed by this merge"
+                .to_string(),
+        ]);
+    }
+    derive_squash_trailer(
+        pr_title,
+        branch,
+        pr_body,
+        no_complete,
+        resolves,
+        completion_held,
+    )
+}
+
+/// STORY-1663: rebase merges must always be pinned to a non-empty head SHA
+/// (`--match-head-commit <SHA>`) so a concurrent push never rebases unreviewed
+/// commits onto the base branch.
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn require_rebase_head_pin(
+    pr_number: u64,
+    method: crate::forge::MergeMethod,
+    match_head: Option<&str>,
+) -> Result<(), String> {
+    if method != crate::forge::MergeMethod::Rebase {
+        return Ok(());
+    }
+    match match_head.map(str::trim).filter(|sha| !sha.is_empty()) {
+        Some(_) => Ok(()),
+        None => Err(format!(
+            "PR-{pr_number}: refusing to rebase-merge without a pinned head commit (`--match-head-commit`); \
+             the PR head SHA could not be resolved."
+        )),
+    }
+}
+
+/// STORY-1663: refuse when the PR head moved between preflight/CI and the
+/// under-lease merge step (a new commit was pushed after CI or preflight).
+// trace:STORY-1663 | ai:antigravity
+pub(crate) fn stale_head_after_ci_refusal(
+    pr_number: u64,
+    pre_ci_head: Option<&str>,
+    merge_head: Option<&str>,
+) -> Option<String> {
+    let pre = pre_ci_head.map(str::trim).filter(|s| !s.is_empty())?;
+    let post = merge_head.map(str::trim).filter(|s| !s.is_empty())?;
+    if pre.eq_ignore_ascii_case(post) {
+        None
+    } else {
+        Some(format!(
+            "PR-{pr_number}'s head moved from `{pre}` to `{post}` after preflight/CI — \
+             refusing stale head. Re-run `aida pr ship {pr_number}` after CI and review \
+             cover `{post}`."
+        ))
+    }
+}
+
+/// STORY-1663: true when a commit subject matches the STORY-1488 slice-stack
+/// move signature (`refactor(cli-lib): extract <m>.rs` or `extend <m>.rs`).
+// trace:STORY-1663 | ai:antigravity
+pub fn is_slice_stack_commit_subject(subject: &str) -> bool {
+    let trimmed = subject.trim();
+    let Some(rest) = trimmed
+        .strip_prefix("refactor(cli-lib): extract ")
+        .or_else(|| trimmed.strip_prefix("refactor(cli-lib): extend "))
+    else {
+        return false;
+    };
+    let module_part = rest.split_whitespace().next().unwrap_or("");
+    let Some(stem) = module_part.strip_suffix(".rs") else {
+        return false;
+    };
+    !stem.is_empty()
+        && stem
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// STORY-1663: marker recorded on a spec when a rebase merge lands without
+/// `--final-slice`, so `aida pull` and `aida db reconcile-status` leave the
+/// spec's status unchanged even if a rebased commit subject carried `(SPEC-ID)`.
+// trace:STORY-1663 | ai:antigravity
+pub const NON_COMPLETING_REBASE_MARKER: &str = "[aida:non-completing-rebase]";
+
+/// STORY-1663: true when a commit subject starts with a `[k/N]` slice prefix
+/// (e.g. `[1/3] feat: ...`) where `1 <= k <= N` and `N > 1`.
+// trace:STORY-1663 | ai:antigravity
+pub fn is_numbered_slice_commit_subject(subject: &str) -> bool {
+    let Some(rest) = subject.trim().strip_prefix('[') else {
+        return false;
+    };
+    let Some((inside, after_bracket)) = rest.split_once(']') else {
+        return false;
+    };
+    if !after_bracket.starts_with(char::is_whitespace) {
+        return false;
+    }
+    let Some((k_str, n_str)) = inside.split_once('/') else {
+        return false;
+    };
+    let (Ok(k), Ok(n)) = (k_str.parse::<u32>(), n_str.parse::<u32>()) else {
+        return false;
+    };
+    k >= 1 && n > 1 && k <= n
+}
+
+/// STORY-1663: true when a commit subject is a slice commit (`refactor(cli-lib):
+/// extract|extend <m>.rs` or `[k/N] ...`) that should not auto-complete its
+/// owning spec during `aida pull` / `aida db reconcile-status`.
+// trace:STORY-1663 | ai:antigravity
+pub fn is_non_completing_slice_commit_subject(subject: &str) -> bool {
+    is_slice_stack_commit_subject(subject) || is_numbered_slice_commit_subject(subject)
 }
 
 /// BUG-1919: the reason `spec` must not be completed by a branch-name
@@ -1162,10 +1333,19 @@ pub const DRY_RUN_PIN_PLACEHOLDER: &str = "<approved-head-sha>";
 /// `None` = no forge command (pure git).
 // trace:TASK-1582 | ai:antigravity
 pub fn dry_run_merge_cmd(forge: crate::forge::ForgeKind, delete_branch: bool) -> Option<String> {
+    dry_run_merge_cmd_for_method(forge, crate::forge::MergeMethod::Squash, delete_branch)
+}
+
+// trace:STORY-1663 | ai:antigravity
+pub fn dry_run_merge_cmd_for_method(
+    forge: crate::forge::ForgeKind,
+    method: crate::forge::MergeMethod,
+    delete_branch: bool,
+) -> Option<String> {
     match forge {
         crate::forge::ForgeKind::GitHub => {
             let opts = crate::forge::MergeOptions {
-                method: crate::forge::MergeMethod::Squash,
+                method,
                 squash_subject: None,
                 squash_body: None, // trace:TASK-1330 | ai:claude
                 delete_branch,
@@ -1179,10 +1359,17 @@ pub fn dry_run_merge_cmd(forge: crate::forge::ForgeKind, delete_branch: bool) ->
             Some(format!("gh {}", argv.join(" ")))
         }
         crate::forge::ForgeKind::GitLab => {
-            let base = if delete_branch {
+            let method_flag = match method {
+                crate::forge::MergeMethod::Squash => "--squash",
+                crate::forge::MergeMethod::Rebase => "--rebase",
+                crate::forge::MergeMethod::Merge => "",
+            };
+            let base = if delete_branch && method == crate::forge::MergeMethod::Squash {
                 forge.merge_cmd("<N>")?
+            } else if method_flag.is_empty() {
+                forge.change_cmd_hint("merge", "<N>")?
             } else {
-                forge.change_cmd_hint("merge", "<N> --squash")?
+                forge.change_cmd_hint("merge", &format!("<N> {method_flag}"))?
             };
             Some(format!(
                 "{base}  (abbreviated: AIDA merges through the GitLab merge API with sha=<MR head read at merge time>, checked against {DRY_RUN_PIN_PLACEHOLDER})"
@@ -1260,6 +1447,16 @@ pub fn format_dry_run_plan(
     steps: &[ShipStep],
     forge: crate::forge::ForgeKind,
 ) -> String {
+    format_dry_run_plan_with_method(opts, steps, forge, crate::forge::MergeMethod::Squash)
+}
+
+// trace:STORY-1663 | ai:antigravity
+pub fn format_dry_run_plan_with_method(
+    opts: &PrShipOptions,
+    steps: &[ShipStep],
+    forge: crate::forge::ForgeKind,
+    method: crate::forge::MergeMethod,
+) -> String {
     // STORY-508/TASK-651: forge-aware noun + commands so a GitLab dry-run names
     // glab/MR, not gh/PR. `<N>` placeholder since the plan is pre-resolution.
     let noun = forge.change_noun();
@@ -1281,7 +1478,7 @@ pub fn format_dry_run_plan(
                 .unwrap_or_else(|| "watch CI to completion".to_string()),
             ShipStep::Merge {
                 delete_branch: true,
-            } => dry_run_merge_cmd(forge, true)
+            } => dry_run_merge_cmd_for_method(forge, method, true)
                 .unwrap_or_else(|| format!("merge the {noun} and delete the branch")),
             ShipStep::Merge {
                 delete_branch: false,
@@ -1292,7 +1489,7 @@ pub fn format_dry_run_plan(
                     crate::forge::ForgeKind::GitLab => "--remove-source-branch",
                     crate::forge::ForgeKind::None => "branch delete",
                 };
-                dry_run_merge_cmd(forge, false)
+                dry_run_merge_cmd_for_method(forge, method, false)
                     .map(|c| format!("{c}  (skip {flag}: branch protected — sibling worktree or stacked children)"))
                     .unwrap_or_else(|| format!("merge the {noun} (keep the branch: protected — sibling worktree or stacked children)"))
             }
@@ -1867,6 +2064,13 @@ pub(crate) struct ShipApprovalPolicy {
     /// is anchored and is not an author may use `--override-stale-approval`
     /// ([`stale_override_refusal`]).
     pub shipper: Vec<String>,
+    /// STORY-1655: solo-human self-approval is in force for this project at
+    /// ship time — the global key re-read now, and never for the AIDA
+    /// repository. Off by default.
+    pub solo_human: bool,
+    /// STORY-1655: authority keys of solo approvals whose receipt re-validated
+    /// and itself records a solo approval (`verified_solo_keys`).
+    pub verified_solo: std::collections::BTreeSet<String>,
 }
 
 /// BUG-1918: why the shipping session may NOT use `--override-stale-approval`
@@ -1942,10 +2146,15 @@ pub(crate) fn approval_authority_refusal(
     let Some(attestation) = newest.attestation.as_ref() else {
         return unattested("it was not recorded through `aida review record`");
     };
-    if policy
-        .author_sessions
-        .iter()
-        .any(|s| s.matches(&attestation.identity))
+    // STORY-1655: a verified solo-human self-approval is exempt from the
+    // author check ONLY; every other authority check below still applies.
+    // trace:STORY-1655 | ai:claude
+    let solo = solo_self_approval(newest, policy);
+    if !solo
+        && policy
+            .author_sessions
+            .iter()
+            .any(|s| s.matches(&attestation.identity))
     {
         return Some(ApprovalAuthorityRefusal::AuthorSession { recorded_by });
     }
@@ -1960,7 +2169,7 @@ pub(crate) fn approval_authority_refusal(
     {
         return unattested("it names no recorder identity anchored to a session or process");
     }
-    if policy.author_sessions.iter().any(|s| s.matches(identity)) {
+    if !solo && policy.author_sessions.iter().any(|s| s.matches(identity)) {
         return Some(ApprovalAuthorityRefusal::AuthorSession { recorded_by });
     }
     if !attestation.authorizes(newest.reviewed_sha.as_deref()) {
@@ -1984,6 +2193,45 @@ pub(crate) fn approval_authority_refusal(
         return unattested("it is dated in the future");
     }
     None
+}
+
+/// STORY-1655: is `approval` a solo-human self-approval the ship gate may
+/// honour? The mode must be in force now, the attestation must say solo and
+/// human-at-TTY, and its receipt must have re-validated as a solo receipt.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn solo_self_approval(
+    approval: &crate::review_verdict::RecordedVerdict,
+    policy: &ShipApprovalPolicy,
+) -> bool {
+    let Some(att) = approval.attestation.as_ref() else {
+        return false;
+    };
+    policy.solo_human
+        && att.solo_human
+        && att.human_at_tty
+        && att
+            .authority_key(approval.recorded_at.as_deref())
+            .is_some_and(|k| k.starts_with("receipt:") && policy.verified_solo.contains(&k))
+}
+
+/// STORY-1655: the line `aida pr ship` prints when the approval it merges on
+/// is a solo-human self-approval; `None` otherwise.
+// trace:STORY-1655 | ai:claude
+pub(crate) fn solo_approval_notice(
+    candidates: &[crate::review_verdict::RecordedVerdict],
+    policy: &ShipApprovalPolicy,
+) -> Option<String> {
+    let approvals = open_approvals(candidates);
+    let newest = newest_approval(&approvals)?;
+    solo_self_approval(newest, policy).then(|| {
+        format!(
+            "approval: solo-human self-approval by `{}` (review.solo_human_self_approval is on)",
+            newest
+                .recorded_by
+                .as_deref()
+                .unwrap_or("a human at a terminal")
+        )
+    })
 }
 
 /// BUG-1918: the refusal text for an [`ApprovalAuthorityRefusal`].
@@ -2211,23 +2459,37 @@ pub(crate) fn parse_open_approved_prs_json(json: &str) -> Vec<OpenApprovedPr> {
         .collect()
 }
 
-/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
-// trace:BUG-2164 | ai:antigravity
-pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
-    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+fn append_open_approved_prs(base: &str, approved: &[OpenApprovedPr]) -> String {
     if approved.is_empty() {
         base.to_string()
     } else {
         let mut msg = format!("{base}\n\nOpen approved PRs:");
+        // trace:TASK-1795 | ai:codex
         for pr in approved {
             if pr.title.is_empty() {
-                msg.push_str(&format!("\n  PR-{}", pr.number));
+                msg.push_str(&format!("\n  aida pr ship {}", pr.number));
             } else {
-                msg.push_str(&format!("\n  PR-{} — {}", pr.number, pr.title));
+                msg.push_str(&format!("\n  aida pr ship {} — {}", pr.number, pr.title));
             }
         }
         msg
     }
+}
+
+/// BUG-2164: Format the refusal message when `aida pr ship` is invoked on the default branch without a PR number.
+// trace:BUG-2164 trace:TASK-1795 | ai:antigravity
+pub(crate) fn format_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: on the default branch; pass a PR number (e.g. aida pr ship 8)";
+    append_open_approved_prs(base, approved)
+}
+
+/// TASK-1803: Format the refusal message when `aida pr ship` is invoked without a PR number
+/// and the default branch could not be determined.
+// trace:TASK-1803 | ai:antigravity
+pub(crate) fn format_unknown_default_branch_ship_refusal(approved: &[OpenApprovedPr]) -> String {
+    let base = "aida pr ship: the default branch could not be determined; run `git remote set-head origin --auto` or pass a PR number (e.g. aida pr ship 8)";
+    append_open_approved_prs(base, approved)
 }
 
 #[cfg(test)]
@@ -2446,15 +2708,20 @@ mod tests {
         ] {
             let mut args = vec!["aida", "pr", "ship", "1602"];
             args.extend(flags);
-            let cli = crate::cli::Cli::try_parse_from(args).unwrap();
-            match cli.command {
-                crate::cli::Command::Pr(crate::cli::PrCommand::Ship { wait, .. }) => {
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+                crate::pr_cmd::PrArgs {
+                    inner: crate::cli::PrCommand::Ship { wait, .. },
+                } => {
                     assert_eq!(wait, expected)
                 }
                 _ => panic!("expected pr ship"),
             }
         }
-        assert!(crate::cli::Cli::try_parse_from(["aida", "pr", "ship", "--wait", "bad"]).is_err());
+        assert!(
+            crate::command_registry::try_parse_from(["aida", "pr", "ship", "--wait", "bad"])
+                .is_err()
+        );
     }
 
     // BUG-1499: a label-only hold is refused even for a HUMAN at a terminal
@@ -3833,9 +4100,11 @@ mod tests {
         for (flags, expected) in [(vec![], false), (vec!["--no-complete"], true)] {
             let mut args = vec!["aida", "pr", "ship", "1957"];
             args.extend(flags);
-            let cli = crate::cli::Cli::try_parse_from(args).unwrap();
-            match cli.command {
-                crate::cli::Command::Pr(crate::cli::PrCommand::Ship { no_complete, .. }) => {
+            let cli = crate::command_registry::try_parse_from(args).unwrap();
+            match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+                crate::pr_cmd::PrArgs {
+                    inner: crate::cli::PrCommand::Ship { no_complete, .. },
+                } => {
                     assert_eq!(no_complete, expected)
                 }
                 _ => panic!("expected pr ship"),

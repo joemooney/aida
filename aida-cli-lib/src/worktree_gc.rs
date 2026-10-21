@@ -3,6 +3,11 @@
 
 use crate::*;
 
+// trace:STORY-1728 | ai:claude
+#[path = "worktree_gc_args.rs"]
+pub(crate) mod worktree_gc_args;
+pub(crate) use worktree_gc_args::*;
+
 /// Is this worktree one of the AIDA/Agent-tool managed isolation worktrees that
 /// accumulate? Matched on EITHER the conventional path segment
 /// (`.claude/worktrees/agent-<id>`) OR the conventional branch name
@@ -405,6 +410,18 @@ pub(crate) fn criterion_trace_suffix(suffix: &str) -> bool {
     {
         return false;
     }
+    // STORY-1700: an explicit word label (`Durability: ...` in the spec's
+    // acceptance) yields criterion id `<SPEC>.Durability`; accept that shape
+    // (capitalised, letters only) so such a criterion can be traced at all.
+    // trace:STORY-1700 | ai:claude
+    let mut chars = suffix.chars();
+    if chars.next().is_some_and(|c| c.is_ascii_uppercase())
+        && suffix.len() >= 2
+        && chars.clone().all(|c| c.is_ascii_alphabetic())
+        && chars.any(|c| c.is_ascii_lowercase())
+    {
+        return true;
+    }
     let upper = suffix.to_ascii_uppercase();
     let Some(rest) = upper.strip_prefix("AC") else {
         return upper
@@ -723,6 +740,20 @@ pub(crate) fn warn_if_cwd_removed() -> bool {
 /// Uses `git worktree list --porcelain`; the first record is always the
 /// main worktree. Falls back to `start` when git can't be invoked.
 pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
+    // BUG-2169: a contained seat's private clone is its own first `worktree
+    // list` record, and git must never run inside it from here (its config
+    // and hooks are seat-writable). Resolve it from files instead. A clone
+    // that does not verify is refused: this infallible resolver points it at
+    // a path where every read, write and `git -C` fails, never at the clone.
+    // trace:BUG-2169 | ai:claude
+    match crate::seat_clone::main_for(start) {
+        crate::seat_clone::MainFor::Verified(main) => return main,
+        crate::seat_clone::MainFor::Unverified(clone_root) => {
+            eprintln!("{:#}", crate::seat_clone::unverified_refusal(&clone_root));
+            return std::path::PathBuf::from(crate::seat_clone::UNVERIFIED_MAIN_SENTINEL);
+        }
+        crate::seat_clone::MainFor::NotAClone => {}
+    }
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(start)
@@ -732,7 +763,12 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
-                    return std::path::PathBuf::from(p);
+                    let main = std::path::PathBuf::from(p);
+                    // BUG-2169: its clone leases now mark seat clones for
+                    // every host git builder in this process.
+                    // trace:BUG-2169 | ai:claude
+                    aida_core::seat_clone_detect::note_host_main(&main);
+                    return main;
                 }
             }
         }
@@ -743,6 +779,11 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
 /// Convenience wrapper that walks up from cwd. Same fallback semantics.
 pub(crate) fn find_main_worktree_root() -> Result<std::path::PathBuf> {
     let start = find_project_root()?;
+    // trace:BUG-2169 | ai:claude
+    if let crate::seat_clone::MainFor::Unverified(clone_root) = crate::seat_clone::main_for(&start)
+    {
+        return Err(crate::seat_clone::unverified_refusal(&clone_root));
+    }
     Ok(main_worktree_root_from(&start))
 }
 
@@ -1996,6 +2037,8 @@ pub(crate) fn ensure_spec_worktree(
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
                 /* self_claim */ false,
+                /* review_coexistence */ None,
+                /* contained_seat */ false,
             )?;
             let lease = list_leases(&main_root)
                 .into_iter()
@@ -3546,3 +3589,47 @@ pub(crate) fn print_lease_detail(l: &SessionLease, elapsed_secs: u64) {
         humanize_duration_secs(elapsed_secs)
     );
 }
+
+// trace:STORY-716 | ai:claude
+/// Manage epic-scoped git worktrees — the workspace layer that
+/// mirrors `git worktree`. `aida worktree add <epic>` creates a worktree
+/// off origin/main (default `~/ai/aida-<epic-slug>` on `<epic>-work`) and
+/// auto-scopes it to that epic via `aida focus`; `aida worktree enter
+/// <epic>` creates-if-missing then cd's you in (run it BARE — the `aida()`
+/// shell wrapper auto-evals the emitted `cd`, NOT wrapped in `eval`);
+/// `aida worktree list` shows AIDA-managed worktrees + each one's focus.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "worktree")]
+pub(crate) struct WorktreeArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::WorktreeCommand,
+}
+
+// STORY-716: `aida worktree` (EPIC-55 workspace layer) operates on git +
+// the filesystem; `enter` emits `cd` shell on stdout for the `aida()`
+// wrapper to auto-eval. Like `role enter` it needs no shared storage
+// handle and its stdout must stay clean of store-init noise, so it
+// dispatches early. trace:STORY-716 | ai:claude
+fn run_worktree(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <WorktreeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let wt_cmd = &args.inner;
+    return handle_worktree_command(wt_cmd);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static WORKTREE: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "worktree",
+        help_after: "spec",
+        command: <WorktreeArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_worktree),
+    };

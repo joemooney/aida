@@ -13,6 +13,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
+// trace:STORY-1728 | ai:claude
+#[path = "notify_args.rs"]
+pub(crate) mod notify_args;
+pub(crate) use notify_args::*;
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
@@ -829,7 +834,7 @@ fn is_echild(e: &std::io::Error) -> bool {
 
 /// One poll of the bounded command.
 // trace:BUG-1623 | ai:claude
-enum ChildPoll {
+pub(crate) enum ChildPoll {
     Running,
     /// Exited but not reaped: its pid is still reserved as the group id.
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -844,7 +849,7 @@ enum ChildPoll {
 /// and background leftovers of a finished command are ended too.
 // trace:TASK-1492 trace:BUG-1623 | ai:claude
 #[cfg(target_os = "linux")]
-fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
+pub(crate) fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
     // SAFETY: waitid only writes the zeroed siginfo we own.
     let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
     let rc = unsafe {
@@ -872,7 +877,7 @@ fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
 /// leftovers of a command that exited on its own are not ended.
 // trace:BUG-1623 | ai:claude
 #[cfg(not(target_os = "linux"))]
-fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
+pub(crate) fn poll_exit(child: &mut std::process::Child) -> std::io::Result<ChildPoll> {
     Ok(match child.try_wait()? {
         Some(status) => ChildPoll::Reaped(status),
         None => ChildPoll::Running,
@@ -980,7 +985,7 @@ mod tests {
         }
 
         fn git(&self, args: &[&str]) {
-            let ok = Command::new("git")
+            let ok = crate::test_git::git_command()
                 .arg("-C")
                 .arg(self.path())
                 .args(args)
@@ -998,7 +1003,7 @@ mod tests {
         }
 
         fn pin_main(&self) {
-            let output = Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(self.path())
                 .args(["rev-parse", "HEAD"])
@@ -1521,3 +1526,71 @@ mod tests {
             .is_none_or(|r| r.last_fire.is_none()));
     }
 }
+
+/// Operator alerts for stalled drains and escalations.
+// trace:STORY-1029 | ai:codex
+#[derive(clap::Parser, Debug)]
+#[clap(name = "notify")]
+pub(crate) struct NotifyArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::NotifyCommand,
+}
+
+fn run_notify(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <NotifyArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => {
+            // `aida notify` has no need for the requirement store: it consumes the
+            // local event stream plus `.aida/config.toml`, so it is safe for cron and
+            // for hooks that run while the cache/store may be locked.
+            // trace:STORY-1029 | ai:codex
+            if let NotifyArgs { inner: cmd } = &args {
+                let project_root = find_project_root()
+                    .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+                return crate::command_registry::returned(notify::handle_notify_command(
+                    &project_root,
+                    cmd,
+                ));
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            let _ = (store_path, backend, &args);
+            crate::git_backend_cmd::exit_unsupported_on_git_backend()
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            unreachable!("`aida notify` has no centralized-store form")
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static NOTIFY: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "notify",
+        help_after: "contract",
+        command: <NotifyArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_notify),
+    };

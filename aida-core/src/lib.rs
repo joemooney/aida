@@ -148,6 +148,8 @@ pub mod review_config;
 pub mod rollup;
 #[cfg(feature = "native")]
 pub mod scaffolding;
+// trace:BUG-2169 | ai:claude — file-only detection of a contained seat's private clone.
+pub mod seat_clone_detect;
 #[cfg(feature = "native")]
 pub mod storage;
 // trace:TASK-1141 | ai:claude
@@ -185,6 +187,9 @@ pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(()
 // trace:TASK-1532 | ai:agy
 #[cfg(test)]
 pub(crate) mod test_env;
+// trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
+#[cfg(test)]
+pub(crate) mod test_git;
 
 // Re-export commonly used types
 pub use ai::{

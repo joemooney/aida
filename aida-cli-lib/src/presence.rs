@@ -975,6 +975,14 @@ fn read_turn_clock_in(dir: &Path, session_id: &str) -> Option<TurnClock> {
     toml::from_str(&std::fs::read_to_string(&path).ok()?).ok()
 }
 
+/// STORY-1700: when the turn clock keyed `key` last saw a turn. The drive
+/// tick reads the `grant-<id>` key the per-turn notice stamps for a seat
+/// grant, to judge whether an advisor seat is live.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn turn_clock_last_seen_in(dir: &Path, key: &str) -> Option<DateTime<Utc>> {
+    read_turn_clock_in(dir, key)?.last_seen_utc()
+}
+
 fn write_turn_clock_in(dir: &Path, session_id: &str, clock: &TurnClock) -> Option<()> {
     std::fs::create_dir_all(dir).ok()?;
     let path = turn_clock_path_in(dir, session_id);

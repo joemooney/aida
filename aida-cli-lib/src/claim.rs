@@ -150,6 +150,7 @@ pub(crate) fn handle_claim(spec: &str, worktree: Option<&str>) -> Result<()> {
     let refreshed = existing.is_some();
 
     let lease = SessionLease {
+        tree_kind: Default::default(),
         id: id.clone(),
         scope: scope.clone(),
         slug: slugify(&scope),
@@ -266,3 +267,97 @@ pub(crate) fn handle_unclaim(spec: &str) -> Result<()> {
     );
     Ok(())
 }
+
+/// Record a spec-scoped CLAIM so advisor-fanned work is visible to the
+/// duplicate-dispatch gates.
+///
+/// AIDA-launched work (`aida queue work`, `aida agent new --spec`) writes a
+/// spec-scoped session lease, so a second pickup of the same spec is
+/// refused. But when an advisor fans an implementer via the Claude Agent
+/// tool (a worktree-isolated subagent), that work takes only a generic
+/// `harness-worktree` lease — NOT spec-scoped — so the gate can't see it.
+/// `aida claim <spec>` closes that gap: it writes a lightweight advisory
+/// lease whose scope IS the spec id, keyed to the calling session's pid, so
+/// the same gate now refuses a duplicate `aida queue work <spec>` and warns
+/// on `aida edit <spec>`.
+///
+/// Liveness-aware: the claim only holds while the claiming process is alive;
+/// a dead claimer's claim is ignored (no crash-deadlock). Idempotent —
+/// re-claiming your own spec is a no-op refresh. Clear it with
+/// `aida unclaim <spec>`. Surfaces in `aida status <spec>` and `aida ps`.
+// trace:TASK-957 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "claim")]
+pub(crate) struct ClaimArgs {
+    /// SPEC-ID, agreed-id, or UUID to claim.
+    pub spec: String,
+
+    /// Optional worktree path to record on the claim (where the fanned
+    /// implementer is working). Informational; the claim's liveness is the
+    /// claiming process, not this path.
+    #[clap(long, value_name = "PATH")]
+    pub worktree: Option<String>,
+}
+
+// TASK-957: `aida claim` / `aida unclaim` self-load the store read-only to
+// resolve the spec id forms, then write/remove a lightweight advisory lease
+// under `.aida/sessions/`. Like `aida ps` / `aida status <spec>` they touch
+// only the local lease dir + a cache-backed lookup, so they need no shared
+// storage handle — dispatch early. trace:TASK-957 | ai:claude
+fn run_claim(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <ClaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ClaimArgs { spec, worktree } = &args;
+    return handle_claim(spec, worktree.as_deref());
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CLAIM: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "claim",
+        help_after: "undefer",
+        command: <ClaimArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_claim),
+    };
+
+/// Inverse of `aida claim` — removes the caller's spec-scoped claim so a
+/// fresh `aida queue work <spec>` / `aida edit <spec>` no longer sees it.
+// trace:TASK-957 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "unclaim")]
+pub(crate) struct UnclaimArgs {
+    /// SPEC-ID, agreed-id, or UUID to unclaim.
+    pub spec: String,
+}
+
+fn run_unclaim(
+    matches: &clap::ArgMatches,
+    _ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<()> {
+    let args = <UnclaimArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let UnclaimArgs { spec } = &args;
+    return handle_unclaim(spec);
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static UNCLAIM: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "unclaim",
+        help_after: "claim",
+        command: <UnclaimArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Early(run_unclaim),
+    };

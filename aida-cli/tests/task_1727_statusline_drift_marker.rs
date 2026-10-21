@@ -5,6 +5,9 @@
 //! Pins the wiring in the statusline handler, not just the segment helper.
 // trace:TASK-1727 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -32,7 +35,7 @@ fn without_inherited_git_env(cmd: &mut Command) -> &mut Command {
 }
 
 fn git(root: &Path, home: &Path, args: &[&str]) {
-    let out = without_inherited_git_env(&mut Command::new("git"))
+    let out = without_inherited_git_env(&mut test_git::git_command())
         .arg("-C")
         .arg(root)
         .env("HOME", home)

@@ -16,6 +16,9 @@
 //!
 //! trace:TASK-1717 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 mod support;
 
 use std::path::{Path, PathBuf};
@@ -50,7 +53,7 @@ fn git_env(cmd: &mut Command) -> &mut Command {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = git_env(Command::new("git").current_dir(dir).args(args))
+    let out = git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git");
     assert!(
@@ -63,7 +66,7 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn git_try(dir: &Path, args: &[&str]) -> Output {
-    git_env(Command::new("git").current_dir(dir).args(args))
+    git_env(test_git::git_command().current_dir(dir).args(args))
         .output()
         .expect("run git")
 }
@@ -401,6 +404,12 @@ fn has_lock_fd(child: &Child, store: &Path) -> bool {
 /// Wait until `child` is blocked on the store lock, then assert it stays
 /// blocked for [`PARKED`] (and has not exited).
 fn assert_parked_on_lock(child: &mut Child, store: &Path, what: &str) {
+    assert_all_parked_on_lock(&mut [(child, what)], store);
+}
+
+/// Wait until `child` has the store lock file open (it is inside
+/// `store_lock::acquire`), failing if it exits first.
+fn wait_on_lock(child: &mut Child, store: &Path, what: &str) {
     let start = Instant::now();
     while !has_lock_fd(child, store) {
         assert!(
@@ -413,11 +422,23 @@ fn assert_parked_on_lock(child: &mut Child, store: &Path, what: &str) {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// [`assert_parked_on_lock`] for several competitors at once: each must reach
+/// the lock, then all must stay blocked through ONE shared [`PARKED`] window
+/// (each was parked at least that long) instead of one window apiece.
+// trace:TASK-1959 | ai:claude
+fn assert_all_parked_on_lock(children: &mut [(&mut Child, &str)], store: &Path) {
+    for (child, what) in children.iter_mut() {
+        wait_on_lock(child, store, what);
+    }
     std::thread::sleep(PARKED);
-    assert!(
-        child.try_wait().unwrap().is_none(),
-        "{what} finished while the store lock was held by another writer"
-    );
+    for (child, what) in children.iter_mut() {
+        assert!(
+            child.try_wait().unwrap().is_none(),
+            "{what} finished while the store lock was held by another writer"
+        );
+    }
 }
 
 /// An external lock-respecting writer: `flock(1)` holds the store lock until
@@ -847,16 +868,26 @@ fn sync_vs_sync_queue_mailbox_and_merge_gate_share_one_lock() {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    assert_parked_on_lock(&mut second, &fx.store, "second db sync (symlink path)");
     let mut queue = fx.spawn(&["queue", "add", "TASK-1"], false);
-    assert_parked_on_lock(&mut queue, &fx.store, "aida queue add");
     let mut gate = fx.spawn(&["db", "merge-gate"], false);
-    assert_parked_on_lock(&mut gate, &fx.store, "aida db merge-gate");
+    // As before: the three are waiting on the lock when the message lands.
+    wait_on_lock(&mut second, &fx.store, "second db sync (symlink path)");
+    wait_on_lock(&mut queue, &fx.store, "aida queue add");
+    wait_on_lock(&mut gate, &fx.store, "aida db merge-gate");
     let local = fx.repo.join(".aida/mailbox");
     std::fs::create_dir_all(&local).unwrap();
     std::fs::write(local.join("m-queued.json"), message_json("m-queued", false)).unwrap();
     let mut digest = fx.spawn(&["mailbox", "sync"], false);
-    assert_parked_on_lock(&mut digest, &fx.store, "aida mailbox sync");
+    // trace:TASK-1959 | ai:claude
+    assert_all_parked_on_lock(
+        &mut [
+            (&mut second, "second db sync (symlink path)"),
+            (&mut queue, "aida queue add"),
+            (&mut gate, "aida db merge-gate"),
+            (&mut digest, "aida mailbox sync"),
+        ],
+        &fx.store,
+    );
     assert!(
         !fx.store.join("mailbox/m-queued.json").exists(),
         "no canonical mailbox write before the lock"
@@ -1700,8 +1731,11 @@ fn sync_refuses_to_publish_after_pulling_an_unparsable_object() {
     fx.write_store_file("notes/pending.txt", "pending\n");
     let out = fx.run(&["db", "sync", "--pull", "--push"]);
     assert!(!out.status.success(), "{}", text(&out));
+    // The pull's evidence preflight now refuses the changed, unparsable
+    // object before the rebase runs. trace:BUG-2162 | ai:claude
     assert!(
-        text(&out).contains("did not read completely"),
+        text(&out).contains("did not read completely")
+            || text(&out).contains("cannot parse objects/TASK/000/TASK-1.yaml"),
         "{}",
         text(&out)
     );
@@ -1872,6 +1906,80 @@ fn remote_reconcile_checks_its_rollback() {
     assert!(text(&out).contains("rollback to"), "{}", text(&out));
     assert!(text(&out).contains("FAILED"), "{}", text(&out));
     assert!(!text(&out).contains("back at"), "{}", text(&out));
+}
+
+/// BUG-2162: a peer publishes a hypothesis whose lock no longer matches its
+/// description. Both reconcile paths into it, the guarded fast-forward
+/// (local behind) and the union merge (local diverged), stop at the evidence
+/// check WITHOUT the preimage rollback: the gate refused before its own Git
+/// step, so the store is exactly where it was and the report says nothing
+/// was pushed or reset.
+// trace:BUG-2162 | ai:claude
+#[test]
+fn remote_reconcile_evidence_refusal_skips_the_rollback() {
+    for diverged in [false, true] {
+        let fx = fixture();
+        let peer = fx.base.join("peer-evidence");
+        git(
+            &fx.base,
+            &[
+                "clone",
+                "-q",
+                "-b",
+                "aida-store",
+                fx.origin.to_str().unwrap(),
+                peer.to_str().unwrap(),
+            ],
+        );
+        let mut h = aida_core::models::Requirement::new("prediction".into(), "rewritten".into());
+        h.spec_id = Some("SPIKE-901".into());
+        h.req_type = aida_core::models::RequirementType::Spike;
+        h.tags.insert("hypothesis".into());
+        h.hypothesis_lock = Some(aida_core::models::HypothesisLock {
+            locked_at: chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap(),
+            description_sha256: "0".repeat(64),
+        });
+        aida_core::object_store::write_object(&peer.join("objects"), &h).unwrap();
+        git(&peer, &["add", "-A"]);
+        git(
+            &peer,
+            &["commit", "-qm", "chore: peer rewrites a locked prediction"],
+        );
+        git(&peer, &["push", "-q", "origin", "aida-store"]);
+        let pre = if diverged {
+            fx.local_commit("local.txt")
+        } else {
+            fx.head()
+        };
+        let published = fx.origin_head();
+
+        let out = fx.run(&["remote", "reconcile", "--execute", "--yes"]);
+        let report = text(&out);
+        assert!(!out.status.success(), "diverged={diverged}: {report}");
+        assert!(
+            report.contains("SPIKE-901"),
+            "diverged={diverged}: {report}"
+        );
+        assert!(
+            report.contains("nothing was pushed or reset"),
+            "diverged={diverged}: {report}"
+        );
+        assert!(!report.contains("back at"), "diverged={diverged}: {report}");
+        assert!(
+            !report.contains("rollback"),
+            "diverged={diverged}: {report}"
+        );
+        assert_eq!(fx.head(), pre, "diverged={diverged}");
+        assert_eq!(fx.origin_head(), published, "diverged={diverged}");
+        assert_eq!(
+            git(
+                &fx.store,
+                &["status", "--porcelain", "--untracked-files=no"]
+            ),
+            "",
+            "diverged={diverged}"
+        );
+    }
 }
 
 /// Discovery sees every hub in sync; a local commit lands before the lock.

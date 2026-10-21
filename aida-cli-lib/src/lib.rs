@@ -43,6 +43,7 @@ mod agent_registry;
 mod agent_registry_root;
 mod aida_bin;
 mod alias;
+mod approvals_cmd;
 mod archive_cmd;
 mod assign_cmd;
 mod auto_complete;
@@ -72,6 +73,7 @@ mod claude_agents;
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod command_registry;
 mod comment_cmd;
 mod commit;
 mod compete;
@@ -99,6 +101,7 @@ mod deep_link;
 mod defer_cmd;
 mod deps_cmd;
 // Derived per-spec driver views + `aida driver`. trace:STORY-1653 | ai:claude
+mod derisk_cmd;
 mod drain_next_n;
 mod driver_cmd;
 mod driver_view;
@@ -166,6 +169,7 @@ mod freshness_gate;
 mod git_arg_guard;
 mod git_backend_cmd;
 // trace:TASK-1522 | ai:antigravity
+mod fleet_lanes;
 pub(crate) mod intent_capture;
 mod machine_readiness;
 mod mcp_cmd;
@@ -180,7 +184,9 @@ mod queue_cmd;
 mod queue_misc;
 mod rel_cards;
 mod relay_stall;
+mod remote_cmd;
 mod requirements_cli;
+mod review_cmd;
 mod review_gates;
 mod role;
 mod runaway_seats;
@@ -188,6 +194,7 @@ mod scaffold_init;
 mod session_end;
 mod session_misc;
 mod session_start;
+mod skill_cmd;
 mod solo_cmd;
 mod stakeholder_role;
 mod status_awaiting;
@@ -208,10 +215,15 @@ mod terminal_cmd;
 // trace:TASK-1427 | ai:codex
 mod token_ledger;
 mod trace;
+// trace:TASK-1783 | ai:claude — whole-tree `aida trace coverage`.
+// trace:TASK-1783 | ai:claude — region rule shared by lint constants and tree coverage.
+mod trace_regions;
+mod trace_tree_coverage;
 mod tui_entry;
 mod upgrade_release;
 mod usage_mcp_helpers;
 mod worktree_gc;
+mod write_provenance;
 mod zen_cmd;
 use advisor_cmd_root::*;
 use agent_config::*;
@@ -334,6 +346,8 @@ mod global_queue;
 mod last_drain;
 mod lifecycle_cmd;
 mod lint_cmd;
+// trace:TASK-1785 | ai:claude — `aida lint constants`.
+mod lint_constants;
 mod load_cmd;
 mod lock_cmd;
 // trace:TASK-1140 | ai:claude — STORY-711 slice 2 automatic advisor-lock gate.
@@ -382,6 +396,8 @@ mod human_cmd;
 mod metrics_cycle_time;
 // trace:STORY-1480 | ai:claude — per-spec timing records published to the store.
 mod timing_record;
+// trace:BUG-2180 | ai:claude — commit a contained child session's store writes.
+mod child_store_commit;
 // trace:TASK-1150 | ai:claude — distinct-user identity guard (queue/lease mixups).
 mod identity_guard;
 mod init_bootstrap;
@@ -407,6 +423,9 @@ mod memories_cmd;
 mod merge_hold;
 // trace:STORY-1698 | ai:claude — the fire-fighting mandate.
 mod mandate;
+mod mandate_drive;
+mod mandate_gates;
+mod mandate_ship;
 mod mandate_traces;
 mod merge_lock;
 mod metrics;
@@ -484,9 +503,13 @@ mod review_marker;
 mod review_classes;
 // trace:BUG-775 | ai:claude — review verdicts as first-class gate-readable state.
 mod review_verdict;
+// trace:TASK-1960 | ai:claude — attested-approval carry-over across clean base merges.
+mod review_carryover;
 mod role_cmd;
+// trace:STORY-1655 | ai:claude — audited solo-human self-approval mode (global key only).
 mod rules_cmd;
 mod rules_sync;
+mod solo_review;
 // trace:TASK-1307 | ai:claude — the pre-BUG-1452 stranded-refusal sweep.
 mod sandbox_cmd;
 mod scaffold_cmd;
@@ -501,6 +524,8 @@ mod schedule_predicate;
 mod schema;
 // trace:STORY-1473 | ai:codex
 mod seat_authority;
+// trace:BUG-2169 | ai:claude — a contained seat's private clone (the only host accessor).
+mod seat_clone;
 mod seat_occupancy;
 // trace:BUG-2014 | ai:codex
 mod grant_expiry_notice;
@@ -543,6 +568,9 @@ mod team_cmd;
 mod test_env;
 #[cfg(test)]
 mod test_exec;
+// trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
+#[cfg(test)]
+mod test_git;
 // trace:BUG-1642 | ai:claude — lib tests run under a temp HOME, never the real ~/.aida.
 #[cfg(test)]
 mod test_home;

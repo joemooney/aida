@@ -1922,6 +1922,9 @@ impl Forge for GitHubForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2498,6 +2501,9 @@ impl Forge for GitLabForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: a clean-merge carry-over is proven against the PR's
+            // base. trace:TASK-1968 | ai:claude
+            Some(c.base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -2866,6 +2872,9 @@ impl Forge for PureGitForge {
             &self.project_root,
             c.id,
             &corpus_gate_spec_hints(c),
+            // TASK-1968: the branch merges into `base`; there is no forge to
+            // read it from. trace:TASK-1968 | ai:claude
+            Some(base.as_str()),
             || {
                 opts.match_head
                     .clone()
@@ -3932,49 +3941,101 @@ fn rev_parse(project_root: &Path, r#ref: &str) -> Option<String> {
     }
 }
 
-pub(crate) fn default_branch_of(project_root: &Path) -> String {
-    // BUG-417: ask the forge for origin's live default branch first. `gh repo
-    // view --json defaultBranchRef` is authoritative even on a fresh clone where
-    // `refs/remotes/origin/HEAD` was never set (the quizdom `master`-default
-    // case that produced a GraphQL base-ref error when AIDA assumed `main`).
-    // Fall back to the local origin/HEAD probe, then `main`. trace:BUG-417 | ai:claude
-    if let Ok(out) = Command::new("gh")
-        .current_dir(project_root)
-        .args([
-            "repo",
-            "view",
-            "--json",
-            "defaultBranchRef",
-            "-q",
-            ".defaultBranchRef.name",
-        ])
-        .output()
-    {
-        if out.status.success() {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            if let Some(name) = crate::pr_ship::parse_gh_default_branch(&stdout) {
-                return name;
-            }
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+fn probe_github_default_branch(project_root: &Path) -> Option<String> {
+    if resolve_open_change_forge_kind(project_root) != ForgeKind::GitHub {
+        return None;
+    }
+    let mut cmd = Command::new(crate::kernel::resolve_gh_binary_for_probe()?);
+    cmd.current_dir(project_root).args([
+        "repo",
+        "view",
+        "--json",
+        "defaultBranchRef",
+        "-q",
+        ".defaultBranchRef.name",
+    ]);
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let name = std::str::from_utf8(&out.stdout).ok()?.trim();
+    // Validate the entire response: a first-line parser could silently accept
+    // malformed or multi-line evidence and let the guard miss the real default.
+    crate::git_arg_guard::is_shell_safe_branch_name(name).then(|| name.to_owned())
+}
+
+// trace:TASK-1803 | ai:antigravity
+pub(crate) fn parse_ls_remote_symref_head(stdout: &str) -> Option<String> {
+    let mut found: Option<String> = None;
+    for line in stdout.lines() {
+        let Some(rest) = line.strip_prefix("ref: ") else {
+            continue;
+        };
+        let (target, symref) = rest.split_once('\t')?;
+        if symref.trim() != "HEAD" {
+            continue;
+        }
+        let branch = target.strip_prefix("refs/heads/")?.trim();
+        if !crate::git_arg_guard::is_shell_safe_branch_name(branch) {
+            return None;
+        }
+        if found.replace(branch.to_owned()).is_some() {
+            return None;
         }
     }
+    found
+}
 
-    // Prefer origin/HEAD; fall back to current branch ∈ {main, master}; else main.
-    if let Ok(out) = Command::new("git")
+/// Bounded, forge-neutral `git ls-remote --symref origin HEAD` probe.
+// trace:TASK-1803 | ai:antigravity
+fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
+    let remote_url = Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .args(["remote", "get-url", "origin"])
         .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    if String::from_utf8_lossy(&remote_url.stdout)
+        .trim()
+        .is_empty()
     {
-        if out.status.success() {
-            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if let Some(b) = s.strip_prefix("origin/") {
-                if !b.is_empty() {
-                    return b.to_string();
-                }
-            }
-        }
+        return None;
     }
-    "main".to_string()
+
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(project_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        // An ssh origin must never prompt for a passphrase or host key.
+        // trace:TASK-1803 | ai:claude
+        .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        .args(["ls-remote", "--symref", "origin", "HEAD"]);
+    aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
+    let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = std::str::from_utf8(&out.stdout).ok()?;
+    parse_ls_remote_symref_head(stdout)
+}
+
+/// Bounded, read-only forge evidence. Unknown is distinct from a guessed PR base.
+// trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+pub(crate) fn probe_default_branch(project_root: &Path) -> Option<String> {
+    probe_github_default_branch(project_root).or_else(|| probe_origin_head_symref(project_root))
+}
+
+pub(crate) fn default_branch_of(project_root: &Path) -> String {
+    // PR base callers retain the conventional-ref/main fallback; authority
+    // guards must use probe_default_branch, where unknown never becomes main.
+    // trace:BUG-417 trace:TASK-1795 | ai:codex
+    probe_default_branch(project_root).unwrap_or_else(|| {
+        crate::detect_default_branch_ref(project_root)
+            .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+            .unwrap_or_else(|| "main".to_owned())
+    })
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from
@@ -4303,7 +4364,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
         let git = |dir: &std::path::Path, args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(dir)
                 .args(args)
                 .output()
@@ -4315,7 +4376,7 @@ mod tests {
                 String::from_utf8_lossy(&out.stderr)
             );
         };
-        let clone = std::process::Command::new("git")
+        let clone = crate::test_git::git_command()
             .args(["clone", &http, repo.to_str().unwrap()])
             .output()
             .unwrap();
@@ -4897,7 +4958,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -4911,7 +4972,7 @@ mod tests {
 
         assert_eq!(resolve_forge_kind(root), ForgeKind::None);
 
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -4932,7 +4993,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -4943,7 +5004,7 @@ mod tests {
             "[forge]\nprovider = \"pure-git\"\n",
         )
         .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -4964,12 +5025,12 @@ mod tests {
         // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
             .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -4997,7 +5058,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5072,7 +5133,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5121,7 +5182,7 @@ mod tests {
             "base HEAD must advance"
         );
         // working tree clean — committed, not left staged.
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(root)
             .args(["status", "--porcelain"])
             .output()
@@ -5208,7 +5269,7 @@ mod tests {
 
     fn pure_git_repo_with_feature(root: &Path) -> String {
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()

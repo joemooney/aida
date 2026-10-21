@@ -117,6 +117,7 @@ fn agent_new_same_worktree_adoption_preserves_ownership() {
         "codex",
         Some("rework-test".into()),
         Some(&lease.worktree_path),
+        /* contained_seat */ false,
     )
     .unwrap();
     assert_eq!(plan.lease_id.as_deref(), Some(lease.id.as_str()));
@@ -239,7 +240,7 @@ fn session_leases_default_includes_dispatch_blocking_stale_lease() {
 #[test]
 fn agent_new_bg_help_documents_noninteractive_form() {
     use clap::CommandFactory;
-    let mut command = Cli::command();
+    let mut command = crate::command_registry::built_command();
     let help = command
         .find_subcommand_mut("agent")
         .unwrap()

@@ -9,7 +9,7 @@
 use super::*;
 
 fn git(root: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(["-c", "user.email=t@example.com", "-c", "user.name=Test"])
@@ -91,6 +91,7 @@ fn bug_1624_stacks_json_cascade_refuses_a_malformed_record() {
     std::fs::create_dir_all(&dir).unwrap();
     for (id, branch) in [("stk001", "feat"), ("stk002", REBASE_EXEC)] {
         let lease = SessionLease {
+            tree_kind: Default::default(),
             id: id.into(),
             scope: "BUG-1".into(),
             slug: "bug-1".into(),

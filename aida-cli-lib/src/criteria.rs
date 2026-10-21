@@ -1151,3 +1151,107 @@ mod tests {
         assert!(!source.contains("test_python_untraced"));
     }
 }
+
+/// Report acceptance criteria traced by Rust, pytest, JS/TS, and Go tests,
+/// or — with `coverage` (alias `gap`) in place of a spec — the project's
+/// capture-coverage figures: trailer share, criteria share, and the
+/// criterion-to-test share, each as count/total.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "criteria")]
+pub(crate) struct CriteriaArgs {
+    /// Requirement ID (UUID or SPEC-ID) whose acceptance criteria to
+    /// inspect, or `coverage` / `gap` for the project-wide report.
+    pub spec: String,
+
+    /// Emit JSON instead of a human report.
+    #[clap(long)]
+    pub json: bool,
+
+    /// Lookback window in days for the project-wide report (the all-time
+    /// figures are always shown alongside). Ignored for a single spec.
+    // trace:STORY-1487 | ai:claude
+    #[clap(long, default_value_t = crate::criteria_coverage::DEFAULT_WINDOW_DAYS, value_name = "DAYS")]
+    pub window_days: u64,
+}
+
+fn run_criteria(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <CriteriaArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                CriteriaArgs {
+                    spec,
+                    json,
+                    window_days,
+                } => {
+                    let store = backend.load()?;
+                    let project_root = find_project_root()?;
+                    // trace:STORY-1487 | ai:claude
+                    crate::criteria_coverage::dispatch_criteria(
+                        &project_root,
+                        &store,
+                        spec,
+                        *window_days,
+                        *json,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                CriteriaArgs {
+                    spec,
+                    json,
+                    window_days,
+                } => {
+                    let store = storage.load()?;
+                    let project_root = find_project_root()
+                        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| ".".into()));
+                    // `coverage` / `gap` is the project-wide report, never a spec id.
+                    // trace:STORY-1487 | ai:claude
+                    criteria_coverage::dispatch_criteria(
+                        &project_root,
+                        &store,
+                        spec,
+                        *window_days,
+                        *json,
+                    )?;
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static CRITERIA: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "criteria",
+        help_after: "graph",
+        command: <CriteriaArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_criteria),
+    };

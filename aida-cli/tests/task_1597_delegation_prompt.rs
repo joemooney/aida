@@ -1,3 +1,6 @@
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::{Read, Write};
 use std::path::Path;
@@ -41,22 +44,22 @@ fn tty_command(bin: &str, home: &Path, repo: &Path) -> CommandBuilder {
 fn setup_repo(home: &Path, repo: &Path) {
     std::fs::create_dir_all(home).unwrap();
     std::fs::create_dir_all(repo).unwrap();
-    std::process::Command::new("git")
+    test_git::git_command()
         .args(["init", "-q", "-b", "main"])
         .current_dir(repo)
         .status()
         .unwrap();
-    std::process::Command::new("git")
+    test_git::git_command()
         .args(["config", "user.email", "you@example.com"])
         .current_dir(repo)
         .status()
         .unwrap();
-    std::process::Command::new("git")
+    test_git::git_command()
         .args(["config", "user.name", "Your Name"])
         .current_dir(repo)
         .status()
         .unwrap();
-    std::process::Command::new("git")
+    test_git::git_command()
         .args(["commit", "-q", "--allow-empty", "-m", "init"])
         .current_dir(repo)
         .status()

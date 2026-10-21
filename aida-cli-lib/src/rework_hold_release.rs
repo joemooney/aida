@@ -100,6 +100,42 @@ impl Outcome {
     }
 }
 
+/// The round history the arming refusal is read from beyond the verdict's
+/// own inline `rounds`: the recordings the writer keeps in the verdict's
+/// per-commit archive ([`rv::archived_recordings`]), and where that archive
+/// is, for the fail-closed refusal.
+// trace:BUG-2186 | ai:claude
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct RetainedHistory {
+    pub archived: Vec<Value>,
+    pub location: String,
+}
+
+impl RetainedHistory {
+    /// Read the archive beside the verdict file at `path`.
+    // trace:BUG-2186 | ai:claude
+    pub(crate) fn beside(path: &Path) -> Result<Self> {
+        let location = rv::verdict_archive_dir(path).map_or_else(
+            || format!("no per-commit archive for {}", path.display()),
+            |dir| dir.display().to_string(),
+        );
+        let archived = rv::archived_recordings(path)
+            .map_err(|why| anyhow::anyhow!("retained verdict history is unreadable: {why}"))?;
+        Ok(Self { archived, location })
+    }
+}
+
+/// Where this build of the writer keeps round history, named in refusals.
+// trace:BUG-2186 | ai:claude
+fn history_note(history: &RetainedHistory) -> String {
+    format!(
+        "looked in the verdict's `rounds` and its per-commit archive {} (where aida {} ({}) records each round)",
+        history.location,
+        env!("CARGO_PKG_VERSION"),
+        rv::short_sha(env!("AIDA_BUILD_GIT_SHA"))
+    )
+}
+
 fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffset>> {
     let text = value
         .and_then(Value::as_str)
@@ -114,6 +150,7 @@ fn timestamp(value: Option<&Value>, context: &str) -> Result<DateTime<FixedOffse
 fn eligible(
     hold: &mh::MergeHoldRecord,
     body: &Value,
+    history: &RetainedHistory,
     head: &str,
     specs: &[Option<&aida_core::Requirement>],
     authority: &sa::GrantCheck,
@@ -191,10 +228,23 @@ fn eligible(
         "recorded reviewer identity changed after review record"
     );
     let approved_at = timestamp(body.get("recorded_at"), "approval")?;
-    let rounds = body
-        .get("rounds")
-        .and_then(Value::as_array)
-        .context("missing arming refusal rounds")?;
+    // BUG-2186: the arming refusal is read from wherever the writer keeps
+    // it — inline `rounds` when the current file survived between rounds,
+    // else the per-commit archive the reviewer launchers never clear.
+    // trace:BUG-2186 | ai:claude
+    let inline = match body.get("rounds") {
+        None => &[][..],
+        Some(rounds) => rounds
+            .as_array()
+            .context("retained `rounds` is not an array")?
+            .as_slice(),
+    };
+    let rounds: Vec<&Value> = inline.iter().chain(&history.archived).collect();
+    ensure!(
+        !rounds.is_empty(),
+        "missing arming refusal rounds: {}",
+        history_note(history)
+    );
     let mut armed = false;
     for round in rounds {
         let kind = round
@@ -217,7 +267,8 @@ fn eligible(
     }
     ensure!(
         armed,
-        "no earlier request-changes/rejected arming round is recorded"
+        "no earlier request-changes/rejected arming round is recorded: {}",
+        history_note(history)
     );
     let key = hold
         .verdict_ref
@@ -328,6 +379,9 @@ struct AutoReleaseIo<'a> {
     read_hold: &'a dyn Fn() -> Option<mh::MergeHoldRecord>,
     covered_specs: &'a dyn Fn() -> Result<(Vec<String>, aida_core::RequirementsStore)>,
     read_body: &'a dyn Fn(&str) -> Result<Value>,
+    /// The archived round history beside the arming verdict.
+    // trace:BUG-2186 | ai:claude
+    read_history: &'a dyn Fn(&str) -> Result<RetainedHistory>,
     read_corpus: &'a dyn Fn(&[String]) -> Result<Vec<(String, String)>>,
     grant_check: &'a dyn Fn(&str, &str) -> sa::GrantCheck,
     /// BUG-1918 attestation + head coverage ([`approval_attested`]).
@@ -356,6 +410,20 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
         .cloned()
         .collect();
     let verdict_root = std::cell::Cell::new(None::<&Path>);
+    let verdict_file = |key: &str| -> Result<std::path::PathBuf> {
+        let verdict_root = match verdict_root.get() {
+            Some(path) => path,
+            None => {
+                let path = [project, root.as_path()]
+                    .into_iter()
+                    .find(|r| rv::verdict_path(r, key).is_file())
+                    .context("arming verdict is missing")?;
+                verdict_root.set(Some(path));
+                path
+            }
+        };
+        Ok(rv::verdict_path(verdict_root, key))
+    };
     auto_release_with(
         &root,
         &hold,
@@ -381,23 +449,9 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     .context("covered spec store is unreadable; human clear required")?;
                 Ok((ids, store))
             },
-            read_body: &|key| {
-                let verdict_root = match verdict_root.get() {
-                    Some(path) => path,
-                    None => {
-                        let path = [project, root.as_path()]
-                            .into_iter()
-                            .find(|r| rv::verdict_path(r, key).is_file())
-                            .context("arming verdict is missing")?;
-                        verdict_root.set(Some(path));
-                        path
-                    }
-                };
-                Ok(serde_json::from_slice(&std::fs::read(rv::verdict_path(
-                    verdict_root,
-                    key,
-                ))?)?)
-            },
+            read_body: &|key| Ok(serde_json::from_slice(&std::fs::read(verdict_file(key)?)?)?),
+            // trace:BUG-2186 | ai:claude
+            read_history: &|key| RetainedHistory::beside(&verdict_file(key)?),
             read_corpus: &|ids| {
                 mh::corpus_gate_bodies(&[project, &root], pr, ids).map_err(anyhow::Error::msg)
             },
@@ -425,6 +479,8 @@ pub(crate) fn auto_release(project: &Path, pr: u64) -> Result<Outcome> {
                     || open_change_head(live_head().ok().flatten()).ok(),
                     false,
                     crate::mandate::rework_release_decision,
+                    // It ignores the carry-over. trace:TASK-1968 | ai:claude
+                    false,
                 )
                 .map(|cover| cover.id)
                 .map_err(|refusal| anyhow::anyhow!("{}", refusal.message(pr)))
@@ -483,6 +539,7 @@ fn auto_release_with(
         .context("hold has no arming verdict reference")?
         .key;
     let check = |body: &Value,
+                 history: &RetainedHistory,
                  ids: &[String],
                  store: &aida_core::RequirementsStore|
      -> Result<Release> {
@@ -527,6 +584,7 @@ fn auto_release_with(
         eligible(
             hold,
             body,
+            history,
             &head,
             &specs,
             &(io.grant_check)(id, subject),
@@ -534,7 +592,12 @@ fn auto_release_with(
         )
     };
     let (ids, store) = (io.covered_specs)()?;
-    let release = check(&(io.read_body)(key)?, &ids, &store)?;
+    let release = check(
+        &(io.read_body)(key)?,
+        &(io.read_history)(key)?,
+        &ids,
+        &store,
+    )?;
     release_with(
         root,
         hold,
@@ -550,7 +613,12 @@ fn auto_release_with(
             // trace:STORY-1687 | ai:codex
             let (ids, store) = (io.covered_specs)()?;
             ensure!(
-                check(&(io.read_body)(key)?, &ids, &store)? == release,
+                check(
+                    &(io.read_body)(key)?,
+                    &(io.read_history)(key)?,
+                    &ids,
+                    &store
+                )? == release,
                 "approval changed before release (or its covering mandate did)"
             );
             let bodies = (io.read_corpus)(&ids)?;
@@ -578,3 +646,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/story_1697_attested_release_tests.rs"]
 mod story_1697_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2186_archived_history_release_tests.rs"]
+mod bug_2186_tests;

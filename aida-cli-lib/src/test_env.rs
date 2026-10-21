@@ -33,11 +33,19 @@ use std::sync::{Mutex, MutexGuard};
 /// Returns true in the parent after the child passed, so the caller returns.
 // trace:BUG-1994 | ai:codex
 pub(crate) fn run_path_isolated_test() -> bool {
+    run_path_isolated_test_output().is_some()
+}
+
+/// [`run_path_isolated_test`] that hands the parent the passed child's
+/// output, so a test can assert what the code under test never printed.
+/// Returns None in the child.
+// trace:BUG-2119 | ai:claude
+pub(crate) fn run_path_isolated_test_output() -> Option<std::process::Output> {
     let thread = std::thread::current();
     let name = thread.name().expect("libtest thread name");
     if is_path_isolated_process() {
         assert_eq!(std::env::var("AIDA_TEST_PATH_CHILD").unwrap(), name);
-        return false;
+        return None;
     }
     assert!(
         !holds_env_lock(),
@@ -76,7 +84,7 @@ pub(crate) fn run_path_isolated_test() -> bool {
             .any(|line| line.starts_with("test result: ok. 1 passed; 0 failed;")),
         "isolated test must actually run one test: {name}\n{stdout}"
     );
-    true
+    Some(output)
 }
 
 // trace:BUG-1994 | ai:codex
@@ -303,7 +311,10 @@ impl EnvVarsGuard {
 
 impl Drop for EnvVarsGuard {
     fn drop(&mut self) {
-        for (key, prev) in &self.prev {
+        // Reverse order, so a var applied after the ones it depends on (a
+        // GIT_CONFIG_COUNT after its pairs) is removed before them.
+        // trace:TASK-1979 | ai:claude
+        for (key, prev) in self.prev.iter().rev() {
             // SAFETY: still holding ENV_LOCK via self._guard.
             #[allow(unused_unsafe)]
             unsafe {
@@ -834,6 +845,231 @@ mod tests {
             "found raw env::set_var / remove_var in test code outside helpers:\n{}",
             offenders.join("\n")
         );
+    }
+
+    /// General test-isolation hygiene discovered during BUG-2118:
+    /// `std::env::set_current_dir` mutates the process-wide cwd across all
+    /// libtest threads; any test that calls `set_current_dir(` directly must
+    /// isolate in a one-test child via `run_path_isolated_test()`.
+    ///
+    /// Scope limitation: this source scanner checks literal `set_current_dir(`
+    /// calls inside test files (`src/tests/**`, `tests/**`) and `#[cfg(...test...)]`
+    /// blocks. Indirect cwd mutation through production code (`queue_cmd.rs:12794`,
+    /// `session_start.rs:2516`, `agent_launch.rs`, `reconstitute.rs`,
+    /// `lib_part1.rs`, `session_end.rs`, ...) is not detected; tests reaching
+    /// those production paths in-process must opt into `run_path_isolated_test()`
+    /// explicitly.
+    // trace:TASK-1970 | ai:antigravity
+    #[test]
+    fn no_unisolated_set_current_dir_in_test_code() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut offenders = scan_unisolated_set_current_dir_in_dir(&manifest_dir.join("src"));
+        if manifest_dir.join("tests").is_dir() {
+            offenders.extend(scan_unisolated_set_current_dir_in_dir(
+                &manifest_dir.join("tests"),
+            ));
+        }
+        assert!(
+            offenders.is_empty(),
+            "found set_current_dir in test code without run_path_isolated_test():\n{}",
+            offenders.join("\n")
+        );
+    }
+
+    // trace:TASK-1970 | ai:antigravity
+    #[test]
+    fn scan_block_for_unisolated_cwd_flags_seeded_offenders_across_fn_visibilities() {
+        let sample = r#"
+#[test]
+fn isolated_caller() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    std::env::set_current_dir("fixture-isolated").unwrap();
+}
+
+pub fn pub_helper_without_guard() {
+    std::env::set_current_dir("fixture-pub").unwrap();
+}
+
+#[test]
+fn guarded_middle() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    std::env::set_current_dir("fixture-mid").unwrap();
+}
+
+pub(crate) fn pub_crate_helper_without_guard() {
+    std::env::set_current_dir("fixture-pub-crate").unwrap();
+}
+
+pub(super) async fn async_helper_without_guard() {
+    std::env::set_current_dir("fixture-async").unwrap();
+}
+"#;
+        let mut offenders = Vec::new();
+        scan_block_for_unisolated_cwd(Path::new("seeded.rs"), sample, 1, &mut offenders);
+        assert_eq!(
+            offenders,
+            vec![
+                "seeded.rs:11: std::env::set_current_dir(\"fixture-pub\").unwrap();",
+                "seeded.rs:23: std::env::set_current_dir(\"fixture-pub-crate\").unwrap();",
+                "seeded.rs:27: std::env::set_current_dir(\"fixture-async\").unwrap();",
+            ]
+        );
+    }
+}
+
+/// Scan `src_dir` for direct `set_current_dir(` calls in test code whose
+/// enclosing function does not call `run_path_isolated_test()`.
+///
+/// Limitation: only literal `set_current_dir(` calls in test modules/files are
+/// inspected; indirect cwd mutation through production code (`queue_cmd.rs:12794`,
+/// `session_start.rs:2516`, ...) is not detected.
+// trace:TASK-1970 | ai:antigravity
+pub(crate) fn scan_unisolated_set_current_dir_in_dir(src_dir: &Path) -> Vec<String> {
+    let mut offenders = Vec::new();
+    let mut stack = vec![src_dir.to_path_buf()];
+
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|e| e == "rs") {
+                let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if file_name == "test_env.rs" {
+                    continue;
+                }
+                let is_test_file = p.components().any(|c| c.as_os_str() == "tests");
+                let content = match std::fs::read_to_string(&p) {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                if is_test_file {
+                    scan_block_for_unisolated_cwd(&p, &content, 1, &mut offenders);
+                } else {
+                    let mut idx = 0;
+                    while idx < content.len() {
+                        let rest = &content[idx..];
+                        let pos = match rest.find("#[cfg(") {
+                            Some(p) => idx + p,
+                            None => break,
+                        };
+                        let bracket_close = match content[pos..].find(']') {
+                            Some(b) => pos + b,
+                            None => {
+                                idx = pos + "#[cfg(".len();
+                                continue;
+                            }
+                        };
+                        let attr = &content[pos..=bracket_close];
+                        if !attr.contains("test") {
+                            idx = bracket_close + 1;
+                            continue;
+                        }
+                        let after_cfg = bracket_close + 1;
+                        if let Some(brace_at) = find_mod_block_brace(&content, after_cfg) {
+                            if let Some(end_brace) = find_matching_brace(&content, brace_at) {
+                                let block = &content[brace_at..end_brace];
+                                let start_line = content[..brace_at].matches('\n').count() + 1;
+                                scan_block_for_unisolated_cwd(
+                                    &p,
+                                    block,
+                                    start_line,
+                                    &mut offenders,
+                                );
+                                idx = end_brace;
+                                continue;
+                            }
+                        }
+                        idx = after_cfg;
+                    }
+                }
+            }
+        }
+    }
+    offenders
+}
+
+// trace:TASK-1970 | ai:antigravity
+fn is_fn_item_start(trimmed: &str) -> bool {
+    let mut s = trimmed.trim_start();
+    if let Some(after_pub) = s.strip_prefix("pub") {
+        let trimmed_after = after_pub.trim_start();
+        if let Some(in_parens) = trimmed_after.strip_prefix('(') {
+            let Some(close_idx) = in_parens.find(')') else {
+                return false;
+            };
+            s = in_parens[close_idx + 1..].trim_start();
+        } else if after_pub.starts_with(char::is_whitespace) {
+            s = trimmed_after;
+        } else {
+            return false;
+        }
+    }
+    loop {
+        let mut progressed = false;
+        for kw in ["const", "async", "unsafe"] {
+            if let Some(rest) = s.strip_prefix(kw) {
+                if rest.starts_with(char::is_whitespace) {
+                    s = rest.trim_start();
+                    progressed = true;
+                }
+            }
+        }
+        if let Some(rest) = s.strip_prefix("extern") {
+            let rest_trimmed = rest.trim_start();
+            if let Some(after_quote) = rest_trimmed.strip_prefix('"') {
+                if let Some(end_quote) = after_quote.find('"') {
+                    s = after_quote[end_quote + 1..].trim_start();
+                    progressed = true;
+                }
+            } else if rest.starts_with(char::is_whitespace) {
+                s = rest_trimmed;
+                progressed = true;
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    s.starts_with("fn ") || s.starts_with("fn\t") || s.starts_with("fn<")
+}
+
+// trace:TASK-1970 | ai:antigravity
+fn scan_block_for_unisolated_cwd(
+    path: &Path,
+    block: &str,
+    start_line: usize,
+    offenders: &mut Vec<String>,
+) {
+    let lines: Vec<&str> = block.lines().collect();
+    let mut current_fn_has_isolated_guard = false;
+    for (j, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//") || trimmed.starts_with('*') || trimmed.starts_with("/*") {
+            continue;
+        }
+        if trimmed.starts_with("#[test]") || is_fn_item_start(trimmed) {
+            current_fn_has_isolated_guard = false;
+        }
+        if line.contains("run_path_isolated_test()") {
+            current_fn_has_isolated_guard = true;
+        }
+        if line.contains("set_current_dir(") && !current_fn_has_isolated_guard {
+            offenders.push(format!(
+                "{}:{}: {}",
+                path.display(),
+                start_line + j,
+                line.trim()
+            ));
+        }
     }
 }
 

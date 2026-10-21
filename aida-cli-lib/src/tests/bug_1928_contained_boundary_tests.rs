@@ -253,7 +253,7 @@ fn pool_worktree_announcement_matches_rule_path() {
     assert!(rules.iter().all(|r| !r.contains(&requested_str)));
 
     // The full launch flags carry the same rules.
-    let flags = crate::session::claude_contained_flags_for(&worktree);
+    let flags = crate::session::claude_contained_flags_for(&worktree).unwrap();
     let pos = flags.iter().position(|f| f == "--settings").unwrap();
     let v: serde_json::Value = serde_json::from_str(&flags[pos + 1]).unwrap();
     let allow: Vec<String> = v["permissions"]["allow"]
@@ -417,7 +417,7 @@ fn symlinked_worktree_announcement_matches_settings_roots() {
 
     let announced = announced_roots(&crate::session::contained_write_boundary_announcement());
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags(),
+        &crate::session::claude_contained_flags().unwrap(),
     ));
     assert_eq!(announced, in_settings);
     // Both spellings of the symlinked tree, and nothing else.
@@ -457,7 +457,7 @@ fn outside_git_contained_session_has_no_write_roots() {
     let _cwd = crate::session::contained_cwd_seam::pin(&outside);
     let roots = crate::session::contained_session_write_roots();
     assert!(roots.is_empty(), "outside git, no write roots: {roots:?}");
-    let allow = allow_rules_in_flags(&crate::session::claude_contained_flags());
+    let allow = allow_rules_in_flags(&crate::session::claude_contained_flags().unwrap());
     assert!(
         allow.iter().all(|r| !r.starts_with("Edit(")),
         "no Edit allow rule outside git: {allow:?}"
@@ -503,7 +503,7 @@ fn queue_work_boundary_line_uses_the_launch_roots_not_the_lease_path() {
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines[0].starts_with("workspace: "), "{lines:?}");
     let in_settings = settings_roots(&allow_rules_in_flags(
-        &crate::session::claude_contained_flags(),
+        &crate::session::claude_contained_flags().unwrap(),
     ));
     assert_eq!(announced_roots(&lines[1]), in_settings);
     assert!(!lines[1].contains("aida-requested"), "{lines:?}");
@@ -527,7 +527,8 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
     );
     let sub = worktree.join("src");
     assert!(crate::session::contained_resume_write_roots(&sub).is_empty());
-    let args = crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub));
+    let args =
+        crate::session::claude_headless_resume_args_with_posture("p", "sid", Some(&sub)).unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -546,7 +547,8 @@ fn contained_resume_fails_closed_unless_cwd_is_a_git_root() {
 fn contained_resume_argv_scopes_boundary_to_its_worktree() {
     let (_tmp, _parent, worktree) = pool_fixture();
     let args =
-        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree));
+        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", Some(&worktree))
+            .unwrap();
     assert!(
         args.windows(2)
             .any(|w| w == ["--permission-mode", "dontAsk"]),
@@ -567,10 +569,323 @@ fn contained_resume_argv_scopes_boundary_to_its_worktree() {
         "{args:?}"
     );
     // The uncontained resume carries no contained flags.
-    let plain = crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None);
+    let plain =
+        crate::session::claude_headless_resume_args_with_posture("proceed", "sid", None).unwrap();
     assert!(!plain.iter().any(|a| a == "--settings"), "{plain:?}");
     assert!(
         plain.contains(&"bypassPermissions".to_string()),
         "{plain:?}"
+    );
+}
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
+fn main_checkout_git_hooks_and_config_are_denied_by_contained_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+
+    // 1. Main checkout with a real `.git` directory: `.git/hooks/*` and `.git/config` denied.
+    let main_checkout = parent.join("aida-main");
+    std::fs::create_dir_all(main_checkout.join(".git/hooks")).unwrap();
+    std::fs::create_dir_all(main_checkout.join("src")).unwrap();
+
+    let settings = settings_for(&main_checkout);
+    let pre_commit = main_checkout.join(".git/hooks/pre-commit");
+    let git_config = main_checkout.join(".git/config");
+    let inside_src = main_checkout.join("src/lib.rs");
+
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&settings, tool, &inside_src, &main_checkout, &home),
+            "{tool} inside main checkout src/ must remain allowed: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &pre_commit, &main_checkout, &home),
+            "{tool} on <main-checkout>/.git/hooks/pre-commit must be denied: {settings}"
+        );
+        assert!(
+            !pre_commit.exists(),
+            "{tool} must not create {}",
+            pre_commit.display()
+        );
+        assert!(
+            !attempt_write(&settings, tool, &git_config, &main_checkout, &home),
+            "{tool} on <main-checkout>/.git/config must be denied: {settings}"
+        );
+        assert!(
+            !git_config.exists(),
+            "{tool} must not create {}",
+            git_config.display()
+        );
+    }
+
+    // 2. Main checkout with a `.git` gitfile (`--separate-git-dir`): both `.git` file and
+    //    its real gitdir target are denied.
+    let gitfile_main = parent.join("aida-main-gitfile");
+    let sep_git_dir = gitfile_main.join(".real-gitdir");
+    std::fs::create_dir_all(sep_git_dir.join("hooks")).unwrap();
+    std::fs::create_dir_all(gitfile_main.join("src")).unwrap();
+    std::fs::write(
+        gitfile_main.join(".git"),
+        format!("gitdir: {}\n", sep_git_dir.display()),
+    )
+    .unwrap();
+
+    let gitfile_settings = settings_for(&gitfile_main);
+    let sep_hook = sep_git_dir.join("hooks/pre-commit");
+    let sep_config = sep_git_dir.join("config");
+    let gitfile_entry = gitfile_main.join(".git");
+    let gitfile_src = gitfile_main.join("src/lib.rs");
+
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&gitfile_settings, tool, &gitfile_src, &gitfile_main, &home),
+            "{tool} inside gitfile main checkout src/ must remain allowed: {gitfile_settings}"
+        );
+        assert!(
+            !attempt_write(&gitfile_settings, tool, &sep_hook, &gitfile_main, &home),
+            "{tool} on main gitfile target hooks/pre-commit must be denied: {gitfile_settings}"
+        );
+        assert!(
+            !attempt_write(&gitfile_settings, tool, &sep_config, &gitfile_main, &home),
+            "{tool} on main gitfile target config must be denied: {gitfile_settings}"
+        );
+        assert!(
+            !allowed(
+                &gitfile_settings,
+                tool,
+                &gitfile_entry,
+                &gitfile_main,
+                &home
+            ),
+            "{tool} on main checkout .git file must be denied: {gitfile_settings}"
+        );
+    }
+
+    // 3. NEGATIVE: a linked worktree's own gitdir stays allowed when in write_roots.
+    let linked_wt = parent.join("aida-wt-linked");
+    let wt_gitdir = main_checkout.join(".git/worktrees/aida-wt-linked");
+    std::fs::create_dir_all(&linked_wt).unwrap();
+    std::fs::create_dir_all(&wt_gitdir).unwrap();
+    std::fs::write(wt_gitdir.join("commondir"), "../..\n").unwrap();
+    std::fs::write(
+        linked_wt.join(".git"),
+        format!("gitdir: {}\n", wt_gitdir.display()),
+    )
+    .unwrap();
+
+    let wt_roots = vec![linked_wt.clone(), wt_gitdir.clone()];
+    assert!(
+        contained_main_checkout_git_deny_paths(&wt_roots).is_empty(),
+        "linked worktree and its own gitdir must not be classified as main checkout .git"
+    );
+    let wt_settings: serde_json::Value = serde_json::from_str(
+        &crate::session::contained_settings_json(&[], false, &wt_roots),
+    )
+    .unwrap();
+    let wt_index = wt_gitdir.join("index");
+    let wt_head = wt_gitdir.join("HEAD");
+    for tool in WRITE_TOOLS {
+        assert!(
+            attempt_write(&wt_settings, tool, &wt_index, &linked_wt, &home),
+            "{tool} on linked worktree's own gitdir index must stay allowed: {wt_settings}"
+        );
+        let _ = std::fs::remove_file(&wt_index);
+        assert!(
+            attempt_write(&wt_settings, tool, &wt_head, &linked_wt, &home),
+            "{tool} on linked worktree's own gitdir HEAD must stay allowed: {wt_settings}"
+        );
+        let _ = std::fs::remove_file(&wt_head);
+    }
+
+    // 4. NEGATIVE: a non-checkout `.git` stays allowed (both a directory without `.git`
+    //    at launch and a nested `sub/.git` inside a checkout).
+    let non_checkout = parent.join("plain-scratch");
+    std::fs::create_dir_all(&non_checkout).unwrap();
+    assert!(
+        contained_main_checkout_git_deny_paths(std::slice::from_ref(&non_checkout)).is_empty(),
+        "non-checkout directory must not emit a .git deny rule"
+    );
+    let non_checkout_settings = settings_for(&non_checkout);
+    let scratch_git_config = non_checkout.join(".git/config");
+    let nested_git_config = main_checkout.join("nested/.git/config");
+    for tool in WRITE_TOOLS {
+        assert!(
+            attempt_write(
+                &non_checkout_settings,
+                tool,
+                &scratch_git_config,
+                &non_checkout,
+                &home
+            ),
+            "{tool} on non-checkout .git/config must stay allowed: {non_checkout_settings}"
+        );
+        let _ = std::fs::remove_dir_all(non_checkout.join(".git"));
+        assert!(
+            attempt_write(&settings, tool, &nested_git_config, &main_checkout, &home),
+            "{tool} on nested non-checkout .git/config must stay allowed: {settings}"
+        );
+        let _ = std::fs::remove_dir_all(main_checkout.join("nested"));
+    }
+
+    // 5. NEGATIVE: an outside-git `os_wrap` root refuses.
+    std::fs::create_dir_all(non_checkout.join(".aida")).unwrap();
+    std::fs::write(
+        non_checkout.join(".aida/config.toml"),
+        "[contained]\nos_wrap = true\n",
+    )
+    .unwrap();
+    let err =
+        crate::session::os_wrapped_program_and_args(&non_checkout, "/bin/echo", vec!["hi".into()])
+            .expect_err("outside-git os_wrap root must refuse");
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("not inside a git repository"),
+        "expected outside-git refusal diagnostic, got: {msg}"
+    );
+}
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
+fn main_checkout_git_denied_even_with_seat_clone_marker() {
+    let tmp = tempfile::tempdir().unwrap();
+    let parent = std::fs::canonicalize(tmp.path()).unwrap();
+    let home = parent.join("home");
+
+    // A main checkout that a contained session has dressed up as a seat clone:
+    // `aida-seat-*` name AND the marker file. Both are writable by the session,
+    // so neither may exempt the real `.git`.
+    let marked = parent.join("aida-seat-forged");
+    std::fs::create_dir_all(marked.join(".git/hooks")).unwrap();
+    std::fs::create_dir_all(marked.join("src")).unwrap();
+    let marker = marked.join(aida_core::seat_clone_detect::MARKER_RELATIVE);
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "forged = true\n").unwrap();
+    assert!(
+        aida_core::seat_clone_detect::seat_clone_root(&marked).is_some(),
+        "fixture must look like a seat clone"
+    );
+
+    let denied = contained_main_checkout_git_deny_paths(std::slice::from_ref(&marked));
+    assert!(
+        denied.contains(&marked.join(".git")),
+        "main checkout .git must be denied whatever the seat-clone marker says: {denied:?}"
+    );
+    assert!(
+        crate::session::main_git_deny_paths(&marked).contains(&marked.join(".git")),
+        "main_git_deny_paths must include the marked checkout's .git"
+    );
+
+    let settings = settings_for(&marked);
+    let pre_commit = marked.join(".git/hooks/pre-commit");
+    let git_config = marked.join(".git/config");
+    for tool in WRITE_TOOLS {
+        assert!(
+            allowed(&settings, tool, &marked.join("src/lib.rs"), &marked, &home),
+            "{tool} inside src/ must remain allowed: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &pre_commit, &marked, &home),
+            "{tool} on marked checkout .git/hooks/pre-commit must be denied: {settings}"
+        );
+        assert!(
+            !attempt_write(&settings, tool, &git_config, &marked, &home),
+            "{tool} on marked checkout .git/config must be denied: {settings}"
+        );
+    }
+}
+
+// trace:BUG-2012 | ai:antigravity
+#[test]
+fn spawn_claude_headless_resume_forwards_contained_then_some_cwd() {
+    let (_tmp, parent, worktree) = pool_fixture();
+    std::fs::create_dir_all(worktree.join(".aida-store")).unwrap();
+    std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+    std::fs::write(
+        worktree.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+
+    let fake = parent.join("fake-claude-resume");
+    let args_out = parent.join("resume-args.txt");
+    crate::test_exec::write_executable(
+        &fake,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 0\n",
+            args_out.display()
+        ),
+    );
+    let log_path = parent.join("resume.log");
+    let tee_opts = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &worktree,
+        "advisor",
+        &["implementer"],
+        &[
+            ("AIDA_AGENT_CMD", Some(fake.to_str().unwrap())),
+            ("AIDA_OS_WRAP", Some("0")),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+
+    // 1. contained = true -> forwards Some(cwd), producing dontAsk + worktree allow rules
+    let status = crate::session::spawn_claude_headless_resume(
+        "proceed",
+        "sid-1",
+        &log_path,
+        &worktree,
+        &tee_opts,
+        true,
+        "implementer",
+    )
+    .unwrap();
+    assert!(status.success());
+    let captured: Vec<String> = std::fs::read_to_string(&args_out)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        captured
+            .windows(2)
+            .any(|w| w == ["--permission-mode", "dontAsk"]),
+        "contained resume must pass dontAsk: {captured:?}"
+    );
+    let expected: Vec<String> = WRITE_TOOLS
+        .iter()
+        .map(|tool| format!("{tool}(/{}/**)", worktree.display()))
+        .collect();
+    assert_eq!(allow_rules_in_flags(&captured), expected);
+
+    // 2. contained = false -> forwards None, producing bypassPermissions without --settings
+    let status = crate::session::spawn_claude_headless_resume(
+        "proceed",
+        "sid-2",
+        &log_path,
+        &worktree,
+        &tee_opts,
+        false,
+        "implementer",
+    )
+    .unwrap();
+    assert!(status.success());
+    let captured_plain: Vec<String> = std::fs::read_to_string(&args_out)
+        .unwrap()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        !captured_plain.iter().any(|a| a == "--settings"),
+        "uncontained resume must not pass --settings: {captured_plain:?}"
+    );
+    assert!(
+        captured_plain.contains(&"bypassPermissions".to_string()),
+        "uncontained resume must pass bypassPermissions: {captured_plain:?}"
     );
 }

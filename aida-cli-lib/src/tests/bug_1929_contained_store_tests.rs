@@ -283,7 +283,7 @@ fn unexpressible_main_emits_no_entries() {
 /// The settings JSON a contained launch gets for `write_roots`, parsed.
 // trace:BUG-1929 | ai:claude
 fn launch_settings(write_roots: &[PathBuf]) -> (String, serde_json::Value) {
-    let flags = crate::session::claude_contained_flags_for_roots(write_roots);
+    let flags = crate::session::claude_contained_flags_for_roots(write_roots).unwrap();
     let json = flags[3].clone();
     let settings = serde_json::from_str(&json).unwrap();
     (json, settings)
@@ -544,7 +544,7 @@ fn real_claude_contained_session_claims_and_comments() {
         "if git init -q --separate-git-dir='{gitdir}' '{sub}' \
          && printf '#!/bin/sh\\necho ran >> {marker}\\nexit 1\\n' > '{hook}' \
          && chmod 755 '{hook}' && echo x > '{sub}/x.txt' && git -C '{sub}' add x.txt \
-         && git -C '{sub}' -c user.email=p@example.com -c user.name=p commit -qm planted \
+         && git -c maintenance.auto=false -c gc.auto=0 -C '{sub}' -c user.email=p@example.com -c user.name=p commit -qm planted \
          && git -C '{sub}' config core.fsmonitor '{hook}'; \
          then echo planted; else echo plant-failed; fi >> {out} 2>&1\n\
          if git -C '{store}' add objects/zz >/dev/null 2>&1; then echo staged; \
@@ -716,7 +716,7 @@ fn real_claude_contained_session_claims_and_comments() {
         "a host-side aida read ran the planted fsmonitor: {probe}"
     );
     // Remove the plant (the host's own raw git below would run its hook).
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["rm", "-q", "--cached", "--ignore-unmatch", "objects/zz"])
         .current_dir(&store)
         .output();
@@ -873,7 +873,7 @@ fn real_claude_contained_session_claims_and_comments() {
     );
     // The plant is live: an unhardened fetch over the next gitlink move runs it.
     move_gitlink("f1: move gitlink again");
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["fetch", "-q", "origin", "aida-store"])
         .current_dir(&store)
         .output();
@@ -989,9 +989,234 @@ fn bug_1929_store_git_guard() {
     );
 }
 
+/// The raw `Command::new("git")` sites in `src` (1-based lines) whose builder
+/// chain, up to its first `;` and at most 12 lines, runs `git status`, and that
+/// carry no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_raw_status_git(src: &str) -> Vec<usize> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let chain = lines[i..lines.len().min(i + 12)].join(" ");
+        let chain = chain.split(';').next().unwrap_or_default();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1985):"));
+        if chain.contains("\"status\"") && !justified {
+            found.push(i + 1);
+        }
+    }
+    found
+}
+
+/// A raw `Command::new("git")` wrapper in one source file: the builder takes
+/// its arguments from a variable (`.args(args)`), so a caller may pass
+/// `status`. A `let mut cmd = Command::new("git");` binding is followed into
+/// its next statement.
+// trace:BUG-1985 | ai:claude
+struct Bug1985Wrapper {
+    line: usize,
+    name: String,
+    public: bool,
+}
+
+/// The raw-git wrapper functions in `src` (see [`Bug1985Wrapper`]) that carry
+/// no `raw-git-ok(BUG-1985): <why>` comment in the three lines above.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_raw_git_wrappers(src: &str) -> Vec<Bug1985Wrapper> {
+    let raw = regex::Regex::new(r#"Command::new\("git"\)"#).unwrap();
+    let bound =
+        regex::Regex::new(r#"let\s+mut\s+\w+\s*=\s*(std::process::)?Command::new\("git"\)\s*;"#)
+            .unwrap();
+    let args_var = regex::Regex::new(r"\.args\(\s*&?[a-z_][a-z0-9_]*\s*\)").unwrap();
+    let func = regex::Regex::new(r"\bfn\s+(\w+)\s*[<(]").unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let mut found = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        if tests.contains(&i) || line.trim_start().starts_with("//") || !raw.is_match(line) {
+            continue;
+        }
+        let window = lines[i..lines.len().min(i + 12)].join(" ");
+        let statements = if bound.is_match(line) { 2 } else { 1 };
+        let chain: Vec<&str> = window.split(';').take(statements).collect();
+        let justified = lines[i.saturating_sub(3)..i]
+            .iter()
+            .any(|l| l.contains("raw-git-ok(BUG-1985):"));
+        if justified || !args_var.is_match(&chain.join(";")) {
+            continue;
+        }
+        let Some((name, public)) = lines[..=i].iter().rev().find_map(|l| {
+            func.captures(l)
+                .map(|c| (c[1].to_string(), l.trim_start().starts_with("pub")))
+        }) else {
+            continue;
+        };
+        found.push(Bug1985Wrapper {
+            line: i + 1,
+            name,
+            public,
+        });
+    }
+    found
+}
+
+/// True when `src` (non-test lines) calls `name(...)` with a `"status"`
+/// argument before the call's statement ends.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_calls_with_status(src: &str, name: &str) -> bool {
+    let call = regex::Regex::new(&format!(r"\b{name}\s*\(")).unwrap();
+    let lines: Vec<&str> = src.lines().collect();
+    let tests = bug_1929_test_lines(&lines);
+    let text: String = lines
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !tests.contains(i))
+        .map(|(_, l)| *l)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let starts: Vec<usize> = call.find_iter(&text).map(|m| m.start()).collect();
+    starts.into_iter().any(|start| {
+        if text[..start].ends_with("fn ") {
+            return false;
+        }
+        let rest = &text[start..];
+        let end = rest.char_indices().nth(300).map_or(rest.len(), |(i, _)| i);
+        rest[..end]
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .contains("\"status\"")
+    })
+}
+
+/// The non-test `.rs` sources of `crate_src`, skipping `tests` directories,
+/// `*_tests.rs` and `tests.rs`, as (path, contents).
+// trace:BUG-1985 | ai:claude
+fn bug_1985_sources(crate_src: &Path) -> Vec<(PathBuf, String)> {
+    let mut sources = Vec::new();
+    let mut stack = vec![crate_src.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if path.is_dir() {
+                if name != "tests" {
+                    stack.push(path);
+                }
+                continue;
+            }
+            if name.ends_with(".rs") && !name.ends_with("_tests.rs") && name != "tests.rs" {
+                let src = std::fs::read_to_string(&path).unwrap();
+                sources.push((path, src));
+            }
+        }
+    }
+    sources
+}
+
+/// The wrapper offenders across one crate's `sources`: a raw-git wrapper
+/// called with `"status"` in its own file, or, when it is `pub`, in any
+/// file of the crate that defines no function of the same name.
+// trace:BUG-1985 | ai:claude
+fn bug_1985_status_wrapper_offenders(sources: &[(PathBuf, String)]) -> Vec<(PathBuf, usize)> {
+    let mut offenders = Vec::new();
+    for (path, src) in sources {
+        for wrapper in bug_1985_raw_git_wrappers(src) {
+            let defines = regex::Regex::new(&format!(r"\bfn\s+{}\s*[<(]", wrapper.name)).unwrap();
+            let called = sources.iter().any(|(other, other_src)| {
+                (other == path || (wrapper.public && !defines.is_match(other_src)))
+                    && bug_1985_calls_with_status(other_src, &wrapper.name)
+            });
+            if called {
+                offenders.push((path.clone(), wrapper.line));
+            }
+        }
+    }
+    offenders
+}
+
+// BUG-1985 guard: every host `git status` starts at
+// `aida_core::git_ops::host_git_command`, which keeps it out of a planted
+// embedded repository in a tree a contained session may have written. Scans
+// the non-test source of aida-core and aida-cli-lib for a raw
+// `Command::new("git")` whose builder runs `status`, and for a raw-git
+// wrapper (`.args(args)`) that some caller runs `status` through.
+// trace:BUG-1985.acb27baf | ai:claude
+// trace:BUG-1985 | ai:claude
+#[test]
+fn bug_1985_host_status_guard() {
+    let sample = "fn a(wt: &Path) {\n    let _ = std::process::Command::new(\"git\")\n        \
+                  .arg(\"-C\")\n        .arg(wt)\n        .args([\"status\", \"--porcelain\"])\n        \
+                  .output();\n}\n\
+                  fn b(wt: &Path) {\n    // raw-git-ok(BUG-1985): fixture.\n    \
+                  let _ = Command::new(\"git\").arg(wt).args([\"status\"]).output();\n}\n\
+                  fn c(wt: &Path) { let _ = Command::new(\"git\").args([\"log\"]).output(); }\n\
+                  #[cfg(test)]\nmod t {\n    fn d(w: &Path) { Command::new(\"git\").args([\"status\"]); }\n}\n";
+    assert_eq!(bug_1985_raw_status_git(sample), vec![2]);
+
+    // The wrapper scanner: a private wrapper called with status in its own
+    // file, a pub one called from another file, a bound `let mut cmd` form,
+    // and a same-named private helper elsewhere that must not count.
+    let own = (
+        PathBuf::from("own.rs"),
+        "fn run_git(dir: &Path, args: &[&str]) {\n    let _ = Command::new(\"git\")\n        \
+         .arg(\"-C\")\n        .arg(dir)\n        .args(args)\n        .output();\n}\n\
+         fn probe(dir: &Path, args: &[&str]) {\n    let mut cmd = Command::new(\"git\");\n    \
+         cmd.arg(\"-C\").arg(dir).args(args);\n}\n\
+         fn f(d: &Path) { run_git(d, &[\"status\", \"--short\"]); probe(d, &[\"log\"]); }\n"
+            .to_string(),
+    );
+    let exported = (
+        PathBuf::from("exported.rs"),
+        "pub(crate) fn capture(dir: &Path, args: &[&str]) {\n    let _ = Command::new(\"git\")\n        \
+         .args(args)\n        .output();\n}\n"
+            .to_string(),
+    );
+    let caller = (
+        PathBuf::from("caller.rs"),
+        "fn g(d: &Path) { capture(d, &[\"status\"]); probe(d, &[\"status\"]); }\n".to_string(),
+    );
+    let offenders = bug_1985_status_wrapper_offenders(&[own, exported, caller]);
+    assert_eq!(
+        offenders,
+        vec![
+            (PathBuf::from("own.rs"), 2),
+            (PathBuf::from("exported.rs"), 2)
+        ]
+    );
+
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut offenders = Vec::new();
+    for crate_src in ["aida-core/src", "aida-cli-lib/src"] {
+        let sources = bug_1985_sources(&workspace.join(crate_src));
+        for (path, src) in &sources {
+            for line in bug_1985_raw_status_git(src) {
+                let rel = path.strip_prefix(workspace).unwrap_or(path);
+                offenders.push(format!("{}:{line}", rel.display()));
+            }
+        }
+        for (path, line) in bug_1985_status_wrapper_offenders(&sources) {
+            let rel = path.strip_prefix(workspace).unwrap_or(&path);
+            offenders.push(format!("{}:{line} (wrapper)", rel.display()));
+        }
+    }
+    offenders.sort();
+    assert!(
+        offenders.is_empty(),
+        "raw `git status`; build it with `aida_core::git_ops::host_git_command` (or \
+         justify it with `// raw-git-ok(BUG-1985): <why>`): {offenders:?}"
+    );
+}
+
 /// Run git in `dir` with a fixed identity; panics on failure.
 fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(args)
         .current_dir(dir)
@@ -1099,7 +1324,7 @@ fn bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack() {
 
     // The plant is live: an unhardened fetch runs it.
     let (store, marker, _) = bug_1929_f1_fixture(&base.join("raw"));
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["fetch", "-q", "origin", "aida-store"])
         .current_dir(&store)
         .output()
@@ -1206,7 +1431,7 @@ fn task_1775_contained_marker_written_before_git_version_check() {
     for fake in ["git version 2.39.5", "not a version"] {
         let _ = std::fs::remove_file(&marker);
         aida_core::git_ops::with_host_git_version(fake, || {
-            let json = crate::session::claude_contained_settings_json(&[main.clone()]);
+            let json = crate::session::claude_contained_settings_json(&[main.clone()]).unwrap();
             let settings: serde_json::Value = serde_json::from_str(&json).unwrap();
             assert!(
                 !allow_write(&settings)
@@ -1217,4 +1442,258 @@ fn task_1775_contained_marker_written_before_git_version_check() {
         });
         assert!(marker.is_file(), "{fake}: marker written on old git");
     }
+}
+
+// BUG-2140: `pull_store_before_id_allocation` and `push_store_after_id_allocation`
+// defer when the store's git directory is not writable (even when an `origin`
+// remote is configured), `commit_pending_store_changes_on_host` commits the
+// deferred write on the host under default config (`auto_push = manual`), and
+// `collect_doctor_findings` reports `store-worktree-gitdir-unwritable` when a
+// host permission bug leaves the store's git metadata read-only.
+// trace:BUG-2140 | ai:antigravity
+#[cfg(unix)]
+#[test]
+fn bug_2140_id_allocation_deferral_and_doctor_check_and_host_commit() {
+    use aida_core::db::DatabaseBackend;
+    use std::os::unix::fs::PermissionsExt;
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping: root ignores directory write bits");
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = std::fs::canonicalize(tmp.path()).unwrap();
+    let remote = root.join("origin.git");
+    std::fs::create_dir_all(&remote).unwrap();
+    bug_1929_git(&remote, &["init", "-q", "--bare"]);
+
+    let main = root.join("main");
+    std::fs::create_dir_all(main.join(".aida")).unwrap();
+    std::fs::write(
+        main.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    bug_1929_git(&main, &["init", "-q", "-b", "main"]);
+    bug_1929_git(&main, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    bug_1929_git(
+        &main,
+        &["worktree", "add", "-q", "-b", "aida-store", ".aida-store"],
+    );
+    let store = main.join(".aida-store");
+    bug_1929_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(store.join("objects")).unwrap();
+    std::fs::write(store.join("metadata.yaml"), "name: test\n").unwrap();
+    bug_1929_git(&store, &["add", "."]);
+    bug_1929_git(&store, &["commit", "-q", "-m", "seed store"]);
+    bug_1929_git(&store, &["push", "-q", "-u", "origin", "aida-store"]);
+
+    // Make a leftover modified file in the store, then lock `.git/objects` read-only
+    // to simulate the contained sandbox's `denyWrite` on `<main>/.git`.
+    std::fs::write(store.join("metadata.yaml"), "name: dirty-in-sandbox\n").unwrap();
+    let objects_git = main.join(".git/objects");
+    let orig_perms = std::fs::metadata(&objects_git).unwrap().permissions();
+    std::fs::set_permissions(&objects_git, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+    // 1. `pull_store_before_id_allocation` + `add_requirement` +
+    //    `push_store_after_id_allocation` succeed without touching `.git`.
+    let pull_res = crate::pull_store_before_id_allocation(&store, &main);
+    let backend = aida_core::db::GitBackend::new(&store).unwrap();
+    let added = backend.add_requirement(aida_core::models::Requirement::new(
+        "Sandbox filed spec".to_string(),
+        "filed while .git/objects is 0555".to_string(),
+    ));
+    let push_res = added.as_ref().ok().and_then(|req| {
+        crate::push_store_after_id_allocation(&store, &main, req.spec_id.as_deref().unwrap()).ok()
+    });
+
+    // 2. Doctor check flags `store-worktree-gitdir-unwritable` while `.git/objects` is 0555.
+    let loaded = backend.load().unwrap();
+    let doctor_findings =
+        crate::doctor_root::collect_doctor_findings(&main, &loaded, Some("store-worktree"))
+            .unwrap();
+
+    // Restore permissions before assertions so cleanup always succeeds.
+    std::fs::set_permissions(&objects_git, orig_perms.clone()).unwrap();
+
+    pull_res.expect("pull_store_before_id_allocation must defer when git dir is unwritable");
+    let added = added.expect("add_requirement must succeed when git dir is unwritable");
+    assert!(
+        push_res.is_some(),
+        "push_store_after_id_allocation must defer when git dir is unwritable"
+    );
+    assert!(
+        doctor_findings
+            .iter()
+            .any(|f| f.id == "store-worktree-gitdir-unwritable"
+                && f.summary.contains("cannot write ")),
+        "expected store-worktree-gitdir-unwritable doctor finding, got: {doctor_findings:?}"
+    );
+
+    // 3. On the host (with default config `auto_push = manual`),
+    // `session_end::finish_session_end_store_and_shell_cleanup` commits the
+    // sandbox's spec and emits shell cleanup (`unset AIDA_SESSION_ID` + `cd`).
+    let mut stdout_lines = Vec::new();
+    let mut stderr_lines = Vec::new();
+    crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| stdout_lines.push(l.to_string()),
+        |l| stderr_lines.push(l.to_string()),
+    )
+    .expect("session_end cleanup must commit pending contained store changes on host");
+    assert!(
+        stdout_lines.iter().any(|l| l == "unset AIDA_SESSION_ID")
+            && stdout_lines.iter().any(|l| l.starts_with("cd '")),
+        "expected unset + cd in session_end stdout: {stdout_lines:?}"
+    );
+    let rel =
+        aida_core::object_store::relative_object_path(added.spec_id.as_deref().unwrap()).unwrap();
+    let head_files = bug_1929_git(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(
+        head_files.lines().any(|l| l == rel),
+        "committed store HEAD must include {rel}: {head_files}"
+    );
+
+    // 4. F5 regression: if a planted embedded `.git` makes the host store commit
+    // fail during `session end`, the shell cleanup (`unset AIDA_SESSION_ID` +
+    // `cd '<main>'` / stale-cwd hint) is STILL emitted before returning Err.
+    std::fs::write(store.join("metadata.yaml"), "name: second-dirty\n").unwrap();
+    let planted_git = store.join("objects/evil/.git");
+    std::fs::create_dir_all(&planted_git).unwrap();
+    std::fs::write(planted_git.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+
+    let mut err_stdout = Vec::new();
+    let mut err_stderr = Vec::new();
+    let end_err = crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| err_stdout.push(l.to_string()),
+        |l| err_stderr.push(l.to_string()),
+    )
+    .expect_err("planted .git must fail session_end store commit");
+    assert!(
+        format!("{end_err:#}").contains("embedded git repository"),
+        "expected embedded git repository refusal: {end_err:#}"
+    );
+    assert!(
+        err_stdout.iter().any(|l| l == "unset AIDA_SESSION_ID")
+            && err_stdout.iter().any(|l| l.starts_with("cd '")),
+        "F5: session_end must still emit unset + cd before returning store commit Err: {err_stdout:?}"
+    );
+
+    // 5. F7 regression: `RealPhaseDriver::commit_contained_child_store_changes`
+    // surfaces the planted `.git` refusal as a loud `PhaseFailure`, and once
+    // removed, commits the pending contained child write on the host.
+    let mut driver = crate::phase_driver::RealPhaseDriver::new(
+        main.clone(),
+        "BUG-2140".into(),
+        "test".into(),
+        None,
+        true,
+        None,
+        crate::phase_driver::AutonomyMode::Default,
+        "tok".into(),
+        false,
+        false,
+        false,
+        false,
+        crate::auto_complete::LifecycleSkip::none(),
+        crate::auto_complete::AutoCompleteVariant::Full,
+    );
+    driver.contained = true;
+    let phase_err = driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect_err("RealPhaseDriver must refuse embedded git repository");
+    assert!(
+        phase_err.reason.contains("embedded git repository"),
+        "unexpected PhaseFailure: {phase_err:?}"
+    );
+
+    std::fs::remove_dir_all(store.join("objects/evil")).unwrap();
+    driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect("RealPhaseDriver must commit pending store changes after removing plant");
+    let status_after = bug_1929_git(&store, &["status", "--porcelain"]);
+    assert!(
+        status_after.trim().is_empty(),
+        "store must be clean after RealPhaseDriver host commit, got: {status_after}"
+    );
+
+    // 6. Round-2 F3 regression: when the store has a rebase in progress (or
+    // detached HEAD / wrong branch) and NOTHING is pending in the store worktree,
+    // `commit_pending_store_changes_on_host`, `session end`, and
+    // `RealPhaseDriver::commit_contained_child_store_changes` must return Ok
+    // without entering `with_store_write_lock` and failing closed — while an
+    // embedded-repository plant is STILL refused loudly.
+    let store_git_dir = PathBuf::from(bug_1929_git(&store, &["rev-parse", "--absolute-git-dir"]));
+    let rebase_merge = store_git_dir.join("rebase-merge");
+    std::fs::create_dir_all(&rebase_merge).unwrap();
+    assert_eq!(
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store)
+            .expect("clean store with rebase in progress must not fail host commit sweep"),
+        false
+    );
+    let mut rebase_stdout = Vec::new();
+    let mut rebase_stderr = Vec::new();
+    crate::session_end::finish_session_end_store_and_shell_cleanup(
+        &main,
+        true,
+        true,
+        |l| rebase_stdout.push(l.to_string()),
+        |l| rebase_stderr.push(l.to_string()),
+    )
+    .expect("session_end must succeed when store has rebase in progress and nothing pending");
+    driver
+        .commit_contained_child_store_changes("phase 1 (implementer)")
+        .expect(
+            "RealPhaseDriver must succeed when store has rebase in progress and nothing pending",
+        );
+    std::fs::remove_dir_all(&rebase_merge).unwrap();
+
+    // 7. Round-2 F5 regression: block allocation (`auto_allocate_block_inner`)
+    // under an unwritable store git dir with an `origin` remote claims a block
+    // in `registry/blocks.yaml`, leaves `registry/blocks.yaml` uncommitted
+    // without pushing to `origin`, and `commit_pending_store_changes_on_host`
+    // later commits `registry/blocks.yaml` on the host.
+    let head_before_block = bug_1929_git(&store, &["rev-parse", "HEAD"]);
+    std::fs::set_permissions(&objects_git, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let claimed_block = crate::db_block::auto_allocate_block_inner(
+        &store,
+        "node01",
+        "testhost",
+        Some("test@example.com"),
+        "BUG",
+        100,
+        crate::db_block::BlockClaimReason::OnFirstAdd,
+    );
+    std::fs::set_permissions(&objects_git, orig_perms).unwrap();
+    let claimed_label =
+        claimed_block.expect("auto_allocate_block_inner must succeed when git dir is unwritable");
+    assert_eq!(claimed_label.as_deref(), Some("BUG-1..100"));
+    assert_eq!(
+        bug_1929_git(&store, &["rev-parse", "HEAD"]),
+        head_before_block,
+        "deferred block allocation must not commit while git dir is unwritable"
+    );
+    assert!(
+        store.join("registry/blocks.yaml").is_file(),
+        "registry/blocks.yaml must be written during deferred block allocation"
+    );
+    assert_eq!(
+        aida_core::git_ops::commit_pending_store_changes_on_host(&store)
+            .expect("host sweep must commit deferred blocks.yaml"),
+        true
+    );
+    let block_commit_files = bug_1929_git(&store, &["show", "--name-only", "--format=", "HEAD"]);
+    assert!(
+        block_commit_files
+            .lines()
+            .any(|l| l == "registry/blocks.yaml"),
+        "host sweep commit must include registry/blocks.yaml: {block_commit_files}"
+    );
 }

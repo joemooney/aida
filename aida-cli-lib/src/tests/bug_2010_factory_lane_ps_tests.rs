@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 // trace:BUG-2010 | ai:antigravity
 fn ps_lease(id: &str, scope: &str, owner: &str, worktree: PathBuf) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -76,28 +77,28 @@ fn agent_entry(
 
 // trace:BUG-2010 | ai:antigravity
 fn init_git_repo(path: &Path) {
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["init", "-q", "-b", "main"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["config", "user.email", "test@example.com"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["config", "user.name", "AIDA Test"])
         .status();
     std::fs::write(path.join("README.md"), "seed\n").unwrap();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["add", "README.md"])
         .status();
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(path)
         .args(["commit", "-qm", "seed"])
@@ -151,6 +152,8 @@ fn test_session_start_mints_factory_lane_lease_with_agent_pid_and_session_leases
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
     )
     .unwrap();
 
@@ -407,6 +410,8 @@ fn test_drain_phase_child_and_claude_leases_preserve_predecessor_and_sigterm_inv
         false,
         Some(false),
         /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
     )
     .unwrap();
 
@@ -558,8 +563,12 @@ fn test_agent_new_does_not_attribute_lease_to_calling_lane() {
 /// must not be attributed to the calling lane, and the calling lane's registry entry
 /// must not be overwritten. With `--no-launch`, the lease IS attributed to the caller.
 // trace:BUG-2010 | ai:antigravity
+// trace:TASK-1970 | ai:antigravity
 #[test]
 fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().to_path_buf();
     init_git_repo(&root);
@@ -614,7 +623,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     store.requirements.push(req2);
     backend.save(&store).unwrap();
 
-    let prev_cwd = std::env::current_dir().unwrap();
+    let prev_cwd = std::env::current_dir().ok();
 
     // 1. Launch case at the session_start level (self_claim = queue_work_self_claim(false))
     assert!(!crate::queue_cmd::queue_work_self_claim(false));
@@ -638,6 +647,8 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         /* force_claim */ true,
         /* use_pool */ None,
         /* self_claim */ crate::queue_cmd::queue_work_self_claim(false),
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
     );
     assert!(
         res1.is_ok(),
@@ -707,7 +718,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         None,
         false,
         /* no_launch */ true,
-        Some("implementer"),
+        crate::queue_cmd::QueueWorkRoleInput::direct(Some("implementer")),
         true,
         None,
         None,
@@ -792,7 +803,9 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
         "lease Y must be matched to calling lane A under --no-launch"
     );
 
-    let _ = std::env::set_current_dir(prev_cwd);
+    if let Some(prev_cwd) = prev_cwd {
+        let _ = std::env::set_current_dir(prev_cwd);
+    }
 }
 
 /// Blocker 2: update_agent_current_spec updates only the target agent's entry

@@ -13,6 +13,9 @@
 // trace:BUG-1520 | ai:claude
 #![cfg(target_os = "linux")]
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -32,7 +35,7 @@ fn aida(repo: &Path, home: &Path, args: &[&str]) -> Output {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

@@ -27,7 +27,8 @@ fn burndown_quiet_command_applies_implementer_grant_and_scrubs_purpose() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -59,7 +60,8 @@ fn burndown_quiet_command_supports_baseline_child() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -87,7 +89,8 @@ fn burndown_verbose_command_applies_implementer_grant_and_scrubs_purpose() {
         "CEILING_KEY",
         "100",
         false,
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         get_cmd_env(&cmd, "AIDA_SESSION_ROLE"),
@@ -210,6 +213,7 @@ fn session_lease_preserves_child_grant_id_across_updates() {
         interrupted_at: None,
         interrupted_reason: None,
         driver: None,
+        tree_kind: Default::default(),
         child_grant_id: Some("01948abc-def0-7000-8000-000000000001".into()),
     };
     std::fs::write(&lease_file, toml::to_string_pretty(&lease).unwrap()).unwrap();

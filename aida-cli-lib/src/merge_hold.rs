@@ -400,13 +400,108 @@ impl MergeHoldRecord {
     }
 }
 
+/// BUG-2176: the checkout whose `.aida/merge-holds/` and
+/// `.aida/merge-hold-clearances/` every reader and writer shares — the
+/// primary checkout, the same main checkout the merge chokepoint reads the
+/// launcher's review verdicts from. A caller in a linked worktree (a headless
+/// reviewer in `aida-pr-N`) used to write its marker into that worktree,
+/// where `aida pr ship` and auto-release never saw it and removing the
+/// worktree destroyed it. A seat clone that does not verify keeps its own
+/// root, as before, rather than pointing at the unverified-clone sentinel
+/// where every hold read would answer "no hold".
+///
+/// Every `hold_path` / `clearance_path` call lands here, and a hold-read miss
+/// walks every placed PR, so this never spawns git: the main checkout is read
+/// from `.git` / `commondir` on disk ([`primary_checkout_from_files`]) and
+/// memoised per process. An unverified seat clone is never memoised, so it
+/// resolves afresh once its lease verifies.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn hold_store_root(project_root: &Path) -> PathBuf {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static MEMO: OnceLock<Mutex<HashMap<PathBuf, PathBuf>>> = OnceLock::new();
+    let memo = MEMO.get_or_init(Default::default);
+    if let Some(hit) = memo.lock().ok().and_then(|m| m.get(project_root).cloned()) {
+        return hit;
+    }
+    let resolved = match crate::seat_clone::main_for(project_root) {
+        crate::seat_clone::MainFor::Unverified(_) => return project_root.to_path_buf(),
+        crate::seat_clone::MainFor::Verified(main) => main,
+        crate::seat_clone::MainFor::NotAClone => {
+            // A root with no `.git` costs one stat and stays unmemoised, so a
+            // directory that later becomes a checkout is not pinned stale.
+            if std::fs::symlink_metadata(project_root.join(".git")).is_err() {
+                return project_root.to_path_buf();
+            }
+            primary_checkout_from_files(project_root)
+        }
+    };
+    if let Ok(mut m) = memo.lock() {
+        m.insert(project_root.to_path_buf(), resolved.clone());
+    }
+    resolved
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Uncached primary-checkout resolutions on this thread.
+    pub(crate) static STORE_RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// The main checkout of `root`, read from git's own files without running git:
+/// a `.git` directory makes `root` the main checkout; a linked worktree's
+/// `.git` file names its gitdir, whose `commondir` is the main checkout's
+/// `.git`. Anything else (a submodule, a bare main, an unreadable file) keeps
+/// `root`, which is where the marker lived before BUG-2176.
+// trace:BUG-2176 | ai:claude
+fn primary_checkout_from_files(root: &Path) -> PathBuf {
+    #[cfg(test)]
+    STORE_RESOLUTIONS.with(|n| n.set(n.get() + 1));
+    let dot_git = root.join(".git");
+    let Ok(meta) = std::fs::symlink_metadata(&dot_git) else {
+        return root.to_path_buf();
+    };
+    if !meta.is_file() {
+        return root.to_path_buf();
+    }
+    let Some(gitdir) = std::fs::read_to_string(&dot_git).ok().and_then(|body| {
+        body.lines()
+            .find_map(|l| l.strip_prefix("gitdir:"))
+            .map(|d| root.join(d.trim()))
+    }) else {
+        return root.to_path_buf();
+    };
+    let Ok(common) = std::fs::read_to_string(gitdir.join("commondir")) else {
+        return root.to_path_buf();
+    };
+    let common = gitdir.join(common.trim());
+    let common = std::fs::canonicalize(&common).unwrap_or(common);
+    match (common.file_name(), common.parent()) {
+        (Some(name), Some(main)) if name == ".git" => main.to_path_buf(),
+        _ => root.to_path_buf(),
+    }
+}
+
 fn holds_dir(project_root: &Path) -> PathBuf {
-    project_root.join(".aida").join("merge-holds")
+    local_holds_dir(&hold_store_root(project_root))
+}
+
+/// `<root>/.aida/merge-holds`, taken literally — no primary-checkout resolution.
+// trace:BUG-2176 | ai:claude
+fn local_holds_dir(root: &Path) -> PathBuf {
+    root.join(".aida").join("merge-holds")
 }
 
 /// The marker path for one PR. Public so callers can log it.
 pub(crate) fn hold_path(project_root: &Path, pr: u64) -> PathBuf {
     holds_dir(project_root).join(format!("PR-{pr}"))
+}
+
+/// The marker path for one PR inside `root` itself — where a contained caller
+/// that cannot write the primary checkout leaves its marker.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn local_hold_path(root: &Path, pr: u64) -> PathBuf {
+    local_holds_dir(root).join(format!("PR-{pr}"))
 }
 
 /// Record a supervised merge-hold for `pr` with a human-readable reason.
@@ -474,8 +569,6 @@ fn write_marker(
     reconcile_route: bool,
     rearmed: bool,
 ) -> std::io::Result<()> {
-    let dir = holds_dir(project_root);
-    std::fs::create_dir_all(&dir)?;
     if record.pr == 0
         || (record.reason_kind == HoldReasonKind::Recusal
             && (record.recused_principals.is_empty()
@@ -497,12 +590,29 @@ fn write_marker(
     }
     let body = serde_json::to_vec_pretty(&normalized)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    match std::fs::remove_file(clearance_path(project_root, record.pr)) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
+    // BUG-2176: the marker lands in the primary checkout. A contained caller
+    // (a reviewer sandboxed to its worktree) cannot write there; it keeps the
+    // marker locally and the launcher adopts it once the reviewer exits
+    // ([`adopt_worktree_hold`]). Any other failure stays an error.
+    // trace:BUG-2176 | ai:claude
+    let store = hold_store_root(project_root);
+    if let Err(error) = write_marker_files(&store, record.pr, &body) {
+        // Compare canonical spellings: a primary reached through a symlink
+        // must not "fall back" to the very directory that just refused.
+        let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        if canon(&store) == canon(project_root) {
+            return Err(error);
+        }
+        write_marker_files(project_root, record.pr, &body)?;
+        eprintln!(
+            "  warning: could not write PR-{pr}'s merge-hold marker in the primary checkout \
+             ({error}); it was written to {local} instead — the review launcher adopts it, \
+             otherwise copy it to {primary} before removing this worktree",
+            pr = record.pr,
+            local = local_hold_path(project_root, record.pr).display(),
+            primary = local_hold_path(&store, record.pr).display(),
+        );
     }
-    aida_core::fs_atomic::write_atomic(&hold_path(project_root, record.pr), &body)?;
     // trace:BUG-1693 | ai:codex
     let mut event = crate::events::Event::new(
         None,
@@ -523,6 +633,136 @@ fn write_marker(
     event.seat = crate::events::active_seat();
     crate::events::emit(project_root, &event);
     Ok(())
+}
+
+/// Retire `root`'s clearance record for `pr` and write its marker, both taken
+/// literally under `root`.
+// trace:BUG-2176 | ai:claude
+fn write_marker_files(root: &Path, pr: u64, body: &[u8]) -> std::io::Result<()> {
+    std::fs::create_dir_all(local_holds_dir(root))?;
+    match std::fs::remove_file(local_clearance_path(root, pr)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    aida_core::fs_atomic::write_atomic(&local_hold_path(root, pr), body)
+}
+
+/// BUG-2176: move a marker a contained reviewer left in its review `worktree`
+/// into the primary checkout, composing with any marker already there (so a
+/// stricter hold stays primary). Only a marker written at or after `since`
+/// (the reviewer's start) is adopted, so a stale copy from an earlier round
+/// cannot re-arm a hold a human has since cleared. Returns whether a marker
+/// was adopted; the worktree copy is removed only after the primary write.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn adopt_worktree_hold(
+    project_root: &Path,
+    worktree: &Path,
+    pr: u64,
+    since: std::time::SystemTime,
+) -> std::io::Result<bool> {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let local = local_hold_path(worktree, pr);
+    if canon(&local) == canon(&hold_path(project_root, pr)) {
+        return Ok(false);
+    }
+    let fresh = std::fs::symlink_metadata(&local)
+        .and_then(|m| m.modified())
+        .is_ok_and(|modified| modified >= since);
+    if !fresh {
+        return Ok(false);
+    }
+    let Some(record) = parse_hold_marker(std::fs::read_to_string(&local), pr) else {
+        return Ok(false);
+    };
+    write_typed_hold(project_root, &record)?;
+    std::fs::remove_file(&local)?;
+    Ok(true)
+}
+
+/// BUG-2176: markers sitting in linked worktrees of `main_root`'s repository,
+/// as `(pr, path)` ascending — where no merge gate reads them and removing the
+/// worktree destroys them. `aida merge-hold list` warns on each.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_worktree_markers(main_root: &Path) -> Vec<(u64, PathBuf)> {
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(main_root)
+        .args(["worktree", "list", "--porcelain"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let primary = canon(&local_holds_dir(main_root));
+    let mut found = Vec::new();
+    for tree in crate::worktree::parse_worktree_paths(&String::from_utf8_lossy(&out.stdout)) {
+        let dir = local_holds_dir(&tree);
+        if canon(&dir) == primary {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if let Some(n) = name
+                .to_string_lossy()
+                .strip_prefix("PR-")
+                .and_then(|s| s.parse::<u64>().ok())
+            {
+                found.push((n, entry.path()));
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// The `stray_worktree_markers` rows of `aida merge-hold list --json`.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_markers_json(
+    strays: &[(u64, PathBuf)],
+    label_only: &[u64],
+) -> serde_json::Value {
+    strays
+        .iter()
+        .map(|(pr, path)| {
+            serde_json::json!({
+                "pr": pr,
+                "path": path.display().to_string(),
+                "label_only": label_only.contains(pr),
+            })
+        })
+        .collect()
+}
+
+/// The `aida merge-hold list` line for one stray marker. A label-only hold
+/// with a stray marker is the BUG-2176 shape: the reviewer's recorded reason
+/// and release condition exist, just not where the gates read.
+// trace:BUG-2176 | ai:claude
+pub(crate) fn stray_marker_warning(
+    pr: u64,
+    path: &Path,
+    main_root: &Path,
+    label_only: bool,
+) -> String {
+    let primary = local_hold_path(main_root, pr);
+    let lead = if label_only {
+        format!(
+            "PR #{pr}: held by the label alone here, but a marker for it sits in a linked worktree"
+        )
+    } else {
+        format!("PR #{pr}: a merge-hold marker sits in a linked worktree")
+    };
+    format!(
+        "{lead} at {} — `aida pr ship` and auto-release do not read it, and removing that worktree destroys it. Copy it to {} to restore it.",
+        path.display(),
+        primary.display()
+    )
 }
 
 /// BUG-1562: place a hold by hand (`aida merge-hold add`) WITHOUT silently
@@ -785,7 +1025,13 @@ fn retire_stale_route_briefs(
 /// hold, preserving the merge chokepoint while exposing the diagnostic.
 // trace:STORY-1397 | ai:codex
 pub(crate) fn read_hold_record(project_root: &Path, pr: u64) -> Option<MergeHoldRecord> {
-    match std::fs::read_to_string(hold_path(project_root, pr)) {
+    parse_hold_marker(std::fs::read_to_string(hold_path(project_root, pr)), pr)
+}
+
+/// The record a marker read yields — `None` only for a missing marker.
+// trace:BUG-2176 | ai:claude
+fn parse_hold_marker(read: std::io::Result<String>, pr: u64) -> Option<MergeHoldRecord> {
+    match read {
         Ok(body) if body.trim_start().starts_with('{') => {
             match serde_json::from_str::<MergeHoldRecord>(&body) {
                 Ok(record) if record.schema_version == 2 && record.pr == pr => Some(record),
@@ -978,8 +1224,12 @@ pub(crate) struct HoldClearance {
 }
 
 pub(crate) fn clearance_path(project_root: &Path, pr: u64) -> PathBuf {
-    project_root
-        .join(".aida")
+    // trace:BUG-2176 | ai:claude
+    local_clearance_path(&hold_store_root(project_root), pr)
+}
+
+fn local_clearance_path(root: &Path, pr: u64) -> PathBuf {
+    root.join(".aida")
         .join("merge-hold-clearances")
         .join(format!("PR-{pr}.json"))
 }
@@ -2619,6 +2869,33 @@ pub(crate) fn corpus_merge_gate(
     bodies: &[(String, String)],
     head: Option<&str>,
 ) -> CorpusMergeGate {
+    corpus_merge_gate_carrying(pr, bodies, head, &|_| None)
+}
+
+/// The TASK-1960 carry-over prover the corpus gate consults: the SAME proof
+/// the approval-head gate applies (`review_carryover::prove_for_refusal`),
+/// asked about a `Moved` refusal from an approved sha to the head. `None` =
+/// no carry-over is available here.
+// trace:TASK-1968 | ai:claude
+pub(crate) type CorpusCarryOverProver<'a> = &'a dyn Fn(
+    &crate::pr_ship::ApprovalHeadRefusal,
+) -> Option<
+    Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>,
+>;
+
+/// [`corpus_merge_gate`], except that a head nothing approves may still
+/// clear when an approval at an older head carries over to it (TASK-1968):
+/// every live verdict's current recording approves, the corpus cleanly
+/// approves that older sha, and `prove` shows the head moved only by clean
+/// merges of the protected base with the PR's own diff unchanged. Anything
+/// short of that refuses exactly as [`corpus_merge_gate`] does.
+// trace:TASK-1968 | ai:claude
+pub(crate) fn corpus_merge_gate_carrying(
+    pr: u64,
+    bodies: &[(String, String)],
+    head: Option<&str>,
+    prove: CorpusCarryOverProver<'_>,
+) -> CorpusMergeGate {
     use crate::review_verdict as rv;
     let live: Vec<&(String, String)> = bodies
         .iter()
@@ -2684,16 +2961,29 @@ pub(crate) fn corpus_merge_gate(
         // Verdict evidence exists but nothing cleanly approves this head: a
         // refusal left at an older sha (a head move alone does not lift the
         // hold) or an approval recorded at the OLD rejected sha (parent AC3).
-        Ok(None) => CorpusMergeGate::Refuse {
-            message: format!(
-                "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
-                 head {} — a head move alone does not lift a recorded refusal, and an approval \
-                 at an older commit is not evidence this head was reviewed. {}",
-                rv::short_sha(head),
-                corpus_release_hint(pr, &first_key)
-            ),
-            arm: None,
-        },
+        //
+        // TASK-1968: the one exception is TASK-1960's carry-over — an
+        // approval at an older head whose only successors are clean merges of
+        // the protected base, with the PR's own diff unchanged.
+        // trace:TASK-1968 | ai:claude
+        Ok(None) => {
+            let not_carried = match corpus_carry_over(&live, head, prove) {
+                Some(Ok(_)) => return CorpusMergeGate::Clear,
+                Some(Err(why)) => format!(" The approval did not carry over: {}.", why.reason()),
+                None => String::new(),
+            };
+            CorpusMergeGate::Refuse {
+                message: format!(
+                    "PR-{pr}'s recorded review verdicts ({first_key}) do not approve its current \
+                     head {} — a head move alone does not lift a recorded refusal, and an \
+                     approval at an older commit is not evidence this head was reviewed.\
+                     {not_carried} {}",
+                    rv::short_sha(head),
+                    corpus_release_hint(pr, &first_key)
+                ),
+                arm: None,
+            }
+        }
         Err(message) => CorpusMergeGate::Refuse {
             message: format!(
                 "PR-{pr}'s verdict corpus cannot be reconciled at its current head {}: {message} \
@@ -2704,6 +2994,56 @@ pub(crate) fn corpus_merge_gate(
             arm: None,
         },
     }
+}
+
+/// Whether an approval in the live corpus carries over to `head`. `None` =
+/// no approval is eligible to carry over: a live artifact that does not
+/// parse, has no reviewed sha, or whose current recording does not approve
+/// (a standing refusal at ANY sha is never carried past), or no approved sha
+/// the corpus itself cleanly approves. Otherwise each eligible approved sha
+/// is proven in turn; the first proof wins, else the last refusal is
+/// returned for the message.
+// trace:TASK-1968 | ai:claude
+fn corpus_carry_over(
+    live: &[&(String, String)],
+    head: &str,
+    prove: CorpusCarryOverProver<'_>,
+) -> Option<Result<crate::review_carryover::CarryOver, crate::review_carryover::CarryOverRefusal>> {
+    use crate::review_verdict as rv;
+    let mut approved: Vec<String> = Vec::new();
+    for (_, body) in live {
+        let verdict = rv::parse_recorded_verdict(body)?;
+        if !verdict.kind.approves() {
+            return None;
+        }
+        let sha = verdict.reviewed_sha?;
+        let sha = sha.trim();
+        if sha.is_empty() || rv::same_reviewed_sha(sha, head) {
+            return None;
+        }
+        if !approved.iter().any(|a| rv::same_reviewed_sha(a, sha)) {
+            approved.push(sha.to_string());
+        }
+    }
+    let mut last = None;
+    for sha in approved {
+        let corpus_approves = matches!(
+            rv::reconcile_artifacts_for_sha(live.iter().map(|(_, b)| b.as_str()), &sha),
+            Ok(Some(kind)) if kind.approves()
+        );
+        if !corpus_approves {
+            continue;
+        }
+        let refusal = crate::pr_ship::ApprovalHeadRefusal::Moved {
+            reviewed_sha: sha,
+            head_sha: head.to_string(),
+        };
+        match prove(&refusal)? {
+            Ok(proof) => return Some(Ok(proof)),
+            Err(why) => last = Some(Err(why)),
+        }
+    }
+    last
 }
 
 /// Gather the `(key, body)` pairs the gate judges: the PR-keyed record plus
@@ -2758,11 +3098,19 @@ pub(crate) fn corpus_gate_bodies(
 /// read. On a definite at-head refusal the mirrors are refreshed best-effort
 /// from the gate's own `CorpusArm` (never from a second predicate), and the
 /// refusal stands whether or not the mirrors landed.
+///
+/// `base_branch` is the PR's base as the caller knows it (`None` = read it
+/// from the forge); a carry-over is proven against the remote's default
+/// branch and only for a PR that targets it (TASK-1968). The proof here is
+/// quiet: it records nothing, since the approval gate that pins the merge
+/// records and announces it.
 // trace:BUG-1774 | ai:claude
+// trace:TASK-1968 | ai:claude
 pub(crate) fn enforce_corpus_gate_before_merge(
     project_root: &Path,
     pr: u64,
     spec_hints: &[String],
+    base_branch: Option<&str>,
     head: impl FnOnce() -> Option<String>,
 ) -> anyhow::Result<()> {
     let main_root = crate::main_worktree_root_from(project_root);
@@ -2781,7 +3129,12 @@ pub(crate) fn enforce_corpus_gate_before_merge(
         return Ok(());
     }
     let head = head();
-    match corpus_merge_gate(pr, &bodies, head.as_deref()) {
+    let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
+    let site = crate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch);
+    let prove = |refusal: &crate::pr_ship::ApprovalHeadRefusal| {
+        crate::review_carryover::prove_for_refusal(&site, pr, refusal)
+    };
+    match corpus_merge_gate_carrying(pr, &bodies, head.as_deref(), &prove) {
         CorpusMergeGate::Clear => Ok(()),
         CorpusMergeGate::Refuse { message, arm } => {
             if let Some(arm) = arm.filter(|_| pr > 0) {
@@ -4801,3 +5154,7 @@ mod tests {
         assert!(write_typed_hold(dir.path(), &invalid).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2176_merge_hold_primary_root_tests.rs"]
+mod bug_2176_merge_hold_primary_root_tests;

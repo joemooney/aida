@@ -1657,6 +1657,14 @@ impl DatabaseBackend for CachedGitBackend {
         Ok(())
     }
 
+    // trace:STORY-1674 | ai:codex
+    fn save_imported(&self, store: &RequirementsStore) -> Result<()> {
+        self.refuse_store_write_on_read_only_cache()?;
+        let _lock = self.inner.lock_store()?;
+        self.inner.save_imported(store)?;
+        self.with_cache_schema_retry("rebuild cache after import", || self.full_rebuild(false))
+    }
+
     /// Whole-store transaction written per spec, then the cache rows it
     /// touched. Holds the store write lock across both.
     // trace:BUG-1612 | ai:claude
@@ -2057,6 +2065,47 @@ mod tests {
         }
         assert!(read(&Uuid::now_v7()).unwrap().is_none());
         assert_eq!(OBJECT_LIST_COUNT.with(|c| c.get()), 1);
+    }
+
+    // The whole-store transaction the doc/burndown/findings commands use:
+    // the returned store, the object on disk and the cache row all carry the
+    // write event's session context. trace:STORY-1674 | ai:claude
+    #[test]
+    fn story1674_update_atomically_returns_and_caches_stamped_rows() {
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("AIDA_SESSION_ID", "session1674"),
+            ("AIDA_HARNESS_VERSION", "harness1674"),
+        ]);
+        let dir = tempdir().unwrap();
+        let store_root = dir.path().join("store");
+        std::fs::create_dir_all(&store_root).unwrap();
+        let backend = CachedGitBackend::open(&store_root, &dir.path().join("cache.db")).unwrap();
+        let added = backend
+            .add_requirement(sample_req("TASK-1", "Before"))
+            .unwrap();
+        let store = backend
+            .update_atomically(|s| {
+                s.requirements
+                    .iter_mut()
+                    .find(|r| r.id == added.id)
+                    .unwrap()
+                    .title = "After".into();
+            })
+            .unwrap();
+        let returned = store.get_requirement_by_id(&added.id).unwrap().clone();
+        let event = returned
+            .history
+            .last()
+            .expect("the write recorded an event");
+        assert!(event.is_write_event());
+        assert_eq!(event.session_id.as_deref(), Some("session1674"));
+        assert_eq!(event.harness_version.as_deref(), Some("harness1674"));
+        let on_disk =
+            crate::object_store::read_object(&store_root.join("objects"), "TASK-1").unwrap();
+        let cached = backend.get_requirement(&added.id).unwrap().unwrap();
+        let yaml = |r: &Requirement| serde_yaml::to_string(r).unwrap();
+        assert_eq!(yaml(&returned), yaml(&on_disk));
+        assert_eq!(yaml(&cached), yaml(&on_disk));
     }
 
     #[test]
@@ -2921,7 +2970,7 @@ mod tests {
         // reachable from the new HEAD. Change the message so the amended commit
         // gets a DIFFERENT sha (an identical-tree/message/author amend is
         // byte-identical and git reuses the same hash).
-        let amend = Command::new("git")
+        let amend = crate::test_git::git_command()
             .current_dir(&store_root)
             .args(["commit", "--amend", "-m", "rewritten root"])
             .output()
@@ -4227,8 +4276,9 @@ mod tests {
     // detached worker (`deferred` in tests, where the spawn is refused) with
     // no write attempt — the `write_attempt == None` flake:
     // - `refresh_lock_contended`: a `fork` on a sibling test thread while this
-    //   reader held the refresh flock leaves a child holding it until `exec`
-    //   (see `acquire_past_fork_window`), so the next read loses the lock.
+    //   reader held the refresh flock left a child holding it until `exec`
+    //   (see `acquire_past_fork_window`), so the next read lost the lock; the
+    //   guard's drop now unlocks explicitly (BUG-2156).
     // - `ancestor_check_failed`: the winner's ancestry check runs under the
     //   read budget and can time out on a loaded host. The budget is pinned
     //   well above any plausible `git merge-base` time so this is not
@@ -4327,6 +4377,18 @@ mod tests {
     }
 
     // trace:TASK-1526 | ai:codex
+    //
+    // BUG-2156: the second read served stale (no incremental) under full-suite
+    // load. Two branches hand that read off with no write attempt:
+    // - `refresh_lock_contended`: a sibling test thread forked while the first
+    //   read held the refresh flock, and the guard's bare close left the lock
+    //   held by the child's copy until its exec. Fixed in `RefreshLock`'s
+    //   drop, which now unlocks explicitly.
+    // - `ancestor_check_failed`: the default 1.5 s read budget bounds the
+    //   `git merge-base` ancestry check, which a loaded host can exceed. The
+    //   budget is pinned well above that here, as BUG-1965 does.
+    // Either one is named in the failure message rather than inferred.
+    // trace:TASK-1956 | ai:claude trace:BUG-2156 | ai:claude
     #[test]
     fn writer_busy_next_reader_retries_incremental_after_lock_release() {
         use super::super::cache_refresh::*;
@@ -4337,16 +4399,19 @@ mod tests {
         holder.execute_batch("BEGIN IMMEDIATE").unwrap();
         {
             let s = CacheReadScope::new();
+            s.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
             backend.list_summaries(&ListFilter::default()).unwrap();
             assert_eq!(s.metadata()["refreshing"], "writer_busy");
         }
         holder.execute_batch("ROLLBACK").unwrap();
         let s = CacheReadScope::new();
+        s.configure(false, Some(ReadBudget(std::time::Duration::from_secs(10))));
         test_counts();
         backend.list_summaries(&ListFilter::default()).unwrap();
-        assert_eq!(s.metadata()["stale"], false);
+        let counts = test_counts();
+        assert_eq!(s.metadata()["stale"], false, "{counts:?} {}", s.metadata());
         assert_eq!(backend.cache().source_head_sha().unwrap(), Some(to));
-        assert_eq!(test_counts().get("incremental"), Some(&1));
+        assert_eq!(counts.get("incremental"), Some(&1), "{counts:?}");
     }
 
     // trace:TASK-1526 | ai:codex
@@ -4395,13 +4460,13 @@ mod tests {
                     )
                     .unwrap();
                 }
-                assert!(std::process::Command::new("git")
+                assert!(crate::test_git::git_command()
                     .args(["add", "."])
                     .current_dir(&store)
                     .status()
                     .unwrap()
                     .success());
-                assert!(std::process::Command::new("git")
+                assert!(crate::test_git::git_command()
                     .args(["commit", "-qm", "bulk"])
                     .current_dir(&store)
                     .status()
@@ -4421,17 +4486,17 @@ mod tests {
                 crate::git_ops::init(&other).unwrap();
                 crate::git_ops::configure_user(&other, "T", "t@t.test").unwrap();
                 std::fs::write(other.join("file"), "other").unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .args(["add", "."])
                     .current_dir(&other)
                     .output()
                     .unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .args(["commit", "-m", "other"])
                     .current_dir(&other)
                     .output()
                     .unwrap();
-                std::process::Command::new("git")
+                crate::test_git::git_command()
                     .arg("fetch")
                     .arg(&other)
                     .arg("HEAD")

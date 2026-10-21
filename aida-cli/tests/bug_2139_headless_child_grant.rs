@@ -8,6 +8,9 @@
 //! advisor running implementer work headless did it with advisor authority.
 // trace:BUG-2139 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -52,7 +55,7 @@ fn aida(fx: &Fixture) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()

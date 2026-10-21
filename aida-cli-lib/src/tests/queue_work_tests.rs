@@ -14,7 +14,7 @@ use uuid::Uuid;
 /// non-repo tempdir no longer exercises the real decision.
 // trace:BUG-1515 | ai:claude
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -33,7 +33,7 @@ fn git(repo: &std::path::Path, args: &[&str]) {
 
 // trace:BUG-1515 | ai:claude
 fn git_head(repo: &std::path::Path) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "HEAD"])
@@ -815,6 +815,7 @@ fn batch_members_report_and_emit_unresolvable_member() {
 
 fn implementer_lease(scope: &str) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: "lease-1082".to_string(),
         scope: scope.to_string(),
         slug: scope.to_ascii_lowercase(),
@@ -1668,6 +1669,7 @@ fn review_pickup_hint_names_reviewer_role() {
 
 fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
     SessionLease {
+        tree_kind: Default::default(),
         id: id.to_string(),
         scope: scope.to_string(),
         slug: scope.to_lowercase(),
@@ -2398,14 +2400,18 @@ fn not_queued_falls_back_when_role_unknown() {
 /// caller opts out.
 #[test]
 fn queue_work_quiet_flag_parses() {
-    let on = Cli::try_parse_from([
+    let on = crate::command_registry::try_parse_from([
         "aida", "queue", "work", "PR-65", "--role", "reviewer", "--quiet",
     ])
     .expect("--quiet parses");
-    let off = Cli::try_parse_from(["aida", "queue", "work", "PR-65", "--role", "reviewer"])
-        .expect("no --quiet parses");
-    let quiet_of = |c: &Cli| match &c.command {
-        Command::Queue(QueueCommand::Work { quiet, .. }) => *quiet,
+    let off = crate::command_registry::try_parse_from([
+        "aida", "queue", "work", "PR-65", "--role", "reviewer",
+    ])
+    .expect("no --quiet parses");
+    let quiet_of = |c: &Cli| match &c.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { quiet, .. },
+        } => *quiet,
         _ => panic!("expected queue work command"),
     };
     assert!(quiet_of(&on), "--quiet should set quiet=true");
@@ -2417,7 +2423,7 @@ fn queue_work_quiet_flag_parses() {
 // of clap's terse "cannot be used with". trace:TASK-560
 #[test]
 fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
-    let cli = Cli::try_parse_from([
+    let cli = crate::command_registry::try_parse_from([
         "aida",
         "queue",
         "work",
@@ -2426,12 +2432,15 @@ fn queue_work_resume_plus_auto_complete_parses_for_handler_rejection() {
         "--auto-complete",
     ])
     .expect("--resume + --auto-complete should parse (handler rejects, not clap)");
-    match cli.command {
-        Command::Queue(QueueCommand::Work {
-            resume,
-            auto_complete,
-            ..
-        }) => {
+    match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner:
+                QueueCommand::Work {
+                    resume,
+                    auto_complete,
+                    ..
+                },
+        } => {
             assert!(resume.is_some() && auto_complete.is_some());
         }
         other => panic!("expected queue work command, got {other:?}"),
@@ -2459,10 +2468,18 @@ fn resume_autocomplete_conflict_message_explains_and_recovers() {
 
 #[test]
 fn queue_work_force_claim_flag_parses() {
-    let cli = Cli::try_parse_from(["aida", "queue", "work", "TASK-559", "--force-claim"])
-        .expect("--force-claim parses on queue work");
-    match cli.command {
-        Command::Queue(QueueCommand::Work { force_claim, .. }) => {
+    let cli = crate::command_registry::try_parse_from([
+        "aida",
+        "queue",
+        "work",
+        "TASK-559",
+        "--force-claim",
+    ])
+    .expect("--force-claim parses on queue work");
+    match cli.command.registered::<crate::queue_cmd::QueueArgs>() {
+        crate::queue_cmd::QueueArgs {
+            inner: QueueCommand::Work { force_claim, .. },
+        } => {
             assert!(force_claim, "--force-claim should set force_claim=true");
         }
         other => panic!("expected queue work command, got {other:?}"),

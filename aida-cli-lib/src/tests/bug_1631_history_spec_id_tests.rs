@@ -16,7 +16,7 @@ const STORY_UUID: &str = "11111111-1111-4111-8111-111111111111";
 const TASK_UUID: &str = "22222222-2222-4222-8222-222222222222";
 
 fn git(store: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(store)
         .args(args)
@@ -263,10 +263,12 @@ fn bug_1631_history_json_flag_parses_on_both_sides_of_events() {
         vec!["aida", "history", "events", "--json"],
         vec!["aida", "history", "--json", "events"],
     ] {
-        let cli = Cli::try_parse_from(&argv).unwrap();
+        let cli = crate::command_registry::try_parse_from(&argv).unwrap();
         // trace:STORY-1477 | ai:codex — each JSON view owns its flag;
         // template management must not inherit JSON capability.
-        let Command::History { json, cmd, .. } = cli.command else {
+        let crate::history::HistoryArgs { json, cmd, .. } =
+            cli.command.registered::<crate::history::HistoryArgs>()
+        else {
             panic!("expected history: {argv:?}");
         };
         assert!(

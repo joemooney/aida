@@ -6,6 +6,9 @@
 //! the budget is actually hit.
 // trace:BUG-1993 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -31,7 +34,7 @@ fn aida(repo: &Path, home: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()
@@ -192,5 +195,21 @@ fn linkage_timeouts_render_unknown_not_unshipped() {
     assert!(
         !human.contains("in flight") && !human.contains("not found"),
         "an unknown shipped state must not read as unshipped:\n{human}"
+    );
+
+    // `symbolic-ref` inside `resolve_default_branch_ref` stalls.
+    let slow_symref = git_shim(&base_dir, "symbolic-ref");
+    let started = std::time::Instant::now();
+    let l = show_json(&repo, &home, &spec, Some(&slow_symref));
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "stalled symbolic-ref is bounded: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(l["complete"], false, "{l}");
+    assert!(notes(&l).contains("shipped state unknown"), "{l}");
+    assert!(
+        l["shipped"].is_null(),
+        "shipped must be null when default-branch resolution times out: {l}"
     );
 }

@@ -62,6 +62,11 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration as StdDuration, Instant};
 
+// trace:STORY-1728 | ai:claude
+#[path = "shift_args.rs"]
+pub(crate) mod shift_args;
+pub(crate) use shift_args::*;
+
 use aida_core::{DatabaseBackend, ExecutionMode, RequirementStatus};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
@@ -3811,3 +3816,74 @@ mod task_1510_wave_unit_tests;
 #[cfg(test)]
 #[path = "tests/task_1517_wave_limits_tests.rs"]
 mod task_1517_wave_limits_tests;
+
+/// Night shift: launch bounded drain waves from the scheduler while no
+/// seat is awake, behind fail-closed guards. Off unless enabled per clone.
+// trace:STORY-1218 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "shift")]
+pub(crate) struct ShiftArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::ShiftCommand,
+}
+
+fn run_shift(
+    matches: &clap::ArgMatches,
+    ctx: &crate::command_registry::DispatchCtx,
+) -> anyhow::Result<crate::command_registry::Flow> {
+    use crate::*;
+    let args = <ShiftArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    match &ctx.store {
+        None => Ok(crate::command_registry::Flow::Continue),
+        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Git {
+            store_path,
+            backend,
+        }) => {
+            use crate::git_backend_cmd::*;
+            let (store_path, backend) = (*store_path, *backend);
+            match &args {
+                ShiftArgs { inner: shift_cmd } => {
+                    // trace:STORY-1218 | ai:claude
+                    return crate::command_registry::returned(self::handle_shift_command(
+                        shift_cmd, backend, store_path,
+                    ));
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+        Some(crate::command_registry::StoreCtx::Legacy {
+            storage,
+            requirements_path,
+        }) => {
+            let (storage, requirements_path) = (*storage, *requirements_path);
+            match &args {
+                // trace:STORY-1218 | ai:claude
+                ShiftArgs { inner: _ } => {
+                    anyhow::bail!(
+                    "aida shift commands are only available in git-canonical (distributed) mode. \
+                     Run `aida init` (defaults to distributed) first."
+                );
+                }
+            }
+            Ok(crate::command_registry::Flow::Continue)
+        }
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SHIFT: crate::command_registry::CommandReg =
+    crate::command_registry::CommandReg {
+        name: "shift",
+        help_after: "supervise",
+        command: <ShiftArgs as clap::CommandFactory>::command,
+        policy: |_| crate::command_registry::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: false,
+            team_identity_write: false,
+        },
+        run: crate::command_registry::Handler::Store(run_shift),
+    };

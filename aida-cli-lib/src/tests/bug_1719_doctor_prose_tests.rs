@@ -1,7 +1,7 @@
 use std::path::Path;
 
 fn git(root: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(root)
         .args(args)

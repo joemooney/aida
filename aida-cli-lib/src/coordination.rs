@@ -539,6 +539,30 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
     format!("{stem}-{hash:016x}")
 }
 
+/// Best-effort store refresh for a coordination write. An unreachable store
+/// keeps the local-only path (`Ok`); a hypothesis evidence refusal is the one
+/// failure that stops the write and its publish (`Err`).
+// trace:BUG-2162 | ai:claude
+fn refresh_store(store_root: &Path, branch: &str) -> Result<std::result::Result<(), String>> {
+    match aida_core::git_ops::pull_rebase(store_root, "origin", branch) {
+        Ok(()) => Ok(Ok(())),
+        Err(e) if aida_core::git_ops::is_evidence_refusal(&e) => Err(e),
+        Err(e) => Ok(Err(e.to_string())),
+    }
+}
+
+/// [`refresh_store`] for a void cleanup path: report a refusal and tell the
+/// caller to stop.
+fn refresh_store_or_stop(store_root: &Path, branch: &str) -> bool {
+    match refresh_store(store_root, branch) {
+        Ok(_) => false,
+        Err(e) => {
+            eprintln!("warning: store coordination update skipped: {e:#}");
+            true
+        }
+    }
+}
+
 /// Directory under the store worktree holding the lease claims.
 fn leases_dir(store_root: &Path) -> PathBuf {
     store_root.join(LEASES_SUBDIR)
@@ -700,65 +724,107 @@ pub(crate) fn acquire_claim(
     let path = claim_path(store_root, scope);
 
     for attempt in 0..MAX_CAS_RETRIES {
-        // Step 1: refresh the store so we see other clones' claims. A failed
-        // pull (offline) is NOT fatal — fall through to local-only behavior.
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_root, "origin", &branch) {
-            return Ok(AcquireOutcome::Unavailable(format!(
-                "store unreachable ({e})"
-            )));
+        // trace:TASK-1930 | ai:agy
+        enum ClaimStep {
+            Unavailable(String),
+            Refused(String),
+            Ready {
+                outcome_note: Option<String>,
+                committed_sha: Option<String>,
+            },
         }
-
-        // Step 2: decide against the freshly-pulled claim.
-        let existing = read_claim(&path);
-        let outcome_note = if force {
-            // --force: skip the decision, but still report what we overrode.
-            existing
-                .as_ref()
-                .filter(|h| h.node_id != ours.node_id)
-                .map(|h| format!("--force overriding {}'s claim ({})", h.host, h.clone_path))
-        } else {
-            match decide_claim(
-                existing.as_ref(),
-                &ours,
-                Utc::now(),
-                &our_host,
-                crate::process_probe::process_identity_is_alive,
-                // BUG-1765: a same-host holder whose session is verifiably
-                // live keeps its claim past the TTL. trace:BUG-1765 | ai:claude
-                |c: &Claim| probe_session_liveness(c, &our_host),
-            ) {
-                ClaimDecision::Refuse { holder } => {
-                    anyhow::bail!("{}", refusal_message(scope, &holder, &path));
-                }
-                ClaimDecision::Acquire => None,
-                ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
+        let step = aida_core::db::with_store_write_lock(store_root, || -> Result<ClaimStep> {
+            // Step 1: refresh the store so we see other clones' claims. A failed
+            // pull (offline) is NOT fatal — fall through to local-only behavior.
+            if let Err(e) = refresh_store(store_root, &branch)? {
+                return Ok(ClaimStep::Unavailable(format!("store unreachable ({e})")));
             }
+
+            // Step 2: decide against the freshly-pulled claim.
+            let existing = read_claim(&path);
+            let outcome_note = if force {
+                // --force: skip the decision, but still report what we overrode.
+                existing
+                    .as_ref()
+                    .filter(|h| h.node_id != ours.node_id)
+                    .map(|h| format!("--force overriding {}'s claim ({})", h.host, h.clone_path))
+            } else {
+                match decide_claim(
+                    existing.as_ref(),
+                    &ours,
+                    Utc::now(),
+                    &our_host,
+                    crate::process_probe::process_identity_is_alive,
+                    // BUG-1765: a same-host holder whose session is verifiably
+                    // live keeps its claim past the TTL. trace:BUG-1765 | ai:claude
+                    |c: &Claim| probe_session_liveness(c, &our_host),
+                ) {
+                    ClaimDecision::Refuse { holder } => {
+                        return Ok(ClaimStep::Refused(refusal_message(scope, &holder, &path)));
+                    }
+                    ClaimDecision::Acquire => None,
+                    ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
+                }
+            };
+
+            // Step 3: write our claim, commit, push. On non-ff → pull + retry.
+            std::fs::create_dir_all(leases_dir(store_root)).ok();
+            let toml = toml::to_string_pretty(&ours)
+                .map_err(|e| anyhow::anyhow!("could not serialize lease claim: {e}"))?;
+            std::fs::write(&path, toml).map_err(|e| {
+                anyhow::anyhow!("could not write lease claim {}: {e}", path.display())
+            })?;
+
+            let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
+            aida_core::git_ops::add(store_root, &[&rel])?;
+            let msg = format!(
+                "chore(coordination): claim lease {scope} (node {})",
+                ours.node_id
+            );
+            // `commit` returns Ok(false) for "nothing to commit" — treat as a
+            // successful no-op (our claim already matched what was on disk).
+            // A real commit error unstages `&rel` and propagates as Err so we
+            // never record a pre-existing HEAD as `committed_sha` or leave the
+            // store index dirty. trace:TASK-1930 | ai:agy
+            let committed = match aida_core::git_ops::commit(store_root, &msg) {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = aida_core::git_ops::host_git_command(store_root)
+                        .args(["reset", "-q", "HEAD", "--", &rel])
+                        .status();
+                    return Err(e);
+                }
+            };
+            let committed_sha = if committed {
+                Some(aida_core::git_ops::head_sha(store_root)?)
+            } else {
+                None
+            };
+            Ok(ClaimStep::Ready {
+                outcome_note,
+                committed_sha,
+            })
+        })?;
+
+        let (outcome_note, committed_sha) = match step {
+            ClaimStep::Unavailable(msg) => return Ok(AcquireOutcome::Unavailable(msg)),
+            ClaimStep::Refused(msg) => anyhow::bail!("{msg}"),
+            ClaimStep::Ready {
+                outcome_note,
+                committed_sha: None,
+            } => {
+                return Ok(match outcome_note {
+                    Some(reason) => AcquireOutcome::Reclaimed(reason),
+                    None => AcquireOutcome::Acquired,
+                });
+            }
+            ClaimStep::Ready {
+                outcome_note,
+                committed_sha: Some(sha),
+            } => (outcome_note, sha),
         };
 
-        // Step 3: write our claim, commit, push. On non-ff → pull + retry.
-        std::fs::create_dir_all(leases_dir(store_root)).ok();
-        let toml = toml::to_string_pretty(&ours)
-            .map_err(|e| anyhow::anyhow!("could not serialize lease claim: {e}"))?;
-        std::fs::write(&path, toml)
-            .map_err(|e| anyhow::anyhow!("could not write lease claim {}: {e}", path.display()))?;
-
-        let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
-        aida_core::git_ops::add(store_root, &[&rel])?;
-        let msg = format!(
-            "chore(coordination): claim lease {scope} (node {})",
-            ours.node_id
-        );
-        // `commit` returns Ok(false) for "nothing to commit" — treat as a
-        // successful no-op (our claim already matched what was on disk).
-        let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(true);
-        if !committed {
-            return Ok(match outcome_note {
-                Some(reason) => AcquireOutcome::Reclaimed(reason),
-                None => AcquireOutcome::Acquired,
-            });
-        }
-
-        match aida_core::git_ops::push(store_root, "origin", &branch) {
+        match aida_core::git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 return Ok(match outcome_note {
                     Some(reason) => AcquireOutcome::Reclaimed(reason),
@@ -767,21 +833,19 @@ pub(crate) fn acquire_claim(
             }
             Ok(false) => {
                 // Push rejected — another clone wrote first. Discard our local
-                // commit + working-tree change so the next iteration's
-                // pull --rebase has a clean tree, then re-decide. Mirrors
-                // register_node_full's BUG-1-069 reset.
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                // commit + working-tree change if HEAD is still our commit so
+                // the next iteration's pull --rebase has a clean tree, then
+                // re-decide. Mirrors register_node_full's BUG-1-069 reset.
+                let _ =
+                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 let _ = attempt; // loop continues
                 continue;
             }
             Err(e) => {
                 // Push errored for a non-contention reason (network mid-flight).
                 // Roll back our commit and proceed local-only rather than wedge.
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ =
+                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 return Ok(AcquireOutcome::Unavailable(format!(
                     "could not push lease claim ({e})"
                 )));
@@ -852,20 +916,41 @@ pub(crate) fn release_claim(store_root: &Path, scope: &str, clone_path: &Path) {
 
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    // Best-effort pull so the delete applies on top of the latest store.
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
-    if std::fs::remove_file(&path).is_err() && path.exists() {
-        return;
-    }
-    let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
-    if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
-        return;
-    }
-    let msg = format!("chore(coordination): release lease {scope}");
+    // trace:TASK-1930 | ai:agy
+    let committed_sha =
+        aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
+            // Best-effort pull so the delete applies on top of the latest store.
+            if refresh_store_or_stop(store_root, &branch) {
+                return Ok(None);
+            }
+            // Re-check ownership after refresh_store so a successor's claim pulled
+            // from origin is not deleted.
+            if let Some(existing) = read_claim(&path) {
+                if !existing.clone_path.is_empty() && existing.clone_path != our_clone {
+                    return Ok(None);
+                }
+            } else if !path.exists() {
+                return Ok(None);
+            }
+            if std::fs::remove_file(&path).is_err() && path.exists() {
+                return Ok(None);
+            }
+            let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
+            if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
+                return Ok(None);
+            }
+            let msg = format!("chore(coordination): release lease {scope}");
+            let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(false);
+            Ok(committed
+                .then(|| aida_core::git_ops::head_sha(store_root))
+                .transpose()?)
+        })
+        .ok()
+        .flatten();
     // Push only when there was actually something to commit; "nothing to
     // commit" (claim already gone) or a commit error is a quiet no-op.
-    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
-        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    if let Some(sha) = committed_sha {
+        let _ = aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch);
     }
 }
 
@@ -900,24 +985,37 @@ pub(crate) fn release_stale_foreign_claim(
     let path = claim_path(store_root, scope);
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    // Pull first so we judge, and delete, against the latest store state — a
-    // peer may already have released or refreshed it.
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
-    let Some(existing) = read_claim(&path) else {
-        // Already gone (or unreadable) — nothing to release, not an error.
-        return Ok(false);
-    };
-    if existing.clone_path != expect_clone_path || existing.heartbeat_at != expect_heartbeat {
-        // Refreshed or reclaimed since we listed it → our staleness verdict is
-        // no longer about this record. Refuse rather than guess.
+    // trace:TASK-1930 | ai:agy
+    let (removed, committed_sha) =
+        aida_core::db::with_store_write_lock(store_root, || -> Result<(bool, Option<String>)> {
+            // Pull first so we judge, and delete, against the latest store state — a
+            // peer may already have released or refreshed it.
+            let _ = refresh_store(store_root, &branch)?;
+            let Some(existing) = read_claim(&path) else {
+                // Already gone (or unreadable) — nothing to release, not an error.
+                return Ok((false, None));
+            };
+            if existing.clone_path != expect_clone_path || existing.heartbeat_at != expect_heartbeat
+            {
+                // Refreshed or reclaimed since we listed it → our staleness verdict is
+                // no longer about this record. Refuse rather than guess.
+                return Ok((false, None));
+            }
+            std::fs::remove_file(&path)?;
+            let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
+            aida_core::git_ops::add(store_root, &[&rel])?;
+            let msg = format!("chore(coordination): release stale lease {scope} (BUG-1764)");
+            let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(false);
+            let sha = committed
+                .then(|| aida_core::git_ops::head_sha(store_root))
+                .transpose()?;
+            Ok((true, sha))
+        })?;
+    if !removed {
         return Ok(false);
     }
-    std::fs::remove_file(&path)?;
-    let rel = format!("{LEASES_SUBDIR}/{}.toml", sanitize_scope(scope));
-    aida_core::git_ops::add(store_root, &[&rel])?;
-    let msg = format!("chore(coordination): release stale lease {scope} (BUG-1764)");
-    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
-        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    if let Some(sha) = committed_sha {
+        let _ = aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch);
     }
     Ok(true)
 }
@@ -1093,72 +1191,117 @@ pub(crate) fn acquire_lock_claim(
     let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
 
     for _attempt in 0..MAX_CAS_RETRIES {
-        if let Err(e) = aida_core::git_ops::pull_rebase(store_root, "origin", &branch) {
-            return Ok(LockAcquireOutcome::Unavailable(format!(
-                "store unreachable ({e})"
-            )));
+        // trace:TASK-1930 | ai:agy
+        enum LockClaimStep {
+            Unavailable(String),
+            Refused(String),
+            Ready {
+                outcome_note: Option<String>,
+                committed_sha: Option<String>,
+            },
         }
-
-        let existing = read_claim(&path);
-        let outcome_note = if force {
-            existing
-                .as_ref()
-                .filter(|h| h.clone_path.is_empty() || h.clone_path != ours.clone_path)
-                .map(|h| {
-                    format!(
-                        "--force overriding {}'s {} ({})",
-                        h.host,
-                        kind.label(),
-                        h.clone_path
-                    )
-                })
-        } else {
-            match decide_claim(
-                existing.as_ref(),
-                &ours,
-                Utc::now(),
-                &our_host,
-                crate::process_probe::process_identity_is_alive,
-                // A lock claim is process-backed (the pid probe above is the
-                // exact signal); there is no session to probe. A session
-                // claim can never legitimately sit at a LOCK path, so grant
-                // it no liveness either. trace:BUG-1765 | ai:claude
-                |_: &Claim| false,
-            ) {
-                ClaimDecision::Refuse { holder } => {
-                    anyhow::bail!("{}", lock_refusal_message(kind, &holder, &path));
+        let step =
+            aida_core::db::with_store_write_lock(store_root, || -> Result<LockClaimStep> {
+                if let Err(e) = refresh_store(store_root, &branch)? {
+                    return Ok(LockClaimStep::Unavailable(format!(
+                        "store unreachable ({e})"
+                    )));
                 }
-                ClaimDecision::Acquire => None,
-                ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
+
+                let existing = read_claim(&path);
+                let outcome_note = if force {
+                    existing
+                        .as_ref()
+                        .filter(|h| h.clone_path.is_empty() || h.clone_path != ours.clone_path)
+                        .map(|h| {
+                            format!(
+                                "--force overriding {}'s {} ({})",
+                                h.host,
+                                kind.label(),
+                                h.clone_path
+                            )
+                        })
+                } else {
+                    match decide_claim(
+                        existing.as_ref(),
+                        &ours,
+                        Utc::now(),
+                        &our_host,
+                        crate::process_probe::process_identity_is_alive,
+                        // A lock claim is process-backed (the pid probe above is the
+                        // exact signal); there is no session to probe. A session
+                        // claim can never legitimately sit at a LOCK path, so grant
+                        // it no liveness either. trace:BUG-1765 | ai:claude
+                        |_: &Claim| false,
+                    ) {
+                        ClaimDecision::Refuse { holder } => {
+                            return Ok(LockClaimStep::Refused(lock_refusal_message(
+                                kind, &holder, &path,
+                            )));
+                        }
+                        ClaimDecision::Acquire => None,
+                        ClaimDecision::Reclaim { stale_reason } => Some(stale_reason),
+                    }
+                };
+
+                std::fs::create_dir_all(store_root.join(LOCKS_SUBDIR)).ok();
+                let toml = toml::to_string_pretty(&ours).map_err(|e| {
+                    anyhow::anyhow!("could not serialize {} claim: {e}", kind.label())
+                })?;
+                std::fs::write(&path, toml).map_err(|e| {
+                    anyhow::anyhow!(
+                        "could not write {} claim {}: {e}",
+                        kind.label(),
+                        path.display()
+                    )
+                })?;
+
+                aida_core::git_ops::add(store_root, &[&rel])?;
+                let msg = format!(
+                    "chore(coordination): claim {} lock (node {})",
+                    kind.label(),
+                    ours.node_id
+                );
+                // trace:TASK-1930 | ai:agy
+                let committed = match aida_core::git_ops::commit(store_root, &msg) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        let _ = aida_core::git_ops::host_git_command(store_root)
+                            .args(["reset", "-q", "HEAD", "--", &rel])
+                            .status();
+                        return Err(e);
+                    }
+                };
+                let committed_sha = if committed {
+                    Some(aida_core::git_ops::head_sha(store_root)?)
+                } else {
+                    None
+                };
+                Ok(LockClaimStep::Ready {
+                    outcome_note,
+                    committed_sha,
+                })
+            })?;
+
+        let (outcome_note, committed_sha) = match step {
+            LockClaimStep::Unavailable(msg) => return Ok(LockAcquireOutcome::Unavailable(msg)),
+            LockClaimStep::Refused(msg) => anyhow::bail!("{msg}"),
+            LockClaimStep::Ready {
+                outcome_note,
+                committed_sha: None,
+            } => {
+                return Ok(match outcome_note {
+                    Some(reason) => LockAcquireOutcome::Reclaimed(reason),
+                    None => LockAcquireOutcome::Acquired,
+                });
             }
+            LockClaimStep::Ready {
+                outcome_note,
+                committed_sha: Some(sha),
+            } => (outcome_note, sha),
         };
 
-        std::fs::create_dir_all(store_root.join(LOCKS_SUBDIR)).ok();
-        let toml = toml::to_string_pretty(&ours)
-            .map_err(|e| anyhow::anyhow!("could not serialize {} claim: {e}", kind.label()))?;
-        std::fs::write(&path, toml).map_err(|e| {
-            anyhow::anyhow!(
-                "could not write {} claim {}: {e}",
-                kind.label(),
-                path.display()
-            )
-        })?;
-
-        aida_core::git_ops::add(store_root, &[&rel])?;
-        let msg = format!(
-            "chore(coordination): claim {} lock (node {})",
-            kind.label(),
-            ours.node_id
-        );
-        let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(true);
-        if !committed {
-            return Ok(match outcome_note {
-                Some(reason) => LockAcquireOutcome::Reclaimed(reason),
-                None => LockAcquireOutcome::Acquired,
-            });
-        }
-
-        match aida_core::git_ops::push(store_root, "origin", &branch) {
+        match aida_core::git_ops::push_exact(store_root, "origin", &committed_sha, &branch) {
             Ok(true) => {
                 return Ok(match outcome_note {
                     Some(reason) => LockAcquireOutcome::Reclaimed(reason),
@@ -1166,15 +1309,13 @@ pub(crate) fn acquire_lock_claim(
                 });
             }
             Ok(false) => {
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ =
+                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 continue;
             }
             Err(e) => {
-                let _ = aida_core::git_ops::host_git_command(store_root)
-                    .args(["reset", "--hard", "HEAD~1"])
-                    .output();
+                let _ =
+                    aida_core::git_ops::rollback_commit_if_head_matches(store_root, &committed_sha);
                 return Ok(LockAcquireOutcome::Unavailable(format!(
                     "could not push {} claim ({e})",
                     kind.label()
@@ -1274,30 +1415,42 @@ pub(crate) fn heartbeat_lock_claim(store_root: &Path, kind: LockKind, clone_path
     }
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
-    let path = lock_claim_path(store_root, kind);
-    let our_clone = canonical_clone_path(clone_path);
-    let Some(mut claim) = read_claim(&path) else {
-        return;
-    };
-    if !claim.clone_path.is_empty() && claim.clone_path != our_clone {
-        // A successor reclaimed it — we don't own it anymore; don't stomp.
-        return;
-    }
-    claim.heartbeat_at = Utc::now().to_rfc3339();
-    let Ok(toml) = toml::to_string_pretty(&claim) else {
-        return;
-    };
-    if std::fs::write(&path, toml).is_err() {
-        return;
-    }
-    let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
-    if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
-        return;
-    }
-    let msg = format!("chore(coordination): heartbeat {} lock", kind.label());
-    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
-        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    // trace:TASK-1930 | ai:agy
+    let committed_sha =
+        aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
+            if refresh_store_or_stop(store_root, &branch) {
+                return Ok(None);
+            }
+            let path = lock_claim_path(store_root, kind);
+            let our_clone = canonical_clone_path(clone_path);
+            let Some(mut claim) = read_claim(&path) else {
+                return Ok(None);
+            };
+            if !claim.clone_path.is_empty() && claim.clone_path != our_clone {
+                // A successor reclaimed it — we don't own it anymore; don't stomp.
+                return Ok(None);
+            }
+            claim.heartbeat_at = Utc::now().to_rfc3339();
+            let Ok(toml) = toml::to_string_pretty(&claim) else {
+                return Ok(None);
+            };
+            if std::fs::write(&path, toml).is_err() {
+                return Ok(None);
+            }
+            let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
+            if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
+                return Ok(None);
+            }
+            let msg = format!("chore(coordination): heartbeat {} lock", kind.label());
+            let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(false);
+            Ok(committed
+                .then(|| aida_core::git_ops::head_sha(store_root))
+                .transpose()?)
+        })
+        .ok()
+        .flatten();
+    if let Some(sha) = committed_sha {
+        let _ = aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch);
     }
 }
 
@@ -1319,17 +1472,36 @@ pub(crate) fn release_lock_claim(store_root: &Path, kind: LockKind, clone_path: 
     }
     let branch =
         aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
-    let _ = aida_core::git_ops::pull_rebase(store_root, "origin", &branch);
-    if std::fs::remove_file(&path).is_err() && path.exists() {
-        return;
-    }
-    let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
-    if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
-        return;
-    }
-    let msg = format!("chore(coordination): release {} lock", kind.label());
-    if let Ok(true) = aida_core::git_ops::commit(store_root, &msg) {
-        let _ = aida_core::git_ops::push(store_root, "origin", &branch);
+    // trace:TASK-1930 | ai:agy
+    let committed_sha =
+        aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
+            if refresh_store_or_stop(store_root, &branch) {
+                return Ok(None);
+            }
+            if let Some(existing) = read_claim(&path) {
+                if !existing.clone_path.is_empty() && existing.clone_path != our_clone {
+                    return Ok(None);
+                }
+            } else if !path.exists() {
+                return Ok(None);
+            }
+            if std::fs::remove_file(&path).is_err() && path.exists() {
+                return Ok(None);
+            }
+            let rel = format!("{LOCKS_SUBDIR}/{}", kind.file_name());
+            if aida_core::git_ops::add(store_root, &[&rel]).is_err() {
+                return Ok(None);
+            }
+            let msg = format!("chore(coordination): release {} lock", kind.label());
+            let committed = aida_core::git_ops::commit(store_root, &msg).unwrap_or(false);
+            Ok(committed
+                .then(|| aida_core::git_ops::head_sha(store_root))
+                .transpose()?)
+        })
+        .ok()
+        .flatten();
+    if let Some(sha) = committed_sha {
+        let _ = aida_core::git_ops::push_exact(store_root, "origin", &sha, &branch);
     }
 }
 
@@ -2291,4 +2463,313 @@ ttl_secs = 1800
             "a deleted worktree must not be affirmed"
         );
     }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_release_claim_rechecks_ownership_after_pull_rebase() {
+        let dir = tempfile::tempdir().unwrap();
+        let origin = dir.path().join("origin.git");
+        let clone_a_store = dir.path().join("clone_a_store");
+        let clone_b_store = dir.path().join("clone_b_store");
+        let clone_a_root = dir.path().join("clone_a");
+        let clone_b_root = dir.path().join("clone_b");
+        std::fs::create_dir_all(&clone_a_root).unwrap();
+        std::fs::create_dir_all(&clone_b_root).unwrap();
+
+        let status = std::process::Command::new("git")
+            .args(["init", "--bare", origin.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        aida_core::git_ops::init(&clone_a_store).unwrap();
+        aida_core::git_ops::configure_user(&clone_a_store, "Test", "test@example.com").unwrap();
+        let status = std::process::Command::new("git")
+            .current_dir(&clone_a_store)
+            .args(["remote", "add", "origin", origin.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        std::fs::write(clone_a_store.join("README.md"), "seed\n").unwrap();
+        aida_core::git_ops::add(&clone_a_store, &["README.md"]).unwrap();
+        aida_core::git_ops::commit(&clone_a_store, "seed").unwrap();
+        let branch = aida_core::git_ops::current_branch(&clone_a_store).unwrap();
+        assert!(aida_core::git_ops::push(&clone_a_store, "origin", &branch).unwrap());
+
+        let status = std::process::Command::new("git")
+            .args([
+                "clone",
+                origin.to_str().unwrap(),
+                clone_b_store.to_str().unwrap(),
+            ])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        aida_core::git_ops::configure_user(&clone_b_store, "Test", "test@example.com").unwrap();
+
+        // Clone A acquires the claim first.
+        let out_a = acquire_claim(
+            &clone_a_store,
+            "TASK-1930",
+            &clone_a_root,
+            "claude",
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(out_a, AcquireOutcome::Acquired);
+
+        // Clone B forces an override and pushes to origin while Clone A's local
+        // store still has Clone A's own claim on disk.
+        let out_b = acquire_claim(
+            &clone_b_store,
+            "TASK-1930",
+            &clone_b_root,
+            "claude",
+            false,
+            true,
+        )
+        .unwrap();
+        assert!(matches!(
+            out_b,
+            AcquireOutcome::Acquired | AcquireOutcome::Reclaimed(_)
+        ));
+
+        // Clone A now calls release_claim: before pull_rebase its local disk
+        // says clone_a_root owns the claim, but after pull_rebase origin's tip
+        // says clone_b_root owns it. release_claim must NOT delete Clone B's claim.
+        release_claim(&clone_a_store, "TASK-1930", &clone_a_root);
+
+        let surviving = read_claim(&claim_path(&clone_a_store, "TASK-1930"))
+            .expect("Clone B's claim must survive Clone A's release_claim after pull_rebase");
+        assert_eq!(surviving.clone_path, canonical_clone_path(&clone_b_root));
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_acquire_claim_and_lock_claim_fail_closed_on_unsafe_store_and_local_write_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let origin = dir.path().join("origin.git");
+        let store_root = dir.path().join("store");
+        let clone_root = dir.path().join("clone");
+        std::fs::create_dir_all(&clone_root).unwrap();
+
+        let status = std::process::Command::new("git")
+            .args(["init", "--bare", origin.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        let status = std::process::Command::new("git")
+            .current_dir(&store_root)
+            .args(["remote", "add", "origin", origin.to_str().unwrap()])
+            .status()
+            .unwrap();
+        assert!(status.success());
+        std::fs::write(store_root.join("README.md"), "seed\n").unwrap();
+        aida_core::git_ops::add(&store_root, &["README.md"]).unwrap();
+        aida_core::git_ops::commit(&store_root, "seed").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store_root).unwrap();
+        assert!(aida_core::git_ops::push(&store_root, "origin", &branch).unwrap());
+
+        // 1. Unsafe store (rebase in progress): ensure_store_write_safe fails inside
+        // with_store_write_lock and MUST propagate as Err (fail-closed), never Ok(Unavailable).
+        let rebase_dir = store_root.join(".git").join("rebase-merge");
+        std::fs::create_dir_all(&rebase_dir).unwrap();
+        let unsafe_claim = acquire_claim(
+            &store_root,
+            "TASK-1930",
+            &clone_root,
+            "claude",
+            false,
+            false,
+        );
+        assert!(
+            unsafe_claim.is_err(),
+            "acquire_claim must fail closed on an unsafe (mid-rebase) store, got {unsafe_claim:?}"
+        );
+        let unsafe_lock = acquire_lock_claim(
+            &store_root,
+            LockKind::Drain,
+            &clone_root,
+            "aida queue drain",
+            60,
+            false,
+        );
+        assert!(
+            unsafe_lock.is_err(),
+            "acquire_lock_claim must fail closed on an unsafe (mid-rebase) store, got {unsafe_lock:?}"
+        );
+        std::fs::remove_dir_all(&rebase_dir).unwrap();
+
+        // 2. Local claim-file write failure (after refresh_store succeeds) MUST
+        // propagate as Err, never Ok(Unavailable).
+        let lease_file_as_dir = claim_path(&store_root, "TASK-1930");
+        std::fs::create_dir_all(&lease_file_as_dir).unwrap();
+        let claim_write_err = acquire_claim(
+            &store_root,
+            "TASK-1930",
+            &clone_root,
+            "claude",
+            false,
+            false,
+        );
+        assert!(
+            claim_write_err.is_err(),
+            "acquire_claim must propagate claim-file write failure as Err, got {claim_write_err:?}"
+        );
+        std::fs::remove_dir_all(&lease_file_as_dir).unwrap();
+
+        let lock_file_as_dir = lock_claim_path(&store_root, LockKind::Drain);
+        std::fs::create_dir_all(&lock_file_as_dir).unwrap();
+        let lock_write_err = acquire_lock_claim(
+            &store_root,
+            LockKind::Drain,
+            &clone_root,
+            "aida queue drain",
+            60,
+            false,
+        );
+        assert!(
+            lock_write_err.is_err(),
+            "acquire_lock_claim must propagate claim-file write failure as Err, got {lock_write_err:?}"
+        );
+        std::fs::remove_dir_all(&lock_file_as_dir).unwrap();
+
+        // 3. Local git commit error (after refresh_store and git add succeed, via a
+        // ref lock `.git/refs/heads/<branch>.lock`) MUST propagate as Err and must
+        // not roll back pre-existing HEAD.
+        let head_before = aida_core::git_ops::head_sha(&store_root).unwrap();
+        let branch_lock = store_root
+            .join(".git")
+            .join("refs")
+            .join("heads")
+            .join(format!("{branch}.lock"));
+        std::fs::write(&branch_lock, "locked").unwrap();
+
+        let claim_res = acquire_claim(
+            &store_root,
+            "TASK-1930",
+            &clone_root,
+            "claude",
+            false,
+            false,
+        );
+        assert!(
+            claim_res.is_err(),
+            "acquire_claim must propagate git commit failure as Err, got {claim_res:?}"
+        );
+        let lock_res = acquire_lock_claim(
+            &store_root,
+            LockKind::Drain,
+            &clone_root,
+            "aida queue drain",
+            60,
+            false,
+        );
+        assert!(
+            lock_res.is_err(),
+            "acquire_lock_claim must propagate git commit failure as Err, got {lock_res:?}"
+        );
+        std::fs::remove_file(&branch_lock).unwrap();
+        assert_eq!(
+            aida_core::git_ops::head_sha(&store_root).unwrap(),
+            head_before,
+            "failed local claim commit must not roll back pre-existing HEAD"
+        );
+    }
+
+    // trace:TASK-1930 | ai:agy
+    #[test]
+    fn task_1930_coordination_claim_and_release_wait_for_store_write_lock_barrier() {
+        use std::time::{Duration, Instant};
+
+        let dir = tempfile::tempdir().unwrap();
+        let origin = dir.path().join("origin.git");
+        let store_root = dir.path().join("store");
+        let clone_root = dir.path().join("clone");
+        std::fs::create_dir_all(&clone_root).unwrap();
+
+        assert!(std::process::Command::new("git")
+            .args(["init", "--bare", origin.to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success());
+        aida_core::git_ops::init(&store_root).unwrap();
+        aida_core::git_ops::configure_user(&store_root, "Test", "test@example.com").unwrap();
+        assert!(std::process::Command::new("git")
+            .current_dir(&store_root)
+            .args(["remote", "add", "origin", origin.to_str().unwrap()])
+            .status()
+            .unwrap()
+            .success());
+        std::fs::write(store_root.join("README.md"), "seed\n").unwrap();
+        aida_core::git_ops::add(&store_root, &["README.md"]).unwrap();
+        aida_core::git_ops::commit(&store_root, "seed").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store_root).unwrap();
+        assert!(aida_core::git_ops::push(&store_root, "origin", &branch).unwrap());
+
+        let initial_head = aida_core::git_ops::head_sha(&store_root).unwrap();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let store_holder = store_root.clone();
+        let holder = std::thread::spawn(move || {
+            aida_core::db::with_store_write_lock(&store_holder, || -> Result<()> {
+                locked_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let store_writer = store_root.clone();
+        let clone_writer = clone_root.clone();
+        let writer = std::thread::spawn(move || {
+            let outcome = acquire_claim(
+                &store_writer,
+                "TASK-1930",
+                &clone_writer,
+                "claude",
+                false,
+                false,
+            )
+            .unwrap();
+            done_tx.send(outcome).unwrap();
+        });
+
+        let wait_start = Instant::now();
+        while aida_core::db::store_write_lock_contended_for(&store_root) == 0 {
+            assert!(
+                wait_start.elapsed() < Duration::from_secs(10),
+                "timed out waiting for acquire_claim to contend on store_write_lock"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            done_rx.try_recv().is_err(),
+            "acquire_claim must not complete while store_write_lock is held"
+        );
+        assert_eq!(
+            aida_core::git_ops::head_sha(&store_root).unwrap(),
+            initial_head,
+            "HEAD must not advance while store_write_lock is held"
+        );
+
+        release_tx.send(()).unwrap();
+        holder.join().unwrap();
+        assert_eq!(
+            done_rx.recv_timeout(Duration::from_secs(10)).unwrap(),
+            AcquireOutcome::Acquired
+        );
+        writer.join().unwrap();
+    }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2162_evidence_refusal_tests.rs"]
+mod bug_2162_evidence_refusal_tests;
