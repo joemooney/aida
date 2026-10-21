@@ -5,7 +5,7 @@ use super::*;
 use aida_core::{Requirement, RequirementStatus, Storage};
 
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

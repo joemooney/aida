@@ -16,7 +16,7 @@ const STORY_UUID: &str = "11111111-1111-4111-8111-111111111111";
 const TASK_UUID: &str = "22222222-2222-4222-8222-222222222222";
 
 fn git(store: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(store)
         .args(args)

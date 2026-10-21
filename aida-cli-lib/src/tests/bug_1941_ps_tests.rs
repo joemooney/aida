@@ -471,7 +471,7 @@ fn bug_1941_commit_age_uses_author_time_not_committer_time() {
     let tmp = tempfile::tempdir().unwrap();
     let dir = tmp.path();
     let git = |args: &[&str], envs: &[(&str, &str)]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .args(args)
             .current_dir(dir)
             .env("GIT_CONFIG_GLOBAL", "/dev/null")

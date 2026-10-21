@@ -416,6 +416,28 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 format!("mandate {id} stopped")
             },
         ),
+        // trace:STORY-1700 | ai:claude
+        EventKind::MandateDriveAction {
+            action,
+            subject,
+            outcome,
+            why,
+            ..
+        } => (
+            "mandate-drive-action",
+            format!(
+                "{action} {subject}: {outcome}{}",
+                why.as_deref()
+                    .map(|w| format!(" ({w})"))
+                    .unwrap_or_default()
+            ),
+        ),
+        EventKind::MandateDriveDue {
+            action, subject, ..
+        } => (
+            "mandate-drive-due",
+            format!("drive routed {action} for {subject} to the advisor"),
+        ),
         // trace:TASK-1450 | ai:claude
         EventKind::ReviewVerdictRecorded {
             pr,

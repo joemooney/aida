@@ -9,6 +9,9 @@
 //! yield an agreed short `FAQ-N` id directly — no `aida db merge-gate`.
 // trace:BUG-1921 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -21,7 +24,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

@@ -544,7 +544,7 @@ fn real_claude_contained_session_claims_and_comments() {
         "if git init -q --separate-git-dir='{gitdir}' '{sub}' \
          && printf '#!/bin/sh\\necho ran >> {marker}\\nexit 1\\n' > '{hook}' \
          && chmod 755 '{hook}' && echo x > '{sub}/x.txt' && git -C '{sub}' add x.txt \
-         && git -C '{sub}' -c user.email=p@example.com -c user.name=p commit -qm planted \
+         && git -c maintenance.auto=false -c gc.auto=0 -C '{sub}' -c user.email=p@example.com -c user.name=p commit -qm planted \
          && git -C '{sub}' config core.fsmonitor '{hook}'; \
          then echo planted; else echo plant-failed; fi >> {out} 2>&1\n\
          if git -C '{store}' add objects/zz >/dev/null 2>&1; then echo staged; \
@@ -716,7 +716,7 @@ fn real_claude_contained_session_claims_and_comments() {
         "a host-side aida read ran the planted fsmonitor: {probe}"
     );
     // Remove the plant (the host's own raw git below would run its hook).
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["rm", "-q", "--cached", "--ignore-unmatch", "objects/zz"])
         .current_dir(&store)
         .output();
@@ -873,7 +873,7 @@ fn real_claude_contained_session_claims_and_comments() {
     );
     // The plant is live: an unhardened fetch over the next gitlink move runs it.
     move_gitlink("f1: move gitlink again");
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["fetch", "-q", "origin", "aida-store"])
         .current_dir(&store)
         .output();
@@ -1216,7 +1216,7 @@ fn bug_1985_host_status_guard() {
 
 /// Run git in `dir` with a fixed identity; panics on failure.
 fn bug_1929_git(dir: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(args)
         .current_dir(dir)
@@ -1324,7 +1324,7 @@ fn bug_1929_f1_store_fetch_never_runs_a_planted_uploadpack() {
 
     // The plant is live: an unhardened fetch runs it.
     let (store, marker, _) = bug_1929_f1_fixture(&base.join("raw"));
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .args(["fetch", "-q", "origin", "aida-store"])
         .current_dir(&store)
         .output()

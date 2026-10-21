@@ -273,7 +273,7 @@ fn reconcile_orchestrated_branch_follows_a_pr_branch_swap() {
     let root = dir.path();
 
     let git = |args: &[&str]| {
-        let ok = std::process::Command::new("git")
+        let ok = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .output()

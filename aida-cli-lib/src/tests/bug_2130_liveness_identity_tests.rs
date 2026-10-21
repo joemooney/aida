@@ -322,21 +322,21 @@ fn bug_2130_relay_stall_owner_alive_parses_wall_clock_for_live_owner() {
 
     let me = std::process::id();
     let future_updated = (chrono::Utc::now() + chrono::Duration::seconds(60)).to_rfc3339();
-    let status = crate::relay_stall::parse_status(&format!(
+    let status = crate::fleet_lanes::parse_status(&format!(
         "state=running\npid={me}\nupdated={future_updated}\n"
     ));
     assert_eq!(
-        crate::relay_stall::owner_alive(run_dir, &status),
+        crate::fleet_lanes::owner_alive(run_dir, &status),
         Some(true),
         "live owner whose process_start_time <= updated must report Some(true)"
     );
 
     let past_updated = "1999-01-01T00:00:00Z";
-    let recycled_status = crate::relay_stall::parse_status(&format!(
+    let recycled_status = crate::fleet_lanes::parse_status(&format!(
         "state=running\npid={me}\nupdated={past_updated}\n"
     ));
     assert_eq!(
-        crate::relay_stall::owner_alive(run_dir, &recycled_status),
+        crate::fleet_lanes::owner_alive(run_dir, &recycled_status),
         Some(false),
         "process started after relay.status updated timestamp must report Some(false)"
     );

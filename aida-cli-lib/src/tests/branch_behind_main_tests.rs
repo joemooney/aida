@@ -8,7 +8,7 @@ fn fixture(feat_ahead: u32, main_ahead: u32) -> (TempDir, &'static str) {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path();
     let run = |args: &[&str]| {
-        let r = Command::new("git")
+        let r = crate::test_git::git_command()
             .arg("-C")
             .arg(p)
             .args(args)
@@ -97,13 +97,13 @@ fn on_main_returns_none() {
 fn missing_main_returns_none() {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["init", "--initial-branch=trunk", "--quiet"])
         .status()
         .unwrap();
-    Command::new("git")
+    crate::test_git::git_command()
         .arg("-C")
         .arg(p)
         .args(["commit", "--allow-empty", "-m", "x", "--quiet"])
