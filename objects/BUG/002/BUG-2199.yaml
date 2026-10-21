@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T04:09:33.757932560Z
-modified_at: 2026-10-21T04:17:46.436452573Z
+modified_at: 2026-10-21T07:09:09.613468879Z
 req_type: Bug
 comments:
 - id: 01a15cad-f3c4-75f0-b5ad-11007abd1769
@@ -26,6 +26,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a15d4a-dcd3-76c1-9d2e-578042e11f12
+  author: joe
+  timestamp: 2026-10-21T07:09:09.715356639Z
+  session_id: 01a15d47d04c
+  changes: []
 filed_at:
   code_sha: 7a1a2077bdc3ded5b4c8a3679d014882e4771d0d
   branch: main
@@ -34,3 +39,11 @@ filed_at:
   aida_build_sha: 6657ffff6d
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Refs parsing + harness-lease narrowing unblock Refs-only PRs (AC1 met), but the fail-closed author set now drops harness-worktree leases that author the PR's own head branch (fail-open in an authority gate, untested); recorder-identity binding path left as-is.
+  recovery_hint: address the review findings, move BUG-2199 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-21T07:09:09.613468879Z

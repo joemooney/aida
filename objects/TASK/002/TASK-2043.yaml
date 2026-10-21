@@ -1,0 +1,26 @@
+id: 01a15d4b-61d7-70e2-b71b-488134a2a9a6
+spec_id: TASK-2043
+agreed_id: TASK-2043
+title: Recorder identity still binds every main-checkout lease via project_root (BUG-2199 path 2)
+description: |
+  RecorderIdentity::current (aida-cli-lib/src/review_authority.rs:455-472) adds project_root to the dirs used by lease_bound_by_context, so every non-harness lease whose worktree is the main checkout (e.g. a claim lease) is bound into the identity of every recorder running from the main checkout. PR-2792 neutralised this for harness leases only. Either bind by the recorder's actual cwd, or document why project_root binding is kept.
+
+  Raised in review of PR-2792: https://github.com/joemooney/aida/pull/2792#issuecomment-6310234707
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T07:09:43.767851473Z
+modified_at: 2026-10-21T07:09:43.767851473Z
+req_type: Task
+tags:
+- from-review:PR-2792
+- severity:minor
+filed_at:
+  code_sha: c6dc8a8ff8b42ad75ee9a579c7d9a0485e59e58e
+  branch: pr-2792
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a0cd26e972
+  vendor: claude
+  session: 01a15d47d04c
