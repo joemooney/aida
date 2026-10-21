@@ -1,0 +1,19 @@
+{
+  "id": "15a6fd33-583c-4abe-bbb4-77cadcb64d33",
+  "thread_id": "15a6fd33-583c-4abe-bbb4-77cadcb64d33",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792578169255,
+  "body": "PR #2794 now at ef52b417c2d8fbacf6450eed1c7cbb1740a5f6da (merged origin/main 68d66b1e36, no rebase, no force-push). Gates on this head: make check-ci-fast PASS; make test-touched PASS (876/876 lib + 2/2 bug_2201 e2e).",
+  "subject": "PR-2794 updated: ef52b417c2d8fbacf6450eed1c7cbb1740a5f6da",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "6e127ffd-7e4a-4e93-aca8-e382730c74b4",
+  "thread_id": "6e127ffd-7e4a-4e93-aca8-e382730c74b4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792578482217,
+  "body": "a2b1111e33994d5223266e8ad4987e4accbd6253: merged origin/main (no rebase/force); one conflict in AGENTS.md (kept both independent paragraphs: BUG-2188 receipts + TASK-1981 writer lock); coordination.rs auto-merged. make check-ci-fast 33/33 ok, make test-touched all green. Ready for reviewer relaunch.",
+  "subject": "PR-2782 main merged (BUG-2188)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

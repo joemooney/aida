@@ -1,0 +1,19 @@
+{
+  "id": "7a2edbdb-2446-4018-b313-ffe7936dfbcd",
+  "thread_id": "7a2edbdb-2446-4018-b313-ffe7936dfbcd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792580063682,
+  "body": "PR #2797, head 4620df366e (branch claude/bug-2203). Gates: make check-ci-fast 33/33 passed; make test-touched 286 passed; the 3 new bug_2203 tests pass (cargo test -p aida-cli-lib --lib bug_2203). All 4 ACs covered: no trailer for a (Refs ...) title, from the title or the branch fallback; auto-bump and reconcile-status skip Refs ids; regression test asserts the exact squash subject and that the spec stays Done; pre-merge line names the ids it will complete. Fail-closed. Note: already-merged b66e4d93b8 completed BUG-2169, and this fix does not reopen it. BUG-2169 and TASK-1952 need their status fixed by hand.",
+  "subject": "PR for BUG-2203",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

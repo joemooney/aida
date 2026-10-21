@@ -1,0 +1,19 @@
+{
+  "id": "cfcc2d03-d289-45ff-8b1f-ef632209d2d9",
+  "thread_id": "cfcc2d03-d289-45ff-8b1f-ef632209d2d9",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792578876518,
+  "body": "PR #2795, SHA 0066ef3ffe. Gates: make check-ci-fast (33 passed), make test-touched (43 passed incl. 4 new bug_2200 tests). Seat check now reads registry/team.toml without requiring objects/, and an unreachable store or missing roster gets its own message with the probed path. Fail-closed is kept. AIDA_STORE is still not honored for seat authority, by design; please confirm.",
+  "subject": "PR for BUG-2200",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
