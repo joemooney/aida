@@ -17,10 +17,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T18:10:31.087634134Z
-modified_at: 2026-10-20T18:10:31.087634134Z
+modified_at: 2026-10-21T04:32:19.375824425Z
 req_type: Bug
 tags:
 - from-implementer:TASK-1981
+- operator-held
+history:
+- id: 01a15cbb-4740-7a70-afb8-6dedec1b643f
+  author: joe
+  timestamp: 2026-10-21T04:32:19.776720919Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:19.375824425Z
+deferred_until: 'Source-audit only, no incident; needs caller-policy decision. Revisit after PR #2778 (TASK-1981) merges, as its follow-up.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 03fe56b082721daf63d4283f0d48545ce82ec961
   branch: main
