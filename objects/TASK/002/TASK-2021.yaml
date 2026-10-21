@@ -17,8 +17,10 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T21:31:45.399075033Z
-modified_at: 2026-10-20T21:32:18.594285003Z
+modified_at: 2026-10-21T04:32:55.195760514Z
 req_type: Task
+tags:
+- operator-held
 relationships:
 - rel_type: References
   target_id: 01a1380e-2128-76a3-889a-4d1d759e76bf
@@ -30,6 +32,15 @@ history:
   timestamp: 2026-10-20T21:32:19.963590622Z
   session_id: 87261c6a-6813-4b97-bc03-12790e5c543e
   changes: []
+- id: 01a15cbb-d320-7c40-8549-194dd90957be
+  author: joe
+  timestamp: 2026-10-21T04:32:55.584183986Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:32:55.195760514Z
+deferred_until: 'Low; lane-liveness not on main yet (PR #2743). Revisit after #2743 merges and a resumed child is seen missing as a dead lane.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: cb782c925504496e41a460f2958a40ab5b01a54e
   branch: agy2/story-1688
