@@ -1,0 +1,27 @@
+id: 01a16015-ee37-7a41-bb5f-ee17868b770b
+spec_id: TASK-2091
+agreed_id: TASK-2091
+title: 'Merge-lease: an empty, just-created lease reads as TTL-stale and gets stolen'
+description: |-
+  merge_lock.rs::acquire does create_new and then write_all, so for a moment the lease file is empty. scripts/release.sh lease_is_live, and merge_lock's own stale check, parse acquired_at=0, judge the lease TTL-stale and rm it, so two mergers both think they hold main. Publish atomically in merge_lock.rs (temp + hard_link) and/or treat an empty or partial lease as live for a short grace period. This is the unfixed half of PR-2807 round-1 finding 1.
+
+  Raised in review of PR-2807: https://github.com/joemooney/aida/pull/2807#issuecomment-6325469771
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:10:12.407245290Z
+modified_at: 2026-10-21T20:10:12.407245290Z
+req_type: Task
+tags:
+- from-review:PR-2807
+- release
+- severity:minor
+filed_at:
+  code_sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+  branch: pr-2807
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16012278c

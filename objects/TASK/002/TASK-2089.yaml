@@ -1,0 +1,27 @@
+id: 01a16015-ce3a-7722-9fc7-5f4e6df7850e
+spec_id: TASK-2089
+agreed_id: TASK-2089
+title: Add per-criterion trace anchors for TASK-1721 release tests
+description: |-
+  aida criteria TASK-1721 reports all 6 ACs untraced. Anchor tests/test_release_pr_flow.sh Tests 0/1/1b/2/2c/5 and release_verb_tests.rs::release_artifact_timeout_covers_ci_and_honours_override to TASK-1721.aced1599/.acd8fb85/.acfe2a84/.ac8f0bcb/.ace581bd.
+
+  Raised in review of PR-2807: https://github.com/joemooney/aida/pull/2807#issuecomment-6325469771
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:10:04.218009326Z
+modified_at: 2026-10-21T20:10:04.218009326Z
+req_type: Task
+tags:
+- from-review:PR-2807
+- release
+- severity:minor
+filed_at:
+  code_sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+  branch: pr-2807
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16012278c

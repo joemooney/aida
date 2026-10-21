@@ -1,0 +1,27 @@
+id: 01a16015-fd34-7b32-8b6e-cfd006999158
+spec_id: TASK-2092
+agreed_id: TASK-2092
+title: release.sh lease temp files live inside .aida/merge-locks/
+description: |-
+  lease_acquire runs mktemp on $lease_file.XXXXXX inside the locks dir. merge_lock::status read_dir lists every entry, so a temp file shows up as a lease, and a SIGKILL between mktemp and rm orphans it for good (the EXIT trap does not clean it). Use a dot-prefixed name that status skips, or a sibling temp dir on the same filesystem.
+
+  Raised in review of PR-2807: https://github.com/joemooney/aida/pull/2807#issuecomment-6325469771
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:10:16.244567307Z
+modified_at: 2026-10-21T20:10:16.244567307Z
+req_type: Task
+tags:
+- from-review:PR-2807
+- release
+- severity:cosmetic
+filed_at:
+  code_sha: 57174e060ee3dd60b38926a0c6caa75c49a512af
+  branch: pr-2807
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16012278c
