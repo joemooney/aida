@@ -332,6 +332,21 @@ on = ["CronJobFailed:relay-stall-guard"]
 prompt = "A relay run is stopped (relay.status state=blocked or exited) with no `.done` acknowledgement. Use the routed trip evidence and `aida doctor check relay-stall` to find the run, read its handoff, then unblock it (answer the signoff or question it is waiting on and resume the relay) or retire it, escalating to the operator if it needs a human. Once handled, acknowledge it with `touch <handoff>.done` so the guard stops tripping."
 enabled = true
 
+# STORY-1688: lane liveness substrate job — every 10 minutes via
+# `aida schedule tick`, no model. Finds dead/stalled lanes with open work,
+# PRs green at their head with no review, human-only merge holds and
+# unanswered advisor requests past their budget, and dead-process spec leases,
+# and routes each new finding once to a `lane-liveness-<seat>` seat job (or an
+# operator notification). The seat jobs are built in; they need no entry here.
+# Ships disabled: enable it only after a read-only `aida doctor check
+# lane-liveness` run shows its findings are real (operator/advisor step).
+# trace:STORY-1688 | ai:claude
+[[schedule.jobs]]
+name = "lane-liveness"
+command = "doctor check lane-liveness"
+every = "10m"
+enabled = false
+
 # STORY-1700 (ADR-77): the drive-mandate tick. While a human-minted DRIVE
 # mandate is active (`aida mandate start --drive`), every 15 minutes (and at
 # once when one starts: the `when` edge) the model-free, grant-free tick
