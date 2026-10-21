@@ -314,8 +314,10 @@ seconds, and `--max-concurrent` accepts one or two reviewers (default two).
 The selected forge CLI (`gh` or `glab`) must be on PATH. Git/forge probes have
 per-command timeouts; the watcher avoids unbounded version-detection probes.
 Initial root resolution and later probes clear ambient Git routing variables.
-Discovery pins origin's forge host/project and fetches the default branch and
-change head into private temporary refs. A symbolic `origin/HEAD` is required;
+Discovery pins origin's forge host/project and fetches each change's own
+target branch (GitHub `baseRefName`, GitLab `target_branch`) and head into
+private temporary refs. It fetches by remote name, so a credential stored in
+the origin URL never appears in process arguments. A missing or invalid base,
 unknown metadata, head movement, or unreadable base evidence refuses dispatch.
 A stale base with overlapping changed paths receives a local mailbox request to
 merge the default branch; a stale non-overlapping head remains reviewable. The
@@ -332,15 +334,21 @@ a PID disappears or is reused. When the dispatcher observes queue work exit
 unsuccessfully (a stale-base or intermediate-only refusal, a reviewer lease
 already held, or a launch-boundary revalidation failure), it records the
 attempt as exited with the last line of its log. That frees the slot, the head
-is not relaunched, and a later head dispatches normally. Only a dispatcher lost
-before recording an outcome stays ambiguous. The capacity refusal names each
+is not relaunched, and a later head dispatches normally. The parent records
+each dispatcher's process identity; if a dispatcher exits before claiming its
+reservation (a refused grant, an unusable store, a timed-out claim), any
+watcher, including a restarted one, records the reservation as exited and
+frees its slot. Only a dispatcher lost after claiming, before recording an
+outcome, stays ambiguous. The capacity refusal names each
 holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,
 and `aida session leases --all` before operator recovery. Do not delete lock
 files or clear ambiguous receipts while a reviewer may still be running.
 Changes that are skipped leave no state, and state for changes no longer open
 and non-draft is pruned on each complete discovery pass unless an attempt is
-still live. In the continuous loop a refusal for one change is logged and the
+still live. Observed blocking review identities are kept per change in
+`review-watch/history/`, which pruning never removes, so a draft toggle or a
+close and reopen cannot reset the round count. In the continuous loop a refusal for one change is logged and the
 pass continues; only an unusable state file stops the watcher. `--once`
 reports any refusal.
 

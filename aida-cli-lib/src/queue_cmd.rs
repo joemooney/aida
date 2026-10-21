@@ -12850,7 +12850,12 @@ pub(crate) fn handle_queue_work(
             } else {
                 None
             };
-        if let Some((_, verdict_path)) = &standalone_reviewer {
+        if let Some((pr, verdict_path)) = &standalone_reviewer {
+            // A watch launch revalidates head, overlap and its reservation
+            // before the destructive verdict reset, so a refused launch keeps
+            // the prior verdict. Outside a watch launch this is inert.
+            // trace:TASK-1993 | ai:claude
+            crate::review_watch::reviewer_launch_context(&project_root, *pr)?;
             clear_standalone_reviewer_verdict(verdict_path);
             // The `/aida-review` skill writes the verdict here — it keys off
             // this env var. Setting it for standalone runs too is what makes

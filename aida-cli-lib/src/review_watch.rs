@@ -37,6 +37,12 @@ const LIMIT: u64 = 2 * 1024 * 1024;
 const STATE: &str = "state.json";
 const WATCH_HEAD: &str = "AIDA_REVIEW_WATCH_HEAD";
 const MAX_ENTRIES: usize = 2000;
+// Tests shorten the claim retry window so a contention test stays fast.
+const CLAIM_DEADLINE: std::time::Duration = if cfg!(test) {
+    std::time::Duration::from_millis(300)
+} else {
+    std::time::Duration::from_secs(5)
+};
 const DIAGNOSTIC_LIMIT: usize = 512;
 
 /// Marks a failure of the whole watcher state (missing, corrupt, unsafe), the
@@ -75,15 +81,36 @@ struct Identity {
 }
 impl Identity {
     fn current() -> Result<Self> {
+        Self::of(std::process::id())
+    }
+    fn of(pid: u32) -> Result<Self> {
         Ok(Self {
-            pid: std::process::id(),
-            start: aida_core::liveness::process_start_identity_exact(std::process::id())
+            pid,
+            start: aida_core::liveness::process_start_identity_exact(pid)
                 .context("cannot bind review launch to its kernel process identity")?,
-            boot: std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?
-                .trim()
-                .into(),
+            boot: boot_id()?,
         })
     }
+    /// The same kernel process is still running (not reused, not a zombie).
+    // trace:TASK-1993 | ai:claude
+    fn alive(&self) -> bool {
+        let zombie = std::fs::read_to_string(format!("/proc/{}/stat", self.pid))
+            .ok()
+            .and_then(|stat| {
+                let rest = &stat[stat.rfind(')')? + 1..];
+                rest.split_whitespace().next().map(|state| state == "Z")
+            })
+            .unwrap_or(true);
+        !zombie
+            && boot_id().is_ok_and(|boot| boot == self.boot)
+            && aida_core::liveness::process_start_identity_exact(self.pid).as_deref()
+                == Some(self.start.as_str())
+    }
+}
+fn boot_id() -> Result<String> {
+    Ok(std::fs::read_to_string("/proc/sys/kernel/random/boot_id")?
+        .trim()
+        .into())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -109,6 +136,11 @@ struct Attempt {
     identity: Option<Identity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     diagnostic: Option<String>,
+    // The spawned dispatcher, recorded by the parent so any watcher can see
+    // a reservation whose dispatcher exited before claiming it.
+    // trace:TASK-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    dispatcher: Option<Identity>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -348,16 +380,75 @@ impl Store {
         // Every writer takes the global lock first, so it alone excludes them.
         let _global = self.dir.lock("admission.lock")?;
         let mut state = self.load()?;
+        let bytes = serde_json::to_vec(&state)?;
+        self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
         state
             .entries
             .retain(|key, entry| open.contains(key) || entry.attempts.iter().any(active));
         let removed = before - state.entries.len();
-        if removed > 0 {
+        if bytes != serde_json::to_vec(&state)? {
             validate_state(&state, &self.repository)?;
             self.dir.write(STATE, &serde_json::to_vec_pretty(&state)?)?;
         }
         Ok(removed)
+    }
+    /// A reservation whose recorded dispatcher is gone without claiming its
+    /// receipt can never start a review: record it exited and free its slot.
+    /// Callers hold the global lock.
+    // trace:TASK-1993 | ai:claude
+    fn reconcile_lost_dispatchers(&self, state: &mut State) {
+        for (key, entry) in state.entries.iter_mut() {
+            for attempt in entry.attempts.iter_mut() {
+                let Some(dispatcher) = attempt.dispatcher.as_ref() else {
+                    continue;
+                };
+                if attempt.phase != Phase::Reserved
+                    || attempt.identity.is_some()
+                    || dispatcher.alive()
+                {
+                    continue;
+                }
+                let tail = log_tail(self, &format!("{key}-{}.log", attempt.token));
+                attempt.phase = Phase::Exited;
+                attempt.diagnostic = Some(bounded_diagnostic(&format!(
+                    "dispatcher {} exited before claiming its launch receipt: {}",
+                    dispatcher.pid,
+                    tail.as_deref().unwrap_or("no log output")
+                )));
+            }
+        }
+    }
+    /// Blocking review identities this watcher has observed, kept per change
+    /// outside state.json so pruning (a draft toggle, close and reopen) can
+    /// never forget a consumed round.
+    // trace:TASK-1993 | ai:claude
+    fn retained(&self, key: &str) -> Result<BTreeSet<crate::review_verdict::RecordingKey>> {
+        let dir = Directory::open(&self.dir.path().join("history"))?;
+        let Some(bytes) = dir.read(&format!("{key}.json"))? else {
+            return Ok(BTreeSet::new());
+        };
+        let keys: BTreeSet<crate::review_verdict::RecordingKey> =
+            serde_json::from_slice(&bytes).context("invalid retained review history")?;
+        anyhow::ensure!(
+            keys.len() <= 16 && keys.iter().all(valid_recording_key),
+            "invalid retained review history"
+        );
+        Ok(keys)
+    }
+    fn retain(
+        &self,
+        key: &str,
+        keys: impl Iterator<Item = crate::review_verdict::RecordingKey>,
+    ) -> Result<()> {
+        let mut retained = self.retained(key)?;
+        let before = retained.len();
+        retained.extend(keys);
+        if retained.len() != before {
+            let dir = Directory::open(&self.dir.path().join("history"))?;
+            dir.write(&format!("{key}.json"), &serde_json::to_vec(&retained)?)?;
+        }
+        Ok(())
     }
     fn history(&self, key: &str) -> Result<History> {
         let mut history = History {
@@ -368,6 +459,7 @@ impl Store {
                 .map(|e| e.historical_keys.clone())
                 .unwrap_or_default(),
         };
+        history.keys.extend(self.retained(key)?);
         let Some(dir) = Directory::existing(&self.runtime.path().join("review-verdicts"))? else {
             return Ok(history);
         };
@@ -437,7 +529,7 @@ impl Store {
                 used < 2,
                 "two-round review cap reached outside watcher; route further work to the advisor"
             );
-            entry.historical_keys.extend(history.blocking_keys());
+            self.retain(key, history.blocking_keys())?;
             Ok(used + 1)
         })
     }
@@ -580,11 +672,13 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
             anyhow::ensure!(
                 match attempt.phase {
                     Phase::Reserved => attempt.identity.is_none(),
-                    Phase::Running | Phase::Completed | Phase::Exited => attempt
+                    Phase::Running | Phase::Completed => attempt
                         .identity
                         .as_ref()
                         .is_some_and(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
-                    Phase::Failed => true,
+                    // An unclaimed reservation whose dispatcher died exits
+                    // without a receipt identity. trace:TASK-1993 | ai:claude
+                    Phase::Failed | Phase::Exited => true,
                 },
                 "invalid review-watch process receipt"
             );
@@ -592,8 +686,12 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                 attempt
                     .diagnostic
                     .as_ref()
-                    .is_none_or(|d| d.len() <= DIAGNOSTIC_LIMIT),
-                "invalid review-watch diagnostic"
+                    .is_none_or(|d| d.len() <= DIAGNOSTIC_LIMIT)
+                    && attempt
+                        .dispatcher
+                        .as_ref()
+                        .is_none_or(|i| i.pid > 0 && !i.start.is_empty() && !i.boot.is_empty()),
+                "invalid review-watch diagnostic or dispatcher"
             );
         }
         anyhow::ensure!(
@@ -643,6 +741,7 @@ fn select(
         .overlap
         .context("default-branch overlap evidence is unknown")?;
     store.transaction(&key, |state| {
+        store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         if total == 0 { state.max_concurrent = max; }
         anyhow::ensure!(state.max_concurrent == max, "another watcher uses a different concurrency limit; use --max-concurrent {}", state.max_concurrent);
@@ -650,6 +749,7 @@ fn select(
         let holders = capacity_holders(state);
         let entry = state.entries.entry(key.clone()).or_default();
         let history = store.history(&key)?;
+        store.retain(&key, history.blocking_keys())?;
         if overlap {
             let notice = entry.notices.entry(change.head.clone()).or_insert_with(|| Notice {
                 message: stale_message(&repository, &key, change), sent: false,
@@ -672,8 +772,7 @@ fn select(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        entry.historical_keys.extend(history.blocking_keys());
-        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None };
+        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -859,7 +958,7 @@ fn execute_reservation(
     // No work begins before the durable, process-bound receipt. A lost
     // dispatcher without a completion receipt stays ambiguous even if its
     // PID disappeared or was reused; an orphan reviewer must not free a slot.
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let deadline = std::time::Instant::now() + CLAIM_DEADLINE;
     let attempt = loop {
         match store.transition(key, token, Phase::Running) {
             Ok(attempt) => break attempt,
@@ -921,7 +1020,7 @@ pub(crate) fn reviewer_launch_prompt(root: &Path, id: u64, prompt: &str) -> Resu
     Ok(reviewer_launch_context(root, id)?.then(|| format!("{prompt}\n\n{REVIEWER_POLICY}")))
 }
 
-fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
+pub(crate) fn reviewer_launch_context(root: &Path, id: u64) -> Result<bool> {
     let Some(head) = std::env::var_os(WATCH_HEAD) else {
         return Ok(false);
     };
@@ -954,9 +1053,19 @@ pub(crate) fn run(args: &ReviewWatchArgs) -> Result<()> {
         return child(&root, &repo, reservation);
     }
     let store = Store::open(&root, &repo.identity)?;
-    let mut children = Vec::<Child>::new();
+    let mut children = Vec::<Dispatcher>::new();
     loop {
-        children.retain_mut(|child| !matches!(child.try_wait(), Ok(Some(_))));
+        children.retain_mut(|d| match d.child.try_wait() {
+            Ok(Some(status)) => {
+                if let Err(error) =
+                    mark_unclaimed_exit(&store, &d.key, &d.token, &status.to_string())
+                {
+                    eprintln!("{}: could not record dispatcher exit: {error:#}", d.key);
+                }
+                false
+            }
+            _ => true,
+        });
         let changes = match repo.discover(&root) {
             Ok(changes) => changes,
             Err(error) if !args.once => {
@@ -997,6 +1106,34 @@ fn stops_watcher(error: &anyhow::Error, once: bool) -> bool {
     once || error.downcast_ref::<GlobalState>().is_some()
 }
 
+struct Dispatcher {
+    child: Child,
+    key: String,
+    token: String,
+}
+
+/// An observed dispatcher exit before it claimed its receipt (a refused grant,
+/// an unusable store, a claim that timed out) can never start a review.
+// trace:TASK-1993 | ai:claude
+fn mark_unclaimed_exit(store: &Store, key: &str, token: &str, status: &str) -> Result<()> {
+    let tail = log_tail(store, &format!("{key}-{token}.log"));
+    store.transaction(key, |state| {
+        if let Some(a) = state
+            .entries
+            .get_mut(key)
+            .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+            .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+        {
+            a.phase = Phase::Exited;
+            a.diagnostic = Some(bounded_diagnostic(&format!(
+                "dispatcher exited {status} before claiming its launch receipt: {}",
+                tail.as_deref().unwrap_or("no log output")
+            )));
+        }
+        Ok(())
+    })
+}
+
 fn is_busy(error: &anyhow::Error) -> bool {
     error.chain().any(|e| {
         e.downcast_ref::<std::io::Error>()
@@ -1010,7 +1147,7 @@ fn watch_change(
     repo: &forge::Repository,
     store: &Store,
     args: &ReviewWatchArgs,
-    children: &mut Vec<Child>,
+    children: &mut Vec<Dispatcher>,
     mut change: forge::Change,
 ) -> Result<()> {
     let key = change.key();
@@ -1056,8 +1193,32 @@ fn watch_change(
                 )?)
             })();
             match spawned {
-                Ok(child) => {
-                    children.push(child);
+                Ok(mut child) => {
+                    // trace:TASK-1993 | ai:claude
+                    let exited = child.try_wait().ok().flatten();
+                    let identity = Identity::of(child.id()).ok();
+                    let token = attempt.token.clone();
+                    children.push(Dispatcher {
+                        child,
+                        key: key.clone(),
+                        token: token.clone(),
+                    });
+                    match exited {
+                        Some(status) => {
+                            mark_unclaimed_exit(store, &key, &token, &status.to_string())?
+                        }
+                        None => store.transaction(&key, |state| {
+                            if let Some(a) = state
+                                .entries
+                                .get_mut(&key)
+                                .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+                                .filter(|a| a.phase == Phase::Reserved && a.identity.is_none())
+                            {
+                                a.dispatcher = identity;
+                            }
+                            Ok(())
+                        })?,
+                    }
                     eprintln!("{key}: review admitted for {}", change.head);
                 }
                 Err(error) => {

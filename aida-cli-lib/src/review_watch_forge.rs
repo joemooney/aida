@@ -7,6 +7,9 @@ use crate::forge::ForgeKind;
 pub(super) struct Change {
     pub id: u64,
     pub head: String,
+    // The change's own target branch; overlap is judged against it, as the
+    // ordinary stale-base preflight does. trace:TASK-1993 | ai:claude
+    pub base: String,
     pub author: String,
     pub gitlab: bool,
     pub overlap: Option<bool>,
@@ -171,7 +174,7 @@ impl Repository {
                 "--repo",
                 &format!("{}/{}", self.host, self.project),
                 "--json",
-                "number,headRefOid,isDraft,state,author",
+                "number,headRefOid,baseRefName,isDraft,state,author",
             ]);
         } else {
             program = "glab";
@@ -259,16 +262,43 @@ impl Repository {
         change.overlap = Some(self.overlap(root, change)?);
         Ok(())
     }
+    /// Fetch by remote name, never by URL: a stored `user:token@` origin then
+    /// reaches git only through the credential gate's environment, not argv
+    /// (BUG-2181). The pinned identity is rechecked first.
+    // trace:TASK-1993 | ai:claude
+    fn fetch(&self, root: &Path, refspecs: &[&str]) -> Result<()> {
+        use aida_core::git_ops::RemoteCredentialsExt as _;
+        anyhow::ensure!(
+            Self::load(root)?.identity == self.identity,
+            "origin identity changed during base probe"
+        );
+        let mut command = Command::new("git");
+        command
+            .current_dir(root)
+            .args([
+                "fetch",
+                "--no-write-fetch-head",
+                "--no-tags",
+                "--",
+                "origin",
+            ])
+            .args(refspecs)
+            .stdin(Stdio::null());
+        clear_routing(&mut command);
+        command.remote_credentials(root, "origin");
+        let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
+            .context("review-watch git fetch failed or exceeded 30 seconds")?;
+        anyhow::ensure!(
+            out.status.success(),
+            "review-watch git fetch failed ({})",
+            out.status
+        );
+        Ok(())
+    }
     fn overlap(&self, root: &Path, change: &Change) -> Result<bool> {
-        let default = git(
-            root,
-            &["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"],
-        )?;
-        let branch = default
-            .trim()
-            .strip_prefix("refs/remotes/origin/")
-            .context("default branch is unknown; set origin/HEAD before review-watch")?;
-        git(root, &["check-ref-format", &format!("refs/heads/{branch}")])?;
+        let branch = change.base.as_str();
+        git(root, &["check-ref-format", &format!("refs/heads/{branch}")])
+            .context("change base branch is not a valid branch name")?;
         let prefix = format!("refs/aida/review-watch/{}", uuid::Uuid::new_v4());
         let base = format!("{prefix}/base");
         let head = format!("{prefix}/head");
@@ -280,19 +310,7 @@ impl Repository {
         };
         let head_spec = format!("+{remote_head}:{head}");
         let result = (|| {
-            output(
-                root,
-                "git",
-                &[
-                    "fetch",
-                    "--no-write-fetch-head",
-                    "--no-tags",
-                    "--",
-                    &self.remote,
-                    &base_spec,
-                    &head_spec,
-                ],
-            )?;
+            self.fetch(root, &[&base_spec, &head_spec])?;
             let resolved = git(root, &["rev-parse", "--verify", &head])?;
             anyhow::ensure!(
                 resolved.trim() == change.head,
@@ -378,6 +396,16 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
         .filter(|h| valid_sha(h))
         .context("missing valid change head")?
         .to_string();
+    let base = value
+        .get(if gitlab {
+            "target_branch"
+        } else {
+            "baseRefName"
+        })
+        .and_then(|v| v.as_str())
+        .filter(|b| !b.is_empty() && b.len() <= 255 && !b.starts_with('-'))
+        .context("missing change base branch")?
+        .to_string();
     let author = value
         .get("author")
         .and_then(|v| v.get(if gitlab { "username" } else { "login" }))
@@ -392,6 +420,7 @@ pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Op
     Ok(Some(Change {
         id,
         head,
+        base,
         author,
         gitlab,
         overlap: None,

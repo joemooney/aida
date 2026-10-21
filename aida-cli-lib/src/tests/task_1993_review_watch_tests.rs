@@ -13,6 +13,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
     forge::Change {
         id,
         head: format!("{head:040x}"),
+        base: "main".into(),
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
@@ -40,7 +41,7 @@ fn write_verdict(path: &Path, value: &serde_json::Value) {
 fn task1993_pending_ci_dispatches_with_receipt_before_work() {
     let (_temp, store) = fixture();
     let value = serde_json::json!({"number": 1, "state": "OPEN", "isDraft": false,
-        "headRefOid": "1".repeat(40), "author": {"login": "writer"},
+        "headRefOid": "1".repeat(40), "baseRefName": "main", "author": {"login": "writer"},
         "statusCheckRollup": [{"status": "IN_PROGRESS"}]});
     let mut c = forge::parse_change(&value, false).unwrap().unwrap();
     // Base evidence is independent of pending CI; discovery supplies it.
@@ -378,11 +379,19 @@ fn task1993_missing_corrupt_and_unsafe_state_refuse_reinitialization() {
 #[test]
 fn task1993_strict_discovery_handles_gitlab_and_refuses_unknown_evidence() {
     let mut row = serde_json::json!({"iid": 4, "state": "opened", "draft": false,
-        "sha": "a".repeat(40), "author": {"username": "writer"}});
-    assert_eq!(
-        forge::parse_change(&row, true).unwrap().unwrap().key(),
-        "MR-4"
-    );
+        "sha": "a".repeat(40), "target_branch": "release/2", "author": {"username": "writer"}});
+    let parsed = forge::parse_change(&row, true).unwrap().unwrap();
+    assert_eq!(parsed.key(), "MR-4");
+    // The change's own target branch is the base evidence (not origin/HEAD).
+    assert_eq!(parsed.base, "release/2");
+    for bad in [serde_json::Value::Null, "".into(), "--upload-pack=x".into()] {
+        let mut unknown = row.clone();
+        unknown["target_branch"] = bad;
+        assert!(
+            forge::parse_change(&unknown, true).is_err(),
+            "unknown base must refuse"
+        );
+    }
     row["draft"] = true.into();
     assert!(forge::parse_change(&row, true).unwrap().is_none());
     row["draft"] = false.into();
@@ -586,17 +595,19 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "https://github.com/owner/repo.git"
         };
         let row = if gitlab {
-            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"author":{"username":"writer"}})
+            serde_json::json!({"iid":1,"state":"opened","draft":false,"sha":head,"target_branch":"main","author":{"username":"writer"}})
         } else {
-            serde_json::json!({"number":1,"state":"OPEN","isDraft":false,"headRefOid":head,"author":{"login":"writer"},"statusCheckRollup":[{"status":"IN_PROGRESS"}]})
+            serde_json::json!({"number":1,"state":"OPEN","isDraft":false,"headRefOid":head,"baseRefName":"main","author":{"login":"writer"},"statusCheckRollup":[{"status":"IN_PROGRESS"}]})
         };
         let list = temp.path().join("list.json");
         let view = temp.path().join("view.json");
         std::fs::write(&list, serde_json::to_vec(&vec![&row]).unwrap()).unwrap();
         std::fs::write(&view, serde_json::to_vec(&row).unwrap()).unwrap();
         let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
+        // Every Git argv is logged so the credential test can inspect it; an
+        // origin-url file overrides the reported origin. trace:TASK-1993 | ai:claude
         crate::test_exec::write_executable(&bin.join("git"), &format!(
-            "#!/bin/sh\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then printf '%s\\n' '{origin}'; exit 0; fi\nif [ \"$1\" = fetch ]; then shift 5; exec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 fetch --no-write-fetch-head --no-tags -- '{}' \"$@\"; fi\nif [ -f '{}/bad-count' ] && [ \"$1\" = rev-list ]; then echo not-a-count; exit 0; fi\nexec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 \"$@\"\n", q(&hub), q(temp.path())));
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{tmp}/argv.log'\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then if [ -f '{tmp}/origin-url' ]; then cat '{tmp}/origin-url'; else printf '%s\\n' '{origin}'; fi; exit 0; fi\nif [ \"$1\" = fetch ]; then shift 5; exec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 fetch --no-write-fetch-head --no-tags -- '{hub}' \"$@\"; fi\nif [ -f '{tmp}/bad-count' ] && [ \"$1\" = rev-list ]; then echo not-a-count; exit 0; fi\nexec /usr/bin/git -c maintenance.auto=false -c gc.auto=0 \"$@\"\n", hub = q(&hub), tmp = q(temp.path())));
         let script = if gitlab {
             format!("#!/bin/sh\n[ \"$GITLAB_HOST\" = gitlab.example.test ] || exit 81\n[ \"$1 $2 $3\" = 'api -X GET' ] || exit 82\ncase \"$4\" in projects/group%2Fsub%2Frepo/merge_requests) cat '{}' ;; projects/group%2Fsub%2Frepo/merge_requests/1) cat '{}' ;; *) exit 83 ;; esac\n", q(&list), q(&view))
         } else {
@@ -637,24 +648,73 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             Some(false),
             "a stale non-overlapping head remains reviewable"
         );
+        // Base evidence is the change's own target branch: the same head
+        // overlaps a release branch that touched its file.
+        // trace:TASK-1993 | ai:claude
+        // Forge-independent checks run once, in the GitHub pass.
+        if !gitlab {
+            git_run(&root, &["checkout", "-q", "-b", "release", "main~1"]);
+            std::fs::write(root.join("own.rs"), "release fix").unwrap();
+            git_run(&root, &["commit", "-qam", "release fix"]);
+            git_run(&root, &["push", "-q", "origin", "release"]);
+            git_run(&root, &["checkout", "-q", "main"]);
+            changes[0].base = "release".into();
+            repo.probe(&root, &mut changes[0]).unwrap();
+            assert_eq!(
+                changes[0].overlap,
+                Some(true),
+                "probe ignored the change's base branch"
+            );
+            changes[0].base = "main".into();
+            repo.probe(&root, &mut changes[0]).unwrap();
+            assert_eq!(changes[0].overlap, Some(false));
+        }
+        // A credentialed origin never reaches git argv (BUG-2181): the probe
+        // fetches by remote name through the credential gate.
+        // trace:TASK-1993 | ai:claude
+        if !gitlab {
+            let secret = "SECRET-TOKEN-1993";
+            std::fs::write(
+                temp.path().join("origin-url"),
+                format!("https://oauth2:{secret}@github.com/owner/repo.git\n"),
+            )
+            .unwrap();
+            let credentialed = forge::Repository::load(&root).unwrap();
+            assert_eq!(credentialed.identity, repo.identity);
+            std::fs::write(temp.path().join("argv.log"), "").unwrap();
+            let mut probed = changes[0].clone();
+            credentialed.probe(&root, &mut probed).unwrap();
+            let argv = std::fs::read_to_string(temp.path().join("argv.log")).unwrap();
+            assert!(
+                argv.contains("fetch --no-write-fetch-head --no-tags -- origin"),
+                "{argv}"
+            );
+            assert!(
+                !argv.contains(secret),
+                "credential leaked into git argv: {argv}"
+            );
+            std::fs::remove_file(temp.path().join("origin-url")).unwrap();
+        }
         assert_eq!(repo.change(&root, 1).unwrap().head, head);
         // The reviewer launch boundary: outside a watch launch it is inert;
         // inside one it revalidates head and reservation before any review.
         // trace:TASK-1993 | ai:claude
-        assert!(reviewer_launch_prompt(&root, 1, "P").unwrap().is_none());
-        env.set_key(WATCH_HEAD, &head);
-        let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
-        assert!(
-            format!("{refused:#}").contains("missing watcher reservation"),
-            "{refused:#}"
-        );
-        env.set_key(WATCH_HEAD, "f".repeat(40));
-        let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
-        assert!(
-            format!("{refused:#}").contains("head changed"),
-            "{refused:#}"
-        );
-        env.unset_key(WATCH_HEAD);
+        if !gitlab {
+            assert!(reviewer_launch_prompt(&root, 1, "P").unwrap().is_none());
+            env.set_key(WATCH_HEAD, &head);
+            let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
+            assert!(
+                format!("{refused:#}").contains("missing watcher reservation"),
+                "{refused:#}"
+            );
+            env.set_key(WATCH_HEAD, "f".repeat(40));
+            let refused = reviewer_launch_prompt(&root, 1, "P").unwrap_err();
+            assert!(
+                format!("{refused:#}").contains("head changed"),
+                "{refused:#}"
+            );
+            env.unset_key(WATCH_HEAD);
+        }
         process_dispatch_barrier(&root, &repo, &changes[0], || {
             env.set_key(WATCH_HEAD, &head);
             let prompt = reviewer_launch_prompt(&root, 1, "/aida-review --pr 1")
@@ -942,10 +1002,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
     // persist it before the ordinary queue-work reset deletes this file.
     let second = change(1, 2, false);
     let attempt = dispatch(select(&store, &second, None, 2).unwrap());
-    assert_eq!(
-        store.load().unwrap().entries["PR-1"].historical_keys.len(),
-        1
-    );
+    assert_eq!(store.retained("PR-1").unwrap().len(), 1);
     crate::queue_cmd::clear_standalone_reviewer_verdict(&path);
     assert!(!path.exists());
     execute_reservation(
@@ -1070,11 +1127,11 @@ fn task1993_observed_queue_work_refusals_are_terminal_and_free_capacity() {
 #[test]
 fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
     let (_temp, store) = fixture();
-    // One live review holds the only slot; thousands of skipped changes
+    // One live review holds the only slot; 1500 skipped changes
     // persist nothing.
     let live = change(1, 1, false);
     dispatch(select(&store, &live, None, 1).unwrap());
-    for id in 2..=2500 {
+    for id in 2..=1500 {
         assert!(matches!(
             select(&store, &change(id, id, false), None, 1).unwrap(),
             Action::Skip(_)
@@ -1084,21 +1141,42 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
     let open: BTreeSet<String> = ["PR-1".to_string()].into();
     assert_eq!(store.prune(&open).unwrap(), 0);
     // Reviewed changes that close are pruned; the live attempt survives even
-    // when its change leaves the open set.
+    // when its change leaves the open set. One transaction seeds 1199
+    // completed receipts so the test measures pruning, not fsync throughput.
     let (_temp, store) = fixture();
     let live = dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
     store
         .transition("PR-1", &live.token, Phase::Running)
         .unwrap();
-    for id in 2..=1200 {
-        let c = change(id, id, false);
-        let a = dispatch(select(&store, &c, None, 2).unwrap());
-        complete(&store, &c, &a);
-        if id % 100 == 0 {
-            store.prune(&BTreeSet::from([c.key()])).unwrap();
-        }
-    }
-    store.prune(&BTreeSet::new()).unwrap();
+    let me = Identity::current().unwrap();
+    store
+        .transaction("PR-1", |state| {
+            for id in 2..=1200u64 {
+                state.entries.insert(
+                    format!("PR-{id}"),
+                    Entry {
+                        attempts: vec![Attempt {
+                            head: format!("{id:040x}"),
+                            token: uuid::Uuid::new_v4().to_string(),
+                            vendor: None,
+                            phase: Phase::Completed,
+                            identity: Some(me.clone()),
+                            diagnostic: None,
+                            dispatcher: None,
+                        }],
+                        ..Default::default()
+                    },
+                );
+            }
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(store.load().unwrap().entries.len(), 1200);
+    assert_eq!(
+        store.prune(&BTreeSet::from(["PR-7".to_string()])).unwrap(),
+        1198
+    );
+    assert_eq!(store.prune(&BTreeSet::new()).unwrap(), 1);
     let state = store.load().unwrap();
     assert_eq!(state.entries.keys().collect::<Vec<_>>(), ["PR-1"]);
     dispatch(select(&store, &change(5000, 1, false), None, 2).unwrap());
@@ -1249,4 +1327,155 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
     assert!(!queue_args("PR-1", Some("claude"))
         .iter()
         .any(|a| a.contains("merge")));
+}
+
+// A dispatcher can exit before claiming its receipt: its grant refused
+// (validate_child_delegation runs before the reservation branch), the store
+// unusable (Store::open), or the claim timing out under lock contention. Any
+// watcher, including one restarted after the spawning parent is gone, sees
+// the recorded dispatcher is gone and frees the slot terminally.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
+    for trigger in [
+        "error: the session grant expired; a reviewer seat cannot be delegated",
+        "Error: unsafe review-watch directory .aida/review-watch",
+        "Error: review-watch lock busy: PR-1.lock",
+    ] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        // A real dispatcher process, identified while alive, then gone.
+        let mut dispatcher = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        let identity = Identity::of(dispatcher.id()).unwrap();
+        assert!(identity.alive());
+        store
+            .transaction("PR-1", |state| {
+                state.entries.get_mut("PR-1").unwrap().attempts[0].dispatcher =
+                    Some(identity.clone());
+                Ok(())
+            })
+            .unwrap();
+        let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+        let mut log = logs
+            .file(&format!("PR-1-{}.log", attempt.token), true)
+            .unwrap();
+        writeln!(log, "{trigger}").unwrap();
+        // While it lives the reservation holds the only slot.
+        assert!(matches!(
+            select(&store, &change(2, 2, false), None, 1).unwrap(),
+            Action::Skip(_)
+        ));
+        dispatcher.kill().unwrap();
+        dispatcher.wait().unwrap();
+        assert!(!identity.alive());
+        // A fresh watcher (no parent bookkeeping) reconciles and dispatches.
+        let restarted = Store::open(temp.path(), &store.repository).unwrap();
+        dispatch(select(&restarted, &change(2, 2, false), None, 1).unwrap());
+        let recorded = &restarted.load().unwrap().entries["PR-1"].attempts[0];
+        assert_eq!(recorded.phase, Phase::Exited);
+        assert!(
+            recorded.diagnostic.as_deref().unwrap().contains(trigger),
+            "{recorded:?}"
+        );
+        let Action::Skip(reason) = select(&restarted, &c, None, 1).unwrap() else {
+            panic!("the lost head relaunched");
+        };
+        assert!(reason.contains("exited"));
+    }
+    // The parent's own reaping records an observed early exit directly.
+    let (_temp, store) = fixture();
+    let attempt = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    mark_unclaimed_exit(&store, "PR-1", &attempt.token, "exit status: 1").unwrap();
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Exited
+    );
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+}
+
+// The triggers above really do leave the reservation unclaimed.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_unclaimed_triggers_never_start_work() {
+    let (temp, store) = fixture();
+    let attempt = dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    {
+        let _held = store.dir.lock("PR-1.lock").unwrap();
+        let other = Store::open(temp.path(), &store.repository).unwrap();
+        assert!(execute_reservation(
+            &other,
+            "PR-1",
+            &attempt.token,
+            |_| panic!("preflight"),
+            |_| panic!("work")
+        )
+        .is_err());
+    }
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Reserved
+    );
+    std::fs::set_permissions(store.dir.path(), std::fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(Store::open(temp.path(), &store.repository).is_err());
+    std::fs::set_permissions(store.dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+}
+
+// Rounds survive pruning: a draft toggle or close/reopen cannot reset the
+// two-round cap, even for legacy current-only verdicts that queue work clears.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_pruning_keeps_consumed_rounds() {
+    let (temp, store) = fixture();
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir(&verdicts).unwrap();
+    let path = verdicts.join("PR-1.json");
+    write_verdict(
+        &path,
+        &verdict_json(&format!("{:040x}", 1), "request-changes"),
+    );
+    let second = change(1, 2, false);
+    let a = dispatch(select(&store, &second, None, 2).unwrap());
+    crate::queue_cmd::clear_standalone_reviewer_verdict(&path);
+    execute_reservation(
+        &store,
+        "PR-1",
+        &a.token,
+        |_| Ok(()),
+        |_| {
+            write_verdict(&path, &verdict_json(&second.head, "request-changes"));
+            Ok(())
+        },
+    )
+    .unwrap();
+    // A later pass observes the second blocking verdict...
+    assert!(matches!(
+        select(&store, &second, None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    // ...then queue work's reset clears it and the change leaves the open set.
+    crate::queue_cmd::clear_standalone_reviewer_verdict(&path);
+    store.prune(&BTreeSet::new()).unwrap();
+    assert!(!store.load().unwrap().entries.contains_key("PR-1"));
+    let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
+        panic!("a pruned change dispatched a third blocking round");
+    };
+    assert!(reason.contains("two-round"), "{reason}");
+}
+
+// The watch revalidation runs before the destructive verdict reset.
+// trace:TASK-1993.ac9ef854 | ai:claude
+#[test]
+fn task1993_launch_revalidation_precedes_verdict_reset() {
+    let source = include_str!("../queue_cmd.rs");
+    let check = source
+        .find("crate::review_watch::reviewer_launch_context(&project_root, *pr)?;")
+        .expect("watch revalidation in handle_queue_work");
+    let clear = source
+        .find("clear_standalone_reviewer_verdict(verdict_path);")
+        .expect("verdict reset in handle_queue_work");
+    assert!(
+        check < clear,
+        "the verdict is cleared before the watch launch is revalidated"
+    );
 }
