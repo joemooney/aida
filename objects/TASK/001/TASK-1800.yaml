@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T05:34:27.604776545Z
+modified_at: 2026-10-21T05:37:43.979009744Z
 req_type: Task
 relationships:
 - rel_type:
@@ -347,6 +347,92 @@ comments:
   created_at: 2026-10-21T05:34:27.604776545Z
   modified_at: 2026-10-21T05:34:27.604776545Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15cf7-282b-7920-a8b1-639f1da1a41b
+  author: joe
+  content: |
+    SKETCH: TASK-1800 AC2. Reduce incidental trace attribution without dropping a true supervised touch (claude, 2026-10-20). Sketch only; nothing implemented.
+
+    ## 0. What the corpus says first (measured from docs/testing/task-1800-semantic-audit.json at main)
+
+    Production already runs the collector in hunk-scoped mode (mandate_traces::collect_pr uses Scope::ChangedItems). The table below splits the 161 scoped (case, ID) pairs by how each ID is reached:
+
+    | judgment | kept only via full-file fallback | kept via item/module scope |
+    |---|---:|---:|
+    | incidental | 84 | 18 |
+    | true-touch | 16 | 13 |
+    | unresolved | 24 | 6 |
+
+    - Fallback drives the incidental rate: 84 of the 102 incidental pairs exist only because a file fell back.
+    - The same fallback also carries 16 of the 29 true touches (all Rust) and 24 of the 30 unresolved IDs (12 md, 10 rs, 2 yml). If attribution is narrowed without a substitute, it WILL drop true touches. That is the central constraint on this design.
+    - In all 17 refused cases among the 18, at least one scoped blocker is true or unresolved. So no attribution change can flip any corpus case from refused to allowed; the expected case-level gain on these 18 is zero. The win AC2 can show is at the level of (case, ID) pairs and fallback paths. Any refusal-rate drop has to come from the other 32 frozen cases or live traffic, or from resolving the 30 unresolved IDs (store history and aliases), which is a separate lever.
+
+    Here is what currently forces a Rust file into fallback. A changed line outside any fn, impl or impl-fn range sends the whole file to full-file union. In the fallback files that keep true or unresolved IDs, the changed top-level lines are struct/enum/const/type/use declarations, mod blocks (mod tests), and outer attributes. These are approximate counts from a raw diff scan, not syn.
+
+    ## 1. Attribution unit
+
+    Rust:
+    - Widen Items from {fn, impl, impl fn} to EVERY syn item and nested item: struct, enum, union, const, static, type, trait (and trait items), use, extern crate, foreign mod, item macros and macro_rules!, mod declarations, impl consts/types. Each unit still includes its leading comment/blank prefix (leading_comment_start). Mod-block brace lines and inner headers are already covered as module evidence.
+    - Ownership is unchanged. The existing "unowned comment = module evidence" rule keeps computing ownership over the OLD unit set (fn/impl only). Widening the unit set therefore only changes the fallback decision; it never removes a module-level comment that is selected today. This keeps the change ADD-only wherever today's result is already scoped.
+    - Reference closure (the substitute that protects true touches). C = units whose span intersects a changed line, computed per side as today. N = names those units define: the item ident, field and variant names of a changed struct/enum, method names in a changed impl, and the macro name. Then select every unit in the same file whose token stream mentions any name in N, add those units' names to N, and repeat to a fixpoint. Selected IDs = module evidence + traces in C plus the closure. If the closure grows to the whole file, that equals full-file, which is acceptable.
+    - Cross-file reachability is NOT attempted. That gap already exists today and this design does not add to it: the two scoped true touches the audit found missing (STORY-1218 in #2669, TASK-1731 in #2686) are cross-file and remain known gaps. Both cases still refuse on other true IDs.
+
+    Non-Rust:
+    - Markdown, including AGENTS.md, OVERVIEW.md and the templates/ md sources. The unit is the ATX heading section: from a heading to the next heading of the same or higher level, nested sections included. The preamble before the first heading is always selected, as the file header is for Rust. The parser must be fence-aware: a heading inside a fenced code block does not count.
+    - YAML, shell, Python, TOML and everything else keep full-file fallback in this slice. Scoping them is a later decision, gated on corpus value: yml has 11 incidental pairs against 2 unresolved.
+    - No path class becomes non-authoritative. Every changed file is still scanned, so the separate ruling-5 signoff for a non-authoritative class is not triggered.
+
+    ## 2. "True vs incidental" proof
+
+    The runtime does not judge semantics and must not try. Attribution is a syntactic over-approximation (changed unit plus same-file reference closure plus module evidence). The manual audit is the oracle. A rule may ship only if, replayed on the corpus, it keeps every (case, ID) pair the oracle labels true-touch OR unresolved that today's scoped collector keeps (16+13 true, 24+6 unresolved). Unresolved counts as true; that is fail-closed. If any such pair is lost, the shape that lost it keeps full-file fallback. The rule is narrowed until the loss is zero; the oracle is never relaxed. The full-only pairs today's collector already misses (2 true, 7 unresolved) are recorded as pre-existing gaps and must not grow.
+
+    ## 3. Fail-closed fallback
+
+    The file falls back to the full-file union, with the full_file_fallbacks flag set, whenever any of these holds:
+    - tokenize or syn parse fails;
+    - a changed line is not covered by any unit;
+    - a changed or selected unit contains an item macro or macro_rules! body whose output the closure cannot see;
+    - a closure name appears inside any macro invocation token stream;
+    - #[path] or include! is present;
+    - a mode-only change (as today);
+    - for markdown: an unbalanced fence, a setext heading, front-matter ambiguity, or a non-UTF8/binary blob (already refused).
+
+    Symlinks, binaries and gitlinks are unchanged; ruling items 3 and 4 still apply. Named IDs and decide()'s fail-closed handling are untouched. Trace-derived IDs still only ADD exclusions.
+
+    ## 4. Regression test shape
+
+    (a) Hermetic CI unit tests in aida-cli-lib/src/tests/task_1790_mandate_traces_tests.rs, one synthetic fixture per shape, each asserting the exact ID set and fallback flag:
+    - struct field change seen by an unchanged traced fn (closure selects it);
+    - const change referenced by a traced fn;
+    - use-line change;
+    - change inside a mod tests block;
+    - attribute-only change;
+    - a closure name used in a macro invocation (falls back);
+    - md section change; md preamble trace (always kept); unbalanced fence (falls back).
+
+    Plus an invariant over every fixture: new_ids is a subset of full_ids, and new_ids is a superset of old_ids whenever the old collector did not fall back.
+
+    (b) Corpus replay, local evidence and not CI: the PR head commits of squash-merged PRs are not guaranteed in CI's clone. Add an #[ignore] test plus a make target. It verifies each changed blob's sha256 against the JSON (corpus drift check), then runs the old collector (kept test-only as ChangedItemsV1) and the new one on each row's pinned base/head. It asserts, for every blocker with modes containing "scoped" and judgment in {true-touch, unresolved}, that the ID is in new.ids. Its output is the before/after table: incidental pairs, fallback paths, case refusals (expected 17/18 unchanged). It then runs the same before/after on all 50 frozen endpoints from task-1800-trace-exclusions.json, which ruling 5 requires.
+
+    ## 5. Files and functions
+
+    - aida-cli-lib/src/mandate_traces.rs (the only behaviour change):
+      - Items visitor: all item kinds.
+      - source_ids: split into rust_ids (unit selection plus reference_closure fixpoint) and markdown_ids (heading sections); other extensions keep the current raw union plus fallback.
+      - Optionally add per-path attribution provenance to Evidence for the replay report; it is never an authority input.
+      - collect and collect_pr: no signature change.
+    - aida-cli-lib/src/mandate.rs decide(): NO change. It consumes only the spec-ID set; the named and trace-derived split and the dangling/history rules stay as they are.
+    - aida-cli-lib/src/mandate_ship.rs mandate_ship_cover (re-exported via pr_cmd.rs; the code moved there): NO authority change. At most the TraceEvidenceUnreadable / refusal diagnostic names the fallback paths.
+    - Tests: task_1790_mandate_traces_tests.rs (shape fixtures) and a new corpus replay test.
+    - docs/testing/task-1800-trace-exclusions.{md,json}: the before/after counts.
+
+    ## Review and risk
+
+    This changes the exclusion input to mandate ship authority, so it needs STRICT review. My recommendation: ship Rust unit widening plus the same-file closure first, gated on a zero-loss corpus replay. Ship markdown sections second, and only if the replay keeps the 12 md unresolved IDs. Expect a substantial cut in incidental and fallback pairs but little or no case-level refusal change on the corpus; the advisor should weigh that against effort before approving.
+
+    Separate from AC2: comment 24's open request-changes finding (a deleted spec referenced by its agreed_id is dropped as dangling, which fails open on the authority path) should land before or alongside this, since it touches the same decide() inputs.
+  created_at: 2026-10-21T05:37:43.979009744Z
+  modified_at: 2026-10-21T05:37:43.979009744Z
+  session_id: 22968829-05f3-4574-a04c-fabb144972f1
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
   author: aida-session-start
