@@ -727,18 +727,47 @@ const SALVAGE_OUTPUT_CAP: u64 = 64 * 1024 * 1024;
 /// over the clone's own `.git/config`. It defines no filter, diff, textconv
 /// or fsmonitor driver and no include, so attributes a seat plants in its
 /// clone name drivers that do not exist and run nothing. The object format
-/// comes from MAIN (the clone was made from main's origin), never from a
-/// file in the clone.
+/// comes from MAIN (the clone borrows main's objects). The one other
+/// repository extension a clone can be made with, `refStorage` (a user's
+/// `init.defaultRefFormat`), is carried over from the clone's config only
+/// as an allowlisted value, `reftable`; anything else is left out, which
+/// can only make the probe fail and the host keep the clone.
 // trace:TASK-2053 | ai:claude
-fn probe_repo_config(main: &Path) -> String {
+fn probe_repo_config(main: &Path, clone: &Path) -> String {
     let mut cmd = git(main);
     cmd.args(["rev-parse", "--show-object-format"]);
-    match run(cmd, "read the object format").as_deref() {
-        Ok("sha256") => "[core]\n\trepositoryformatversion = 1\n\tbare = false\n\
-                         [extensions]\n\tobjectformat = sha256\n"
-            .to_string(),
-        _ => "[core]\n\trepositoryformatversion = 0\n\tbare = false\n".to_string(),
+    let mut extensions = Vec::new();
+    if run(cmd, "read the object format").is_ok_and(|format| format == "sha256") {
+        extensions.push("\tobjectformat = sha256\n");
     }
+    if clone_ref_storage(main, clone).as_deref() == Some("reftable") {
+        extensions.push("\trefstorage = reftable\n");
+    }
+    if extensions.is_empty() {
+        return "[core]\n\trepositoryformatversion = 0\n\tbare = false\n".to_string();
+    }
+    format!(
+        "[core]\n\trepositoryformatversion = 1\n\tbare = false\n[extensions]\n{}",
+        extensions.concat()
+    )
+}
+
+/// `extensions.refStorage` from the clone's own `.git/config`, lowercased.
+/// The seat-written file is read only as a regular file (never a FIFO or
+/// through a symlink) and parsed by `git config --file` on a host-side copy,
+/// which follows no include.
+// trace:TASK-2053 | ai:claude
+fn clone_ref_storage(main: &Path, clone: &Path) -> Option<String> {
+    let body = aida_core::seat_clone_detect::read_regular_file(&clone.join(".git").join("config"))?;
+    let copy = tempfile::NamedTempFile::new().ok()?;
+    std::fs::write(copy.path(), body).ok()?;
+    let mut cmd = git(main);
+    cmd.args(["config", "--file"])
+        .arg(copy.path())
+        .args(["--get", "extensions.refstorage"]);
+    run(cmd, "read the clone's ref storage")
+        .ok()
+        .map(|value| value.to_ascii_lowercase())
 }
 
 /// The bwrap argv that runs a program against `clone` for the host: no
@@ -857,7 +886,7 @@ fn run_sandboxed(
     let repo_config = tempfile::NamedTempFile::new()
         .and_then(|mut file| {
             use std::io::Write;
-            file.write_all(probe_repo_config(main).as_bytes())?;
+            file.write_all(probe_repo_config(main, clone).as_bytes())?;
             Ok(file)
         })
         .map_err(|error| failed(format!("could not write the probe's git config: {error}")))?;

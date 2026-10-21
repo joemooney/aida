@@ -850,7 +850,7 @@ fn end_session(id: &str, force: bool) -> anyhow::Result<()> {
 }
 
 /// Review round 2, item 1: untracked names that git would quote (non-ASCII,
-/// a double quote, a backslash) are salvaged with their content, and an
+/// a double quote, a backslash, a newline) are salvaged with their content, and an
 /// untracked file that cannot be read fails the salvage, which keeps the clone.
 #[cfg(target_os = "linux")]
 #[test]
@@ -860,7 +860,12 @@ fn task_2053_bwrap_salvage_keeps_quoted_untracked_names_and_fails_on_unreadable(
     }
     let fx = fixture();
     let clone = seat(&fx, "names", "c0ffee000021");
-    let names = ["naïve.txt", "q\"uote.txt", "back\\slash.txt"];
+    let names = [
+        "naïve.txt",
+        "q\"uote.txt",
+        "back\\slash.txt",
+        "new\nline.txt",
+    ];
     for (i, name) in names.iter().enumerate() {
         std::fs::write(clone.join(name), format!("content-{i}\n")).unwrap();
     }
@@ -1051,4 +1056,136 @@ fn release_orphan_pin_rechecks_and_compares_before_deleting() {
     std::fs::remove_dir(&gone).unwrap();
     assert!(release_orphan_pin(&fx.main, &orphan).unwrap());
     assert!(!ref_exists(&fx.main, &pin));
+}
+
+/// A logging `git` first on PATH (tagged invocations are the sandboxed
+/// accessor's own); returns (shim dir, log).
+fn logging_git_shim(fx: &Fixture) -> (PathBuf, PathBuf) {
+    let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
+        .display()
+        .to_string();
+    let shim_dir = fx.root.join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let log = fx.root.join("git.log");
+    std::fs::write(&log, "").unwrap();
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\n{{ printf '%s\\t%s\\t' \"${{{ACCESSOR_ENV}:-0}}\" \"$PWD\"; \
+             for a in \"$@\"; do printf '%s\\037' \"$a\"; done; printf '\\n'; }} >> '{}'\n\
+             exec '{real_git}' \"$@\"\n",
+            log.display()
+        ),
+    );
+    (shim_dir, log)
+}
+
+fn untagged_git_in(log: &Path, clone: &Path) -> Vec<String> {
+    clone_invocations(&std::fs::read_to_string(log).unwrap(), clone)
+        .into_iter()
+        .filter(|(tagged, _)| !tagged)
+        .map(|(_, line)| line)
+        .collect()
+}
+
+/// Review round 3: `aida session end --force` and `aida worktree dismiss` on
+/// a clone run no untagged git in it (signoff condition 1), and session end
+/// never follows a seat-planted `<clone>/.aida` symlink: the decoy it points
+/// at keeps its `sessions` link and its files.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_clone_aida_link() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let id = "c0ffee000031";
+    let ended = seat(&fx, "end-shim", id);
+    seat_commit(&ended, "work.txt");
+    let decoy = fx.root.join("decoy-aida");
+    std::fs::create_dir_all(&decoy).unwrap();
+    std::fs::write(decoy.join("sentinel"), "keep\n").unwrap();
+    std::fs::write(decoy.join("cache.db"), "keep\n").unwrap();
+    std::os::unix::fs::symlink(fx.root.join("elsewhere"), decoy.join("sessions")).unwrap();
+    std::fs::write(
+        decoy.join("session-env.sh"),
+        format!(
+            "export CARGO_TARGET_DIR={}\n",
+            decoy.join("target").display()
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(decoy.join("target")).unwrap();
+    let aida = ended.join(".aida");
+    if std::fs::symlink_metadata(&aida).is_ok() {
+        std::fs::remove_dir_all(&aida).unwrap();
+    }
+    std::os::unix::fs::symlink(&decoy, &aida).unwrap();
+    let dismissed = seat(&fx, "dismiss-shim", "c0ffee000032");
+    std::fs::write(dismissed.join("loose.txt"), "loose\n").unwrap();
+
+    let (shim_dir, log) = logging_git_shim(&fx);
+    let path = format!(
+        "{}:{}",
+        shim_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _ambient =
+        crate::test_env::AmbientGuard::hermetic_and(&fx.main, None, &[("PATH", Some(&path))]);
+
+    end_session(id, true).unwrap();
+    assert!(!ended.exists());
+    assert!(
+        std::fs::symlink_metadata(decoy.join("sessions")).is_ok_and(|m| m.file_type().is_symlink())
+    );
+    for kept in ["sentinel", "cache.db", "session-env.sh", "target"] {
+        assert!(
+            decoy.join(kept).exists(),
+            "session end touched decoy/{kept}"
+        );
+    }
+    crate::worktree_dismiss::handle_dismiss(Some(dismissed.to_str().unwrap()), None).unwrap();
+    assert!(!dismissed.exists());
+
+    for clone in [&ended, &dismissed] {
+        let untagged = untagged_git_in(&log, clone);
+        assert!(
+            untagged.is_empty(),
+            "host git ran in {}: {untagged:#?}",
+            clone.display()
+        );
+    }
+}
+
+/// Review round 3: a clone using the reftable ref backend stays readable by
+/// the probe (its `refStorage` extension is carried into the probe config).
+/// Skipped where git cannot migrate refs to reftable.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_probe_reads_a_reftable_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "reftable", "c0ffee000033");
+    let migrated = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&clone)
+        .args(["refs", "migrate", "--ref-format=reftable"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    if !migrated {
+        eprintln!("SKIP (git cannot migrate refs to reftable)");
+        return;
+    }
+    seat_commit(&clone, "work.txt");
+    let facts = known(probe(&fx.main, &clone));
+    assert_eq!(facts.branch.as_deref(), Some("feat"));
+    assert!(facts.unpushed >= 1, "{facts:?}");
 }

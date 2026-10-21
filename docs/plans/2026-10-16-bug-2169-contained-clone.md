@@ -508,3 +508,20 @@ Owning spec: TASK-2053 (the remaining BUG-2169 slices moved there unchanged).
   dropped, and a file that cannot be diffed fails the whole salvage.
 - **Orphan pins are compare-and-delete.** `release_orphan_pin` re-checks that the clone directory
   is absent and that no clone lease names it, then runs `update-ref -d <pin> <listed oid>`.
+
+### S3 review round 3 fixes
+
+- **No host writes through a seat's `.aida`.** Session end no longer strips the runtime links in
+  `<clone>/.aida` or reads `<clone>/.aida/session-env.sh` for a clone lease: the directory is
+  seat-writable, so a symlink there would aim host unlinks (or the cargo-target removal) outside
+  the clone. `seat_clone::destroy` removes the whole clone without following symlinks.
+- **Reftable clones stay readable.** The probe config carries `extensions.refStorage = reftable`
+  from the clone's config (read as a regular file, parsed from a host-side copy, allowlisted
+  value only) beside main's object format. Any other value is dropped, which can only make the
+  probe fail closed.
+- **Tests.** Session end `--force` and worktree dismiss run under the logging git shim with no
+  untagged git in the clone, and a decoy that `<clone>/.aida` points at keeps its `sessions` link,
+  files and target dir; a reftable clone probes (skipped where git cannot migrate refs); the
+  quoted-names salvage test adds a newline in a name.
+- **Folded to TASK-2110 (S4):** squash-merged branches whose origin ref was pruned read as
+  unpushed.
