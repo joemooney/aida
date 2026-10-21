@@ -1,0 +1,26 @@
+id: 01a15e59-6337-7261-a6cb-f4763e0a02c8
+spec_id: TASK-2061
+agreed_id: TASK-2061
+title: 'mandate_traces #[path] detection misses cfg_attr(path=...)'
+description: |
+  Items::visit_attribute checks only node.path().is_ident("path"), so '#[cfg_attr(c, path="x")] mod m;' is not flagged. Plain 'mod m;' is not flagged either, although the rule's rationale covers it.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:04:38.839555094Z
+modified_at: 2026-10-21T12:04:38.839555094Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- severity:minor
+filed_at:
+  code_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e50a60a

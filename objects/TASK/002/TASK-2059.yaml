@@ -1,0 +1,26 @@
+id: 01a15e59-423f-78d3-bb56-55690ac8c48c
+spec_id: TASK-2059
+agreed_id: TASK-2059
+title: 'TASK-1800 AC2: item-level collector widens fallback 290->414 with no refusal gain'
+description: |
+  aida-cli-lib/src/mandate_traces.rs source_evidence/reference_closure: the production ChangedItems collector raises full-file fallback (290->414 case/paths), grows scoped sets in 34/50 cases and shrinks none, and leaves refusals unchanged (49->49). Most of it comes from ExternalSource (#[path] mod tests) and MacroName. Trim the PR to the comment-24 fix + replay + docs, or get an advisor ruling.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:04:30.399486206Z
+modified_at: 2026-10-21T12:04:30.399486206Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- severity:major
+filed_at:
+  code_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e50a60a

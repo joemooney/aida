@@ -1,0 +1,26 @@
+id: 01a15e59-80b4-74b2-bee6-e6ad2173b877
+spec_id: TASK-2063
+agreed_id: TASK-2063
+title: semantic-audit.md:297 still calls trimmed trace_lines 'exact' (TASK-2042 item)
+description: |
+  docs/testing/task-1800-semantic-audit.md:297 says 'exact trace lines', but the stored text has its leading whitespace trimmed. TASK-2042 was folded into TASK-1800.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:04:46.388975468Z
+modified_at: 2026-10-21T12:04:46.388975468Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- severity:cosmetic
+filed_at:
+  code_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e50a60a

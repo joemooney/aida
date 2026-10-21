@@ -1,0 +1,26 @@
+id: 01a15e59-72a6-7923-8d68-293df0718f4f
+spec_id: TASK-2062
+agreed_id: TASK-2062
+title: 'TASK-1800 closure bookkeeping: subject trailer and unresolved-ID follow-up spec'
+description: |
+  The measurement in PR-2798 closes TASK-1800 (signoff 3), so the subject should carry (TASK-1800), not (Refs TASK-1800). The follow-up spec for resolving unresolved IDs via store history/aliases is not filed.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:04:42.790001140Z
+modified_at: 2026-10-21T12:04:42.790001140Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- severity:minor
+filed_at:
+  code_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e50a60a

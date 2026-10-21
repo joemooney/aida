@@ -1,0 +1,26 @@
+id: 01a15e59-5184-76d3-be25-d0dc7187a90e
+spec_id: TASK-2060
+agreed_id: TASK-2060
+title: mandate_traces closure misses trait-mediated uses (use Trait / as _ / derive)
+description: |
+  A changed 'use some::Trait;', 'use x::Trait as _;' or '#[derive]' now narrows to the units that name the ident, so same-file method callers are dropped. Before, it fell back to the full file. The ac2_attribute_only_change test asserts the narrowing.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798#issuecomment-6315445915
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T12:04:34.308641026Z
+modified_at: 2026-10-21T12:04:34.308641026Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- severity:minor
+filed_at:
+  code_sha: 0add137bc25547cbc420443409b8bbff3993a748
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e50a60a
