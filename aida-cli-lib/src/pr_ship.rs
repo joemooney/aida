@@ -493,22 +493,53 @@ pub(crate) fn derive_squash_trailer(
             "non-completing slice ({how}) — no spec is completed by this merge"
         )]);
     }
+    // BUG-2203: a title ending in `(Refs X[, Y])` declares a non-completing
+    // reference, so neither the title nor the branch-name fallback may grant a
+    // trailer (the fallback turned `(Refs BUG-2169)` into `... (BUG-2169)` and
+    // completed it). An id named in any `(Refs …)` group of the title never
+    // gains completion authority from another source either. Fail closed.
+    // trace:BUG-2203 | ai:claude
+    let trailing_refs = extract_trailing_refs_spec_ids_from_subject(pr_title);
+    if !trailing_refs.is_empty() {
+        return SquashTrailer::none(vec![format!(
+            "PR title ends in `(Refs {})` — a reference, not a completion trailer; \
+             no spec is completed by this merge",
+            trailing_refs.join(", ")
+        )]);
+    }
+    let refs_ids = refs_spec_ids_in_text(pr_title);
+    let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
+    let mut notes = Vec::new();
     let title_ids: Vec<String> = extract_trailing_spec_ids_from_subject(pr_title)
         .into_iter()
         .filter(|id| resolves(id))
+        .filter(|id| {
+            let referenced = is_ref(id);
+            if referenced {
+                notes.push(format!(
+                    "{id} is also named in a `(Refs …)` group — not completed by this merge"
+                ));
+            }
+            !referenced
+        })
         .collect();
     if !title_ids.is_empty() {
         return SquashTrailer {
             ids: title_ids,
             source: TrailerSource::Title,
-            notes: Vec::new(),
+            notes,
         };
     }
-    let mut notes = Vec::new();
+    if !notes.is_empty() {
+        // The title's only trailer ids were referenced ones: withhold the
+        // branch-name fallback too rather than guess. trace:BUG-2203 | ai:claude
+        return SquashTrailer::none(notes);
+    }
     let mut branch_ids = Vec::new();
     for id in extract_spec_ids_from_text(branch)
         .into_iter()
         .filter(|id| resolves(id))
+        .filter(|id| !is_ref(id))
     {
         match completion_held(&id) {
             Some(reason) => notes.push(format!(
@@ -699,8 +730,14 @@ pub(crate) fn spec_completion_hold_reason(
 pub fn format_trailer_provenance(trailer: &SquashTrailer) -> String {
     let joined = trailer.ids.join(" ");
     let mut out = match trailer.source {
-        TrailerSource::Title => format!("completion trailer ({joined}) — from the PR title"),
-        TrailerSource::Branch => format!("completion trailer ({joined}) — from the branch name"),
+        // BUG-2203: name the ids this merge will complete, not just the trailer.
+        // trace:BUG-2203 | ai:claude
+        TrailerSource::Title => format!(
+            "completion trailer ({joined}) — from the PR title; this merge will complete {joined}"
+        ),
+        TrailerSource::Branch => format!(
+            "completion trailer ({joined}) — from the branch name; this merge will complete {joined}"
+        ),
         TrailerSource::None => {
             "completion trailer: none — this merge completes no spec".to_string()
         }
@@ -729,6 +766,11 @@ pub fn format_dry_run_trailer_provenance(trailer: Result<&SquashTrailer, &str>) 
 pub fn squash_subject_with_spec_ids(subject: &str, ids: &[String]) -> String {
     let subject = subject.trim();
     if ids.is_empty() || subject.is_empty() {
+        return subject.to_string();
+    }
+    // BUG-2203: never turn a `(Refs X)` subject into a completing one.
+    // trace:BUG-2203 | ai:claude
+    if !extract_trailing_refs_spec_ids_from_subject(subject).is_empty() {
         return subject.to_string();
     }
     let existing = extract_trailing_spec_ids_from_subject(subject);
@@ -866,6 +908,63 @@ pub fn extract_trailing_spec_ids_from_subject(subject: &str) -> Vec<String> {
         return Vec::new();
     };
     parse_spec_id_group(inner)
+}
+
+/// BUG-2203: the ids of a subject's trailing `(Refs X[, Y])` group (the
+/// non-completing reference form), optionally followed by GitHub's `(#N)`.
+/// Empty when the trailing group is anything else.
+// trace:BUG-2203 | ai:claude
+pub fn extract_trailing_refs_spec_ids_from_subject(subject: &str) -> Vec<String> {
+    let mut tail = subject.trim();
+    if let Some((head, inner)) = trailing_paren_group(tail) {
+        let pr_suffix = inner
+            .strip_prefix('#')
+            .filter(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()));
+        if pr_suffix.is_some() {
+            tail = head.trim_end();
+        }
+    }
+    match trailing_paren_group(tail) {
+        Some((_, inner)) => refs_group_spec_ids(inner),
+        None => Vec::new(),
+    }
+}
+
+/// BUG-2203: every id named in any `(Refs …)` group of `text` (a subject or a
+/// whole commit message). Merge-time completion skips these: a commit that
+/// says `Refs X` anywhere is never evidence that X is finished, even when a
+/// bare `(X)` trailer was appended after it. Upper-cased, deduplicated.
+// trace:BUG-2203 | ai:claude
+pub fn refs_spec_ids_in_text(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (open_at, _) in text.match_indices('(') {
+        let rest = &text[open_at + 1..];
+        let Some(close_at) = rest.find(')') else {
+            break;
+        };
+        for id in refs_group_spec_ids(&rest[..close_at]) {
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+    }
+    out
+}
+
+/// The ids of one paren group's inner text when it reads `Refs X[, Y]` (also
+/// `Ref`, `Refs:`, any case); empty otherwise.
+fn refs_group_spec_ids(inner: &str) -> Vec<String> {
+    let inner = inner.trim_start();
+    let word_len = inner
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(inner.len());
+    let word = &inner[..word_len];
+    if !(word.eq_ignore_ascii_case("refs") || word.eq_ignore_ascii_case("ref")) {
+        return Vec::new();
+    }
+    let rest = inner[word_len..].trim_start();
+    let rest = rest.strip_prefix(':').unwrap_or(rest);
+    extract_spec_ids_from_text(rest)
 }
 
 fn append_spec_ids_before_pr_suffix(subject: &str, joined_ids: &str) -> String {
@@ -3845,6 +3944,100 @@ mod tests {
         assert_eq!(trailer.source, TrailerSource::Branch);
     }
 
+    // trace:BUG-2203 | ai:claude
+    #[test]
+    fn bug_2203_refs_groups_are_recognized() {
+        let refs = extract_trailing_refs_spec_ids_from_subject;
+        assert_eq!(refs("feat: x (Refs BUG-2169)"), vec!["BUG-2169"]);
+        assert_eq!(
+            refs("feat: x (refs: TASK-1, BUG-2) (#12)"),
+            vec!["TASK-1", "BUG-2"]
+        );
+        assert_eq!(refs("feat: x (Ref STORY-3)"), vec!["STORY-3"]);
+        assert!(refs("feat: x (Refs BUG-2169) (BUG-2169)").is_empty());
+        assert!(refs("feat: x (BUG-2169)").is_empty());
+        assert!(refs("refactor(cli): x (References BUG-1)").is_empty());
+        assert_eq!(
+            refs_spec_ids_in_text("feat: x (Refs BUG-2169) (BUG-2169)\n\n- y (Refs TASK-7)"),
+            vec!["BUG-2169", "TASK-7"]
+        );
+        assert!(refs_spec_ids_in_text("refactor(cli): x (BUG-1) (#3)").is_empty());
+    }
+
+    // trace:BUG-2203 | ai:claude
+    #[test]
+    fn bug_2203_refs_title_never_gains_a_completion_trailer() {
+        // The PR-2787 shape: a Refs title from a branch named for the spec.
+        let t = derive_squash_trailer(
+            "feat: slice 2 (Refs BUG-2169)",
+            "claude/bug-2169",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert!(t.ids.is_empty(), "{t:?}");
+        assert_eq!(t.source, TrailerSource::None);
+        assert!(t.notes[0].contains("(Refs BUG-2169)"), "{t:?}");
+        // With a `(#N)` suffix too.
+        let t = derive_squash_trailer(
+            "feat: x (Refs TASK-1952) (#2790)",
+            "claude/task-1952",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert!(t.ids.is_empty(), "{t:?}");
+        // A bare trailer repeating a Refs id is still a reference; the branch
+        // fallback is withheld rather than guessed.
+        let t = derive_squash_trailer(
+            "feat: x (Refs BUG-2169) (BUG-2169)",
+            "claude/bug-2169",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert!(t.ids.is_empty(), "{t:?}");
+        // A Refs id never rides in on the branch name either.
+        let t = derive_squash_trailer(
+            "feat: x (Refs BUG-2169) and more",
+            "claude/bug-2169",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert!(t.ids.is_empty(), "{t:?}");
+        // A different completing id after a Refs group still completes.
+        let t = derive_squash_trailer(
+            "feat: x (Refs BUG-1) (BUG-2)",
+            "neutral",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        );
+        assert_eq!(t.ids, vec!["BUG-2".to_string()]);
+        // The full subject derivation leaves the Refs title untouched.
+        let (subject, _) = derive_squash_subject_with_trailer(
+            "feat: slice 2 (Refs BUG-2169)",
+            "claude/bug-2169",
+            "",
+            "",
+            false,
+            |_| true,
+            |_| None,
+        )
+        .unwrap();
+        assert_eq!(subject, "feat: slice 2 (Refs BUG-2169)");
+        assert_eq!(
+            squash_subject_with_spec_ids("feat: x (Refs BUG-1)", &["BUG-1".to_string()]),
+            "feat: x (Refs BUG-1)"
+        );
+    }
+
     // trace:BUG-1919 | ai:claude
     #[test]
     fn bug_1919_provenance_names_source() {
@@ -3858,12 +4051,12 @@ mod tests {
         );
         assert_eq!(
             format_trailer_provenance(&title),
-            "completion trailer (TASK-1538) — from the PR title"
+            "completion trailer (TASK-1538) — from the PR title; this merge will complete TASK-1538"
         );
         let branch = derive_squash_trailer("fix: x", "task-1538-x", "", false, |_| true, |_| None);
         assert_eq!(
             format_trailer_provenance(&branch),
-            "completion trailer (TASK-1538) — from the branch name"
+            "completion trailer (TASK-1538) — from the branch name; this merge will complete TASK-1538"
         );
         let none = derive_squash_trailer("fix: x", "neutral", "", false, |_| true, |_| None);
         assert_eq!(
@@ -4077,7 +4270,7 @@ mod tests {
         );
         assert_eq!(
             format_dry_run_trailer_provenance(Ok(&trailer)),
-            "  · completion trailer (TASK-1538) — from the PR title\n"
+            "  · completion trailer (TASK-1538) — from the PR title; this merge will complete TASK-1538\n"
         );
         let withheld = derive_squash_trailer("fix: x", "task-1538-x", "", true, |_| true, |_| None);
         let line = format_dry_run_trailer_provenance(Ok(&withheld));

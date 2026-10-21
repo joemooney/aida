@@ -2087,7 +2087,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
             && !commit_declares_non_completing(message)
             && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
         {
+            // BUG-2203: an id named in any `(Refs …)` group of the commit is a
+            // reference, never a completion — even when a bare `(X)` trailer
+            // follows it (`… (Refs BUG-2169) (BUG-2169)`). trace:BUG-2203 | ai:claude
+            let refs_ids = crate::pr_ship::refs_spec_ids_in_text(message);
+            let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
             for spec_id in extract_spec_ids_from_commit(subject) {
+                if is_ref(&spec_id) {
+                    continue;
+                }
                 candidates.entry(spec_id).or_insert_with(|| sha.to_string());
             }
             // BUG-536: also harvest the completion trailers GitHub preserves in
@@ -2105,6 +2113,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
             // the backstops. trace:BUG-536 | ai:claude
             if extract_pr_number_from_commit_subject(subject).is_some() {
                 for spec_id in extract_referenced_spec_ids_from_commit(message) {
+                    if is_ref(&spec_id) {
+                        continue;
+                    }
                     candidates.entry(spec_id).or_insert_with(|| sha.to_string());
                 }
             }
@@ -3027,7 +3038,14 @@ pub(crate) fn handle_db_reconcile_status(
             && !commit_declares_non_completing(message)
             && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
         {
+            // BUG-2203: skip `(Refs …)` ids, matching the live auto-bump scan.
+            // trace:BUG-2203 | ai:claude
+            let refs_ids = crate::pr_ship::refs_spec_ids_in_text(message);
+            let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
             for id in extract_spec_ids_from_commit(subject) {
+                if is_ref(&id) {
+                    continue;
+                }
                 if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
                     candidate_sources.insert(
                         slot.key().clone(),
@@ -3042,6 +3060,9 @@ pub(crate) fn handle_db_reconcile_status(
             // single-trailer squash. trace:BUG-536 | ai:claude
             if extract_pr_number_from_commit_subject(subject).is_some() {
                 for id in extract_referenced_spec_ids_from_commit(message) {
+                    if is_ref(&id) {
+                        continue;
+                    }
                     if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
                         candidate_sources.insert(
                             slot.key().clone(),
