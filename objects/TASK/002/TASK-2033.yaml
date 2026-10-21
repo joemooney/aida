@@ -11,12 +11,23 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T23:41:49.112942354Z
-modified_at: 2026-10-20T23:41:49.112942354Z
+modified_at: 2026-10-21T04:33:08.526362094Z
 req_type: Task
 tags:
 - from-review:PR-2787
+- operator-held
 - severity:cosmetic
 - tests
+history:
+- id: 01a15cbc-0722-7610-955f-1c1cf1516ecc
+  author: joe
+  timestamp: 2026-10-21T04:33:08.898681886Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+deferred: true
+deferred_at: 2026-10-21T04:33:08.526362094Z
+deferred_until: 'Cosmetic test gaps on PR #2787 (open). Revisit when #2787 merges; fold into TASK-1952.'
+deferred_reason: 'Advisor triage 2026-10-20 21:30: valid but not needed on the current path'
 filed_at:
   code_sha: 45025e7234009af5f935bde71591c6f0469de938
   branch: pr-2787
