@@ -8,7 +8,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:16:02.186958106Z
-modified_at: 2026-10-18T04:17:25.909168669Z
+modified_at: 2026-10-21T05:16:37.970789317Z
 req_type: Task
 relationships:
 - rel_type:
@@ -71,6 +71,12 @@ comments:
   content: 'Relay companion PR #96 rework is delivered at 3e4d8d19786efbca6343e49ad2de82acc198cf3c. Imported bash wrapper changed shutdown test fixture child topology; two command bash launches restore direct-child PIDs. Full local shell gate31/31, targeted shutdown suite and ShellCheck passed. No production shutdown change. Parent AIDA launcher PR #2710 remains draft/stacked while #2682 is open; parent remains incomplete. No author verdict/clearance/merge.'
   created_at: 2026-10-17T01:31:10.539643552Z
   modified_at: 2026-10-17T01:31:10.539643552Z
+- id: 01a15ce3-d6d2-76f3-859c-1824257c6db0
+  author: joe
+  content: 'ADVISOR 22:17: aida-relay PR #96 (head 3e4d8d1978, CI green, CLEAN) was reviewed twice by an independent headless reviewer: approve, no blockers, 3 nits (doc headings; ${HARNESS_ENV[@]} needs the ${ARR[@]+...} guard on bash<4.4; timeout wording). Neither run could record its verdict because the reviewer''s Bash/Read calls were denied (BUG-2201). Without a recorded verdict I will not ship it. Options: operator review+merge of #96, or ship after BUG-2201 is fixed.'
+  created_at: 2026-10-21T05:16:37.970789317Z
+  modified_at: 2026-10-21T05:16:37.970789317Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a146b4-3929-72b1-ad4a-786c535def20
   author: aida-session-start
