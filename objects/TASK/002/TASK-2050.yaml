@@ -7,18 +7,27 @@ description: |
   2) In aida-cli-lib/src/seat_occupancy/runtime.rs lease_scope_for_own, `start(pid).as_deref() == Some(rec) || strict_match(pid, rec)` is now redundant on its first arm, because strict_match covers both formats. That leaves the `start` parameter nearly vestigial.
 
   Raised in review of PR-2735 (BUG-2130).
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T08:17:24.625564825Z
-modified_at: 2026-10-21T08:17:24.625564825Z
+modified_at: 2026-10-21T17:35:50.505756451Z
 req_type: Task
 tags:
 - from-review:PR-2735
 - liveness
 - severity:cosmetic
 - tests
+history:
+- id: 01a15f88-9ae9-7ea1-a6c6-2da8ec55712e
+  author: joe
+  timestamp: 2026-10-21T17:35:50.505750389Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: f687736aa0674af02c12031f315b4ac882106c18
   branch: pr-2735
