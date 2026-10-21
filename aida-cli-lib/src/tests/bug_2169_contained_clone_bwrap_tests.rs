@@ -33,7 +33,8 @@ mod linux {
     use std::process::Command;
 
     fn git_ok(dir: &Path, args: &[&str]) -> String {
-        let out = Command::new("git")
+        // trace:BUG-2169 | ai:claude
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args(args)
@@ -735,7 +736,9 @@ mod linux {
             let branch = format!("seat-{}", layer.replace(' ', "-"));
             let script = format!(
                 "set -e; git checkout -qb {branch}; echo {branch} > work.txt; git add work.txt; \
-             git commit -qm work; git fetch -q origin; git merge -q --no-edit origin/main; \
+             git -c maintenance.auto=false -c gc.auto=0 commit -qm work; \
+             git -c maintenance.auto=false -c gc.auto=0 fetch -q origin; \
+             git -c maintenance.auto=false -c gc.auto=0 merge -q --no-edit origin/main; \
              git push -q -u origin {branch}; git rev-parse HEAD"
             );
             let ran = run_in(&argv, &script, &[]);
