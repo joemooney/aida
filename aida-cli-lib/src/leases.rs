@@ -2670,8 +2670,15 @@ pub(crate) fn classify_session_leases(
                 .active_pid
                 .filter(|p| process_probe::pid_is_alive(*p))
                 .or_else(|| live_in_worktree.map(|s| s.pid))
+                // Same rule as `aida ps`: only a creator still alive is the
+                // row's process. trace:TASK-1955 | ai:claude (TASK-2098)
                 .or(if l.review_verb || l.claim_verb {
-                    l.creator_pid
+                    l.creator_pid.filter(|p| {
+                        process_probe::process_identity_is_alive(
+                            *p,
+                            l.creator_pid_start_time.as_deref(),
+                        )
+                    })
                 } else {
                     None
                 });

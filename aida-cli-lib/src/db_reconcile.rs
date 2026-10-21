@@ -549,6 +549,16 @@ pub(crate) struct RefsCompletionFilter {
 }
 
 impl RefsCompletionFilter {
+    /// The subject names spec ids, and every one only inside a `(Refs …)`
+    /// group: a reference merge that completes nothing (BUG-2203).
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    pub(crate) fn subject_only_references(&self, subject: &str) -> bool {
+        !self.subject_refs.is_empty()
+            && extract_spec_ids_from_commit(subject)
+                .iter()
+                .all(|id| self.subject(id))
+    }
+
     pub(crate) fn subject(&self, id: &str) -> bool {
         self.subject_refs.iter().any(|r| r.eq_ignore_ascii_case(id))
     }
@@ -1999,6 +2009,31 @@ pub(crate) fn apply_stranded_review_pr_resolution(
 }
 
 /// trace:STORY-86 | ai:claude
+/// STORY-1663's slice-subject rule, scoped to the commits it was written for.
+/// A rebased slice commit (no `(#N)` suffix) never completes its spec. A
+/// squash merge's subject is the PR title plus the trailer `aida pr ship`
+/// chose, so it completes on that trailer, except an unfinished numbered
+/// slice (`[k/N]` with k < N); the final `[N/N]` squash completes.
+// trace:TASK-1951 trace:TASK-1618 | ai:claude
+pub(crate) fn slice_subject_withholds_completion(subject: &str) -> bool {
+    if extract_pr_number_from_commit_subject(subject).is_none() {
+        return crate::pr_ship::is_non_completing_slice_commit_subject(subject);
+    }
+    numbered_slice_position(subject).is_some_and(|(k, n)| k < n)
+}
+
+/// `(k, N)` from a `[k/N] …` subject that `is_numbered_slice_commit_subject`
+/// accepts.
+// trace:TASK-1951 trace:TASK-1618 | ai:claude
+fn numbered_slice_position(subject: &str) -> Option<(u32, u32)> {
+    if !crate::pr_ship::is_numbered_slice_commit_subject(subject) {
+        return None;
+    }
+    let inside = subject.trim().strip_prefix('[')?.split_once(']')?.0;
+    let (k, n) = inside.split_once('/')?;
+    Some((k.parse().ok()?, n.parse().ok()?))
+}
+
 pub(crate) fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -2114,6 +2149,10 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // by /aida-pr's auto-queue (their spec IDs are NEVER in commit
     // subjects, so the `candidates` scan above can't see them).
     let mut pr_to_sha: std::collections::BTreeMap<u64, String> = std::collections::BTreeMap::new();
+    // TASK-1765: PRs whose merge declared itself non-completing; the BUG-106
+    // covers path below must not complete their covered specs either.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    let mut non_completing_prs: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2151,7 +2190,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // trace:STORY-1663 | ai:antigravity
         if !is_plan_commit_subject(subject)
             && !commit_declares_non_completing(message)
-            && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
+            && !slice_subject_withholds_completion(subject)
         {
             // BUG-2203: an id the SUBJECT names in a `(Refs …)` group is a
             // reference, never a completion — even when a bare `(X)` trailer
@@ -2187,6 +2226,12 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
         if let Some(pr_n) = extract_pr_number_from_commit_subject(subject) {
             pr_to_sha.entry(pr_n).or_insert_with(|| sha.to_string());
+            if commit_declares_non_completing(message)
+                || slice_subject_withholds_completion(subject)
+                || refs_completion_filter(subject, message).subject_only_references(subject)
+            {
+                non_completing_prs.insert(pr_n);
+            }
         }
     }
 
@@ -2310,6 +2355,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // trace:BUG-106 | ai:claude
     if !pr_to_sha.is_empty() {
         for (pr_n, sha) in &pr_to_sha {
+            if non_completing_prs.contains(pr_n) {
+                continue;
+            }
             let Some(review_story) = store
                 .requirements
                 .iter()
@@ -3101,7 +3149,7 @@ pub(crate) fn handle_db_reconcile_status(
         // trace:STORY-1663 | ai:antigravity
         if !is_plan_commit_subject(subject)
             && !commit_declares_non_completing(message)
-            && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
+            && !slice_subject_withholds_completion(subject)
         {
             // BUG-2203: skip `(Refs …)` ids, matching the live auto-bump scan.
             // trace:BUG-2203 | ai:claude

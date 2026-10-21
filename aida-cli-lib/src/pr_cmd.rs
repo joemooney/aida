@@ -3192,14 +3192,21 @@ pub(crate) fn pr_ship_with_method(
         // branch-name fallback or non-final rebase slice never completes a spec
         // silently. Rebase merges produce no squash subject.
         // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
-        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method(
+        let ship_meta = fetch_pr_ship_metadata_via_gh(&project_root, pr_number)?;
+        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method_from(
             &project_root,
-            pr_number,
+            &ship_meta,
             &ship_branch,
             no_complete,
             merge_method,
             final_slice,
         )?;
+        // TASK-1765: the forge's squash body is built from the commits, not
+        // the PR body, so a non-completing declaration would not reach main
+        // and the pull's review-story covers path would complete the covered
+        // specs. trace:TASK-1951 trace:TASK-1765 | ai:claude
+        let declares_non_completing =
+            no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);
         eprintln!(
             "  step 3: {}",
             pr_ship::format_trailer_provenance(&completion_trailer)
@@ -3252,6 +3259,20 @@ pub(crate) fn pr_ship_with_method(
         } else {
             None
         };
+        let sanitized_squash_body =
+            if merge_method == crate::forge::MergeMethod::Squash && declares_non_completing {
+                let body = match sanitized_squash_body {
+                    Some(body) => body,
+                    None => crate::identity_gate::squash_commit_messages_body(
+                        &project_root,
+                        &retarget_base,
+                        head_sha.as_deref().unwrap_or(&ship_branch),
+                    )?,
+                };
+                Some(non_completing_squash_body(&body))
+            } else {
+                sanitized_squash_body
+            };
         let mut merge_opts = crate::forge::MergeOptions {
             method: merge_method,
             squash_subject: explicit_squash_subject.clone(),
@@ -4776,6 +4797,20 @@ pub(crate) fn ship_completion_trailer_for_method(
         |id| matches!(store.get_requirement_unambiguous(id), Ok(Some(_))),
         |id| pr_ship::spec_completion_hold_reason(store, id),
     )
+}
+
+/// TASK-1765: `body` with an `aida: no-complete` declaration line appended,
+/// so the squash commit on main carries the non-completing marker the pull
+/// reads (`commit_declares_non_completing`).
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+pub(crate) fn non_completing_squash_body(body: &str) -> String {
+    let body = body.trim_end();
+    let marker = pr_ship::NO_COMPLETE_BODY_MARKERS[0];
+    if body.is_empty() {
+        marker.to_string()
+    } else {
+        format!("{body}\n\n{marker}")
+    }
 }
 
 /// STORY-1663: optional slice-stack verifier hook before rebase merge.
@@ -7657,6 +7692,33 @@ mod story_1663_rebase_ship_tests {
         }
         // The operator hint names --rebase, so the re-run takes the rebase path.
         assert!(include_str!("pr_cmd.rs").contains("re-run `aida pr ship {pr_number} --rebase`"));
+    }
+
+    /// TASK-1765: a non-completing squash ship writes the declaration into
+    /// the squash body, rebuilt from the commits when the identity gate left
+    /// it to the forge.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    #[test]
+    fn task_1951_non_completing_squash_ship_writes_the_marker_into_the_body() {
+        assert_eq!(non_completing_squash_body(""), "aida: no-complete");
+        assert_eq!(
+            non_completing_squash_body("* a\n\n* b\n"),
+            "* a\n\n* b\n\naida: no-complete"
+        );
+        assert!(crate::db_reconcile::commit_declares_non_completing(
+            &format!("fix: x (#9)\n\n{}", non_completing_squash_body("* a"))
+        ));
+        let src = include_str!("pr_cmd.rs");
+        let decl = src
+            .find("no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);")
+            .expect("ship derives the non-completing declaration");
+        let body = src[decl..]
+            .find("Some(non_completing_squash_body(&body))")
+            .expect("the declaration reaches the squash body");
+        let merge = src[decl..]
+            .find("squash_body: sanitized_squash_body,")
+            .expect("merge options carry the body");
+        assert!(body < merge, "the marker is added before the merge options");
     }
 
     #[test]

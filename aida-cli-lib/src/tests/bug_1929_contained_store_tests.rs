@@ -349,7 +349,10 @@ fn bug_1929_linked_worktree_grants_its_own_main_only() {
         deny_write(&settings),
         vec![
             format!("/{}", main.join(".aida-store/.git").display()),
-            format!("/{}", main.join(".git").display())
+            format!("/{}", main.join(".git").display()),
+            // TASK-1989: the worktree's own `.git` pointer file.
+            // trace:TASK-1952 | trace:TASK-1989 | ai:claude
+            format!("/{}", worktree.join(".git").display())
         ],
         "{json}"
     );

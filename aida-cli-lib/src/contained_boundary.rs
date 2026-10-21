@@ -193,7 +193,8 @@ pub(crate) fn contained_store_deny_write_paths(store_write_paths: &[PathBuf]) ->
 /// Linked worktrees (whose `gitdir:` target is `<common>/worktrees/<name>`
 /// with a `commondir` resolving back to `<common>`) and non-checkout
 /// directories (no `.git`, or a nested `.git` outside the checkout root) are
-/// not main checkouts, so their paths stay allowed. A `.git` symlink is
+/// not main checkouts, so their gitdirs stay allowed; only a linked
+/// worktree's `.git` pointer file itself is denied (TASK-1989). A `.git` symlink is
 /// followed to its directory or gitfile. No seat-clone name or marker exempts
 /// a main checkout's real `.git`: those markers are writable by the contained
 /// session.
@@ -222,9 +223,9 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
             continue;
         }
         if meta.is_dir() || git_entry.is_dir() {
-            if git_entry.join("commondir").exists() {
-                continue;
-            }
+            // TASK-2036: a linked worktree's `.git` is never a directory, so a
+            // `commondir` file planted in a `.git` directory exempts nothing.
+            // trace:TASK-1952 | trace:TASK-2036 | ai:claude
             push_unique(git_entry.clone());
             if let Ok(canon) = std::fs::canonicalize(&git_entry) {
                 push_unique(canon);
@@ -240,10 +241,15 @@ pub(crate) fn contained_main_checkout_git_deny_paths(write_roots: &[PathBuf]) ->
                 continue;
             };
             let target = normalize_lexical(&raw_target);
+            push_unique(git_entry.clone());
             if is_linked_worktree_gitdir(&target) {
+                // TASK-1989: a linked worktree keeps its own gitdir writable,
+                // but not the `.git` pointer file: a rewritten pointer would
+                // aim the operator's next git command in this tree at a
+                // planted gitdir (hooks, core.hooksPath) outside the sandbox.
+                // trace:TASK-1952 | trace:TASK-1989 | ai:claude
                 continue;
             }
-            push_unique(git_entry.clone());
             if let Ok(canon_entry) = std::fs::canonicalize(&git_entry) {
                 push_unique(canon_entry);
             }
@@ -614,3 +620,7 @@ mod main_git_tests;
 #[cfg(test)]
 #[path = "tests/bug_2201_contained_baseline_tests.rs"]
 mod baseline_tests;
+
+#[cfg(test)]
+#[path = "tests/task_1952_contained_launch_tests.rs"]
+mod task_1952_launch_tests;
