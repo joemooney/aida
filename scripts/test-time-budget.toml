@@ -42,6 +42,7 @@ default_limit = 10
 "aida-cli::bug_2190_list_focus_disclosure open_statuses_remain_visible_and_persistent_focus_is_never_silent" = 40  # max 18.7s, median 17.7s over 6 runs
 "aida-cli::story_1644_list_sort_cap list_sort_and_agent_cap_follow_story_1644" = 40  # max 17.9s, median 13.5s over 7 runs
 "aida-cli-lib task_1507_history_cache_tests::task_1507_interleaved_merge_every_cut_matches_walk_exactly" = 35  # max 17.5s, median 14.5s over 7 runs
+"aida-cli::bug_2187_reviewer_record_identity scrubbed_headless_reviewer_records_but_implementer_shell_refuses" = 35  # measured 16.84s on the loaded agent profile (real reviewer launch + recorder subprocesses), x2 rounded up; trace:BUG-2187 | ai:claude
 "aida-cli-lib::path_isolation_guardrail raw_path_setters_require_process_isolation" = 35  # max 15.2s, median 11.5s over 7 runs
 "aida-cli::bug_1502_format_json_audit show_json_uses_type_aware_status_display_and_preserves_stored_status" = 35  # max 15.1s, median 13.4s over 7 runs
 "aida-cli::bug_1993_linkage_budgets linkage_timeouts_render_unknown_not_unshipped" = 35  # max 16.0s, median 15.4s over 7 runs
