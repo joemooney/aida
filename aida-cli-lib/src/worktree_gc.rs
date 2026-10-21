@@ -1778,7 +1778,12 @@ pub(crate) fn probe_lease_death_facts(
         && caller.is_some_and(|(pid, start)| {
             lease.creator_pid == Some(pid)
                 && match (lease.creator_pid_start_time.as_deref(), start) {
-                    (Some(a), Some(b)) => a == b,
+                    // trace:BUG-2130 | ai:agy
+                    (Some(a), Some(b)) => {
+                        a == b
+                            || (aida_core::liveness::process_identity_matches_strict(pid, a)
+                                && aida_core::liveness::process_identity_matches_strict(pid, b))
+                    }
                     // Without both start identities a recycled pid could pose
                     // as the caller: never assume.
                     _ => false,
