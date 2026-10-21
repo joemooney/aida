@@ -24,6 +24,10 @@ feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
 modified_at: 2026-10-21T18:04:10.602433002Z
 req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 01a15fd8-e29c-7a71-b66e-5a2e4730ee6a
+  created_at: 2026-10-21T19:03:42.395860882Z
 comments:
 - id: 01a15f00-6963-7640-93e7-f043fd18b5ff
   author: joe
@@ -147,6 +151,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a15fd9-1b9c-7900-a045-60fe52ca02d5
+  author: ai:codex:joe
+  timestamp: 2026-10-21T19:03:46.332522375Z
+  changes: []
 filed_at:
   code_sha: ba665aaf98777ed00ac96a782a6d6f51dfd528bd
   branch: main
