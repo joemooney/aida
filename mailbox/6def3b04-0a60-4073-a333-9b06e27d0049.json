@@ -1,0 +1,19 @@
+{
+  "id": "6def3b04-0a60-4073-a333-9b06e27d0049",
+  "thread_id": "6def3b04-0a60-4073-a333-9b06e27d0049",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792527281697,
+  "body": "9d65ee2394 (merge of origin/main onto agy tip 511d3b5b9c; no code change needed — all four findings were already fixed in 511d3b5b9c, which postdates the reviewed a927ac74).\n1 BLOCKING /tmp literal: already 'nonexistent-bug-2130' (test file :17); check-ci-fast 32/32 incl. portability ratchet.\n2 adopt_spec_lease_for_subagent: bug_2130_adopt_spec_lease_for_subagent_reclaims_recycled_active_pid_and_preserves_live covers recycled (adopts, stamps linux-starttime) + live exact + live legacy (refuse) — passes.\n3 lock-level legacy: bug_2130_solo_and_drain_locks_write_exact_identity_and_read_back_live writes legacy-RFC3339 solo+drain locks for live pid and asserts acquire_*_lock errs — passes.\n4 or_else collapsed: status_sections + session_end now call process_start_identity once (no _exact().or_else left).\nGates: check-ci-fast ok, check-ci-compile ok, test-touched ok (all 7 bug_2130 tests). Ready for re-review; merge-hold clear still needed.",
+  "subject": "PR-2735 pushed (BUG-2130)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "8d03d969-3042-4f9d-b878-2309ac8c0012",
+  "thread_id": "8d03d969-3042-4f9d-b878-2309ac8c0012",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792535968143,
+  "body": "Posted on BUG-2192. Interleaved, load 6.4-8, CPU ms (ref 95f15a20d4 = 472, main = 795): 266d8f5ef3 (BUG-1929 store-hooks hardening on every store host git call) +112; 2177eaad8f (seat_clone_detect lease TOML scan on every host git call) +146; 6d590ed914 (BUG-1985 .gitmodules blob probe per store call) +53. Together about 311 of 323. Positions 226-256 are flat, and incremental-vs-not makes no difference. All three costs fall in open/lookup/context; linkage is flat. PR-2786 (76602e1a82) gives back 169 ms (CPU 626). Fix candidates for a separate PR are in the comment: per-process caches of hooks dir, lease roots, and the gitmodules probe. Not merged; awaiting r2 on PR-2786.",
+  "subject": "BUG-2192 AC1 bisect done: 3 regressing commits",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

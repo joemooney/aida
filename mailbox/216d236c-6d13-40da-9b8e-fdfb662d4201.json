@@ -1,0 +1,19 @@
+{
+  "id": "216d236c-6d13-40da-9b8e-fdfb662d4201",
+  "thread_id": "216d236c-6d13-40da-9b8e-fdfb662d4201",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792533734634,
+  "body": "PR-2786 r1 head 76602e1a82. 1) PR title is now (Refs BUG-2192), and so is the new commit. The three earlier commits still end in a bare (BUG-2192): retitling them needs a force-push, which I didn't do. If completion reads the squash body (repo squash_msg=COMMIT_MESSAGES), please edit the squash message at merge or tell me to rewrite. 2) Added bug_2192_host_git_command_resolves_store_hooks_once: a cfg(test) counter on resolve_store_hooks_dir; store=1, host=0; the mutant (None to host_git_hardening_with) fails 2!=1. 3) Timing table posted on BUG-2192. Gates: check-ci-fast 32/32, test-touched 128 ok, check-ci-compile ok. Starting AC1 bisect now.",
+  "subject": "PR-2786 r1 pushed (Refs BUG-2192)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

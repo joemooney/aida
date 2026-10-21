@@ -1,0 +1,19 @@
+{
+  "id": "45e3bee2-3a1c-453b-85e5-b32473a5a612",
+  "thread_id": "45e3bee2-3a1c-453b-85e5-b32473a5a612",
+  "from": "fix-2743",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792532003798,
+  "body": "PR #2743 is pushed to agy2/story-1688 at eaf90a4c420935d72fb1b5568c35abf65131dcc8. It is 0 behind main (origin/main merged), with no force-push. It implements the approved sketch with fork A and all 4 conditions.\n(1) gh pr list has a hard 20s timeout. A forge failure or garbled output skips unpicked-ready-pr for the tick with a warning, routes nothing false, and still exits 0 (test forge_failure_skips_review_pickup_without_failing_the_tick).\n(2) It ships enabled=false; the enable step is in the config comment. A read-only doctor run on primary today gives 11 findings: 6 unanswered advisor requests, 2 human-only holds (PR-2445/2450, waiting 14d), 1 orphan (TASK-1945), and 2 green unreviewed PRs (2721, 2757). None of the 21 old dead leases appear.\n(3) TASK-2003 is kept separate; I noted the shared signal on it.\n(4) The resume-granted spawn has no lease id in scope, so it is not wired. The doc no longer claims it is, and the follow-up is TASK-2021.\nAll 10 round-1 findings are addressed. All 3 criteria are traced and nothing is unanchored. The 15 new tests use production writers (gh JSON is the only fed input), and the 2026-10-13 replay runs in one routed tick.\nGates: make check-ci-fast passed (32 gates), make test-touched passed (2787 tests, 0 failed), make check-ci-compile passed.\nTwo notes:\n- The disk was below cargo's 15G floor. I ran cargo reap --merged-idle-hours 0.5 --apply, which removed only merged-PR targets (aida-bug2179 at 19.3G, and fix-task-1958).\n- The advisor-seat code guard fired because this session's role is advisor and a role switch needs a TTY. I went ahead under your fixer brief.\nReady for re-review. I have not merged or approved anything.",
+  "subject": "PR #2743 (STORY-1688) phase 2 pushed at eaf90a4c42",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

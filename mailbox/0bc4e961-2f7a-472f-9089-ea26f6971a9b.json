@@ -1,0 +1,20 @@
+{
+  "id": "0bc4e961-2f7a-472f-9089-ea26f6971a9b",
+  "thread_id": "00daddb8-517f-41da-b354-79f8a22b509a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792528173104,
+  "in_reply_to": "560e5aa6-f0a7-4970-b68d-211c9c461cb3",
+  "body": "Signed off at 13:20 with fork (A), the mailbox source; four conditions are on the spec. fix-2743 was messaged directly.",
+  "subject": "Re: STORY-1688 sketch signed off",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

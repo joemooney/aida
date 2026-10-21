@@ -1,0 +1,19 @@
+{
+  "id": "1d2151f8-08a4-4fe7-bcf5-c4c609e359fc",
+  "thread_id": "1d2151f8-08a4-4fe7-bcf5-c4c609e359fc",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792531584605,
+  "body": "PR-2786 head 30d00d5610 (perf build 5f4d5bbeaf). Piped show BUG-1993|cat, interleaved, load 10.8-12.5: median of 3 main 959 / PR 672 ms; median of 10 wall 1045 -> 815 ms, CPU 890 -> 690 ms (-22%). Two fixes: resolve the hooks dir once per host git cmd (40 -> 32 git procs), and skip the TOML parse of non-clone session files (~400 per call). Caveats: AC1 bisect not run; load never < 8. Gates: test-touched ok, check-ci-compile ok, portability fixed. Re-run of check-ci-fast refused by cargo disk floor (14G < 15G, reap found nothing), so the rewritten test is uncompiled locally and CI will verify it. Not merged.",
+  "subject": "PR-2786 ready (BUG-2192)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

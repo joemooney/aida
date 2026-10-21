@@ -1,0 +1,19 @@
+{
+  "id": "b47751de-2473-42f0-8190-93e9fafd50c7",
+  "thread_id": "b47751de-2473-42f0-8190-93e9fafd50c7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792538971682,
+  "body": "45025e7234 pushed (no force), 0 behind origin/main.\nFix: host_recorded_clone now also requires the main that main_for verified to be one THIS host process resolved itself: seat_clone_detect::is_host_main = note_host_main (host git worktree list on a non-clone path) or the process cwd's git root. The marker never feeds that set. cargo_target_dir is accepted only at exactly <main>/target/worktrees/<clone dir>, and only as a real directory (symlink_metadata), never a symlink.\nTest (only_the_host_lease_makes_a_host_recorded_clone): the seat builds a fake main in its own target dir, rewrites marker + alternates, and plants a lease there naming an 'elsewhere' target dir. main_for returns Verified(fake), proving the forgery passes every seat-writable check, yet host_recorded_clone is None and neither --settings allowWrite nor os_wrap_rw_paths contains the forged dir. With the anchor removed, the test fails on that assertion. A symlinked target dir gives cargo_target_dir=None and grants nothing.\nConsequence: a fresh host process whose cwd is the clone and that never resolved main gets no host-recorded clone. That fails closed: no target-dir grant, and the clone's own .git stays denied for the Edit/Write tools only (Bash git is unaffected).\nGates: check-ci-fast (32), test-touched (776), check-ci-compile ok, clippy (aida-cli-lib + aida-core) clean. Resume-scope note left for TASK-1952.",
+  "subject": "PR-2787 round 2 addressed (BUG-2169 S2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

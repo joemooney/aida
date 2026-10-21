@@ -1,0 +1,19 @@
+{
+  "id": "64b10fe4-880b-4a79-bdc1-f3826378d6ea",
+  "thread_id": "64b10fe4-880b-4a79-bdc1-f3826378d6ea",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792530578353,
+  "body": "Head b60ea1beb2. Budget gate green twice at this head: run 39494894926 attempt 1 and its gh-run-rerun attempt 2 (Test time budget succeeded on all 5 test lanes in both, 0 stall warnings). Round 3 touched only the budget gate. (1) Recalibrated from 7 nextest runs at max x2, rounded up to 5 s, minimum 15 s; every test over 5 s and every bug_1594/bug_1956/bug_1993 test has an explicit entry (181 entries). bug_1985_host_status_guard is capped at the 180 s nextest kill (x2 would be 220). (2) NEW, please rule on it: over-budget tests whose JUnit spans overlap are reported as a runner stall (::warning::), not a failure; a lone over-budget test still fails. With the round-2 budget file alone this turns 39492854022's lib-1 red into warnings. If you'd rather not have it, it is one function (test-timings.py stalled) to drop. (3) The other lib half's did-not-run notes are suppressed. Round-2 violators named in the PR body: sandbox_cmd::tests::sandbox_create_and_seed_round_trip 18.7s and two scaffold_refresh::tests apply_* at 17.7/17.9s, all starting 20:39:10-11, normally 0.7-2.3s, which is a runner I/O stall. The PR body explains S6 selections vs --partition (keeps the TASK-1979 union guard and small per-lane compile sets). Parity (same SHA 4632c55b7d, main cargo-test 39487299524 vs PR nextest 39491010857): lib-0 4439->4441 (2 tests that failed under cargo test on main and passed under nextest: grant_expiry_notice deterministic_crossings, history_views index_answers_whole_window), lib-1 4859, cli-0 188, cli-1 143, rest 2177; total 11808 >= baseline 11799 (+9 new from 4632c55b7d). Wall: main 39475194172 9m46s; PR 39491010857 9m26s; final head 11m19s / 9m16s (the gates lane, unchanged by this PR, varied). Gates: check-ci-fast passed, test-touched passed, check-ci-compile passed (no Rust changed since).",
+  "subject": "PR-2785 ready (TASK-1988) round 3",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

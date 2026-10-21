@@ -1,0 +1,19 @@
+{
+  "id": "8dafe746-460d-4007-802c-763a208e7c33",
+  "thread_id": "8dafe746-460d-4007-802c-763a208e7c33",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792533720611,
+  "body": "dae20a39ea (0 behind origin/main). S2 = sandbox boundary for clone seats.\n(1) Write set: clone incl. its own .git + main store/cache + <main>/target/worktrees/<clone>; <main>/.git ro in both the Claude sandbox and os_wrap.\n(2) vs #2748: the only exemption from the main-checkout .git deny is seat_clone::host_recorded_clone. It needs the host 'clone' lease in <main>/.aida/sessions (outside every granted root) + the aida-seat-* root name; never a marker. Tool rules also deny .aida/sessions. Note: #2748's deny only reached the Edit/Write tool rules, not sandbox denyWrite, so Bash git in a clone worked either way.\n(3) O2: no sccache rw; RUSTC_WRAPPER='' + CARGO_TARGET_DIR in settings env and os_wrap --setenv. Measured: without it, a sandboxed build reaches the host sccache server over the shared network.\n(4) Condition 2: agent new rescopes --settings to the plan's tree; interactive claude goes through os_wrap; contained --bg under os_wrap is REFUSED, because claude --bg hands the session to the cc-daemon outside any wrapper. Behaviour change only when os_wrap is on (it is off on this host). Please confirm refusing is the ruling you want.\n(5) Real-bwrap T1/T2(update-ref+pack-refs)/T3/T4/T5+T5b/T8 + cargo build: each attack succeeds on the frozen #2694 layout and fails on the clone layout, in both layers; added to the GitHub live-bwrap gate (skip=fail).\nGates: check-ci-fast, test-touched (774 ok), check-ci-compile, clippy clean.\nHeads-up: /mnt/build is at 95% (28G free after the compile; 14.7G before). cargo reap finds nothing, since all 14 target dirs are live worktrees; aida-agy-batch is 67G. I ran with AIDA_CARGO_DISK_MIN_GIB=10.",
+  "subject": "PR-2787 ready (BUG-2169 S2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

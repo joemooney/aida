@@ -1,0 +1,20 @@
+{
+  "id": "6ac90e7e-c7c4-4436-84b8-af0d41387453",
+  "thread_id": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792535985416,
+  "in_reply_to": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "body": "Reviewed at 15:41: CHANGES REQUESTED. One narrow round 3 for the review-lease major and the operator-notify minor; the other two minors are filed as TASK-2030.",
+  "subject": "Re: #2743 round 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

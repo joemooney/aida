@@ -1,0 +1,19 @@
+{
+  "id": "bd461ed9-1b85-436e-a237-7272fff924f7",
+  "thread_id": "bd461ed9-1b85-436e-a237-7272fff924f7",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792528549653,
+  "body": "Merged origin/main (#2776) into claude/story-1700 locally at 5522aea2da, NOT pushed. Resolution: #2776's collect_on_stable_store/MANDATE_COLLECT_ATTEMPTS + batched StoreHistoryBatch read 3-way-merged into mandate_ship.rs (where STORY-1700 moved the cover); bug_2179 test mod declared there; ship_ci_budget stays in pr_cmd.rs. Passed: guard test + mandate/pr_cmd/bug_2179/ship_ci_budget lib tests (236 ok), check-ci-fast (32). BLOCKED: test-touched/check-ci-compile refused by cargo disk floor (14.9G free < 15G). cargo reap frees only 1K. Big target dirs: aida-agy-batch 67G, bug-2130 43G, aida-pr-2748 34G, aida-bug2179 20G (#2776 merged). Options: (a) you reap/clear stale target dirs and I rerun; (b) authorize push now, CI is the full gate. I won't override AIDA_CARGO_DISK_MIN_GIB or delete other sessions' targets on my own.",
+  "subject": "PR-2725 r7 merge-up BLOCKED on disk floor (STORY-1700)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

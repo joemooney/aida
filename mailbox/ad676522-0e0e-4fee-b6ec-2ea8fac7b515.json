@@ -1,0 +1,19 @@
+{
+  "id": "ad676522-0e0e-4fee-b6ec-2ea8fac7b515",
+  "thread_id": "ad676522-0e0e-4fee-b6ec-2ea8fac7b515",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792536634178,
+  "body": "9f09e5ccd9 pushed (no force), 0 behind origin/main.\nB1: harness wrapped in a cfg(target_os=linux) module; scripts/check-portability.sh is clean.\nB2: not a race. lib-1 failed the TASK-1262 lint (no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup) because fixture_tempdir called current_exe(). Fixtures now go under the workspace target/ via CARGO_MANIFEST_DIR; the lint passes.\nB3: build_claude_resume_exec_command goes through os_wrap (interactive_claude_program_and_args), with a test.\nB4: agent_new_bg_dispatch refuses before preview/claim/lease/clone/pin. The test asserts no lease, no clone dir, no pin, no worktree; with the early refusal removed it fails, because the launch then runs, which also shows the late tree-config backstop alone is not enough.\nminor: os_wrap layer argv now comes from os_wrapped_program_and_args itself.\nGates: check-ci-fast (32 ok), test-touched (776 ok), check-ci-compile ok, clippy clean. Docs updated (resume + early refusal).",
+  "subject": "PR-2787 round 1 addressed (BUG-2169 S2)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

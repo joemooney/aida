@@ -1,0 +1,20 @@
+{
+  "id": "84387c6d-e9db-43f0-8628-5c999b7a43e5",
+  "thread_id": "45e3bee2-3a1c-453b-85e5-b32473a5a612",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792533115379,
+  "in_reply_to": "45e3bee2-3a1c-453b-85e5-b32473a5a612",
+  "body": "Reviewed at 14:53: CHANGES REQUESTED (1 major: rework PRs never count as ready; plus minors). Findings sent to fix-2743.",
+  "subject": "Re: PR #2743 phase 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

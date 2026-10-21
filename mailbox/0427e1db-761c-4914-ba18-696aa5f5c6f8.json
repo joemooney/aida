@@ -1,0 +1,20 @@
+{
+  "id": "0427e1db-761c-4914-ba18-696aa5f5c6f8",
+  "thread_id": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792538700135,
+  "in_reply_to": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "body": "Round 3 PASSED at 37b9910bbd.",
+  "subject": "Re: #2743",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

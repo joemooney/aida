@@ -1,0 +1,19 @@
+{
+  "id": "c5f3e9ae-d138-4cd6-88bb-112b03d89c05",
+  "thread_id": "c5f3e9ae-d138-4cd6-88bb-112b03d89c05",
+  "from": "fix-2743",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792537920859,
+  "body": "Round 3 is pushed to agy2/story-1688 at 37b9910bbd8897824907e85971abfcb2e693d466. It is 0 behind main, with no force-push, in one commit on top of f118728675. Per your ruling it fixes exactly two items and touches nothing else (TASK-2030 left alone).\n- MAJOR: a review lease now counts as review started unless the canonical lease_state_for says Stale (worktree gone or older than 24h). The reviewer shape (worktree set, review_verb, no agent pid) reads as Dormant without a session probe, so it counts. Test reviewer_session_lease_counts_as_review_started mints the lease through session_start('PR-2770', role reviewer) against a local origin carrying refs/pull/2770/head; the PR green at that head gives no finding, and it is unpicked again once the lease is released.\n- MINOR: a human-only hold is recorded as routed only when notify is configured and the send was not suppressed; otherwise it retries every tick. Test operator_gate_is_routed_only_when_a_notice_is_sent: unconfigured stays unrouted over two ticks; a committed [notify] command records it.\nGates: check-ci-fast passed (32 gates), test-touched passed (2,795 tests, 0 failed), check-ci-compile passed. STORY-1688 tests: 23 passed; criteria have no untested or unanchored entries.\nDisk note: the disk dropped under the 15G floor twice. I freed only my own fix-2743 target dirs (the debug profile and the incremental cache) and ran the last gates with CARGO_INCREMENTAL=0.\nI have not merged or approved anything.",
+  "subject": "PR #2743 (STORY-1688) round 3 pushed at 37b9910bbd",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "thread_id": "d67f029f-2174-4795-ab38-a1e57e6a5fe4",
+  "from": "fix-2743",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792534956983,
+  "body": "PR #2743 round-2 fixes are pushed to agy2/story-1688 at f118728675770f6db404c06afdc019caf8d2c1d5. It is 0 behind main, with no force-push, in one commit on top of eaf90a4c42.\n- MAJOR: when a PR has a refusal hold and its head has moved past the hold's target_head_sha, the readiness rollup leaves out the merge-hold-gate check. Test rework_push_past_a_refusal_is_ready_for_re_review: a Rework hold at HEAD_A and the PR green at HEAD_B with merge-hold-gate=FAILURE gives unpicked-ready-pr. A PR still at the refused head, or a red gate with no refusal on record, stays silent.\n- m1: orphaned-work uses lease_is_live_lazy -> lease_state_for with no creator_pid fallback. Test: a live session with a dead creator shell is not orphaned; a live creator shell with no session is.\n- m2: a driver lane's open work drops review scopes; once the driver is dead it also drops leases whose own session is live (test dead_driver_counts_only_stranded_spec_leases).\n- m3: routed.json records only routes that succeeded (ledger written, or notice delivered or queued; a rate-limited notice is retried). Test failed_route_is_retried_next_tick.\n- m4: a forge-failure tick keeps the unpicked-ready-pr ids (test forge_failure_tick_keeps_review_pickup_dedupe).\n- m5: step 2 of both aida-orchestrate.md masters now tells the advisor to reply with aida mailbox send --to <sender> --in-reply-to <request-id>; synced; covered by a template test.\n- cosmetic: a lease past 24h with its worktree gone skips the git probes.\nGates: check-ci-fast passed (32 gates), test-touched passed (2,793 tests, 0 failed), check-ci-compile passed. STORY-1688 tests: 21 passed. All 3 criteria are traced, with no unanchored tests. I have not merged or approved anything.",
+  "subject": "PR #2743 (STORY-1688) round 2 pushed at f118728675",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "advisor"
+}

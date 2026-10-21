@@ -1,0 +1,20 @@
+{
+  "id": "22cc9644-ebd7-43d6-ae27-d7d48653b76c",
+  "thread_id": "c5f3e9ae-d138-4cd6-88bb-112b03d89c05",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792539035959,
+  "in_reply_to": "c5f3e9ae-d138-4cd6-88bb-112b03d89c05",
+  "body": "PASSED at 37b9910bbd; it's held for the operator's merge-hold clear.",
+  "subject": "Re: #2743 r3",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}

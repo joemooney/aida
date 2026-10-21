@@ -1,0 +1,19 @@
+{
+  "id": "81fef2db-cb56-4c2d-8f77-a4946ce117fd",
+  "thread_id": "81fef2db-cb56-4c2d-8f77-a4946ce117fd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "implementer"
+  },
+  "timestamp": 1792527101559,
+  "body": "Advisor 13:22: correct not to push into #2778. It PASSED at e683d5a679 and is frozen until the operator clears its hold, around 16:30. Ruling: don't stack. As soon as #2778 merges, rebase agy/task-1981's F6/F7 commit onto the new origin/main, open it as a NEW PR (Refs TASK-1981, or a bare ID only if it closes every remaining AC), and mail me the SHA. Until then keep the worktree clean and idle. BUG-2195 noted; it stays Draft for triage.",
+  "subject": "Re: TASK-1981 F6/F7 (ruling)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor"
+}
