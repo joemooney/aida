@@ -3,12 +3,12 @@ spec_id: BUG-2201
 agreed_id: BUG-2201
 title: Headless reviewer in aida-relay is denied Bash/Read and cannot record its verdict (PR-96 reviewed twice, no verdict)
 description: 'aida queue work PR-96 --role reviewer --no-human --vendor claude, run from /home/joe/ai/aida-relay on 2026-10-20 at 21:2x and again at 21:50, exited 30 both times: ''the reviewer for PR-96 exited without recording a verifiable verdict''. The reviewer finished its analysis (approve, no blockers, 3 nits; head 3e4d8d1978, CI green, CLEAN) and tried to run `aida review record TASK-119 --pr 96 --sha 3e4d8d1978... --verdict approved`. The log shows ''[headless:reviewer] ⚠ permission denied: Bash, Bash, Read, …+5 more'', so the record call and several verification reads never ran. The same launcher works in /home/joe/ai/aida (many PASS verdicts tonight), so the headless permission set probably does not cover the aida-relay project or its reviewer worktree (/home/joe/ai/aida-relay-worktrees/aida-relay-pr-96). Logs: /tmp/claude-1000/-home-joe-ai-aida/7d71bfbf-a609-42bd-a714-a7d52d81db81/scratchpad/review-relay96b.log (and review-relay96.log). Acceptance: (1) a headless reviewer launched for a non-aida project gets the same Bash/Read allowances (at minimum `aida review record`, git, and reads inside its worktree) as in the aida repo; (2) when a permission denial stops the reviewer before it records a verdict, the launcher names the denied tool calls in its error instead of the generic ''no verdict file''; (3) a regression test launches a reviewer against a fixture project outside the aida repo and asserts a verdict file is written. Blocks TASK-1793 completion (aida-relay PR #96).'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T05:16:14.397684799Z
-modified_at: 2026-10-21T13:56:10.142191561Z
+modified_at: 2026-10-21T16:02:08.477071941Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -79,6 +79,21 @@ history:
   timestamp: 2026-10-21T13:56:10.207624332Z
   session_id: 01a15ebde63e
   changes: []
+- id: 01a15f32-d195-76b3-af90-a22e7ae673c1
+  author: aida-auto-bump
+  timestamp: 2026-10-21T16:02:08.405213538Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a15f32-d1dd-7eb0-b20f-77af6e7faf67
+  timestamp: 2026-10-21T16:02:08.477067257Z
+  agent: aida
+  commit_sha: 42007a47f646fc232f2ccad014d53b989eebd72c
+  summary: 'All BUG-2201 ACs plus folded TASK-2040/TASK-2058 met: contained --settings gain Bash(aida)/Read(worktree,store,cache) beside the write grant only, no git allow (sandbox auto-allow covers reads), contained handshake falls back to the worktree on EROFS/EACCES only, exit-30 names permission_denials; e2e outside-project reviewer + unit tests; PR CI green (merge-hold-gate is the expected prior-round hold).'
+  review_verdict: approved
 filed_at:
   code_sha: b381e35218398635c9367100ebd0fdd1d3cfc9d8
   branch: main
@@ -87,11 +102,7 @@ filed_at:
   aida_build_sha: d29b69c35c
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round 2: round-1 findings fixed (ceiling guardrail, TASK-2040 fallback test, fallback narrowed to PermissionDenied/EROFS) and the push forms are closed, but the new read-only git allowlist still includes ''fetch'' and ''grep'', which write refs or run arbitrary commands. That reopens TASK-2058. CI was still pending at review time.'
-  recovery_hint: address the review findings, move BUG-2201 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-21T13:56:10.142191561Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T16:02:08.405198374Z
+  completion_sha: 42007a47f646fc232f2ccad014d53b989eebd72c
