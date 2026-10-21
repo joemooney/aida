@@ -1352,7 +1352,7 @@ where
 /// `aida schedule done <job>`: the seat reports a run. Ledgers who/when,
 /// clears the due flag, and mirrors the clock locally.
 // trace:STORY-1226 | ai:claude
-fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
+pub(crate) fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
     let config = load_registry(project_root)?;
     let task = config
         .as_ref()

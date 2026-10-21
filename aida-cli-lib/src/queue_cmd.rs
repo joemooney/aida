@@ -1094,7 +1094,7 @@ pub(crate) fn merged_pr_review_entries<'a>(
 /// failure (gh missing/unreachable, no forge configured), never a silent
 /// collect.
 // trace:BUG-1512 | ai:claude
-fn review_pr_is_merged_or_closed(
+pub(crate) fn review_pr_is_merged_or_closed(
     project_root: &std::path::Path,
     pr: u32,
     sink: &mut dyn network_retry::RetrySink,

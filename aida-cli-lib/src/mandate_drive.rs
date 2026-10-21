@@ -279,11 +279,17 @@ pub(crate) fn resolving_action(
 /// The spec a relay run was working, from its run record (`ticket=` in
 /// relay.status). `None` when the record names none.
 // trace:STORY-1700 | ai:claude
-pub(crate) fn run_spec(lane: &Lane) -> Option<String> {
+///
+/// Only an id the loaded store knows (`known`) counts: a `PREFIX-N` token
+/// the store has never seen is not the lane's spec, so an unknown spec still
+/// fails closed.
+// trace:TASK-1955 | ai:claude (TASK-1925)
+pub(crate) fn run_spec(lane: &Lane, known: &dyn Fn(&str) -> bool) -> Option<String> {
     ["ticket", "spec"]
         .iter()
         .filter_map(|k| lane.evidence.field(k))
-        .find_map(|v| spec_ids_in(v).into_iter().next())
+        .flat_map(spec_ids_in)
+        .find(|id| known(id))
 }
 
 /// Why a lane whose run spec is unknown is gated (fail closed).
@@ -364,7 +370,7 @@ pub(crate) fn plan_relay_lane(
     // it for the floors, and gate the lane when it is unknown (fail closed).
     // trace:STORY-1700 | ai:claude
     let act_on_run = |action, command: String, detail: String| {
-        let spec = run_spec(lane);
+        let spec = run_spec(lane, &|id| spec_signoff(id).is_some());
         let missing = spec.is_none();
         let mut d = act(
             action,

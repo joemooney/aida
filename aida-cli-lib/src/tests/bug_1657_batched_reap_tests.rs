@@ -90,6 +90,7 @@ fn batched_repo() -> (tempfile::TempDir, PathBuf) {
 fn reap_verdict(worktree: AgentWorktreeFacts, spec_finished: bool) -> ReapVerdict {
     classify_session_reap(&ReapFacts {
         spec_finished,
+        review_pr_terminal: false,
         process_exited: true,
         locked: false,
         head_on_branch: true,
@@ -430,6 +431,7 @@ fn bug_1657_worktree_off_its_session_branch_is_kept() {
     let verdict = |head_on_branch: bool| {
         classify_session_reap(&ReapFacts {
             spec_finished: true,
+            review_pr_terminal: false,
             process_exited: true,
             locked: false,
             head_on_branch,
@@ -586,6 +588,7 @@ fn bug_1657_unresolved_default_ref_fails_closed() {
 fn reap_verdict_at(worktree: AgentWorktreeFacts, head_on_branch: bool) -> ReapVerdict {
     classify_session_reap(&ReapFacts {
         spec_finished: true,
+        review_pr_terminal: false,
         process_exited: true,
         locked: false,
         head_on_branch,
@@ -847,6 +850,7 @@ fn bug_1657_moved_worktree_is_kept() {
         );
         let verdict = classify_session_reap(&ReapFacts {
             spec_finished: true,
+            review_pr_terminal: false,
             process_exited: true,
             locked: false,
             head_on_branch: true,
