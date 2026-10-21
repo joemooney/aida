@@ -619,3 +619,143 @@ fn task_1803_stripped_path_gh_resolution_finds_fallback_binary() {
         ShipDefaultBranchDisposition::FeatureBranch
     );
 }
+
+// trace:TASK-1951 trace:TASK-1660 | ai:claude
+#[test]
+fn task_1951_parse_ls_remote_symref_head_refuses_ambiguous_or_unsafe_answers() {
+    use crate::forge::parse_ls_remote_symref_head as parse;
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    assert_eq!(
+        parse(&format!("ref: refs/heads/trunk\tHEAD\n{sha}\tHEAD\n")).as_deref(),
+        Some("trunk")
+    );
+    // Symrefs for other refs are ignored, not mistaken for HEAD.
+    assert_eq!(
+        parse("ref: refs/heads/other\trefs/remotes/x/HEAD\nref: refs/heads/trunk\tHEAD\n")
+            .as_deref(),
+        Some("trunk")
+    );
+    for bad in [
+        // No symref line at all (server without symref capability).
+        format!("{sha}\tHEAD\n"),
+        String::new(),
+        // A symref line without the tab separator is malformed.
+        "ref: refs/heads/trunk HEAD\n".to_owned(),
+        // Two HEAD symrefs: ambiguous evidence.
+        "ref: refs/heads/trunk\tHEAD\nref: refs/heads/main\tHEAD\n".to_owned(),
+        // HEAD pointing outside refs/heads.
+        "ref: refs/tags/v1\tHEAD\n".to_owned(),
+        // Branch names the shell-safety guard rejects.
+        "ref: refs/heads/-x\tHEAD\n".to_owned(),
+        "ref: refs/heads/a;rm -rf\tHEAD\n".to_owned(),
+        "ref: refs/heads/\tHEAD\n".to_owned(),
+    ] {
+        assert_eq!(parse(&bad), None, "{bad:?}");
+    }
+}
+
+// trace:TASK-1951 trace:TASK-1659 | ai:claude
+#[test]
+fn task_1951_default_branch_of_prefers_local_origin_head_over_network_probe() {
+    let origin = create_test_repo_on_branch("trunk");
+    let work = create_test_repo_on_branch("develop");
+    for args in [
+        vec!["remote", "add", "origin", origin.path().to_str().unwrap()],
+        vec!["update-ref", "refs/remotes/origin/develop", "HEAD"],
+        vec![
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/develop",
+        ],
+    ] {
+        assert!(crate::test_git::git_command()
+            .arg("-C")
+            .arg(work.path())
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let gh = fake_default_branch_gh(work.path(), "pure-git", "echo unexpected");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        work.path(),
+        "implementer",
+        &[],
+        &[("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap()))],
+    );
+    // The remote answers "trunk"; local origin/HEAD says "develop" and must
+    // win without a network round-trip.
+    assert_eq!(
+        crate::forge::probe_default_branch(work.path()).as_deref(),
+        Some("trunk")
+    );
+    assert_eq!(crate::forge::default_branch_of(work.path()), "develop");
+}
+
+// trace:TASK-1951 trace:TASK-1663 | ai:claude
+#[test]
+fn task_1951_origin_head_probe_keeps_operator_ssh_command() {
+    for via_config in [false, true] {
+        let work = create_test_repo_on_branch("feature-work");
+        let log = work.path().join("ssh-calls");
+        let ssh = work.path().join("fake-ssh");
+        crate::test_exec::write_executable(
+            &ssh,
+            format!("#!/bin/sh\necho \"$*\" >> '{}'\nexit 1\n", log.display()),
+        );
+        let user_command = format!("'{}' --operator-wrapper", ssh.display());
+        let mut git_args = vec![vec![
+            "remote".to_owned(),
+            "add".to_owned(),
+            "origin".to_owned(),
+            "ssh://forge.invalid/repo.git".to_owned(),
+        ]];
+        if via_config {
+            git_args.push(vec![
+                "config".to_owned(),
+                "core.sshCommand".to_owned(),
+                user_command.clone(),
+            ]);
+        }
+        for args in git_args {
+            assert!(crate::test_git::git_command()
+                .arg("-C")
+                .arg(work.path())
+                .args(&args)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let gh = fake_default_branch_gh(work.path(), "pure-git", "echo unexpected");
+        let env_command = (!via_config).then_some(user_command.as_str());
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            work.path(),
+            "implementer",
+            &[],
+            &[
+                ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+                ("GIT_SSH_COMMAND", env_command),
+                ("GIT_SSH", None),
+            ],
+        );
+        assert_eq!(crate::forge::probe_default_branch(work.path()), None);
+        let calls = std::fs::read_to_string(&log).unwrap_or_default();
+        assert!(
+            calls
+                .lines()
+                .any(|l| l.contains("--operator-wrapper") && l.contains("BatchMode=yes")),
+            "via_config={via_config}: {calls:?}"
+        );
+    }
+}
+
+// trace:TASK-1951 trace:TASK-1663 | ai:claude
+#[test]
+fn task_1951_ssh_command_with_batch_mode_appends_to_configured_command() {
+    use crate::forge::ssh_command_with_batch_mode as batch;
+    assert_eq!(batch(None), "ssh -o BatchMode=yes");
+    assert_eq!(
+        batch(Some("ssh -i ~/.ssh/deploy")),
+        "ssh -i ~/.ssh/deploy -o BatchMode=yes"
+    );
+}

@@ -3987,6 +3987,63 @@ pub(crate) fn parse_ls_remote_symref_head(stdout: &str) -> Option<String> {
     found
 }
 
+/// The ssh command git would use for `project_root`: `GIT_SSH_COMMAND`, then
+/// `core.sshCommand`, then `GIT_SSH` (a bare program). None means plain `ssh`.
+// trace:TASK-1951 trace:TASK-1663 | ai:claude
+fn configured_ssh_command(project_root: &Path) -> Option<String> {
+    let non_empty = |value: String| {
+        let value = value.trim().to_owned();
+        (!value.is_empty()).then_some(value)
+    };
+    if let Some(command) = std::env::var("GIT_SSH_COMMAND").ok().and_then(non_empty) {
+        return Some(command);
+    }
+    let core = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["config", "--get", "core.sshCommand"])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(non_empty);
+    core.or_else(|| {
+        // GIT_SSH names a program, not a shell command, so quote it.
+        std::env::var("GIT_SSH")
+            .ok()
+            .and_then(non_empty)
+            .map(|program| format!("'{}'", program.replace('\'', "'\\''")))
+    })
+}
+
+/// Append `-o BatchMode=yes` to the operator's ssh command instead of
+/// replacing it, so a custom key or wrapper keeps working for the probe.
+// trace:TASK-1951 trace:TASK-1663 | ai:claude
+pub(crate) fn ssh_command_with_batch_mode(configured: Option<&str>) -> String {
+    format!("{} -o BatchMode=yes", configured.unwrap_or("ssh"))
+}
+
+/// Local `refs/remotes/origin/HEAD`, the only local default-branch evidence;
+/// leftover `origin/main`-style refs are never treated as a default.
+// trace:TASK-1951 trace:TASK-1659 | ai:claude
+pub(crate) fn local_origin_head_branch(project_root: &Path) -> Option<String> {
+    Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args([
+            "symbolic-ref",
+            "--quiet",
+            "--short",
+            "refs/remotes/origin/HEAD",
+        ])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .and_then(|name| name.trim().strip_prefix("origin/").map(str::to_owned))
+        .filter(|name| !name.is_empty())
+}
+
 /// Bounded, forge-neutral `git ls-remote --symref origin HEAD` probe.
 // trace:TASK-1803 | ai:antigravity
 fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
@@ -4010,7 +4067,10 @@ fn probe_origin_head_symref(project_root: &Path) -> Option<String> {
         .env("GIT_TERMINAL_PROMPT", "0")
         // An ssh origin must never prompt for a passphrase or host key.
         // trace:TASK-1803 | ai:claude
-        .env("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+        .env(
+            "GIT_SSH_COMMAND",
+            ssh_command_with_batch_mode(configured_ssh_command(project_root).as_deref()),
+        )
         .args(["ls-remote", "--symref", "origin", "HEAD"]);
     aida_core::git_ops::configure_remote_credentials(&mut cmd, project_root, "origin"); // trace:BUG-2181 | ai:claude
     let out = crate::command_output_with_timeout(cmd, crate::FORGE_CLI_CALL_TIMEOUT)?;
@@ -4031,11 +4091,16 @@ pub(crate) fn default_branch_of(project_root: &Path) -> String {
     // PR base callers retain the conventional-ref/main fallback; authority
     // guards must use probe_default_branch, where unknown never becomes main.
     // trace:BUG-417 trace:TASK-1795 | ai:codex
-    probe_default_branch(project_root).unwrap_or_else(|| {
-        crate::detect_default_branch_ref(project_root)
-            .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
-            .unwrap_or_else(|| "main".to_owned())
-    })
+    // Local origin/HEAD first: the network probe (up to the forge timeout)
+    // runs only when there is no local evidence.
+    // trace:TASK-1951 trace:TASK-1659 | ai:claude
+    local_origin_head_branch(project_root)
+        .or_else(|| probe_default_branch(project_root))
+        .unwrap_or_else(|| {
+            crate::detect_default_branch_ref(project_root)
+                .map(|name| name.strip_prefix("origin/").unwrap_or(&name).to_owned())
+                .unwrap_or_else(|| "main".to_owned())
+        })
 }
 
 /// TASK-1421: an in-memory forge for orchestrator tests. Lookups answer from
