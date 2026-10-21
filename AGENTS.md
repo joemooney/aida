@@ -5,6 +5,13 @@ new heads wait for prior work. No process termination or readiness/merge action
 exists in this slice. See [review watch](docs/cli/06-roles-sessions.md#watching-for-new-review-heads).
 <!-- trace:TASK-1993 | ai:codex -->
 
+Agent-new setup retains invocation receipts through actual child spawn (or
+background-dispatch acceptance). Fresh worktrees publish atomically without
+replacement; rollback validates `.git` identity and compare-deletes only newly
+created branch refs and exact shared claim IDs. Adopted resources and changed
+identities are retained with recovery commands. See OVERVIEW.md.
+<!-- trace:BUG-2188 BUG-2168 | ai:codex -->
+
 Every production verdict reader (record, archive, ship and merge gates,
 orchestrator phase handshake, drain, status) pins the non-symlink
 review-verdicts directory and archive subdirectories, then validates and reads

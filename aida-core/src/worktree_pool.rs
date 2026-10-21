@@ -518,7 +518,8 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
     let lease_ttl = opts.lease_ttl_secs.unwrap_or(DEFAULT_LEASE_TTL_SECS);
     let now = now_ts();
 
-    with_state_lock(project_root, |pool| {
+    let mut allocated = None::<(PathBuf, String)>;
+    let result = with_state_lock(project_root, |pool| {
         // 1. Prefer a reclaimable entry → reset + hand out. "Reclaimable" is a
         //    plain idle tree, OR a stale lease whose TTL has elapsed with no
         //    live owner (the reservation-leak backstop, TASK-1008). An idle
@@ -638,6 +639,9 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         }
         git_ops::add_detached_worktree(project_root, &path, &base_ref)
             .with_context(|| format!("create pool worktree {}", path.display()))?;
+        // Keep the exact marker across later setup/state-write failures.
+        // trace:BUG-2188 | ai:codex
+        allocated = Some((path.clone(), std::fs::read_to_string(path.join(".git"))?));
         git_ops::ensure_aida_runtime_excluded(&path)
             .with_context(|| format!("exclude AIDA runtime files in {}", path.display()))?;
         git_ops::init_submodules_or_warn(&path, opts.init_submodules)
@@ -658,7 +662,23 @@ pub fn acquire(project_root: &Path, opts: &AcquireOptions) -> Result<PathBuf> {
         // trace:TASK-1012 | ai:claude
         pool.create_count = pool.create_count.saturating_add(1);
         Ok(path)
-    })
+    });
+    if result.is_err() {
+        if let Some((path, marker)) = allocated {
+            let same = std::fs::symlink_metadata(path.join(".git"))
+                .is_ok_and(|m| m.file_type().is_file())
+                && std::fs::read_to_string(path.join(".git")).ok().as_deref()
+                    == Some(marker.as_str());
+            if same && crate::worktree_holders::check_worktree_removal(&path).is_ok() {
+                if let Err(error) = git_ops::remove_worktree_at(project_root, &path, true) {
+                    eprintln!("pool setup cleanup failed for {}: {error:#}; inspect `git worktree list --porcelain`", path.display());
+                }
+            } else {
+                eprintln!("pool setup cleanup kept changed or occupied worktree {}; inspect `git worktree list --porcelain`", path.display());
+            }
+        }
+    }
+    result
 }
 
 /// Save a dirty pooled tree's uncommitted diff to `.aida/salvage/` before it
