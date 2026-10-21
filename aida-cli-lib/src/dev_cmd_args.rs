@@ -172,9 +172,11 @@ pub enum DevCommand {
         install: bool,
     },
 
-    /// One-command release: bump version + tag + push (via scripts/release.sh),
-    /// wait for the GitHub Actions workflow to publish binary tarballs, then
-    /// upgrade your sibling installs to the new version. Default bump: patch.
+    /// One-command release: bump the version through a release PR, tag the
+    /// merged commit and push the tag (via scripts/release.sh), wait for the
+    /// GitHub Actions workflow to publish binary tarballs, then upgrade your
+    /// sibling installs to the new version. Default bump: patch.
+    // trace:TASK-1721 | ai:claude
     Release {
         /// Version bump kind: major, minor, patch, or an explicit version like "0.5.0"
         #[clap(default_value = "patch")]

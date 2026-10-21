@@ -338,6 +338,18 @@ jobs:
         if: matrix.shard == 'gates'
         run: bash tests/test_cargo_timeout_guard.sh
 
+      # TASK-1721: scripts/release.sh publishes through a release PR and never
+      # pushes main. The fixture drives it end to end against a local bare
+      # remote that rejects pushes to main, with fake gh/cargo, plus the
+      # existing release-script regressions. Shell only, so it runs on every PR.
+      # trace:TASK-1721 | ai:claude
+      - name: Run release PR-flow fixtures
+        if: matrix.shard == 'gates'
+        run: |
+          bash tests/test_release_pr_flow.sh
+          bash tests/test_release_prepare_only.sh
+          bash tests/test_release_skip_ai_warnings.sh
+
       # trace:STORY-1648 | ai:claude
       # Primary-checkout drift line in the session-context hook: clean,
       # tracked-dirty, untracked-only, off-main, behind-origin, linked

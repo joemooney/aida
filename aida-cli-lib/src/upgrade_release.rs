@@ -1573,7 +1573,8 @@ pub(crate) fn handle_release(
         }
         // ADR-72: no cross-platform pre-release gate; --skip-xplat-check is a
         // no-op kept for compatibility. trace:TASK-1723 | ai:claude
-        println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (tag + push)  3) wait for tarballs  4) upgrade sibling installs");
+        // trace:TASK-1721 | ai:claude
+        println!("  steps:   1) aida-store pull  2) scripts/release.sh {bump} (release PR, squash-merge, tag the merged commit, push the tag)  3) wait for tarballs  4) upgrade sibling installs");
         println!("  cross-platform gate: none (Linux-only releases)");
         println!("\n  Re-run without --check to execute.");
         return Ok(());
@@ -1714,9 +1715,39 @@ pub(crate) fn handle_release(
 #[path = "tests/release_verb_tests.rs"]
 mod release_verb_tests;
 
-/// Stream a child's stdout/stderr to the parent's stderr with a prefix.
+/// Default wait for the release workflow's tarballs after the tag push. The
+/// release workflow takes ~8-10 minutes when the runners are idle; the
+/// 30-minute default covers queueing behind PR CI. `AIDA_RELEASE_ARTIFACT_TIMEOUT_SECS`
+/// overrides it.
+// trace:TASK-1721 | ai:claude
+const RELEASE_ARTIFACT_TIMEOUT_SECS: u64 = 1800;
+
+// trace:TASK-1721 | ai:claude
+pub(crate) fn release_artifact_timeout(env_value: Option<&str>) -> std::time::Duration {
+    let secs = env_value
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|&s| s > 0)
+        .unwrap_or(RELEASE_ARTIFACT_TIMEOUT_SECS);
+    std::time::Duration::from_secs(secs)
+}
+
+/// The tag release.sh pushed, read from the file it writes via
+/// `AIDA_RELEASE_TAG_FILE`. Falls back to the newest reachable tag, which
+/// misses the release when the local base branch could not be fast-forwarded
+/// to the squash-merged commit.
+// trace:TASK-1721 | ai:claude
+pub(crate) fn released_tag(tag_file: &std::path::Path, repo: &std::path::Path) -> Option<String> {
+    std::fs::read_to_string(tag_file)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| git_describe_latest_tag(repo))
+}
+
 /// `aida dev release [bump]` — the one-command release flow:
-/// 1. run scripts/release.sh (bumps version, tags, pushes, interactive)
+/// 1. run scripts/release.sh (bumps version on a release/vX PR, waits for its
+///    checks, squash-merges it, tags the merged commit, pushes the tag;
+///    interactive)
 /// 2. wait for the GitHub Actions workflow to publish the binary tarballs
 ///    (HEAD-poll the asset URL with timeout)
 /// 3. upgrade sibling installs to the new version (auto-yes)
@@ -1806,9 +1837,13 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
     // Run release.sh interactively — it prints the version-bump diff and
     // asks for confirmation. Inheriting stdio means the user sees and
     // responds to the prompts directly.
+    // release.sh writes the tag it pushed here, since the squash-merged
+    // commit it tagged need not be this checkout's HEAD. trace:TASK-1721 | ai:claude
+    let tag_file = tempfile::NamedTempFile::new().context("create release tag file")?;
     let status = std::process::Command::new(&script)
         .arg(bump)
         .current_dir(&repo)
+        .env("AIDA_RELEASE_TAG_FILE", tag_file.path())
         .status_retrying_etxtbsy()
         .with_context(|| format!("Failed to invoke {}", script.display()))?;
     if !status.success() {
@@ -1819,8 +1854,7 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
         );
     }
 
-    // After release.sh completes, the new tag is the latest one in the repo.
-    let new_tag = git_describe_latest_tag(&repo).ok_or_else(|| {
+    let new_tag = released_tag(tag_file.path(), &repo).ok_or_else(|| {
         anyhow::anyhow!("release.sh succeeded but no tag is reachable — confused state, please check `git tag --list` manually.")
     })?;
 
@@ -1845,7 +1879,15 @@ pub(crate) fn handle_dev_release(bump: &str) -> Result<()> {
         new_tag, target
     );
     println!("Polling {} ...", asset_url);
-    poll_until_published(&asset_url, std::time::Duration::from_secs(600))?;
+    // trace:TASK-1721 | ai:claude
+    poll_until_published(
+        &asset_url,
+        release_artifact_timeout(
+            std::env::var("AIDA_RELEASE_ARTIFACT_TIMEOUT_SECS")
+                .ok()
+                .as_deref(),
+        ),
+    )?;
 
     // ── Step 4/5: upgrade sibling installs ───────────────────────────────
     println!();
@@ -2231,8 +2273,9 @@ where
 }
 
 // trace:STORY-472 | ai:claude
-/// One-verb release: sync the store, run the version bump + tag + push,
-/// wait for the published tarballs, and upgrade sibling installs. Wraps the
+// trace:TASK-1721 | ai:claude
+/// One-verb release: sync the store, run the version bump through a release PR
+/// and tag the merged commit, wait for the published tarballs, and upgrade sibling installs. Wraps the
 /// whole sequence so you don't have to remember it. Use `release check` first to
 /// preview without acting.
 #[derive(clap::Parser, Debug)]

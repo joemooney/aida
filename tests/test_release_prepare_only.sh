@@ -18,9 +18,10 @@ case "$help" in
 esac
 
 prepare_line=$(grep -n 'if \[ "$prepare_only" = "1" \]; then' "$SCRIPT" | head -n1 | cut -d: -f1)
-commit_line=$(grep -n '^git commit -m "chore: release v\$new"' "$SCRIPT" | head -n1 | cut -d: -f1)
-tag_line=$(grep -n '^git tag -a "v\$new"' "$SCRIPT" | head -n1 | cut -d: -f1)
-push_line=$(grep -n '^git push origin HEAD' "$SCRIPT" | head -n1 | cut -d: -f1)
+commit_line=$(grep -n '^git commit -m "chore: release v\$new"' "$SCRIPT" | head -n1 | cut -d: -f1 || true)
+tag_line=$(grep -n '^git tag -a "v\$new"' "$SCRIPT" | head -n1 | cut -d: -f1 || true)
+# TASK-1721: the first publish push is the release branch, never main.
+push_line=$(grep -n '^if ! git push "\$release_remote" "\$release_branch"' "$SCRIPT" | head -n1 | cut -d: -f1 || true)
 
 if [ -z "$prepare_line" ] || [ -z "$commit_line" ] || [ -z "$tag_line" ] || [ -z "$push_line" ]; then
     echo "FAIL: could not locate prepare-only or publish boundary lines" >&2

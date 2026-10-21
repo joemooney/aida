@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+# tests/test_release_pr_flow.sh — TASK-1721 (with BUG-2193 folded in).
+#
+# scripts/release.sh used to commit `chore: release vX` on main and push it
+# straight to main, the one path that kept GitHub from requiring a pull request
+# on main. It now commits the bump on release/vX, opens a PR, waits for checks,
+# squash-merges with --match-head-commit, tags the merged commit and pushes only
+# the tag. It also refuses to start while an `aida pr ship` holds the main
+# merge-lease.
+#
+# Everything runs against a local bare remote whose pre-receive hook rejects
+# every push to main (the "Require a pull request" stand-in), with a fake `gh`
+# that performs the squash-merge server-side and a fake `cargo`. No network, no
+# real release, no real tag.
+#
+# trace:TASK-1721 | ai:claude
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RELEASE="$PROJECT_ROOT/scripts/release.sh"
+TEST_DIR=$(mktemp -d)
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+pass() { echo -e "${GREEN}PASS${NC} $1"; }
+fail() { echo -e "${RED}FAIL${NC} $1"; exit 1; }
+info() { echo -e "${YELLOW}----${NC} $1"; }
+
+cleanup() { rm -rf "$TEST_DIR"; }
+trap cleanup EXIT
+
+export GIT_AUTHOR_NAME="TASK-1721 test" GIT_AUTHOR_EMAIL="test@example.com"
+export GIT_COMMITTER_NAME="TASK-1721 test" GIT_COMMITTER_EMAIL="test@example.com"
+export GIT_CONFIG_NOSYSTEM=1 HOME="$TEST_DIR/home"
+mkdir -p "$HOME"
+git config --global init.defaultBranch main
+git config --global advice.detachedHead false
+
+# ─── fake gh / cargo ──────────────────────────────────────────────────────
+FAKE_BIN="$TEST_DIR/bin"
+mkdir -p "$FAKE_BIN"
+cat > "$FAKE_BIN/cargo" <<'EOF'
+#!/usr/bin/env bash
+# `cargo check` passes; `cargo run … changelog` is unavailable (non-fatal).
+[ "${1:-}" = "check" ] && exit 0
+exit 1
+EOF
+cat > "$FAKE_BIN/gh" <<'EOF'
+#!/usr/bin/env bash
+# Minimal gh for the release PR flow, backed by $FAKE_GH_REMOTE (a bare repo)
+# and $FAKE_GH_STATE. Records every invocation in $FAKE_GH_STATE/calls.
+set -euo pipefail
+state=$FAKE_GH_STATE
+echo "$*" >> "$state/calls"
+case "$1 $2" in
+    "pr create")
+        shift 2
+        while [ $# -gt 0 ]; do
+            case "$1" in --head) echo "$2" > "$state/head"; shift ;; --base) echo "$2" > "$state/base"; shift ;; esac
+            shift
+        done
+        echo "https://github.com/joemooney/aida/pull/7"
+        ;;
+    "pr checks")
+        if [ ! -f "$state/checks_seen" ]; then
+            touch "$state/checks_seen"
+            echo "no checks reported on the '$(cat "$state/head")' branch"
+            exit 1
+        fi
+        if [ "${FAKE_GH_CHECKS_FAIL:-0}" = "1" ]; then
+            echo "Build	fail"
+            exit 1
+        fi
+        echo "Build	pass"
+        ;;
+    "pr merge")
+        shift 3
+        squash=0 match=""
+        while [ $# -gt 0 ]; do
+            case "$1" in --squash) squash=1 ;; --match-head-commit) match=$2; shift ;; esac
+            shift
+        done
+        [ "$squash" = "1" ] || { echo "fake gh: only --squash is allowed" >&2; exit 1; }
+        head=$(cat "$state/head") base=$(cat "$state/base")
+        tip=$(git --git-dir="$FAKE_GH_REMOTE" rev-parse "refs/heads/$head")
+        [ -n "$match" ] && [ "$tip" = "$match" ] || { echo "fake gh: head $tip != --match-head-commit '$match'" >&2; exit 1; }
+        parent=$(git --git-dir="$FAKE_GH_REMOTE" rev-parse "refs/heads/$base")
+        merged=$(git --git-dir="$FAKE_GH_REMOTE" commit-tree "$tip^{tree}" -p "$parent" -m "chore: release (#7)")
+        # update-ref runs no hooks: this is GitHub merging the PR server-side.
+        git --git-dir="$FAKE_GH_REMOTE" update-ref "refs/heads/$base" "$merged" "$parent"
+        git --git-dir="$FAKE_GH_REMOTE" update-ref -d "refs/heads/$head"
+        echo "$merged" > "$state/merged"
+        ;;
+    "pr view")
+        cat "$state/merged"
+        ;;
+    *) echo "fake gh: unsupported: $*" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$FAKE_BIN/cargo" "$FAKE_BIN/gh"
+
+# ─── fixture: workspace clone + bare remote that refuses pushes to main ────
+make_fixture() {
+    local root=$1
+    mkdir -p "$root/state"
+    git init -q --bare "$root/remote.git"
+    git clone -q "$root/remote.git" "$root/work" 2>/dev/null
+    (
+        cd "$root/work"
+        cat > Cargo.toml <<'TOML'
+[workspace]
+resolver = "2"
+members = [
+    "aida-crate",
+    "aida-core",
+]
+
+[workspace.package]
+version = "0.15.0"
+repository = "https://github.com/joemooney/aida"
+TOML
+        mkdir -p aida-crate aida-core
+        cat > aida-crate/Cargo.toml <<'TOML'
+[package]
+name = "aida"
+version = "0.15.0"
+edition = "2021"
+
+[dependencies]
+aida-core = { path = "../aida-core", version = "0.15" }
+TOML
+        cat > aida-core/Cargo.toml <<'TOML'
+[package]
+name = "aida-core"
+version.workspace = true
+edition = "2021"
+TOML
+        echo "# lock" > Cargo.lock
+        git add -A
+        git commit -q -m "init"
+        git push -q origin main
+        # The merge-lease lives under .aida/, which is ignored in a real clone.
+        echo "/.aida/" >> .git/info/exclude
+        # Records AIDA_RELEASE for each commit, to prove the hook suppression env
+        # reaches the bump commit.
+        cat > .git/hooks/commit-msg <<HOOK
+#!/usr/bin/env bash
+echo "AIDA_RELEASE=\${AIDA_RELEASE:-}" >> "$root/state/commit-env"
+HOOK
+        chmod +x .git/hooks/commit-msg
+    )
+    cat > "$root/remote.git/hooks/pre-receive" <<'HOOK'
+#!/usr/bin/env bash
+# "Require a pull request before merging": no direct push may update main.
+while read -r old new ref; do
+    if [ "$ref" = "refs/heads/main" ]; then
+        echo "GH006: Protected branch update failed for refs/heads/main: changes must be made through a pull request." >&2
+        exit 1
+    fi
+done
+HOOK
+    chmod +x "$root/remote.git/hooks/pre-receive"
+}
+
+run_release() {
+    local root=$1; shift
+    (
+        cd "$root/work"
+        PATH="$FAKE_BIN:$PATH" FAKE_GH_REMOTE="$root/remote.git" FAKE_GH_STATE="$root/state" \
+            AIDA_RELEASE_CHECKS_INTERVAL_SECS=0 AIDA_RELEASE_TAG_FILE="$root/state/tag" \
+            bash "$RELEASE" "$@"
+    )
+}
+
+remote_refs() { git --git-dir="$1/remote.git" for-each-ref --format='%(refname) %(objectname)'; }
+
+echo ""
+echo "=== TASK-1721: release goes through a PR, tags the merged commit ==="
+echo "Fixture root: $TEST_DIR"
+echo ""
+
+# ─── 0. the fixture really refuses a direct push to main ──────────────────
+info "Test 0: the bare remote rejects a direct push to main"
+F0="$TEST_DIR/f0"; make_fixture "$F0"
+(
+    cd "$F0/work"
+    git commit -q --allow-empty -m "direct"
+    if git push -q origin HEAD:main 2>/dev/null; then exit 1; fi
+) || fail "fixture remote accepted a direct push to main"
+pass "direct push to main is rejected by the fixture remote"
+
+# ─── 1. --dry-run prints the PR sequence and changes nothing ──────────────
+info "Test 1: --dry-run prints the planned PR sequence, pushes nothing"
+F1="$TEST_DIR/f1"; make_fixture "$F1"
+before=$(remote_refs "$F1")
+out=$(run_release "$F1" patch --dry-run 2>&1) || fail "dry run exited non-zero: $out"
+for want in "release/v0.15.1" "git push origin release/v0.15.1" "gh pr create" \
+    "gh pr checks" "--squash --match-head-commit" "git tag -a v0.15.1 <merged-sha>" \
+    "git push origin v0.15.1"; do
+    printf '%s' "$out" | grep -qF -- "$want" || fail "dry run output lacks '$want': $out"
+done
+if printf '%s' "$out" | grep -qE 'git push origin (HEAD|main)'; then
+    fail "dry run plans a direct push of main: $out"
+fi
+[ "$before" = "$(remote_refs "$F1")" ] || fail "dry run changed the remote"
+[ -z "$(git -C "$F1/work" status --porcelain)" ] || fail "dry run changed the working tree"
+[ "$(git -C "$F1/work" branch --list 'release/*')" = "" ] || fail "dry run created a branch"
+[ ! -s "$F1/state/calls" ] || fail "dry run called gh: $(cat "$F1/state/calls")"
+pass "--dry-run prints the sequence and leaves remote, tree and branches unchanged"
+
+info "Test 1b: no direct push of main remains in release.sh, including fallback text"
+if grep -nE 'git push (origin|"\$release_remote"|\$release_remote) (HEAD|main)\b' "$RELEASE"; then
+    fail "release.sh still pushes main directly"
+fi
+pass "release.sh has no 'git push origin HEAD|main'"
+
+# ─── 2. end-to-end release against the PR-required remote ─────────────────
+info "Test 2: release completes end to end through the PR"
+F2="$TEST_DIR/f2"; make_fixture "$F2"
+out=$(run_release "$F2" patch --yes --skip-docs-check 2>&1) || fail "release failed: $out"
+merged=$(cat "$F2/state/merged")
+remote_main=$(git --git-dir="$F2/remote.git" rev-parse refs/heads/main)
+[ "$merged" = "$remote_main" ] || fail "remote main $remote_main is not the squash-merged commit $merged"
+tag_target=$(git --git-dir="$F2/remote.git" rev-parse 'refs/tags/v0.15.1^{commit}' 2>/dev/null) \
+    || fail "tag v0.15.1 was not pushed: $out"
+[ "$tag_target" = "$merged" ] || fail "tag points at $tag_target, not the merged commit $merged"
+git --git-dir="$F2/remote.git" merge-base --is-ancestor v0.15.1 main \
+    || fail "v0.15.1 is not an ancestor of main"
+git --git-dir="$F2/remote.git" show main:Cargo.toml | grep -q '^version = "0.15.1"' \
+    || fail "Cargo.toml on main is not 0.15.1"
+grep -q -- "--match-head-commit" "$F2/state/calls" || fail "merge was not pinned with --match-head-commit"
+pass "tag v0.15.1 is the squash-merged commit on main, and main is at 0.15.1"
+
+info "Test 2b: local state after the release"
+[ "$(git -C "$F2/work" rev-parse HEAD)" = "$merged" ] || fail "local main was not fast-forwarded"
+[ "$(git -C "$F2/work" symbolic-ref --short HEAD)" = "main" ] || fail "release left the checkout off main"
+[ -z "$(git -C "$F2/work" branch --list 'release/*')" ] || fail "local release branch left behind"
+[ -z "$(git --git-dir="$F2/remote.git" branch --list 'release/*')" ] || fail "remote release branch left behind"
+[ "$(cat "$F2/state/tag")" = "v0.15.1" ] || fail "AIDA_RELEASE_TAG_FILE not written"
+[ ! -e "$F2/work/.aida/merge-locks/main" ] || fail "merge-lease left behind"
+pass "checkout back on fast-forwarded main, branches cleaned up, lease released"
+
+info "Test 2c: the bump commit keeps AIDA_RELEASE=1"
+grep -qx "AIDA_RELEASE=1" "$F2/state/commit-env" || fail "bump commit ran without AIDA_RELEASE=1: $(cat "$F2/state/commit-env")"
+pass "AIDA_RELEASE=1 reached the commit-msg hook"
+
+# ─── 3. failed checks: no merge, no tag ───────────────────────────────────
+info "Test 3: failing PR checks stop before merge and tag"
+F3="$TEST_DIR/f3"; make_fixture "$F3"
+main_before=$(git --git-dir="$F3/remote.git" rev-parse refs/heads/main)
+if out=$(FAKE_GH_CHECKS_FAIL=1 run_release "$F3" patch --yes --skip-docs-check 2>&1); then
+    fail "release succeeded despite failing checks"
+fi
+printf '%s' "$out" | grep -q "nothing was tagged" || fail "missing stuck-PR guidance: $out"
+[ "$(git --git-dir="$F3/remote.git" rev-parse refs/heads/main)" = "$main_before" ] || fail "main moved"
+[ -z "$(git --git-dir="$F3/remote.git" tag)" ] || fail "a tag was pushed"
+[ -z "$(git -C "$F3/work" tag)" ] || fail "a local tag was created"
+if grep -q "pr merge" "$F3/state/calls"; then fail "merge was attempted"; fi
+pass "failed checks leave main and tags untouched"
+
+# ─── 4. in-flight `aida pr ship` (BUG-2193) ───────────────────────────────
+info "Test 4: refuses to start while a live ship holds the main merge-lease"
+F4="$TEST_DIR/f4"; make_fixture "$F4"
+mkdir -p "$F4/work/.aida/merge-locks"
+write_lease() {
+    printf 'host=%s\npid=%s\npid_start=\npr=42\nnote=aida pr ship\nacquired_at=%s\nttl_secs=600\n' \
+        "$(uname -n)" "$1" "$2" > "$F4/work/.aida/merge-locks/main"
+}
+write_lease "$$" "$(date +%s)"
+if out=$(run_release "$F4" patch --yes --skip-docs-check 2>&1); then
+    fail "release started while a live ship held the lease"
+fi
+printf '%s' "$out" | grep -q "merge-lease" || fail "refusal does not name the merge-lease: $out"
+printf '%s' "$out" | grep -q "PR #42" || fail "refusal does not name the ship's PR: $out"
+[ -z "$(git -C "$F4/work" status --porcelain)" ] || fail "refused release modified the tree"
+[ ! -s "$F4/state/calls" ] || fail "refused release called gh"
+grep -q "pid=$$" "$F4/work/.aida/merge-locks/main" || fail "refused release disturbed the ship's lease"
+pass "live ship lease refuses the release before anything changes"
+
+info "Test 4b: a dead or expired holder does not block"
+sleep 0 & dead_pid=$!; wait "$dead_pid"
+write_lease "$dead_pid" "$(date +%s)"
+run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "dead-pid lease blocked the release"
+write_lease "$$" "$(( $(date +%s) - 4000 ))"
+run_release "$F4" patch --dry-run >/dev/null 2>&1 || fail "expired lease blocked the release"
+pass "stale leases (dead pid, past TTL) are not treated as an in-flight ship"
+
+info "Test 4c: the release holds the lease while it mutates the checkout"
+F5="$TEST_DIR/f5"; make_fixture "$F5"
+mkdir -p "$TEST_DIR/bin-lease"
+cat > "$TEST_DIR/bin-lease/cargo" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = "check" ]; then
+    cp "$F5/work/.aida/merge-locks/main" "$F5/state/lease-during-check" 2>/dev/null || true
+    exit 0
+fi
+exit 1
+EOF
+chmod +x "$TEST_DIR/bin-lease/cargo"
+(
+    cd "$F5/work"
+    PATH="$TEST_DIR/bin-lease:$FAKE_BIN:$PATH" FAKE_GH_REMOTE="$F5/remote.git" FAKE_GH_STATE="$F5/state" \
+        AIDA_RELEASE_CHECKS_INTERVAL_SECS=0 bash "$RELEASE" patch --yes --skip-docs-check >/dev/null 2>&1
+) || fail "release with lease probe failed"
+grep -q "note=scripts/release.sh v0.15.1" "$F5/state/lease-during-check" 2>/dev/null \
+    || fail "the main merge-lease was not held during cargo check"
+pass "release.sh holds the main merge-lease during the bump"
+
+# ─── 5. --prepare-only fallback text routes through a PR ──────────────────
+info "Test 5: --prepare-only manual steps open a PR instead of pushing main"
+F6="$TEST_DIR/f6"; make_fixture "$F6"
+out=$(run_release "$F6" patch --prepare-only --skip-docs-check 2>&1) || fail "prepare-only failed: $out"
+printf '%s' "$out" | grep -qF "gh pr create" || fail "prepare-only steps lack gh pr create: $out"
+printf '%s' "$out" | grep -qF -- "--match-head-commit" || fail "prepare-only steps lack --match-head-commit: $out"
+if printf '%s' "$out" | grep -qE 'git push origin (HEAD|main)'; then
+    fail "prepare-only tells the operator to push main: $out"
+fi
+[ ! -s "$F6/state/calls" ] || fail "prepare-only called gh"
+[ ! -e "$F6/work/.aida/merge-locks/main" ] || fail "prepare-only left the merge-lease behind"
+pass "--prepare-only prints the PR sequence and publishes nothing"
+
+echo ""
+echo "All TASK-1721 release PR-flow tests passed."
