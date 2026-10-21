@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1688",
+  "publishes": [
+    {
+      "at": "2026-10-21T08:14:09.839280399Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-20T20:11:32.259900244Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T20:11:32.260540948Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-20T20:12:10.548002338Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:37:36.772387080Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2743,
+        "verdict": "APPROVED",
+        "reviewed_sha": "7554f2c777bc"
+      }
+    },
+    {
+      "ts": "2026-10-21T02:09:58.560971999Z",
+      "spec": "STORY-1688",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1688",
+        "branch": "pr-2743",
+        "first_seen": "2026-10-21T02:09:58.560902966+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T08:10:35.432085708Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T08:13:46.663963347Z",
+      "spec": "STORY-1688",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2743
+      }
+    },
+    {
+      "ts": "2026-10-21T08:14:09.667276635Z",
+      "spec": "STORY-1688",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "87e4fca49ea56ae8732d5c00230f53d94796c826",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
