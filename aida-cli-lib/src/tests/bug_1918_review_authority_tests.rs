@@ -855,7 +855,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
         head_ref: "renamed-branch".into(),
         commit_subjects: vec!["[AI:claude] fix(x): y (BUG-91801)".into()],
     };
-    let (ids, branch, resolved) = crate::with_review_pr_subject(subject, || {
+    let (ids, branch, resolved, _) = crate::with_review_pr_subject(subject, || {
         crate::pr_cmd::pr_gate_subject(root.path(), 2485, &[], Some("renamed-local"))
     });
     assert!(resolved);
@@ -871,7 +871,7 @@ fn ship_from_main_with_a_renamed_branch_still_finds_the_author() {
     // Forge offline: the local title/branch claim an unrelated spec. That
     // claim is not trusted for authorship — every recorded author counts.
     let claimed = vec!["TASK-99901".to_string()];
-    let (ids, _, resolved) =
+    let (ids, _, resolved, _) =
         crate::pr_cmd::pr_gate_subject(root.path(), 2485, &claimed, Some("task-99901-work"));
     assert!(!resolved);
     assert_eq!(ids, claimed);

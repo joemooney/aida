@@ -1758,8 +1758,11 @@ pub(crate) fn pr_gate_subject(
     pr: u64,
     known_ids: &[String],
     head_branch: Option<&str>,
-) -> (Vec<String>, Option<String>, bool) {
+) -> (Vec<String>, Option<String>, bool, Vec<String>) {
     let mut ids = known_ids.to_vec();
+    // `(Refs X)` subjects name the work's spec for authorship only, never
+    // for verdict lookup or completion. trace:BUG-2199 | ai:claude
+    let mut refs_ids: Vec<String> = Vec::new();
     let mut forge_resolved = false;
     let mut branch = head_branch
         .map(str::trim)
@@ -1778,6 +1781,7 @@ pub(crate) fn pr_gate_subject(
             }
             for s in &subject.commit_subjects {
                 ids.extend(pr_ship::extract_trailing_spec_ids_from_subject(s));
+                refs_ids.extend(pr_ship::extract_authorship_spec_ids_from_subject(s));
             }
         }
         Err(e) => eprintln!(
@@ -1785,7 +1789,13 @@ pub(crate) fn pr_gate_subject(
              every recorded author is treated as one of its authors"
         ),
     }
-    (normalized_spec_ids(&ids), branch, forge_resolved)
+    refs_ids.extend(ids.iter().cloned());
+    (
+        normalized_spec_ids(&ids),
+        branch,
+        forge_resolved,
+        normalized_spec_ids(&refs_ids),
+    )
 }
 
 /// BUG-1918: the approval candidates for merging PR `pr` (read from `roots`)
@@ -1804,11 +1814,13 @@ pub(crate) fn merge_approval_inputs(
     Vec<crate::review_verdict::RecordedVerdict>,
     pr_ship::ShipApprovalPolicy,
 ) {
-    let (ids, branch, forge_resolved) = pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    let (ids, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = pr_ship::merge_gate_verdict_candidates(roots, pr, &ids, head_sha);
     // An unconfirmed subject (forge unreachable) names no author set: every
     // recorded author counts. trace:BUG-1918 | ai:claude
-    let author_ids: &[String] = if forge_resolved { &ids } else { &[] };
+    // trace:BUG-2199 | ai:claude
+    let author_ids: &[String] = if forge_resolved { &authorship_ids } else { &[] };
     let policy = ship_approval_policy(main_worktree, author_ids, branch.as_deref(), &candidates);
     (candidates, policy)
 }

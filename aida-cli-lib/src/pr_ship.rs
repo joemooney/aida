@@ -868,6 +868,29 @@ pub fn extract_trailing_spec_ids_from_subject(subject: &str) -> Vec<String> {
     parse_spec_id_group(inner)
 }
 
+/// BUG-2199: the spec ids a commit subject names for AUTHORSHIP — its
+/// trailing completion group (see [`extract_trailing_spec_ids_from_subject`])
+/// plus any `(Refs X[, Y...])` group, which names the work's spec without
+/// completing it. Never use this for completion: `Refs` must not close a spec.
+// trace:BUG-2199 | ai:claude
+pub(crate) fn extract_authorship_spec_ids_from_subject(subject: &str) -> Vec<String> {
+    let mut out = extract_trailing_spec_ids_from_subject(subject);
+    let mut rest = subject.trim();
+    while let Some((head, inner)) = trailing_paren_group(rest) {
+        let inner = inner.trim();
+        let refs = inner
+            .get(..4)
+            .filter(|w| w.eq_ignore_ascii_case("refs"))
+            .map(|_| inner[4..].trim_start_matches(':'))
+            .filter(|r| r.starts_with(char::is_whitespace));
+        if let Some(ids) = refs.map(parse_spec_id_group) {
+            out.extend(ids);
+        }
+        rest = head.trim_end();
+    }
+    out
+}
+
 fn append_spec_ids_before_pr_suffix(subject: &str, joined_ids: &str) -> String {
     if let Some((head, inner)) = trailing_paren_group(subject) {
         let pr_suffix = inner

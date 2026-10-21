@@ -492,8 +492,22 @@ impl RecorderIdentity {
 // ── Authorship ──────────────────────────────────────────────────────────────
 
 /// Is `lease` an authoring (implementer/claim) lease? Review leases and
-/// PR-scoped leases belong to reviewers and never are.
+/// PR-scoped leases belong to reviewers and never are; nor is a generic
+/// `harness-worktree` lease, which names no spec — it authors only the branch
+/// it works on (see [`is_work_lease`]).
+// trace:BUG-2199 | ai:claude
 pub(crate) fn is_authoring_lease(lease: &SessionLease) -> bool {
+    is_work_lease(lease)
+        && !lease
+            .scope
+            .trim()
+            .eq_ignore_ascii_case(crate::worktree_lease::HARNESS_WORKTREE_SCOPE)
+}
+
+/// Is `lease` doing (non-review) work on its branch? An authoring lease, or a
+/// generic `harness-worktree` lease — whose authorship is its branch alone.
+// trace:BUG-2199 | ai:claude
+fn is_work_lease(lease: &SessionLease) -> bool {
     let scope = lease.scope.trim();
     !lease.review_verb && !scope.is_empty() && !scope.to_ascii_uppercase().starts_with("PR-")
 }
@@ -639,7 +653,9 @@ fn append_authorship_as(
     extra: Vec<String>,
     with_creator_shell: bool,
 ) {
-    if !is_authoring_lease(lease) {
+    // Harness leases are recorded too: their branch still names an author.
+    // trace:BUG-2199 | ai:claude
+    if !is_work_lease(lease) {
         return;
     }
     let mut tokens = lease_tokens(lease, manifest_session_id(project_root, lease).as_deref());
@@ -776,7 +792,7 @@ pub(crate) fn author_sessions(
     let mut out: Vec<crate::pr_ship::AuthorSession> = Vec::new();
     for lease in leases {
         if is_authoring_lease_for(lease, spec_ids)
-            || (is_authoring_lease(lease) && branch_is(&lease.branch, head_branch))
+            || (is_work_lease(lease) && branch_is(&lease.branch, head_branch))
         {
             let mut tokens = lease_tokens(lease, manifest_session(lease).as_deref());
             // The claim record says whether the creating shell is the
@@ -827,7 +843,16 @@ pub(crate) fn all_author_sessions(project_root: &Path) -> Vec<crate::pr_ship::Au
         .into_iter()
         .filter(is_authoring_lease)
         .collect();
-    let ledger = load_ledger(project_root);
+    // A harness-worktree claim record names no spec: it authors no PR that
+    // maps to none. trace:BUG-2199 | ai:claude
+    let ledger: Vec<AuthorshipRecord> = load_ledger(project_root)
+        .into_iter()
+        .filter(|r| {
+            !r.scope
+                .trim()
+                .eq_ignore_ascii_case(crate::worktree_lease::HARNESS_WORKTREE_SCOPE)
+        })
+        .collect();
     let mut ids: Vec<String> = leases
         .iter()
         .map(|l| l.scope.trim().to_string())
@@ -1026,3 +1051,7 @@ pub(crate) fn verified_solo_keys(
 #[cfg(test)]
 #[path = "tests/bug_1918_review_authority_tests.rs"]
 mod bug_1918_review_authority_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2199_refs_authorship_tests.rs"]
+mod bug_2199_refs_authorship_tests;
