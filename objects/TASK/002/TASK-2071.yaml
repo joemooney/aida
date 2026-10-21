@@ -6,16 +6,25 @@ description: |
   TASK-1953 asks for each change to be traced to the sweep ID and to the original item ID. Inline trace tags in PR-2800 name only TASK-1953. Commit b578ba6021's Refs trailer lists the originals but omits TASK-2054, whose roster-path part shipped in seat_authority.rs (issuance_roster_store, validate_child_delegation).
 
   Raised in review of PR-2800: https://github.com/joemooney/aida/pull/2800#issuecomment-6321991753
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:13:49.970512966Z
-modified_at: 2026-10-21T17:13:49.970512966Z
+modified_at: 2026-10-21T17:19:07.357439539Z
 req_type: Task
 tags:
 - from-review:PR-2800
 - severity:cosmetic
+history:
+- id: 01a15f79-4c5d-7b91-95cb-0c323639b77d
+  author: joe
+  timestamp: 2026-10-21T17:19:07.357432731Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 48a6ce159419528992b224d29a7486b78348a256
   branch: pr-2800
