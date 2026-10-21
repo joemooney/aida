@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1700",
+  "publishes": [
+    {
+      "at": "2026-10-21T01:46:07.107049686Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-16T04:05:38.136541939Z",
+      "spec": "STORY-1700",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-16T04:10:30.473719161Z",
+      "spec": "STORY-1700",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1700",
+        "branch": "story-1700-sketch",
+        "first_seen": "2026-10-16T04:10:30.473648893+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-18T11:54:49.941289209Z",
+      "spec": "STORY-1700",
+      "kind": {
+        "event": "UnshippedWorkDetected",
+        "spec": "STORY-1700",
+        "branch": "pr-2725",
+        "first_seen": "2026-10-18T11:54:49.938245245+00:00"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:37:32.279562646Z",
+      "spec": "STORY-1700",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 2725,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d9191496ae1f"
+      }
+    },
+    {
+      "ts": "2026-10-21T01:45:34.746489386Z",
+      "spec": "STORY-1700",
+      "seat": "advisor",
+      "kind": {
+        "event": "CiTerminal",
+        "green": true
+      }
+    },
+    {
+      "ts": "2026-10-21T01:45:46.760923439Z",
+      "spec": "STORY-1700",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2725
+      }
+    },
+    {
+      "ts": "2026-10-21T01:46:06.834960392Z",
+      "spec": "STORY-1700",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "2241f23360355a078cbae4a2a399d5cd2e5e0239",
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
