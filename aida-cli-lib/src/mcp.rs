@@ -8994,7 +8994,7 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
 
         let git = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store_root)
                 .args(args)
@@ -9050,7 +9050,7 @@ mod tests {
         let store_root = dir.path().join("store");
         std::fs::create_dir_all(&store_root).unwrap();
         let git = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store_root)
                 .args(args)
@@ -9160,7 +9160,7 @@ mod tests {
         let store_root = dir.path().join("proj").join("store");
         std::fs::create_dir_all(&store_root).unwrap();
         let git = |args: &[&str]| -> String {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store_root)
                 .args(args)
@@ -10528,7 +10528,7 @@ mod tests {
             vec!["config", "user.email", "test@example.com"],
             vec!["config", "user.name", "AIDA Test"],
         ] {
-            assert!(Command::new("git")
+            assert!(crate::test_git::git_command()
                 .args(args)
                 .current_dir(&store_root)
                 .status()
@@ -10553,7 +10553,7 @@ mod tests {
             }))
             .unwrap();
         let subject = String::from_utf8(
-            Command::new("git")
+            crate::test_git::git_command()
                 .args(["log", "-1", "--format=%s"])
                 .current_dir(&store_root)
                 .output()

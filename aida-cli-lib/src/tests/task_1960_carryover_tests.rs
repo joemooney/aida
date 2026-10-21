@@ -10,7 +10,7 @@ use std::path::Path;
 const PR: u64 = 42;
 
 pub(crate) fn git(repo: &Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
@@ -28,7 +28,7 @@ pub(crate) fn git(repo: &Path, args: &[&str]) -> String {
 
 /// `git` that is allowed to fail (an expected merge conflict).
 fn git_may_fail(repo: &Path, args: &[&str]) {
-    let _ = std::process::Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)

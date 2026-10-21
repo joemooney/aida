@@ -7,7 +7,7 @@ use aida_core::DatabaseBackend;
 use aida_core::Storage;
 
 fn run_git(repo: &std::path::Path, args: &[&str]) -> String {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(args)
         .current_dir(repo)
         .output()
