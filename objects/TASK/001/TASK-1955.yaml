@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T13:57:35.723826894Z
+modified_at: 2026-10-21T14:18:19.252012366Z
 req_type: Task
 tags:
 - launch
@@ -196,6 +196,12 @@ comments:
   content: 'Deferred from the PR-2789 (TASK-1993) round-3 review, per advisor ruling: (a) review_watch.rs:1154 watch_change runs repo.probe (two fetches, a merge-base and two diffs) for every open change on every pass, before select''s cheap skips; with N PRs at the 10s interval that is about 2N fetches every 10s. Add a lock-held cheap admission pre-check and probe only when dispatch or notify is possible. (b) review_watch.rs:439-451: Store::retain writes unbounded blocking keys while read enforces <=16; cap on write (2 are needed) and drop or document the write-dead Entry.historical_keys.'
   created_at: 2026-10-21T13:57:35.723826894Z
   modified_at: 2026-10-21T13:57:35.723826894Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15ed3-c4f4-7e90-92c4-7f97e7f3dea7
+  author: joe
+  content: 'Folded TASK-2069 (PR-2782 non-blocking follow-up): claim CAS retry hard-fails when the store HEAD moved past our unpushed claim commit.'
+  created_at: 2026-10-21T14:18:19.252012366Z
+  modified_at: 2026-10-21T14:18:19.252012366Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
