@@ -1,5 +1,6 @@
 id: 01a15f96-e3ce-79e0-b9ed-280a72349bc6
 spec_id: TASK-1-416
+agreed_id: TASK-1686
 title: 'non-blocking (minor): aida-cargo-timeout-guard.sh make_targets_skip_cargo fails…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1967, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15f9f-84d9-7b00-9001-2c7948cab3aa
   author: joe
   timestamp: 2026-10-21T18:00:52.185173070Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15fd8-d2fd-76a1-86a3-c6dd6254e3af
+  author: joe
+  timestamp: 2026-10-21T19:03:27.741625316Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:

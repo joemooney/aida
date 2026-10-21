@@ -1,5 +1,6 @@
 id: 01a15f96-ef57-7901-85ea-9e84b27a0a1b
 spec_id: TASK-1-417
+agreed_id: TASK-1687
 title: 'non-blocking (minor): make resolver treats an unknown prerequisite as a plain f…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1967, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a15f9f-a093-7d61-84c3-0280c4d09f6d
   author: joe
   timestamp: 2026-10-21T18:00:59.283956421Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15fd8-d31a-7251-a20d-5383126130fb
+  author: joe
+  timestamp: 2026-10-21T19:03:27.770661867Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
