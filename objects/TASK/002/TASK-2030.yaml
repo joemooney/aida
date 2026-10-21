@@ -8,8 +8,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-20T22:39:15.991856363Z
-modified_at: 2026-10-20T22:39:15.991856363Z
+modified_at: 2026-10-21T04:30:42.825248453Z
 req_type: Task
+comments:
+- id: 01a15cb9-cc89-7211-921c-2ad43bc07a8d
+  author: joe
+  content: 'Advisor triage 2026-10-20 21:30: folded TASK-2028 into this spec (TASK-2030 part (a) is the same required-checks-only rollup fix.). Its open acceptance items now belong here.'
+  created_at: 2026-10-21T04:30:42.825248453Z
+  modified_at: 2026-10-21T04:30:42.825248453Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 filed_at:
   code_sha: 4632c55b7d30c2e33a1b2225b5210dce205fa70f
   branch: main
