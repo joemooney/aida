@@ -357,7 +357,14 @@ reservation (a refused grant, an unusable store, a timed-out claim), any
 watcher, including a restarted one, records the reservation as exited and
 frees its slot. Only a dispatcher lost after claiming, before recording an
 outcome, stays reserved until its exact process (start identity and boot ID)
-is gone; then it is recorded as exited and its slot freed. Terminal receipts
+is gone. Queue work runs as the dispatcher's child and can outlive it, so the
+dispatcher records that child's identity before waiting on it, and the slot is
+freed (recorded as exited) only once both processes are gone. If the
+dispatcher died after starting to spawn but before recording the child, the
+attempt stays held and the capacity refusal names it with the recovery step:
+confirm no `queue work` reviewer for that change remains, then record the
+attempt as exited while no watcher runs. Queue work also receives SIGTERM from
+the kernel if its dispatcher dies, which makes such orphans uncommon. Terminal receipts
 retry through lock contention for the same window as the claim. The capacity refusal names each
 holder's change, head and token. A missing/corrupt/unsafe state file refuses
 reinitialization; inspect the state, dispatcher logs in `review-watch/logs/`,

@@ -141,6 +141,13 @@ struct Attempt {
     // trace:TASK-1993 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     dispatcher: Option<Identity>,
+    // Set just before queue work is spawned; `worker` then records that child.
+    // Queue work outlives a killed dispatcher, so a claimed attempt is freed
+    // only once both processes are provably gone. trace:TASK-1993 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    spawning: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    worker: Option<Identity>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -407,7 +414,13 @@ impl Store {
                     (Phase::Reserved, None, Some(dispatcher)) => {
                         (dispatcher, "before claiming its launch receipt")
                     }
-                    (Phase::Running, Some(identity), _) => {
+                    // Queue work may outlive its dispatcher: both must be gone,
+                    // and an unrecorded child stays ambiguous.
+                    // trace:TASK-1993 | ai:claude
+                    (Phase::Running, Some(identity), _)
+                        if !attempt.spawning
+                            || attempt.worker.as_ref().is_some_and(|w| !w.alive()) =>
+                    {
                         (identity, "after claiming, without a terminal receipt")
                     }
                     _ => continue,
@@ -538,6 +551,28 @@ impl Store {
             );
             self.retain(key, history.blocking_keys())?;
             Ok(used + 1)
+        })
+    }
+    /// Record that queue work is being spawned (`None`) or the spawned child's
+    /// identity, for the dispatcher that holds this Running receipt.
+    // trace:TASK-1993 | ai:claude
+    fn record_worker(&self, key: &str, token: &str, worker: Option<Identity>) -> Result<()> {
+        let me = Identity::current()?;
+        self.transaction(key, |state| {
+            let attempt = state
+                .entries
+                .get_mut(key)
+                .and_then(|e| e.attempts.iter_mut().find(|a| a.token == token))
+                .context("unknown review-watch reservation")?;
+            anyhow::ensure!(
+                attempt.phase == Phase::Running && attempt.identity.as_ref() == Some(&me),
+                "review-watch receipt changed before queue work"
+            );
+            attempt.spawning = true;
+            if worker.is_some() {
+                attempt.worker = worker;
+            }
+            Ok(())
         })
     }
     fn transition(&self, key: &str, token: &str, phase: Phase) -> Result<Attempt> {
@@ -746,7 +781,7 @@ fn select(
     let key = change.key();
     let overlap = change
         .overlap
-        .context("default-branch overlap evidence is unknown")?;
+        .context("base-branch overlap evidence is unknown")?;
     store.transaction(&key, |state| {
         store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
@@ -789,7 +824,7 @@ fn select(
         if history.contains(&change.head) { return Ok(Action::Skip("head already has a recorded review".into())); }
         if history.blocking() >= 2 { return Ok(Action::Skip("two-round review cap reached; route further work to the advisor".into())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
-        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None };
+        let attempt = Attempt { head: change.head.clone(), token: uuid::Uuid::new_v4().to_string(), vendor, phase: Phase::Reserved, identity: None, diagnostic: None, dispatcher: None, spawning: false, worker: None };
         // Nothing is active here, so earlier terminal attempts are history only:
         // durable verdicts carry the rounds. trace:TASK-1993 | ai:claude
         entry.attempts.clear();
@@ -812,10 +847,16 @@ fn capacity_holders(state: &State) -> String {
         })
         .map(|(key, a)| {
             format!(
-                "{key} at {} ({:?}, token {})",
+                "{key} at {} ({:?}, token {}{})",
                 &a.head[..12],
                 a.phase,
-                a.token
+                a.token,
+                if a.phase == Phase::Running && a.spawning && a.worker.is_none() {
+                    // trace:TASK-1993 | ai:claude
+                    format!("; ambiguous: its queue-work child was never recorded, so it is held until an operator confirms no `queue work {key}` reviewer process remains and then records the attempt as exited in .aida/review-watch/state.json while no watcher runs")
+                } else {
+                    String::new()
+                }
             )
         })
         .collect();
@@ -980,7 +1021,21 @@ fn child_with_program(
             cmd.args(queue_args(key, attempt.vendor.as_deref()))
                 .env(WATCH_HEAD, &attempt.head)
                 .env("AIDA_REVIEW_ROUND", round.get().to_string());
-            let status = crate::process_retry::RetryEtxtbsy::status_retrying_etxtbsy(&mut cmd)?;
+            // Mark spawning first, then record the child: a crash between the
+            // two leaves the attempt held as ambiguous, never freed.
+            // trace:TASK-1993 | ai:claude
+            retry_busy(|| store.record_worker(key, token, None))?;
+            set_parent_death_signal(&mut cmd);
+            let mut child = crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut cmd)?;
+            match Identity::of(child.id()) {
+                Ok(worker) => {
+                    if let Err(error) = retry_busy(|| store.record_worker(key, token, Some(worker.clone()))) {
+                        eprintln!("{key}: could not record the queue-work child; the attempt stays held as ambiguous: {error:#}");
+                    }
+                }
+                Err(error) => eprintln!("{key}: queue-work child identity unavailable; the attempt stays held as ambiguous: {error:#}"),
+            }
+            let status = child.wait()?;
             if !status.success() {
                 // trace:TASK-1993 | ai:claude
                 let log = format!("{key}-{token}.log");
@@ -990,6 +1045,31 @@ fn child_with_program(
             Ok(())
         },
     )
+}
+
+/// Belt and braces only: the kernel sends queue work SIGTERM if this
+/// dispatcher dies. Capacity never relies on it; reconciliation still
+/// requires the recorded child to be provably gone.
+// trace:TASK-1993 | ai:claude
+fn set_parent_death_signal(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    let parent = std::process::id() as libc::pid_t;
+    // SAFETY: prctl and getppid are async-signal-safe and touch no memory
+    // shared with the parent.
+    unsafe {
+        command.pre_exec(move || {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // The dispatcher already died before the setting took effect.
+            if libc::getppid() != parent {
+                return Err(std::io::Error::other(
+                    "review dispatcher exited before launch",
+                ));
+            }
+            Ok(())
+        });
+    }
 }
 
 fn execute_reservation(

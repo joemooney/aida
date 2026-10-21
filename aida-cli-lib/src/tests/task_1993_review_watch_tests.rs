@@ -443,6 +443,20 @@ assert os.environ['AIDA_REVIEW_WATCH_HEAD'] == attempt['head']
 assert os.environ['AIDA_REVIEW_ROUND'] == '1'
 assert os.environ['GH_HOST'] in ['github.com', 'gitlab.example.test']
 assert os.environ.get('AIDA_SESSION_GRANT')
+# The dispatcher records this child before relying on it, and the kernel
+# would SIGTERM it if the dispatcher died. trace:TASK-1993 | ai:claude
+import ctypes, signal
+deadline = time.monotonic() + 10
+while True:
+    attempt = json.loads((root / '.aida/review-watch/state.json').read_text())['entries'][key]['attempts'][0]
+    if 'worker' in attempt:
+        break
+    assert attempt.get('spawning'), attempt
+    assert time.monotonic() < deadline, 'worker identity never recorded'
+    time.sleep(0.01)
+assert attempt['worker']['pid'] == os.getpid() and attempt['worker']['start']
+sig = ctypes.c_int(0)
+assert ctypes.CDLL(None).prctl(2, ctypes.byref(sig)) == 0 and sig.value == signal.SIGTERM
 (root / 'queue-ready').write_text(str(os.getppid()))
 deadline = time.monotonic() + 15
 while not (root / 'queue-release').exists():
@@ -1170,6 +1184,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             identity: Some(me.clone()),
                             diagnostic: None,
                             dispatcher: None,
+                            spawning: false,
+                            worker: None,
                         }],
                         ..Default::default()
                     },
@@ -1623,4 +1639,78 @@ fn task1993_stale_notice_names_the_base_without_resending_old_notices() {
             other => panic!("unexpected action for sent={sent}: {other:?}"),
         }
     }
+}
+
+// Queue work runs as the dispatcher's child and can outlive a killed
+// dispatcher: a claimed attempt is freed only when both are provably gone,
+// and one whose child was never recorded stays held, named as ambiguous.
+// trace:TASK-1993.ac55aab8 | ai:claude
+// trace:TASK-1993.ac1e5827 | ai:claude
+#[test]
+fn task1993_orphaned_queue_work_keeps_its_slot_until_it_exits() {
+    let dead = || {
+        let mut gone = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+        let identity = Identity::of(gone.id()).unwrap();
+        gone.kill().unwrap();
+        gone.wait().unwrap();
+        identity
+    };
+    let claimed = |store: &Store, worker: Option<Identity>| {
+        let a = dispatch(select(store, &change(1, 1, false), None, 1).unwrap());
+        let dispatcher = dead();
+        store
+            .transaction("PR-1", |state| {
+                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                attempt.phase = Phase::Running;
+                attempt.identity = Some(dispatcher.clone());
+                attempt.spawning = true;
+                attempt.worker = worker.clone();
+                Ok(())
+            })
+            .unwrap();
+        a
+    };
+    // Dispatcher dead, queue-work child alive: the slot and the head stay held.
+    let (_temp, store) = fixture();
+    let mut orphan = Command::new("/bin/sleep").arg("30").spawn().unwrap();
+    claimed(&store, Some(Identity::of(orphan.id()).unwrap()));
+    assert!(matches!(
+        select(&store, &change(2, 2, false), None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(matches!(
+        select(&store, &change(1, 2, false), None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Running
+    );
+    // Both gone: freed terminally.
+    orphan.kill().unwrap();
+    orphan.wait().unwrap();
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Exited
+    );
+    // Dispatcher dead while spawning, child never recorded: ambiguous, held,
+    // and the capacity refusal names it with the recovery step.
+    let (_temp, store) = fixture();
+    let a = claimed(&store, None);
+    let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
+        panic!("an unrecorded child freed its slot");
+    };
+    assert!(
+        reason.contains(&a.token) && reason.contains("never recorded"),
+        "{reason}"
+    );
+    assert!(
+        reason.contains("no `queue work PR-1` reviewer process remains"),
+        "{reason}"
+    );
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Running
+    );
 }
