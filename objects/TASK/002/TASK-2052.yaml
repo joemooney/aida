@@ -1,0 +1,27 @@
+id: 01a15db8-900d-73c3-bb18-29967da2c9b3
+spec_id: TASK-2052
+agreed_id: TASK-2052
+title: Consensus parent-conflict message is misleading when the mapped owner is already among several parents
+description: |
+  aida-cli-lib/src/regen/consensus.rs:806-818 (link_existing_draft): when existing_parent_uuids returns [owner, other], the "== [owner]" no-op check fails and the code reports a "conflicts with mapped parent ... kept existing parent" conflict, even though the mapped parent is already linked. Behaviour is safe (nothing is written), but the diagnostic is wrong. Treat "parents contains owner" as already-linked, or word the message as a multi-parent notice.
+
+  Raised in review of PR-2745: https://github.com/joemooney/aida/pull/2745
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T09:08:59.021678874Z
+modified_at: 2026-10-21T09:08:59.021678874Z
+req_type: Task
+tags:
+- from-review:PR-2745
+- regenerability
+- severity:cosmetic
+filed_at:
+  code_sha: 180cd721f3d7ff2a39b596dd19286e3710b0144d
+  branch: pr-2745
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5be3319c9b
+  vendor: claude
+  session: 01a15db01f76

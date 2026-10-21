@@ -1,0 +1,32 @@
+id: 01a15db8-7b04-7353-a9bc-9b66469ed1c6
+spec_id: TASK-2051
+agreed_id: TASK-2051
+title: Anchor TASK-0446 consensus mapping tests to their acceptance criterion IDs
+description: |
+  `aida criteria TASK-0446` reports all four criteria (acce5225, acf44f1a, acdc6aeb, acb58cb4) as untraced. It also lists the new tests in aida-cli-lib/src/regen/consensus.rs (lines 1295-1956) as "Unanchored tests", even though they cover the criteria in substance:
+  - acf44f1a: valid_mapping_from_trusted_default_branch_parents_draft_idempotently, remapped_display_alias_still_parents_by_uuid_and_titles_render_single_line
+  - acdc6aeb: missing_mapping_names_absent_file_or_absent_check, untrusted_or_unresolvable_oracle_commit_is_unavailable_never_missing, invalid_map_blob_at_oracle_commit_is_explicit, stale_references_against_the_selected_corpus_are_explicit, live_graph_drift_between_trial_and_file_leaves_draft_unparented, failed_parent_links_surface_and_never_claim_a_mapped_target
+  - acb58cb4: the tests above plus existing_deduplicated_draft_gains_parent_add_only_and_keeps_different_parent
+  Fix: add criterion-level `trace:TASK-0446.<ac-id>` anchors to these tests so the criteria evidence surface is accurate.
+
+  Raised in review of PR-2745: https://github.com/joemooney/aida/pull/2745
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T09:08:53.636602769Z
+modified_at: 2026-10-21T09:08:53.636602769Z
+req_type: Task
+tags:
+- from-review:PR-2745
+- regenerability
+- severity:minor
+- tests
+filed_at:
+  code_sha: 180cd721f3d7ff2a39b596dd19286e3710b0144d
+  branch: pr-2745
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5be3319c9b
+  vendor: claude
+  session: 01a15db01f76
