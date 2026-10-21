@@ -313,10 +313,8 @@ pub(crate) fn spec_verdict_fallback_for_phase3(
     current_head: Option<&str>,
 ) -> Result<Option<auto_complete::ReviewerOutcome>, auto_complete::PhaseFailure> {
     let path = review_verdict::verdict_path(project_root, spec);
-    let Some(mtime) = std::fs::metadata(&path)
-        .ok()
-        .and_then(|metadata| metadata.modified().ok())
-    else {
+    // trace:TASK-1801 | ai:claude
+    let Some(mtime) = review_verdict::verdict_file_modified(&path) else {
         return Ok(None);
     };
     if mtime < reviewer_started_at {
@@ -389,10 +387,7 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             (format!("{spec}.json"), false),
         ] {
             let cand = dir.join(".aida").join("review-verdicts").join(&name);
-            let Some(mtime) = std::fs::metadata(&cand)
-                .ok()
-                .and_then(|m| m.modified().ok())
-            else {
+            let Some(mtime) = review_verdict::verdict_file_modified(&cand) else {
                 continue;
             };
             if mtime >= reviewer_started_at {
@@ -411,7 +406,7 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
     let mut bodies = candidates
         .iter()
         .map(|(_, path, _)| {
-            std::fs::read_to_string(path).map_err(|e| {
+            review_verdict::read_verdict_body(path).map_err(|e| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoVerdict,
                     format!(
@@ -471,9 +466,11 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
     };
 
     // Publish without overwriting a verdict that appeared at the canonical
-    // path after the caller's initial probe. A hard link is an atomic,
-    // complete-file, no-clobber publication boundary. On collision, include
-    // that evidence in the same reconciliation and leave its bytes untouched.
+    // path after the caller's initial probe. A no-replace rename is an atomic,
+    // complete-file, no-clobber publication boundary that never leaves the
+    // canonical file doubly linked (TASK-1801). On collision, include that
+    // evidence in the same reconciliation and leave its bytes untouched.
+    // trace:TASK-1801 | ai:claude
     let dest_dir = project_root.join(".aida").join("review-verdicts");
     std::fs::create_dir_all(&dest_dir).map_err(|e| {
         auto_complete::PhaseFailure::of(
@@ -510,12 +507,14 @@ pub(crate) fn sibling_verdict_sweep_for_phase3(
             format!("could not stage canonical verdict evidence: {e}"),
         ));
     }
-    let publication = std::fs::hard_link(&temp, &dest);
-    let _ = std::fs::remove_file(&temp);
+    let publication = review_verdict::publish_verdict_no_replace(&temp, &dest);
+    if publication.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
     match publication {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            let canonical = std::fs::read_to_string(&dest).map_err(|read_error| {
+            let canonical = review_verdict::read_verdict_body(&dest).map_err(|read_error| {
                 auto_complete::PhaseFailure::of(
                     auto_complete::FailureKind::NoVerdict,
                     format!(
@@ -583,7 +582,7 @@ pub(crate) fn phase3_head_archive_fallback(
     // TASK-1169) — an older archived approval must never paper over them.
     // trace:TASK-1460 | ai:claude
     read_verdict_file(path).ok()?;
-    let current_sha = std::fs::read_to_string(path)
+    let current_sha = review_verdict::read_verdict_body(path)
         .ok()
         .and_then(|b| review_verdict::parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)?;
@@ -591,7 +590,7 @@ pub(crate) fn phase3_head_archive_fallback(
         return None;
     }
     let archived = review_verdict::archived_verdict_file_for_sha(path, head)?;
-    let mtime = std::fs::metadata(&archived).ok()?.modified().ok()?;
+    let mtime = review_verdict::verdict_file_modified(&archived)?;
     if mtime < started_at {
         return None;
     }
@@ -698,7 +697,10 @@ mod task_1460_phase3_archive_tests {
 pub(crate) fn read_verdict_file(
     path: &std::path::Path,
 ) -> Result<auto_complete::ReviewerOutcome, auto_complete::PhaseFailure> {
-    let body = std::fs::read_to_string(path).map_err(|_| {
+    // Anchored read: a linked verdict directory or a hard-linked file is no
+    // verdict at all, so phase 4 can never merge on redirected evidence.
+    // trace:TASK-1801 | ai:claude
+    let body = review_verdict::read_verdict_body(path).map_err(|_| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             "the reviewer session produced no verdict file — the review did not complete",
@@ -779,7 +781,7 @@ pub(crate) fn read_verdict_file_for_head(
     ) {
         return Ok(outcome);
     }
-    let body = std::fs::read_to_string(path).map_err(|e| {
+    let body = review_verdict::read_verdict_body(path).map_err(|e| {
         auto_complete::PhaseFailure::of(
             auto_complete::FailureKind::NoVerdict,
             format!("could not re-read approval provenance: {e}"),
@@ -836,7 +838,7 @@ pub(crate) fn capture_review_calibration_for_spec(
     verdict_path: &std::path::Path,
     spec: &str,
 ) {
-    let Ok(body) = std::fs::read_to_string(verdict_path) else {
+    let Ok(body) = review_verdict::read_verdict_body(verdict_path) else {
         return;
     };
     let Some(verdict) = reviewer_summary::parse_verdict_file(&body) else {

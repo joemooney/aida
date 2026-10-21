@@ -8629,7 +8629,7 @@ pub(crate) fn handle_queue_rework(
             permission_mode,
             /* sandbox */ false,
             /* no_launch */ false,
-            QueueWorkRoleInput::rework(for_role, for_role_resolved.as_deref()),
+            rework_role_input(for_role, for_role_resolved.as_deref()),
             no_pull,
             /* type_filter */ None,
             /* branch_override */ None,
@@ -8701,13 +8701,6 @@ impl<'a> QueueWorkRoleInput<'a> {
         }
     }
 
-    pub(crate) fn rework(raw_for: Option<&'a str>, resolved_route: Option<&'a str>) -> Self {
-        Self {
-            pickup: resolved_route,
-            explicit: raw_for,
-        }
-    }
-
     pub(crate) fn review_coexistence<'p>(
         &self,
         plan: &'p QueueWorkPlan,
@@ -8715,6 +8708,18 @@ impl<'a> QueueWorkRoleInput<'a> {
         plan.review_target?;
         self.explicit
             .map(|explicit| (explicit, plan.anchor_display.as_str()))
+    }
+}
+
+/// Rework inherits the route while preserving the raw CLI intent separately.
+// trace:TASK-1801 | ai:codex
+pub(crate) fn rework_role_input<'a>(
+    raw_for: Option<&'a str>,
+    resolved_route: Option<&'a str>,
+) -> QueueWorkRoleInput<'a> {
+    QueueWorkRoleInput {
+        pickup: resolved_route,
+        explicit: raw_for,
     }
 }
 
@@ -10624,7 +10629,7 @@ pub(crate) fn rework_findings_block_for_spec(
         .map(|entry| entry.path())
         .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("json"))
         .filter_map(|path| {
-            let body = std::fs::read_to_string(&path).ok()?;
+            let body = review_verdict::read_verdict_body(&path).ok()?;
             let verdict = review_verdict::parse_recorded_verdict(&body)?;
             verdict.kind.blocks_done().then_some((path, verdict))
         })
@@ -13492,7 +13497,7 @@ pub(crate) fn run_standalone_reviewer(
     // `--quiet` suppresses it for scripted consumers that read the
     // verdict file directly. trace:BUG-226 | ai:claude
     if !quiet {
-        let verdict_json = std::fs::read_to_string(verdict_path).ok();
+        let verdict_json = review_verdict::read_verdict_body(verdict_path).ok();
         let result_event = log_path
             .as_deref()
             .and_then(|p| std::fs::read_to_string(p).ok())
@@ -14930,7 +14935,8 @@ pub(crate) fn probe_pr_integration_state(
             let existing: Vec<_> = paths.iter().filter(|path| path.exists()).collect();
             let bodies: Vec<String> = match existing
                 .iter()
-                .map(|path| std::fs::read_to_string(path))
+                // trace:TASK-1801 | ai:claude
+                .map(|path| review_verdict::read_verdict_body(path))
                 .collect::<Result<_, _>>()
             {
                 Ok(bodies) => bodies,

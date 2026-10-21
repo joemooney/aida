@@ -115,6 +115,15 @@ Around that core sit the **launchers** and the **comms**. `aida agent new` and `
 
 **Gotchas.** The `leases` ≠ `conversations` split is the one that bites: `aida session conversations` (formerly `session list`) will *not* show the scoped leases that `aida session start` created — they're different substrates. `aida session show` defaults to the lease covering your cwd (or matched by ancestor PID), so running it from inside a worktree "just works." And `end` leaves the branch untouched by design — ending a session is *not* merging or discarding the work. Note the split between `end` and `reap` on branches too: `end` leaves the branch for you to merge or discard, while `reap` only ever runs *after* the branch has already merged, so deleting it there loses nothing.
 
+A direct `aida session start --role reviewer` keeps ordinary source-branch
+conflict handling: a live implementer lease refuses headless callers and retains
+the conflict prompt at a terminal. Automatic coexistence requires an explicit
+reviewer pickup through `aida queue work PR-N --role reviewer` (or `MR-N`),
+with the backing spec verified against the change's title trailer or branch.
+An inherited reviewer route, an unrelated anchor, or unavailable change metadata
+does not authorize coexistence.
+<!-- trace:TASK-1801 | ai:codex -->
+
 **Chains with** — `aida queue work` ([Chapter 3](03-work-autonomy.md)) leases under the hood; `aida session start --launch` is the manual equivalent. After review + merge, `aida session end` tears the worktree down. Cross-reference `aida agent new` for the multi-process launcher.
 
 ---

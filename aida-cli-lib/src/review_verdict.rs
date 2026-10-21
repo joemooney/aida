@@ -470,7 +470,7 @@ pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<(
     }
     // Verify: an honest "written" claim reads the artefact back rather than
     // trusting the write syscall's return value.
-    match std::fs::read_to_string(path) {
+    match read_verdict_body(path) {
         Ok(on_disk) if on_disk == body => Ok(()),
         Ok(_) => Err(std::io::Error::other(format!(
             "wrote {} but the content on disk does not match what was staged",
@@ -481,6 +481,95 @@ pub(crate) fn write_verdict_atomic(path: &Path, body: &str) -> std::io::Result<(
             path.display()
         ))),
     }
+}
+
+/// Move the staged file `temp` to `dest` only when `dest` does not exist, so
+/// the first publisher wins and a later one gets `AlreadyExists`. The rename
+/// never gives `dest` a second link, which the singly-linked rule in
+/// [`read_verdict_file_with_hook`] would refuse. When the kernel or
+/// filesystem lacks a no-replace rename, the fallback links and then unlinks
+/// `temp`, and if that unlink fails it removes `dest` again rather than leave
+/// a verdict every reader refuses. On error, `temp` may still exist.
+// trace:TASK-1801 | ai:claude
+pub(crate) fn publish_verdict_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    match rename_no_replace(temp, dest) {
+        Err(e)
+            if matches!(
+                e.raw_os_error(),
+                Some(libc::EINVAL) | Some(libc::ENOSYS) | Some(libc::ENOTSUP)
+            ) =>
+        {
+            link_then_unlink(temp, dest, |p| std::fs::remove_file(p))
+        }
+        other => other,
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub(crate) fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
+    let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
+    // The raw syscall works with every libc, including musl builds.
+    // SAFETY: both paths are valid NUL-terminated strings for the call.
+    let rc = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            from.as_ptr(),
+            libc::AT_FDCWD,
+            to.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+pub(crate) fn rename_no_replace(temp: &Path, dest: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let from = std::ffi::CString::new(temp.as_os_str().as_bytes())?;
+    let to = std::ffi::CString::new(dest.as_os_str().as_bytes())?;
+    // SAFETY: both paths are valid NUL-terminated strings for the call.
+    let rc = unsafe { libc::renamex_np(from.as_ptr(), to.as_ptr(), libc::RENAME_EXCL) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+pub(crate) fn rename_no_replace(_temp: &Path, _dest: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::from_raw_os_error(libc::ENOSYS))
+}
+
+/// The fallback for [`publish_verdict_no_replace`]. `unlink` is a parameter so
+/// a test can make it fail. During the hard-link/unlink interval the new
+/// destination has nlink=2, so anchored readers transiently refuse it. This
+/// fail-closed window exists only on the no-RENAME_NOREPLACE fallback; after
+/// successful unlink the destination is singly linked and readable again.
+// trace:TASK-1801 | ai:codex
+fn link_then_unlink(
+    temp: &Path,
+    dest: &Path,
+    unlink: impl Fn(&Path) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    std::fs::hard_link(temp, dest)?;
+    if let Err(e) = unlink(temp) {
+        // `dest` is our own link, made just above. Remove it so no reader
+        // finds a doubly linked verdict.
+        let _ = std::fs::remove_file(dest);
+        return Err(std::io::Error::new(
+            e.kind(),
+            format!("could not finish publishing {}: {e}", dest.display()),
+        ));
+    }
+    Ok(())
 }
 
 pub fn verdict_path(project_root: &Path, spec: &str) -> PathBuf {
@@ -949,7 +1038,7 @@ pub fn rework_findings_comment(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    let body = std::fs::read_to_string(verdict_path(project_root, spec)).ok()?;
+    let body = read_verdict_body(verdict_path(project_root, spec)).ok()?;
     parse_recorded_verdict(&body)
 }
 
@@ -1160,7 +1249,7 @@ pub fn backfill_abbreviated_shas(
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let Ok(body) = std::fs::read_to_string(&path) else {
+        let Ok(body) = read_verdict_body(&path) else {
             continue;
         };
         let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
@@ -1256,11 +1345,7 @@ pub(crate) fn build_verdict_object(
             "review recording requires non-empty recorded_by provenance",
         ));
     }
-    let mut obj = std::fs::read_to_string(path)
-        .ok()
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
+    let mut obj = read_existing_verdict_object(path)?;
     // BUG-1516 criterion 2: normalize AT THE WRITE BOUNDARY rather than
     // teaching every comparison site to tolerate an abbreviated sha. One
     // writer (the drain's forge-resolved head) already always writes full;
@@ -1436,6 +1521,10 @@ pub(crate) fn write_verdict_object(
             );
         }
     }
+    // TASK-1801: read the archive entry before writing anything, so a refused
+    // entry fails the whole record instead of being rewritten without the
+    // rounds it held. trace:TASK-1801 | ai:claude
+    let archive = prepare_archive_round(path, obj)?;
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(obj.clone()))
         .unwrap_or_else(|_| "{}".to_string());
     write_verdict_atomic(path, &format!("{body}\n"))?;
@@ -1445,7 +1534,10 @@ pub(crate) fn write_verdict_object(
     // and it is best-effort for the same reason — but loudly, because a
     // silently missing archive is exactly the invisible loss this fixes.
     // trace:BUG-1539 | ai:claude
-    if let Err(e) = archive_round_by_sha(path, obj) {
+    if let Err(e) = archive
+        .map(|(file, body)| write_verdict_atomic(&file, &body))
+        .unwrap_or(Ok(()))
+    {
         eprintln!(
             "warning: recorded {} but could not archive the round by reviewed commit: {e}",
             path.display()
@@ -1489,30 +1581,38 @@ fn archivable_sha(sha: &str) -> Option<&str> {
 /// overwrite.
 // trace:BUG-1539 | ai:claude
 fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
+    match prepare_archive_round(path, obj)? {
+        Some((archive, body)) => write_verdict_atomic(&archive, &body),
+        None => Ok(()),
+    }
+}
+
+/// The archive file and body [`archive_round_by_sha`] would write for `obj`,
+/// computed without writing. `None` when the round is not archivable. An
+/// existing archive entry the anchored reader refuses is an error: rewriting
+/// it from an empty object would drop the rounds it retained.
+// trace:TASK-1801 | ai:claude
+fn prepare_archive_round(path: &Path, obj: &JsonObj) -> std::io::Result<Option<(PathBuf, String)>> {
     let Some(sha) = round_sha(obj) else {
-        return Ok(());
+        return Ok(None);
     };
     let Some(sha) = archivable_sha(&sha) else {
-        return Ok(());
+        return Ok(None);
     };
     if obj
         .get("verdict")
         .and_then(|v| v.as_str())
         .is_none_or(|v| v.trim().is_empty())
     {
-        return Ok(());
+        return Ok(None);
     }
     let Some(dir) = verdict_archive_dir(path) else {
-        return Ok(());
+        return Ok(None);
     };
     let archive = dir.join(format!("{}.json", sha.to_ascii_lowercase()));
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
-    let mut existing: JsonObj = std::fs::read_to_string(&archive)
-        .ok()
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned())
-        .unwrap_or_default();
+    let mut existing = read_existing_verdict_object(&archive)?;
     archive_current_round(&mut existing, &recording_key(&snapshot));
     if let Some(rounds) = existing.remove("rounds") {
         snapshot.insert("rounds".to_string(), rounds);
@@ -1525,7 +1625,30 @@ fn archive_round_by_sha(path: &Path, obj: &JsonObj) -> std::io::Result<()> {
     }
     let body = serde_json::to_string_pretty(&serde_json::Value::Object(snapshot))
         .unwrap_or_else(|_| "{}".to_string());
-    write_verdict_atomic(&archive, &format!("{body}\n"))
+    Ok(Some((archive, format!("{body}\n"))))
+}
+
+/// The verdict object already at `path`, for a read-modify-write. A missing
+/// file is empty. A present file the anchored reader refuses (linked, too
+/// large, or reached through a linked directory) is an error, so a writer
+/// fails closed instead of replacing the history it could not read.
+/// Unparseable content is still treated as empty, as before.
+// trace:TASK-1801 | ai:claude
+fn read_existing_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
+    match read_verdict_body(path) {
+        Ok(body) => Ok(serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(JsonObj::new()),
+        Err(e) => Err(std::io::Error::new(
+            e.kind(),
+            format!(
+                "refusing to overwrite {}: the existing verdict could not be read safely: {e}",
+                path.display()
+            ),
+        )),
+    }
 }
 
 /// BUG-2186: every recording [`archive_round_by_sha`] kept for the verdict
@@ -1540,16 +1663,20 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
     let Some(dir) = verdict_archive_dir(path) else {
         return Ok(Vec::new());
     };
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
+    // Anchor even an empty archive before enumeration. Otherwise an empty
+    // symlinked directory can silently erase the refusal history. Enumerate
+    // the held directory descriptor rather than rediscovering its path.
+    // trace:TASK-1801 | ai:codex
+    let anchor = match open_verdict_directory(&dir) {
+        Ok(anchor) => anchor,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(format!("could not read {}: {e}", dir.display())),
     };
+    let names = list_verdict_directory(&anchor)
+        .map_err(|e| format!("could not read {}: {e}", dir.display()))?;
     let mut files = Vec::new();
-    for entry in entries {
-        let file = entry
-            .map_err(|e| format!("could not read {}: {e}", dir.display()))?
-            .path();
+    for name in names {
+        let file = dir.join(name);
         if file.extension().is_some_and(|ext| ext == "json") {
             files.push(file);
         }
@@ -1557,7 +1684,7 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
     files.sort();
     let mut recordings = Vec::new();
     for file in files {
-        let text = std::fs::read_to_string(&file)
+        let text = read_verdict_body(&file)
             .map_err(|e| format!("could not read {}: {e}", file.display()))?;
         let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&text) else {
             return Err(format!("{} is not a JSON object", file.display()));
@@ -1581,7 +1708,7 @@ pub(crate) fn archived_recordings(path: &Path) -> Result<Vec<serde_json::Value>,
 // trace:TASK-1460 | ai:claude
 pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<RecordedVerdict> {
     let path = verdict_file_for_sha(project_root, key, sha)?;
-    std::fs::read_to_string(path)
+    read_verdict_body(path)
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
 }
@@ -1594,7 +1721,15 @@ pub fn read_verdict_for_sha(project_root: &Path, key: &str, sha: &str) -> Option
 // trace:TASK-1460 | ai:claude
 pub fn verdict_file_for_sha(project_root: &Path, key: &str, sha: &str) -> Option<PathBuf> {
     let path = verdict_path(project_root, key);
-    let current_at_sha = std::fs::read_to_string(&path)
+    // TASK-1801: a current file that exists but the anchored reader refuses
+    // (linked file or directory) is not evidence, and it must not let an
+    // archived round answer for the key either. Same rule as the merge gate.
+    // trace:TASK-1801 | ai:claude
+    let body = read_verdict_body(&path);
+    if body.is_err() && std::fs::symlink_metadata(&path).is_ok() {
+        return None;
+    }
+    let current_at_sha = body
         .ok()
         .and_then(|b| parse_recorded_verdict(&b))
         .and_then(|v| v.reviewed_sha)
@@ -1658,7 +1793,7 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
                 .is_some_and(|stem| same_reviewed_sha(stem, sha))
         })
         .filter_map(|p| {
-            let v = parse_recorded_verdict(&std::fs::read_to_string(&p).ok()?)?;
+            let v = parse_recorded_verdict(&read_verdict_body(&p).ok()?)?;
             Some((p, v))
         })
         .collect();
@@ -1674,7 +1809,7 @@ fn archived_files_in_dir(dir: &Path, sha: &str) -> Vec<(PathBuf, RecordedVerdict
 /// archived (the same refusal the record path makes). Idempotent.
 // trace:TASK-1460 | ai:claude
 pub fn adopt_direct_write(path: &Path) -> std::io::Result<()> {
-    let Some(obj) = std::fs::read_to_string(path)
+    let Some(obj) = read_verdict_body(path)
         .ok()
         .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
         .and_then(|v| v.as_object().cloned())
@@ -1740,34 +1875,184 @@ impl VerdictCandidate {
 /// a few KiB; anything larger is not one.
 const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 
+/// Open the verdict directory itself without following links, then descend
+/// through archive directories relative to held descriptors. Project-root and
+/// .aida resolution retain their existing behavior; the verdict subtree cannot
+/// redirect a read through a link or a directory replacement.
+// trace:TASK-1801 | ai:codex
+fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let root = path
+        .ancestors()
+        .filter(|p| {
+            p.file_name().is_some_and(|n| n == "review-verdicts")
+                && p.parent()
+                    .and_then(Path::file_name)
+                    .is_some_and(|n| n == ".aida")
+        })
+        .last()
+        .unwrap_or(path);
+    let mut dir = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(root)?;
+    for component in path
+        .strip_prefix(root)
+        .map_err(std::io::Error::other)?
+        .components()
+    {
+        let std::path::Component::Normal(name) = component else {
+            return Err(std::io::Error::other("invalid verdict directory component"));
+        };
+        dir = open_verdict_entry(&dir, name, libc::O_DIRECTORY)?;
+    }
+    Ok(dir)
+}
+
+/// The entry names in the held directory `dir`, read with `fdopendir` on a
+/// duplicate of its descriptor. Needs no `/proc`, so it works on macOS and in
+/// sandboxes without one.
+// trace:TASK-1801 | ai:claude
+fn list_verdict_directory(dir: &std::fs::File) -> std::io::Result<Vec<std::ffi::OsString>> {
+    use std::os::fd::AsRawFd;
+    use std::os::unix::ffi::OsStrExt;
+    // SAFETY: dup returns a new descriptor or -1. fdopendir takes ownership
+    // of it on success, and closedir releases it; on failure we close it.
+    let fd = unsafe { libc::fcntl(dir.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 0) };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let dirp = unsafe { libc::fdopendir(fd) };
+    if dirp.is_null() {
+        let e = std::io::Error::last_os_error();
+        unsafe { libc::close(fd) };
+        return Err(e);
+    }
+    // The duplicate shares the original's offset; start from the beginning.
+    unsafe { libc::rewinddir(dirp) };
+    let mut names = Vec::new();
+    let result = loop {
+        set_errno_zero();
+        // SAFETY: dirp is a valid open DIR*; the entry is copied before the
+        // next readdir call can reuse it.
+        let entry = unsafe { libc::readdir(dirp) };
+        if entry.is_null() {
+            let e = std::io::Error::last_os_error();
+            break match e.raw_os_error() {
+                Some(0) | None => Ok(()),
+                Some(_) => Err(e),
+            };
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr((*entry).d_name.as_ptr()) };
+        let name = std::ffi::OsStr::from_bytes(name.to_bytes());
+        if name != "." && name != ".." {
+            names.push(name.to_os_string());
+        }
+    };
+    unsafe { libc::closedir(dirp) };
+    result.map(|()| names)
+}
+
+/// readdir reports end-of-directory and errors both as NULL; only errno,
+/// cleared beforehand, tells them apart.
+fn set_errno_zero() {
+    // SAFETY: each returns this thread's errno location.
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe {
+        *libc::__errno_location() = 0
+    };
+    #[cfg(target_vendor = "apple")]
+    unsafe {
+        *libc::__error() = 0
+    };
+}
+
+// trace:TASK-1801 | ai:codex
+fn open_verdict_entry(
+    parent: &std::fs::File,
+    name: &std::ffi::OsStr,
+    flags: libc::c_int,
+) -> std::io::Result<std::fs::File> {
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::ffi::OsStrExt;
+    let name = std::ffi::CString::new(name.as_bytes())?;
+    // SAFETY: parent stays open across openat; name is NUL-terminated. The
+    // returned descriptor is owned exactly once by File, including on errors.
+    let fd = unsafe {
+        libc::openat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC | flags,
+        )
+    };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(unsafe { std::fs::File::from_raw_fd(fd) })
+}
+
+/// The one way to read a verdict artefact: every merge/ship-authoritative
+/// reader outside this module goes through it too, so a linked verdict
+/// directory or a hard-linked file is refused everywhere, not just here.
+// trace:TASK-1801 | ai:codex
+// trace:TASK-1801 | ai:claude
+pub(crate) fn read_verdict_body(path: impl AsRef<Path>) -> std::io::Result<String> {
+    read_verdict_file(path.as_ref()).map(|(body, _)| body)
+}
+
+/// Modification time of a verdict artefact, from the same anchored handle the
+/// body is read through. A linked file or directory has no trustworthy mtime.
+// trace:TASK-1801 | ai:claude
+pub(crate) fn verdict_file_modified(path: impl AsRef<Path>) -> Option<std::time::SystemTime> {
+    read_verdict_file(path.as_ref()).ok()?.1.modified().ok()
+}
+
+fn read_verdict_file(path: &Path) -> std::io::Result<(String, std::fs::Metadata)> {
+    read_verdict_file_with_hook(path, || {})
+}
+
+/// The hook permits a deterministic replacement between validation and read in
+/// tests. Both operations must use the same descriptor even after that swap.
+// trace:TASK-1801 | ai:codex
+fn read_verdict_file_with_hook(
+    path: &Path,
+    after_validation: impl FnOnce(),
+) -> std::io::Result<(String, std::fs::Metadata)> {
+    use std::io::Read;
+    use std::os::unix::fs::MetadataExt;
+    let parent = open_verdict_directory(
+        path.parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new(".")),
+    )?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("missing verdict name"))?;
+    let file = open_verdict_entry(&parent, name, 0)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() || meta.nlink() != 1 || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
+        return Err(std::io::Error::other(
+            "verdict must be a bounded, singly linked regular file",
+        ));
+    }
+    after_validation();
+    let mut body = String::new();
+    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
+        .read_to_string(&mut body)?;
+    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
+        return Err(std::io::Error::other("verdict exceeds size limit"));
+    }
+    Ok((body, meta))
+}
+
 /// BUG-2149: a verdict file modified at or after `since` (the reviewer's
 /// start), read as a candidate. A pre-existing file is never a candidate,
 /// and neither is anything but a regular file of bounded size — a symlink to
 /// a FIFO or device must not be able to hang or flood the launcher.
 fn fresh_candidate(path: &Path, since: std::time::SystemTime) -> Option<VerdictCandidate> {
-    // Validate and read the same opened inode. O_NONBLOCK prevents a FIFO
-    // replacement from hanging open; O_NOFOLLOW rejects final-component links.
-    // trace:TASK-1786 | ai:codex
-    use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-        .ok()?;
-    let meta = file.metadata().ok()?;
-    if !meta.file_type().is_file() || meta.len() > MAX_COLLECTED_VERDICT_BYTES {
-        return None;
-    }
+    let (body, meta) = read_verdict_file(path).ok()?;
     let modified = meta.modified().ok()?;
     if modified < since {
-        return None;
-    }
-    let mut body = String::new();
-    file.take(MAX_COLLECTED_VERDICT_BYTES + 1)
-        .read_to_string(&mut body)
-        .ok()?;
-    if body.len() as u64 > MAX_COLLECTED_VERDICT_BYTES {
         return None;
     }
     let obj = serde_json::from_str::<serde_json::Value>(&body)
@@ -2000,7 +2285,7 @@ pub fn migrate_sidecars_to_archive(dir: &Path) -> std::io::Result<usize> {
     files.sort();
     let mut created = 0;
     for path in files {
-        let Some(obj) = std::fs::read_to_string(&path)
+        let Some(obj) = read_verdict_body(&path)
             .ok()
             .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
             .and_then(|v| v.as_object().cloned())
@@ -2079,7 +2364,7 @@ pub fn close_verdict_on_merge(
         return Ok(false);
     }
     let path = verdict_path(project_root, spec);
-    let Ok(body) = std::fs::read_to_string(&path) else {
+    let Ok(body) = read_verdict_body(&path) else {
         return Ok(false);
     };
     let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&body) else {
@@ -2635,7 +2920,7 @@ pub fn audit_verdict_dir(project_root: &Path) -> Vec<NonCanonicalVerdict> {
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| {
             let file = p.file_name()?.to_str()?.to_string();
-            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let body = read_verdict_body(&p).unwrap_or_default();
             let (raw, kind, issues) = audit_verdict_body(&body);
             (!issues.is_empty()).then_some(NonCanonicalVerdict {
                 file,
@@ -2660,7 +2945,7 @@ pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| {
             let spec = p.file_stem()?.to_str()?.to_string();
-            let body = std::fs::read_to_string(&p).unwrap_or_default();
+            let body = read_verdict_body(&p).unwrap_or_default();
             let verdict = parse_recorded_verdict(&body)?;
             Some((spec, verdict))
         })
