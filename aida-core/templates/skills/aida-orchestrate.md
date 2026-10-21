@@ -162,11 +162,19 @@ advisor signoff before any code is written.
    - out-of-scope items;
    - open questions.
 
-   No code at this stage.
+   No code at this stage. Then tell the advisor it is ready, as a request:
+   `aida mailbox send --to advisor --intent request --subject "<SPEC> sketch ready" "<summary>"`.
+   A request with no reply in its thread is a gate wait the lane-liveness
+   job reports after 15 minutes; an FYI mail is not tracked.
+   <!-- trace:STORY-1688 | ai:claude -->
 2. A **different** advisor session verifies the sketch's claims against the
    code, answers the open questions, and posts either
    `ADVISOR SIGNOFF: APPROVED` (with binding amendments) or
-   `CHANGES REQUESTED`.
+   `CHANGES REQUESTED`. It also answers the sketch-ready request in its own
+   thread, `aida mailbox send --to <sender> --in-reply-to <request-id> "<verdict>"`;
+   the reply is what clears the lane-liveness advisor gate, and a spec
+   comment alone does not.
+   <!-- trace:STORY-1688 | ai:claude -->
 3. The spec is implemented **as amended**; the advisor's text wins. If the
    advisor splits it into slices, build slice 1, file the rest as child tasks,
    and tag the parent `closure:pending`.

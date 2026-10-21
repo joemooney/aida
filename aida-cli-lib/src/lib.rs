@@ -182,6 +182,8 @@ mod punt_done;
 mod questions;
 mod queue_cmd;
 mod queue_misc;
+// trace:STORY-1688 | ai:antigravity
+mod lane_liveness;
 mod rel_cards;
 mod relay_stall;
 mod remote_cmd;

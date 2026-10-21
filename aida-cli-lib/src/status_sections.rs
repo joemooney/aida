@@ -1229,8 +1229,7 @@ impl TerminateTarget {
     pub(crate) fn from_live_process(pid: u32) -> Self {
         Self {
             pid,
-            recorded_start_time: aida_core::liveness::process_start_identity_exact(pid)
-                .or_else(|| aida_core::liveness::process_start_identity(pid)),
+            recorded_start_time: aida_core::liveness::process_start_identity(pid),
         }
     }
 }
