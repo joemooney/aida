@@ -1,0 +1,26 @@
+id: 01a15fbf-6af6-7162-ac3d-fdd5f863a180
+spec_id: TASK-2079
+agreed_id: TASK-2079
+title: Drive ownership counts entries in abandoned work queues
+description: |
+  mandate_drive.rs queue_and_drain_claims treats any entry in any .aida-store/registry/queues/*.yaml as ownership. Abandoned queues exist (e.g. codex.yaml entries from 2026-07), so an approved spec left in one is never dispatched. Consider requiring a live owner/session for the queue, or an age bound.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:35:42.710769084Z
+modified_at: 2026-10-21T18:35:42.710769084Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:minor
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15fb19d1e

@@ -1,0 +1,26 @@
+id: 01a15fbf-90cc-7650-bdfa-0113211d768e
+spec_id: TASK-2081
+agreed_id: TASK-2081
+title: 'Corrupt drive state: refusal re-ledgered every tick, no operator notice, empty mandate id'
+description: |
+  mandate_drive.rs run_tick load_state Err path: the state-check refusal is ledgered every 15m with no operator notice, and when no own-principal mandate is active it is ledgered under an empty mandate id.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:35:52.396515394Z
+modified_at: 2026-10-21T18:35:52.396515394Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:minor
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fb19d1e

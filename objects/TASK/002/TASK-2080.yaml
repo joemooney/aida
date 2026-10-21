@@ -1,0 +1,26 @@
+id: 01a15fbf-7dfc-77d0-ad8d-057d55435852
+spec_id: TASK-2080
+agreed_id: TASK-2080
+title: Drive dispatch map never pruned; pre-upgrade dispatches never re-route
+description: |
+  PerMandate.dispatch grows without pruning for specs no longer approved. Specs routed before TASK-1915 (emitted key ending 'approved', no routed_at) never get an epoch bump, so their dead fixers are never re-routed.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:35:47.580660358Z
+modified_at: 2026-10-21T18:35:47.580660358Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:minor
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15fb19d1e

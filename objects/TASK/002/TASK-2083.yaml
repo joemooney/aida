@@ -1,0 +1,26 @@
+id: 01a15fbf-b743-73f0-8695-0f19a6f3144d
+spec_id: TASK-2083
+agreed_id: TASK-2083
+title: 'Add tests: mismatch-path save_state report and store-check Tick::end arm'
+description: |
+  TASK-1915 left two paths untested: the save_state error reported in idle on the principal-mismatch path, and the store-check recheck-failure arm of Tick::end.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:36:02.243644312Z
+modified_at: 2026-10-21T18:36:02.243644312Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:cosmetic
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fb19d1e

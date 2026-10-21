@@ -1,0 +1,26 @@
+id: 01a15fbf-4c50-7e41-82de-0075cbdf6355
+spec_id: TASK-2078
+agreed_id: TASK-2078
+title: Drive dispatch re-routes an unowned spec every 2h while nobody acts
+description: |
+  mandate_drive.rs DispatchEpoch/dispatch_epoch: DISPATCH_STALE (2h) opens a new epoch whenever a routed spec stays unowned, so an advisor that does not act (indistinguishable from a dead fixer) receives a fresh MandateDriveDue event + mail every 2h per spec for the mandate's life. Consider a cap, backoff, or tying staleness to the advisor having seen the item.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:35:34.864680879Z
+modified_at: 2026-10-21T18:35:34.864680879Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:minor
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15fb19d1e

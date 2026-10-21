@@ -1,0 +1,26 @@
+id: 01a15fbf-cd20-7461-81e9-1f7e0f85c445
+spec_id: TASK-2084
+agreed_id: TASK-2084
+title: emit_due_with scans the full event log per due emission
+description: |
+  mandate_drive.rs emit_due_with calls events::read_all for every emission to dedup on (mandate, key); linear in event-log size. Consider an indexed or tail-bounded lookup.
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:36:07.840622752Z
+modified_at: 2026-10-21T18:36:07.840622752Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:cosmetic
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fb19d1e

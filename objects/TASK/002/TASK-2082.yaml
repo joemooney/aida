@@ -1,0 +1,26 @@
+id: 01a15fbf-a4b2-7592-b0e7-2dd23bc5b550
+spec_id: TASK-2082
+agreed_id: TASK-2082
+title: Failed mandate-covered rework-hold release is not ledgered
+description: |
+  rework_hold_release.rs auto_release_with writes a release-rework-hold MandateDriveAction only on success; a release_with Err under a mandate leaves no ledger row (emit_session_ship ledgers both outcomes for ships).
+
+  Raised in review of PR-2804: https://github.com/joemooney/aida/pull/2804#issuecomment-6323616357
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T18:35:57.490665172Z
+modified_at: 2026-10-21T18:35:57.490665172Z
+req_type: Task
+tags:
+- from-review:PR-2804
+- severity:minor
+filed_at:
+  code_sha: 4f8f60a11c92fe1b18f5d59707ca5517282f8bf2
+  branch: pr-2804
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a15fb19d1e
