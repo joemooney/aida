@@ -727,6 +727,8 @@ fn queue_work_coexistence_input_preserves_explicit_intent() {
 }
 
 // trace:BUG-2187 | ai:codex
+// trace:BUG-2187.ac2db2c6 | ai:claude
+// trace:BUG-2187.ac63597b | ai:claude
 #[cfg(unix)]
 #[test]
 fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
@@ -752,4 +754,154 @@ fn bug2187_scrubbed_parent_supplies_headless_reviewer_attribution() {
     let verdict = crate::review_verdict::parse_recorded_verdict(&body).unwrap();
     assert!(verdict.attestation.is_some());
     assert_eq!(verdict.kind, crate::review_verdict::VerdictKind::Approved);
+}
+
+/// BUG-2187: a scrubbed parent and a headless Claude reviewer, as the
+/// production launch sees it. `script` is the mock reviewer's body.
+// trace:BUG-2187 | ai:claude
+#[cfg(unix)]
+fn run_scrubbed_headless_claude(
+    tmp: &std::path::Path,
+    script: impl Fn(&Launch<'_>) -> String,
+) -> (Result<()>, std::path::PathBuf) {
+    run_mock_reviewer_mode(tmp, true, |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        env.set_key("AIDA_OS_WRAP", "0");
+        env.unset_key("AIDA_CONTAINED");
+        std::fs::write(
+            l.project.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[agents]\nenabled = [\"claude\"]\n",
+        )
+        .unwrap();
+        script(l)
+    })
+}
+
+/// A Claude reviewer killed before its result event: stream-json lines with
+/// an assistant draft, and no `aida review record` attempt.
+#[cfg(unix)]
+fn unrecorded_claude_draft(exit: i32) -> String {
+    let init = serde_json::json!({"type":"system","subtype":"init","session_id":"s"});
+    let draft = serde_json::json!({"type":"assistant","message":{"content":[
+        {"type":"text","text":"Verdict draft: request-changes, the leak is unfixed."}
+    ]}});
+    format!("#!/bin/sh\ncat <<'EOF'\n{init}\n{draft}\nEOF\nexit {exit}\n")
+}
+
+/// BUG-2187 AC2: the reviewer exits cleanly without recording. The launch
+/// still fails with the no-verdict code, and even under `--quiet` its error
+/// carries the reviewer's final draft, the retained log and a ready `aida
+/// review record` command filled with the PR's spec, number and head.
+// trace:BUG-2187.aca06f8e | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_unrecorded_headless_review_surfaces_draft_and_record_command() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) =
+        run_scrubbed_headless_claude(tmp.path(), |_| unrecorded_claude_draft(0));
+    let err = result.expect_err("an unrecorded review is never a success");
+    assert_eq!(
+        crate::exit_code_for_error(&err),
+        NO_REVIEW_VERDICT_EXIT_CODE
+    );
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        "{msg}"
+    );
+    assert!(
+        msg.contains(&format!(
+            "aida review record STORY-77 --pr 59 --sha {HEAD} --verdict"
+        )),
+        "{msg}"
+    );
+    assert!(msg.contains(".aida/headless-logs/"), "{msg}");
+    assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
+}
+
+/// BUG-2187 AC2: a reviewer that exits non-zero without recording keeps its
+/// own exit code, and the recovery text is returned rather than lost to a
+/// bare `process::exit`.
+// trace:BUG-2187.aca06f8e | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_failed_headless_reviewer_keeps_exit_code_and_draft() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, _) = run_scrubbed_headless_claude(tmp.path(), |_| unrecorded_claude_draft(3));
+    let err = result.expect_err("a failed reviewer with no verdict is an error");
+    assert_eq!(crate::exit_code_for_error(&err), 3);
+    let msg = format!("{err:#}");
+    assert!(
+        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        "{msg}"
+    );
+    assert!(msg.contains("aida review record STORY-77 --pr 59"), "{msg}");
+}
+
+/// BUG-2187 AC1, interactive arm: the launch-plan reviewer is identified by
+/// its own vendor and seat, and its prompt carries no headless-only
+/// recovery appendix.
+// trace:BUG-2187.ac2db2c6 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_interactive_reviewer_gets_identity_without_headless_appendix() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let argv = tmp.path().join("argv.txt");
+    let (result, _) = run_mock_reviewer(tmp.path(), |l, env| {
+        env.unset_key("AIDA_AGENT_TYPE");
+        env.unset_key("AIDA_AGENT_NAME");
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", HEAD, "").replacen(
+            "#!/bin/sh\n",
+            &format!(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\n[ \"$AIDA_AGENT_TYPE\" = codex ] || exit 0\n[ \"$AIDA_AGENT_NAME\" = codex-reviewer ] || exit 0\n",
+                argv.display()
+            ),
+            1,
+        )
+    });
+    result.expect("the interactive reviewer must carry its recording identity");
+    let argv = std::fs::read_to_string(&argv).unwrap();
+    assert!(argv.contains("/aida-review --pr 59"), "{argv}");
+    assert!(!argv.contains("If recording the verdict fails"), "{argv}");
+}
+
+/// BUG-2187 AC1, interactive resume: a granted Claude resume carries the
+/// reviewer identity even when the launcher's env has none.
+// trace:BUG-2187.ac2db2c6 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug2187_granted_reviewer_resume_sets_identity() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let mock = tmp.path().join("claude");
+    crate::test_exec::write_executable(
+        &mock,
+        "#!/bin/sh\n[ \"$AIDA_AGENT_TYPE\" = claude ] && [ \"$AIDA_AGENT_NAME\" = claude-reviewer ]\n",
+    );
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_AGENT_CMD", Some(mock.to_str().unwrap())),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_CONTAINED", None),
+    ]);
+    let status = crate::session::spawn_claude_resume_with_grant(
+        "019e0000-0000-7000-8000-0000000000cc",
+        None,
+        false,
+        Some("grant-id"),
+    )
+    .unwrap();
+    assert!(status.success(), "the resumed reviewer saw no identity");
 }

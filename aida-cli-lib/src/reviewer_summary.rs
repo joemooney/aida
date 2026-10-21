@@ -626,6 +626,7 @@ pub(crate) fn unrecorded_review_recovery(
     worktree: &Path,
     log_path: Option<&Path>,
     jsonl: Option<&str>,
+    record_template: &str,
 ) -> String {
     let mut out = format!(
         "Unrecorded review artifacts: {}. No approval was accepted.\n",
@@ -648,11 +649,37 @@ pub(crate) fn unrecorded_review_recovery(
             out.push('\n');
         }
     }
+    // The reviewer may never have reached a record attempt; the launcher
+    // still knows the spec, PR and head, so hand over a ready command.
+    // trace:BUG-2187 | ai:claude
+    out.push_str("Record it from an attested reviewer seat with:\n");
+    out.push_str(record_template);
+    out.push('\n');
     out.push_str("Inspect the retained draft/log before retrying; the launcher must not record a verdict on the reviewer's behalf.");
     out
 }
 
-// Claude emits a terminal result; Codex emits completed agent messages.
+/// The `aida review record` command for this PR, filled in with what the
+/// launcher knows; only the verdict, summary and findings are left to choose.
+// trace:BUG-2187 | ai:claude
+pub(crate) fn review_record_template(
+    spec_ids: &[String],
+    pr: u64,
+    head_sha: Option<&str>,
+) -> String {
+    let spec = spec_ids
+        .first()
+        .cloned()
+        .unwrap_or_else(|| format!("PR-{pr}"));
+    format!(
+        "aida review record {spec} --pr {pr} --sha {} --verdict <approved|request-changes|rejected> \
+         --summary '<one line>' [--finding '<finding>' ...]",
+        head_sha.unwrap_or("<PR-HEAD-SHA>")
+    )
+}
+
+// Claude emits a terminal result (or, cut short, assistant text blocks);
+// Codex emits completed agent messages.
 // Agy's current -p argv emits plain response text (no JSON output flag).
 // Unknown/truncated formats retain the raw excerpt rather than losing evidence.
 // trace:BUG-2187 | ai:codex
@@ -671,6 +698,20 @@ fn final_review_draft(log: &str) -> Option<String> {
                 .as_str()
                 .filter(|s| !s.trim().is_empty())
             {
+                return Some(text.to_string());
+            }
+        }
+        // A Claude run killed before its result event: the last assistant
+        // text block is the latest draft. trace:BUG-2187 | ai:claude
+        if event["type"] == "assistant" {
+            let text = event["message"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .rev()
+                .filter(|b| b["type"] == "text")
+                .find_map(|b| b["text"].as_str().filter(|t| !t.trim().is_empty()));
+            if let Some(text) = text {
                 return Some(text.to_string());
             }
         }
@@ -725,16 +766,18 @@ fn last_record_command(jsonl: &str) -> Option<String> {
     None
 }
 
-// The complete, unmodified evidence stays in the named log.
+// The complete, unmodified evidence stays in the named log. A final draft
+// sits at the end of the output, so the excerpt keeps the tail.
 // trace:BUG-2187 | ai:codex
+// trace:BUG-2187 | ai:claude
 fn recovery_excerpt(text: &str) -> String {
-    let mut chars = text.chars();
-    let excerpt: String = chars.by_ref().take(8192).collect();
-    if chars.next().is_some() {
-        format!("{excerpt}\n[truncated; see full reviewer log]")
-    } else {
-        excerpt
+    const LIMIT: usize = 8192;
+    let total = text.chars().count();
+    if total <= LIMIT {
+        return text.to_string();
     }
+    let tail: String = text.chars().skip(total - LIMIT).collect();
+    format!("[earlier output truncated; see full reviewer log]\n{tail}")
 }
 
 #[cfg(test)]
@@ -742,6 +785,7 @@ mod bug2187_recovery_tests {
     use super::*;
 
     // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
     #[test]
     fn recovery_keeps_the_draft_attempted_command_and_log_location() {
         let command = "aida review record STORY-77 --verdict request-changes --sha 1234567 --summary 'fix the leak' --pr 59";
@@ -754,6 +798,7 @@ mod bug2187_recovery_tests {
             Path::new("/review"),
             Some(Path::new("/logs/review.jsonl")),
             Some(&log),
+            "TEMPLATE",
         );
         assert!(out.contains(command));
         assert!(out.contains("Request changes: fix the leak"));
@@ -763,6 +808,7 @@ mod bug2187_recovery_tests {
     }
 
     // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
     #[test]
     fn codex_and_plain_agy_recovery_preserve_the_final_draft() {
         let command = "aida review record STORY-77 --verdict rejected --sha 1234567 --summary fix";
@@ -771,30 +817,103 @@ mod bug2187_recovery_tests {
             serde_json::json!({"type":"item.completed","item":{"type":"command_execution","command":command}}),
             serde_json::json!({"type":"item.completed","item":{"type":"agent_message","text":"Rejected: fix the leak"}})
         );
-        let out =
-            unrecorded_review_recovery(Path::new("/review"), Some(Path::new("/log")), Some(&log));
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&log),
+            "T",
+        );
         assert!(out.contains(command));
         assert!(out.contains("Rejected: fix the leak"));
         let agy = format!("Request changes: fix the leak. Recording failed. Retry {command}");
-        let out =
-            unrecorded_review_recovery(Path::new("/review"), Some(Path::new("/log")), Some(&agy));
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&agy),
+            "T",
+        );
         assert!(out.contains(&agy));
         assert!(out.contains("No approval was accepted"));
     }
 
     // trace:BUG-2187 | ai:codex
+    // trace:BUG-2187.aca06f8e | ai:claude
     #[test]
     fn missing_or_large_draft_still_names_the_preserved_evidence() {
         let missing = unrecorded_review_recovery(
             Path::new("/review"),
             Some(Path::new("/log")),
             Some("invalid"),
+            "T",
         );
         assert!(missing.contains("/review"));
         assert!(missing.contains("/log"));
         let text = "é".repeat(9000);
         let excerpt = recovery_excerpt(&text);
-        assert!(excerpt.contains("[truncated; see full reviewer log]"));
+        assert!(excerpt.starts_with("[earlier output truncated; see full reviewer log]"));
         assert!(excerpt.len() < text.len());
+    }
+
+    /// Over-limit output keeps its end, where the final draft is.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn oversized_plain_output_keeps_the_final_draft_at_its_tail() {
+        let agy = format!(
+            "{}\nFINAL DRAFT: request changes, fix the leak",
+            "x".repeat(20_000)
+        );
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&agy),
+            "T",
+        );
+        assert!(
+            out.contains("FINAL DRAFT: request changes, fix the leak"),
+            "{out}"
+        );
+        assert!(out.contains("[earlier output truncated; see full reviewer log]"));
+        assert!(out.len() < agy.len());
+    }
+
+    /// A Claude log cut off before its result event falls back to the last
+    /// assistant text, not the head of the raw JSONL.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn claude_log_without_result_recovers_the_last_assistant_text() {
+        let log = [
+            serde_json::json!({"type":"system","subtype":"init","session_id":"s"}),
+            serde_json::json!({"type":"assistant","message":{"content":[{"type":"text","text":"Looking at the diff."}]}}),
+            serde_json::json!({"type":"assistant","message":{"content":[
+                {"type":"text","text":"Verdict draft: request-changes, the leak is unfixed."},
+                {"type":"tool_use","name":"Bash","input":{"command":"ls"}}
+            ]}}),
+        ]
+        .map(|v| v.to_string())
+        .join("\n");
+        let out = unrecorded_review_recovery(
+            Path::new("/review"),
+            Some(Path::new("/log")),
+            Some(&log),
+            "T",
+        );
+        assert!(
+            out.contains("Verdict draft: request-changes, the leak is unfixed."),
+            "{out}"
+        );
+        assert!(!out.contains("\"subtype\":\"init\""), "{out}");
+    }
+
+    /// With no attempted command, the launcher's own template is printed.
+    // trace:BUG-2187.aca06f8e | ai:claude
+    #[test]
+    fn recovery_prints_a_ready_record_command_when_none_was_attempted() {
+        let template = review_record_template(&["STORY-77".into()], 59, Some("abc1234"));
+        assert!(template.starts_with(
+            "aida review record STORY-77 --pr 59 --sha abc1234 --verdict <approved|request-changes|rejected>"
+        ));
+        let out = unrecorded_review_recovery(Path::new("/review"), None, Some("draft"), &template);
+        assert!(out.contains(&template), "{out}");
+        assert!(review_record_template(&[], 59, None).contains("PR-59 --pr 59 --sha <PR-HEAD-SHA>"));
     }
 }

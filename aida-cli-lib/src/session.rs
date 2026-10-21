@@ -1444,7 +1444,7 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
     // trace:BUG-2187 | ai:codex
-    apply_headless_child_agent_identity(&mut cmd, vendor, seat.as_str());
+    apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1623,6 +1623,8 @@ pub(crate) fn spawn_claude_resume_with_grant(
     if let Some(grant) = grant_id {
         cmd.env(crate::seat_authority::GRANT_ENV, grant)
             .env("AIDA_SESSION_ROLE", "reviewer");
+        // trace:BUG-2187 | ai:claude
+        apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, "reviewer");
     }
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -1821,6 +1823,8 @@ pub(crate) fn spawn_reviewer_launch_plan_granted(
     cmd.args(&plan.args)
         .env(crate::seat_authority::GRANT_ENV, &grant.id)
         .env("AIDA_SESSION_ROLE", "reviewer");
+    // trace:BUG-2187 | ai:claude
+    apply_child_agent_identity(&mut cmd, plan.vendor, "reviewer");
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -3700,7 +3704,7 @@ pub(crate) fn build_exec_vendor_headless_command(
     // inherited from the launcher, whose grant may carry delegable seats.
     apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
     // trace:BUG-2187 | ai:codex
-    apply_headless_child_agent_identity(&mut child_cmd, vendor, seat);
+    apply_child_agent_identity(&mut child_cmd, vendor, seat);
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -3771,15 +3775,12 @@ pub(crate) fn apply_headless_child_seat_env(
     scrub_launcher_session_env(cmd);
 }
 
-/// Attribution comes from this launch's vendor and seat, never the launcher.
+/// Attribution comes from this launch's vendor and seat, never the launcher
+/// (headless and interactive child launches alike).
 /// These labels confer no authority: recording still requires its existing
 /// reviewer grant and independent-session attestation.
 // trace:BUG-2187 | ai:codex
-fn apply_headless_child_agent_identity(
-    cmd: &mut std::process::Command,
-    vendor: HeadlessVendor,
-    seat: &str,
-) {
+fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessVendor, seat: &str) {
     let agent_type = match vendor {
         HeadlessVendor::Claude => "claude",
         HeadlessVendor::Codex => "codex",
@@ -4228,7 +4229,7 @@ pub(crate) fn spawn_claude_headless_resume_granted(
         .env(ceiling_key, ceiling_value);
     // A resume launches Claude even when the launcher is another harness.
     // trace:BUG-2187 | ai:codex
-    apply_headless_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
+    apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
