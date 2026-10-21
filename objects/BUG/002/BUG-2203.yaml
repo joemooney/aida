@@ -1,0 +1,20 @@
+id: 01a15de1-51d6-70d0-a0e0-7cff2f1e65ff
+spec_id: BUG-2203
+agreed_id: BUG-2203
+title: aida pr ship appends a bare (SPEC) trailer to a '(Refs SPEC)' subject, so a non-completing slice completes its spec
+description: 'Seen 2026-10-21 02:51: PR-2787''s subject ended ''(Refs BUG-2169)''. The squash commit on main is b66e4d93b8 ''... slice 2 (Refs BUG-2169) (BUG-2169)'', and BUG-2169 went to completed with slices S3-S5 still open. Earlier tonight #2790 (Refs TASK-1952) got ''(Refs TASK-1952) (TASK-1952)'' too. This supersedes TASK-2035 (folded into the TASK-1951 sweep at 22:48, now promoted because it causes wrong completions). Acceptance: (1) a subject whose trailing group is (Refs X[, Y]) never gets a bare completion trailer appended, and the branch-name fallback does not add one either; (2) merge-time completion skips Refs IDs; (3) a regression test ships a Refs-subject PR and asserts the merge subject and that the spec status is unchanged; (4) aida pr ship prints which IDs it will complete before merging.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T09:53:30.070573682Z
+modified_at: 2026-10-21T09:53:30.070573682Z
+req_type: Bug
+filed_at:
+  code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 68d66b1e36
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
