@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-21T17:22:53.444683218Z
+modified_at: 2026-10-21T17:24:44.424352586Z
 req_type: Story
 comments:
 - id: 01a15f00-6963-7640-93e7-f043fd18b5ff
@@ -86,6 +86,34 @@ comments:
     Advisor signoff requested on identity/lifecycle/schema approach, proposed role audience/migration policy, namespace/bounds/unlabelled defaults, and Agy capability gate. No implementation tests or builds run for this design-only review.
   created_at: 2026-10-21T17:22:53.444683218Z
   modified_at: 2026-10-21T17:22:53.444683218Z
+- id: 01a15f7e-7108-7c92-9701-c9b0c21064d0
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF (2026-10-21 10:35) on SKETCH v1: APPROVED WITH CONDITIONS.
+
+    Approved as sketched:
+    - Identity and lifetime: a common-root logical recipient UUID owning one handle; atomic reservation under a common-root lock; native-session binding; never identify by a shared daemon PID or inherited env; resume reconnects and a new session gets a new UUID.
+    - Naming as confirmed by the operator, plus the proposed bounds: first character alphanumeric, max 63, reserved role/vendor/person aliases, invalid names refused with a suggested spelling.
+    - One shared typed resolver for CLI, MCP, mentions, notices and inbox. Unknown or dead handles refuse before writing.
+    - Additive message metadata: keep IDs, threads, tombstones and receipts; notices never acknowledge; per-UUID acknowledgement.
+    - Relay: one UUID per run across rotations; accept mail in the gaps; unread mail stays with the original run; the undelivered-notice outbox is exactly-once and never bounces a bounce; label reuse warns with exact counts and only hands over explicitly; headless reuse needs an explicit choice.
+    - Handles confer NO authority. Keep the 'no authority escalation' black-box case mandatory.
+    - Agy capability gate: verify Agy's real startup and per-turn hook surface before claiming the cross-vendor acceptance item. If Agy has no next-turn hook, bring the acceptance adjustment back to the advisor; do not fake it.
+
+    Conditions:
+    C1. Role audience policy, simplified: snapshot live readers at send and print their names. ZERO readers REFUSES by default (non-zero exit, with a hint to name a handle or pass an explicit --queue-for-role). Do NOT silently queue for a future cohort; that is exactly the BUG-2204 failure. With --queue-for-role, assign the queued mail once, to the first eligible reader. Multiple readers each get their own receipt and the warning lists them.
+    C2. Re-slice so the first PR is small and fixes the live failure without schema change:
+      PR1: the shared resolver, refusal of unknown and dead recipients, and the role zero/many warnings and refusal (C1) over TODAY's identities. No UUIDs, no migration. Closes the BUG-2204 delivery half.
+      PR2: handles: the reservation/binding, UUID, additive schema and migration, agent ls and statusline.
+      PR3: raw-client startup coverage (Claude/Codex/Agy) behind the capability gate.
+      PR4: relay lifetime: stable label, gap queue, end/crash bounces, reuse handover, coordinated with an aida-relay version gate.
+      Only PR4 completes STORY-1843. The others use 'Refs STORY-1843'.
+    C3. Migration must be dry-run first. Ship 'aida mailbox migrate --dry-run' (the reconciliation report) in PR2 and run it against this repo's real store. The advisor reviews the report before any write-mode migration ships.
+
+    Implementation may start with PR1. Each PR gets an independent attested review. PR2 and PR4 touch identity and lifecycle, so their reviews are STRICT.
+  created_at: 2026-10-21T17:24:44.424352586Z
+  modified_at: 2026-10-21T17:24:44.424352586Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
