@@ -102,8 +102,10 @@ the merge will complete; `--dry-run` prints the same line.
 
 A title ending in `(Refs SPEC-ID[, …])` is a reference, not a trailer: ship
 appends no completion trailer to it, not even from the branch name, and the
-merge completes nothing. Merge-time completion also skips any id named in a
-`(Refs …)` group of a commit, even when a bare `(SPEC-ID)` group follows it.
+merge completes nothing. Merge-time completion reads intent from the line
+carrying the trailer: an id the subject names in a `(Refs …)` group is not
+completed even when a bare `(SPEC-ID)` group follows it, while a squash-body
+bullet such as `* slice (Refs SPEC-ID)` never suppresses the subject's trailer.
 <!-- trace:BUG-2203 | ai:claude -->
 
 **Drive-owned PRs.** A live drive's PR remains protected by its independent

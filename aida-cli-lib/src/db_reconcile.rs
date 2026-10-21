@@ -529,6 +529,65 @@ pub(crate) fn open_pr_withheld_message(
     }
 }
 
+/// BUG-2203: which of a commit's trailer ids are `(Refs …)` references rather
+/// than completions. Completion intent comes from the line that carries the
+/// trailer: the subject's Refs groups suppress only the subject's ids, and a
+/// squash-body bullet (`* slice (Refs X)`, one per branch commit) never
+/// suppresses the subject's `(X)` — it only keeps its OWN line's `(X)` from
+/// counting (`* slice (Refs X) (X)`).
+// trace:BUG-2203 | ai:claude
+pub(crate) struct RefsCompletionFilter {
+    subject_refs: Vec<String>,
+    /// Body trailer ids whose every body line also names them in a Refs group.
+    body_refs_only: Vec<String>,
+}
+
+impl RefsCompletionFilter {
+    pub(crate) fn subject(&self, id: &str) -> bool {
+        self.subject_refs.iter().any(|r| r.eq_ignore_ascii_case(id))
+    }
+
+    pub(crate) fn body(&self, id: &str) -> bool {
+        self.subject(id)
+            || self
+                .body_refs_only
+                .iter()
+                .any(|r| r.eq_ignore_ascii_case(id))
+    }
+}
+
+// trace:BUG-2203 | ai:claude
+pub(crate) fn refs_completion_filter(subject: &str, message: &str) -> RefsCompletionFilter {
+    use std::collections::BTreeMap;
+    // id → does some body line carry it as a completion (not a Refs) trailer?
+    let mut body: BTreeMap<String, bool> = BTreeMap::new();
+    let mut lines = message.lines().skip_while(|l| l.trim().is_empty());
+    lines.next();
+    for line in lines {
+        if crate::pr_lookup::body_line_is_code_like(line) {
+            continue;
+        }
+        let mut ids = Vec::new();
+        crate::pr_lookup::push_paren_spec_ids_from_line(line, &mut ids);
+        if ids.is_empty() {
+            continue;
+        }
+        let line_refs = crate::pr_ship::refs_spec_ids_in_text(line);
+        for id in ids {
+            let completes = !line_refs.iter().any(|r| r.eq_ignore_ascii_case(&id));
+            *body.entry(id.to_ascii_uppercase()).or_insert(false) |= completes;
+        }
+    }
+    RefsCompletionFilter {
+        subject_refs: crate::pr_ship::refs_spec_ids_in_text(subject),
+        body_refs_only: body
+            .into_iter()
+            .filter(|(_, completes)| !completes)
+            .map(|(id, _)| id)
+            .collect(),
+    }
+}
+
 /// BUG-2134: does a commit message's BODY (everything after the subject line)
 /// carry a [`crate::pr_ship::NO_COMPLETE_BODY_MARKERS`] line? A squash merge
 /// copies the PR body into the commit body, so this is where a non-completing
@@ -2087,13 +2146,12 @@ pub(crate) fn auto_bump_done_to_completed_with(
             && !commit_declares_non_completing(message)
             && !crate::pr_ship::is_non_completing_slice_commit_subject(subject)
         {
-            // BUG-2203: an id named in any `(Refs …)` group of the commit is a
+            // BUG-2203: an id the SUBJECT names in a `(Refs …)` group is a
             // reference, never a completion — even when a bare `(X)` trailer
             // follows it (`… (Refs BUG-2169) (BUG-2169)`). trace:BUG-2203 | ai:claude
-            let refs_ids = crate::pr_ship::refs_spec_ids_in_text(message);
-            let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
+            let is_ref = refs_completion_filter(subject, message);
             for spec_id in extract_spec_ids_from_commit(subject) {
-                if is_ref(&spec_id) {
+                if is_ref.subject(&spec_id) {
                     continue;
                 }
                 candidates.entry(spec_id).or_insert_with(|| sha.to_string());
@@ -2113,7 +2171,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
             // the backstops. trace:BUG-536 | ai:claude
             if extract_pr_number_from_commit_subject(subject).is_some() {
                 for spec_id in extract_referenced_spec_ids_from_commit(message) {
-                    if is_ref(&spec_id) {
+                    if is_ref.body(&spec_id) {
                         continue;
                     }
                     candidates.entry(spec_id).or_insert_with(|| sha.to_string());
@@ -3040,10 +3098,9 @@ pub(crate) fn handle_db_reconcile_status(
         {
             // BUG-2203: skip `(Refs …)` ids, matching the live auto-bump scan.
             // trace:BUG-2203 | ai:claude
-            let refs_ids = crate::pr_ship::refs_spec_ids_in_text(message);
-            let is_ref = |id: &str| refs_ids.iter().any(|r| r.eq_ignore_ascii_case(id));
+            let is_ref = refs_completion_filter(subject, message);
             for id in extract_spec_ids_from_commit(subject) {
-                if is_ref(&id) {
+                if is_ref.subject(&id) {
                     continue;
                 }
                 if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
@@ -3060,7 +3117,7 @@ pub(crate) fn handle_db_reconcile_status(
             // single-trailer squash. trace:BUG-536 | ai:claude
             if extract_pr_number_from_commit_subject(subject).is_some() {
                 for id in extract_referenced_spec_ids_from_commit(message) {
-                    if is_ref(&id) {
+                    if is_ref.body(&id) {
                         continue;
                     }
                     if let std::collections::btree_map::Entry::Vacant(slot) = candidates.entry(id) {
