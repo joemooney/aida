@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T23:00:01.795083421Z
-modified_at: 2026-10-21T05:34:23.481420621Z
+modified_at: 2026-10-21T05:34:27.604776545Z
 req_type: Task
 relationships:
 - rel_type:
@@ -340,6 +340,12 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-1800 ruling mostly implemented, but a deleted spec referenced by its agreed_id is dropped as dangling (fail-open on authority path, violates ruling item 3). TASK-1803 passes.. No triage reason was given.'
   created_at: 2026-10-21T05:34:23.481412880Z
   modified_at: 2026-10-21T05:34:23.481412880Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15cf4-2914-7490-9cca-cff3d90f8eef
+  author: joe
+  content: 'ADVISOR 22:35: #2721 merged (audit of 18 of 50 cases, docs only, STANDARD PASS). AC1 is closed at 18: no more audit PRs. Next is AC2, which reduces the incidental trace-attribution rate (item-level attribution for Rust modules, hunk scoping for non-Rust files) without dropping a true supervised touch, stays ADD-only and fails closed, with the 18 inventoried cases as the regression corpus. It changes mandate ship authority, so it needs a SKETCH on this spec and advisor signoff first: name the attribution unit, how a touch is proven true vs incidental, the fail-closed fallback, and the corpus test shape. Status: approved, waiting for the sketch.'
+  created_at: 2026-10-21T05:34:27.604776545Z
+  modified_at: 2026-10-21T05:34:27.604776545Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a14764-8f55-7713-9a13-a6c96154963e
