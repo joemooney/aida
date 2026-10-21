@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:19:38.969438189Z
-modified_at: 2026-10-21T08:15:53.591724034Z
+modified_at: 2026-10-21T08:15:56.876488644Z
 req_type: Bug
 relationships:
 - rel_type: Supersedes
@@ -65,6 +65,12 @@ comments:
   created_at: 2026-10-16T14:21:23.893623443Z
   modified_at: 2026-10-16T14:21:23.893623443Z
   session_id: b307b6fe-d611-428b-bc2a-5df6287d4592
+- id: 01a15d88-01cc-7410-ba25-ba0082f86aee
+  author: joe
+  content: 'ADVISOR 01:16 burndown: folded TASK-2046 (""Anchor host_recorded_clone to the launcher''s main, not a process-wide host-main set"") into this spec as an item.'
+  created_at: 2026-10-21T08:15:56.876488644Z
+  modified_at: 2026-10-21T08:15:56.876488644Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a143cc-f836-7583-b190-7823068c7b77
   author: aida-session-start
