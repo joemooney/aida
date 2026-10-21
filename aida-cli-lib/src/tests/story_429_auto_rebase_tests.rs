@@ -91,7 +91,7 @@ fn clean_auto_rebase_proceeds_without_retrying_preflight() {
     // on unrelated (docs-only) PRs. A real repo here contains every git
     // operation to this throwaway dir. trace:BUG-409 | ai:claude
     let g = |args: &[&str]| {
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .current_dir(tmp.path())
             .args(args)
             .output()

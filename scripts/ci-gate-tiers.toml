@@ -99,6 +99,7 @@
 "Check Rust test portability ratchet" = "fast"
 "Prose-classification rule fixtures" = "fast"
 "Executable fixture ratchet" = "fast"
+"Test git auto-maintenance ratchet" = "fast"  # trace:BUG-2191 | ai:claude
 "Verify pure-move slice stack fixtures" = "fast"
 "Sccache tmpdir detection fixtures" = "fast"  # trace:BUG-2135 | ai:antigravity
 "Run clippy" = "full"
@@ -136,4 +137,4 @@
 "Doc-intent gate (surface changes mark doc-impact)" = "same `.aida-store` fetch-and-fast-forward as the trace gate above"
 # trace:STORY-1853 | ai:claude
 "Test shard root hygiene" = "asserts an ephemeral CI checkout has no untracked root entries; local worktrees can contain operator scratch files"
-"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py target/test-run.log` still prints local timings"
+"Test time budget" = "its budgets are CI-runner seconds on the debug profile; a local run is a different profile on a shared host. `python3 scripts/test-timings.py <log> --junit <target dir>/nextest/ci/junit-*.xml` still prints local per-test timings"

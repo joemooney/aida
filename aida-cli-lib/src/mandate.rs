@@ -28,6 +28,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
@@ -48,6 +49,33 @@ pub(crate) const MAX_TTL: Duration = Duration::hours(24);
 pub(crate) const ISSUE_SKEW: Duration = Duration::minutes(5);
 /// The tag that keeps a spec human-only whatever the mandate says.
 pub(crate) const OPERATOR_ONLY_TAG: &str = "operator-only";
+/// STORY-1700: the `kind` of a drive mandate (ADR-77).
+pub(crate) const KIND_DRIVE: &str = "drive";
+
+/// STORY-1700: what a mandate covers beyond its on-disk `scope`. A closed
+/// set with no catch-all arm, so an unknown scope string fails
+/// deserialization and [`load_valid`] ignores that record (fail closed).
+/// Relay restart is not a scope here (STORY-1706).
+// trace:STORY-1700 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Scope {
+    ShipHeld,
+    SketchSignoff,
+    Dispatch,
+}
+
+impl Scope {
+    pub(crate) const ALL: [Scope; 3] = [Scope::ShipHeld, Scope::SketchSignoff, Scope::Dispatch];
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::ShipHeld => SCOPE_SHIP_HELD,
+            Self::SketchSignoff => "sketch-signoff",
+            Self::Dispatch => "dispatch",
+        }
+    }
+}
 
 /// One mandate record.
 // trace:STORY-1698 | ai:claude
@@ -71,11 +99,37 @@ pub(crate) struct Mandate {
     pub revoked_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub revoked_by: Option<String>,
+    /// STORY-1700: scopes beyond `scope`. `scope` stays `ship-held` on disk,
+    /// so a STORY-1698 reader still loads a drive record as ship-held.
+    // trace:STORY-1700 | ai:claude
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub scopes: BTreeSet<Scope>,
+    /// STORY-1700: `Some("drive")` for a drive mandate; absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
 }
 
 impl Mandate {
     fn is_active_at(&self, now: DateTime<Utc>) -> bool {
         self.revoked_at.is_none() && now < self.expires_at
+    }
+
+    /// STORY-1700: a drive mandate (ADR-77)?
+    // trace:STORY-1700 | ai:claude
+    pub(crate) fn is_drive(&self) -> bool {
+        self.kind.as_deref() == Some(KIND_DRIVE)
+    }
+
+    /// STORY-1700: `scope` (always ship-held) plus `scopes`.
+    // trace:STORY-1700 | ai:claude
+    pub(crate) fn effective_scopes(&self) -> BTreeSet<Scope> {
+        let mut out = self.scopes.clone();
+        out.insert(Scope::ShipHeld);
+        out
+    }
+
+    pub(crate) fn covers(&self, scope: Scope) -> bool {
+        self.effective_scopes().contains(&scope)
     }
 }
 
@@ -182,6 +236,10 @@ fn record_problem(m: &Mandate, stem: &str, principal: &str, now: DateTime<Utc>) 
     }
     if m.scope != SCOPE_SHIP_HELD {
         return Some(format!("unknown scope `{}`", m.scope));
+    }
+    // trace:STORY-1700 | ai:claude
+    if let Some(kind) = m.kind.as_deref().filter(|k| *k != KIND_DRIVE) {
+        return Some(format!("unknown kind `{kind}`"));
     }
     if m.principal.trim() != principal.trim() || principal.trim().is_empty() {
         return Some(format!(
@@ -295,6 +353,31 @@ pub(crate) fn current_state() -> MandateState {
     current_state_reporting(false)
 }
 
+/// STORY-1700 (R3): is mandate `id` still the newest active mandate at
+/// `now`? Re-reads `dir` (stop tombstones included); nothing is cached. The
+/// drive tick calls this immediately before every side effect.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn recheck(
+    dir: &Path,
+    id: &str,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> std::result::Result<Mandate, MandateRefusal> {
+    let (valid, _) = load_valid(dir, principal, now);
+    if let MandateState::Active(m) = state_at(&valid, now) {
+        if m.id == id {
+            return Ok(m);
+        }
+    }
+    match valid.iter().find(|m| m.id == id) {
+        Some(m) if m.revoked_at.is_none() && now >= m.expires_at => {
+            Err(MandateRefusal::Expired { id: id.into() })
+        }
+        // Stopped, superseded, or its record vanished: no longer this mandate.
+        _ => Err(MandateRefusal::Stopped { id: id.into() }),
+    }
+}
+
 /// Parse `--ttl`: `<n>h` or `<n>m`, more than zero and at most [`MAX_TTL`].
 // trace:STORY-1698 | ai:claude
 pub(crate) fn parse_ttl(raw: &str) -> Result<Duration> {
@@ -331,6 +414,33 @@ pub(crate) fn start(
     include_supervised: bool,
     now: DateTime<Utc>,
 ) -> Result<Mandate> {
+    start_with(
+        dir,
+        human,
+        principal,
+        ttl,
+        reason,
+        include_supervised,
+        false,
+        now,
+    )
+}
+
+/// [`start`], optionally as a STORY-1700 drive mandate: `drive` records
+/// `kind = "drive"` and every [`Scope`]. Same floor, cap and no-extension
+/// rule.
+// trace:STORY-1700 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn start_with(
+    dir: &Path,
+    human: &dyn Fn() -> Result<()>,
+    principal: &str,
+    ttl: Duration,
+    reason: Option<String>,
+    include_supervised: bool,
+    drive: bool,
+    now: DateTime<Utc>,
+) -> Result<Mandate> {
     if let Err(err) = human() {
         bail!("a mandate can only be started by a human at an interactive terminal ({err})");
     }
@@ -361,6 +471,12 @@ pub(crate) fn start(
         expires_at: now + ttl,
         revoked_at: None,
         revoked_by: None,
+        scopes: if drive {
+            Scope::ALL.into_iter().collect()
+        } else {
+            BTreeSet::new()
+        },
+        kind: drive.then(|| KIND_DRIVE.to_string()),
     };
     write_private(
         &dir.join(format!("{}.json", mandate.id)),
@@ -682,6 +798,206 @@ fn parse_version(text: &str) -> std::result::Result<aida_core::Requirement, Stri
     Ok(req)
 }
 
+/// One git invocation in the store repository; `Err` carries git's stderr.
+// trace:BUG-2179 | ai:claude
+fn store_git(
+    store_root: &Path,
+    args: &[&str],
+    stdin: Option<&[u8]>,
+) -> std::result::Result<Vec<u8>, String> {
+    use std::io::Write;
+    let mut cmd = aida_core::git_ops::host_git_command(store_root);
+    cmd.args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .stdin(if stdin.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        });
+    let mut child = cmd.spawn().map_err(|e| format!("git failed to run: {e}"))?;
+    if let Some(input) = stdin {
+        // A writer thread, so a large reply cannot deadlock against the input.
+        let mut pipe = child.stdin.take().ok_or("git stdin unavailable")?;
+        let input = input.to_vec();
+        let writer = std::thread::spawn(move || pipe.write_all(&input));
+        let out = child
+            .wait_with_output()
+            .map_err(|e| format!("git failed: {e}"))?;
+        writer
+            .join()
+            .map_err(|_| "git stdin writer panicked".to_string())?
+            .map_err(|e| format!("cannot write to git: {e}"))?;
+        return git_output(out);
+    }
+    git_output(
+        child
+            .wait_with_output()
+            .map_err(|e| format!("git failed: {e}"))?,
+    )
+}
+
+fn git_output(out: std::process::Output) -> std::result::Result<Vec<u8>, String> {
+    if out.status.success() {
+        Ok(out.stdout)
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+/// BUG-2179: the store history the mandate exclusion check reads, gathered in
+/// a bounded number of git invocations however many specs a PR traces: one
+/// `git log --all` walk over every spec's object path, one `git cat-file
+/// --batch` for every stored version, and (only when some ID has no current
+/// record) one `-G` walk for the aliases. Strictness is the per-spec walks':
+/// every ref (`--all`), every version that added or changed the object,
+/// and fail-closed per spec when a version cannot be read.
+// trace:BUG-2179 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct StoreHistoryBatch {
+    /// Upper-cased spec ID → every stored version, each expanded by its
+    /// recorded field changes; `Err` when one of its versions is unreadable.
+    versions: std::collections::BTreeMap<
+        String,
+        std::result::Result<Vec<aida_core::Requirement>, String>,
+    >,
+}
+
+impl StoreHistoryBatch {
+    /// Every stored version of `spec_id` (`Ok(empty)` when no ref ever held it).
+    pub(crate) fn versions(
+        &self,
+        spec_id: &str,
+    ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
+        self.versions
+            .get(&spec_id.to_ascii_uppercase())
+            .cloned()
+            .unwrap_or_else(|| Err(format!("{spec_id} was not part of the history read")))
+    }
+
+    /// Read every version of each of `spec_ids`. `Err` when the store history
+    /// cannot be walked at all.
+    pub(crate) fn read(
+        store_root: &Path,
+        spec_ids: &[String],
+    ) -> std::result::Result<Self, String> {
+        let mut batch = Self::default();
+        let mut paths: Vec<(String, String)> = Vec::new();
+        for id in spec_ids {
+            let key = id.to_ascii_uppercase();
+            if batch.versions.contains_key(&key) {
+                continue;
+            }
+            match aida_core::object_store::relative_object_path(id) {
+                Ok(rel) => {
+                    batch.versions.insert(key.clone(), Ok(Vec::new()));
+                    paths.push((key, rel));
+                }
+                Err(e) => {
+                    batch
+                        .versions
+                        .insert(key, Err(format!("no object path for {id}: {e}")));
+                }
+            }
+        }
+        if paths.is_empty() {
+            return Ok(batch);
+        }
+        // Deletions carry no body to read; every other touching commit does.
+        // The walk is limited by each path's top directory, not by every path:
+        // git checks each pathspec against every commit, so a PR tracing ~100
+        // specs took ~50 s over a ~50k-commit store, while one directory
+        // pathspec takes seconds whatever the spec count. The names it lists
+        // are filtered to the wanted paths below.
+        let mut tops: Vec<&str> = paths
+            .iter()
+            .map(|(_, rel)| rel.split_once('/').map_or(rel.as_str(), |(top, _)| top))
+            .collect();
+        tops.sort_unstable();
+        tops.dedup();
+        let mut args: Vec<&str> = vec![
+            "log",
+            "--all",
+            "--format=%x00%H",
+            "--diff-filter=ACMRT",
+            "--name-only",
+            "--",
+        ];
+        args.extend(tops);
+        let log = store_git(store_root, &args, None)?;
+        let by_path: std::collections::BTreeMap<&str, &str> = paths
+            .iter()
+            .map(|(key, rel)| (rel.as_str(), key.as_str()))
+            .collect();
+        // `<sha>:<path>` per version, in log order (newest first).
+        let mut wanted: Vec<(String, String)> = Vec::new();
+        for record in String::from_utf8_lossy(&log).split('\0').skip(1) {
+            let mut lines = record.lines().map(str::trim).filter(|l| !l.is_empty());
+            let Some(sha) = lines.next() else { continue };
+            for file in lines {
+                if let Some(key) = by_path.get(file) {
+                    wanted.push((key.to_string(), format!("{sha}:{file}")));
+                }
+            }
+        }
+        if wanted.is_empty() {
+            return Ok(batch);
+        }
+        let input: String = wanted.iter().map(|(_, obj)| format!("{obj}\n")).collect();
+        let bodies = store_git(store_root, &["cat-file", "--batch"], Some(input.as_bytes()))?;
+        let mut rest: &[u8] = &bodies;
+        for (key, obj) in &wanted {
+            let (body, tail) = next_batch_object(rest)
+                .map_err(|e| format!("cannot read {obj} from the store: {e}"))?;
+            rest = tail;
+            let Some(Ok(versions)) = batch.versions.get_mut(key) else {
+                continue;
+            };
+            let spec = obj.split_once(':').map_or(obj.as_str(), |(sha, _)| sha);
+            let parsed = body
+                .ok_or_else(|| format!("cannot read {key} at {spec}: missing object"))
+                .and_then(|text| {
+                    parse_version(&String::from_utf8_lossy(text))
+                        .map_err(|e| format!("{key} at {spec}: {e}"))
+                });
+            match parsed {
+                Ok(req) => {
+                    versions.extend(field_change_versions(&req));
+                    versions.push(req);
+                }
+                Err(e) => {
+                    batch.versions.insert(key.clone(), Err(e));
+                }
+            }
+        }
+        Ok(batch)
+    }
+}
+
+/// One `git cat-file --batch` reply: `(Some(body), rest)` for a found object,
+/// `(None, rest)` for a missing one.
+// trace:BUG-2179 | ai:claude
+fn next_batch_object(out: &[u8]) -> std::result::Result<(Option<&[u8]>, &[u8]), String> {
+    let nl = out
+        .iter()
+        .position(|&b| b == b'\n')
+        .ok_or("truncated git cat-file reply")?;
+    let header = String::from_utf8_lossy(&out[..nl]);
+    let rest = &out[nl + 1..];
+    if header.ends_with(" missing") || header.ends_with(" ambiguous") {
+        return Ok((None, rest));
+    }
+    let size: usize = header
+        .rsplit(' ')
+        .next()
+        .and_then(|n| n.parse().ok())
+        .ok_or_else(|| format!("unexpected git cat-file header {header:?}"))?;
+    if rest.len() < size + 1 {
+        return Err("truncated git cat-file body".into());
+    }
+    Ok((Some(&rest[..size]), &rest[size + 1..]))
+}
+
 /// STORY-1698 / TASK-1800: every version of `spec_id` in the store's git
 /// history (all refs, so a rewritten local branch still shows what the remote
 /// saw), each expanded by its recorded field changes. `Ok(empty)` when the
@@ -693,101 +1009,103 @@ pub(crate) fn store_history_versions_optional(
     store_root: &Path,
     spec_id: &str,
 ) -> std::result::Result<Vec<aida_core::Requirement>, String> {
-    let rel = aida_core::object_store::relative_object_path(spec_id)
-        .map_err(|e| format!("no object path for {spec_id}: {e}"))?;
-    let git = |args: &[&str]| {
-        aida_core::git_ops::host_git_command(store_root)
-            .args(args)
-            .output()
-            .map_err(|e| format!("git failed to run: {e}"))
-            .and_then(|out| {
-                if out.status.success() {
-                    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-                } else {
-                    Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
-                }
-            })
-    };
-    // Deletions carry no body to read; every other touching commit does.
-    let log = git(&[
-        "log",
-        "--all",
-        "--format=%H",
-        "--diff-filter=ACMRT",
-        "--",
-        &rel,
-    ])?;
-    let shas: Vec<&str> = log
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .collect();
-    if shas.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    for sha in shas {
-        let text = git(&["show", &format!("{sha}:{rel}")])
-            .map_err(|e| format!("cannot read {spec_id} at {sha}: {e}"))?;
-        let req = parse_version(&text).map_err(|e| format!("{spec_id} at {sha}: {e}"))?;
-        out.extend(field_change_versions(&req));
-        out.push(req);
-    }
-    Ok(out)
+    StoreHistoryBatch::read(store_root, &[spec_id.to_string()])?.versions(spec_id)
 }
 
-/// TASK-1800: the stored object IDs whose YAML carried `id` as its `spec_id`
-/// or `agreed_id` in any version on any ref, other than `id` itself. This is
-/// how a DELETED spec named by its agreed_id (stored under a different
-/// spec_id path) is still found and judged. `Err` when the history cannot be
-/// searched; the caller refuses rather than treating the ID as dangling.
+/// TASK-1800 / BUG-2179: for each of `ids`, the stored object IDs whose YAML
+/// carried it as its `spec_id` or `agreed_id` in any version on any ref, other
+/// than the ID itself. This is how a DELETED spec named by its agreed_id
+/// (stored under a different spec_id path) is still found and judged. One
+/// `-G` walk serves every ID; each matching added or removed line is
+/// attributed to the ID it names. `Err` when an ID is not searchable or the
+/// history cannot be searched; the caller refuses rather than treating an ID
+/// as dangling.
 // trace:TASK-1800 | ai:claude
-pub(crate) fn store_history_alias_ids(
+// trace:BUG-2179 | ai:claude
+pub(crate) fn store_history_alias_map(
     store_root: &Path,
-    id: &str,
-) -> std::result::Result<Vec<String>, String> {
-    if id.is_empty()
-        || !id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-    {
-        return Err(format!("cannot search store history for {id:?}"));
+    ids: &[String],
+) -> std::result::Result<std::collections::BTreeMap<String, Vec<String>>, String> {
+    let mut found: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for id in ids {
+        if id.is_empty()
+            || !id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(format!("cannot search store history for {id:?}"));
+        }
+        found.insert(id.to_ascii_uppercase(), Vec::new());
     }
-    let pattern = format!("^(spec_id|agreed_id): *['\"]?{id}['\"]? *$");
-    let out = aida_core::git_ops::host_git_command(store_root)
-        .args([
+    if found.is_empty() {
+        return Ok(found);
+    }
+    let alternation = found.keys().cloned().collect::<Vec<_>>().join("|");
+    let pattern = format!("^(spec_id|agreed_id): *['\"]?({alternation})['\"]? *$");
+    let line_re = regex::RegexBuilder::new(&pattern)
+        .case_insensitive(true)
+        .build()
+        .map_err(|e| format!("cannot search store history: {e}"))?;
+    let out = store_git(
+        store_root,
+        &[
             "log",
             "--all",
             "--format=",
-            "--name-only",
+            "-p",
+            "--unified=0",
+            "--no-color",
+            "--no-ext-diff",
             "--regexp-ignore-case",
             &format!("-G{pattern}"),
             "--",
             "objects/",
-        ])
-        .output()
-        .map_err(|e| format!("git failed to run: {e}"))?;
-    if !out.status.success() {
-        return Err(format!(
-            "cannot search store history for {id}: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
-    }
-    let mut ids: Vec<String> = Vec::new();
-    for line in String::from_utf8_lossy(&out.stdout).lines() {
-        let Some(stem) = Path::new(line.trim())
+        ],
+        None,
+    )
+    .map_err(|e| format!("cannot search store history for {}: {e}", ids.join(", ")))?;
+    let mut file: Option<String> = None;
+    for line in String::from_utf8_lossy(&out).lines() {
+        if let Some(paths) = line.strip_prefix("diff --git ") {
+            file = paths.rsplit_once(" b/").map(|(_, b)| b.to_string());
+            continue;
+        }
+        if line.starts_with("+++ ") || line.starts_with("--- ") {
+            continue;
+        }
+        let Some(body) = line.strip_prefix('+').or_else(|| line.strip_prefix('-')) else {
+            continue;
+        };
+        let (Some(caps), Some(path)) = (line_re.captures(body), file.as_deref()) else {
+            continue;
+        };
+        let Some(stem) = Path::new(path)
             .file_name()
             .and_then(|n| n.to_str())
             .and_then(|n| n.strip_suffix(".yaml"))
         else {
             continue;
         };
+        let id = caps[2].to_ascii_uppercase();
         let stem = stem.to_ascii_uppercase();
-        if !stem.eq_ignore_ascii_case(id) && !ids.contains(&stem) {
-            ids.push(stem);
+        if let Some(aliases) = found.get_mut(&id) {
+            if stem != id && !aliases.contains(&stem) {
+                aliases.push(stem);
+            }
         }
     }
-    Ok(ids)
+    Ok(found)
+}
+
+/// TASK-1800: [`store_history_alias_map`] for one ID.
+// trace:TASK-1800 | ai:claude
+#[cfg(test)]
+pub(crate) fn store_history_alias_ids(
+    store_root: &Path,
+    id: &str,
+) -> std::result::Result<Vec<String>, String> {
+    let mut map = store_history_alias_map(store_root, &[id.to_string()])?;
+    Ok(map.remove(&id.to_ascii_uppercase()).unwrap_or_default())
 }
 
 /// STORY-1698: every version of `spec_id` in the store's git history (all
@@ -825,10 +1143,43 @@ pub(crate) struct ShipCheck<'a> {
     pub ledger: &'a std::result::Result<std::collections::BTreeMap<String, Exclusion>, String>,
     /// The PR's merge-hold as the release step will see it.
     pub hold: &'a HoldFacts,
+    /// STORY-1700 (R1): every path the PR changes at the head it ships;
+    /// `None` = they could not be resolved (refuses). Read only by
+    /// [`ship_decision`].
+    // trace:STORY-1700 | ai:claude
+    pub changed_paths: Option<&'a [String]>,
+    /// STORY-1700: why `ship` is a human gate right now (listed in
+    /// `[mandate.human_gates]`, or the gate config is unreadable); `None` =
+    /// not gated. Read by [`ship_decision`] and [`rework_release_decision`].
+    pub ship_gate: Option<String>,
+    /// STORY-1700: why `hold-clear` is a human gate right now; `None` = not
+    /// gated. Read by [`rework_release_decision`].
+    pub hold_clear_gate: Option<String>,
     /// TASK-1960: the attested-approval carry-over for a moved head, proven
     /// by the caller (`pr_cmd::mandate_carry_over`): `Ok(head)` = proven for
     /// that head, `Err(reason)` = the proof failed, `None` = not attempted.
     pub carry_over: Option<std::result::Result<String, String>>,
+}
+
+/// STORY-1700 (R1): the gate checks every mandate path runs before hold
+/// cover. A PR that touches the mandate or its gates, or whose files cannot
+/// be resolved, is never shipped nor released under a mandate; nor is any PR
+/// while one of `gates` (a human gate in force) names why.
+// trace:STORY-1700 | ai:claude
+fn gate_checks(
+    c: &ShipCheck<'_>,
+    gates: &[&Option<String>],
+) -> std::result::Result<(), MandateRefusal> {
+    let paths = c
+        .changed_paths
+        .ok_or(MandateRefusal::ChangedPathsUnresolved)?;
+    if let Some(path) = crate::mandate_gates::touches_gates(paths) {
+        return Err(MandateRefusal::TouchesGates { path });
+    }
+    if let Some(why) = gates.iter().find_map(|g| g.as_ref()) {
+        return Err(MandateRefusal::HumanGated { why: why.clone() });
+    }
+    Ok(())
 }
 
 /// STORY-1698: the merge-hold a mandate would release. A mandate only ever
@@ -888,6 +1239,11 @@ pub(crate) enum MandateRefusal {
     Approval(String),
     StaleApproval(String),
     SupervisedNotIncluded { id: String }, // trace:STORY-1697 | ai:claude
+    // trace:STORY-1700 | ai:claude
+    ChangedPathsUnresolved,
+    TouchesGates { path: String },
+    HumanGated { why: String },
+    SoloSelfApproval,
 }
 
 impl MandateRefusal {
@@ -947,6 +1303,14 @@ impl MandateRefusal {
             Self::SupervisedNotIncluded { id } => format!(
                 "mandate {id} was not minted with --include-supervised, so it does not cover sensitive specs"
             ),
+            Self::ChangedPathsUnresolved => {
+                "the files the PR changes could not be resolved, so it may touch the mandate's own gates".to_string()
+            }
+            Self::TouchesGates { path } => format!(
+                "it changes `{path}`, part of the mandate and its human gates; a human must merge it"
+            ),
+            Self::HumanGated { why } => format!("shipping is a human gate ({why})"),
+            Self::SoloSelfApproval => "the approval is a solo-human self-approval, not an independent review; a human must ship it".to_string(),
         };
         format!("PR-{pr}: the fire-fighting mandate does not cover this ship: {why}")
     }
@@ -993,6 +1357,9 @@ pub(crate) fn always_human_class(req: &aida_core::Requirement) -> Option<String>
 /// every input is gathered by the caller, at the instant of the decision.
 // trace:STORY-1698 | ai:claude
 pub(crate) fn ship_decision(c: &ShipCheck<'_>) -> std::result::Result<String, MandateRefusal> {
+    // STORY-1700 (R1): checked before hold cover, on every mandate ship
+    // path. trace:STORY-1700 | ai:claude
+    gate_checks(c, &[&c.ship_gate])?;
     let mandate = hold_cover(c)?;
     let shipper = &c.policy.shipper;
     if !crate::review_authority::has_identity_anchor(shipper) {
@@ -1047,6 +1414,13 @@ fn approver_is_not_shipper(c: &ShipCheck<'_>) -> std::result::Result<(), Mandate
     let Some(newest) = crate::pr_ship::newest_approval(&approvals) else {
         return Ok(());
     };
+    // STORY-1700: a STORY-1655 solo-human SELF-approval is not the
+    // independent review a mandate needs: it may clear the author check for
+    // a human shipping by hand, never a mandate ship or release.
+    // trace:STORY-1700 | ai:claude
+    if crate::pr_ship::solo_self_approval(newest, c.policy) {
+        return Err(MandateRefusal::SoloSelfApproval);
+    }
     let recorder = newest
         .attestation
         .as_ref()
@@ -1096,6 +1470,10 @@ pub(crate) fn rework_release_decision(
         HoldFacts::None => return Err(MandateRefusal::NoHoldMarker),
         HoldFacts::MarkerMissing => return Err(MandateRefusal::MarkerMissing),
     }
+    // STORY-1700 (R1): a released rework hold lets the PR ship, so the
+    // release takes the same gate checks as a mandate ship, plus hold-clear.
+    // trace:STORY-1700 | ai:claude
+    gate_checks(c, &[&c.ship_gate, &c.hold_clear_gate])?;
     let mandate = hold_cover(c)?;
     if !mandate.include_supervised {
         return Err(MandateRefusal::SupervisedNotIncluded {
@@ -1312,6 +1690,83 @@ pub(crate) fn statusline_segment(state: &MandateState, now: DateTime<Utc>) -> Op
     }
 }
 
+/// STORY-1700: the one-line mandate display shared by `aida mandate status
+/// --line`, SessionStart, the per-turn notice and `aida session handoff
+/// --show`: `MANDATE drive · 5h40m left · by joe · reason · gates: none`.
+/// `None` unless a mandate is active. `gates` describes the human gates.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str) -> Option<String> {
+    let MandateState::Active(m) = state else {
+        return None;
+    };
+    if !m.is_active_at(now) {
+        return None;
+    }
+    let mut parts = vec![
+        format!(
+            "MANDATE {}",
+            if m.is_drive() {
+                KIND_DRIVE
+            } else {
+                SCOPE_SHIP_HELD
+            }
+        ),
+        format!(
+            "{} left",
+            crate::seat_authority::format_remaining(m.expires_at - now)
+        ),
+        format!("by {}", m.principal),
+    ];
+    if let Some(reason) = &m.reason {
+        parts.push(reason.clone());
+    }
+    parts.push(format!("gates: {gates}"));
+    Some(parts.join(" · "))
+}
+
+/// STORY-1700: the per-turn notice for `seat`: the [`status_line`] while a
+/// mandate is active, and ONE line per seat when it expires or is stopped
+/// (marker `<dir>/.seen/<id>.<seat>`, written here). `None` otherwise.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn notice_line(
+    dir: &Path,
+    state: &MandateState,
+    now: DateTime<Utc>,
+    seat: &str,
+    gates: &str,
+) -> Option<String> {
+    let (m, how) = match state {
+        MandateState::Active(_) => return status_line(state, now, gates),
+        MandateState::None => return None,
+        MandateState::Expired(m) => (m, "expired"),
+        MandateState::Stopped(m) => (m, "was stopped"),
+    };
+    // Only a recent end is news; a seat started days later is not told.
+    let ended = m.revoked_at.unwrap_or(m.expires_at).min(m.expires_at);
+    if now - ended > MAX_TTL {
+        return None;
+    }
+    let seat: String = seat
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let marker = dir.join(".seen").join(format!("{}.{seat}", m.id));
+    if std::fs::symlink_metadata(&marker).is_ok() {
+        return None;
+    }
+    write_private(&marker, now.to_rfc3339().as_bytes()).ok()?;
+    Some(format!(
+        "MANDATE {} {how}; the advisor seat no longer acts under it (a human starts a new one with `aida mandate start`)",
+        m.id
+    ))
+}
+
 fn status_json(state: &MandateState, now: DateTime<Utc>) -> serde_json::Value {
     let (status, mandate) = match state {
         MandateState::None => ("none", None),
@@ -1338,7 +1793,18 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
                 m.principal,
                 m.issued_at.to_rfc3339()
             ),
-            format!("  covers:    the advisor seat shipping held PRs"),
+            if m.is_drive() {
+                format!(
+                    "  covers:    drive ({}): the advisor seat ships held PRs, signs off sketches and dispatches fixers; the 15m drive tick routes stalled lanes",
+                    m.effective_scopes()
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                "  covers:    the advisor seat shipping held PRs".to_string()
+            },
             format!(
                 "  includes sensitive specs: {}",
                 if m.include_supervised {
@@ -1375,6 +1841,23 @@ fn status_text(state: &MandateState, now: DateTime<Utc>) -> String {
     }
 }
 
+/// STORY-1700: `--include-supervised` is ON by default for `--drive`.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn drive_includes_supervised(drive: bool, include: bool, exclude: bool) -> bool {
+    if drive {
+        !exclude
+    } else {
+        include
+    }
+}
+
+fn state_mandate(state: &MandateState) -> Option<&Mandate> {
+    match state {
+        MandateState::None => None,
+        MandateState::Active(m) | MandateState::Expired(m) | MandateState::Stopped(m) => Some(m),
+    }
+}
+
 // Preserve the shared direct-human authority check, while giving mandate
 // callers a relevant recovery command instead of role-grant wording.
 // trace:TASK-1790 | ai:codex
@@ -1393,34 +1876,54 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
     match action {
         crate::cli::MandateAction::Start {
             ship_held,
+            drive,
             ttl,
             reason,
             include_supervised,
+            exclude_supervised,
         } => {
-            if !ship_held {
-                bail!("say what the mandate covers: `aida mandate start --ship-held` (the only scope today)");
+            if !ship_held && !drive {
+                bail!("say what the mandate covers: `aida mandate start --ship-held`, or `--drive` for a drive mandate");
             }
             let ttl = match ttl {
                 Some(raw) => parse_ttl(raw)?,
                 None => DEFAULT_TTL,
             };
-            let m = start(
+            // STORY-1700: a drive mandate covers sensitive specs unless the
+            // human opts out. trace:STORY-1700 | ai:claude
+            let include =
+                drive_includes_supervised(*drive, *include_supervised, *exclude_supervised);
+            let m = start_with(
                 &dir,
                 &human,
                 &crate::current_user_id(None),
                 ttl,
                 reason.clone(),
-                *include_supervised,
+                include,
+                *drive,
                 Utc::now(),
             )?;
             if let Some(root) = &audit_root {
                 emit_changed(root, &m, true);
             }
-            println!(
-                "Mandate {} started: the advisor seat may ship held PRs with an attested, independent approval and green CI until {}.",
-                m.id,
-                m.expires_at.to_rfc3339()
-            );
+            if m.is_drive() {
+                println!(
+                    "Drive mandate {} started until {}: the advisor seat may ship held PRs with an attested, independent approval and green CI, sign off sketches and dispatch fixers; every 15 minutes the drive tick routes each stalled lane.",
+                    m.id,
+                    m.expires_at.to_rfc3339()
+                );
+                if let Some(root) = &audit_root {
+                    for warning in crate::mandate_drive::start_warnings(root, &m.principal) {
+                        eprintln!("warning: {warning}");
+                    }
+                }
+            } else {
+                println!(
+                    "Mandate {} started: the advisor seat may ship held PRs with an attested, independent approval and green CI until {}.",
+                    m.id,
+                    m.expires_at.to_rfc3339()
+                );
+            }
             if !m.include_supervised {
                 println!("Sensitive specs (security, containment, authority, guided, keystone) stay human-only.");
             }
@@ -1443,17 +1946,36 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             }
             Ok(())
         }
-        crate::cli::MandateAction::Status { json } => {
+        crate::cli::MandateAction::Status { json, line } => {
             let now = Utc::now();
             let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            let state = state_at(&valid, now);
+            // trace:STORY-1700 | ai:claude
+            if *line {
+                let gates = crate::mandate_gates::describe(audit_root.as_deref());
+                if let Some(line) = status_line(&state, now, &gates) {
+                    println!("{line}");
+                }
+                return Ok(());
+            }
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
-            let state = state_at(&valid, now);
             if *json {
-                println!("{}", status_json(&state, now));
+                let mut out = status_json(&state, now);
+                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
+                    out["drive_actions"] = crate::mandate_drive::ledger_json(root, &m.id);
+                }
+                println!("{out}");
             } else {
                 println!("{}", status_text(&state, now));
+                if let (Some(root), Some(m)) = (&audit_root, state_mandate(&state)) {
+                    let gates = crate::mandate_gates::describe(Some(root));
+                    println!("  human gates: {gates}");
+                    if let Some(summary) = crate::mandate_drive::ledger_text(root, &m.id) {
+                        println!("{summary}");
+                    }
+                }
             }
             Ok(())
         }

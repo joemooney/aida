@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn git(store: &Path, args: &[&str], date: Option<&str>) {
-    let mut cmd = Command::new("git");
+    let mut cmd = crate::test_git::git_command();
     cmd.arg("-C").arg(store).args(args);
     if let Some(d) = date {
         cmd.env("GIT_AUTHOR_DATE", d).env("GIT_COMMITTER_DATE", d);
@@ -257,7 +257,7 @@ fn story_1650_unbuilt_index_falls_back_without_building_it() {
 /// minute apart and after every earlier commit (no clock skew).
 fn advance(store: &Path, n: usize) {
     for _ in 0..n {
-        let out = Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(store)
             .args(["rev-list", "--count", "HEAD"])

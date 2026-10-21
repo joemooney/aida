@@ -802,7 +802,7 @@ fn setup_block_references_target_project_not_binary_repo() {
 // containing none of the reviewed work. trace:BUG-1525 | ai:claude
 
 fn brief_git(root: &std::path::Path, args: &[&str]) {
-    let output = std::process::Command::new("git")
+    let output = crate::test_git::git_command()
         .args(args)
         .current_dir(root)
         .output()

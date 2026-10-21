@@ -1823,7 +1823,7 @@ mod bug_1626_push_fresh_state_tests {
     const T: Duration = Duration::from_secs(20);
 
     fn git(dir: &Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(dir)
             .args([
@@ -1879,7 +1879,7 @@ mod bug_1626_push_fresh_state_tests {
     }
 
     fn second_clone(bare: &Path, dir: &Path) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .args(["clone", "-q", bare.to_str().unwrap(), dir.to_str().unwrap()])
             .output()
             .expect("clone");
@@ -2086,7 +2086,7 @@ mod bug_1626_push_fresh_state_tests {
         let (proj, code_bare, _) = project(tmp.path());
         // Push target is a different repository that lags the fetch URL.
         let push_target = tmp.path().join("push-target.git");
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .args([
                 "clone",
                 "-q",
@@ -2174,7 +2174,7 @@ mod bug_1626_push_fresh_state_tests {
         let err = handle_push_command(&proj.join(".aida-store"), true, false, None, false, true)
             .expect_err("a behind-main branch with no terminal must not exit 0");
         assert!(err.to_string().contains("behind main"), "{err}");
-        let has_feature = std::process::Command::new("git")
+        let has_feature = crate::test_git::git_command()
             .arg("-C")
             .arg(&code_bare)
             .args(["rev-parse", "--verify", "--quiet", "refs/heads/feature"])
@@ -2259,7 +2259,7 @@ mod bug_1500_store_pull_hint_tests {
     fn rebase_in_progress_still_suggests_abort() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(repo)
             .status()
@@ -2300,7 +2300,7 @@ mod bug_1500_store_pull_hint_tests {
     fn db_sync_pull_bail_message_includes_abort_hint_with_rebase() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(repo)
             .status()

@@ -3257,7 +3257,7 @@ mod tests {
         let root = dir.path();
 
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -3347,7 +3347,7 @@ mod tests {
         let root = dir.path();
 
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -3428,7 +3428,7 @@ mod tests {
         let root = dir.path();
 
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -3877,7 +3877,7 @@ mod tests {
         let root = dir.path();
 
         let git = |args: &[&str], env: &[(&str, &str)]| {
-            let mut cmd = ProcessCommand::new("git");
+            let mut cmd = crate::test_git::git_command();
             cmd.arg("-C").arg(root).args(args);
             for (k, v) in env {
                 cmd.env(k, v);
@@ -3961,7 +3961,7 @@ mod tests {
         let root = dir.path();
 
         let git = |args: &[&str]| -> String {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -4094,7 +4094,7 @@ mod tests {
     // trace:BUG-1617 | ai:claude
     fn write_status_flip_fixture(root: &Path, commit_count: usize) {
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -4645,7 +4645,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -4757,7 +4757,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -4797,7 +4797,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let git = |args: &[&str]| {
-            let out = ProcessCommand::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)

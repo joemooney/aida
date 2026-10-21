@@ -153,7 +153,7 @@ fn write_then_unclaim_round_trips_through_the_gate() {
 
 /// BUG-2143: run git in `dir`, panicking on failure.
 fn git_in(dir: &std::path::Path, args: &[&str]) {
-    let ok = std::process::Command::new("git")
+    let ok = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)

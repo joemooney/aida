@@ -323,7 +323,7 @@ fn aida_quiet_honors_only_real_optin_values() {
 #[test]
 fn detect_distributed_store_resolves_from_sibling_worktree() {
     fn git(repo: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(args)

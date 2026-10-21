@@ -6,6 +6,9 @@
 //! and never cuts rows silently.
 // trace:STORY-1644 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -18,7 +21,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

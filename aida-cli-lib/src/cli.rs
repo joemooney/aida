@@ -48,6 +48,7 @@ pub(crate) use crate::lock_cmd::lock_cmd_args::LockCommand;
 pub(crate) use crate::mailbox_cmd::mailbox_cmd_args::MailboxCommand;
 pub(crate) use crate::maintenance_schedule::maintenance_schedule_args::MaintenanceScheduleCommand;
 pub(crate) use crate::mandate::mandate_args::MandateAction;
+pub(crate) use crate::mandate_drive::mandate_drive_args::FleetAction;
 pub(crate) use crate::mcp_cmd::mcp_cmd_args::McpCommand;
 pub(crate) use crate::memories_cmd::memories_cmd_args::MemoriesCommand;
 pub(crate) use crate::merge_hold_cmd::merge_hold_cmd_args::MergeHoldAction;

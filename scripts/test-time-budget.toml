@@ -1,64 +1,211 @@
-# Slow-test budget: allowed wall seconds per test binary in CI's "Run tests"
-# step (ubuntu-latest, 4 cores, debug profile, binaries run one at a time).
-# scripts/test-timings.py --budget enforces it in the "Test time budget" step:
-# - a binary over default_limit seconds with no entry fails the build;
-# - a binary over its entry fails the build.
-# Keys are <deps stem>:<src> or doctests:<crate>, as test-timings.py prints them.
+# Slow-test budget: allowed seconds per test in CI's "Run tests" step
+# (ubuntu-latest, 4 cores, debug profile, cargo-nextest's `ci` profile: every
+# test in its own process, num-cpus tests at a time).
+# scripts/test-timings.py --budget enforces it in the "Test time budget" step,
+# reading nextest's JUnit reports (STORY-1853 AC4):
+# - a test over default_limit seconds with no entry fails the build;
+# - a test over its entry fails the build;
+# - except over-budget tests whose runs overlap each other: a runner stall,
+#   reported as a CI warning (test-timings.py `stalled`).
+# Keys are `<nextest binary id> <test name>` (doctests: `doctests:<crate>`),
+# as test-timings.py prints them.
 #
-# Recalibrated for the TASK-1979 lane layout (lib-0, lib-1, cli-0, cli-1, rest),
-# from post-S6 main runs 39371035274, 39373597572, 39374644094, 39378420619
-# and 39380387908, and PR-2769 runs 39383875258, 39396053306 and 39398646423.
-# Each entry is the slowest measured time x1.5, rounded up to 5 s, for every
-# binary whose x1.5 crosses the default limit. The aida-cli-lib unit binary
-# runs as two halves, each budgeted under [lane_budget.<lane>] below
-# (test-timings.py --lane). Lower an entry when you speed a binary up; raise
-# one only with a reason in the PR. STORY-1853 S4 targets the top of this list.
-# trace:STORY-1853 | ai:claude
+# Calibrated from the JUnit reports of main runs 39455014512, 39475194172,
+# 39476669725 and 39487299524 (the nextest shadow lanes) and PR-2785 runs
+# 39487052143, 39491010857 and 39492854022 (the gating lanes; the last one
+# includes a runner stall). Shared runners vary, so each entry is the slowest
+# measured time x2, rounded up to 5 s, at least 15 s, and at most the 180 s
+# nextest kill (.config/nextest.toml). Every test measured over 5 s has an
+# entry, so none sits just under the 10 s default, and so does every test of
+# the wall-clock-bounded binaries bug_1594_show_bounded, bug_1956_* and
+# bug_1993_*. Lower an entry when you speed a test up; raise one only with a
+# reason in the PR. STORY-1853 S4 targets the top of this list.
+# trace:TASK-1988 | ai:claude
 
 default_limit = 10
 
 [budget]
-"aida_core:src/lib.rs" = 135  # max measured 88.0s, median 84.3s over 8 runs, 1563 tests
-"task_1717_store_writer_lock:tests/task_1717_store_writer_lock.rs" = 105  # max measured 69.0s, median 67.1s over 8 runs, 43 tests
-"agent_error_channel:tests/agent_error_channel.rs" = 75  # max measured 47.4s, median 19.6s over 8 runs, 2 tests
-"bug_1502_format_json_audit:tests/bug_1502_format_json_audit.rs" = 50  # max measured 33.0s, median 31.6s over 8 runs, 9 tests
-"bug_1947_session_end_live_process:tests/bug_1947_session_end_live_process.rs" = 50  # max measured 30.1s, median 17.9s over 8 runs, 11 tests
-"task_1290_criteria_gate:tests/task_1290_criteria_gate.rs" = 35  # max measured 22.9s, median 12.0s over 8 runs, 5 tests
-"task_1335_reconcile_unavailable_evidence:tests/task_1335_reconcile_unavailable_evidence.rs" = 35  # max measured 21.2s, median 19.1s over 8 runs, 17 tests
-"journey:tests/journey.rs" = 30  # max measured 19.7s, median 16.3s over 8 runs, 5 tests
-"queue_work_dry_run:tests/queue_work_dry_run.rs" = 30  # max measured 17.8s, median 16.5s over 8 runs, 15 tests
-"bug_1940_corrupt_cache:tests/bug_1940_corrupt_cache.rs" = 25  # max measured 15.9s, median 10.3s over 8 runs, 7 tests
-"path_isolation_guardrail:tests/path_isolation_guardrail.rs" = 25  # max measured 15.4s, median 14.8s over 8 runs, 3 tests
-"bug_1252_structural_tags:tests/bug_1252_structural_tags.rs" = 20  # max measured 11.2s, median 8.7s over 8 runs, 2 tests
-"bug_1921_faq_short_ids:tests/bug_1921_faq_short_ids.rs" = 20  # max measured 11.1s, median 8.6s over 8 runs, 9 tests
-"bug_1956_reader_fallbacks_bounded_under_writer:tests/bug_1956_reader_fallbacks_bounded_under_writer.rs" = 20  # max measured 10.5s, median 10.1s over 8 runs, 4 tests
-"bug_1993_linkage_budgets:tests/bug_1993_linkage_budgets.rs" = 20  # max measured 11.0s, median 10.8s over 8 runs, 1 tests
-"bug_2139_headless_child_grant:tests/bug_2139_headless_child_grant.rs" = 20  # max measured 12.9s, median 11.6s over 8 runs, 6 tests
-"story_1644_list_sort_cap:tests/story_1644_list_sort_cap.rs" = 20  # max measured 12.2s, median 11.2s over 8 runs, 2 tests
-"story_1649_show_linkage:tests/story_1649_show_linkage.rs" = 20  # max measured 12.0s, median 11.2s over 8 runs, 12 tests
-"story_1653_derived_driver:tests/story_1653_derived_driver.rs" = 20  # max measured 11.7s, median 11.1s over 8 runs, 11 tests
-"task_1283_protocol_cli:tests/task_1283_protocol_cli.rs" = 20  # max measured 12.6s, median 11.4s over 8 runs, 4 tests
-"bug_1234_edit_description_sources:tests/bug_1234_edit_description_sources.rs" = 15  # max measured 7.1s, median 3.7s over 8 runs, 3 tests
-"bug_1687_defer_status_lens:tests/bug_1687_defer_status_lens.rs" = 15  # max measured 8.1s, median 7.6s over 8 runs, 4 tests
-"bug_1771_status_lens_filters:tests/bug_1771_status_lens_filters.rs" = 15  # max measured 9.5s, median 8.5s over 8 runs, 4 tests
-"bug_1808_delegation_preflight:tests/bug_1808_delegation_preflight.rs" = 15  # max measured 7.7s, median 6.9s over 8 runs, 5 tests
-"bug_1952_session_end_from_worktree:tests/bug_1952_session_end_from_worktree.rs" = 15  # max measured 7.0s, median 6.4s over 8 runs, 3 tests
-"bug_1993_toon_linkage_budget:tests/bug_1993_toon_linkage_budget.rs" = 15  # max measured 9.0s, median 8.4s over 8 runs, 1 tests
-"story_1642_knowledge_list:tests/story_1642_knowledge_list.rs" = 15  # max measured 7.4s, median 6.9s over 8 runs, 2 tests
-"story_1650_history_status_flow:tests/story_1650_history_status_flow.rs" = 15  # max measured 9.3s, median 8.7s over 8 runs, 13 tests
-"task_1527_refresh_worker:tests/task_1527_refresh_worker.rs" = 15  # max measured 6.8s, median 6.4s over 8 runs, 7 tests
-"task_1784_worktree_add_after_deleted_tree:tests/task_1784_worktree_add_after_deleted_tree.rs" = 15  # max measured 8.2s, median 7.8s over 8 runs, 4 tests
-
-# Per-lane budgets for a binary split across lanes; test-timings.py --lane
-# applies them over [budget]. Each lib half's time on PR-2769 runs 39383875258,
-# 39396053306 and 39398646423, recomputed for the halves these weights produce
-# from those runs' per-test times (--lib-weights's estimator, which matched
-# run 39398646423's lanes within 4 s), x1.5. trace:TASK-1979 | ai:claude
-[lane_budget.lib-0]
-"aida_cli_lib:src/lib.rs" = 350  # max 231.6s (runs: 159.5, 231.6, 205.2s), ~4127 tests
-
-[lane_budget.lib-1]
-"aida_cli_lib:src/lib.rs" = 340  # max 223.7s (runs: 156.4, 213.5, 223.7s), ~5128 tests
+"aida-cli-lib contained_boundary::store_tests::bug_1985_host_status_guard" = 180  # max 108.6s, median 99.4s over 7 runs; x2 is 220, capped at the 180 s nextest kill
+"aida-cli-lib task_1507_history_cache_tests::bug_1620_id_every_cut_across_merges_matches_the_walk" = 125  # max 61.0s, median 51.9s over 7 runs
+"aida-cli-lib command_registry::story_1728_policy_parity_tests::registered_policy_matches_mains_legacy_tables_for_every_verb" = 120  # max 58.7s, median 55.0s over 7 runs
+"aida-cli::bug_1502_format_json_audit checked_in_audit_is_exhaustive_and_every_honoured_probe_parses" = 85  # max 40.5s, median 36.9s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::history_cache_max_commits_window_parity" = 80  # max 39.2s, median 31.4s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::history_cache_parity_with_git_walk_all_filters" = 65  # max 31.1s, median 24.8s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_catch_up_across_tie_merges_from_partial_states" = 60  # max 27.5s, median 23.4s over 7 runs
+"aida-cli-lib cli::tests::source_doc_comments_carry_no_spec_id_provenance" = 50  # max 24.5s, median 22.2s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_octopus_merge_ties" = 45  # max 20.1s, median 16.6s over 7 runs
+"aida-cli-lib sandbox_cmd::tests::sandbox_create_and_seed_round_trip" = 40  # max 18.7s, median 1.6s over 7 runs
+"aida-cli-lib scaffold_refresh::tests::apply_refresh_prune_leave_non_aida_skill_dir_byte_identical" = 40  # max 17.9s, median 1.3s over 7 runs
+"aida-cli-lib scaffold_refresh::tests::apply_writes_one_manifest_per_pack_and_reapply_respects_deletion" = 40  # max 17.7s, median 1.2s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_id_queries_with_merge_ties" = 40  # max 19.5s, median 16.3s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_nested_merge_ties" = 40  # max 20.0s, median 16.6s over 7 runs
+"aida-cli::bug_2190_list_focus_disclosure open_statuses_remain_visible_and_persistent_focus_is_never_silent" = 40  # max 18.7s, median 17.7s over 6 runs
+"aida-cli::story_1644_list_sort_cap list_sort_and_agent_cap_follow_story_1644" = 40  # max 17.9s, median 13.5s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_interleaved_merge_every_cut_matches_walk_exactly" = 35  # max 17.5s, median 14.5s over 7 runs
+"aida-cli-lib::path_isolation_guardrail raw_path_setters_require_process_isolation" = 35  # max 15.2s, median 11.5s over 7 runs
+"aida-cli::bug_1502_format_json_audit show_json_uses_type_aware_status_display_and_preserves_stored_status" = 35  # max 15.1s, median 13.4s over 7 runs
+"aida-cli::bug_1993_linkage_budgets linkage_timeouts_render_unknown_not_unshipped" = 35  # max 16.0s, median 15.4s over 7 runs
+"aida-cli::journey task_1417_relationship_collapse_declares_view_limit_at_threshold" = 35  # max 17.0s, median 12.4s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::bug_1923::bug_1923_far_behind_index_reaches_head_in_bounded_budgeted_queries" = 30  # max 13.9s, median 12.1s over 7 runs
+"aida-cli::bug_1252_structural_tags doctor_cli_lists_and_heals_the_thirteen_incident_ids" = 30  # max 13.6s, median 12.6s over 7 runs
+"aida-cli::bug_1502_format_json_audit unsupported_global_json_pin_errors_before_human_fallback" = 30  # max 14.5s, median 12.6s over 7 runs
+"aida-cli::bug_2139_headless_child_grant launcher_that_cannot_delegate_implementer_gets_a_baseline_child" = 30  # max 14.3s, median 10.3s over 7 runs
+"aida-cli::bug_2139_headless_child_grant orchestrated_headless_reviewer_gets_its_own_reviewer_grant" = 30  # max 13.6s, median 9.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock remote_reconcile_uses_the_current_locked_preimage" = 30  # max 12.5s, median 12.0s over 7 runs
+"aida-cli-lib command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot" = 25  # max 11.2s, median 9.3s over 7 runs
+"aida-cli-lib session_end::bug_1983_grant_verdict_tests::one_rejection_table_drives_the_edit_gate_and_review_record" = 25  # max 10.4s, median 9.1s over 7 runs
+"aida-cli::bug_1502_format_json_audit bug_1635_history_formats_agree_on_event_count" = 25  # max 11.6s, median 10.4s over 7 runs
+"aida-cli::bug_1502_format_json_audit show_json_includes_git_linkage_unless_suppressed" = 25  # max 10.8s, median 9.3s over 7 runs
+"aida-cli::bug_1513_queue_list_for_role queue_list_for_role_excludes_callers_own_mismatched_role_row" = 25  # max 12.1s, median 10.8s over 7 runs
+"aida-cli::bug_1594_show_bounded bug_1594_show_with_hung_forge_finishes_in_budget_and_says_timed_out" = 25  # max 10.0s, median 9.4s over 7 runs
+"aida-cli::bug_1771_status_lens_filters epic_inherits_child_lens" = 25  # max 10.8s, median 7.6s over 7 runs
+"aida-cli::bug_1956_reader_fallbacks_bounded_under_writer edit_outlasts_a_writer_when_no_compatible_snapshot_exists" = 25  # max 11.4s, median 10.7s over 7 runs
+"aida-cli::bug_1993_toon_linkage_budget toon_linkage_timeout_reads_unknown_not_unshipped" = 25  # max 10.9s, median 9.5s over 7 runs
+"aida-cli::bug_2139_headless_child_grant orchestrated_headless_reviewer_without_delegation_is_refused_without_mutation" = 25  # max 11.1s, median 7.7s over 7 runs
+"aida-cli::journey agent_journey_toon_list_search_queue_done_and_status" = 25  # max 10.2s, median 7.4s over 7 runs
+"aida-cli::story_1642_knowledge_list faq_listings_show_only_live_faqs_with_id_and_question" = 25  # max 11.0s, median 7.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock allocation_pull_and_push_follow_the_window_discipline" = 25  # max 10.5s, median 9.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock push_probe_still_fails_a_lock_held_by_the_pushing_process" = 25  # max 10.6s, median 10.1s over 7 runs
+"aida-cli::task_1717_store_writer_lock scaffolded_hook_profile_runs_every_route" = 25  # max 11.0s, median 10.4s over 7 runs
+"aida-cli::task_1717_store_writer_lock sync_vs_sync_queue_mailbox_and_merge_gate_share_one_lock" = 25  # max 11.3s, median 10.8s over 7 runs
+"aida-cli-lib task_1737_authority_trailers_tests::task_1737_store_commit_path_emits_authority_trailers_for_every_advisor_gated_advance" = 20  # max 9.5s, median 8.3s over 7 runs
+"aida-cli::bug_1502_format_json_audit bug_1631_history_json_stdout_is_pure_json_outside_agent_mode" = 20  # max 8.7s, median 7.9s over 7 runs
+"aida-cli::bug_1502_format_json_audit real_binary_fixture_cannot_write_an_inherited_caller_store" = 20  # max 9.0s, median 8.1s over 7 runs
+"aida-cli::bug_1502_format_json_audit show_format_json_round_trips_description_and_matches_json_flag" = 20  # max 8.4s, median 7.7s over 7 runs
+"aida-cli::bug_1520_list_fields_json bogus_field_is_refused_on_every_format" = 20  # max 8.5s, median 7.9s over 7 runs
+"aida-cli::bug_1520_list_fields_json json_rows_carry_both_type_spellings" = 20  # max 8.2s, median 7.0s over 7 runs
+"aida-cli::bug_1520_list_fields_json valid_fields_narrow_every_format" = 20  # max 8.5s, median 7.6s over 7 runs
+"aida-cli::bug_1687_defer_status_lens deferred_status_token_returns_the_deferred_shelf" = 20  # max 8.9s, median 8.3s over 7 runs
+"aida-cli::bug_1687_defer_status_lens show_reports_the_deferral_not_the_status_it_was_deferred_out_of" = 20  # max 8.0s, median 6.4s over 7 runs
+"aida-cli::bug_1771_status_lens_filters lens_status_tokens_select_their_own_parked_set" = 20  # max 9.2s, median 6.5s over 7 runs
+"aida-cli::bug_1771_status_lens_filters lens_token_mixed_with_a_stored_status_honours_both" = 20  # max 8.7s, median 6.2s over 7 runs
+"aida-cli::bug_1921_faq_short_ids faq_on_an_existing_node_gets_a_short_id_without_merge_gate" = 20  # max 8.1s, median 7.5s over 7 runs
+"aida-cli::bug_1947_session_end_live_process session_end_without_live_processes_removes_the_worktree_even_from_inside_it" = 20  # max 8.0s, median 6.2s over 7 runs
+"aida-cli::bug_1952_session_end_from_worktree session_end_inside_worktree_resolves_main_root_and_matches_main_checkout" = 20  # max 8.7s, median 7.7s over 7 runs
+"aida-cli::bug_2139_headless_child_grant uncontained_fresh_headless_child_gets_its_own_implementer_grant" = 20  # max 7.8s, median 5.5s over 7 runs
+"aida-cli::journey bug_1558_show_carries_stored_relationship_type_on_every_surface" = 20  # max 8.6s, median 6.2s over 7 runs
+"aida-cli::story_1642_knowledge_list include_knowledge_and_comma_types_keep_standing_and_accepted_rows" = 20  # max 8.3s, median 6.1s over 7 runs
+"aida-cli::story_1645_faq_topics faq_topics_counts_live_faqs_only" = 20  # max 9.0s, median 8.3s over 7 runs
+"aida-cli::task_1283_protocol_cli pickup_commands_dispatch_and_render_protocols_before_acceptance" = 20  # max 8.7s, median 8.2s over 7 runs
+"aida-cli::task_1290_criteria_gate reviewer_prompt_round_one_cites_the_untraced_criteria_list" = 20  # max 9.3s, median 8.6s over 7 runs
+"aida-cli::task_1717_store_writer_lock installed_hook_profile_completes" = 20  # max 8.1s, median 7.6s over 7 runs
+"aida-cli::task_1717_store_writer_lock mailbox_digest_rereads_canonical_and_commits_in_one_window" = 20  # max 7.6s, median 7.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock pull_store_leg_is_one_window" = 20  # max 8.5s, median 8.1s over 7 runs
+"aida-cli::task_1717_store_writer_lock read_sync_pull_holds_the_lock_and_leaves_foreign_rebase_alone" = 20  # max 8.7s, median 8.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock rejection_retry_preserves_peer_and_concurrent_local_commit" = 20  # max 7.7s, median 7.4s over 7 runs
+"aida-cli::task_1717_store_writer_lock remote_reconcile_evidence_refusal_skips_the_rollback" = 20  # max 8.6s, median 8.1s over 7 runs
+"aida-cli::task_1717_store_writer_lock stale_cache_with_a_competing_refresh_holder" = 20  # max 7.7s, median 7.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock sync_vs_edit_serializes_across_commit_and_rebase" = 20  # max 9.8s, median 9.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock unreadable_status_fails_push_and_auto_push_without_false_success" = 20  # max 8.3s, median 7.9s over 7 runs
+"aida-cli::task_1784_worktree_add_after_deleted_tree a_failed_re_mint_keeps_the_dead_lease" = 20  # max 8.2s, median 6.0s over 7 runs
+"aida-cli::task_1784_worktree_add_after_deleted_tree worktree_add_after_rm_rf_ends_the_dead_lease_and_mints_fresh" = 20  # max 8.7s, median 6.4s over 7 runs
+"aida-cli::task_1784_worktree_add_after_deleted_tree worktree_add_after_rm_rf_of_an_unpushed_branch_re_mints_from_the_local_branch" = 20  # max 8.5s, median 6.3s over 7 runs
+"aida-core db::cached_git_backend::tests::bug_1956_unbudgeted_refresh_outlasts_a_four_second_writer" = 20  # max 8.4s, median 7.8s over 7 runs
+"aida-core db::cached_git_backend::tests::non_tty_full_rebuild_winner_files_request_and_serves_deferred_when_spawn_refused" = 20  # max 7.5s, median 6.0s over 7 runs
+"aida-cli-lib bug_1670_stale_cache_callers_tests::focus_guard_uses_fresh_subtree" = 15  # max 5.2s, median 4.5s over 7 runs
+"aida-cli-lib contained_boundary::store_tests::bug_1929_store_git_guard" = 15  # max 7.2s, median 6.6s over 7 runs
+"aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_best_effort_callers_stop_on_evidence_refusal" = 15  # max 6.4s, median 4.1s over 7 runs
+"aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_block_claim_retries_stop_on_evidence_refusal" = 15  # max 6.3s, median 4.4s over 7 runs
+"aida-cli-lib coordination::bug_2162_evidence_refusal_tests::bug_2162_void_cleanup_paths_stop_on_evidence_refusal" = 15  # max 6.2s, median 4.6s over 7 runs
+"aida-cli-lib doctor_cmd::story_462_doctor_tests::branch_content_fully_landed_bails_out_on_a_deep_history_range" = 15  # max 7.0s, median 6.1s over 7 runs
+"aida-cli-lib global_queue::tests::bug_1682_cross_process_adds_preserve_exact_identity_set" = 15  # max 5.7s, median 4.9s over 7 runs
+"aida-cli-lib init_cmd::init_roster_tests::init_at_non_tty_writes_no_team_roster" = 15  # max 6.1s, median 4.7s over 7 runs
+"aida-cli-lib live_work::tests::start_of_work_bump_moves_only_approved_specs" = 15  # max 6.1s, median 5.4s over 7 runs
+"aida-cli-lib mcp::tests::mcp_add_requirement_normalizes_every_valid_type_prefix" = 15  # max 6.6s, median 6.0s over 7 runs
+"aida-cli-lib regen::score::completeness::tests::hung_help_is_killed_at_the_deadline_and_recorded_as_timed_out" = 15  # max 6.6s, median 6.4s over 7 runs
+"aida-cli-lib status_sections::bug_1647_findings_atomic_tests::bug_1647_approve_write_refuses_a_finding_now_in_a_final_status" = 15  # max 5.7s, median 5.1s over 7 runs
+"aida-cli-lib status_sections::bug_1664_stale_sweep_tests::archive_older_than_skips_reopened_and_recent_specs_behind_a_stale_snapshot" = 15  # max 5.9s, median 5.5s over 7 runs
+"aida-cli-lib status_sections::bug_1664_stale_sweep_tests::post_pull_auto_archive_skips_reopened_and_recent_specs_behind_a_stale_snapshot" = 15  # max 5.9s, median 5.5s over 7 runs
+"aida-cli-lib status_sections::bug_1664_stale_sweep_tests::queue_gc_keeps_an_entry_reopened_behind_a_stale_snapshot" = 15  # max 5.3s, median 5.0s over 7 runs
+"aida-cli-lib status_sections::bug_1664_stale_sweep_tests::queue_list_self_heal_keeps_an_entry_reopened_behind_a_stale_snapshot" = 15  # max 5.3s, median 4.9s over 7 runs
+"aida-cli-lib status_sections::bug_2148_liveness_kill_signal_tests::bug_2148_agent_stop_never_signals_unconfirmed_identity_and_keeps_entry" = 15  # max 5.7s, median 5.6s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::history_cache_id_window_parity" = 15  # max 5.8s, median 4.7s over 7 runs
+"aida-cli-lib task_1507_history_cache_tests::task_1507_fork_point_tie_complete_and_partial" = 15  # max 5.3s, median 4.4s over 7 runs
+"aida-cli::agent_write_confirm queue_done_non_interactive_without_yes_marks_done_not_cancelled" = 15  # max 7.0s, median 5.3s over 7 runs
+"aida-cli::bug_1234_edit_description_sources edit_help_lists_all_sources_and_clap_rejects_combining_them" = 15  # max 5.7s, median 3.2s over 7 runs
+"aida-cli::bug_1234_edit_description_sources edit_refuses_missing_and_empty_files_without_erasing_description" = 15  # max 5.9s, median 3.4s over 7 runs
+"aida-cli::bug_1234_edit_description_sources edit_replaces_description_from_file_and_stdin" = 15  # max 6.8s, median 4.7s over 7 runs
+"aida-cli::bug_1252_structural_tags cli_refuses_every_structural_family_and_force_ledgers_dropped_tags" = 15  # max 6.3s, median 4.0s over 7 runs
+"aida-cli::bug_1535_ambiguous_ids show_on_an_ambiguous_id_exits_non_zero_listing_candidates" = 15  # max 5.0s, median 3.2s over 7 runs
+"aida-cli::bug_1535_ambiguous_ids writes_on_an_ambiguous_id_refuse_and_name_each_handle" = 15  # max 6.5s, median 5.7s over 7 runs
+"aida-cli::bug_1594_show_bounded bug_1594_first_add_to_fresh_file_store_is_visible_to_list" = 15  # max 1.0s, median 0.9s over 7 runs
+"aida-cli::bug_1594_show_bounded bug_1594_toon_show_default_path_with_linkage_stays_in_budget" = 15  # max 7.3s, median 6.1s over 7 runs
+"aida-cli::bug_1594_show_bounded bug_1594_upstream_notice_check_is_recorded_once_per_version" = 15  # max 5.6s, median 4.2s over 7 runs
+"aida-cli::bug_1683_live_drain_lock two_hour_live_lock_blocks_all_launch_entry_points" = 15  # max 7.4s, median 5.2s over 7 runs
+"aida-cli::bug_1687_defer_status_lens deferred_token_mixed_with_a_stored_status_honours_both" = 15  # max 7.3s, median 6.4s over 7 runs
+"aida-cli::bug_1687_defer_status_lens undefer_restores_the_prior_status_round_trip" = 15  # max 7.0s, median 6.7s over 7 runs
+"aida-cli::bug_1808_delegation_preflight delegating_grant_passes_headless_resume_preflight_and_launches" = 15  # max 5.5s, median 4.4s over 7 runs
+"aida-cli::bug_1808_delegation_preflight headless_standalone_reviewer_without_reviewer_delegation_is_refused_without_mutation" = 15  # max 6.8s, median 4.9s over 7 runs
+"aida-cli::bug_1921_faq_short_ids first_block_claim_is_pushed_to_the_remote" = 15  # max 5.5s, median 5.1s over 7 runs
+"aida-cli::bug_1940_corrupt_cache a_locked_healthy_cache_is_not_quarantined" = 15  # max 5.1s, median 2.6s over 7 runs
+"aida-cli::bug_1940_corrupt_cache notadb_read_prints_the_rebuild_hint_when_auto_heal_cannot_lock" = 15  # max 5.8s, median 3.2s over 7 runs
+"aida-cli::bug_1940_corrupt_cache read_command_and_verify_print_the_rebuild_hint_not_the_raw_error" = 15  # max 5.1s, median 2.6s over 7 runs
+"aida-cli::bug_1947_session_end_live_process session_end_include_in_use_removes_a_worktree_with_a_live_process_inside" = 15  # max 5.5s, median 3.9s over 7 runs
+"aida-cli::bug_1947_session_end_live_process session_end_with_its_own_mcp_claim_still_refuses_a_live_holder" = 15  # max 5.5s, median 4.3s over 7 runs
+"aida-cli::bug_1952_session_end_from_worktree bug_483_peer_guard_fires_from_inside_worktree" = 15  # max 5.8s, median 5.3s over 7 runs
+"aida-cli::bug_1952_session_end_from_worktree pooled_tree_ended_from_inside_is_returned_not_removed" = 15  # max 5.8s, median 5.3s over 7 runs
+"aida-cli::bug_1956_reader_fallbacks_bounded_under_writer reads_are_bounded_when_spawning_is_suppressed" = 15  # max 6.6s, median 5.8s over 7 runs
+"aida-cli::bug_1956_reader_fallbacks_bounded_under_writer show_is_bounded_when_the_schema_stamp_is_missing" = 15  # max 4.9s, median 4.3s over 7 runs
+"aida-cli::bug_1956_reader_fallbacks_bounded_under_writer show_is_bounded_with_no_detach" = 15  # max 6.1s, median 4.4s over 7 runs
+"aida-cli::bug_1960_init_cd_file_not_inherited aida_init_writes_the_cd_block_to_the_wrappers_side_channel_file" = 15  # max 6.1s, median 4.2s over 7 runs
+"aida-cli::bug_1993_show_phase_timings show_usage_event_records_phase_timings" = 15  # max 5.2s, median 4.3s over 7 runs
+"aida-cli::bug_2139_headless_child_grant contained_fresh_headless_child_gets_its_own_implementer_grant" = 15  # max 6.6s, median 5.0s over 7 runs
+"aida-cli::bug_2139_headless_child_grant headless_resume_child_gets_its_own_grant" = 15  # max 6.5s, median 4.9s over 7 runs
+"aida-cli::newcomer_delight newcomer_delight_human_nudge_meta_hidden_soft_empty_queue" = 15  # max 6.9s, median 5.5s over 7 runs
+"aida-cli::queue_work_dry_run defer_removes_queued_rows_across_queue_identities" = 15  # max 6.7s, median 5.6s over 7 runs
+"aida-cli::queue_work_dry_run drain_dry_run_skips_reviewer_routed_head" = 15  # max 5.9s, median 5.5s over 7 runs
+"aida-cli::queue_work_dry_run no_launch_completion_text_is_codex_aware" = 15  # max 5.2s, median 4.8s over 7 runs
+"aida-cli::queue_work_dry_run no_launch_with_custom_base_populates_submodules" = 15  # max 5.4s, median 5.1s over 7 runs
+"aida-cli::queue_work_dry_run reasoned_hold_refuses_queue_pickup_and_direct_session_start" = 15  # max 5.7s, median 5.1s over 7 runs
+"aida-cli::queue_work_dry_run task_1337_post_setup_launch_error_prints_manual_guided_continuation" = 15  # max 5.5s, median 4.9s over 7 runs
+"aida-cli::story_1434_carve_out_cli carve_into_an_ambiguous_target_refuses" = 15  # max 5.8s, median 5.3s over 7 runs
+"aida-cli::story_1434_carve_out_cli carve_out_end_to_end_strikes_description_writes_both_edges_and_the_comment" = 15  # max 6.2s, median 5.6s over 7 runs
+"aida-cli::story_1644_list_sort_cap history_limit_is_configurable" = 15  # max 7.0s, median 5.2s over 7 runs
+"aida-cli::story_1652_show_markdown piped_toon_and_json_output_carry_the_markdown_source_unchanged" = 15  # max 5.7s, median 5.3s over 7 runs
+"aida-cli::story_1653_derived_driver relay_drives_batch_spec_then_degrades_to_queued_when_killed" = 15  # max 5.9s, median 4.3s over 7 runs
+"aida-cli::task_1283_protocol_cli awaiting_notice_tracks_real_lease_through_session_end" = 15  # max 5.7s, median 5.3s over 7 runs
+"aida-cli::task_1290_criteria_gate queue_done_force_overrides_and_ledgers_the_override" = 15  # max 6.6s, median 6.0s over 7 runs
+"aida-cli::task_1290_criteria_gate queue_done_is_quiet_when_all_criteria_are_traced" = 15  # max 5.8s, median 5.4s over 7 runs
+"aida-cli::task_1290_criteria_gate queue_done_refuses_under_enforce_refuse" = 15  # max 5.1s, median 4.7s over 7 runs
+"aida-cli::task_1290_criteria_gate queue_done_warns_and_names_the_untraced_criterion_verbatim" = 15  # max 5.9s, median 5.4s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence attribution_is_not_free_text" = 15  # max 5.2s, median 4.9s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence covers_multistep_loss_rooted_cycle_and_next_run_graduation" = 15  # max 5.2s, median 4.8s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence covers_support_is_rooted_not_circular" = 15  # max 5.5s, median 5.1s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence held_candidates_are_redecided_live" = 15  # max 7.4s, median 7.0s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence historical_trailer_unavailable_then_clear" = 15  # max 5.8s, median 5.5s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence multi_candidate_failure_is_conservative_and_truthful" = 15  # max 5.7s, median 5.4s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence stale_review_path_is_decided_at_the_live_seam" = 15  # max 6.0s, median 5.6s over 7 runs
+"aida-cli::task_1335_reconcile_unavailable_evidence write_seam_rechecks_reopen_closure_and_covers" = 15  # max 6.1s, median 5.6s over 7 runs
+"aida-cli::task_1527_refresh_worker killed_worker_leaves_cache_readable_and_request_present_then_next_run_completes" = 15  # max 6.4s, median 4.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock drifted_generated_hook_is_refused_with_upgrade_guidance" = 15  # max 5.4s, median 5.0s over 7 runs
+"aida-cli::task_1717_store_writer_lock gc_runs_after_the_store_window" = 15  # max 5.4s, median 4.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock hook_declined_push_fails_with_the_real_message_not_offline" = 15  # max 5.8s, median 5.4s over 7 runs
+"aida-cli::task_1717_store_writer_lock killed_holder_releases_the_lock_and_the_sidecar_survives" = 15  # max 5.6s, median 5.5s over 7 runs
+"aida-cli::task_1717_store_writer_lock mailbox_digest_refuses_an_unreadable_canonical_record" = 15  # max 5.2s, median 4.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock non_executable_aida_hook_is_reported_and_made_executable" = 15  # max 5.2s, median 4.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock owned_rebase_abort_failure_is_reported_and_preserved" = 15  # max 5.4s, median 5.1s over 7 runs
+"aida-cli::task_1717_store_writer_lock per_write_auto_push_publishes_the_captured_commit_unlocked" = 15  # max 5.6s, median 5.4s over 7 runs
+"aida-cli::task_1717_store_writer_lock pull_and_allocation_report_a_failed_pending_commit" = 15  # max 6.7s, median 6.3s over 7 runs
+"aida-cli::task_1717_store_writer_lock pull_window_unions_a_same_spec_conflict" = 15  # max 6.3s, median 6.0s over 7 runs
+"aida-cli::task_1717_store_writer_lock push_probe_attributes_a_competitor_that_took_the_released_lock" = 15  # max 5.2s, median 4.7s over 7 runs
+"aida-cli::task_1717_store_writer_lock push_store_leg_reports_a_failed_commit_and_pushes_nothing" = 15  # max 7.1s, median 6.7s over 7 runs
+"aida-cli::task_1717_store_writer_lock remote_reconcile_checks_its_rollback" = 15  # max 6.2s, median 5.8s over 7 runs
+"aida-cli::task_1717_store_writer_lock remote_reconcile_decides_noop_under_the_lock" = 15  # max 6.3s, median 6.0s over 7 runs
+"aida-cli::task_1717_store_writer_lock repeated_rejection_fails_and_keeps_local_commits" = 15  # max 6.1s, median 5.8s over 7 runs
+"aida-cli::task_1717_store_writer_lock sibling_worktree_discovers_the_same_lock" = 15  # max 6.1s, median 5.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock sync_touches_nothing_before_it_owns_the_lock" = 15  # max 5.9s, median 5.6s over 7 runs
+"aida-cli::task_1717_store_writer_lock sync_vs_edit_serializes_at_the_pending_commit" = 15  # max 6.8s, median 6.5s over 7 runs
+"aida-cli::task_1717_store_writer_lock template_hook_profile_completes_with_healthy_effects" = 15  # max 6.0s, median 5.7s over 7 runs
+"aida-cli::task_1717_store_writer_lock unclassified_push_failure_defers_with_exit_zero" = 15  # max 5.3s, median 4.9s over 7 runs
+"aida-cli::task_1717_store_writer_lock unreachable_origin_files_locally_and_defers" = 15  # max 6.8s, median 6.5s over 7 runs
+"aida-cli::task_1784_worktree_add_after_deleted_tree worktree_add_names_a_project_root_lease_and_how_to_end_it" = 15  # max 7.3s, median 5.4s over 7 runs
+"aida-core db::cached_git_backend::tests::bug_1956_bounded_refresh_never_serves_a_pending_migration" = 15  # max 5.6s, median 4.5s over 7 runs
+"aida-core db::git_backend::tests::bug1612_per_spec_update_does_not_scan_the_store" = 15  # max 5.7s, median 3.6s over 7 runs
+"aida-core db::git_backend::tests::bug1612_repeated_saves_of_one_loaded_store_all_land" = 15  # max 6.2s, median 4.6s over 7 runs
+"aida-core db::git_backend::tests::bug1641_bulk_writer_reassigns_past_a_disk_that_moved_further" = 15  # max 5.3s, median 4.7s over 7 runs
+"aida-core db::git_backend::tests::bug_1677_concurrent_queue_writers_lose_nothing_and_readers_see_no_torn_file" = 15  # max 5.4s, median 4.2s over 7 runs
+"aida-core db::git_backend::tests::bulk_update_atomically_decides_on_the_stored_object_in_one_commit" = 15  # max 5.2s, median 3.8s over 7 runs
+"aida-core db::hypothesis_tests::hypothesis_both_edge_directions_and_types_lock_but_other_edges_and_legacy_do_not" = 15  # max 6.4s, median 4.5s over 7 runs
 
 # Deterministic CLI half-split weights, measured on main 128a5bb6eb,
 # CI run 39348896342. Independent of the enforcement limits above.
@@ -142,9 +289,11 @@ default_limit = 10
 
 # Lib-half weights: each aida-cli-lib top-level module's summed per-test
 # seconds (max over the logs), which scripts/ci-test-shards.py balances the
-# lib-0/lib-1 halves by. Regenerate from the timestamped lane logs:
-#   gh run view --job <lib-0 job> --log > lib-0.log   (and lib-1)
-#   python3 scripts/ci-test-shards.py --lib-weights lib-0.log lib-1.log
+# lib-0/lib-1 halves by. Regenerate from the lib lanes' nextest JUnit reports
+# (the test-timings-lib-0 and -lib-1 artifacts of a CI run):
+#   python3 scripts/ci-test-shards.py --lib-weights junit-lib-0-0.xml junit-lib-1-0.xml
+# or, for a cargo-test run, from the timestamped lane logs
+# (`gh run view --job <lib-0 job> --log > lib-0.log`, and lib-1).
 # Measured on PR-2769 runs 39383875258, 39396053306 and 39398646423. A module without an
 # entry weighs its test count times the mean per test. Independent of the
 # enforcement limits above. trace:TASK-1979 | ai:claude

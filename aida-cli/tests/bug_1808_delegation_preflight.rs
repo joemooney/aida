@@ -7,6 +7,9 @@
 //! lease and manifest had landed. A refusal must leave state byte-identical.
 // trace:BUG-1808 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -46,7 +49,7 @@ fn aida(repo: &Path, home: &Path, bin_dir: &Path) -> Command {
 }
 
 fn git(repo: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()

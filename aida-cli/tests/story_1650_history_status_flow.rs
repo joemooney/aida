@@ -14,6 +14,9 @@
 //! the binary built just before this change (see `capture_digest_goldens`).
 // trace:STORY-1650 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -32,7 +35,7 @@ impl Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()
@@ -133,7 +136,7 @@ fn write_obj(
 
 fn commit_at(store: &Path, msg: &str, date: &str) {
     git_ok(store, &["add", "-A"]);
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(store)
         .env("GIT_AUTHOR_DATE", date)
         .env("GIT_COMMITTER_DATE", date)

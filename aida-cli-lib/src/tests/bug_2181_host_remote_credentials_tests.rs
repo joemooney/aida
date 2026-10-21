@@ -26,7 +26,7 @@ struct CredentialedOrigin {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -192,7 +192,7 @@ fn an_unrouted_remote_call_leaks_the_token_into_transport_argv() {
     }
     let fx = CredentialedOrigin::new();
     let _env = fx.transport_env();
-    let _ = Command::new("git")
+    let _ = crate::test_git::git_command()
         .arg("-C")
         .arg(&fx.repo)
         .args(["ls-remote", "origin"])

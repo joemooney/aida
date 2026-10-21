@@ -3458,7 +3458,7 @@ mod story_1405_review_marker_tests {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
         let git = |args: &[&str]| {
-            assert!(std::process::Command::new("git")
+            assert!(crate::test_git::git_command()
                 .arg("-C")
                 .arg(repo)
                 .args(args)
@@ -3486,7 +3486,7 @@ mod story_1405_review_marker_tests {
     fn marker_head_best_effort_is_none_with_no_forge_and_no_local_ref() {
         let dir = tempfile::tempdir().unwrap();
         let repo = dir.path();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(repo)
             .args(["init", "-q"])

@@ -6,6 +6,9 @@
 //! one id.
 // trace:BUG-1535 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -16,7 +19,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(dir)
         .args(args)
         .status()

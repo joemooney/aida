@@ -10,6 +10,9 @@
 //! `criteria_gate` helper functions (unit-tested separately).
 // trace:TASK-1290 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -22,7 +25,7 @@ mod support;
 // trace:TASK-1959 | ai:claude
 
 fn git(repo: &Path, args: &[&str]) {
-    let status = Command::new("git")
+    let status = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .status()

@@ -1114,6 +1114,9 @@ pub struct DigestReport {
     pub process: Vec<MemoryEntry>,
     /// Operator-audience capabilities lens (CLI-surface diff). trace:STORY-541
     pub capabilities: CapabilitiesReport,
+    /// STORY-1700: one line per mandate with actions in the window.
+    // trace:STORY-1700 | ai:claude
+    pub mandate_driven: Vec<String>,
 }
 
 /// Render the operator (capabilities) lens: grouped by surface, value-framed,
@@ -1303,6 +1306,17 @@ pub fn render_markdown(report: &DigestReport, opts: &DigestOptions) -> String {
             }
             s.push('\n');
         }
+    }
+
+    // trace:STORY-1700 | ai:claude
+    // The lines name mandates, outcomes and actions — never a spec id — so
+    // the section shows for every audience, the default included.
+    if !report.mandate_driven.is_empty() {
+        s.push_str("## Mandate-driven\n\n");
+        for line in &report.mandate_driven {
+            s.push_str(&format!("- {line}\n"));
+        }
+        s.push('\n');
     }
 
     if !report.plans.is_empty() && opts.audience.keep_spec_ids() {
@@ -1501,6 +1515,9 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
         /// Operator-lens candidate set (Layer-1 facts the skill renders from).
         #[serde(skip_serializing_if = "Option::is_none")]
         capabilities: Option<CapabilitiesJson<'a>>,
+        // trace:STORY-1700 | ai:claude
+        #[serde(skip_serializing_if = "<[String]>::is_empty")]
+        mandate_driven: &'a [String],
     }
     #[derive(Serialize)]
     struct CapabilitiesJson<'a> {
@@ -1555,6 +1572,7 @@ fn render_json(report: &DigestReport, opts: &DigestOptions) -> Result<String> {
     };
 
     let doc = DigestJson {
+        mandate_driven: &report.mandate_driven,
         regeneration: report.regeneration.as_ref(),
         since: report.since.to_rfc3339(),
         until: report.until.to_rfc3339(),
@@ -1717,6 +1735,7 @@ pub fn render_string(
         plans,
         process,
         capabilities,
+        mandate_driven: crate::mandate_drive::digest_lines(project_root, opts.since, opts.until),
     };
 
     Ok(match opts.format {
@@ -2035,6 +2054,7 @@ mod tests {
             plans: vec![],
             process: vec![],
             capabilities: CapabilitiesReport::default(),
+            mandate_driven: vec![],
         };
         let customer = render_markdown(&report, &opts);
         assert!(!customer.contains("STORY-"));
@@ -2043,6 +2063,36 @@ mod tests {
         opts.audience = DigestAudience::Team;
         let team = render_markdown(&report, &opts);
         assert!(team.contains("STORY-50"));
+    }
+
+    // STORY-1700: the drive ledger's section carries no spec ids, so the
+    // default (customer) audience shows it too.
+    // trace:STORY-1700.Audit | ai:claude
+    #[test]
+    fn mandate_driven_section_shows_for_every_audience() {
+        let now = Utc::now();
+        let mut opts = opts_at(now - chrono::Duration::days(7), now);
+        let report = DigestReport {
+            regeneration: None,
+            since: opts.since,
+            until: opts.until,
+            releases: vec![],
+            completed: vec![],
+            cluster_prs: vec![],
+            strategic: vec![],
+            pivots: vec![],
+            next: NextSection::default(),
+            plans: vec![],
+            process: vec![],
+            capabilities: CapabilitiesReport::default(),
+            mandate_driven: vec!["mandate 6f1c1d6e: 2 routed (by action: 2 dispatch)".into()],
+        };
+        for audience in [DigestAudience::Customer, DigestAudience::Team] {
+            opts.audience = audience;
+            let md = render_markdown(&report, &opts);
+            assert!(md.contains("## Mandate-driven"), "{md}");
+            assert!(md.contains("- mandate 6f1c1d6e: 2 routed"), "{md}");
+        }
     }
 
     #[test]
@@ -2066,6 +2116,7 @@ mod tests {
             plans: vec![],
             process: vec![],
             capabilities: CapabilitiesReport::default(),
+            mandate_driven: vec![],
         };
         let brief = render_brief(&report, &opts);
         assert!(!brief.contains("##"));
@@ -2216,6 +2267,7 @@ mod tests {
             plans: vec![],
             process: vec![],
             capabilities,
+            mandate_driven: vec![],
         };
         let md = render_markdown(&report, &opts);
         assert!(md.contains("## New commands"));
