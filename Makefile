@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched \
+        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched test-lane \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -255,8 +255,15 @@ db-list-status: cli ## List requirements grouped by status
 # `make test TEST_PROFILE=dev` opts back in. trace:STORY-1853 | ai:claude
 TEST_PROFILE ?= agent
 
-test: ## Run all tests (agent profile; the full suite is CI's job, not a pre-push gate)
-	cargo test --workspace --profile $(TEST_PROFILE)
+# `make test` runs CI's test lanes (lib, cli, rest) through the same planner
+# and runner: cargo-nextest, doctests on cargo test; cargo test for all of it
+# when nextest is not installed. `make test-lane LANE=cli-0` runs one lane.
+# trace:TASK-1988 | ai:claude
+test: ## Run all tests the way CI's test lanes do (agent profile; the full suite is CI's job, not a pre-push gate)
+	python3 scripts/ci-test-shards.py --runner nextest --shard all --profile $(TEST_PROFILE)
+
+test-lane: ## Run one CI test lane locally: make test-lane LANE=lib-0|lib-1|cli-0|cli-1|rest
+	python3 scripts/ci-test-shards.py --runner nextest --shard $(LANE) --profile $(TEST_PROFILE)
 
 # The STANDARD tier's local tests: targeted `cargo test --profile agent` runs
 # for the Rust files changed vs origin/main (module filters, touched
