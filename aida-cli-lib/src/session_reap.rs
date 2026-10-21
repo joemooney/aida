@@ -1154,20 +1154,31 @@ fn reap_one_with_clear_hooks(
     }
 }
 
-/// The reap verdict for a seat clone, pure over the probe and the gates. The
-/// order mirrors [`classify_session_reap`]: unreadable or uncommitted state
-/// first, then the branch, then work origin lacks, then liveness, completion
-/// and the merge signal (a merged PR on the forge: the clone's branch is
-/// never in main).
+/// The reap verdict for a seat clone, pure over the probe and the gates.
+/// The cheap gates run first (liveness, then completion), so a live or
+/// unfinished seat is never probed: a probe is two sandboxed git runs, and
+/// every reap scan, interactive or from the drive loop and night shift,
+/// visits every clone lease. Then the probe, in [`classify_session_reap`]'s
+/// order (unreadable or uncommitted state, the branch, work origin lacks),
+/// and last the merge signal (a merged PR on the forge: the clone's branch
+/// is never in main).
 // trace:TASK-2053 | ai:claude
 pub(crate) fn classify_clone_reap(
-    probe: &crate::seat_clone::Probe,
+    probe: impl FnOnce() -> crate::seat_clone::Probe,
     branch: &str,
     process_exited: bool,
     spec_finished: bool,
     merged: impl FnOnce() -> bool,
 ) -> ReapVerdict {
-    let facts = match probe {
+    if !process_exited {
+        return ReapVerdict::Skip(
+            "its process is still running — left untouched (never force-closed)".to_string(),
+        );
+    }
+    if !spec_finished {
+        return ReapVerdict::Skip("its spec is not finished (needs Done or Completed)".to_string());
+    }
+    let facts = match probe() {
         crate::seat_clone::Probe::Unknown(why) => {
             return ReapVerdict::Skip(format!("seat clone state could not be read ({why}) — kept"))
         }
@@ -1186,14 +1197,6 @@ pub(crate) fn classify_clone_reap(
             "seat clone holds {} commit(s) origin does not have",
             facts.unpushed
         ));
-    }
-    if !process_exited {
-        return ReapVerdict::Skip(
-            "its process is still running — left untouched (never force-closed)".to_string(),
-        );
-    }
-    if !spec_finished {
-        return ReapVerdict::Skip("its spec is not finished (needs Done or Completed)".to_string());
     }
     if !merged() {
         return ReapVerdict::Skip(format!("no merged PR found for `{branch}`"));
@@ -1227,17 +1230,25 @@ fn scan_clone_lease(
         owner_gone,
         worktree_is_active(&lease.worktree_path, active),
     );
-    let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
-    let verdict = classify_clone_reap(&probe, &lease.branch, process_exited, spec_finished, || {
-        matches!(
-            detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
-            PrLookup::Found(_)
-        )
-    });
-    let branch_tip = match &probe {
-        crate::seat_clone::Probe::Known(facts) => facts.head.clone(),
-        crate::seat_clone::Probe::Unknown(_) => None,
-    };
+    let mut branch_tip = None;
+    let verdict = classify_clone_reap(
+        || {
+            let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
+            if let crate::seat_clone::Probe::Known(facts) = &probe {
+                branch_tip = facts.head.clone();
+            }
+            probe
+        },
+        &lease.branch,
+        process_exited,
+        spec_finished,
+        || {
+            matches!(
+                detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
+                PrLookup::Found(_)
+            )
+        },
+    );
     ReapRow {
         session: lease.id.clone(),
         scope: lease.scope.clone(),

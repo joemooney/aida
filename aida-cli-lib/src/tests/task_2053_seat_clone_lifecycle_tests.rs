@@ -116,11 +116,28 @@ fn status_v2_parsing_reads_head_branch_and_entries() {
 /// command scope.
 #[test]
 fn the_probe_sandbox_is_read_only_networkless_and_hookless() {
-    let args: Vec<String> = probe_sandbox_args(Path::new("/w/aida-seat-x"), Path::new("/m"))
+    let sandbox = |allowlist: &[String]| -> Vec<String> {
+        probe_sandbox_args(
+            Path::new("/w/aida-seat-x"),
+            Path::new("/m"),
+            allowlist,
+            Path::new("/h/probe-config"),
+        )
         .into_iter()
         .map(|a| a.into_string().unwrap())
-        .collect();
+        .collect()
+    };
+    let args = sandbox(&[]);
     let has = |seq: &[&str]| args.windows(seq.len()).any(|w| w == seq);
+    // The clone's own config is replaced, and git cannot follow a planted
+    // `.git/commondir` to another one.
+    assert!(has(&[
+        "--ro-bind",
+        "/h/probe-config",
+        "/w/aida-seat-x/.git/config"
+    ]));
+    assert!(has(&["--setenv", "GIT_DIR", "/w/aida-seat-x/.git"]));
+    assert!(has(&["--setenv", "GIT_COMMON_DIR", "/w/aida-seat-x/.git"]));
     assert!(has(&["--unshare-all"]), "{args:?}");
     assert!(!args.iter().any(|a| a == "--share-net"), "{args:?}");
     assert!(has(&["--ro-bind", "/", "/"]), "{args:?}");
@@ -138,6 +155,18 @@ fn the_probe_sandbox_is_read_only_networkless_and_hookless() {
     assert!(has(&["--setenv", "GIT_CONFIG_KEY_1", "core.fsmonitor"]));
     assert!(has(&["--setenv", "GIT_CONFIG_VALUE_1", "false"]));
     assert_eq!(args.last().map(String::as_str), Some("--"));
+
+    // With `[contained] read_allowlist`, the probe sees what the seat sees:
+    // the essential system paths and the allowlist, never the whole root.
+    let narrowed = sandbox(&["/data/a".to_string()]);
+    let has = |seq: &[&str]| narrowed.windows(seq.len()).any(|w| w == seq);
+    assert!(!has(&["--ro-bind", "/", "/"]), "{narrowed:?}");
+    assert!(has(&["--ro-bind-try", "/usr", "/usr"]), "{narrowed:?}");
+    assert!(
+        has(&["--ro-bind-try", "/data/a", "/data/a"]),
+        "{narrowed:?}"
+    );
+    assert!(has(&["--ro-bind", "/w/aida-seat-x", "/w/aida-seat-x"]));
 }
 
 #[test]
@@ -150,7 +179,7 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
         unpushed: 0,
     };
     let verdict = |probe: &Probe, exited, finished, merged: bool| {
-        classify_clone_reap(probe, "feat", exited, finished, || merged)
+        classify_clone_reap(|| probe.clone(), "feat", exited, finished, || merged)
     };
     let ok = Probe::Known(clean.clone());
     assert!(matches!(
@@ -192,6 +221,17 @@ fn clone_reap_verdicts_keep_anything_unreadable_unshipped_or_unmerged() {
     );
     skip(verdict(&ok, false, true, true), "still running");
     skip(verdict(&ok, true, false, true), "not finished");
+    // The cheap gates come first: a live or unfinished seat is never probed.
+    for (exited, finished) in [(false, true), (true, false)] {
+        let verdict = classify_clone_reap(
+            || panic!("probed a seat the cheap gates already kept"),
+            "feat",
+            exited,
+            finished,
+            || true,
+        );
+        assert!(matches!(verdict, ReapVerdict::Skip(_)));
+    }
     skip(verdict(&ok, true, true, false), "no merged PR");
 }
 
@@ -568,4 +608,195 @@ fn task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease() {
     )
     .unwrap();
     assert!(ledger.contains("seat_clone_dismiss"), "{ledger}");
+}
+
+/// A host file outside `/tmp` and outside the essential system paths: the
+/// crate's own manifest. A probe that can read it would also read `~/.ssh`.
+fn outside_file() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml")
+}
+
+fn write_read_allowlist(fx: &Fixture, dirs: &[&Path]) {
+    let list: Vec<String> = dirs
+        .iter()
+        .map(|d| aida_core::toml_quote::toml_string(&d.display().to_string()))
+        .collect();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        format!("[contained]\nread_allowlist = [{}]\n", list.join(", ")),
+    )
+    .unwrap();
+}
+
+/// Review round 1, item 1: a seat-planted clean filter never runs in the
+/// probe or salvage (the probe's own repo config defines no driver), and with
+/// `[contained] read_allowlist` the probe sandbox cannot read a host file
+/// outside it, while it can without the allowlist (control).
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "filter", "c0ffee000011");
+    let outside = outside_file();
+    let marker = "name = \"aida-cli-lib\"";
+    git_ok(
+        &clone,
+        &[
+            "config",
+            "filter.leak.clean",
+            &format!("cat '{}'", outside.display()),
+        ],
+    );
+    std::fs::write(clone.join(".gitattributes"), "* filter=leak\n").unwrap();
+    std::fs::write(clone.join("README.md"), "seat edit\n").unwrap();
+
+    assert!(known(probe(&fx.main, &clone)).unshipped());
+    let patch = std::fs::read_to_string(salvage(&fx.main, &clone).unwrap()).unwrap();
+    assert!(patch.contains("+seat edit"), "{patch}");
+    assert!(
+        !patch.contains(marker),
+        "a seat-planted filter ran in the salvage:\n{patch}"
+    );
+
+    let read = |fx: &Fixture| {
+        run_sandboxed(
+            &clone,
+            &fx.main,
+            "cat",
+            &[outside.as_os_str()],
+            PROBE_OUTPUT_CAP,
+        )
+    };
+    let unconfined = read(&fx).expect("control: readable without an allowlist");
+    assert!(String::from_utf8_lossy(&unconfined).contains(marker));
+    let visible = fx.root.join("visible");
+    std::fs::create_dir_all(&visible).unwrap();
+    write_read_allowlist(&fx, &[&visible]);
+    assert!(
+        matches!(read(&fx), Err(SandboxFailure::Failed(_))),
+        "a host file outside read_allowlist was readable from the probe"
+    );
+    // The probe itself still works in the narrowed view.
+    assert!(known(probe(&fx.main, &clone)).unshipped());
+}
+
+/// Review round 1, item 2: reap re-checks for live processes right before
+/// removal, so a seat resumed after the scan keeps its clone.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_reap_keeps_a_clone_a_live_process_is_using() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "busy", "c0ffee000012");
+    let head = known(probe(&fx.main, &clone)).head.unwrap();
+    let mut holder = std::process::Command::new("sleep")
+        .arg("60")
+        .current_dir(&clone)
+        .spawn()
+        .unwrap();
+    let kept = destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, Some(&head)).unwrap();
+    let _ = holder.kill();
+    let _ = holder.wait();
+    assert!(
+        matches!(&kept, Destroyed::Kept { reason, .. } if reason.contains("in use")),
+        "{kept:?}"
+    );
+    assert!(clone.exists());
+    assert!(ref_exists(&fx.main, &pin_ref(&clone).unwrap()));
+    let removed = destroy(&fx.main, &clone, DestroyMode::KeepUnshipped, Some(&head)).unwrap();
+    assert!(matches!(removed, Destroyed::Removed { .. }), "{removed:?}");
+    assert!(!clone.exists());
+}
+
+/// Review round 1, item 3: `create` claims the clone directory before it
+/// writes the base pin, so an orphan-pin pass racing a launch always sees the
+/// directory and only reports the pin.
+#[cfg(unix)]
+#[test]
+fn create_claims_the_clone_directory_before_writing_its_pin() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let dest = fx.root.join(format!("{CLONE_DIR_PREFIX}aida-race"));
+    let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
+        .display()
+        .to_string();
+    let shim_dir = fx.root.join("shim");
+    std::fs::create_dir_all(&shim_dir).unwrap();
+    let log = fx.root.join("pin.log");
+    crate::test_exec::write_executable(
+        &shim_dir.join("git"),
+        format!(
+            "#!/bin/sh\ncase \"$*\" in *update-ref\\ refs/aida/seats/*)\n\
+             if [ -d '{dest}' ]; then echo present; else echo absent; fi >> '{log}';;\n\
+             esac\nexec '{real_git}' \"$@\"\n",
+            dest = dest.display(),
+            log = log.display()
+        ),
+    );
+    {
+        let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+        create(&fx.main, &dest, "feat", "origin/main").unwrap();
+    }
+    assert_eq!(std::fs::read_to_string(&log).unwrap().trim(), "present");
+    // The racing pass: a pin, its directory, no lease yet. Reported, kept.
+    let orphans = orphan_pins(&fx.main);
+    assert!(orphans.iter().all(|o| o.clone_exists), "{orphans:?}");
+    crate::session_reap::release_orphan_pins(&fx.main, &orphans);
+    assert!(ref_exists(&fx.main, &pin_ref(&dest).unwrap()));
+}
+
+/// Review round 1, item 5: a reader stops after the cap and kills the
+/// writer, so an endless stream ends at once instead of at the timeout.
+#[cfg(unix)]
+#[test]
+fn the_capped_runner_cuts_off_an_endless_stream() {
+    let mut cmd = std::process::Command::new("sh");
+    cmd.args(["-c", "yes"]);
+    let started = std::time::Instant::now();
+    let out =
+        crate::command_output_with_timeout_capped(cmd, std::time::Duration::from_secs(60), 4096);
+    let crate::BoundedCommandOutput::Completed(out) = out else {
+        panic!("the capped run must complete, not time out");
+    };
+    assert_eq!(out.stdout.len(), 4097);
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+}
+
+/// Review round 1, item 5: a salvage past its cap is written cut off with a
+/// closing marker and reported as an error, and `destroy` keeps the clone.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_a_salvage_past_its_cap_is_marked_and_keeps_the_clone() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "big", "c0ffee000013");
+    std::fs::write(clone.join("big.txt"), "x\n".repeat(64 * 1024)).unwrap();
+    let err = salvage_capped(&fx.main, &clone, 1024).unwrap_err();
+    assert!(format!("{err:#}").contains("cut off"), "{err:#}");
+    let dir = fx
+        .main
+        .join(".aida/salvage")
+        .join(clone.file_name().unwrap());
+    let patch = std::fs::read_dir(&dir)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let body = std::fs::read_to_string(patch).unwrap();
+    assert!(body.trim_end().ends_with("the clone was kept"), "{body}");
+    assert!(clone.exists());
 }

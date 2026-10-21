@@ -253,7 +253,8 @@ fn refusal(dest: &Path, error: anyhow::Error) -> anyhow::Error {
 /// sandbox exists:
 ///
 /// 1. resolve `base_ref` to a commit in `main` (the base is main's view);
-/// 2. pin it at `refs/aida/seats/<dir>` in `main`;
+/// 2. create the empty `dest`, then pin the base at `refs/aida/seats/<dir>`
+///    in `main`;
 /// 3. `git clone --reference <main> --no-checkout -- <origin> <dest>`;
 /// 4. check out `branch` at that commit (present through alternates);
 /// 5. exclude AIDA runtime files and write the marker.
@@ -334,10 +335,22 @@ pub(crate) fn create(
             .map_err(|e| refusal(dest, e))?;
     }
 
+    // Claim the (empty) directory BEFORE the pin, so a pin never exists
+    // without its clone directory: reap releases a pin with no clone lease
+    // only when the directory is gone, and the lease is written after
+    // `create` returns. `create_dir` also fails when another launch claimed
+    // the same path first. `git clone` accepts an empty directory.
+    // trace:TASK-2053 | ai:claude
+    std::fs::create_dir(dest)
+        .with_context(|| format!("create {}", dest.display()))
+        .map_err(|e| refusal(dest, e))?;
     let mut pin_cmd = git(main);
     // An empty old value makes `update-ref` refuse when the pin already exists.
     pin_cmd.args(["update-ref", &pin, &base_sha, ""]);
-    run(pin_cmd, &format!("pin {pin} in the main checkout")).map_err(|e| refusal(dest, e))?;
+    if let Err(error) = run(pin_cmd, &format!("pin {pin} in the main checkout")) {
+        let _ = std::fs::remove_dir(dest);
+        return Err(refusal(dest, error));
+    }
 
     let made = clone_and_checkout(main, dest, branch, &base_sha, &origin_url, &pin);
     if let Err(error) = made {
@@ -699,45 +712,94 @@ impl ProbeFacts {
     }
 }
 
-/// The bwrap argv that runs a program against `clone` for the host: the
-/// whole file system read-only, a private `/tmp`, no network, no other
-/// namespace, a fresh session, and torn down with the host process. The clone
-/// and main's `.git` (which the clone borrows objects from) are bound again
-/// after the `/tmp` mount, so a clone or main under `/tmp` stays visible. The
-/// environment is cleared: no user or system git config, and command-scope
-/// config that disables hooks and fsmonitor, which outranks the clone's own.
+/// The most a probe run may print. `git status` of a clone with very many
+/// changed files stays far below this; more means a seat-planted program is
+/// streaming, and the probe reads "unknown".
 // trace:TASK-2053 | ai:claude
-pub(crate) fn probe_sandbox_args(clone: &Path, main: &Path) -> Vec<std::ffi::OsString> {
-    let mut args: Vec<std::ffi::OsString> = [
-        "--unshare-all",
-        "--die-with-parent",
-        "--new-session",
-        "--ro-bind",
-        "/",
-        "/",
-        "--dev",
-        "/dev",
-        "--proc",
-        "/proc",
-        "--tmpfs",
-        "/tmp",
-    ]
-    .iter()
-    .map(Into::into)
-    .collect();
+const PROBE_OUTPUT_CAP: u64 = 16 * 1024 * 1024;
+
+/// The most [`salvage`] writes. A larger patch is cut off, says so, and the
+/// clone is kept.
+// trace:TASK-2053 | ai:claude
+const SALVAGE_OUTPUT_CAP: u64 = 64 * 1024 * 1024;
+
+/// The repository config git reads inside the probe sandbox, bound read-only
+/// over the clone's own `.git/config`. It defines no filter, diff, textconv
+/// or fsmonitor driver and no include, so attributes a seat plants in its
+/// clone name drivers that do not exist and run nothing. The object format
+/// comes from MAIN (the clone was made from main's origin), never from a
+/// file in the clone.
+// trace:TASK-2053 | ai:claude
+fn probe_repo_config(main: &Path) -> String {
+    let mut cmd = git(main);
+    cmd.args(["rev-parse", "--show-object-format"]);
+    match run(cmd, "read the object format").as_deref() {
+        Ok("sha256") => "[core]\n\trepositoryformatversion = 1\n\tbare = false\n\
+                         [extensions]\n\tobjectformat = sha256\n"
+            .to_string(),
+        _ => "[core]\n\trepositoryformatversion = 0\n\tbare = false\n".to_string(),
+    }
+}
+
+/// The bwrap argv that runs a program against `clone` for the host: no
+/// network, no other namespace, a fresh session, a private `/tmp`, torn down
+/// with the host process, and never more of the file system than the seat
+/// itself may read. With `[contained] read_allowlist` (read from MAIN's
+/// config) only the essential system paths and the allowlist are visible, as
+/// for the seat; without it the file system is read-only. The clone and
+/// main's `.git` (which the clone borrows objects from) are bound read-only
+/// after the `/tmp` mount, and `repo_config` (see [`probe_repo_config`]) over
+/// the clone's own config. `GIT_DIR` and `GIT_COMMON_DIR` are set, so a
+/// seat-planted `.git/commondir` cannot point git at another config. The
+/// environment is cleared: no user or system git config, and command-scope
+/// config that disables hooks and fsmonitor.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn probe_sandbox_args(
+    clone: &Path,
+    main: &Path,
+    read_allowlist: &[String],
+    repo_config: &Path,
+) -> Vec<std::ffi::OsString> {
+    let mut args: Vec<std::ffi::OsString> = ["--unshare-all", "--die-with-parent", "--new-session"]
+        .iter()
+        .map(Into::into)
+        .collect();
+    if read_allowlist.is_empty() {
+        args.extend(["--ro-bind".into(), "/".into(), "/".into()]);
+    } else {
+        let paths = crate::session::strict_read_essential_paths()
+            .iter()
+            .map(|p| p.to_string())
+            .chain(read_allowlist.iter().cloned());
+        for path in paths {
+            args.extend(["--ro-bind-try".into(), path.clone().into(), path.into()]);
+        }
+    }
+    args.extend(
+        ["--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp"]
+            .iter()
+            .map(Into::into),
+    );
+    let git_dir = clone.join(".git");
     for path in [clone.to_path_buf(), main.join(".git")] {
         args.extend(["--ro-bind".into(), path.clone().into(), path.into()]);
     }
     args.extend([
+        "--ro-bind".into(),
+        repo_config.as_os_str().to_os_string(),
+        git_dir.join("config").into(),
         "--chdir".into(),
         clone.as_os_str().to_os_string(),
         "--clearenv".into(),
     ]);
     let host_path = std::env::var_os("PATH").unwrap_or_else(|| "/usr/bin:/bin".into());
-    let env: [(&str, std::ffi::OsString); 13] = [
+    let env: [(&str, std::ffi::OsString); 16] = [
         ("PATH", host_path),
         ("HOME", "/nonexistent".into()),
         ("LC_ALL", "C".into()),
+        ("GIT_DIR", git_dir.clone().into()),
+        ("GIT_COMMON_DIR", git_dir.into()),
+        ("GIT_WORK_TREE", clone.into()),
         ("GIT_CONFIG_NOSYSTEM", "1".into()),
         ("GIT_CONFIG_GLOBAL", "/dev/null".into()),
         ("GIT_TERMINAL_PROMPT", "0".into()),
@@ -756,37 +818,91 @@ pub(crate) fn probe_sandbox_args(clone: &Path, main: &Path) -> Vec<std::ffi::OsS
     args
 }
 
-/// Run `program args…` in the probe sandbox for `clone`. `Err` carries why
-/// there is no answer: no bwrap, a spawn failure, a timeout or a non-zero exit.
+/// Why a sandboxed run gave no usable answer.
+// trace:TASK-2053 | ai:claude
+#[derive(Debug)]
+enum SandboxFailure {
+    /// No bwrap, a spawn failure, a timeout or a non-zero exit.
+    Failed(String),
+    /// More than `cap` bytes on stdout: the first `cap` bytes.
+    Truncated(Vec<u8>),
+}
+
+impl std::fmt::Display for SandboxFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SandboxFailure::Failed(why) => f.write_str(why),
+            SandboxFailure::Truncated(kept) => {
+                write!(
+                    f,
+                    "the sandboxed output passed {} bytes and was cut off",
+                    kept.len()
+                )
+            }
+        }
+    }
+}
+
+/// Run `program args…` in the probe sandbox for `clone`, keeping at most
+/// `cap` bytes of its stdout.
 // trace:TASK-2053 | ai:claude
 fn run_sandboxed(
     clone: &Path,
     main: &Path,
     program: &str,
     args: &[&std::ffi::OsStr],
-) -> std::result::Result<String, String> {
+    cap: u64,
+) -> std::result::Result<Vec<u8>, SandboxFailure> {
+    let failed = |why: String| SandboxFailure::Failed(why);
+    let repo_config = tempfile::NamedTempFile::new()
+        .and_then(|mut file| {
+            use std::io::Write;
+            file.write_all(probe_repo_config(main).as_bytes())?;
+            Ok(file)
+        })
+        .map_err(|error| failed(format!("could not write the probe's git config: {error}")))?;
+    let read_allowlist = crate::session::contained_read_allowlist(main);
     let mut cmd = std::process::Command::new("bwrap");
-    cmd.args(probe_sandbox_args(clone, main))
-        .arg(program)
-        .args(args)
-        .stdin(std::process::Stdio::null());
-    match crate::command_output_with_timeout_detail(cmd, PROBE_TIMEOUT) {
-        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
-            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    cmd.args(probe_sandbox_args(
+        clone,
+        main,
+        &read_allowlist,
+        repo_config.path(),
+    ))
+    .arg(program)
+    .args(args)
+    .stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_capped(cmd, PROBE_TIMEOUT, cap) {
+        crate::BoundedCommandOutput::Completed(mut out) if out.stdout.len() as u64 > cap => {
+            out.stdout.truncate(cap as usize);
+            Err(SandboxFailure::Truncated(out.stdout))
         }
-        crate::BoundedCommandOutput::Completed(out) => Err(format!(
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(out.stdout),
+        crate::BoundedCommandOutput::Completed(out) => Err(failed(format!(
             "the sandboxed {program} exited with {}: {}",
             out.status,
             String::from_utf8_lossy(&out.stderr).trim()
+        ))),
+        crate::BoundedCommandOutput::SpawnFailed => Err(failed(
+            "bwrap is not available to sandbox the probe".to_string(),
         )),
-        crate::BoundedCommandOutput::SpawnFailed => {
-            Err("bwrap is not available to sandbox the probe".to_string())
-        }
-        crate::BoundedCommandOutput::TimedOut => Err(format!(
+        crate::BoundedCommandOutput::TimedOut => Err(failed(format!(
             "the sandboxed {program} did not finish within {}s",
             PROBE_TIMEOUT.as_secs()
-        )),
+        ))),
     }
+}
+
+/// [`run_sandboxed`] for a probe: text, at most [`PROBE_OUTPUT_CAP`].
+// trace:TASK-2053 | ai:claude
+fn probe_run(
+    clone: &Path,
+    main: &Path,
+    args: &[&std::ffi::OsStr],
+) -> std::result::Result<String, String> {
+    run_sandboxed(clone, main, "git", args, PROBE_OUTPUT_CAP)
+        .map(|out| String::from_utf8_lossy(&out).into_owned())
+        .map_err(|failure| failure.to_string())
 }
 
 /// The commit `refs/aida/seats/<dir>` pins in `main`: the clone's base, read
@@ -819,10 +935,9 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             clone.display()
         ));
     }
-    let status = match run_sandboxed(
+    let status = match probe_run(
         clone,
         main,
-        "git",
         &[
             "status".as_ref(),
             "--porcelain=v2".as_ref(),
@@ -846,7 +961,7 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             args.push(base.into());
         }
         let args: Vec<&std::ffi::OsStr> = args.iter().map(|a| a.as_os_str()).collect();
-        match run_sandboxed(clone, main, "git", &args) {
+        match probe_run(clone, main, &args) {
             Ok(out) => match out.trim().parse() {
                 Ok(n) => facts.unpushed = n,
                 Err(_) => {
@@ -904,8 +1019,16 @@ exit 0
 /// controls.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
+    salvage_capped(main, clone, SALVAGE_OUTPUT_CAP)
+}
+
+/// [`salvage`] keeping at most `cap` bytes: a longer patch is written cut
+/// off, with a closing `# TRUNCATED` line, and returned as an error so the
+/// caller keeps the clone.
+// trace:TASK-2053 | ai:claude
+fn salvage_capped(main: &Path, clone: &Path, cap: u64) -> Result<PathBuf> {
     let base = pinned_base(main, clone).unwrap_or_default();
-    let body = run_sandboxed(
+    let ran = run_sandboxed(
         clone,
         main,
         "sh",
@@ -915,8 +1038,13 @@ pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
             "aida-seat-salvage".as_ref(),
             base.as_ref(),
         ],
-    )
-    .map_err(|why| anyhow::anyhow!("could not salvage {}: {why}", clone.display()))?;
+        cap,
+    );
+    let (mut body, truncated) = match ran {
+        Ok(body) => (body, false),
+        Err(SandboxFailure::Truncated(kept)) => (kept, true),
+        Err(failure) => anyhow::bail!("could not salvage {}: {failure}", clone.display()),
+    };
     let name = clone
         .file_name()
         .and_then(|n| n.to_str())
@@ -927,7 +1055,21 @@ pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
         "{}.patch",
         chrono::Utc::now().format("%Y-%m-%dT%H%M%S%.3fZ")
     ));
+    if truncated {
+        body.extend_from_slice(
+            format!("\n# TRUNCATED: the salvage passed {cap} bytes; the clone was kept\n")
+                .as_bytes(),
+        );
+    }
     std::fs::write(&path, body).with_context(|| format!("write {}", path.display()))?;
+    if truncated {
+        anyhow::bail!(
+            "the salvage of {} passed {cap} bytes and was cut off (partial patch at {}), so the \
+             clone is kept",
+            clone.display(),
+            path.display()
+        );
+    }
     Ok(path)
 }
 
@@ -962,7 +1104,8 @@ pub(crate) fn is_seat_clone_location(main: &Path, clone: &Path) -> bool {
 // trace:TASK-2053 | ai:claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DestroyMode {
-    /// Reap: salvage a patch and KEEP the clone.
+    /// Reap: salvage a patch and KEEP the clone; also keep a clone a live
+    /// process is using.
     KeepUnshipped,
     /// Session end and dismiss, after their own confirmation: salvage a
     /// patch, then remove the clone.
@@ -1029,10 +1172,35 @@ pub(crate) fn destroy(
             }
         }
         if facts.unshipped() {
-            salvaged = Some(salvage(main, clone)?);
+            // A salvage that failed or was cut off keeps the clone: removing
+            // it would lose what the patch does not hold.
+            // trace:TASK-2053 | ai:claude
+            match salvage(main, clone) {
+                Ok(path) => salvaged = Some(path),
+                Err(error) => {
+                    return Ok(Destroyed::Kept {
+                        reason: format!("{error:#}"),
+                        salvage: None,
+                    })
+                }
+            }
             if mode == DestroyMode::KeepUnshipped {
                 return Ok(Destroyed::Kept {
                     reason: "it holds work origin does not have".to_string(),
+                    salvage: salvaged,
+                });
+            }
+        }
+        // Reap acts on a scan that may be stale (`aida session resume` into
+        // the clone), so it re-checks for live processes right before the
+        // removal and keeps the clone in use or unverified, as
+        // `teardown_worktree_path` does for worktrees (BUG-1947). Session end
+        // and dismiss ran their own holder checks, with their own overrides.
+        // trace:TASK-2053 | ai:claude
+        if mode == DestroyMode::KeepUnshipped {
+            if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(clone) {
+                return Ok(Destroyed::Kept {
+                    reason: format!("it is in use: {in_use}"),
                     salvage: salvaged,
                 });
             }

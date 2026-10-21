@@ -354,8 +354,22 @@ pub(crate) enum BoundedCommandOutput {
 }
 
 pub(crate) fn command_output_with_timeout_detail(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> BoundedCommandOutput {
+    command_output_with_timeout_capped(cmd, timeout, u64::MAX)
+}
+
+/// [`command_output_with_timeout_detail`] that also stops reading either
+/// pipe after `cap` bytes: the reader keeps `cap + 1` bytes, kills the
+/// process group and stops, so a child streaming without end can neither
+/// grow this process nor run to the timeout. A captured stream longer than
+/// `cap` means the output was cut off.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn command_output_with_timeout_capped(
     mut cmd: std::process::Command,
     timeout: std::time::Duration,
+    cap: u64,
 ) -> BoundedCommandOutput {
     use std::io::Read;
 
@@ -386,15 +400,21 @@ pub(crate) fn command_output_with_timeout_detail(
     let mut stderr_pipe = child.stderr.take().expect("stderr was piped");
     let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
     let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    // trace:TASK-2053 | ai:claude
+    let read_capped = move |pipe: &mut dyn Read| {
         let mut buf = Vec::new();
-        let _ = stdout_pipe.read_to_end(&mut buf);
-        let _ = stdout_tx.send(buf);
+        let _ = pipe.take(cap.saturating_add(1)).read_to_end(&mut buf);
+        if buf.len() as u64 > cap {
+            #[cfg(unix)]
+            kill_process_group(pid);
+        }
+        buf
+    };
+    std::thread::spawn(move || {
+        let _ = stdout_tx.send(read_capped(&mut stdout_pipe));
     });
     std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = stderr_pipe.read_to_end(&mut buf);
-        let _ = stderr_tx.send(buf);
+        let _ = stderr_tx.send(read_capped(&mut stderr_pipe));
     });
     let start = std::time::Instant::now();
     let mut killed = false;
