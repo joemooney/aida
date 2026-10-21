@@ -92,26 +92,37 @@ fn store_compact(squash: bool, yes: bool) -> Result<()> {
         );
     }
 
+    store_compact_at(&store_path, squash, yes)
+}
+
+// Path-explicit entry keeps the maintenance boundary testable without cwd changes.
+// trace:TASK-1981 | ai:codex
+fn store_compact_at(store_path: &std::path::Path, squash: bool, yes: bool) -> Result<()> {
     if squash {
-        return store_compact_squash(&store_path, yes);
+        return store_compact_squash(store_path, yes);
     }
 
     // ── Safe path: aggressive repack ──
-    let before = aida_core::git_ops::count_objects(&store_path);
-    if let Some(b) = before {
-        println!(
-            "{} {} packs, {} loose objects before compaction",
-            "Store:".bold(),
-            b.packs.to_string().cyan(),
-            b.loose.to_string().cyan()
-        );
-    }
-    println!("Running an aggressive repack (deep gc — this can take a moment)...");
-    let res = aida_core::git_ops::gc_aggressive(&store_path)?;
-    if !res.success {
-        anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
-    }
-    let after = aida_core::git_ops::count_objects(&store_path);
+    // Git serializes repacks itself; no AIDA writer lock during GC.
+    // trace:TASK-1981 | ai:codex
+    let (before, after) = {
+        let before = aida_core::git_ops::count_objects(&store_path);
+        if let Some(b) = before {
+            println!(
+                "{} {} packs, {} loose objects before compaction",
+                "Store:".bold(),
+                b.packs.to_string().cyan(),
+                b.loose.to_string().cyan()
+            );
+        }
+        println!("Running an aggressive repack (deep gc — this can take a moment)...");
+        let res = aida_core::git_ops::gc_aggressive(&store_path)?;
+        if !res.success {
+            anyhow::bail!("git gc --aggressive failed: {}", res.stderr);
+        }
+        let after = aida_core::git_ops::count_objects(&store_path);
+        (before, after)
+    };
     match (before, after) {
         (Some(b), Some(a)) => println!(
             "{} {} -> {} packs, {} -> {} loose objects",
@@ -200,16 +211,29 @@ fn store_compact_squash(store_path: &std::path::Path, yes: bool) -> Result<()> {
         return Ok(());
     }
 
-    let message = format!(
-        "snapshot: compacted aida-store @ {} (squashed {} commits; backup: {})",
-        chrono::Local::now().format("%Y-%m-%d"),
-        commit_count,
-        backup_ref
-    );
-    let outcome = aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
+    // trace:TASK-1981 | ai:agy
+    let outcome = aida_core::db::with_store_write_lock(store_path, || -> Result<_> {
+        let locked_count = aida_core::git_ops::host_git_command(store_path)
+            .args(["rev-list", "--count", "HEAD"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_else(|| commit_count.clone());
+        let message = format!(
+            "snapshot: compacted aida-store @ {} (squashed {} commits; backup: {})",
+            chrono::Local::now().format("%Y-%m-%d"),
+            locked_count,
+            backup_ref
+        );
+        let outcome =
+            aida_core::git_ops::squash_orphan_to_snapshot(store_path, &message, &backup_ref)?;
 
-    // Reclaim the now-unreferenced object space (the old commits are still held
-    // by the backup ref, so this won't drop them until that ref is deleted).
+        Ok(outcome)
+    })?;
+    // History rewriting is serialized above; Git's own GC locks protect the
+    // potentially long repack after AIDA's writer lock has been released.
+    // trace:TASK-1981 | ai:codex
     let _ = aida_core::git_ops::gc_aggressive(store_path);
 
     println!(
@@ -519,3 +543,7 @@ pub(crate) static STORE: crate::command_registry::CommandReg =
         },
         run: crate::command_registry::Handler::Early(run_store),
     };
+
+#[cfg(test)]
+#[path = "tests/task_1981_compact_tests.rs"]
+mod task_1981_compact_tests;
