@@ -1,0 +1,12 @@
+scope = "PR-2795"
+node_id = "1"
+clone_path = "/home/joe/ai/aida"
+host = "imac"
+pid = 3560461
+pid_start_time = "linux-starttime:123153048"
+agent = "reviewer"
+started_at = "2026-10-21T10:35:46.864299390+00:00"
+heartbeat_at = "2026-10-21T10:35:46.864299390+00:00"
+ttl_secs = 1800
+process_backed = false
+review_verb = true
