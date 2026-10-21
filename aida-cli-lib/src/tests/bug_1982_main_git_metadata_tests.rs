@@ -50,7 +50,7 @@ fn probe_script(tree: &Path, metadata: &[PathBuf], out: &Path) -> String {
     }
     script.push_str(&format!(
         "echo change > probe-commit.txt && git add probe-commit.txt \
-         && git -c user.email=p@example.com -c user.name=p commit -qm probe \
+         && git -c maintenance.auto=false -c gc.auto=0 -c user.email=p@example.com -c user.name=p commit -qm probe \
          && echo commit-ok >> '{out}' || echo commit-failed >> '{out}'\n",
         out = out.display()
     ));

@@ -6,6 +6,9 @@
 //! traversed classification, release, gate re-run, and merge in that order.
 // trace:TASK-1287 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -19,7 +22,7 @@ const HEAD_SHA: &str = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12";
 const HEAD_COMMITTED_AT: &str = "2026-10-06T12:00:00Z";
 
 fn git(repo: &Path, args: &[&str]) {
-    let out = Command::new("git")
+    let out = test_git::git_command()
         .current_dir(repo)
         .args(args)
         .output()
@@ -56,7 +59,7 @@ impl Fixture {
         git(&repo, &["config", "user.email", "test@example.com"]);
         git(&repo, &["config", "user.name", "AIDA Test"]);
         git(&repo, &["add", "."]);
-        let out = Command::new("git")
+        let out = test_git::git_command()
             .current_dir(&repo)
             .args(["commit", "-q", "-m", "base"])
             .env("GIT_COMMITTER_DATE", HEAD_COMMITTED_AT)
@@ -65,7 +68,7 @@ impl Fixture {
             .unwrap();
         assert!(out.status.success(), "{out:?}");
         let head_sha = String::from_utf8(
-            Command::new("git")
+            test_git::git_command()
                 .current_dir(&repo)
                 .args(["rev-parse", "HEAD"])
                 .output()

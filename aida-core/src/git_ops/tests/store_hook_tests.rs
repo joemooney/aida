@@ -118,7 +118,7 @@ fn bug_1929_unverified_host_hooks_refuse_store_writes() {
             Some("host-owned AIDA store hooks could not be verified"),
             "{corruption}"
         );
-        let staged = Command::new("git")
+        let staged = crate::test_git::git_command()
             .current_dir(&store)
             .args(["diff", "--cached", "--name-only"])
             .output()
@@ -706,7 +706,7 @@ fn bug_2131_old_git_contained_project_refuses_store_git() {
                 );
             });
             assert_eq!(git(&store, &["rev-parse", "HEAD"]).unwrap().stdout, before);
-            let staged = Command::new("git")
+            let staged = crate::test_git::git_command()
                 .current_dir(&store)
                 .args(["diff", "--cached", "--name-only"])
                 .output()

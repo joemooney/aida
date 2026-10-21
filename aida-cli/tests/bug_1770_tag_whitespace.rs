@@ -10,6 +10,9 @@
 //! it was meant to be and cannot witness the regression.
 // trace:BUG-1770 | ai:claude
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use aida_core::Storage;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -21,7 +24,7 @@ struct Fixture {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Output {
-    Command::new("git")
+    test_git::git_command()
         .current_dir(dir)
         .args(args)
         .output()

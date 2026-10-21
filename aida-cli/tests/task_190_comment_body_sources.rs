@@ -2,6 +2,9 @@
 // Black-box coverage for mutually exclusive, lossless comment body sources.
 // trace:TASK-190 | ai:codex
 
+#[path = "support/test_git.rs"]
+mod test_git;
+
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -27,14 +30,14 @@ fn comment_body_sources_conflict_and_empty_explicit_sources_fail() {
         &["config", "user.email", "test@example.com"],
         &["config", "user.name", "TASK-190 Test"],
     ] {
-        assert!(Command::new("git")
+        assert!(test_git::git_command()
             .current_dir(&repo)
             .args(args)
             .status()
             .unwrap()
             .success());
     }
-    assert!(Command::new("git")
+    assert!(test_git::git_command()
         .current_dir(&repo)
         .args(["commit", "-q", "--allow-empty", "-m", "init"])
         .status()

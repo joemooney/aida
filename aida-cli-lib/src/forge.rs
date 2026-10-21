@@ -4364,7 +4364,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let repo = tmp.path().join("repo");
         let git = |dir: &std::path::Path, args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(dir)
                 .args(args)
                 .output()
@@ -4376,7 +4376,7 @@ mod tests {
                 String::from_utf8_lossy(&out.stderr)
             );
         };
-        let clone = std::process::Command::new("git")
+        let clone = crate::test_git::git_command()
             .args(["clone", &http, repo.to_str().unwrap()])
             .output()
             .unwrap();
@@ -4958,7 +4958,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -4972,7 +4972,7 @@ mod tests {
 
         assert_eq!(resolve_forge_kind(root), ForgeKind::None);
 
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -4993,7 +4993,7 @@ mod tests {
         // trace:BUG-1109 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
@@ -5004,7 +5004,7 @@ mod tests {
             "[forge]\nprovider = \"pure-git\"\n",
         )
         .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -5025,12 +5025,12 @@ mod tests {
         // trace:BUG-896 | ai:codex
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args(["init", "-q", "-b", "main"])
             .status()
             .unwrap();
-        Command::new("git")
+        crate::test_git::git_command()
             .current_dir(root)
             .args([
                 "remote",
@@ -5058,7 +5058,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5133,7 +5133,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()
@@ -5182,7 +5182,7 @@ mod tests {
             "base HEAD must advance"
         );
         // working tree clean — committed, not left staged.
-        let status = Command::new("git")
+        let status = crate::test_git::git_command()
             .current_dir(root)
             .args(["status", "--porcelain"])
             .output()
@@ -5269,7 +5269,7 @@ mod tests {
 
     fn pure_git_repo_with_feature(root: &Path) -> String {
         let g = |args: &[&str]| {
-            let out = Command::new("git")
+            let out = crate::test_git::git_command()
                 .current_dir(root)
                 .args(args)
                 .output()

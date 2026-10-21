@@ -331,6 +331,28 @@ pub(crate) fn compose_handoff_show(
     out
 }
 
+/// Header of the ACTIVE MANDATE block `--show` prints first.
+// trace:STORY-1700 | ai:claude
+pub(crate) const ACTIVE_MANDATE_HEADER: &str = "ACTIVE MANDATE";
+
+/// STORY-1700: [`compose_handoff_show`] with the ACTIVE MANDATE block first,
+/// then standing orders, then the handoff. `mandate` is the live
+/// `MANDATE ...` line read at show time — it is never copied into handoff
+/// text, so a rotation cannot carry a stale or expired mandate.
+// trace:STORY-1700 | ai:claude
+pub(crate) fn compose_handoff_show_with_mandate(
+    mandate: Option<&str>,
+    standing: Option<&str>,
+    handoff: Option<&str>,
+    seat: &str,
+) -> String {
+    let rest = compose_handoff_show(standing, handoff, seat);
+    match mandate {
+        Some(line) => format!("{ACTIVE_MANDATE_HEADER}\n{}\n\n{rest}", line.trim_end()),
+        None => rest,
+    }
+}
+
 /// Append a dated entry to the repo-local standing orders for `seat`,
 /// creating the file (with a title) on first use. Returns the file path.
 pub(crate) fn add_standing_order(

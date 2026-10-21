@@ -2955,7 +2955,7 @@ mod story_1043_unshipped_work_tests {
     use super::*;
 
     fn git(root: &std::path::Path, args: &[&str]) {
-        let output = std::process::Command::new("git")
+        let output = crate::test_git::git_command()
             .args(args)
             .current_dir(root)
             .output()

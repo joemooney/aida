@@ -103,6 +103,19 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // STORY-1700: the drive-mandate check reads the AIDA home and the
+            // schedule driver only. trace:STORY-1700 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::mandate_drive::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::mandate_drive::DOCTOR_CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
@@ -265,7 +278,7 @@ mod task_190_tests {
     #[test]
     fn detector_resolves_canonical_store_from_sibling_worktree() {
         fn git(cwd: &std::path::Path, args: &[&str]) {
-            let output = Command::new("git")
+            let output = crate::test_git::git_command()
                 .current_dir(cwd)
                 .args(args)
                 .output()
@@ -726,6 +739,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::relay_stall::scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:STORY-1700 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::mandate_drive::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::mandate_drive::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     if doctor_category_selected(opts.category.as_deref(), "agent-launch")? {
         findings.extend(scan_agent_worktree_trust(&project_root));
@@ -1099,6 +1120,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1699 | ai:claude
         crate::relay_stall::CATEGORY => {
             DoctorReport::from_findings(crate::relay_stall::scan(&project_root))
+        }
+        // trace:STORY-1700 | ai:claude
+        crate::mandate_drive::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };
@@ -2153,7 +2178,7 @@ mod bug_2009_git_hook_tests {
     fn non_executable_aida_hook_is_reported() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let status = std::process::Command::new("git")
+        let status = crate::test_git::git_command()
             .args(["init", "-q"])
             .current_dir(root)
             .status()
@@ -5287,7 +5312,7 @@ mod bug_1796_orphan_store_doctor_tests {
     use std::process::Command;
 
     fn git(path: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git")
+        let output = crate::test_git::git_command()
             .arg("-C")
             .arg(path)
             .args(args)
@@ -8334,7 +8359,7 @@ mod story_462_doctor_tests {
         let dir = tempfile::tempdir().unwrap();
         let project = dir.path();
         let run_git = |cwd: &std::path::Path, args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8372,7 +8397,7 @@ mod story_462_doctor_tests {
     }
 
     fn task_202_git(cwd: &std::path::Path, args: &[&str]) {
-        let output = std::process::Command::new("git")
+        let output = crate::test_git::git_command()
             .arg("-C")
             .arg(cwd)
             .args(args)
@@ -8452,7 +8477,7 @@ mod story_462_doctor_tests {
             store.canonicalize().unwrap()
         );
         let git_value = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8568,7 +8593,7 @@ mod story_462_doctor_tests {
         let store = project.join(".aida-store");
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(&store)
             .args(["init", "-q"])
@@ -8636,7 +8661,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(store.join("objects")).unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
         let run_git = |cwd: &std::path::Path, args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8694,7 +8719,7 @@ mod story_462_doctor_tests {
         .unwrap();
         std::fs::write(store.join(".gitignore"), bug_563_runtime_patterns()).unwrap();
         let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8707,7 +8732,7 @@ mod story_462_doctor_tests {
             );
             output
         };
-        assert!(std::process::Command::new("git")
+        assert!(crate::test_git::git_command()
             .arg("-C")
             .arg(&store)
             .args(["init", "-b", "aida-store", "-q"])
@@ -8749,7 +8774,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&project).unwrap();
         std::fs::create_dir_all(&foreign).unwrap();
         let git = |cwd: &std::path::Path, args: &[&str]| {
-            let output = std::process::Command::new("git")
+            let output = crate::test_git::git_command()
                 .arg("-C")
                 .arg(cwd)
                 .args(args)
@@ -8828,7 +8853,7 @@ mod story_462_doctor_tests {
         let (_dir, store) = task_1547_linked_store("wrong-store", &bug_563_runtime_patterns());
         let project = store.parent().unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -8885,7 +8910,7 @@ mod story_462_doctor_tests {
         let (_dir, store) = task_1547_linked_store("aida-store", &bug_563_runtime_patterns());
         let project = store.parent().unwrap();
         let git = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(&store)
                 .args(args)
@@ -9319,7 +9344,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&root).unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -9333,7 +9358,7 @@ mod story_462_doctor_tests {
             );
         };
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -9390,7 +9415,7 @@ mod story_462_doctor_tests {
         // shipped-work: ancestry can never clear this (different SHA forever),
         // and the current trees no longer match, but the landed patch is still
         // present in main's bounded history.
-        let count_out = std::process::Command::new("git")
+        let count_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["rev-list", "--count", "main..shipped-work"])
@@ -9404,7 +9429,7 @@ mod story_462_doctor_tests {
             ancestry_count, 2,
             "ancestry must still see both squash-merged branch commits as unique"
         );
-        let per_commit_out = std::process::Command::new("git")
+        let per_commit_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args([
@@ -9461,7 +9486,7 @@ mod story_462_doctor_tests {
         std::fs::create_dir_all(&root).unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -9475,7 +9500,7 @@ mod story_462_doctor_tests {
             );
         };
 
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -9502,7 +9527,7 @@ mod story_462_doctor_tests {
             run(&["commit", "--allow-empty", "-m", &format!("filler {i}")]);
         }
 
-        let merge_base_out = std::process::Command::new("git")
+        let merge_base_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["merge-base", "main", "deep-history-work"])
@@ -9511,7 +9536,7 @@ mod story_462_doctor_tests {
         let merge_base = String::from_utf8_lossy(&merge_base_out.stdout)
             .trim()
             .to_string();
-        let count_out = std::process::Command::new("git")
+        let count_out = crate::test_git::git_command()
             .arg("-C")
             .arg(&root)
             .args(["rev-list", "--count", &format!("{merge_base}..main")])
@@ -10695,7 +10720,7 @@ User content.
         std::fs::write(root.join("Dockerfile"), "FROM scratch\n").unwrap();
 
         let run = |args: &[&str]| {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(&root)
                 .args(args)
@@ -10709,7 +10734,7 @@ User content.
             );
         };
         std::fs::create_dir_all(&root).unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("init")
             .arg(&root)
             .output()
@@ -10861,7 +10886,7 @@ User content.
     /// are saved through `Storage`. Returns (project_root tempdir, storage).
     fn integrity_fixture() -> (tempfile::TempDir, Storage) {
         fn g(root: &std::path::Path, args: &[&str]) {
-            let out = std::process::Command::new("git")
+            let out = crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10891,7 +10916,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10923,7 +10948,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10957,7 +10982,7 @@ User content.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
         let g = |args: &[&str]| {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(root)
                 .args(args)
@@ -10988,7 +11013,7 @@ User content.
         // this check targets only Completed-without-corroboration.
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11034,7 +11059,7 @@ User content.
     fn integrity_since_exempts_legacy_specs() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11065,7 +11090,7 @@ User content.
     fn integrity_excludes_non_code_spec_types() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11111,7 +11136,7 @@ User content.
     fn integrity_collapses_historical_tail_by_default() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -11140,7 +11165,7 @@ User content.
     fn integrity_all_expands_historical_tail() {
         let (tmp, storage) = integrity_fixture();
         let root = tmp.path();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(root)
             .args(["commit", "--allow-empty", "-qm", "init"])
@@ -12044,19 +12069,19 @@ User content.
     fn salvage_worktree_patch_writes_diff_before_cleanup() {
         let project = tempfile::tempdir().unwrap();
         let worktree = tempfile::tempdir().unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .arg("init")
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["config", "user.email", "t@example.com"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["config", "user.name", "Test"])
@@ -12064,13 +12089,13 @@ User content.
             .unwrap();
         let file = worktree.path().join("notes.txt");
         std::fs::write(&file, "before\n").unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["add", "notes.txt"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["commit", "-m", "init"])
@@ -12105,7 +12130,7 @@ User content.
             vec!["config", "user.email", "t@example.com"],
             vec!["config", "user.name", "Test"],
         ] {
-            std::process::Command::new("git")
+            crate::test_git::git_command()
                 .arg("-C")
                 .arg(worktree.path())
                 .args(&args)
@@ -12116,13 +12141,13 @@ User content.
         // untracked file whose content must survive.
         let tracked = worktree.path().join("tracked.txt");
         std::fs::write(&tracked, "before\n").unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["add", "tracked.txt"])
             .output()
             .unwrap();
-        std::process::Command::new("git")
+        crate::test_git::git_command()
             .arg("-C")
             .arg(worktree.path())
             .args(["commit", "-m", "init"])
@@ -12184,7 +12209,7 @@ User content.
     }
 
     fn git752(root: &std::path::Path, args: &[&str]) {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .current_dir(root)
             .args(args)
             .output()

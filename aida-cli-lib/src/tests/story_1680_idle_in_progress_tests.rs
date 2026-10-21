@@ -320,7 +320,7 @@ fn a_config_override_changes_which_specs_are_listed() {
 }
 
 fn git(dir: &Path, args: &[&str], date: &str) {
-    let st = std::process::Command::new("git")
+    let st = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
         .args([

@@ -683,7 +683,7 @@ fn ship_policy_from_on_disk_ledger_refuses_the_harness_authors_approval() {
 fn head_commit_date_is_read_from_the_repo() {
     let tmp = tempfile::tempdir().unwrap();
     let git = |args: &[&str]| {
-        let out = std::process::Command::new("git")
+        let out = crate::test_git::git_command()
             .arg("-C")
             .arg(tmp.path())
             .args(args)

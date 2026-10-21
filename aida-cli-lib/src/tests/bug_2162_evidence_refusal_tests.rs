@@ -10,7 +10,7 @@ use aida_core::models::{
 use sha2::Digest;
 
 fn git(cwd: &Path, args: &[&str]) {
-    let out = std::process::Command::new("git")
+    let out = crate::test_git::git_command()
         .args(args)
         .current_dir(cwd)
         .output()

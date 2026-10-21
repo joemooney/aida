@@ -6,7 +6,7 @@
 use super::*;
 
 fn git(repo: &std::path::Path, args: &[&str]) {
-    let status = std::process::Command::new("git")
+    let status = crate::test_git::git_command()
         .arg("-C")
         .arg(repo)
         .args(args)
