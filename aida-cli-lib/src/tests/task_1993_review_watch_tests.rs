@@ -443,9 +443,8 @@ assert os.environ['AIDA_REVIEW_WATCH_HEAD'] == attempt['head']
 assert os.environ['AIDA_REVIEW_ROUND'] == '1'
 assert os.environ['GH_HOST'] in ['github.com', 'gitlab.example.test']
 assert os.environ.get('AIDA_SESSION_GRANT')
-# The dispatcher records this child before relying on it, and the kernel
-# would SIGTERM it if the dispatcher died. trace:TASK-1993 | ai:claude
-import ctypes, signal
+# The dispatcher records this child before relying on it.
+# trace:TASK-1993 | ai:claude
 deadline = time.monotonic() + 10
 while True:
     attempt = json.loads((root / '.aida/review-watch/state.json').read_text())['entries'][key]['attempts'][0]
@@ -455,8 +454,6 @@ while True:
     assert time.monotonic() < deadline, 'worker identity never recorded'
     time.sleep(0.01)
 assert attempt['worker']['pid'] == os.getpid() and attempt['worker']['start']
-sig = ctypes.c_int(0)
-assert ctypes.CDLL(None).prctl(2, ctypes.byref(sig)) == 0 and sig.value == signal.SIGTERM
 (root / 'queue-ready').write_text(str(os.getppid()))
 deadline = time.monotonic() + 15
 while not (root / 'queue-release').exists():
@@ -1186,6 +1183,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             dispatcher: None,
                             spawning: false,
                             worker: None,
+                            reviewer_spawning: false,
+                            reviewer: None,
                         }],
                         ..Default::default()
                     },
@@ -1340,6 +1339,11 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
             "update-branch",
             "\"cargo\"",
             "\"ship\"",
+            // trace:TASK-1993 | ai:claude
+            "PR_SET_PDEATHSIG",
+            "SIGTERM",
+            "prctl",
+            "pre_exec",
         ] {
             assert!(!text.contains(forbidden), "{file} contains {forbidden}");
         }
@@ -1641,39 +1645,84 @@ fn task1993_stale_notice_names_the_base_without_resending_old_notices() {
     }
 }
 
-// Queue work runs as the dispatcher's child and can outlive a killed
-// dispatcher: a claimed attempt is freed only when both are provably gone,
-// and one whose child was never recorded stays held, named as ambiguous.
+// The review is carried by the reviewer process queue work launches, which
+// can outlive both queue work and the dispatcher. Real processes model the
+// tree: the slot is held while the reviewer lives and freed once it exits,
+// and a reviewer never recorded keeps the slot held, named as ambiguous.
 // trace:TASK-1993.ac55aab8 | ai:claude
 // trace:TASK-1993.ac1e5827 | ai:claude
 #[test]
-fn task1993_orphaned_queue_work_keeps_its_slot_until_it_exits() {
-    let dead = || {
-        let mut gone = Command::new("/bin/sleep").arg("30").spawn().unwrap();
-        let identity = Identity::of(gone.id()).unwrap();
-        gone.kill().unwrap();
-        gone.wait().unwrap();
-        identity
+fn task1993_orphaned_reviewer_keeps_its_slot_until_it_exits() {
+    let temp = tempfile::tempdir().unwrap();
+    let pid_of = |name: &str| -> u32 {
+        let path = temp.path().join(name);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            if let Some(pid) = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|s| s.trim().parse().ok())
+            {
+                return pid;
+            }
+            assert!(std::time::Instant::now() < deadline, "{name} never started");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     };
-    let claimed = |store: &Store, worker: Option<Identity>| {
+    let gone = |identity: &Identity| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while identity.alive() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "process {} did not exit",
+                identity.pid
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    };
+    let kill = |pid: u32| {
+        assert!(Command::new("/bin/kill")
+            .args(["-9", &pid.to_string()])
+            .status()
+            .unwrap()
+            .success());
+    };
+    // dispatcher -> queue work -> reviewer, as real processes.
+    let script = format!(
+        "sh -c 'sleep 60 & echo $! > {dir}/reviewer; wait' & echo $! > {dir}/queue; wait",
+        dir = temp.path().display()
+    );
+    let mut dispatcher = Command::new("/bin/sh")
+        .args(["-c", &script])
+        .spawn()
+        .unwrap();
+    let dispatcher_id = Identity::of(dispatcher.id()).unwrap();
+    let queue_id = Identity::of(pid_of("queue")).unwrap();
+    let reviewer_id = Identity::of(pid_of("reviewer")).unwrap();
+    let running = |store: &Store, reviewer: Option<Identity>| {
         let a = dispatch(select(store, &change(1, 1, false), None, 1).unwrap());
-        let dispatcher = dead();
         store
             .transaction("PR-1", |state| {
-                let attempt = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
-                attempt.phase = Phase::Running;
-                attempt.identity = Some(dispatcher.clone());
-                attempt.spawning = true;
-                attempt.worker = worker.clone();
+                let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+                a.phase = Phase::Running;
+                a.identity = Some(dispatcher_id.clone());
+                a.spawning = true;
+                a.worker = Some(queue_id.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = reviewer.clone();
                 Ok(())
             })
             .unwrap();
         a
     };
-    // Dispatcher dead, queue-work child alive: the slot and the head stay held.
-    let (_temp, store) = fixture();
-    let mut orphan = Command::new("/bin/sleep").arg("30").spawn().unwrap();
-    claimed(&store, Some(Identity::of(orphan.id()).unwrap()));
+    let (_store_temp, store) = fixture();
+    running(&store, Some(reviewer_id.clone()));
+    // The dispatcher and queue work die; the reviewer is orphaned but alive.
+    dispatcher.kill().unwrap();
+    dispatcher.wait().unwrap();
+    kill(queue_id.pid);
+    gone(&dispatcher_id);
+    gone(&queue_id);
+    assert!(reviewer_id.alive());
     assert!(matches!(
         select(&store, &change(2, 2, false), None, 1).unwrap(),
         Action::Skip(_)
@@ -1686,31 +1735,82 @@ fn task1993_orphaned_queue_work_keeps_its_slot_until_it_exits() {
         store.load().unwrap().entries["PR-1"].attempts[0].phase,
         Phase::Running
     );
-    // Both gone: freed terminally.
-    orphan.kill().unwrap();
-    orphan.wait().unwrap();
+    // The reviewer exits: only now is the slot freed.
+    kill(reviewer_id.pid);
+    gone(&reviewer_id);
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
     assert_eq!(
         store.load().unwrap().entries["PR-1"].attempts[0].phase,
         Phase::Exited
     );
-    // Dispatcher dead while spawning, child never recorded: ambiguous, held,
-    // and the capacity refusal names it with the recovery step.
-    let (_temp, store) = fixture();
-    let a = claimed(&store, None);
+    // A reviewer marked spawning but never recorded stays held as ambiguous.
+    let (_store_temp, store) = fixture();
+    let a = running(&store, None);
     let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
-        panic!("an unrecorded child freed its slot");
+        panic!("an unrecorded reviewer freed its slot");
     };
     assert!(
         reason.contains(&a.token) && reason.contains("never recorded"),
         "{reason}"
     );
     assert!(
-        reason.contains("no `queue work PR-1` reviewer process remains"),
+        reason.contains("no `queue work PR-1` or reviewer process for it remains"),
         "{reason}"
     );
     assert_eq!(
         store.load().unwrap().entries["PR-1"].attempts[0].phase,
         Phase::Running
+    );
+}
+
+// Queue work records the reviewer it launches through the production spawn
+// helper; outside a watch launch the helper is the ordinary blocking run.
+// trace:TASK-1993.ac55aab8 | ai:claude
+#[test]
+fn task1993_queue_work_records_the_reviewer_it_launches() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let a = &mut state.entries.get_mut("PR-1").unwrap().attempts[0];
+            a.phase = Phase::Running;
+            a.identity = Some(Identity::current()?);
+            a.spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    LAUNCH.with(|l| *l.borrow_mut() = None);
+    let exit = || {
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", "exit 0"]);
+        cmd
+    };
+    assert!(reviewer_status(&mut exit()).unwrap().success());
+    assert!(store.load().unwrap().entries["PR-1"].attempts[0]
+        .reviewer
+        .is_none());
+    LAUNCH.with(|l| {
+        *l.borrow_mut() = Some((
+            temp.path().to_path_buf(),
+            store.repository.clone(),
+            "PR-1".into(),
+            c.head.clone(),
+        ))
+    });
+    let status = reviewer_status(&mut exit());
+    LAUNCH.with(|l| *l.borrow_mut() = None);
+    assert!(status.unwrap().success());
+    let attempt = &store.load().unwrap().entries["PR-1"].attempts[0];
+    assert!(attempt.reviewer_spawning);
+    let reviewer = attempt
+        .reviewer
+        .as_ref()
+        .expect("reviewer identity recorded");
+    assert_ne!(reviewer.pid, std::process::id());
+    assert_eq!(
+        attempt.worker.as_ref(),
+        Some(&Identity::current().unwrap()),
+        "queue work recorded itself"
     );
 }
