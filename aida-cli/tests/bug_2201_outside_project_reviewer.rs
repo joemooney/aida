@@ -274,7 +274,8 @@ fn contained_reviewer_in_outside_project_records_its_verdict() {
     let log = text(&out);
     let argv = std::fs::read_to_string(fx.base.join("child-argv")).expect("the fake vendor ran");
     assert!(argv.contains("\"Bash(aida *)\""), "{argv}\n{log}");
-    assert!(argv.contains("\"Bash(git *)\""), "{argv}\n{log}");
+    assert!(argv.contains("\"Bash(git diff *)\""), "{argv}\n{log}");
+    assert!(!argv.contains("\"Bash(git *)\""), "{argv}\n{log}");
     assert!(
         child_env(&fx)
             .iter()

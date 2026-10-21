@@ -1460,11 +1460,6 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         .env("AIDA_HEADLESS", "1")
         .env("AIDA_SESSION_ROLE", seat.as_str())
         .env(crate::seat_authority::GRANT_ENV, &child_grant.id)
-        // BUG-2201: the seat is the vendor this launcher spawns, so it carries
-        // that identity; without it `aida review record` refuses (BUG-1978)
-        // and the reviewer's `AIDA_AGENT_TYPE=… aida …` retry is a denied
-        // call under `dontAsk`. trace:BUG-2201 | ai:claude
-        .env("AIDA_AGENT_TYPE", vendor.agent_type())
         // BUG-802: anchor the drive root so `aida review record --pr N` (and
         // any future handshake writer) lands artifacts where the orchestrator
         // polls, no matter where the session wanders (PR checkouts, /tmp).
@@ -1473,6 +1468,11 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         // machine's login shells happen to resolve.
         .env("PATH", drive_path_env().unwrap_or_default())
         .env(ceiling_key, ceiling_value);
+    // BUG-2201: the seat is the vendor this launcher spawns, so it carries
+    // that identity; without it `aida review record` refuses (BUG-1978)
+    // and the reviewer's `AIDA_AGENT_TYPE=… aida …` retry is a denied
+    // call under `dontAsk`. trace:BUG-2201 | ai:claude
+    cmd.env("AIDA_AGENT_TYPE", vendor.agent_type());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -3296,21 +3296,43 @@ pub(crate) fn contained_settings_json_with_boundary(
     .to_string()
 }
 
+/// BUG-2201: the read-only git subcommands a contained session may run
+/// whatever its project allows. Deliberately not `Bash(git *)`: a prefix rule
+/// cannot exclude `push +ref`, `push --mirror`, or `git -c k=v push -f`, so
+/// anything that writes a ref or a remote stays unlisted (TASK-2058).
+// trace:BUG-2201 | ai:claude
+pub(crate) const CONTAINED_READ_ONLY_GIT: &[&str] = &[
+    "status",
+    "diff",
+    "log",
+    "show",
+    "rev-parse",
+    "rev-list",
+    "merge-base",
+    "ls-files",
+    "grep",
+    "blame",
+    "cat-file",
+    "fetch",
+];
+
 /// BUG-2201: the tool rules every contained AIDA session gets whatever its
-/// project's `.claude/settings.json` says: the `aida` CLI and git through
-/// Bash (still confined by the OS sandbox and `destructive_command_deny_rules`,
-/// which deny wins over), and `Read` of the session's worktree and the main
-/// checkout's store and cache. No write tool appears here; the write boundary
-/// stays [`crate::contained_boundary::write_allow_rules`].
+/// project's `.claude/settings.json` says: the `aida` CLI and the
+/// [`CONTAINED_READ_ONLY_GIT`] subcommands through Bash (still confined by
+/// the OS sandbox and `destructive_command_deny_rules`), and `Read` of the
+/// session's worktree and the main checkout's store and cache. No write tool
+/// appears here; the write boundary stays
+/// [`crate::contained_boundary::write_allow_rules`].
 // trace:BUG-2201 | ai:claude
 pub(crate) fn contained_baseline_allow_rules(
     write_roots: &[PathBuf],
     store_paths: &[PathBuf],
 ) -> Vec<String> {
-    let mut rules: Vec<String> = ["Bash(aida)", "Bash(aida *)", "Bash(git)", "Bash(git *)"]
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
+    let mut rules: Vec<String> = vec!["Bash(aida)".to_string(), "Bash(aida *)".to_string()];
+    for sub in CONTAINED_READ_ONLY_GIT {
+        rules.push(format!("Bash(git {sub})"));
+        rules.push(format!("Bash(git {sub} *)"));
+    }
     let mut push = |rule: String| {
         if !rules.contains(&rule) {
             rules.push(rule);

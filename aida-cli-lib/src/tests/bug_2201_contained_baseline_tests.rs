@@ -78,7 +78,16 @@ fn outside_project_reviewer_gets_aida_and_git_bash_rules() {
         "the fixture project grants nothing itself"
     );
     let allow = rules(&launch_settings(&worktree, &main), "allow");
-    for rule in ["Bash(aida)", "Bash(aida *)", "Bash(git)", "Bash(git *)"] {
+    for rule in [
+        "Bash(aida)",
+        "Bash(aida *)",
+        "Bash(git status)",
+        "Bash(git diff *)",
+        "Bash(git log *)",
+        "Bash(git show *)",
+        "Bash(git rev-parse *)",
+        "Bash(git fetch *)",
+    ] {
         assert!(allow.contains(&rule.to_string()), "{rule}: {allow:?}");
     }
 }
@@ -139,8 +148,66 @@ fn baseline_rules_never_widen_the_write_boundary() {
             outside.display()
         );
     }
-    // The destructive git denies still win over `Bash(git *)`.
+    // The destructive git denies are still in place.
     assert!(rules(&settings, "deny").contains(&"Bash(git reset --hard *)".to_string()));
+}
+
+/// Whether a Claude Code `Bash(...)` rule matches `command`: `Bash(p *)`
+/// matches `p` followed by a space and anything; `Bash(p)` matches `p` only.
+fn bash_rule_matches(rule: &str, command: &str) -> bool {
+    let Some(spec) = rule.strip_prefix("Bash(").and_then(|r| r.strip_suffix(')')) else {
+        return false;
+    };
+    match spec.strip_suffix(" *") {
+        Some(prefix) => command
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with(' ')),
+        None => command == spec,
+    }
+}
+
+// TASK-2058: no baseline rule allows a git command that writes a ref or a
+// remote, in any spelling: a refspec force, the lease/includes forces, global
+// options before the subcommand, mirror and delete pushes, or a bare prefix.
+#[test]
+fn baseline_allows_no_ref_or_remote_writing_git() {
+    let (_tmp, main, worktree) = outside_project_fixture();
+    let allow = rules(&launch_settings(&worktree, &main), "allow");
+    for command in [
+        "git push origin main",
+        "git push origin +main",
+        "git push origin +refs/heads/main:refs/heads/main",
+        "git push --force origin main",
+        "git push -f origin main",
+        "git push --force-with-lease origin main",
+        "git push --force-if-includes origin main",
+        "git push --mirror origin",
+        "git push --delete origin main",
+        "git push origin :main",
+        "git -c core.hooksPath=/x push --force",
+        "git -C /tmp push -f",
+        "git reset --hard HEAD~1",
+        "git update-ref refs/heads/main HEAD",
+        "git branch -D main",
+        "git tag -d v1",
+        "git commit -m x",
+        "git remote set-url origin x",
+        "git config core.hooksPath /x",
+        "git worktree remove --force /x",
+    ] {
+        let hits: Vec<&String> = allow
+            .iter()
+            .filter(|rule| bash_rule_matches(rule, command))
+            .collect();
+        assert!(hits.is_empty(), "`{command}` is allowed by {hits:?}");
+    }
+    // Mutation control: the matcher does match what the baseline grants.
+    for command in ["git diff main...HEAD", "git status", "aida review record X"] {
+        assert!(
+            allow.iter().any(|rule| bash_rule_matches(rule, command)),
+            "`{command}` must be allowed: {allow:?}"
+        );
+    }
 }
 
 #[test]
