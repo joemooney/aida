@@ -1,0 +1,26 @@
+id: 01a15f74-6772-7f33-8262-540424907757
+spec_id: TASK-2070
+agreed_id: TASK-2070
+title: Re-open or follow up the behaviour items declined by the TASK-1953 sweep (TASK-2054 AIDA_STORE part, TASK-2055, TASK-1667)
+description: |
+  PR-2800 (TASK-1953 sweep) declined three items as behaviour changes, not docs fixes: the AIDA_STORE-divergence part of TASK-2054/TASK-1666, TASK-2055 (NotDetected cause), and TASK-1667 (pass the resolved store into roster_allows). All three are marked superseded by TASK-1953, so completing TASK-1953 would close them silently. Re-open them, or file a behaviour spec that covers them.
+
+  Raised in review of PR-2800: https://github.com/joemooney/aida/pull/2800#issuecomment-6321991753
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T17:13:46.610750377Z
+modified_at: 2026-10-21T17:13:46.610750377Z
+req_type: Task
+tags:
+- from-review:PR-2800
+- severity:minor
+filed_at:
+  code_sha: 48a6ce159419528992b224d29a7486b78348a256
+  branch: pr-2800
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9fcf463499
+  vendor: claude
+  session: 01a15f725537
