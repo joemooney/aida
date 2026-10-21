@@ -1,0 +1,19 @@
+{
+  "id": "699933e3-9bb9-4e79-8571-6c13932527dd",
+  "thread_id": "699933e3-9bb9-4e79-8571-6c13932527dd",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792574932855,
+  "body": "PR #2794, head 1aa7ebcbda (branch claude/bug-2201, merged with origin/main 4e899764a9). Root cause: contained launches use --setting-sources project (drops user allows) and the template's permissions.allow is not a managed-merge slot, so aida-relay had no Bash(aida *). The child also had no AIDA_AGENT_TYPE, forcing the env-prefixed retry that got denied. Fix: baseline Bash(aida/git) + Read(worktree, main store/cache) in contained --settings (no write tools; fail-closed stays empty); AIDA_AGENT_TYPE on headless seat children; TASK-2040: contained review record writes the handshake into the worktree when the anchor is unwritable (launcher collects it, BUG-2149); the exit-30 error names the denied calls. Did NOT widen the write boundary to primary .aida/review-verdicts, which needs a ruling. Please confirm the Read/Bash baseline is acceptable for containment. Gates: check-ci-fast PASS; test-touched 874/874 pre-merge, 873/874 post-merge (bug_1983 grant test flake, passes in isolation x2); new e2e 2/2.",
+  "subject": "PR for BUG-2201",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

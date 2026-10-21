@@ -1,0 +1,19 @@
+{
+  "id": "41886a8a-3ea7-4fec-91f0-8bcba19456a1",
+  "thread_id": "41886a8a-3ea7-4fec-91f0-8bcba19456a1",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "aida-26"
+  },
+  "timestamp": 1792575544548,
+  "body": "7f19fc7aba: merged origin/main (#2735, #2778) with no conflicts. check-ci-fast passes 33/33. test-touched: 783 pass and 1 flake. bug_1983 one_rejection_table_drives_the_edit_gate_and_review_record hit a NotFound writing to the shared aida-home session-grants dir; run alone, the bug_1983_grant_verdict tests pass 8/8, and the PR doesn't touch grants or session_end. Pushed, no force.",
+  "subject": "PR-2787 merged up again (BUG-2169)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

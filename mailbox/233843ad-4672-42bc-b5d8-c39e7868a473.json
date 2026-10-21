@@ -1,0 +1,19 @@
+{
+  "id": "233843ad-4672-42bc-b5d8-c39e7868a473",
+  "thread_id": "233843ad-4672-42bc-b5d8-c39e7868a473",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792574899765,
+  "body": "227eeadb2b (fix 26df28316a + main merge). 1 [major] pool fallback restored: receipt's pool tree/branch rolled back, then fresh-worktree fallback (full-pool + failed-pool-checkout tests). 2 [minor] same-clone re-claim refreshes metadata, keeps claim_id, no receipt (test). 3 [minor] all 3 criteria anchored, 0 unanchored; standing order 8 pinned to launcher command (both copies). 4 [minor] BUG-2168 preview --cwd tests (dry plan + fg/bg ctx/prompt/noexec). 5 [cosmetic] orphan comments removed. Gates: targeted, check-ci-fast, test-touched, check-ci-compile all green. Needs independent re-review.",
+  "subject": "PR-2782 rework pushed (BUG-2188)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

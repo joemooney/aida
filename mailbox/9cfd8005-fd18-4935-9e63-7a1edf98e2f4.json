@@ -1,0 +1,19 @@
+{
+  "id": "9cfd8005-fd18-4935-9e63-7a1edf98e2f4",
+  "thread_id": "9cfd8005-fd18-4935-9e63-7a1edf98e2f4",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792573996097,
+  "body": "PR #2792 head 3fa76e8673 (fix 63fc77e7d2 + merge of main; no force-push).\n1. all_author_sessions(root, head_branch): work leases + harness ledger records on the head branch still author; only harness leases on OTHER branches drop. Both callers (ship_approval_policy, review_recorder_authors) pass the branch.\n2. Fail-closed tests: spec_less_pr_ignores_a_harness_lease_on_another_branch (ships) and spec_less_pr_refuses_the_harness_lease_on_its_head_branch (AuthorSession, live and ledger-only).\n3. RecorderIdentity::current binds by actual cwd only (project_root dropped); new recorder_binds_leases_by_cwd_not_project_root; PR-2791 test now documents the remaining main-checkout-cwd binding via with_context.\n4. (Refs:BUG-1) colon/no-space parses; case added.\nGates: check-ci-fast 33/33 ok, test-touched 484 ok. Note: bug_1918 unrecognised_agent_is_bound_by_its_session_leader flaked once in a parallel run (passes alone and in 2 reruns; uses no leases, looks like an env race).",
+  "subject": "PR-2792 round 2",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

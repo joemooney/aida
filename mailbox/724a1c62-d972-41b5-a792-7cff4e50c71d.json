@@ -1,0 +1,19 @@
+{
+  "id": "724a1c62-d972-41b5-a792-7cff4e50c71d",
+  "thread_id": "724a1c62-d972-41b5-a792-7cff4e50c71d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792575203198,
+  "body": "7d13fe1c49 (merged main a0cd26e972; baseline untouched, ratchet clean). Fixes: (a) bug_1502 audit row for aida review watch; (b) child re-exec via aida_bin::current_executable_path; (c) fixture grant via new AmbientGuard::set_key, no raw env write; (d) watcher flock retries ~1s on WouldBlock (fork-window flake seen in test-touched); (e) reworded removed graph-flag spelling in main's TASK-1944 triage TSV that the removed-flag guard fails on full-CI PRs. Gates: fast 33/33, test-touched 398 ok, compile ok, audit test ok. No merge/approve.",
+  "subject": "PR-2789 pushed (TASK-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
