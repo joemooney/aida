@@ -1,0 +1,19 @@
+{
+  "id": "53a4e6fe-5130-404e-bb56-c8c335ca5341",
+  "thread_id": "53a4e6fe-5130-404e-bb56-c8c335ca5341",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792590419050,
+  "body": "e6e50481bd. 1 multiplicity test 24.9s→0.2s, no budget entry; 2 dispatcher identity recorded, pre-claim exits → Exited + slot freed (reap or restart), 3 triggers tested; 3 fetch by remote name via remote_credentials, token-not-in-argv test; 4 blocking history persisted per change outside state, prune-safe, tested; 5 overlap vs change's own base, missing base refuses, release-base test; 6 revalidate before verdict clear, ordering test. fast 33/33, touched 438.",
+  "subject": "PR-2789 round-2 fixes pushed (TASK-1993)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

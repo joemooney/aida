@@ -1,0 +1,19 @@
+{
+  "id": "1d596a78-f080-4bc6-b625-a6cc24137e1e",
+  "thread_id": "1d596a78-f080-4bc6-b625-a6cc24137e1e",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792590557433,
+  "body": "PR #2799, SHA 5af25a4a9b22073c0e1011cefce610286eb1f8f0. Extended aida session reap with a release-only lane for protected-checkout leases whose recorded pids are all provably dead (BUG-2130 identity; unknown identity = not dead); pid-less leases are never attributed to the inspector and are 'unknown owner', released only with --release-unknown-owner. Gates: make check-ci-fast 33/33 passed; make test-touched green (0 failed); 9 new regression tests incl. primary checkout byte-identical.",
+  "subject": "PR for BUG-2197",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

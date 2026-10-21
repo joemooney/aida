@@ -1,0 +1,19 @@
+{
+  "id": "1a9810cf-40e1-4c00-b5f5-ba9f063a2c7b",
+  "thread_id": "1a9810cf-40e1-4c00-b5f5-ba9f063a2c7b",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792590358092,
+  "body": "01a04910d0fcedbf42a4ae5c23cdc6d61d36013c (0 behind; fix commit 30acb4f80f + merge of ed4168add1/0add137bc2, AGENTS.md conflict kept both paragraphs). 1 [major] refused launch restores Approved iff this launch bumped it and it is still InProgress (SessionStartCleanup.status_bump; test bug2188_refused_launch_restores_approved_status_and_retry_succeeds fg+bg, fails without the revert). 2 [CI] grant env named via seat_authority::GRANT_ENV; task_1752 passes, no allowlist. 3 [CI] docs cite 'aida role enter advisor --delegate-seat implementer'; verify-manual 0 FAIL. 4 [minor] publish_worktree_noreplace falls back on EINVAL/ENOSYS to exclusive-mkdir reservation + rename (only replaces an empty reservation), error names the fs limitation; unit tests. 5 [cosmetic] release_branch: absent ref = clean (test). Gates: check-ci-fast 33/33, test-touched green except aida-core cached_git_backend::refresh_holder_exits_without_refresh_returns_deferred (untouched file; passed 3/3 in isolation, load flake), verify-manual clean.",
+  "subject": "PR-2782 round-2 rework + main merge (BUG-2188)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

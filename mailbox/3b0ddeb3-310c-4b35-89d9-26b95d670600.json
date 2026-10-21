@@ -1,0 +1,19 @@
+{
+  "id": "3b0ddeb3-310c-4b35-89d9-26b95d670600",
+  "thread_id": "3b0ddeb3-310c-4b35-89d9-26b95d670600",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792590798045,
+  "body": "PR #2794 round 2 at 352ec74bc7 (0 behind main; merged ed4168add1 TASK-1801 and 0add137bc2; no rebase, no force-push).\n1 [blocker] Fixed in 5fd5d2f822: the AIDA_AGENT_TYPE env moved after the ceiling env; the guardrail window is unchanged. task1169_launcher_sets_ceiling_guardrail passes 2/2 locally. Of the other red checks: 'Build (ubuntu-latest)' is the 'Require every CI lane' aggregator, red only because CI (rest) failed; 'merge-hold-gate' is red because of the review's active aida:merge-hold label, not code; Release was skipped. No other cause.\n2 [test gap] lib_part5 contained_record_falls_back_to_worktree_when_anchor_is_read_only: AIDA_CONTAINED=1 with a 0555 anchor dir. It asserts the worktree PR-N.json is written (mode orchestrator-phase-3, reviewed_sha) and the anchor is absent, plus an uncontained control that must still fail. Mutation check: with the fallback disabled the test FAILS. The test is cfg(unix) and skips when running as root.\n3 [minor] The fallback now applies only to ErrorKind::PermissionDenied | ReadOnlyFilesystem; any other error keeps its real cause.\n4 [TASK-2058] Bash(git *) is gone. It is replaced by CONTAINED_READ_ONLY_GIT, an allowlist of status/diff/log/show/rev-parse/rev-list/merge-base/ls-files/grep/blame/cat-file/fetch (exact form + ' *'); push, commit, reset, update-ref, branch, tag, remote, config and worktree are all unlisted. Test baseline_allows_no_ref_or_remote_writing_git enumerates the 20 forms (+ref, --force-with-lease, --force-if-includes, -c/-C before push, --mirror, --delete, :ref, etc.) and asserts none matches an allow rule, with a positive mutation control. The e2e asserts Bash(git *) is absent.\nTASK-1801 interaction: the fallback writes a regular file in the worktree's real .aida/review-verdicts, which the anchored reader accepts.\nGates on 352ec74bc7: check-ci-fast PASS; test-touched PASS 896/896 + 2/2 e2e (two clean consecutive runs; one earlier run had 2 failures, bug_1918 unrecognised_agent... and bug_1983 one_rejection_table..., which pass in isolation 2/2 and did not reproduce, so I read them as intermittent under parallel load and unrelated to this diff); task1169 guardrail 2/2; bug_2201 e2e 2/2.",
+  "subject": "PR-2794 round 2: 352ec74bc7",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

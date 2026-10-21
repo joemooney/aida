@@ -1,0 +1,18 @@
+{
+  "id": "2c0f38c9-bc03-4f62-ae2b-ed4db055811e",
+  "thread_id": "2c0f38c9-bc03-4f62-ae2b-ed4db055811e",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792584996197,
+  "body": "PR #2796 (TASK-1981 F6/F7) round-2 fixes pushed at 5a69cbfe09.\n\n1. [blocking, detached HEAD] Added git_ops::attached_branch (symbolic-ref --quiet --short HEAD). It fails closed on a detached HEAD and accepts an unborn-but-attached branch. capture_dev_release_store and commit_initial_store now resolve the branch first, inside the lock and before any stage or commit, so nothing is written on refusal. Defense in depth: push_exact_outcome now refuses a branch named `HEAD` before any remote I/O.\n   New shared test task_1981_detached_store_refuses_capture_and_publication runs in both the init and release modules. It detaches the store and asserts that the capture errors, HEAD is unchanged, publish_snapshot(..,\"HEAD\",..) is refused, and the remote has no refs/heads/* at all.\n   Note: the store write lock's own safety check already refuses a detached *store tree*, so on a real store the capture was already blocked. The new guards close the remaining paths: a non-store-tree repo, and any other caller passing \"HEAD\".\n2. [title] Retitled to the completing form: \"[AI:codex] fix(store): capture init and release publication snapshots (TASK-1981)\".\n\nGates: make check-ci-fast passed (33 gates). make test-touched passed (193 + 147). CI is running.\n",
+  "subject": "READY: #2796 at 5a69cbfe09 (detached-HEAD refusal + retitle)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

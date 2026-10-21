@@ -1,0 +1,19 @@
+{
+  "id": "3168ec76-fb37-4d3d-a399-5f511d767390",
+  "thread_id": "3168ec76-fb37-4d3d-a399-5f511d767390",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792588317615,
+  "body": "Sorry, I only saw your 21:49 mail at 06:10. Evidence for AC3, AC4 and AC5 is posted on STORY-1853, all three MET against main @571dbfd65f, run 39543779263. AC3: README.md:36 says the full suite is CI-only; no template sets the slot-bypass var; the hook blocks it and test_git_guardrails_parse.sh:61-63 asserts that. AC4: I re-ran the per-test budget gate on all 5 lane JUnits: exit 0, 0 unbudgeted, 22 tests over 10s and all budgeted. AC5: 11,860 passed + 10 ignored = 11,870, vs the 11,683 baseline, 0 failed. AC2: the hourly checks from 23:08 to 06:09 all saw load 11-52 with 5-9 build procs, so there has been no quiet window. The watch keeps running and measures automatically when load1 < 1.5 and no rustc/cargo is running; I'll record wall time, passed/ignored and the dominant binaries. While the mandate's fleet runs, the box may not go quiet. A ~30 min pause of new dispatch would let me measure.",
+  "subject": "STORY-1853 AC3/AC4/AC5 evidence posted; AC2 waiting on a quiet window",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "integrator"
+}

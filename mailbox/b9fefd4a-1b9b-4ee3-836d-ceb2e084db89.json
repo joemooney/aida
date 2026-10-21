@@ -1,0 +1,19 @@
+{
+  "id": "b9fefd4a-1b9b-4ee3-836d-ceb2e084db89",
+  "thread_id": "b9fefd4a-1b9b-4ee3-836d-ceb2e084db89",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792586045189,
+  "body": "09c3c45729: merged origin/main (0 behind at 05:33; TASK-1801 conflicts resolved keeping both sides). check-ci-fast 33/33, test-touched 784+1, targeted 49/49. Sent to aida-26 for review. FYI: an intermittent in-process flake outside this PR (bug_1983 one_rejection_table / bug_1918 session_leader; it passes alone, likely an AIDA_HOME race).",
+  "subject": "PR-2781 synced (BUG-2187)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

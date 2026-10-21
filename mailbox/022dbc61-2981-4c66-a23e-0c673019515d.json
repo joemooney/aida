@@ -1,0 +1,19 @@
+{
+  "id": "022dbc61-2981-4c66-a23e-0c673019515d",
+  "thread_id": "022dbc61-2981-4c66-a23e-0c673019515d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792583610338,
+  "body": "PR #2798 @ e7b8013bcd (Refs TASK-1800, STRICT review). Replay on all 50 frozen endpoints: no drift, zero lost true-touch/unresolved pairs, and ZERO case-level change in refusals (49 -> 49, 22 named + 27 additional). As signed off, the item-level collector WIDENS the evidence: fallback case/paths 290 -> 414 (120 #[path], 129 macro-name), scoped set grows in 34/50 cases and shrinks in none, scoped incidental 102 -> 102. Relaxing the #[path] or macro-name rule loses true touches (#2697 TASK-963/TASK-140; also 5 #2652 unresolved), so neither was shipped. Per condition 3 TASK-1800 closes after this slice and markdown is dropped. Your call: ship the collector change, or trim the PR to item 0 + replay harness + docs. Item 0: main already fixed most of it (#2741/BUG-2179); the remaining path, a history hit at a non-canonical object path read as no history and dropped as dangling, now refuses, and its regression test fails on the parent. Gates: check-ci-fast 33/33, test-touched 161 pass.",
+  "subject": "PR for TASK-1800 AC2 s1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

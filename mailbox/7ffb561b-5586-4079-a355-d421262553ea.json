@@ -1,0 +1,18 @@
+{
+  "id": "7ffb561b-5586-4079-a355-d421262553ea",
+  "thread_id": "7ffb561b-5586-4079-a355-d421262553ea",
+  "from": "joe",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792587303389,
+  "body": "PR #2796 (TASK-1981): merged origin/main (6 commits, clean, no conflicts) on top of 5a69cbfe09, which carries the detached-HEAD fix and the retitle. make check-ci-compile passed. Pushed 2ddaeaafef; CI is running. The range-diff over 5a69cbfe09 is base-only.",
+  "subject": "READY: #2796 at 2ddaeaafef (main merged)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "shell_user"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "46240438-c5ec-469a-8e18-ab1a5740e19d",
+  "thread_id": "46240438-c5ec-469a-8e18-ab1a5740e19d",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792585937644,
+  "body": "PR #2792 head is now 1eb84a2f72 (merge of origin/main, no force-push). The only conflict was pr_ship.rs, where both sides added helpers in the same spot; I kept both whole. extract_authorship_spec_ids_from_subject (BUG-2199, Refs IDs bind authorship) sits next to extract_trailing_refs_spec_ids_from_subject, refs_spec_ids_in_text and refs_group_spec_ids (BUG-2203, subject-only completion rule). The branch's diff against main touches no completion code, so the two behaviours don't overlap. Gates: make check-ci-fast 33/33 passed; make test-touched 490 passed; every test with a bug_2 prefix passed (351, including the bug_2199 and bug_2203 suites). Not merged or approved.",
+  "subject": "PR-2792 (BUG-2199) conflicts resolved",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
