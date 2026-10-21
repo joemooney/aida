@@ -1,0 +1,27 @@
+id: 01a16029-4f50-72f1-b459-358938b010e3
+spec_id: TASK-2096
+agreed_id: TASK-2096
+title: TASK-2030 folded items TASK-2025 / TASK-1664 / TASK-1665 unaddressed in TASK-1955 slice 4
+description: |
+  PR-2810 addresses TASK-2030 (a)/(b) only. The advisor folded TASK-2025 (operator gate finding marked routed when [notify] is unconfigured), TASK-1664 (no warning that notify is missing) and TASK-1665 (crashed Dormant reviewer suppresses unpicked-ready-pr for 24h) into TASK-2030. None is fixed or deferred in the PR body. Take them in a later slice, each with a fix and a test or a stated reason.
+
+  Raised in review of PR-2810: https://github.com/joemooney/aida/pull/2810#issuecomment-6325879491
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:31:22.448238964Z
+modified_at: 2026-10-21T20:31:22.448238964Z
+req_type: Task
+tags:
+- TASK-1955
+- from-review:PR-2810
+- severity:minor
+filed_at:
+  code_sha: 396cb2bf3cdc964d4c5c07d6665d05ece4204880
+  branch: pr-2810
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16022c487

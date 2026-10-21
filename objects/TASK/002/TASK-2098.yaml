@@ -1,0 +1,27 @@
+id: 01a16029-6ec5-7f50-8a15-5b2c20595965
+spec_id: TASK-2098
+agreed_id: TASK-2098
+title: aida session leases still shows a dead creator_pid for review/claim leases
+description: |
+  leases.rs:2668-2674 classify_session_leases still uses the unfiltered l.creator_pid fallback for review_verb/claim_verb leases. PR-2810 filtered the same fallback in ps_integrate.rs:2216-2226 with process_identity_is_alive. Apply the same filter so both views agree.
+
+  Raised in review of PR-2810: https://github.com/joemooney/aida/pull/2810#issuecomment-6325879491
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T20:31:30.501989235Z
+modified_at: 2026-10-21T20:31:30.501989235Z
+req_type: Task
+tags:
+- TASK-1955
+- from-review:PR-2810
+- severity:cosmetic
+filed_at:
+  code_sha: 396cb2bf3cdc964d4c5c07d6665d05ece4204880
+  branch: pr-2810
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 01a16022c487

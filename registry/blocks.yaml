@@ -901,7 +901,7 @@ blocks:
   type_prefix: TASK
   range_start: 2015
   range_end: 2114
-  next: 2094
+  next: 2099
   allocated_at: 2026-10-20T09:46:13.371327982Z
 - node_id: '1'
   owner: redacted@node.invalid
@@ -911,3 +911,11 @@ blocks:
   range_end: 2316
   next: 2217
   allocated_at: 2026-10-21T03:56:18.242488289Z
+- node_id: '1'
+  owner: redacted@node.invalid
+  hostname: imac
+  type_prefix: TASK
+  range_start: 2115
+  range_end: 2214
+  next: 2115
+  allocated_at: 2026-10-21T20:31:22.644250236Z
