@@ -3,12 +3,12 @@ spec_id: TASK-1-225
 agreed_id: TASK-1332
 title: Store sync pre-commit and rebase need the existing writer lock
 description: 'TASK-1604 isolates the fetched rebase target from shared FETCH_HEAD and corrects the error hint. Inspection found aida db sync staging/commit/rebase in git_backend_cmd.rs does not hold db::store_lock across that window, unlike backend spec mutations. The original report also saw cannot lock ref HEAD during chore: sync pending changes. Target isolation does not fix concurrent commits/rebases on the same store worktree; follow-up should reuse the existing re-entrant store writer lock around sync, audit other network store writers, and add concurrent-process regression coverage. No race was reproduced against the live shared store during this implementation.'
-status: Approved
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-06T07:25:55.876829177Z
-modified_at: 2026-10-21T04:50:09.201028275Z
+modified_at: 2026-10-21T16:22:28.313055112Z
 req_type: Task
 tags:
 - closure-pending
@@ -803,6 +803,14 @@ history:
   timestamp: 2026-10-21T04:50:10.722086025Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a15f45-6ed9-7692-901c-e457e0a79a79
+  author: joe
+  timestamp: 2026-10-21T16:22:28.313043278Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 deferred: true
 deferred_at: 2026-10-21T04:49:55.640498253Z
 deferred_until: TASK-1981's last slice merges (then complete TASK-1332)
@@ -815,3 +823,6 @@ filed_at:
   aida_version: 0.15.0
   aida_build_sha: e1422ae139
   vendor: codex
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-21T16:22:28.313022750Z
