@@ -1,0 +1,31 @@
+id: 01a15fd8-e29c-7a71-b66e-5a2e4730ee6a
+spec_id: STORY-1890
+agreed_id: STORY-1890
+title: 'Review PR-2808: shared live mailbox resolver (Refs STORY-1843)'
+description: |
+  Independently review https://github.com/joemooney/aida/pull/2808 at e85d432ebaf8eb399c9b373df6a368c77bafd4b7. This is PR1 of STORY-1843's advisor-approved four-slice plan, a non-completing reference slice.
+
+  ## Acceptance
+  - Read STORY-1843's SKETCH v1, advisor C1-C3 signoff, and the 11:01 boundary ruling (message81b4a4f8, relayed as a story comment). Review PR1's shared resolver, unknown/dead/ambiguous and zero-reader refusal, named current group-reader diagnostics, human offline inbox compatibility, and preserved historical catalog precedence.
+  - PR1 deliberately has no UUID schema/migration, explicit queue flag or private group receipts; advisor moved those to PR2. Do not complete STORY-1843 or BUG-2204's separate verdict-truth acceptance.
+  - Independently verify source/evidence at the PR's current head; author self-checks are not independent review. Local evidence:65 mailbox tests,2 mention tests,33 fast gates passed at e85d432eba; workspace test targets compiled at parent201f64a889 before the private catalog followup.
+  - Record the ordinary independent attested PR verdict only for the current SHA. Require green required CI at that head before ship. Do not bypass holds or rework. Ask advisor if design questions arise.
+
+  Filed manually because aida pr auto-queue-review skipped the approved Refs-only commit trailers. Operator explicitly authorized full implementation with advisor-coordinated independent review for each PR. Author lease01a15f84fa7c remains in /home/joe/ai/aida-story-1843-routing; reviewer should use explicit --role reviewer and the PR's unambiguous backing spec for coexistence.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:03:31.740684502Z
+modified_at: 2026-10-21T19:03:31.740684502Z
+req_type: Story
+tags:
+- pr:2808
+- review
+filed_at:
+  code_sha: 3df0a4c73dccd81e6defc0be0bf89595d846dbda
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: codex
