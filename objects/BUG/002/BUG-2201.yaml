@@ -3,13 +3,22 @@ spec_id: BUG-2201
 agreed_id: BUG-2201
 title: Headless reviewer in aida-relay is denied Bash/Read and cannot record its verdict (PR-96 reviewed twice, no verdict)
 description: 'aida queue work PR-96 --role reviewer --no-human --vendor claude, run from /home/joe/ai/aida-relay on 2026-10-20 at 21:2x and again at 21:50, exited 30 both times: ''the reviewer for PR-96 exited without recording a verifiable verdict''. The reviewer finished its analysis (approve, no blockers, 3 nits; head 3e4d8d1978, CI green, CLEAN) and tried to run `aida review record TASK-119 --pr 96 --sha 3e4d8d1978... --verdict approved`. The log shows ''[headless:reviewer] ⚠ permission denied: Bash, Bash, Read, …+5 more'', so the record call and several verification reads never ran. The same launcher works in /home/joe/ai/aida (many PASS verdicts tonight), so the headless permission set probably does not cover the aida-relay project or its reviewer worktree (/home/joe/ai/aida-relay-worktrees/aida-relay-pr-96). Logs: /tmp/claude-1000/-home-joe-ai-aida/7d71bfbf-a609-42bd-a714-a7d52d81db81/scratchpad/review-relay96b.log (and review-relay96.log). Acceptance: (1) a headless reviewer launched for a non-aida project gets the same Bash/Read allowances (at minimum `aida review record`, git, and reads inside its worktree) as in the aida repo; (2) when a permission denial stops the reviewer before it records a verdict, the launcher names the denied tool calls in its error instead of the generic ''no verdict file''; (3) a regression test launches a reviewer against a fixture project outside the aida repo and asserts a verdict file is written. Blocks TASK-1793 completion (aida-relay PR #96).'
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T05:16:14.397684799Z
-modified_at: 2026-10-21T05:16:14.397684799Z
+modified_at: 2026-10-21T05:16:34.342288474Z
 req_type: Bug
+history:
+- id: 01a15ce3-c8a6-7f51-91c2-ddf3bc26512f
+  author: joe
+  timestamp: 2026-10-21T05:16:34.342282640Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: b381e35218398635c9367100ebd0fdd1d3cfc9d8
   branch: main
