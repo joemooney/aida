@@ -1,5 +1,6 @@
 id: 01a15f78-27ca-75b1-9198-ab901d39561e
 spec_id: TASK-1-408
+agreed_id: TASK-1678
 title: 'non-blocking/minor: TASK-2054 (AIDA_STORE-divergence part), TASK-2055 and TASK-…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1953, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -36,6 +37,10 @@ history:
   author: joe
   timestamp: 2026-10-21T17:19:01.755871288Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a15f80-47c8-7112-b8da-98979168f174
+  author: joe
+  timestamp: 2026-10-21T17:26:44.936405166Z
   changes: []
 filed_at:
   code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
