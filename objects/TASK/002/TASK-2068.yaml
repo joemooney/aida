@@ -1,0 +1,27 @@
+id: 01a15ea2-b37a-7640-be92-36088d4e4152
+spec_id: TASK-2068
+agreed_id: TASK-2068
+title: 'TASK-1800 replay guard (make task-1800-replay) is #[ignore]/local-only; CI does not enforce the drift/zero-loss gate'
+description: |
+  aida-cli-lib/src/tests/task_1800_trace_replay_tests.rs:44 marks task_1800_corpus_replay #[ignore] because the pinned squash-merged PR heads need not exist in CI's clone. The doc (task-1800-trace-exclusions.md) says "any future attribution change must pass" it, but nothing enforces that: a change to mandate_traces collection can merge with the zero-loss gate never run. Options: vendor the 18 audited cases' relevant blobs as fixtures so a reduced zero-loss check runs in CI, or make the review checklist require replay output for any mandate_traces.rs change.
+
+  Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T13:24:43.514354798Z
+modified_at: 2026-10-21T13:24:43.514354798Z
+req_type: Task
+tags:
+- from-review:PR-2798
+- mandate
+- severity:minor
+filed_at:
+  code_sha: c8f7d054ba9d01bc4ecf7a48e90c91bc97f1f6cf
+  branch: pr-2798
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: b5c03f772f
+  vendor: claude
+  session: 01a15e97c0de
