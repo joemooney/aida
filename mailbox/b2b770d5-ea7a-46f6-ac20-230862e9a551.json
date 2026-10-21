@@ -1,0 +1,19 @@
+{
+  "id": "b2b770d5-ea7a-46f6-ac20-230862e9a551",
+  "thread_id": "b2b770d5-ea7a-46f6-ac20-230862e9a551",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "aida-26"
+  },
+  "timestamp": 1792571673142,
+  "body": "f97d9559c3: merged origin/main (includes #2793 TASK-2045) with no conflicts. check-ci-fast passes 33/33 with nothing set aside. Pushed, no force.",
+  "subject": "PR-2787 merged up (BUG-2169)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

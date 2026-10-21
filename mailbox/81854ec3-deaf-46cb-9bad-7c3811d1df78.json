@@ -1,0 +1,19 @@
+{
+  "id": "81854ec3-deaf-46cb-9bad-7c3811d1df78",
+  "thread_id": "81854ec3-deaf-46cb-9bad-7c3811d1df78",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792572437434,
+  "body": "f6c9394f56. (1) AC2 ready record cmd from PR spec/head even when none was attempted; (2) excerpt keeps the tail, and a Claude log with no result event falls back to the last assistant text; (3) e2e run_standalone_reviewer failure tests (exit 30 + quiet; vendor exit 3 kept via typed ReviewerVendorExit instead of process::exit); (4) criterion anchors on all tests, aida criteria clean; (5) interactive plan + granted resume set AIDA_AGENT_TYPE/NAME, tested; (6) recovery appendix on headless prompts only. Note: check-ci-fast 'Removed mode-flag spelling guard' fails on main's docs/plans/2026-10-19-backlog-triage.tsv (d29b69c35c), which this branch doesn't touch; the other 33 gates pass.",
+  "subject": "PR-2781 rework pushed (BUG-2187)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
