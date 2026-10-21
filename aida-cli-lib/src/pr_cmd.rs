@@ -5177,6 +5177,10 @@ mod bug_2164_default_branch_ship_refusal_tests;
 #[path = "tests/task_140_squash_subject_tests.rs"]
 mod task_140_squash_subject_tests;
 
+#[cfg(test)]
+#[path = "tests/bug_2203_refs_subject_tests.rs"]
+mod bug_2203_refs_subject_tests;
+
 pub(crate) struct PrShipMetadata {
     pub(crate) title: String,
     pub(crate) body: String,

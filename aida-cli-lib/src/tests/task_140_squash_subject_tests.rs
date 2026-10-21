@@ -119,7 +119,8 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
     let out = pr_ship_dry_run_output("PLAN\n".to_string(), root, 1957, "task-1538-x", false);
     assert_eq!(
         out,
-        "PLAN\n  · completion trailer (TASK-1538) — from the branch name\n"
+        "PLAN\n  · completion trailer (TASK-1538) — from the branch name; \
+         this merge will complete TASK-1538\n"
     );
     let out = pr_ship_dry_run_output("PLAN\n".to_string(), root, 0, "task-1538-x", false);
     assert!(
