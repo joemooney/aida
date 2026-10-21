@@ -2462,8 +2462,10 @@ pub fn first_parent_sha(repo: &Path, sha: &str) -> Option<String> {
 /// was pushing unlocked (`HEAD != expected_sha`), drops `expected_sha` via
 /// `git rebase --onto <expected_sha>~1 <expected_sha>` so the peer's commit is
 /// preserved rather than erased by a blind `reset --hard HEAD~1`. If that
-/// rebase conflicts, aborts it and leaves `HEAD` untouched.
+/// rebase conflicts, aborts it and leaves `HEAD` untouched (`Ok(false)`).
+/// Non-conflict reset or rebase errors surface as `Err`.
 // trace:TASK-1930 | ai:agy
+// trace:TASK-1981 | ai:agy
 pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Result<bool> {
     if expected_sha.is_empty() {
         return Ok(false);
@@ -2473,13 +2475,55 @@ pub fn rollback_commit_if_head_matches(repo: &Path, expected_sha: &str) -> Resul
         let parent = format!("{expected_sha}~1");
         if current == expected_sha {
             let out = git(repo, &["reset", "--hard", &parent])?;
-            return Ok(out.success);
+            if !out.success {
+                anyhow::bail!(
+                    "git reset --hard {parent} failed while rolling back {expected_sha}: {}",
+                    out.stderr
+                );
+            }
+            return Ok(true);
         }
         if is_ancestor(repo, expected_sha, &current).unwrap_or(false) {
             let rebased = git(repo, &["rebase", "--onto", &parent, expected_sha])?;
-            if !rebased.success && rebase_in_progress(repo) {
-                let _ = git(repo, &["rebase", "--abort"]);
+            if rebased.success {
+                // Preserve the existing bool contract: true means HEAD matched.
+                // trace:TASK-1981 | ai:codex
+                return Ok(false);
             }
+            if rebase_in_progress(repo) {
+                // Rebase state also survives signing and other replay failures.
+                // Only unmerged index entries establish a merge conflict.
+                // trace:TASK-1981 | ai:codex
+                let conflicts = git(repo, &["ls-files", "--unmerged"]).with_context(|| {
+                    format!(
+                        "checking conflicts after failed rollback: {}",
+                        rebased.stderr
+                    )
+                })?;
+                let aborted = git(repo, &["rebase", "--abort"])
+                    .with_context(|| format!("aborting failed rollback: {}", rebased.stderr))?;
+                if !aborted.success {
+                    anyhow::bail!(
+                        "rollback rebase failed: {}; abort also failed: {}",
+                        rebased.stderr,
+                        aborted.stderr
+                    );
+                }
+                if !conflicts.success {
+                    anyhow::bail!(
+                        "rollback rebase failed: {}; conflict check failed: {}",
+                        rebased.stderr,
+                        conflicts.stderr
+                    );
+                }
+                if !conflicts.stdout.is_empty() {
+                    return Ok(false);
+                }
+            }
+            anyhow::bail!(
+                "git rebase --onto {parent} {expected_sha} failed without conflict while rolling back {expected_sha}: {}",
+                rebased.stderr
+            );
         }
         Ok(false)
     })
@@ -4101,7 +4145,9 @@ pub fn configure_store_gc_auto(repo: &Path, threshold: u32) -> bool {
 pub fn apply_store_gc_auto_from_env(repo: &Path) {
     let override_val = std::env::var("AIDA_STORE_GC_AUTO").ok();
     if let Some(threshold) = resolve_store_gc_auto(override_val.as_deref()) {
-        let _ = configure_store_gc_auto(repo, threshold);
+        // trace:TASK-1981 | ai:agy
+        let _ =
+            crate::db::with_store_write_lock(repo, || Ok(configure_store_gc_auto(repo, threshold)));
     }
 }
 
@@ -4110,8 +4156,17 @@ pub fn apply_store_gc_auto_from_env(repo: &Path) {
 /// Best-effort: failures are swallowed.
 // trace:TASK-1033 | ai:claude
 pub fn gc_auto(repo: &Path) -> bool {
+    // Maintenance uses Git's own locks and must not occupy AIDA's writer
+    // window. Do not override gc.auto or gc.autoDetach: Git must honour all
+    // configured scopes, including a global gc.auto=0.
+    // trace:TASK-1981 | ai:codex
+    if crate::db::any_store_write_lock_held()
+        || resolve_store_gc_auto(std::env::var("AIDA_STORE_GC_AUTO").ok().as_deref()).is_none()
+    {
+        return false;
+    }
     git(repo, &["gc", "--auto"])
-        .map(|r| r.success)
+        .map(|out| out.success)
         .unwrap_or(false)
 }
 
@@ -4132,10 +4187,14 @@ pub fn gc_auto(repo: &Path) -> bool {
 /// `off`/`0` disables).
 // trace:STORY-733 | ai:claude
 pub fn opportunistic_store_gc(repo: &Path) {
+    // Only the config write takes AIDA's lock. Potentially long repacks run
+    // after it is released; an already-locked caller defers maintenance.
+    // trace:TASK-1981 | ai:codex
+    if crate::db::any_store_write_lock_held() {
+        return;
+    }
     apply_store_gc_auto_from_env(repo);
     let _ = gc_auto(repo);
-    // STORY-733: the occasional aggressive consolidation. Self-throttling +
-    // best-effort — a failed aggressive repack must never break the sync.
     let override_val = std::env::var("AIDA_STORE_GC_AGGRESSIVE_PACKS").ok();
     if let Some(threshold) = resolve_store_gc_aggressive_packs(override_val.as_deref()) {
         if let Some(counts) = count_objects(repo) {
@@ -4224,6 +4283,11 @@ pub fn count_objects(repo: &Path) -> Option<StoreObjectCounts> {
 /// is unaffected. Returns the [`GitResult`] (caller decides how loud to be).
 // trace:STORY-733 | ai:claude
 pub fn gc_aggressive(repo: &Path) -> Result<GitResult> {
+    // trace:TASK-1981 | ai:codex
+    anyhow::ensure!(
+        !crate::db::any_store_write_lock_held(),
+        "store GC must run outside the store writer transaction"
+    );
     git(repo, &["gc", "--aggressive"])
 }
 
@@ -4764,7 +4828,8 @@ pub fn register_node_full_identity(
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -4871,7 +4936,8 @@ pub fn register_node_remote_only(
         match push_exact(aida_repo, "origin", &committed_sha, &branch) {
             Ok(true) => return Ok(id),
             Ok(false) => {
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Remote-only node backfill: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -5010,7 +5076,8 @@ pub fn set_node_identity_field(
             Ok(false) => {
                 // Push rejected — discard our stale commit + tree so the next
                 // pull --rebase applies cleanly. trace:BUG-1-069
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 eprintln!(
                     "Node identity update: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -5209,7 +5276,8 @@ pub fn hijack_node(
                 if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
                     let _ = std::fs::remove_file(marker_path);
                 }
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 continue;
             }
             Err(e) => anyhow::bail!("Hijack push failed: {}", e),
@@ -5270,7 +5338,8 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
                 // changes so the next iteration's pull --rebase has a clean
                 // tree to apply onto. `--soft` alone leaves the index dirty,
                 // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
-                let _ = rollback_commit_if_head_matches(aida_repo, &committed_sha);
+                // trace:TASK-1981 | ai:agy
+                rollback_commit_if_head_matches(aida_repo, &committed_sha)?;
                 continue;
             }
             Err(e) => anyhow::bail!("Node unregister failed: {}", e),
@@ -10796,6 +10865,173 @@ mod tests {
         }
         let err = push_exact(&repo, "origin", &next, "main").unwrap_err();
         assert!(err.to_string().starts_with("git push failed:"), "{err:#}");
+    }
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_rollback_reports_dirty_tree_failure_without_losing_peer() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        std::fs::create_dir_all(&repo).unwrap();
+        run_git(&repo, &["init", "-q", "-b", "aida-store"]);
+        run_git(&repo, &["config", "user.email", "t@example.com"]);
+        run_git(&repo, &["config", "user.name", "t"]);
+        // This case requires dirty-tree refusal rather than the operator's
+        // optional auto-stash behavior. trace:TASK-1981 | ai:codex
+        run_git(&repo, &["config", "rebase.autoStash", "false"]);
+        std::fs::write(repo.join("seed"), "seed\n").unwrap();
+        run_git(&repo, &["add", "seed"]);
+        run_git(&repo, &["commit", "-q", "-m", "seed"]);
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "writer"]);
+        let writer = head_sha(&repo).unwrap();
+        run_git(&repo, &["commit", "-q", "--allow-empty", "-m", "peer"]);
+        let peer = head_sha(&repo).unwrap();
+        std::fs::write(repo.join("seed"), "dirty\n").unwrap();
+        let err = rollback_commit_if_head_matches(&repo, &writer).unwrap_err();
+        assert!(
+            err.to_string().contains("failed without conflict"),
+            "{err:#}"
+        );
+        assert_eq!(head_sha(&repo).unwrap(), peer);
+        assert_eq!(
+            std::fs::read_to_string(repo.join("seed")).unwrap(),
+            "dirty\n"
+        );
+        assert!(!rebase_in_progress(&repo));
+    }
+
+    // A failed signer leaves rebase state without unmerged entries: it must
+    // abort and report failure, not masquerade as a conflict.
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_rollback_reports_non_conflict_replay_failure_and_aborts() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        init(&repo).unwrap();
+        configure_user(&repo, "Test", "test@example.com").unwrap();
+        for name in ["seed", "writer", "peer"] {
+            std::fs::write(repo.join(name), name).unwrap();
+            run_git(&repo, &["add", name]);
+            run_git(
+                &repo,
+                &["-c", "commit.gpgSign=false", "commit", "-q", "-m", name],
+            );
+        }
+        let peer = head_sha(&repo).unwrap();
+        let writer = run_git(&repo, &["rev-parse", "HEAD~1"]);
+        run_git(&repo, &["config", "commit.gpgSign", "true"]);
+        run_git(&repo, &["config", "gpg.format", "openpgp"]);
+        run_git(&repo, &["config", "gpg.program", "/bin/false"]);
+        let err = rollback_commit_if_head_matches(&repo, &writer).unwrap_err();
+        assert!(
+            err.to_string().contains("failed without conflict"),
+            "{err:#}"
+        );
+        assert!(
+            err.to_string().contains("failed to write commit object"),
+            "{err:#}"
+        );
+        assert_eq!(head_sha(&repo).unwrap(), peer);
+        assert!(!rebase_in_progress(&repo));
+        assert!(repo.join("peer").exists());
+        assert!(repo.join("writer").exists());
+        assert!(git(&repo, &["ls-files", "--unmerged"])
+            .unwrap()
+            .stdout
+            .is_empty());
+    }
+
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_gc_runs_without_waiting_for_store_writer() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        seed_multi_pack_store(&repo, 4);
+        run_git(&repo, &["config", "gc.autoDetach", "false"]);
+        run_git(&repo, &["config", "gc.auto", "500"]);
+        run_git(&repo, &["config", "gc.autoPackLimit", "1"]);
+        crate::db::with_store_write_lock(&repo, || {
+            assert!(!gc_auto(&repo), "locked caller must defer auto GC");
+            assert!(
+                gc_aggressive(&repo).is_err(),
+                "locked caller must refuse GC"
+            );
+            let contender = repo.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            let child = std::thread::spawn(move || {
+                tx.send(gc_auto(&contender)).unwrap();
+            });
+            assert!(rx.recv_timeout(Duration::from_secs(30)).unwrap());
+            child.join().unwrap();
+            assert_eq!(count_objects(&repo).unwrap().packs, 1);
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    // Each config phase runs in an exact-test child with Command-scoped env,
+    // so the parent and unrelated libtest threads never mutate their env.
+    // trace:TASK-1981 | ai:codex
+    #[test]
+    fn task_1981_auto_gc_respects_global_zero_and_off_override() {
+        const TEST: &str =
+            "git_ops::tests::task_1981_auto_gc_respects_global_zero_and_off_override";
+        let phase = std::env::var("AIDA_TEST_GC_CONFIG_CHILD").ok();
+        if phase.is_none() {
+            let dir = tempfile::tempdir().unwrap();
+            let global = dir.path().join("global.gitconfig");
+            std::fs::write(&global, "[gc]\n    auto = 0\n").unwrap();
+            for phase in ["off-unset", "global-zero", "off-local"] {
+                let mut command = Command::new(std::env::current_exe().unwrap());
+                command
+                    .args(["--exact", TEST, "--nocapture"])
+                    .env("AIDA_TEST_GC_CONFIG_CHILD", phase)
+                    .env("GIT_CONFIG_GLOBAL", &global)
+                    .env("GIT_CONFIG_NOSYSTEM", "1")
+                    .env_remove("AIDA_STORE_GC_AUTO");
+                if phase != "global-zero" {
+                    command.env("AIDA_STORE_GC_AUTO", "off");
+                }
+                let output = command.output().unwrap();
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(output.status.success(), "{phase}: {stdout}\n{stderr}");
+                assert!(
+                    stdout.lines().any(|line| line == "running 1 test")
+                        && stdout.contains("test result: ok. 1 passed; 0 failed;"),
+                    "{phase}: child must run exactly one passing test: {stdout}\n{stderr}"
+                );
+            }
+            return;
+        }
+        let phase = phase.unwrap();
+        assert!(matches!(
+            phase.as_str(),
+            "off-unset" | "global-zero" | "off-local"
+        ));
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("store");
+        let before = seed_multi_pack_store(&repo, 4);
+        assert!(before.packs > 1, "fixture must have packs to collect");
+        run_git(&repo, &["config", "gc.autoDetach", "false"]);
+        run_git(&repo, &["config", "gc.autoPackLimit", "1"]);
+        run_git(&repo, &["config", "--unset", "gc.auto"]);
+        assert!(
+            !git(&repo, &["config", "--local", "--get", "gc.auto"])
+                .unwrap()
+                .success
+        );
+        if phase == "off-local" {
+            // Off must also win over an existing nonzero local policy.
+            run_git(&repo, &["config", "gc.auto", "500"]);
+        }
+        if phase == "global-zero" {
+            // No AIDA override: Git's global zero still disables collection.
+            assert!(gc_auto(&repo));
+        } else {
+            assert!(!gc_auto(&repo), "off must skip explicit maintenance");
+        }
+        assert_eq!(count_objects(&repo).unwrap().packs, before.packs);
     }
 
     // trace:TASK-1930 | ai:agy

@@ -1357,7 +1357,8 @@ fn done(project_root: &Path, job: &str, note: Option<&str>) -> Result<()> {
     let task = config
         .as_ref()
         .and_then(|c| c.tasks.iter().find(|t| t.name == job))
-        .cloned();
+        .cloned()
+        .or_else(|| builtin_routed_seat_task(job));
     if task.is_none() {
         anyhow::bail!("no scheduled job named '{job}' (see `aida schedule list`)");
     }
@@ -1695,19 +1696,64 @@ fn list(project_root: &Path, seat: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
+/// The `lane-liveness-<seat>` seat jobs the lane-liveness substrate job
+/// routes findings to, built from its single prompt table so they appear in
+/// `due` / `done` with no config entry.
+// trace:STORY-1688 | ai:claude
+fn builtin_routed_seat_task(name: &str) -> Option<Task> {
+    let route = crate::lane_liveness::route_for_job(name)?;
+    Some(Task {
+        name: name.to_string(),
+        kind: JobKind::Seat,
+        seats: vec![route.seat.to_string()],
+        command: None,
+        prompt: Some(route.prompt.to_string()),
+        interval: None,
+        on: vec![EventTrigger {
+            kind: "CronJobFired".to_string(),
+            job: Some(name.to_string()),
+        }],
+        when: None,
+        when_raw: None,
+        quiet_hours: None,
+        enabled: true,
+        source: JobSource::Project,
+        problem: None,
+        invalid_command: None,
+    })
+}
+
 /// Due jobs, file-only (config parse + ledger/state reads; no git, no
 /// network). Seat jobs are filtered to `seat` when given; substrate jobs are
 /// included only when no seat filter is given (`include_substrate`).
 // trace:STORY-1226 | ai:claude
 fn collect_due(project_root: &Path, seat: Option<&str>, include_substrate: bool) -> Vec<DueJob> {
-    let Ok(Some(config)) = load_registry(project_root) else {
+    let Ok(config) = load_registry(project_root) else {
         return Vec::new();
     };
-    let state = load_state(project_root).unwrap_or_default();
     let ledgers = schedule_ledger::load_all(&store_root(project_root));
+    let mut tasks = config.map(|c| c.tasks).unwrap_or_default();
+    // trace:STORY-1688 | ai:claude
+    for route in crate::lane_liveness::ROUTES {
+        let builtin_name = crate::lane_liveness::route_job_name(route.seat);
+        if ledgers
+            .get(&builtin_name)
+            .and_then(|l| l.due_since)
+            .is_some()
+            && !tasks.iter().any(|t| t.name == builtin_name)
+        {
+            if let Some(task) = builtin_routed_seat_task(&builtin_name) {
+                tasks.push(task);
+            }
+        }
+    }
+    if tasks.is_empty() {
+        return Vec::new();
+    }
+    let state = load_state(project_root).unwrap_or_default();
     let now = Utc::now();
     let mut out = Vec::new();
-    for task in &config.tasks {
+    for task in &tasks {
         match task.kind {
             JobKind::Seat => {
                 if seat.is_some_and(|s| !task.applies_to_seat(s)) {
@@ -3136,6 +3182,19 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                     "--json",
                     "--fail-on-findings",
                 ],
+                hook_allowed: false,
+            },
+        ),
+        // STORY-1688: lane liveness substrate job — checks lane process/log
+        // liveness, review pickup, gate waits, and orphaned work leases, and
+        // routes its own findings, so it exits 0 rather than failing as a gate.
+        // Off the per-turn hook path: it calls the forge.
+        // trace:STORY-1688 | ai:claude
+        (
+            &["doctor check lane-liveness", "lane-liveness"],
+            ScheduledCommand {
+                display: "doctor check lane-liveness",
+                args: &["doctor", "check", "lane-liveness", "--json"],
                 hook_allowed: false,
             },
         ),
@@ -6467,6 +6526,65 @@ enabled = true
             hook.unsupported.is_empty(),
             "a hook tick never reports them"
         );
+    }
+
+    // STORY-1688 criterion 3: no model-side polling. The lane-liveness check
+    // is a substrate command kept off the per-turn hook path, every seat job
+    // it routes to fires only on its own CronJobFired event (no interval, no
+    // schedule), and this repo registers the check alone: disabled, with no
+    // polling seat job or failure route of its own.
+    // trace:STORY-1688.acfeeb8f | ai:claude
+    #[test]
+    fn story_1688_lane_liveness_has_no_model_side_polling() {
+        let command = parse_scheduled_command("doctor check lane-liveness").unwrap();
+        assert!(
+            !command.hook_allowed,
+            "the forge-calling check never runs per turn"
+        );
+        assert_eq!(command.args, ["doctor", "check", "lane-liveness", "--json"]);
+
+        for route in crate::lane_liveness::ROUTES {
+            let name = crate::lane_liveness::route_job_name(route.seat);
+            let task = builtin_routed_seat_task(&name).unwrap();
+            assert_eq!(task.kind, JobKind::Seat);
+            assert_eq!(task.seats, [route.seat]);
+            assert!(
+                task.interval.is_none() && task.when.is_none(),
+                "{name} polls"
+            );
+            assert_eq!(task.on.len(), 1);
+            assert_eq!(task.on[0].kind, "CronJobFired");
+            assert_eq!(task.on[0].job.as_deref(), Some(name.as_str()));
+        }
+        assert!(builtin_routed_seat_task("lane-liveness-merge").is_none());
+        assert!(builtin_routed_seat_task("lane-liveness-operator").is_none());
+
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let config = load_config(repo).unwrap().unwrap();
+        let registered: Vec<&Task> = config
+            .tasks
+            .iter()
+            .filter(|t| t.name.starts_with("lane-liveness"))
+            .collect();
+        assert_eq!(
+            registered
+                .iter()
+                .map(|t| t.name.as_str())
+                .collect::<Vec<_>>(),
+            ["lane-liveness"],
+            "route prompts live in lane_liveness::ROUTES, not config"
+        );
+        let job = registered[0];
+        assert_eq!(job.kind, JobKind::Substrate);
+        assert_eq!(job.interval, Some(parse_duration("10m").unwrap()));
+        assert!(
+            !job.enabled,
+            "ships disabled until enabled after a read-only run"
+        );
+        assert!(config.tasks.iter().all(|t| t
+            .on
+            .iter()
+            .all(|e| e.job.as_deref() != Some("lane-liveness"))));
     }
 }
 

@@ -1135,3 +1135,19 @@ and keeps ordinary conflict handling (headless live-lease refusal, terminal
 conflict prompt). See [sessions](docs/cli/06-roles-sessions.md).
 <!-- trace:TASK-1801 | ai:codex -->
 <!-- trace:TASK-1801 | ai:claude -->
+
+Store writer follow-up (TASK-1981): store config and compaction history
+rewrites retain `store-write.lock` across their read-modify-write window. GC
+runs after that lock is released using Git’s own maintenance locks, so long
+repacks do not exhaust concurrent writers’ 120-second wait. Explicit auto-GC uses normal Git configuration precedence and detach policy;
+`AIDA_STORE_GC_AUTO=off` skips it. The sync path retains AIDA’s existing
+default local threshold (500) and detach setting unless that override is off.
+Legacy ID retirement reloads through `update_atomically`; doc/finding filing
+no longer rewrites objects after releasing that transaction. Doctor heals
+lock their read/write/commit window. Interactive repairs restrict mutations to
+confirmed edges or blocks, while counter-scope migration refuses new active
+unconfirmed blocks before changing policy. Whole-store saves already lock and
+perform optimistic conflict detection; the inventory distinguishes that
+protection from in-lock reloads. See
+[store writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
+<!-- trace:TASK-1981 | ai:codex -->

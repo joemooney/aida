@@ -1308,8 +1308,9 @@ pub(crate) fn handle_findings_add(
 
     // Mirror `aida doc add`'s minimal persistence path — works regardless of
     // id_format policy (node-aware ids drop in when blocks aren't allocated).
-    // CR-8: stamp filing provenance BEFORE the store write — the object is
-    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    // CR-8: stamp filing provenance BEFORE the store write — update_atomically
+    // persists the stamped object under store-write.lock. trace:CR-8 | ai:claude
+    // trace:TASK-1981 | ai:agy
     aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1320,7 +1321,6 @@ pub(crate) fn handle_findings_add(
         .last()
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
-    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
 
     let display_id = written.spec_id.as_deref().unwrap_or("?");
     record_role_activity(display_id, "findings-add");
@@ -1670,10 +1670,10 @@ pub(crate) fn promote_finding_to_gate(
     let (written, was_reused) = match reused {
         Some(r) => (r, true),
         None => {
+            // trace:TASK-1981 | ai:agy
             let w = store.requirements.last().cloned().ok_or_else(|| {
                 anyhow::anyhow!("add_requirement_with_id produced no requirement")
             })?;
-            aida_core::object_store::write_object(&store_path.join("objects"), &w)?;
             (w, false)
         }
     };
@@ -1843,8 +1843,9 @@ pub(crate) fn file_reviewer_verdict_unavailable_finding(
         .insert("kind:ReviewerVerdictUnavailable".to_string());
     req.tags.insert("severity:major".to_string());
 
-    // CR-8: stamp filing provenance BEFORE the store write — the object is
-    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    // CR-8: stamp filing provenance BEFORE the store write — update_atomically
+    // persists the stamped object under store-write.lock. trace:CR-8 | ai:claude
+    // trace:TASK-1981 | ai:agy
     aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1855,7 +1856,6 @@ pub(crate) fn file_reviewer_verdict_unavailable_finding(
         .last()
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
-    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
 
     let display_id = written.spec_id.as_deref().unwrap_or("?");
     record_role_activity(display_id, "findings-add");
@@ -1898,8 +1898,9 @@ pub(crate) fn file_agent_gate_warning_finding(
     req.tags.insert("kind:AgentGateWarning".to_string());
     req.tags.insert("severity:major".to_string());
 
-    // CR-8: stamp filing provenance BEFORE the store write — the object is
-    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    // CR-8: stamp filing provenance BEFORE the store write — update_atomically
+    // persists the stamped object under store-write.lock. trace:CR-8 | ai:claude
+    // trace:TASK-1981 | ai:agy
     aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1910,7 +1911,6 @@ pub(crate) fn file_agent_gate_warning_finding(
         .last()
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
-    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
 
     let display_id = written.spec_id.as_deref().unwrap_or("?");
     record_role_activity(display_id, "findings-add");

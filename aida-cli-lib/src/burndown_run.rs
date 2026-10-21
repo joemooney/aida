@@ -1384,8 +1384,9 @@ pub(crate) fn file_integration_wait_finding(
     req.tags.insert("severity:major".to_string());
     req.tags.insert("aida:burndown".to_string());
 
-    // CR-8: stamp filing provenance BEFORE the store write — the object is
-    // rewritten below from the in-memory copy. trace:CR-8 | ai:claude
+    // CR-8: stamp filing provenance BEFORE the store write — update_atomically
+    // persists the stamped object under store-write.lock. trace:CR-8 | ai:claude
+    // trace:TASK-1981 | ai:agy
     aida_core::provenance::stamp_if_absent(&mut req);
     let store = backend.update_atomically(|store| {
         let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1396,7 +1397,6 @@ pub(crate) fn file_integration_wait_finding(
         .last()
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("add_requirement_with_id produced no requirement"))?;
-    aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
     record_role_activity(written.spec_id.as_deref().unwrap_or("?"), "findings-add");
     Ok(())
 }

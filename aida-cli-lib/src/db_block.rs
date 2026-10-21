@@ -1575,7 +1575,7 @@ mod task_1930_tests {
 
         // Run doctor_tombstone_stale_blocks_in_store and doctor_repair_dangling_relationships_in_store.
         let tombstoned =
-            crate::doctor_cmd::doctor_tombstone_stale_blocks_in_store(&store_path).unwrap();
+            crate::doctor_cmd::doctor_tombstone_stale_blocks_in_store(&store_path, None).unwrap();
         assert_eq!(tombstoned, 1);
         let after_blocks = aida_core::BlockRegistry::load(&blocks_path).unwrap();
         let n1_block = after_blocks
@@ -1595,7 +1595,8 @@ mod task_1930_tests {
         assert!(stale_block.is_exhausted());
 
         let repaired =
-            crate::doctor_cmd::doctor_repair_dangling_relationships_in_store(&store_path).unwrap();
+            crate::doctor_cmd::doctor_repair_dangling_relationships_in_store(&store_path, None)
+                .unwrap();
         assert_eq!(repaired, 1);
         let r1_after = aida_core::object_store::read_object(&objects_root, "TASK-1").unwrap();
         assert_eq!(
@@ -1627,6 +1628,7 @@ mod task_1930_tests {
             &store_path,
             "n1",
             100,
+            None,
         )
         .unwrap();
         assert_eq!(
