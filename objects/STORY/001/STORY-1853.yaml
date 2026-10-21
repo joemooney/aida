@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-21T04:48:59.968994224Z
+modified_at: 2026-10-21T13:11:48.062798559Z
 req_type: Story
 tags:
 - architecture
@@ -262,6 +262,18 @@ comments:
   created_at: 2026-10-21T04:48:59.968984587Z
   modified_at: 2026-10-21T04:48:59.968984587Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a15e96-de5e-7422-822b-786bc54a4989
+  author: joe
+  content: |
+    ## AC3 / AC4 / AC5 evidence (integrator seat, 2026-10-21, main @ 571dbfd65f, CI run 39543779263)
+
+    - **AC3: MET.** `aida-core/templates/.aida/discipline/README.md:36` says "The full workspace suite runs only in CI, at the PR head. Never run `cargo test --workspace` locally." No template sets `AIDA_CARGO_NO_SLOT`. Every mention is a prohibition: `implementer-discipline.md:297`, `rework-brief-craft.md:23`, `standing-orders/advisor.md:28`, `workflow-patterns.md:2112`, and the guard's own doc at `hooks/aida-git-guardrails.sh:543-553`. The hook enforces it (it blocked this seat's own grep tonight), and `tests/test_git_guardrails_parse.sh:61-63` asserts the prefix, export and `env` forms are refused. This closes the earlier "no test asserts it" gap.
+    - **AC4: MET.** The `Test time budget` step (`.github/workflows/ci.yml:204-211`) runs `scripts/test-timings.py` against each lane's nextest JUnit, per test, with `default_limit` 10 s from `scripts/test-time-budget.toml`. I re-ran it locally on all 5 lanes' artifacts from run 39543779263: exit 0 on every lane, and 0 "no budget entry" rows. All 22 tests over 10 s in that run have budget entries.
+    - **AC5: MET.** From `scripts/ci-test-shards.py --totals` on the 5 lane logs of run 39543779263: lib-0 4128+2, lib-1 5230+1, cli-0 188+0, cli-1 142+1, rest 2172+6. That is **11,860 passed + 10 ignored = 11,870**, against the recorded baseline of 11,671 passed / 11,683 passed+ignored (+187), with 0 failed. Per-lane totals are published to the job summary by the same step.
+    - **AC2: pending.** The host load was 11–52 at every hourly check from 23:08 to 06:09, so there has been no quiet window yet. The measurement runs automatically in the first window with load1 < 1.5 and no build processes.
+  created_at: 2026-10-21T13:11:48.062798559Z
+  modified_at: 2026-10-21T13:11:48.062798559Z
+  session_id: f91fd366-4181-4735-8802-dfc810a1c42e
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
