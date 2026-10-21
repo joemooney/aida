@@ -6,17 +6,26 @@ description: |
   aida-cli-lib/src/tests/task_1800_trace_replay_tests.rs:44 marks task_1800_corpus_replay #[ignore] because the pinned squash-merged PR heads need not exist in CI's clone. The doc (task-1800-trace-exclusions.md) says "any future attribution change must pass" it, but nothing enforces that: a change to mandate_traces collection can merge with the zero-loss gate never run. Options: vendor the 18 audited cases' relevant blobs as fixtures so a reduced zero-loss check runs in CI, or make the review checklist require replay output for any mandate_traces.rs change.
 
   Raised in review of PR-2798: https://github.com/joemooney/aida/pull/2798
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:24:43.514354798Z
-modified_at: 2026-10-21T13:24:43.514354798Z
+modified_at: 2026-10-21T17:37:50.539884257Z
 req_type: Task
 tags:
 - from-review:PR-2798
 - mandate
 - severity:minor
+history:
+- id: 01a15f8a-6fcb-7423-885f-c63d0a63c37c
+  author: joe
+  timestamp: 2026-10-21T17:37:50.539877755Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c8f7d054ba9d01bc4ecf7a48e90c91bc97f1f6cf
   branch: pr-2798
