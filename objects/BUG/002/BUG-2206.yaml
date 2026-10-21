@@ -1,0 +1,36 @@
+id: 01a15ff4-2354-73e1-8349-e6717482c968
+spec_id: BUG-2206
+agreed_id: BUG-2206
+title: Dead attested-reviewer leases (PR-N scope) show as running in aida ps and are never reaped
+description: |-
+  Observed 2026-10-21 12:35 in the primary checkout (advisor seat):
+  - `aida ps` reports `running: 35`. 33 of those are attested-reviewer sessions (scope PR-N, role reviewer, live=dormant, activity=working) whose creator_pid no longer exists. 29 of their PRs are MERGED or CLOSED; the oldest lease is 24h old (PR-2776).
+  - .aida/sessions holds 103 reviewer-role leases. 37 aida-worktrees/aida-pr-27xx worktrees remain.
+  - `aida session reap --dry-run` never considers them: reap keys on "spec is Done/Completed", and a PR-N scope has no spec, so they fall into "(108 session(s) whose spec is not finished — not shown)".
+
+  Expected:
+  1. `aida ps` must not count a lease whose recorded process (pid plus start identity) is provably dead as running/working. Show it as stale or hide it, the same way implementer leases are handled.
+  2. `aida session reap` must reap reviewer leases whose PR is merged or closed (or whose verdict was recorded for a head that is no longer the PR head) and whose process is dead: remove the review worktree, release the lease. Keep the reviewer-worktree merge-hold marker rule (BUG-2176): copy .aida/merge-holds/PR-N to the primary before removing.
+  3. Ideally the attested-review launcher releases its own lease when the reviewer exits after writing the verdict.
+
+  Example lease: .aida/sessions/01a15ac34759.toml (scope PR-2776, review_verb=true, creator_pid 1536988 gone, PR merged).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-21T19:33:17.780466863Z
+modified_at: 2026-10-21T19:33:17.780466863Z
+req_type: Bug
+tags:
+- ps
+- reap
+- review
+- session
+filed_at:
+  code_sha: 3df0a4c73dccd81e6defc0be0bf89595d846dbda
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 72eb713535
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
