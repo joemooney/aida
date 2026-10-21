@@ -3016,6 +3016,17 @@ pub(crate) fn agent_new_bg_dispatch(
                 }
             });
             manifest.claude_session_id = Some(sid.clone());
+            // BUG-2167: the session's own SessionStart hook may already have
+            // registered it from a recycled spare's stale environment.
+            // trace:TASK-1955 | ai:claude (BUG-2167)
+            agent_registry::adopt_bg_session_identity(
+                &plan.project_root,
+                sid,
+                &plan.name,
+                plan.current_spec.as_deref(),
+                plan.role.as_deref(),
+                &plan.launch_cwd,
+            );
             // BUG-1918: the backgrounded agent — not this launcher — works
             // the lease; record its session id as one of the lease's authors.
             // trace:BUG-1918 | ai:claude
@@ -4401,6 +4412,19 @@ fresh `aida agent new ... --spec NEXT-ID` session.\n"
     ));
     out.push('\n');
 
+    // TASK-1806: the active mandate, for every vendor. Claude Code and Codex
+    // print it from their SessionStart / per-turn hooks; Antigravity installs
+    // neither, so without this an agy seat or relay lane never sees it.
+    // Omitted entirely when no mandate is active.
+    // trace:TASK-1955 | ai:claude (TASK-1806)
+    if let Some(section) = render_launch_mandate_section(
+        crate::mandate::mandate_dir().ok().as_deref(),
+        &plan.project_root,
+        chrono::Utc::now(),
+    ) {
+        out.push_str(&section);
+    }
+
     // STORY-1226: the seat's due jobs from the `[schedule]` registry, so a
     // freshly launched seat starts with the periodic work that applies to it
     // — identical under every vendor (one registry, one view). No vendor is
@@ -4469,6 +4493,20 @@ pub(crate) fn render_seat_gate_section(project_root: &std::path::Path, role: &st
     let waiting = queue_head_line(project_root, Some(&seat))
         .unwrap_or_else(|| format!("- Nothing is waiting on the `{seat}` role queue."));
     format!("{responsibility}\n\nAt your gate now:\n{waiting}\n")
+}
+
+/// The launch-context `## Mandate` section: the `aida mandate status --line`
+/// output while a mandate is active, `None` otherwise.
+// trace:TASK-1955 | ai:claude (TASK-1806)
+pub(crate) fn render_launch_mandate_section(
+    mandate_dir: Option<&std::path::Path>,
+    project_root: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let line = crate::mandate::current_status_line(mandate_dir?, Some(project_root), now)?;
+    Some(format!(
+        "## Mandate\n\n{line}\n(Point-in-time; run `aida mandate status --line` for the current state.)\n\n"
+    ))
 }
 
 /// STORY-619: build the launch-context `## Mailbox` body for a spawned agent.
@@ -5015,7 +5053,7 @@ pub(crate) fn render_agent_show_prompt(
 /// program + argv from [`harness_version_probe_program_and_args`], so the probe
 /// runs under the same os_wrap boundary as the child.
 // trace:TASK-1793 | ai:codex
-fn apply_harness_version(
+pub(crate) fn apply_harness_version(
     command: &mut std::process::Command,
     (program, args): (std::ffi::OsString, Vec<String>),
 ) {
@@ -5727,3 +5765,53 @@ pub(crate) static AGENT: crate::command_registry::CommandReg =
 #[cfg(test)]
 #[path = "tests/task_1793_harness_version_tests.rs"]
 mod harness_version_tests;
+
+/// TASK-1806: the launch context every vendor (Antigravity included) gets
+/// carries the MANDATE line while a mandate is active, and nothing when none.
+// trace:TASK-1955 | ai:claude (TASK-1806)
+#[cfg(test)]
+mod task_1806_launch_mandate_tests {
+    use super::render_launch_mandate_section;
+
+    #[test]
+    fn launch_context_shows_the_mandate_only_while_one_is_active() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("mandates");
+        std::fs::create_dir_all(&dir).unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let now = chrono::Utc::now();
+
+        assert_eq!(
+            render_launch_mandate_section(Some(&dir), &project, now),
+            None
+        );
+        assert_eq!(render_launch_mandate_section(None, &project, now), None);
+
+        crate::mandate::start_with(
+            &dir,
+            &|| Ok(()),
+            &crate::current_user_id(None),
+            chrono::Duration::hours(2),
+            Some("operator away".into()),
+            false,
+            false,
+            now,
+        )
+        .unwrap();
+        let section = render_launch_mandate_section(Some(&dir), &project, now)
+            .expect("an active mandate is shown");
+        assert!(
+            section.starts_with("## Mandate\n\nMANDATE ship-held · "),
+            "{section}"
+        );
+        assert!(section.contains("operator away"), "{section}");
+
+        let later = now + chrono::Duration::hours(3);
+        assert_eq!(
+            render_launch_mandate_section(Some(&dir), &project, later),
+            None,
+            "an expired mandate is not shown"
+        );
+    }
+}

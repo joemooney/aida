@@ -1739,6 +1739,19 @@ pub(crate) fn status_line(state: &MandateState, now: DateTime<Utc>, gates: &str)
     Some(parts.join(" · "))
 }
 
+/// The [`status_line`] for the mandates in `dir` right now, with the human
+/// gates of `audit_root` — what `aida mandate status --line` prints.
+// trace:TASK-1955 | ai:claude (TASK-1806)
+pub(crate) fn current_status_line(
+    dir: &Path,
+    audit_root: Option<&Path>,
+    now: DateTime<Utc>,
+) -> Option<String> {
+    let (valid, _) = load_valid(dir, &crate::current_user_id(None), now);
+    let state = state_at(&valid, now);
+    status_line(&state, now, &crate::mandate_gates::describe(audit_root))
+}
+
 /// STORY-1700: the per-turn notice for `seat`: the [`status_line`] while a
 /// mandate is active, and ONE line per seat when it expires or is stopped
 /// (marker `<dir>/.seen/<id>.<seat>`, written here). `None` otherwise.
@@ -1963,16 +1976,15 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
         }
         crate::cli::MandateAction::Status { json, line } => {
             let now = Utc::now();
-            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
-            let state = state_at(&valid, now);
             // trace:STORY-1700 | ai:claude
             if *line {
-                let gates = crate::mandate_gates::describe(audit_root.as_deref());
-                if let Some(line) = status_line(&state, now, &gates) {
+                if let Some(line) = current_status_line(&dir, audit_root.as_deref(), now) {
                     println!("{line}");
                 }
                 return Ok(());
             }
+            let (valid, warnings) = load_valid(&dir, &crate::current_user_id(None), now);
+            let state = state_at(&valid, now);
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
