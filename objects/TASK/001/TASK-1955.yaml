@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-21T19:36:34.086016304Z
+modified_at: 2026-10-21T20:13:34.598529942Z
 req_type: Task
 tags:
 - launch
@@ -404,6 +404,12 @@ comments:
   created_at: 2026-10-21T19:36:34.086016304Z
   modified_at: 2026-10-21T19:36:34.086016304Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16019-0406-7fd2-8b5d-573824d2e3dd
+  author: joe
+  content: 'ADVISOR 13:16: PR-2807 (TASK-1721) round-3 non-blocking notes, for the slice-6 release/lease work. (1) IMPORTANT: merge_lock.rs::acquire still creates the lease with create_new and then write_all, so release.sh lease_is_live can read an empty file as acquired_at=0, judge it TTL-stale and DELETE a live ship''s lease. Write via temp file plus link in Rust too, and make release.sh treat an empty or unparsable lease as live, not stale. (2) release.sh retakes the lease after the confirm prompt without re-checking HEAD == the commit the bump, CHANGELOG and tag notes were computed on; refuse if HEAD moved. (3) Lease temp files main.XXXXXX inside .aida/merge-locks are listed by merge_lock::status, and a SIGKILL orphans them; use a dot-prefixed name that status skips. (4) Add TASK-1721 per-criterion trace anchors on the release-flow tests. (5) Tests 4d/4e are source-greps; prefer behavioural probes.'
+  created_at: 2026-10-21T20:13:34.598529942Z
+  modified_at: 2026-10-21T20:13:34.598529942Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
@@ -648,6 +654,11 @@ history:
   timestamp: 2026-10-21T19:33:39.563576536Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16016-cdf9-7b30-8438-d3bbd1083aa0
+  author: joe
+  timestamp: 2026-10-21T20:11:09.689043399Z
+  session_id: 01a1600cb5e1
+  changes: []
 filed_at:
   code_sha: 6d590ed914dea5135a126f7dae6abb403adec66d
   branch: main
@@ -656,3 +667,11 @@ filed_at:
   aida_build_sha: 6d590ed914
   vendor: claude
   session: 4ba23e2e-8a26-46f4-b1e9-6b3f2a2d2eff
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Slice 3 delivers TASK-1772/1804/1805/1806 but BUG-2167 and TASK-2069 are partial: bg relabel races the manifest save, recycled-pid filter drops live launcher lanes, claim-drop HEAD check is outside the store lock; BUG-2206 (routed to slice 3) not addressed. PR CI unverifiable from the reviewer sandbox.'
+  recovery_hint: address the review findings, move TASK-1955 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-21T20:11:09.561451156Z
