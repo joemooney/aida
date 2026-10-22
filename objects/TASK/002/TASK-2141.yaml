@@ -1,0 +1,27 @@
+id: 01a16280-3033-7101-9cba-111078517fc4
+spec_id: TASK-2141
+agreed_id: TASK-2141
+title: Store-history timeout default is below the measured cold walk, and the refusal does not name the override
+description: |
+  mandate.rs store_history_timeout (PR-2823, TASK-1951 slice 8) bounds store-history git walks at 120 s by default. TASK-1662 measured a cold walk on the live store at 4m26s, so a cold-cache ship will now refuse with HistoryUnreadable until the cache warms. The error text "store history read timed out after 120s" does not mention AIDA_STORE_HISTORY_TIMEOUT_SECS, so the operator has no hint about how to raise the budget. Either name the env var in the timeout message or calibrate the default to the measured cold walk.
+
+  Raised in review of PR-2823: https://github.com/joemooney/aida/pull/2823#issuecomment-6335211630
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T07:25:30.547271464Z
+modified_at: 2026-10-22T07:25:30.547271464Z
+req_type: Task
+tags:
+- from-review:PR-2823
+- severity:minor
+filed_at:
+  code_sha: 105c8d91d699f2c946766939b12f4d77c8fa6d45
+  branch: pr-2823
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a1627cbe22
+  harness_version: 2.1.308 (Claude Code)
