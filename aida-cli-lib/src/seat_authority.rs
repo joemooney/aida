@@ -11,6 +11,11 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 pub(crate) const GRANT_ENV: &str = "AIDA_SESSION_GRANT";
+/// A grant-file handle a launcher may carry. Named here, beside
+/// [`GRANT_ENV`], so the grant env names live in this module alone; the
+/// standalone implementer's child scrub reads it.
+// trace:STORY-1662 | ai:claude
+pub(crate) const GRANT_FILE_ENV: &str = "AIDA_SESSION_GRANT_FILE";
 const GRANT_DIR: &str = "session-grants";
 const MAX_GRANT_AGE: Duration = Duration::hours(24);
 

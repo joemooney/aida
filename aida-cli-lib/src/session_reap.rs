@@ -424,6 +424,12 @@ pub(crate) struct ReapReport {
     /// Suggest-only — the operator runs the launch; the reap pass never spawns.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_up: Option<String>,
+    /// Seat-clone base pins in main that no `clone` lease accounts for. A pin
+    /// whose clone directory is gone is released on a real pass; one whose
+    /// clone still exists is reported and kept for the operator.
+    // trace:TASK-2053 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub orphan_pins: Vec<crate::seat_clone::OrphanPin>,
 }
 
 /// Resolve every lease's scope to a spec status in ONE store open, so the pass
@@ -882,6 +888,7 @@ pub(crate) fn scan_reapable_with(
     let mut report = ReapReport::default();
     let summaries = requirement_summaries(project_root);
     report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
+    report.orphan_pins = crate::seat_clone::orphan_pins(project_root); // trace:TASK-2053 | ai:claude
     if leases.is_empty() {
         return report;
     }
@@ -947,6 +954,18 @@ pub(crate) fn scan_reapable_with(
         }
 
         let spec_finished = finished.contains(&lease.scope.to_ascii_uppercase());
+
+        // TASK-2053: a seat clone is judged from the sandboxed probe and the
+        // forge, never from host git in the clone or main's branch refs.
+        // trace:TASK-2053 | ai:claude
+        if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+            let row = scan_clone_lease(project_root, lease, spec_finished, &live, &active, now);
+            match row.verdict {
+                "reap" => report.reapable.push(row),
+                _ => report.skipped.push(row),
+            }
+            continue;
+        }
 
         // Liveness — the shipped detection, not a second notion. An advisory
         // lease's worktree path is empty, so the in-worktree probe is skipped
@@ -1119,6 +1138,10 @@ fn reap_one_with_clear_hooks(
     after_final_registration_check: impl FnOnce(),
 ) -> String {
     let lease = &reap_view(lease, project_root);
+    // trace:TASK-2053 | ai:claude
+    if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+        return reap_one_clone(project_root, lease, checked_tip);
+    }
     let has_worktree = !lease.worktree_path.as_os_str().is_empty();
     let branch = reap_branch(lease, resolve_default_branch_ref(project_root).as_deref());
 
@@ -1222,6 +1245,182 @@ fn reap_one_with_clear_hooks(
     } else {
         format!("reaped — worktree removed, lease released (branch `{branch}` kept: gone or moved)")
     }
+}
+
+/// The reap verdict for a seat clone, pure over the probe and the gates.
+/// The cheap gates run first (liveness, then completion), so a live or
+/// unfinished seat is never probed: a probe is two sandboxed git runs, and
+/// every reap scan, interactive or from the drive loop and night shift,
+/// visits every clone lease. Then the probe, in [`classify_session_reap`]'s
+/// order (unreadable or uncommitted state, the branch, work origin lacks),
+/// and last the merge signal (a merged PR on the forge: the clone's branch
+/// is never in main).
+// trace:TASK-2053 | ai:claude
+pub(crate) fn classify_clone_reap(
+    probe: impl FnOnce() -> crate::seat_clone::Probe,
+    branch: &str,
+    process_exited: bool,
+    spec_finished: bool,
+    merged: impl FnOnce() -> bool,
+) -> ReapVerdict {
+    if !process_exited {
+        return ReapVerdict::Skip(
+            "its process is still running — left untouched (never force-closed)".to_string(),
+        );
+    }
+    if !spec_finished {
+        return ReapVerdict::Skip("its spec is not finished (needs Done or Completed)".to_string());
+    }
+    let facts = match probe() {
+        crate::seat_clone::Probe::Unknown(why) => {
+            return ReapVerdict::Skip(format!("seat clone state could not be read ({why}) — kept"))
+        }
+        crate::seat_clone::Probe::HasSubmodules(reason) => return ReapVerdict::Skip(reason),
+        crate::seat_clone::Probe::Known(facts) => facts,
+    };
+    if !facts.dirty.is_empty() {
+        return ReapVerdict::Skip("uncommitted changes present — never auto-removed".to_string());
+    }
+    if facts.branch.as_deref() != Some(branch) {
+        return ReapVerdict::Skip(
+            "seat clone is not checked out on its session branch — operator decision".to_string(),
+        );
+    }
+    if facts.unpushed > 0 {
+        return ReapVerdict::Skip(format!(
+            "seat clone holds {} commit(s) origin does not have",
+            facts.unpushed
+        ));
+    }
+    if !merged() {
+        return ReapVerdict::Skip(format!("no merged PR found for `{branch}`"));
+    }
+    ReapVerdict::Reap(
+        "spec finished, process exited, PR merged, nothing beyond origin in the seat clone"
+            .to_string(),
+    )
+}
+
+/// Scan one `clone` lease. The row's `branch_tip` is the HEAD the probe saw;
+/// [`reap_one_clone`] removes the clone only while HEAD is still there.
+// trace:TASK-2053 | ai:claude
+fn scan_clone_lease(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    spec_finished: bool,
+    live: &[process_probe::LiveSession],
+    active: &std::collections::HashSet<std::path::PathBuf>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> ReapRow {
+    let owner_gone = aida_core::liveness::lease_owner_process_gone(
+        lease.active_pid,
+        lease.active_pid_start_time.as_deref(),
+        lease.creator_pid,
+        lease.creator_pid_start_time.as_deref(),
+        process_probe::process_identity_is_alive,
+    );
+    let process_exited = session_process_exited(
+        lease_state_for(lease, live, now),
+        owner_gone,
+        worktree_is_active(&lease.worktree_path, active),
+    );
+    let mut branch_tip = None;
+    let verdict = classify_clone_reap(
+        || {
+            let probe = crate::seat_clone::probe(project_root, &lease.worktree_path);
+            if let crate::seat_clone::Probe::Known(facts) = &probe {
+                branch_tip = facts.head.clone();
+            }
+            probe
+        },
+        &lease.branch,
+        process_exited,
+        spec_finished,
+        || {
+            matches!(
+                detect_merged_pr_for_branch_via_forge(project_root, &lease.branch),
+                PrLookup::Found(_)
+            )
+        },
+    );
+    ReapRow {
+        session: lease.id.clone(),
+        scope: lease.scope.clone(),
+        worktree: lease.worktree_path.display().to_string(),
+        branch: lease.branch.clone(),
+        verdict: match verdict {
+            ReapVerdict::Reap(_) => "reap",
+            ReapVerdict::Skip(_) => "skip",
+        },
+        reason: verdict.reason().to_string(),
+        spec_finished,
+        branch_tip,
+        outcome: None,
+    }
+}
+
+/// Reap ONE seat clone: [`crate::seat_clone::destroy`] re-probes it, keeps it
+/// (with a salvage patch) if work appeared or HEAD moved since the scan, and
+/// otherwise removes the clone, its cargo target directory and its base pin.
+/// The lease goes only once the clone is gone.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn reap_one_clone(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    checked_tip: Option<&str>,
+) -> String {
+    let Some(tip) = checked_tip else {
+        return "skipped — the scan recorded no HEAD for the seat clone".to_string();
+    };
+    match crate::seat_clone::destroy(
+        project_root,
+        &lease.worktree_path,
+        crate::seat_clone::DestroyMode::KeepUnshipped,
+        Some(tip),
+    ) {
+        Ok(crate::seat_clone::Destroyed::Removed { .. }) => {
+            release_lease_files(project_root, &lease.id);
+            "reaped — seat clone removed, base pin released, lease released".to_string()
+        }
+        Ok(crate::seat_clone::Destroyed::Kept { reason, salvage }) => format!(
+            "skipped — seat clone kept: {reason}{}",
+            salvage
+                .map(|p| format!(" (salvage patch: {})", p.display()))
+                .unwrap_or_default()
+        ),
+        Err(error) => format!("failed — {error:#}"),
+    }
+}
+
+/// Release every orphan pin whose clone directory is gone; record the outcome
+/// on each row. Returns how many were released.
+// trace:TASK-2053 | ai:claude
+pub(crate) fn release_orphan_pins(
+    project_root: &std::path::Path,
+    pins: &[crate::seat_clone::OrphanPin],
+) -> Vec<String> {
+    pins.iter()
+        .map(|orphan| {
+            if orphan.clone_exists {
+                format!(
+                    "kept {} — its clone {} exists with no lease; `aida worktree dismiss {}` \
+                     removes it",
+                    orphan.pin,
+                    orphan.clone.display(),
+                    orphan.clone.display()
+                )
+            } else {
+                match crate::seat_clone::release_orphan_pin(project_root, orphan) {
+                    Ok(true) => format!("released {} (its clone is gone)", orphan.pin),
+                    Ok(false) => format!(
+                        "kept {} — its clone or lease reappeared since the scan",
+                        orphan.pin
+                    ),
+                    Err(error) => format!("could not release {}: {error:#}", orphan.pin),
+                }
+            }
+        })
+        .collect()
 }
 
 /// BUG-2197: release ONE protected-checkout lease. Re-reads the lease from disk
@@ -1667,6 +1866,7 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
         && report.unshipped_work.is_empty()
         && report.releasable.is_empty()
         && report.unknown_owner.is_empty()
+        && report.orphan_pins.is_empty()
     {
         if opts.json {
             println!("{}", serde_json::to_string_pretty(&report)?);
@@ -1791,6 +1991,32 @@ pub(crate) fn run_session_reap(opts: ReapOptions) -> Result<()> {
 
     // trace:BUG-2197 | ai:claude
     release_protected_leases(&project_root, &mut report, &opts)?;
+
+    // TASK-2053: a pin whose clone is gone protects nothing; release it on a
+    // real pass. A pin whose clone still exists is only reported.
+    // trace:TASK-2053 | ai:claude
+    if !report.orphan_pins.is_empty() && !opts.json {
+        if opts.dry_run {
+            for orphan in &report.orphan_pins {
+                println!(
+                    "  {} orphan seat-clone pin {}{}",
+                    "pin".cyan(),
+                    orphan.pin,
+                    if orphan.clone_exists {
+                        " (its clone exists with no lease — kept)"
+                    } else {
+                        " (its clone is gone — would be released)"
+                    }
+                );
+            }
+        } else {
+            for line in release_orphan_pins(&project_root, &report.orphan_pins) {
+                println!("  {} {line}", "pin".cyan());
+            }
+        }
+    } else if !report.orphan_pins.is_empty() && !opts.dry_run {
+        release_orphan_pins(&project_root, &report.orphan_pins);
+    }
 
     if report.reapable.is_empty() {
         if opts.json {
@@ -2042,6 +2268,7 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
         .map(|r| r.removed_count())
         .map_err(|e| format!("{e:#}"));
     let report = scan_reapable(project_root);
+    release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
         return QuietReap {
             agent_gc,
