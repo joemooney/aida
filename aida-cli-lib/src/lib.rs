@@ -185,6 +185,7 @@ mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod lane_liveness;
 mod rel_cards;
+mod relay_launch; // trace:STORY-1706 | ai:claude
 mod relay_stall;
 mod remote_cmd;
 mod requirements_cli;

@@ -476,8 +476,26 @@ each held PR:
 - **What it sends to you:** an advisor-seat run, a run stopped on API credits,
   and anything behind a human gate.
 
-It never ships, restarts a relay or clears a hold itself. Before each action
-it re-reads the mandate, so a stop or an expiry takes effect mid-tick.
+It never ships or clears a hold itself. Before each action it re-reads the
+mandate, so a stop or an expiry takes effect mid-tick.
+
+**Crashed relays.** The tick restarts a relay itself only when the relay died
+without its exit handler running (killed or crashed, not stopped, capped,
+blocked or finished), and only when all of these hold:
+
+- the run's `relay.launch` record shows that you started it at a terminal,
+  that it belongs to the mandate's principal, and that its profile is unchanged;
+- it is not an advisor-seat or `--force-seat` run, and no `bin/relay.sh
+  --no-restart <run>` marker is present;
+- it has been restarted fewer than 3 times, after waiting 1, 2 and then 4 ticks;
+- sessions are left in its budget and the mandate has at least 30 minutes left;
+- the mandate was started with the `relay-restart` scope (`--drive` adds it;
+  a drive mandate started before it existed does not cover it).
+
+The restart re-runs the arguments from the record with `--max-sessions` set
+to the sessions left. It uses no grant and no session role. Any other crashed
+run goes to the advisor as before. After the third restart you get one
+crash-loop notice.
 
 **No advisor.** If no advisor seat has been active in the last 30 minutes, you
 get one notice per absence. Seat actions wait in `aida awaiting` for the next
@@ -487,7 +505,7 @@ advisor; the substrate actions continue.
 
 ```toml
 [mandate.human_gates]
-ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
+ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-restart
 ```
 
 - The list is empty by default. An unknown op is a configuration error.
@@ -497,7 +515,7 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear
 - If the committed layer cannot be read, every action is gated.
 - A PR that changes `.aida/config.toml` or the mandate code
   (`mandate.rs`, `mandate_gates.rs`, `mandate_drive.rs`, `mandate_ship.rs`,
-  `mandate_traces.rs`, `rework_hold_release.rs`, `review_authority.rs`,
+  `mandate_traces.rs`, `relay_launch.rs`, `rework_hold_release.rs`, `review_authority.rs`,
   `solo_review.rs`, `review_verdict.rs`,
   `fleet_lanes.rs`, `seat_authority.rs`, `pr_ship.rs`, `merge_hold.rs`) never
   ships under a mandate, and a mandate never releases its rework hold either.
