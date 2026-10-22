@@ -1,0 +1,19 @@
+{
+  "id": "d74b3803-9bdf-4308-8b6f-0bd6b3cc3355",
+  "thread_id": "d74b3803-9bdf-4308-8b6f-0bd6b3cc3355",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792681190683,
+  "body": "PR #2808 main-conflict resolved and normal merge pushed: e2e1f1d85bd82270196df3e896f8c8e9f0ea72d0.\nhttps://github.com/joemooney/aida/pull/2808\n\nMerged origin/main 6d3b5d15916c87b0825a381ef5914256c637644e into codex/story-1843-routing, no rebase or force push. Exact requested merge subject retained. Registry conflict keeps main lease-linked env_name handling and stale-process filtering plus namespace metadata. New main agent-launch fixture adds pid_namespace: None; its identity-adoption regression passed. Sandbox unknown-liveness delivery, role-over-person precedence/person:<name>, --to joe/spec-comment hints and single docs trace all preserved.\n\nAll requested local gates passed: cargo check -p aida-cli-lib --tests --profile agent; make check-ci-fast (34 gates); make test-touched (784 selected unit tests, all 43 TASK-1717 tests, TASK-1955). Includes agent_registry and STORY-1843 resolver coverage. Results/recovery details recorded on STORY-1843. PR body updated.\n\nCI pending registration/settlement on this new head; this is the requested head notification, not a READY or approval claim. No PR merge, ship, hold clearance or verdict performed. Locks/leases retained, parent in-progress, PR2 paused until PR1 merges. All local validation and push jobs finished.\n",
+  "subject": "PR-2808 main merged: e2e1f1d85b — local gates passed, new head pushed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
