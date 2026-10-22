@@ -1,0 +1,27 @@
+id: 01a16153-cbb1-7cb2-b6eb-321e62f58a6e
+spec_id: TASK-2132
+agreed_id: TASK-2132
+title: landed_commits_for_subjects has no lower bound at the merge point
+description: |
+  pr_cmd.rs landed_commits_for_subjects matches newest-first over 500 first-parent commits. On a late already-merged re-run, a newer commit that reuses a slice subject is bound as landed and the real slice commit is left unmarked. Bound the search to commits after the PR merge.
+
+  Raised in review of PR-2816 (Refs TASK-1951): https://github.com/joemooney/aida/pull/2816#issuecomment-6330823809
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T01:57:24.017201966Z
+modified_at: 2026-10-22T01:57:24.017201966Z
+req_type: Task
+tags:
+- from-review:PR-2816
+- severity:minor
+- ship
+filed_at:
+  code_sha: 012be096608ce23b110d8bbb7d8436de68020ed3
+  branch: pr-2816
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f9890cf67d
+  vendor: claude
+  session: 01a161517724

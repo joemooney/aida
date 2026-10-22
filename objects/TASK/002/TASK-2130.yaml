@@ -1,0 +1,27 @@
+id: 01a16153-9288-7b81-aaa9-0c0eb183dffd
+spec_id: TASK-2130
+agreed_id: TASK-2130
+title: Already-merged rebase bookkeeping uses the --rebase flag, not the PR's actual merge method
+description: |
+  pr_cmd.rs:3838-3847: on an already-merged re-run, the merge_method == Rebase gate reads the CLI flag. A '--rebase' re-run of a squash-merged PR writes a non-completing marker with subject-only lines, or, with --final-slice, completes specs. Confirm the merged PR's merge method, or refuse.
+
+  Raised in review of PR-2816 (Refs TASK-1951): https://github.com/joemooney/aida/pull/2816#issuecomment-6330823809
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T01:57:09.384760395Z
+modified_at: 2026-10-22T01:57:09.384760395Z
+req_type: Task
+tags:
+- from-review:PR-2816
+- severity:minor
+- ship
+filed_at:
+  code_sha: 012be096608ce23b110d8bbb7d8436de68020ed3
+  branch: pr-2816
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f9890cf67d
+  vendor: claude
+  session: 01a161517724
