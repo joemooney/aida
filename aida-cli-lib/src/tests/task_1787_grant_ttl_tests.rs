@@ -371,7 +371,13 @@ fn test_non_tty_mint_still_refused() {
         stderr_is_terminal: false,
     }));
 
-    let res = issue_direct(dir.path(), "advisor", Vec::new(), Some(Duration::hours(12)));
+    let res = issue_direct(
+        dir.path(),
+        "advisor",
+        Vec::new(),
+        Some(Duration::hours(12)),
+        None,
+    );
     crate::test_ambient::replace(prev);
 
     assert!(res.is_err(), "non-TTY minting must be refused");
@@ -391,7 +397,7 @@ fn test_managed_agent_mint_refused() {
         ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
     ]);
 
-    let res = issue_direct(dir.path(), "advisor", Vec::new(), None);
+    let res = issue_direct(dir.path(), "advisor", Vec::new(), None, None);
     assert!(res.is_err(), "managed agent minting must be refused");
     let err = res.unwrap_err().to_string();
     assert!(err.contains("AIDA-managed agent sessions cannot issue direct TTY grants"));
@@ -499,7 +505,14 @@ fn test_issue_direct_writes_requested_ttl() {
         stdout_is_terminal: true,
         stderr_is_terminal: true,
     }));
-    let grant = issue_direct(dir.path(), "advisor", Vec::new(), Some(Duration::hours(12))).unwrap();
+    let grant = issue_direct(
+        dir.path(),
+        "advisor",
+        Vec::new(),
+        Some(Duration::hours(12)),
+        None,
+    )
+    .unwrap();
     crate::test_ambient::replace(prev);
     let ttl = grant.expires_at.signed_duration_since(grant.issued_at);
     assert_eq!(ttl, Duration::hours(12));

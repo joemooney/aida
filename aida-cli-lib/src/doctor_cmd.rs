@@ -130,6 +130,19 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // BUG-1934: the seat-grant check reads the grant store and this
+            // process's ancestry only. trace:BUG-1934 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::seat_authority::DOCTOR_CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::seat_authority::DOCTOR_CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // trace:TASK-1544 | ai:codex
             if !all && !*sub_all {
                 match normalize_doctor_category(category).ok().as_deref() {
@@ -761,6 +774,14 @@ fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::mandate_drive::doctor_scan(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
+    // trace:BUG-1934 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::seat_authority::DOCTOR_CATEGORY,
+    )? {
+        findings.extend(crate::seat_authority::doctor_scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
 
     // STORY-1688: lane liveness (opt-in append path: only when --category is explicitly passed,
     // since it inspects open PRs via gh and session leases via git).
@@ -1155,6 +1176,10 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         // trace:STORY-1700 | ai:claude
         crate::mandate_drive::DOCTOR_CATEGORY => {
             DoctorReport::from_findings(crate::mandate_drive::doctor_scan(&project_root))
+        }
+        // trace:BUG-1934 | ai:claude
+        crate::seat_authority::DOCTOR_CATEGORY => {
+            DoctorReport::from_findings(crate::seat_authority::doctor_scan(&project_root))
         }
         _ => unreachable!("only store-free categories dispatch here"),
     };

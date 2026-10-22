@@ -36,6 +36,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             no_title,
             delegate_seats,
             ttl,
+            bind_pid,
         } => handle_role_enter(
             &project_root,
             name.as_deref(),
@@ -44,6 +45,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             *no_title,
             delegate_seats,
             ttl.as_deref(),
+            *bind_pid,
         ),
         RoleCommand::Add {
             name,
@@ -59,6 +61,7 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             warn_within,
             refuse_within,
         } => handle_role_expiry(warn_within, refuse_within.as_deref()),
+        RoleCommand::Status { json } => handle_role_status(&project_root, *json),
         RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
@@ -202,6 +205,7 @@ fn handle_role_enter(
     no_title: bool,
     delegate_seats: &[String],
     ttl: Option<&str>,
+    bind_pid: Option<u32>,
 ) -> Result<()> {
     // trace:TASK-1787 | ai:antigravity
     let requested_ttl = crate::seat_authority::parse_ttl(project_root, ttl)?;
@@ -216,6 +220,7 @@ fn handle_role_enter(
             persona,
             delegate_seats.to_vec(),
             requested_ttl,
+            bind_pid,
         )?;
         let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
         eprintln!(
@@ -223,6 +228,10 @@ fn handle_role_enter(
             grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
             dur_str
         );
+        if bind_pid.is_some() {
+            emit_bound_grant_eval(&grant);
+            return Ok(());
+        }
         crate::seat_authority::revoke_current()?;
         emit_persona_enter_eval(project_root, persona, &grant.id);
         return Ok(());
@@ -245,6 +254,7 @@ fn handle_role_enter(
                                 persona,
                                 delegate_seats.to_vec(),
                                 requested_ttl,
+                                bind_pid,
                             )?;
                             let dur_str = crate::seat_authority::format_ttl(
                                 grant.expires_at - grant.issued_at,
@@ -254,6 +264,10 @@ fn handle_role_enter(
                                 grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
                                 dur_str
                             );
+                            if bind_pid.is_some() {
+                                emit_bound_grant_eval(&grant);
+                                return Ok(());
+                            }
                             crate::seat_authority::revoke_current()?;
                             emit_persona_enter_eval(project_root, persona, &grant.id);
                             return Ok(());
@@ -338,6 +352,7 @@ Include it in the TTY-issued delegation set?";
         &seat_name,
         final_delegate_seats,
         requested_ttl,
+        bind_pid,
     )?;
     let dur_str = crate::seat_authority::format_ttl(grant.expires_at - grant.issued_at);
     eprintln!(
@@ -345,6 +360,12 @@ Include it in the TTY-issued delegation set?";
         grant.expires_at.format("%Y-%m-%d %H:%M UTC"),
         dur_str
     );
+    // BUG-1934: a grant bound to another session leaves this shell's role
+    // and grant untouched. trace:BUG-1934 | ai:claude
+    if bind_pid.is_some() {
+        emit_bound_grant_eval(&grant);
+        return Ok(());
+    }
     crate::seat_authority::revoke_current()?;
     state.last_active_at = chrono::Utc::now();
     state.working_directory = std::env::current_dir().ok();
@@ -378,6 +399,28 @@ Include it in the TTY-issued delegation set?";
         Some(&grant.id),
     );
     Ok(())
+}
+
+/// BUG-1934: `role enter --bind-pid` output. Eval'd like every enter, but it
+/// changes nothing in this shell: it only says which process the grant is
+/// bound to and the id that session exports.
+// trace:BUG-1934 | ai:claude
+fn emit_bound_grant_eval(grant: &crate::seat_authority::SeatGrant) {
+    let _eval = crate::shell_eval::EvalBlock::open();
+    let bound_to = crate::seat_authority::describe_binding(&grant.binding);
+    println!(
+        "# aida role enter --bind-pid — {} grant bound to {}; this shell is unchanged",
+        eval_comment_text(&grant.seat),
+        eval_comment_text(&bound_to)
+    );
+    println!(
+        "echo '{} Issued a {} grant bound to {}. In that session: export {}={}'",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        sh_single_quote(&grant.seat),
+        sh_single_quote(&bound_to),
+        crate::seat_authority::GRANT_ENV,
+        sh_single_quote(&grant.id)
+    );
 }
 
 fn stakeholder_persona_name(name: &str) -> Option<&'static str> {
@@ -568,6 +611,7 @@ fn handle_role_add(
         project_root,
         &canonical_role_name(name),
         Vec::new(),
+        None,
         None,
     ) {
         Ok(grant) => {
@@ -970,6 +1014,41 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     if let Some(warning) = crate::seat_authority::expiry_warning(&expiry, now, warn_within) {
         println!("{warning}");
     }
+    Ok(())
+}
+
+/// BUG-1934: `aida role status [--json]`.
+// trace:BUG-1934 | ai:claude
+fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> {
+    let status = crate::seat_authority::grant_status(project_root);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&status)?);
+        return Ok(());
+    }
+    match &status.grant {
+        None => println!("grant: none exported"),
+        Some(g) => {
+            println!(
+                "grant: {}… seat {} — {}",
+                g.id_prefix,
+                g.seat.as_deref().unwrap_or("unknown"),
+                if g.valid { "valid" } else { "REFUSED" }
+            );
+            if let Some(at) = g.expires_at {
+                println!("  expires: {}", at.format("%Y-%m-%d %H:%M UTC"));
+            }
+            println!("  bound to: {}", g.bound_to);
+            if let Some(why) = &g.rejection {
+                println!("  {why}");
+            }
+        }
+    }
+    let pid = |p: Option<u32>| p.map_or_else(|| "unknown".to_string(), |p| p.to_string());
+    println!(
+        "this session: harness pid {}, shell pid {} (for `aida role enter <seat> --bind-pid <pid>`)",
+        pid(status.harness_pid),
+        pid(status.shell_pid)
+    );
     Ok(())
 }
 
@@ -1535,6 +1614,7 @@ mod tests {
             /* no_resume */ true,
             /* no_title */ true,
             &[],
+            None,
             None,
         )
         .expect_err("non-TTY role entry must not issue authority");

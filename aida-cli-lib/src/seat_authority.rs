@@ -28,6 +28,15 @@ pub(crate) struct SeatGrant {
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
+    /// BUG-1934: the processes this grant is bound to, as strict
+    /// `proc:`/`sid:` `<pid>@<start>` tokens. Only a presenter that runs under
+    /// one of them (an ancestor, itself, or its POSIX session leader) may use
+    /// the grant. Empty on a record minted before binding, which is refused.
+    /// (`session_id` above is the old, never-checked binding; kept so older
+    /// records still parse.)
+    // trace:BUG-1934 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub binding: Vec<String>,
 }
 
 pub(crate) fn grant_dir() -> Result<PathBuf> {
@@ -68,7 +77,9 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
     }
     let path = dir.join(format!("{}.json", grant.id));
     let bytes = serde_json::to_vec_pretty(grant)?;
-    let tmp = dir.join(format!(".{}.tmp", grant.id));
+    // A per-write staging name: two writers of one grant (a launch stamp and
+    // a revoke) must not collide on `create_new`. trace:BUG-1934 | ai:claude
+    let tmp = dir.join(format!(".{}.{}.tmp", grant.id, Uuid::new_v4()));
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -83,6 +94,50 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(tmp, path)?;
     Ok(())
+}
+
+/// BUG-1934: read-modify-write grant `id` under an exclusive lock on its
+/// sibling `.<id>.lock`, then re-read and confirm `applied` holds, retrying
+/// when a concurrent writer replaced the record between our write and the
+/// re-read. Every rewrite of an existing record (pid stamps, revocation) goes
+/// through here, so a stamp cannot drop a revocation or another stamp.
+/// `change` returns `false` when there is nothing to write.
+// trace:BUG-1934 | ai:claude
+fn update_grant(
+    id: &str,
+    mut change: impl FnMut(&mut SeatGrant) -> bool,
+    applied: impl Fn(&SeatGrant) -> bool,
+) -> Result<bool> {
+    use fs2::FileExt;
+    const ATTEMPTS: usize = 5;
+    let dir = grant_dir()?;
+    if Uuid::parse_str(id).is_err() {
+        bail!("invalid session grant handle");
+    }
+    std::fs::create_dir_all(&dir)?;
+    for _ in 0..ATTEMPTS {
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join(format!(".{id}.lock")))
+            .context("cannot open the session grant lock")?;
+        lock.lock_exclusive()
+            .context("cannot lock the session grant record")?;
+        let mut grant = read_grant(id)?;
+        let changed = change(&mut grant);
+        if changed {
+            write_grant(&grant)?;
+        }
+        drop(lock);
+        if !changed {
+            return Ok(false);
+        }
+        if read_grant(id).is_ok_and(|now| applied(&now)) {
+            return Ok(true);
+        }
+    }
+    bail!("session grant {id} kept changing under concurrent writers; the update was not applied")
 }
 
 /// Why the seat check could not reach a team roster. Distinct from a roster
@@ -197,6 +252,14 @@ pub(crate) enum GrantRejection {
     ParentNotDelegating {
         parent_seat: String,
     },
+    /// BUG-1934: the record carries no process binding (minted before
+    /// grants were bound), so no presenter can be shown to own it.
+    Unbound,
+    /// BUG-1934: the grant is bound to other processes than the ones this
+    /// process runs under. `bound_to` names them by pid.
+    PresenterNotBound {
+        bound_to: String,
+    },
 }
 
 impl std::fmt::Display for GrantRejection {
@@ -229,6 +292,15 @@ impl std::fmt::Display for GrantRejection {
             Self::ParentNotDelegating { parent_seat } => write!(
                 f,
                 "the `{parent_seat}` grant it was delegated from no longer delegates this seat"
+            ),
+            // trace:BUG-1934 | ai:claude
+            Self::Unbound => write!(
+                f,
+                "it was issued before grants were bound to the process that holds them, so no process may present it"
+            ),
+            Self::PresenterNotBound { bound_to } => write!(
+                f,
+                "it is bound to {bound_to}, and this process does not run under it"
             ),
         }
     }
@@ -268,9 +340,17 @@ impl GrantCheck {
         };
         let prefix: String = id.chars().take(8).collect();
         let seat_label = seat.as_deref().unwrap_or("unknown seat");
-        let recovery = match seat.as_deref() {
-            Some(seat) => format!("Re-enter it at a terminal: `aida role enter {seat}`"),
-            None => "Re-enter your role at a terminal: `aida role enter <role>`".to_string(),
+        let recovery = match (seat.as_deref(), reason) {
+            // BUG-1934 C1: a binding refusal names both sanctioned fixes.
+            // trace:BUG-1934 | ai:claude
+            (
+                Some(seat),
+                GrantRejection::Unbound | GrantRejection::PresenterNotBound { .. },
+            ) => format!(
+                "Re-enter it in the terminal that runs this session: `eval \"$(aida role enter {seat})\"`; for a background session, bind it from a terminal with `aida role enter {seat} --bind-pid <harness pid>`"
+            ),
+            (Some(seat), _) => format!("Re-enter it at a terminal: `aida role enter {seat}`"),
+            (None, _) => "Re-enter your role at a terminal: `aida role enter <role>`".to_string(),
         };
         Some(format!(
             "Session grant {prefix}… ({seat_label}) was rejected: {reason}. {recovery}"
@@ -386,7 +466,134 @@ pub(crate) fn grant_check_at(project_root: &Path, now: DateTime<Utc>) -> GrantCh
     else {
         return GrantCheck::Absent;
     };
-    grant_check_for_at(project_root, &id, &crate::current_user_id(None), now)
+    // BUG-1934: an env-presented grant must also be bound to this process.
+    // trace:BUG-1934 | ai:claude
+    with_presenter(
+        grant_check_for_at(project_root, &id, &crate::current_user_id(None), now),
+        &presenter_tokens(),
+    )
+}
+
+/// BUG-1934: the identity tokens of THIS process as a grant presenter: its
+/// whole ancestry plus its POSIX session leader.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn presenter_tokens() -> Vec<String> {
+    #[allow(unused_mut)]
+    let mut out = presenter_source().presenter_tokens();
+    // Under `cfg(test)` the test process presents every in-process check,
+    // also beside an injected source. trace:BUG-1934 | ai:claude
+    #[cfg(test)]
+    if let Some(me) = own_process_token() {
+        if !out.contains(&me) {
+            out.push(me);
+        }
+    }
+    out
+}
+
+/// The identity source behind [`presenter_tokens`] and direct issuance.
+/// Under `cfg(test)` a source no test injected falls back to the REAL
+/// ancestry: the test process (or a test binary re-exec'd as a child of it)
+/// really is the presenter, and the grant fixtures are bound to it. An
+/// injected source is used as is.
+// trace:BUG-1934 | ai:claude
+fn presenter_source() -> crate::review_authority::IdentitySource {
+    #[allow(unused_mut)]
+    let mut source = crate::review_authority::IdentitySource::live();
+    #[cfg(test)]
+    if source.chain.is_empty() {
+        source.chain = crate::review_authority::live_ancestry();
+        source.session_leader = crate::review_authority::live_session_leader();
+    }
+    source
+}
+
+/// `proc:<pid>@<start>` for this very process, when its start identity reads.
+// trace:BUG-1934 | ai:claude
+fn own_process_token() -> Option<String> {
+    pid_binding_token(std::process::id())
+}
+
+/// `proc:<pid>@<start>` for live process `pid`; `None` when its start
+/// identity cannot be read (a binding without one could never match).
+// trace:BUG-1934 | ai:claude
+fn pid_binding_token(pid: u32) -> Option<String> {
+    let start = crate::process_probe::process_start_identity(pid)?;
+    Some(crate::review_authority::process_token(
+        "proc",
+        pid,
+        Some(&start),
+    ))
+}
+
+/// BUG-1934: why `presenter` may not use `grant`, or `None` when it may.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn presenter_rejection(
+    grant: &SeatGrant,
+    presenter: &[String],
+) -> Option<GrantRejection> {
+    if grant.binding.is_empty() {
+        return Some(GrantRejection::Unbound);
+    }
+    if crate::review_authority::binding_overlaps(&grant.binding, presenter) {
+        return None;
+    }
+    Some(GrantRejection::PresenterNotBound {
+        bound_to: describe_binding(&grant.binding),
+    })
+}
+
+/// BUG-1934: the presenter tokens that satisfy `grant`'s binding: what a
+/// review attestation and the advisor turn stamp carry to ship time.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<String> {
+    presenter
+        .iter()
+        .filter(|p| {
+            grant
+                .binding
+                .iter()
+                .any(|b| crate::review_authority::binding_tokens_match(b, p))
+        })
+        .cloned()
+        .collect()
+}
+
+/// `process 4242, terminal session 4200` for a refusal or status line.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn describe_binding(binding: &[String]) -> String {
+    let parts: Vec<String> = binding
+        .iter()
+        .filter_map(|t| {
+            let (kind, value) = t.split_once(':')?;
+            let pid = value.split('@').next().filter(|p| !p.is_empty())?;
+            Some(match kind {
+                "sid" => format!("terminal session {pid}"),
+                _ => format!("process {pid}"),
+            })
+        })
+        .collect();
+    if parts.is_empty() {
+        "no process".to_string()
+    } else {
+        parts.join(", ")
+    }
+}
+
+/// Apply the presenter check to an otherwise-valid verdict.
+// trace:BUG-1934 | ai:claude
+fn with_presenter(check: GrantCheck, presenter: &[String]) -> GrantCheck {
+    let GrantCheck::Valid(grant) = check else {
+        return check;
+    };
+    match presenter_rejection(&grant, presenter) {
+        None => GrantCheck::Valid(grant),
+        Some(reason) => GrantCheck::Rejected {
+            id: grant.id.clone(),
+            seat: Some(grant.seat),
+            reason,
+        },
+    }
 }
 
 /// Revalidate a recorded reviewer through the same grant verdict as record time.
@@ -1000,8 +1207,21 @@ pub(crate) fn issue_direct(
     seat: &str,
     delegable_seats: Vec<String>,
     ttl: Option<Duration>,
+    bind_pid: Option<u32>,
 ) -> Result<SeatGrant> {
     require_direct_human()?;
+    // BUG-1934: bind before anything is written; an unbindable grant is
+    // never minted. trace:BUG-1934 | ai:claude
+    let caller = presenter_source();
+    let binding = match bind_pid {
+        None => direct_issue_binding(&caller)?,
+        Some(pid) => vec![check_bind_target(
+            pid,
+            probe_bind_target(pid).as_ref(),
+            &caller,
+            current_uid(),
+        )?],
+    };
     // trace:TASK-1594 | ai:claude
     let subject = crate::current_user_id(None);
     let principal = subject.clone();
@@ -1035,9 +1255,150 @@ pub(crate) fn issue_direct(
         issued_at: now,
         expires_at: now + lifetime,
         revoked_at: None,
+        binding,
     };
     write_grant(&grant)?;
     Ok(grant)
+}
+
+/// BUG-1934: what `aida role enter` binds a grant to: the shell that ran it
+/// (its parent) and that shell's POSIX session leader, so every process in
+/// that terminal session (an agent started there, its tool calls) can
+/// present it and nothing outside the session can. The shell's start
+/// identity must read; a leader without one is left out.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn direct_issue_binding(
+    caller: &crate::review_authority::IdentitySource,
+) -> Result<Vec<String>> {
+    let token = |kind: &str, p: &crate::review_authority::ProcEntry| {
+        p.start
+            .as_deref()
+            .filter(|s| !s.trim().is_empty() && p.pid > 1)
+            .map(|start| crate::review_authority::process_token(kind, p.pid, Some(start)))
+    };
+    let shell = caller
+        .chain
+        .get(1)
+        .and_then(|p| token("proc", p))
+        .context(
+            "cannot bind the grant: the start identity of the shell running `aida role enter` could not be read, so no grant was issued",
+        )?;
+    let mut binding = vec![shell];
+    if let Some(leader) = caller.session_leader.as_ref().and_then(|p| token("sid", p)) {
+        if !binding
+            .iter()
+            .any(|b| crate::review_authority::binding_tokens_match(b, &leader))
+        {
+            binding.push(leader);
+        }
+    }
+    Ok(binding)
+}
+
+/// BUG-1934: a live process `aida role enter --bind-pid` may bind a grant to.
+// trace:BUG-1934 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct BindTarget {
+    pub entry: crate::review_authority::ProcEntry,
+    /// Owning uid, when the platform reports one.
+    pub uid: Option<u32>,
+}
+
+/// Interactive shells `--bind-pid` accepts besides agent harnesses.
+const BIND_SHELLS: &[&str] = &[
+    "bash", "zsh", "sh", "dash", "fish", "ksh", "mksh", "tcsh", "csh", "nu", "pwsh",
+];
+
+/// BUG-1934: the binding token for `--bind-pid <pid>`, or why it is refused.
+/// The target must be a live process of the same user, an agent harness or
+/// an interactive shell, with a readable start identity, and neither pid 1
+/// nor an ancestor of the caller above the caller's own terminal session
+/// (an init, session manager, terminal emulator or multiplexer would bind
+/// far more than one session).
+// trace:BUG-1934 | ai:claude
+pub(crate) fn check_bind_target(
+    pid: u32,
+    target: Option<&BindTarget>,
+    caller: &crate::review_authority::IdentitySource,
+    caller_uid: Option<u32>,
+) -> Result<String> {
+    if pid <= 1 {
+        bail!("--bind-pid {pid}: refusing to bind a grant to pid {pid}");
+    }
+    let Some(target) = target.filter(|t| t.entry.pid == pid) else {
+        bail!("--bind-pid {pid}: no running process has that pid");
+    };
+    if caller_uid.is_none() || target.uid != caller_uid {
+        bail!("--bind-pid {pid}: the process does not belong to the user entering the role");
+    }
+    let name = target.entry.name.trim_start_matches('-');
+    let is_shell = BIND_SHELLS.contains(&name);
+    if !is_shell
+        && !crate::review_authority::is_agent_harness(&target.entry.name, &target.entry.cmd)
+    {
+        bail!(
+            "--bind-pid {pid}: `{}` is neither an agent harness (claude, codex, agy, ...) nor a shell",
+            target.entry.name
+        );
+    }
+    if let Some(at) = caller.chain.iter().position(|p| p.pid == pid) {
+        let leader_at = caller
+            .session_leader
+            .as_ref()
+            .and_then(|l| caller.chain.iter().position(|p| p.pid == l.pid));
+        if leader_at.is_none_or(|leader_at| at > leader_at) {
+            bail!(
+                "--bind-pid {pid}: the process is above this terminal session in your own process tree; name the agent session's harness pid instead"
+            );
+        }
+    }
+    target
+        .entry
+        .start
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(|start| crate::review_authority::process_token("proc", pid, Some(start)))
+        .with_context(|| format!("--bind-pid {pid}: the process start identity could not be read"))
+}
+
+/// Live probe behind `--bind-pid`: one single-pid refresh, never a table scan.
+// trace:BUG-1934 | ai:claude
+fn probe_bind_target(pid: u32) -> Option<BindTarget> {
+    use sysinfo::{ProcessRefreshKind, System, UpdateKind};
+    let spid = sysinfo::Pid::from_u32(pid);
+    let mut sys = System::new();
+    sys.refresh_pids_specifics(
+        &[spid],
+        ProcessRefreshKind::new()
+            .with_cmd(UpdateKind::Always)
+            .with_user(UpdateKind::Always),
+    );
+    let proc = sys.process(spid)?;
+    #[cfg(unix)]
+    let uid = proc.user_id().map(|u| **u);
+    #[cfg(not(unix))]
+    let uid = None;
+    Some(BindTarget {
+        entry: crate::review_authority::ProcEntry {
+            pid,
+            name: proc.name().to_string(),
+            cmd: proc.cmd().to_vec(),
+            start: crate::process_probe::process_start_identity(pid),
+        },
+        uid,
+    })
+}
+
+fn current_uid() -> Option<u32> {
+    #[cfg(unix)]
+    {
+        // SAFETY: getuid has no preconditions and cannot fail.
+        Some(unsafe { libc::getuid() })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
 }
 
 /// Read-only launch preflight; issuance repeats this validation after setup.
@@ -1079,6 +1440,13 @@ pub(crate) fn issue_child(
     child_subject: &str,
 ) -> Result<SeatGrant> {
     let parent = validate_child_delegation(project_root, requested_seat)?;
+    // BUG-1934: a child grant is bound to the launcher minting it. An exec'd
+    // worker keeps this pid and start; a spawned worker descends from it; a
+    // detached worker is stamped with [`bind_grant_to_pid`] after spawn.
+    // trace:BUG-1934 | ai:claude
+    let launcher = own_process_token().context(
+        "cannot bind the child grant: this launcher's process start identity could not be read",
+    )?;
     let now = Utc::now();
     let grant = SeatGrant {
         id: Uuid::new_v4().to_string(),
@@ -1092,6 +1460,7 @@ pub(crate) fn issue_child(
         issued_at: now,
         expires_at: parent.expires_at,
         revoked_at: None,
+        binding: vec![launcher],
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -1208,15 +1577,53 @@ pub(crate) fn revoke_current() -> Result<bool> {
 /// child exits and when its lease ends or is reaped.
 // trace:BUG-2139 | ai:claude
 pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
-    let Ok(mut grant) = read_grant(id) else {
-        return Ok(false);
-    };
-    if grant.revoked_at.is_some() {
+    if read_grant(id).is_err() {
         return Ok(false);
     }
-    grant.revoked_at = Some(Utc::now());
-    write_grant(&grant)?;
-    Ok(true)
+    // BUG-1934: under the record lock, so a concurrent pid stamp cannot
+    // write back a pre-revocation copy. trace:BUG-1934 | ai:claude
+    update_grant(
+        id,
+        |grant| {
+            if grant.revoked_at.is_some() {
+                return false;
+            }
+            grant.revoked_at = Some(Utc::now());
+            true
+        },
+        |grant| grant.revoked_at.is_some(),
+    )
+}
+
+/// BUG-1934 (C4): bind grant `id` to live process `pid` as well: a launcher
+/// stamps the worker it detached (setsid, nohup, a new terminal), which no
+/// longer descends from the launcher the grant was minted bound to. Locked
+/// and re-verified ([`update_grant`]), so concurrent stamps on one grant
+/// all land. Fails when `pid`'s start identity cannot be read: the worker
+/// then stays unbound and is refused, never silently trusted.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn bind_grant_to_pid(id: &str, pid: u32) -> Result<()> {
+    let token = pid_binding_token(pid).with_context(|| {
+        format!("cannot bind session grant to process {pid}: its start identity could not be read")
+    })?;
+    bind_grant_token(id, &token)
+}
+
+/// Token-level core of [`bind_grant_to_pid`].
+// trace:BUG-1934 | ai:claude
+pub(crate) fn bind_grant_token(id: &str, token: &str) -> Result<()> {
+    update_grant(
+        id,
+        |grant| {
+            if grant.binding.iter().any(|b| b == token) {
+                return false;
+            }
+            grant.binding.push(token.to_string());
+            true
+        },
+        |grant| grant.binding.iter().any(|b| b == token),
+    )?;
+    Ok(())
 }
 
 /// BUG-1918: did grant `id` authorize seat `seat` at instant `at`? Re-read
@@ -1225,12 +1632,19 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
 /// have been issued before `at`, not expired or been revoked by `at`, and the
 /// seat must still be allowed by the roster. An implementer seat never
 /// authorizes an approval.
+///
+/// BUG-1934: `presented_by` is what the recorder carried for the grant's
+/// binding (an attestation's `grant_binding`, the advisor turn stamp's
+/// binding): it must strictly match the grant's own binding, so an unbound
+/// grant, or one presented outside its process tree, authorizes nothing.
 // trace:BUG-1918 | ai:claude
+// trace:BUG-1934 | ai:claude
 pub(crate) fn grant_authorized_at(
     project_root: &Path,
     id: &str,
     seat: &str,
     at: DateTime<Utc>,
+    presented_by: &[String],
 ) -> bool {
     let seat = aida_core::team::canonical_role(seat.trim());
     if seat.is_empty() || seat == "implementer" {
@@ -1243,6 +1657,7 @@ pub(crate) fn grant_authorized_at(
         return false;
     };
     if aida_core::team::canonical_role(&grant.seat) != seat
+        || !crate::review_authority::binding_overlaps(&grant.binding, presented_by)
         || !valid_at(&grant)
         || !roster_allows(project_root, &grant.principal, &seat)
     {
@@ -1256,6 +1671,90 @@ pub(crate) fn grant_authorized_at(
                 && parent.delegable_seats.iter().any(|s| s == &grant.seat)
         }),
     }
+}
+
+/// BUG-1934: what `aida role status` reports about the exported grant.
+// trace:BUG-1934 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantStatusGrant {
+    pub id_prefix: String,
+    pub seat: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub valid: bool,
+    pub binding: Vec<String>,
+    pub bound_to: String,
+    /// Whether this process may present the grant: `None` when its record
+    /// cannot be read.
+    pub binding_ok: Option<bool>,
+    pub rejection: Option<String>,
+}
+
+/// BUG-1934: `aida role status --json`.
+// trace:BUG-1934 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantStatus {
+    pub grant: Option<GrantStatusGrant>,
+    /// This session's agent harness: the pid `--bind-pid` should name.
+    pub harness_pid: Option<u32>,
+    /// The shell that ran this command.
+    pub shell_pid: Option<u32>,
+}
+
+// trace:BUG-1934 | ai:claude
+pub(crate) fn grant_status(project_root: &Path) -> GrantStatus {
+    let source = crate::review_authority::IdentitySource::live();
+    let harness_pid = source.agent_root().map(|p| p.pid);
+    let shell_pid = source.chain.get(1).map(|p| p.pid).filter(|p| *p > 1);
+    let check = grant_check(project_root);
+    let grant = current_grant_id().map(|id| {
+        let record = read_grant(&id).ok();
+        let binding = record
+            .as_ref()
+            .map(|g| g.binding.clone())
+            .unwrap_or_default();
+        GrantStatusGrant {
+            id_prefix: id.chars().take(8).collect(),
+            seat: record.as_ref().map(|g| g.seat.clone()),
+            expires_at: record.as_ref().map(|g| g.expires_at),
+            valid: matches!(check, GrantCheck::Valid(_)),
+            bound_to: describe_binding(&binding),
+            binding_ok: record
+                .as_ref()
+                .map(|g| presenter_rejection(g, &presenter_tokens()).is_none()),
+            binding,
+            rejection: check.rejection_sentence(),
+        }
+    });
+    GrantStatus {
+        grant,
+        harness_pid,
+        shell_pid,
+    }
+}
+
+/// BUG-1934: the `seat-grant` doctor category.
+pub(crate) const DOCTOR_CATEGORY: &str = "seat-grant";
+
+/// BUG-1934: a finding when this session exports a grant that is refused,
+/// naming the reason (an unbound grant, one presented outside its process
+/// tree, ...) instead of leaving a silent "no role". Silent otherwise.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn doctor_scan(project_root: &Path) -> Vec<crate::DoctorFinding> {
+    let check = grant_check(project_root);
+    let Some(sentence) = check.rejection_sentence() else {
+        return Vec::new();
+    };
+    let GrantCheck::Rejected { id, .. } = &check else {
+        return Vec::new();
+    };
+    let prefix: String = id.chars().take(8).collect();
+    vec![crate::DoctorFinding {
+        category: DOCTOR_CATEGORY.into(),
+        id: format!("{DOCTOR_CATEGORY}:{prefix}"),
+        summary: sentence,
+        action: "re-enter the role as the refusal says; `aida role status` shows this session's harness pid for --bind-pid".into(),
+        safe_heal: false,
+    }]
 }
 
 pub(crate) fn grant_id(grant: &SeatGrant) -> &str {
@@ -1371,6 +1870,10 @@ pub(crate) mod test_support {
             issued_at: now,
             expires_at: now + lifetime,
             revoked_at: None,
+            // BUG-1934: bound to the test process, the presenter of every
+            // in-process check and an ancestor of every binary a test spawns.
+            // trace:BUG-1934 | ai:claude
+            binding: own_process_token().into_iter().collect(),
         };
         write_grant(&grant).unwrap();
         grant.id
@@ -1455,6 +1958,7 @@ mod tests {
             issued_at: at,
             expires_at: at,
             revoked_at: None,
+            binding: Vec::new(),
         };
         for (expires_at, seat, emits) in [
             (at, "advisor", true),
@@ -1942,3 +2446,8 @@ mod task_1752_grant_env_guard_tests;
 #[cfg(test)]
 #[path = "tests/bug_2200_roster_store_tests.rs"]
 mod bug_2200_roster_store_tests;
+
+// trace:BUG-1934 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_1934_grant_binding_tests.rs"]
+mod bug_1934_grant_binding_tests;

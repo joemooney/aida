@@ -913,6 +913,11 @@ pub(crate) struct TurnClock {
     pub last_seen: String,
     #[serde(default)]
     pub prompt_count: u64,
+    /// BUG-1934: on a `grant-<id>` stamp only, the presenter tokens that
+    /// satisfied that grant's binding when the turn ran.
+    // trace:BUG-1934 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub binding: Vec<String>,
 }
 
 impl TurnClock {
@@ -981,6 +986,33 @@ fn read_turn_clock_in(dir: &Path, session_id: &str) -> Option<TurnClock> {
 // trace:STORY-1700 | ai:claude
 pub(crate) fn turn_clock_last_seen_in(dir: &Path, key: &str) -> Option<DateTime<Utc>> {
     read_turn_clock_in(dir, key)?.last_seen_utc()
+}
+
+/// BUG-1934: the binding tokens the `key` stamp recorded (empty when none).
+// trace:BUG-1934 | ai:claude
+pub(crate) fn turn_clock_binding_in(dir: &Path, key: &str) -> Vec<String> {
+    read_turn_clock_in(dir, key)
+        .map(|c| c.binding)
+        .unwrap_or_default()
+}
+
+/// BUG-1934: stamp turn-clock `key` at `now` carrying `binding`. Overwrites
+/// the record: a grant stamp's binding is always the latest presenter's.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn stamp_bound_turn_clock(key: &str, binding: Vec<String>, now: DateTime<Utc>) {
+    let Some(dir) = turn_clock_dir() else {
+        return;
+    };
+    let prompt_count = read_turn_clock_in(&dir, key).map_or(0, |c| c.prompt_count) + 1;
+    let _ = write_turn_clock_in(
+        &dir,
+        key,
+        &TurnClock {
+            last_seen: now.to_rfc3339(),
+            prompt_count,
+            binding,
+        },
+    );
 }
 
 fn write_turn_clock_in(dir: &Path, session_id: &str, clock: &TurnClock) -> Option<()> {
@@ -1054,6 +1086,7 @@ fn stamp_turn_clock_in(
         &TurnClock {
             last_seen: now.to_rfc3339(),
             prompt_count,
+            binding: Vec::new(),
         },
     );
     label
@@ -1752,6 +1785,7 @@ mod tests {
         let seeded = TurnClock {
             last_seen: (now - Duration::minutes(1)).to_rfc3339(),
             prompt_count: 0,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&seeded), false, now),
@@ -1761,6 +1795,7 @@ mod tests {
         let prev = TurnClock {
             last_seen: (now - Duration::minutes(3)).to_rfc3339(),
             prompt_count: 2,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&prev), false, now),
@@ -1770,6 +1805,7 @@ mod tests {
         let prev = TurnClock {
             last_seen: (now - Duration::hours(2)).to_rfc3339(),
             prompt_count: 5,
+            binding: Vec::new(),
         };
         assert_eq!(
             timing_label(Some(&prev), false, now),

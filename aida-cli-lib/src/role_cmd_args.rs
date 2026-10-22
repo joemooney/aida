@@ -15,6 +15,8 @@ pub enum RoleCommand {
     ///   raw binary: `eval "$(aida role enter advisor)"`
     ///   via the shell helper (`aida dev shell-init`): just `aida role enter advisor`
     /// The helper auto-evals it, so the bare form is correct there.
+    /// The seat grant is bound to this terminal session: any process in this
+    /// terminal session can use this grant, and no process outside it can.
     Enter {
         /// Role name — picker shown when omitted on a TTY
         name: Option<String>,
@@ -43,6 +45,15 @@ pub enum RoleCommand {
         // trace:TASK-1787 | ai:antigravity
         #[clap(long)]
         ttl: Option<String>,
+
+        /// Bind the grant to another running session instead of this
+        /// terminal: the pid of that session's agent harness (claude, codex,
+        /// agy) or shell, owned by you (`aida role status` shows a session's
+        /// harness pid). Prints the grant id for that session to export and
+        /// leaves this shell's role unchanged.
+        // trace:BUG-1934 | ai:claude
+        #[clap(long = "bind-pid", value_name = "PID")]
+        bind_pid: Option<u32>,
     },
 
     /// Add a new role, then enter it. Errors if the name already exists
@@ -112,6 +123,17 @@ pub enum RoleCommand {
         /// Exit 3 with a refusal when less than this span is left.
         #[clap(long)]
         refuse_within: Option<String>,
+    },
+
+    /// Show this session's seat grant (seat, expiry, the processes it is
+    /// bound to, and whether this process may present it) and the pids
+    /// `aida role enter <seat> --bind-pid` accepts for this session: its
+    /// agent harness and its shell. Read-only; always exits 0.
+    // trace:BUG-1934 | ai:claude
+    Status {
+        /// Emit JSON instead of text.
+        #[clap(long)]
+        json: bool,
     },
 
     /// Emit a deduplicated informational tool-hook expiry notice.

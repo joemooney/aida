@@ -3091,6 +3091,16 @@ pub(crate) fn handle_review_record_at(
         identity: recorder.tokens.clone(),
         receipt_id,
         solo_human,
+        // trace:BUG-1934 | ai:claude
+        grant_binding: recorder_grant
+            .as_ref()
+            .map(|g| {
+                crate::seat_authority::matched_binding(
+                    g,
+                    &crate::seat_authority::presenter_tokens(),
+                )
+            })
+            .unwrap_or_default(),
     })
     .context("could not serialize the review recorder attestation")?;
 

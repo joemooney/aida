@@ -89,6 +89,7 @@ impl Case {
             issued_at: Utc::now(),
             expires_at: Utc::now() + chrono::Duration::hours(1),
             revoked_at: None,
+            binding: Vec::new(),
         };
         let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "rework", Some(OLD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
