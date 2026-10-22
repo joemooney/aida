@@ -555,15 +555,22 @@ fi
 # trace:TASK-1948 | ai:claude
 # trace:TASK-1952 | trace:TASK-1643 | ai:claude
 NO_SLOT_SET='AIDA_CARGO_NO_SLOT\+?='
-NO_SLOT_SHELL='(^|[^A-Za-z0-9_./-])(bash|sh|zsh|dash|ksh)'
+# A shell by name or by path (`bash`, `/bin/bash`, `/usr/bin/env bash`).
+NO_SLOT_SHELL='(^|[^A-Za-z0-9_.-])([^[:space:]'"'"'"]*/)?(bash|sh|zsh|dash|ksh)'
 no_slot_set() {
     printf '%s' "$SCAN_COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
-    printf '%s' "$COMMAND" | grep -qE \
-        "($NO_SLOT_SHELL|(^|[^A-Za-z0-9_])eval)([[:space:]]+[^;&|]*)?[^A-Za-z0-9_]$NO_SLOT_SET" \
-        && return 0
+    # A quoted payload counts only when the shell (or eval) that runs it is
+    # itself unquoted: a shell named inside prose runs nothing (TASK-2123).
+    if printf '%s' "$SCAN_COMMAND" | grep -qE "$NO_SLOT_SHELL([^A-Za-z0-9_]|\$)|(^|[^A-Za-z0-9_])eval([^A-Za-z0-9_]|\$)"; then
+        printf '%s' "$COMMAND" | grep -qE \
+            "($NO_SLOT_SHELL|(^|[^A-Za-z0-9_])eval)([[:space:]]+[^;&|]*)?[^A-Za-z0-9_]$NO_SLOT_SET" \
+            && return 0
+    fi
     printf '%s' "$COMMAND" | grep -qE "(\\\$\\(|\`)[^)\`]*$NO_SLOT_SET" && return 0
-    if printf '%s' "$COMMAND" | grep -qE \
-        "$NO_SLOT_SHELL([[:space:]]+-[A-Za-z]+)*[[:space:]]*(<|\$)|\\|[[:space:]]*(bash|sh|zsh|dash|ksh)([^A-Za-z0-9_]|\$)"; then
+    # A shell fed on stdin, judged on the unquoted, heredoc-free text so a
+    # heredoc body or a quoted line ending in a shell name is not one.
+    if printf '%s' "$SCAN_COMMAND" | grep -qE \
+        "$NO_SLOT_SHELL([[:space:]]+-[A-Za-z]+)*[[:space:]]*(<|\$)|\\|[[:space:]]*([^[:space:]]*/)?(env[[:space:]]+)?(bash|sh|zsh|dash|ksh)([^A-Za-z0-9_]|\$)"; then
         printf '%s' "$COMMAND" | grep -qE "(^|[^A-Za-z0-9_])$NO_SLOT_SET" && return 0
     fi
     return 1

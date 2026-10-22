@@ -204,28 +204,26 @@ pub(crate) fn commit_store_writes_since(
 }
 
 /// Which of `paths` the store's index or HEAD knows (a pathspec `git commit
-/// -- <paths>` accepts). A store with no commit yet has no HEAD paths.
+/// -- <paths>` accepts). A store with no commit yet (an unborn HEAD) has no
+/// HEAD paths; any other git failure is an error.
 // trace:TASK-1952 | trace:TASK-2009 | ai:claude
 fn known_to_git(
     store: &Path,
     paths: &[String],
 ) -> anyhow::Result<std::collections::HashSet<String>> {
-    let list = |args: &[&str], must_succeed: bool| -> anyhow::Result<Vec<String>> {
+    let list = |args: &[&str]| -> anyhow::Result<Vec<String>> {
         let out = aida_core::git_ops::host_git_command(store)
             .arg("--literal-pathspecs")
             .args(args)
             .arg("--")
             .args(paths)
             .output()?;
-        if !out.status.success() {
-            anyhow::ensure!(
-                !must_succeed,
-                "git {} failed: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr).trim()
-            );
-            return Ok(Vec::new());
-        }
+        anyhow::ensure!(
+            out.status.success(),
+            "git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         Ok(out
             .stdout
             .split(|b| *b == 0)
@@ -234,11 +232,17 @@ fn known_to_git(
             .collect())
     };
     let mut known: std::collections::HashSet<String> =
-        list(&["ls-files", "-z"], true)?.into_iter().collect();
-    known.extend(list(
-        &["ls-tree", "-r", "-z", "--name-only", "HEAD"],
-        false,
-    )?);
+        list(&["ls-files", "-z"])?.into_iter().collect();
+    // Only an unborn HEAD has no paths; any other ls-tree failure is an
+    // error, never an empty HEAD.
+    let born = aida_core::git_ops::host_git_command(store)
+        .args(["rev-parse", "-q", "--verify", "HEAD^{commit}"])
+        .output()?
+        .status
+        .success();
+    if born {
+        known.extend(list(&["ls-tree", "-r", "-z", "--name-only", "HEAD"])?);
+    }
     Ok(known)
 }
 

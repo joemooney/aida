@@ -10074,6 +10074,7 @@ mod tests {
                 .unwrap()
                 .success
         );
+        let own_head = git(&store, &["rev-parse", "HEAD"]).unwrap().stdout;
         std::fs::write(store.join("notes.txt"), "by hand\n").unwrap();
         let out = host_git_command(&store)
             .env_remove("AIDA_STORE_WRITE_GUARD")
@@ -10102,6 +10103,10 @@ mod tests {
         assert!(
             !body.contains(forged.trim()),
             "the planted nested store forged the trailer: {body}"
+        );
+        assert!(
+            body.contains(&format!("Aida-Store: {}", own_head.trim())),
+            "a store commit pins the store's own head: {body}"
         );
     }
 

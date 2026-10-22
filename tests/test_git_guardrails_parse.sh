@@ -78,6 +78,11 @@ assert_exit "a shell heredoc payload is blocked" 2 "$(run '{"tool_input":{"comma
 assert_exit "a payload piped into sh is blocked" 2 "$(run '{"tool_input":{"command":"echo '"'"'AIDA_CARGO_NO_SLOT=1 make check'"'"' | sh"}}')"
 assert_exit "an eval payload is blocked" 2 "$(run '{"tool_input":{"command":"eval \"AIDA_CARGO_NO_SLOT=1 make check\""}}')"
 assert_exit "a command substitution in a quoted arg is blocked" 2 "$(run '{"tool_input":{"command":"echo \"$(AIDA_CARGO_NO_SLOT=1 make check)\""}}')"
+assert_exit "an absolute-path shell payload is blocked" 2 "$(run '{"tool_input":{"command":"/bin/bash -c '"'"'AIDA_CARGO_NO_SLOT=1 cargo test'"'"'"}}')"
+assert_exit "an env-prefixed shell payload is blocked" 2 "$(run '{"tool_input":{"command":"/usr/bin/env bash -c \"AIDA_CARGO_NO_SLOT=1 make check\""}}')"
+assert_exit "a payload piped into /bin/sh is blocked" 2 "$(run '{"tool_input":{"command":"echo '"'"'AIDA_CARGO_NO_SLOT=1 make'"'"' | /bin/sh"}}')"
+assert_exit "a shell named in quoted prose is allowed" 0 "$(run '{"tool_input":{"command":"aida comment add TASK-1 \"never run bash -c with AIDA_CARGO_NO_SLOT=1\""}}')"
+assert_exit "a heredoc body line ending in a shell name is allowed" 0 "$(run '{"tool_input":{"command":"aida mailbox send --to advisor --stdin <<EOF\nAIDA_CARGO_NO_SLOT=1 was set by a script run with bash\nEOF"}}')"
 assert_exit "a similarly named variable is allowed" 0 "$(run '{"tool_input":{"command":"MY_AIDA_CARGO_NO_SLOT=1 true"}}')"
 rm -rf "$TMP"
 [ "$fail" -eq 0 ] || exit 1
