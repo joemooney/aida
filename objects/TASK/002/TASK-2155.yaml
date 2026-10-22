@@ -1,0 +1,27 @@
+id: 01a1630c-16b0-7612-a202-c7d980210fd4
+spec_id: TASK-2155
+agreed_id: TASK-2155
+title: 'ship-batch: record batch start/outcome/stop in events.jsonl so aida history shows the run'
+description: |
+  SKETCH v1 on STORY-1887 says the batch reuses events.jsonl (one record per batch start, per-PR outcome and stop reason) so that aida history shows the run. GitHubPorts::record in aida-cli-lib/src/pr_ship_batch.rs writes those only to .aida/advisor-activity.jsonl; only 'refused' reaches events (record_gate_held).
+
+  Raised in review of PR-2828: https://github.com/joemooney/aida/pull/2828#issuecomment-6337989557
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:58:19.056668843Z
+modified_at: 2026-10-22T09:58:19.056668843Z
+req_type: Task
+tags:
+- from-review:PR-2828
+- severity:minor
+filed_at:
+  code_sha: 2d09343748fa40918904ca838f6799c171e5a3dd
+  branch: pr-2828
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a162f6832d
+  harness_version: 2.1.308 (Claude Code)

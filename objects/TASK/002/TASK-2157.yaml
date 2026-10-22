@@ -1,0 +1,27 @@
+id: 01a1630c-3c78-7141-aeed-9006ce57d2fa
+spec_id: TASK-2157
+agreed_id: TASK-2157
+title: ship-batch --dry-run runs git fetch origin despite 'change nothing'
+description: |
+  plan_pr -> GitHubPorts::stale_definition_files runs 'git fetch --quiet origin', which updates remote-tracking refs, but --dry-run is documented as 'change nothing'. Document it or skip the fetch in dry-run.
+
+  Raised in review of PR-2828: https://github.com/joemooney/aida/pull/2828#issuecomment-6337989557
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:58:28.728006159Z
+modified_at: 2026-10-22T09:58:28.728006159Z
+req_type: Task
+tags:
+- from-review:PR-2828
+- severity:cosmetic
+filed_at:
+  code_sha: 2d09343748fa40918904ca838f6799c171e5a3dd
+  branch: pr-2828
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a162f6832d
+  harness_version: 2.1.308 (Claude Code)

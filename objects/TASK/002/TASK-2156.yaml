@@ -1,0 +1,27 @@
+id: 01a1630c-2837-7ed3-9c35-5c50d488db8f
+spec_id: TASK-2156
+agreed_id: TASK-2156
+title: 'ship-batch: review wait should build verdict-candidate spec ids the same way aida pr ship does'
+description: |
+  GitHubPorts::review_at_head (aida-cli-lib/src/pr_ship_batch.rs) passes known_ids=&[] to merge_approval_inputs, while the ship gate (pr_cmd.rs ~2183-2199) passes ship_gate_spec_records plus the IDs in the branch and title. A spec ID found only in the PR title can give the batch different verdict candidates than ship uses. The batch then waits to timeout while ship would accept. This fails closed, but it contradicts the sketch's no-drift claim. Share one helper.
+
+  Raised in review of PR-2828: https://github.com/joemooney/aida/pull/2828#issuecomment-6337989557
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:58:23.543974928Z
+modified_at: 2026-10-22T09:58:23.543974928Z
+req_type: Task
+tags:
+- from-review:PR-2828
+- severity:minor
+filed_at:
+  code_sha: 2d09343748fa40918904ca838f6799c171e5a3dd
+  branch: pr-2828
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a162f6832d
+  harness_version: 2.1.308 (Claude Code)
