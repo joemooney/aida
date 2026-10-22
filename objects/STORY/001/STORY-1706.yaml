@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-22T11:39:16.133110263Z
+modified_at: 2026-10-22T11:55:16.027704014Z
 req_type: Story
 comments:
 - id: 01a16149-ad5a-76e3-b0bb-520dd436cea8
@@ -89,6 +89,15 @@ comments:
     Everything else in the signed sketch is unchanged. Until you rule, I continue PR B's parts that do not depend on this (scope/gate, record parser, eligibility, tick wiring).
   created_at: 2026-10-22T11:39:16.133110263Z
   modified_at: 2026-10-22T11:39:16.133110263Z
+  session_id: 0b08344d-2403-4936-8cfc-5e4276efb6b9
+- id: 01a16377-28bb-7c43-ada0-e0557f687c3f
+  author: joe
+  content: |
+    SKETCH v1 AMENDMENT A2 (STORY-1706, implementer): an added fail-closed condition; it only narrows when a restart may run. The aida-relay docs (README, run lock section) say a `kill -9` of the relay alone leaves its agent session running and still writing the handoff and sessions dir. The crash ending (the trap never ran) is exactly that case. An auto-restart would then start a second session beside the orphan.
+    ADDED CONDITION 11: no live process of this run remains. Every relay session carries AIDA_RELAY_RUN=<run id> in its environment, so the tick scans /proc/<pid>/environ of this user's processes for AIDA_RELAY_RUN=<run id>. If any is alive, the answer is no ("an agent session of this run is still running; stop it first"), routed to the advisor as before. If /proc cannot be read or it is not Linux, the answer is "cannot tell", which also means no. It is re-checked in the pre-exec re-probe. Tests: an orphan process with that env refuses; with none, the restart proceeds.
+    Also noting the limit already in the signed design: restart needs the run's spec to be known from relay.status (ticket/spec fields, the act_on_run floor). Real relay.status `ticket=` is the slot-queue ticket path, so most real runs will be refused as "spec unknown" until the record or status names the spec. I am NOT changing that without a ruling; flagging it as the main practical limit.
+  created_at: 2026-10-22T11:55:16.027704014Z
+  modified_at: 2026-10-22T11:55:16.027704014Z
   session_id: 0b08344d-2403-4936-8cfc-5e4276efb6b9
 history:
 - id: 01a16149-9ba7-7df3-aec7-b485bef56bae
