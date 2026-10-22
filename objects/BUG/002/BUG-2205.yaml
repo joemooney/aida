@@ -8,11 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:38.631962743Z
-modified_at: 2026-10-22T00:48:37.124689702Z
+modified_at: 2026-10-22T00:48:42.603129692Z
 req_type: Bug
 tags:
 - leases
 - review
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a154e7-6af1-70c0-8437-98c9e77a36a3
+  created_at: 2026-10-22T00:48:42.603126708Z
+  created_by: joe
 history:
 - id: 01a16114-d304-7e80-86d3-e0f6872d8568
   author: joe
@@ -22,6 +27,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a16114-edba-7d20-8118-0b65616d1a8d
+  author: joe
+  timestamp: 2026-10-22T00:48:43.962548126Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
