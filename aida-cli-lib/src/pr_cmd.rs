@@ -70,6 +70,12 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                 *final_slice,
             )
         }
+        // trace:STORY-1887 | ai:claude
+        PrCommand::ShipBatch {
+            prs,
+            review_timeout,
+            dry_run,
+        } => crate::pr_ship_batch::run(prs, *review_timeout, *dry_run),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
         PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
@@ -2085,6 +2091,22 @@ pub(crate) fn normalized_spec_ids(spec_ids: &[String]) -> Vec<String> {
     ids
 }
 
+/// The stale-definition gate's own predicate: PR `pr_number`'s base branch
+/// and the staleness warning its ship branch carries against it. A warning
+/// with `definition_files` is exactly what [`ship_stale_definition_gate`]
+/// refuses, so `aida pr ship-batch` reads this, never a re-implementation.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn ship_stale_definition_warning(
+    project_root: &std::path::Path,
+    ship_branch: &str,
+    pr_number: u64,
+) -> (String, Option<StaleCheckWarning>) {
+    let base_branch = pr_ship_target_branch(pr_number);
+    let base_ref = format!("origin/{base_branch}");
+    let warning = pr_stale_check_warning(project_root, ship_branch, &base_ref);
+    (base_branch, warning)
+}
+
 // trace:TASK-1606 | ai:codex
 fn ship_stale_definition_gate(
     project_root: &std::path::Path,
@@ -2092,9 +2114,9 @@ fn ship_stale_definition_gate(
     pr_number: u64,
     override_stale_check: bool,
 ) -> Result<()> {
-    let base_branch = pr_ship_target_branch(pr_number);
-    let base_ref = format!("origin/{base_branch}");
-    if let Some(warning) = pr_stale_check_warning(&project_root, &ship_branch, &base_ref) {
+    let (base_branch, warning) =
+        ship_stale_definition_warning(project_root, ship_branch, pr_number);
+    if let Some(warning) = warning {
         if !warning.definition_files.is_empty() {
             if override_stale_check {
                 eprintln!(

@@ -307,7 +307,7 @@ fn pr_list_gitlab(
 /// means some red check is NOT on that allow-list, whether or not branch
 /// protection actually requires it.
 // trace:BUG-1935 | ai:claude
-fn github_rollup_ci_status(
+pub(crate) fn github_rollup_ci_status(
     rollup: &[serde_json::Value],
     cfg: &crate::ci_gate::CiGateConfig,
 ) -> String {
