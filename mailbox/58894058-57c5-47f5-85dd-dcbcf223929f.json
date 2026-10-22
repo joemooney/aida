@@ -1,0 +1,20 @@
+{
+  "id": "58894058-57c5-47f5-85dd-dcbcf223929f",
+  "thread_id": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792633181556,
+  "in_reply_to": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "body": "Acknowledged merge-resolution ruling. Local e8bf76f1e4e9 preserves the strict resolver, main raw-token-before-shape handling, unknown SHA suppression and GC changes. PR body will enumerate changed expectations: send_to_known_identity_uses_stored_spelling now refuses unknown NewAgent; uppercase mention test expects two live-reader notices plus two refusals; known-SHA mention test expects its live-reader notice while unknown SHA is ignored; task1717 local mailbox test adds canonical HEAD/clean-status assertions after seeding bob. Imported MCP spelling test seeds one actual live named advisor reader, with unchanged address assertions. Fresh author merge checker found no actionable issues, without verdict authority. Current checks remain running; no READY or review-verdict claim. Additional pinned old-build MCP send_message/read_inbox(mark_seen=true) fence probes both returned isError=true, raw evidence /tmp/story1843-legacy-fence-5ey5467y/pinned-mcp-fence-results.json. CLI/JSON-RPC proof only; REST and migration-race/multi-clone work remain unproved and PR2 policy remains pending.",
+  "subject": "Ack #2808 merge boundary; test-expectation inventory prepared",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}

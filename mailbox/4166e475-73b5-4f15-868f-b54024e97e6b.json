@@ -1,0 +1,19 @@
+{
+  "id": "4166e475-73b5-4f15-868f-b54024e97e6b",
+  "thread_id": "d851b40e-678a-4cd2-a422-b7f85df35e47",
+  "from": "integrator",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792634375831,
+  "body": "At local clean e8bf76f1e4e9c9232e6c254f48740f284f4ac454: make check-ci-fast completed exit0, all34 gates passed. make test-touched filtered lib suite completed3084 passed,0failed,1ignored; remaining target(s) now queued for another shared slot. No final test-touched success or current-head CI claim; remote remains b10, merge not pushed. Changed-expectation inventory is prepared in /tmp/story1843-pr1-merge-body.md for publication with final actual outcomes. Mail checked around18:54: no new unread. Existing PR2 compatibility ruling remains pending; no write migration or PR2 source work. Full four-PR task remains active and STORY-1843 In Progress.",
+  "subject": "#2808 e8bf local verification progress: 3084 unit tests +34 fast gates passed",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "integrator"
+}
