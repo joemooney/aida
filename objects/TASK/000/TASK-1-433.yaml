@@ -1,5 +1,6 @@
 id: 01a16451-b2f5-7ac1-9096-0159ac2b0f42
 spec_id: TASK-1-433
+agreed_id: TASK-1704
 title: 'minor, aida-cli-lib/src/pr_ship_batch.rs:540-546: if clear_hold succeeds and th…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on STORY-1887, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a16468-79b9-7251-8854-51e594b8737b
   author: joe
   timestamp: 2026-10-22T16:18:50.937820303Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a16561-ab63-7d31-bfe9-dd5042ca2a5e
+  author: joe
+  timestamp: 2026-10-22T20:51:02.115040408Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
