@@ -2041,10 +2041,11 @@ pub(crate) fn ensure_spec_worktree(
                 /* role */ Some("implementer".to_string()),
                 /* force_claim (TASK-1784: own dead lease) */ reclaimed_dead_lease,
                 /* use_pool */ Some(false),
-                /* self_claim */ false,
+                /* self_claim: the caller works it (BUG-2010) */ true,
                 /* review_coexistence */ None,
                 /* contained_seat */ false,
             )?;
+            // trace:TASK-1955 | ai:claude (TASK-1772): self_claim above
             let lease = list_leases(&main_root)
                 .into_iter()
                 .filter(|l| l.scope.eq_ignore_ascii_case(spec_display))
