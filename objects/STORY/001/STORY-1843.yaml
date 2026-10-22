@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T15:48:40.372999510Z
+modified_at: 2026-10-22T15:48:43.007711167Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -324,6 +324,12 @@ comments:
   content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: PR1 resolver is well-scoped, CI green, and all prior rework rulings are implemented with tests, but from the default sandboxed CLI the 1268 unended legacy registry records (no pid_namespace) all count as unknown-liveness readers, so zero-reader/dead refusal never fires there and every group notice lists hundreds of names. No triage reason was given.'
   created_at: 2026-10-22T15:48:40.372988159Z
   modified_at: 2026-10-22T15:48:40.372988159Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1644c-e37f-78b0-ab8b-49f057067fe3
+  author: joe
+  content: 'Advisor: PR #2808 round-1 request-changes (findings 1–5). Rework brief handed to the operator for codex at 08:45. Returned to in-progress.'
+  created_at: 2026-10-22T15:48:43.007711167Z
+  modified_at: 2026-10-22T15:48:43.007711167Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
