@@ -96,8 +96,9 @@ fn write_grant(grant: &SeatGrant) -> Result<()> {
     Ok(())
 }
 
-/// BUG-1934: read-modify-write grant `id` under an exclusive lock on its
-/// sibling `.<id>.lock`, then re-read and confirm `applied` holds, retrying
+/// BUG-1934: read-modify-write grant `id` under an exclusive lock on
+/// `session-grant-locks/<id>.lock` (beside, never inside, the grant store,
+/// whose readers parse every file as a grant), then re-read and confirm `applied` holds, retrying
 /// when a concurrent writer replaced the record between our write and the
 /// re-read. Every rewrite of an existing record (pid stamps, revocation) goes
 /// through here, so a stamp cannot drop a revocation or another stamp.
@@ -114,13 +115,17 @@ fn update_grant(
     if Uuid::parse_str(id).is_err() {
         bail!("invalid session grant handle");
     }
-    std::fs::create_dir_all(&dir)?;
+    let locks = dir
+        .parent()
+        .context("session grant store has no parent directory")?
+        .join("session-grant-locks");
+    std::fs::create_dir_all(&locks)?;
     for _ in 0..ATTEMPTS {
         let lock = std::fs::OpenOptions::new()
             .create(true)
             .truncate(false)
             .write(true)
-            .open(dir.join(format!(".{id}.lock")))
+            .open(locks.join(format!("{id}.lock")))
             .context("cannot open the session grant lock")?;
         lock.lock_exclusive()
             .context("cannot lock the session grant record")?;
