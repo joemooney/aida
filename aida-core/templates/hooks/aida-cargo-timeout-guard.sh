@@ -263,6 +263,16 @@ make_targets_skip_cargo() {
         # bare `$(X)` line) can expand to a whole rule or a computed target.
         # trace:TASK-1955 | ai:claude (TASK-2128)
         eq = index(line, "=")
+        # make reads `A B=1` as no assignment (a name holds no blank), so a
+        # `$(X) Y=1` line is a rule line that can expand to anything.
+        # trace:TASK-1955 | ai:claude (TASK-2128)
+        if (eq > 0) {
+            nm = substr(line, 1, eq - 1)
+            sub(/[:+?!]+$/, "", nm)
+            sub(/^[ \t]*((override|export|private|unexport)[ \t]+)*/, "", nm)
+            sub(/[ \t]+$/, "", nm)
+            if (nm ~ /[ \t]/) eq = 0
+        }
         if (eq == 0 || (c > 0 && c < eq)) {
             lead = (c > 0) ? head : line
             if (lead ~ /\$/) { unresolvable = 1; exit }
@@ -288,7 +298,13 @@ make_targets_skip_cargo() {
             # trace:TASK-1955 | ai:claude (TASK-2076)
             if (ts[k] ~ /%/) implicit = 1
             else if (ts[k] ~ /^\.[^.\/]+(\.[^.\/]+)?$/) maybe_suffix[ts[k]] = 1
+            # `.DEFAULT` builds every prerequisite nothing else names.
+            # trace:TASK-1955 | ai:claude (TASK-2128)
+            if (ts[k] == ".DEFAULT") implicit = 1
             if (ts[k] == ".SUFFIXES") {
+                # A variable suffix list cannot be read here.
+                # trace:TASK-1955 | ai:claude (TASK-2128)
+                if (body ~ /\$/) { unresolvable = 1; exit }
                 if (body ~ /^[ \t]*$/) { delete suffix; delete declared }
                 m = split(body, sl, /[ \t]+/)
                 for (j = 1; j <= m; j++) if (sl[j] != "") suffix[sl[j]] = 1

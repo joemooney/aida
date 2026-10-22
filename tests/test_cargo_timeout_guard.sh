@@ -204,6 +204,18 @@ for sfx in .C .S .F; do
 done
 mk_case declared '.SUFFIXES: .md .html' 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
 expect_warn "a .SUFFIXES-declared suffix rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# PR-2826 round 1: a variable .SUFFIXES list, an expansion in front of a
+# blank-containing name (no assignment to make) and .DEFAULT all fail closed.
+# trace:TASK-1955 | ai:claude (TASK-2128)
+mk_case varsuffixes 'S := .md .html' '.SUFFIXES: $(S)' 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
+touch "$MK/varsuffixes/page.md"
+expect_warn "a variable .SUFFIXES list fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case varassign 'X := hello: ; cargo test' '$(X) Y=1'
+expect_warn "a \$(X) Y=1 line that expands to a rule fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case computedname 'N := A' '$(N)_FLAGS = -O2' 'override CFLAGS += -g' 'hello: notes.txt' $'\t@echo hi'
+expect_silent "a computed variable name is still an assignment" 'timeout 1h make hello'
+mk_case default 'hello: page.txt' $'\t@echo hi' '.DEFAULT:' $'\tcargo run --bin gen $@'
+expect_warn ".DEFAULT may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 # TASK-2129: a dot target with an unknown suffix is a plain target.
 mk_case venv '.venv: requirements.txt' $'\tpython3 -m venv .venv' 'hello: notes.txt' $'\t@echo hi'
 expect_silent ".venv is no suffix rule" 'timeout 1h make hello'
