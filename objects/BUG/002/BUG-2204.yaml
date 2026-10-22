@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:20.534275095Z
-modified_at: 2026-10-22T00:48:50.680536729Z
+modified_at: 2026-10-22T00:48:52.597673580Z
 req_type: Bug
 tags:
 - mailbox
@@ -17,6 +17,10 @@ relationships:
 - rel_type: References
   target_id: 01a15037-319b-7e92-850d-affbbac2a99d
   created_at: 2026-10-21T15:07:07.794569295Z
+  created_by: joe
+- rel_type: SupersededBy
+  target_id: 01a15037-319b-7e92-850d-affbbac2a99d
+  created_at: 2026-10-22T00:48:52.597670061Z
   created_by: joe
 history:
 - id: 01a15f00-7a5a-7030-b9cf-c6b24c26526d
@@ -32,6 +36,11 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Superseded
+- id: 01a16115-186b-7422-8eda-f7aeb701a122
+  author: joe
+  timestamp: 2026-10-22T00:48:54.891894765Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
