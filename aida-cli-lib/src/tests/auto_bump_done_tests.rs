@@ -4906,3 +4906,91 @@ fn open_pr_withheld_message_names_kept_status_and_prompts_triage() {
     let done = open_pr_withheld_message("BUG-8", &RequirementStatus::Done, 4);
     assert!(done.contains("BUG-8 stays Done"), "{done}");
 }
+
+/// TASK-1765: a squash merge whose body declares a non-completing slice must
+/// not complete the specs its review story covers (BUG-106 path), while an
+/// ordinary merge of another covered PR still does.
+// trace:TASK-1951 trace:TASK-1765 | ai:claude
+#[test]
+fn non_completing_merge_does_not_complete_review_story_covered_specs() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_cluster_pr_review_story(&store_path, "STORY-9201", 41, &["TASK-9201"]);
+    seed_cluster_pr_review_story(&store_path, "STORY-9202", 42, &["TASK-9202"]);
+    seed_cluster_pr_review_story(&store_path, "STORY-9203", 43, &["TASK-9203"]);
+    seed_cluster_pr_review_story(&store_path, "STORY-9204", 44, &["TASK-9204"]);
+
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    // PR-44 is merged the way `aida pr ship --no-complete` now writes it: the
+    // commit bullets plus the appended declaration.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    let shipped_body = crate::pr_cmd::non_completing_squash_body("* fix: part one\n\nDetail.");
+    assert!(
+        shipped_body.ends_with("\n\naida: no-complete"),
+        "{shipped_body}"
+    );
+    for (file, subject, body) in [
+        ("a.txt", "fix: cluster (#41)", "Non-completing slice."),
+        ("b.txt", "fix: cluster (#42)", "Ordinary merge."),
+        (
+            "c.txt",
+            "fix: cluster (Refs TASK-9203) (#43)",
+            "Reference only.",
+        ),
+        ("d.txt", "fix: cluster (#44)", shipped_body.as_str()),
+    ] {
+        std::fs::write(project_root.join(file), "x\n").unwrap();
+        run_git(&project_root, &["add", file]);
+        run_git(&project_root, &["commit", "-m", subject, "-m", body]);
+    }
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let after = storage.load().unwrap();
+    let status = |id: &str| after.get_requirement_by_spec_id(id).unwrap().status.clone();
+    assert!(!has_flip(&flips, "TASK-9201"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9201"), RequirementStatus::Done);
+    assert!(has_flip(&flips, "TASK-9202"), "control: flips: {flips:?}");
+    assert_eq!(status("TASK-9202"), RequirementStatus::Completed);
+    // A `(Refs X)`-only squash subject and a `--no-complete` ship body are
+    // non-completing too. trace:TASK-1951 trace:TASK-1765 | ai:claude
+    for id in ["TASK-9203", "TASK-9204"] {
+        assert!(!has_flip(&flips, id), "{id}: flips: {flips:?}");
+        assert_eq!(status(id), RequirementStatus::Done, "{id}");
+    }
+}
+
+/// TASK-1618: the slice-subject exclusion applies to rebased slice commits
+/// only. A squash merge (`(#N)` subject) of a module extraction or of the
+/// final `[N/N]` slice completes its trailer spec; an unfinished `[k/N]`
+/// squash and a rebased slice commit still do not.
+// trace:TASK-1951 trace:TASK-1618 | ai:claude
+#[test]
+fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    for id in ["TASK-9301", "TASK-9302", "TASK-9303", "TASK-9304"] {
+        seed_spec_at(&store_path, id, "Done");
+    }
+    let pre_sha = run_git(&project_root, &["rev-parse", "HEAD"]);
+    for (file, subject) in [
+        (
+            "a.txt",
+            "refactor(cli-lib): extract foo.rs (TASK-9301) (#51)",
+        ),
+        ("b.txt", "[3/3] feat: last slice (TASK-9302) (#52)"),
+        ("c.txt", "[1/3] feat: first slice (TASK-9303) (#53)"),
+        ("d.txt", "refactor(cli-lib): extract bar.rs (TASK-9304)"),
+    ] {
+        std::fs::write(project_root.join(file), "x\n").unwrap();
+        run_git(&project_root, &["add", file]);
+        run_git(&project_root, &["commit", "-m", subject]);
+    }
+
+    let storage = Storage::new(&store_path);
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(has_flip(&flips, "TASK-9301"), "flips: {flips:?}");
+    assert!(has_flip(&flips, "TASK-9302"), "flips: {flips:?}");
+    assert!(!has_flip(&flips, "TASK-9303"), "flips: {flips:?}");
+    assert!(!has_flip(&flips, "TASK-9304"), "flips: {flips:?}");
+}

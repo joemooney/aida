@@ -129,8 +129,9 @@ native multi-pushurl (leg 3) so the *code* leg fans out automatically too.
 
 ### Release fan-out
 
-`scripts/release.sh` pushes the release commit and tag to `origin`, then mirrors the
-`vN` tag to each remote in `[store.sync] mirror_remotes`. Mirror failures warn and do
+`scripts/release.sh` lands the version bump on `origin` through a `release/vN` PR
+(squash-merged once its checks pass; main is never pushed directly), tags the merged
+commit and pushes the tag to `origin`, then mirrors the `vN` tag to each remote in `[store.sync] mirror_remotes`. Mirror failures warn and do
 not fail the GitHub release. GitLab receives the mirrored tag and runs its release stage:
 Linux tarballs are built on GitLab runners, Darwin tarballs are copied from the GitHub
 release until a macOS GitLab runner is available, and a GitLab Release links all four

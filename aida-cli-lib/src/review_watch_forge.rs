@@ -299,7 +299,14 @@ impl Repository {
         let branch = change.base.as_str();
         git(root, &["check-ref-format", &format!("refs/heads/{branch}")])
             .context("change base branch is not a valid branch name")?;
-        let prefix = format!("refs/aida/review-watch/{}", uuid::Uuid::new_v4());
+        // The probing process's pid leads the ref name, so a sweep can tell a
+        // leaked ref (its prober gone) from one a live watcher is using.
+        // trace:TASK-1955 | ai:claude (TASK-1-413)
+        let prefix = format!(
+            "{PROBE_REF_PREFIX}{}-{}",
+            std::process::id(),
+            uuid::Uuid::new_v4()
+        );
         let base = format!("{prefix}/base");
         let head = format!("{prefix}/head");
         let base_spec = format!("+refs/heads/{branch}:{base}");
@@ -354,6 +361,36 @@ impl Repository {
         let _ = output(root, "git", &["update-ref", "-d", &head]);
         result
     }
+}
+
+const PROBE_REF_PREFIX: &str = "refs/aida/review-watch/";
+
+/// Delete probe refs left by a watcher killed between its fetch and its
+/// `update-ref -d`: every `refs/aida/review-watch/<pid>-<uuid>/*` whose pid
+/// is not alive, and any older pid-less one. Returns how many were removed.
+// trace:TASK-1955 | ai:claude (TASK-1-413)
+pub(super) fn sweep_probe_refs(root: &Path) -> usize {
+    let Ok(listing) = git(
+        root,
+        &["for-each-ref", "--format=%(refname)", PROBE_REF_PREFIX],
+    ) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for name in listing.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let owner = name
+            .strip_prefix(PROBE_REF_PREFIX)
+            .and_then(|rest| rest.split('/').next())
+            .and_then(|probe| probe.split_once('-'))
+            .and_then(|(pid, _)| pid.parse::<u32>().ok());
+        if owner.is_some_and(aida_core::liveness::pid_is_alive) {
+            continue;
+        }
+        if git(root, &["update-ref", "-d", name]).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }
 
 pub(super) fn parse_change(value: &serde_json::Value, gitlab: bool) -> Result<Option<Change>> {
