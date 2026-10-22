@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-22T22:00:58.797365481Z
+modified_at: 2026-10-22T22:01:02.176629901Z
 req_type: Task
 tags:
 - launch
@@ -658,6 +658,12 @@ comments:
   created_at: 2026-10-22T11:17:33.839721765Z
   modified_at: 2026-10-22T11:17:33.839721765Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a165a1-c1e0-7e83-a9a6-5f73d8506099
+  author: joe
+  content: 'Advisor 15:01: folded #2826 review nits TASK-2185 (cargo-timeout hook '':='' false rule-colon hint), TASK-2186 (dead ''declared'' array in .SUFFIXES handling), TASK-2187 (PR body round-1 table: 0755 template dir is tightened, not refused) into slice 7b.'
+  created_at: 2026-10-22T22:01:02.176629901Z
+  modified_at: 2026-10-22T22:01:02.176629901Z
+  session_id: 37c635ef-7a29-44ab-b2b4-0e1dc247e5ce
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
   author: joe
