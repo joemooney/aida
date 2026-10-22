@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T02:17:42.373576887Z
+modified_at: 2026-10-22T02:17:48.714355516Z
 req_type: Task
 tags:
 - reconcile
@@ -367,6 +367,12 @@ comments:
   content: 'ADVISOR 18:35 (new item for the next slice): `aida merge-hold clear N` on a PR that was never forge-held still adds the aida:merge-hold-cleared label. merge-hold-gate then fails with ''Clearance label has no matching recorded hold'' (PR-2809: cleared label added 16:57, no recorded label in its history). A later `merge-hold clear` reports ''No merge-hold'' and leaves the orphaned label in place, while the ship error tells the operator that clear ''re-syncs'' it. Fix: clear adds the label only when a recorded hold exists, and the re-sync removes an orphaned cleared label. Add a test for both.'
   created_at: 2026-10-22T01:33:16.287529942Z
   modified_at: 2026-10-22T01:33:16.287529942Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16166-7baa-7f11-83c8-31aab46e4938
+  author: joe
+  content: 'ADVISOR 19:18: PR-2816 (slice 4) MERGED 19:05. Folded its round-3 notes into the completing slice: TASK-2130 (already-merged bookkeeping uses the --rebase flag, not the PR''s actual merge method), 2131 (fetch_merged_pr_refs_via_gh is gh-only, so it fails on GitLab and pure git) and 2132 (landed_commits_for_subjects has no lower bound at the merge point).'
+  created_at: 2026-10-22T02:17:48.714355516Z
+  modified_at: 2026-10-22T02:17:48.714355516Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
