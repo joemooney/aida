@@ -98,11 +98,17 @@ pub enum RemoteCommand {
     /// mirror-sync attested exactly that push. Anything else exits non-zero
     /// with the reason, so the guard keeps refusing. Guard snippet:
     /// `printf '%s\n' "$refs" | aida remote mirror-guard-check "$1" && exit 0`
+    /// `--print-guard` prints AIDA's opt-in main-guard pre-push hook, which
+    /// already consults this check.
     // trace:BUG-2015 | ai:claude
     #[clap(hide = true)]
     MirrorGuardCheck {
         /// The remote the push targets (pre-push hook argument $1).
-        remote: String,
+        #[clap(required_unless_present = "print_guard")]
+        remote: Option<String>,
+        /// Print the opt-in main-guard pre-push hook and exit.
+        #[clap(long, conflicts_with = "remote")]
+        print_guard: bool,
     },
 
     /// Push origin's tips of the default branch and the spec store to every

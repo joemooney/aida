@@ -11,7 +11,8 @@
 //! pipes its ref lines to `aida remote mirror-guard-check <remote>` and
 //! allows the push only when [`check_mirror_sync_push`] confirms every
 //! default-branch ref independently: the remote is a registered mirror (never
-//! origin), the push is not a deletion, the sha equals origin's tip, and the
+//! origin), the push is not a deletion, the sha equals origin's live tip
+//! (ls-remote, not the local tracking ref), and the
 //! attestation names exactly that remote, sha and ref. The attestation alone
 //! never allows anything, so a hand-set variable cannot widen the guard.
 // trace:BUG-2015 | ai:claude
@@ -30,16 +31,11 @@ pub(crate) fn mirror_sync_attestation(mirror: &str, sha: &str, branch: &str) -> 
     format!("{mirror} {sha} refs/heads/{branch}")
 }
 
-/// Resolve `refspec` to a commit sha in `repo`, or None.
-fn rev_parse(repo: &Path, refspec: &str) -> Option<String> {
-    let out = aida_core::git_ops::host_git_command(repo)
-        .args(["rev-parse", "--verify", "--quiet", refspec])
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|s| !s.is_empty())
+/// AIDA's opt-in main-guard pre-push hook (`--print-guard`): refuses any
+/// push to the default branch unless [`check_mirror_sync_push`] allows it.
+// trace:BUG-2015 | ai:claude
+pub(crate) fn main_guard_hook_script() -> &'static str {
+    aida_core::templates::EMBEDDED_TEMPLATES["hooks/aida-main-guard-pre-push.sh"]
 }
 
 /// Decide whether a push of `ref_lines` (the pre-push hook's stdin) to
@@ -82,11 +78,10 @@ pub(crate) fn check_mirror_sync_push(
             "`{remote}` is not a registered mirror ([store.sync] mirror_remotes)"
         ));
     }
-    let origin_tip = rev_parse(
-        project_root,
-        &format!("refs/remotes/origin/{branch}^{{commit}}"),
-    )
-    .ok_or_else(|| format!("origin/{branch} is unknown here — cannot confirm the tip"))?;
+    // Origin's live tip (ls-remote), never the local tracking ref: a stale
+    // `refs/remotes/origin/<branch>` must not vouch for a superseded sha.
+    let origin_tip = crate::remote_create::remote_branch_head(project_root, "origin", &branch)
+        .ok_or_else(|| format!("origin's {branch} is unreachable — cannot confirm the tip"))?;
     let attested: Vec<&str> = attestation
         .unwrap_or_default()
         .lines()

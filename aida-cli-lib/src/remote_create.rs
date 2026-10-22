@@ -2263,8 +2263,11 @@ pub(crate) fn run_remote_mirror(
     // and a repo guarding it could never push the commit. Leave the change
     // in the tree and name the branch route instead.
     // trace:BUG-2015 | ai:claude
+    // A `Never` caller (`aida init`) settles the config itself, so the
+    // branch route is only printed for a standalone `aida remote mirror`.
     let default_branch = aida_core::git_ops::default_branch_name(project_root);
     let on_default = current_branch(project_root) == default_branch;
+    let caller_settles = mode == crate::config_commit::CommitMode::Never;
     let mode = if on_default {
         crate::config_commit::CommitMode::Never
     } else {
@@ -2276,8 +2279,14 @@ pub(crate) fn run_remote_mirror(
         mode,
         &format!("[AI:aida] chore(remote): list {name} as a store mirror"),
     );
-    if on_default && outcome == crate::config_commit::ConfigChangeOutcome::LeftUncommitted {
-        println!("{}", mirror_default_branch_note(name, &default_branch));
+    if on_default
+        && !caller_settles
+        && outcome == crate::config_commit::ConfigChangeOutcome::LeftUncommitted
+    {
+        println!(
+            "{}",
+            mirror_default_branch_note(name, &default_branch, config_was_clean == Some(true))
+        );
     }
 
     println!();
@@ -2290,8 +2299,17 @@ pub(crate) fn run_remote_mirror(
 
 /// Printed when `aida remote mirror` left its config change uncommitted
 /// because HEAD is the default branch: land it on a branch through a PR.
+/// A config that already held other edits (`was_clean` false) gets a
+/// warning instead of a commit recipe that would sweep those edits in.
 // trace:BUG-2015 | ai:claude
-fn mirror_default_branch_note(name: &str, default_branch: &str) -> String {
+fn mirror_default_branch_note(name: &str, default_branch: &str, was_clean: bool) -> String {
+    if !was_clean {
+        return format!(
+            "  not committed on `{default_branch}`: .aida/config.toml already had uncommitted \
+             edits before this run — review `git diff .aida/config.toml`, then land only the \
+             `{name}` mirror entry on a branch through a PR"
+        );
+    }
     format!(
         "  not committed on `{default_branch}` — the default branch advances only through a PR:\n    \
          git switch -c chore/mirror-{name} && git commit -m \"chore(remote): list {name} as a store mirror\" -- .aida/config.toml\n    \
@@ -2347,7 +2365,7 @@ fn git_out_remote(repo: &Path, remote: &str, args: &[&str]) -> Option<String> {
 /// [`git_ops::remote_branch_head_sha`] with `remote`'s HTTP token kept out of
 /// `git-remote-http` argv.
 // trace:BUG-2119 | ai:claude
-fn remote_branch_head(repo: &Path, remote: &str, branch: &str) -> Option<String> {
+pub(crate) fn remote_branch_head(repo: &Path, remote: &str, branch: &str) -> Option<String> {
     let mut cmd = aida_core::git_ops::host_git_command(repo);
     cmd.env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"));
     crate::gitlab_project_create::configure_git_remote_credentials(&mut cmd, repo, remote, None);
@@ -4446,7 +4464,7 @@ host = \"should.not.count\"
     // BUG-2015 (b): on the default branch the mirror's config edit is left in
     // the tree with the branch route, never committed onto main — even
     // non-interactively with a clean config.
-    // trace:BUG-2015 | ai:claude
+    // trace:BUG-2015.ac204075 | ai:claude
     #[test]
     fn bug_2015_remote_mirror_never_commits_onto_the_default_branch() {
         use crate::config_commit::{CommitMode, ConfigChangeOutcome};
@@ -4464,9 +4482,33 @@ host = \"should.not.count\"
         assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
         let body = std::fs::read_to_string(project.join(".aida/config.toml")).unwrap();
         assert!(body.contains("mirror"), "{body}");
-        let note = mirror_default_branch_note("mirror", "main");
+        let note = mirror_default_branch_note("mirror", "main", true);
         assert!(note.contains("git switch -c chore/mirror-mirror"), "{note}");
         assert!(note.contains("open a PR"), "{note}");
+    }
+
+    // A config that was already dirty gets a warning, never a commit recipe
+    // that would sweep the operator's other edits into the mirror commit;
+    // `aida init` (a `Never` caller on main) settles the config itself and
+    // never commits either.
+    // trace:BUG-2015.ac204075 | ai:claude
+    #[test]
+    fn bug_2015_dirty_config_on_main_warns_and_init_never_commits() {
+        use crate::config_commit::{CommitMode, ConfigChangeOutcome};
+        let note = mirror_default_branch_note("mirror", "main", false);
+        assert!(note.contains("already had uncommitted edits"), "{note}");
+        assert!(!note.contains("git commit"), "{note}");
+
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        repo_with_committed_config(&project);
+        git(tmp.path(), &["init", "-q", "--bare", "hub.git"]);
+        let url = tmp.path().join("hub.git").display().to_string();
+        let head = git_out(&project, &["rev-parse", "HEAD"]).unwrap();
+        let outcome = run_remote_mirror(&project, "mirror", Some(&url), CommitMode::Never).unwrap();
+        assert_eq!(outcome, ConfigChangeOutcome::LeftUncommitted);
+        assert_eq!(git_out(&project, &["rev-parse", "HEAD"]).unwrap(), head);
     }
 
     /// BUG-2015: install a pre-push hook in `project` that records each
@@ -4488,7 +4530,7 @@ host = \"should.not.count\"
     // BUG-2015 (a): mirror-sync's push of origin's main tip carries an
     // attestation that the guard check accepts, so a main guard consulting
     // `aida remote mirror-guard-check` lets the mirror catch up.
-    // trace:BUG-2015 | ai:claude
+    // trace:BUG-2015.ac6fb370 | ai:claude
     #[test]
     fn bug_2015_mirror_sync_push_of_origin_tip_passes_the_guard_check() {
         use crate::mirror_guard::check_mirror_sync_push;
@@ -4521,7 +4563,7 @@ host = \"should.not.count\"
     // BUG-2015 refusals: the allowance never covers a sha that is not
     // origin's tip (a local-only main commit), a push to origin, an
     // unattested push, an unregistered remote, or a deletion.
-    // trace:BUG-2015 | ai:claude
+    // trace:BUG-2015.ac6fb370 | ai:claude
     #[test]
     fn bug_2015_guard_check_refuses_everything_but_an_attested_origin_tip() {
         use crate::mirror_guard::{check_mirror_sync_push, mirror_sync_attestation};
