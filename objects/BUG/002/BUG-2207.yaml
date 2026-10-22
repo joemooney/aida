@@ -26,13 +26,24 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T01:15:23.627006662Z
-modified_at: 2026-10-22T01:15:23.627006662Z
+modified_at: 2026-10-22T01:16:26.617420810Z
 req_type: Bug
 tags:
 - attribution
 - leases
 - relay
 - seats
+relationships:
+- rel_type: References
+  target_id: 01a12b1c-ff55-76c0-b29d-5495b413ce81
+  created_at: 2026-10-22T01:16:26.617416746Z
+  created_by: joe
+history:
+- id: 01a1612e-5240-7e31-a895-0be77d3ef962
+  author: joe
+  timestamp: 2026-10-22T01:16:28.096593339Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 filed_at:
   code_sha: f9890cf67dc856c97b55fded65a6f5e9b1bddf12
   branch: main
