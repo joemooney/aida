@@ -1,0 +1,28 @@
+id: 01a16451-be36-7822-8773-f79d69bf8488
+spec_id: TASK-1-434
+title: 'cosmetic, aida-cli-lib/src/pr_ship_batch.rs:771: a hold-label read error inside…'
+description: |-
+  Non-blocking finding carried forward from an APPROVED review verdict on STORY-1887, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
+
+  cosmetic, aida-cli-lib/src/pr_ship_batch.rs:771: a hold-label read error inside GitHubPorts::ci_at_head surfaces as 'could not read PR #N's CI'. It fails closed, but the message names the wrong cause.
+  Reviewed sha: 0b38f5304b2ea63d63010ccc825488cb0f67edbd
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-10-22T15:54:01.142436751Z
+modified_at: 2026-10-22T15:54:01.142436751Z
+req_type: Task
+tags:
+- carried-from:STORY-1887
+- finding-hash:9f762448
+- from-review:STORY-1887
+- kind:carried-forward
+filed_at:
+  code_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6d3b5d1591
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
