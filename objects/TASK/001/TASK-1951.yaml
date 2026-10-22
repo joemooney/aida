@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T08:18:13.210388026Z
+modified_at: 2026-10-22T08:19:06.373761224Z
 req_type: Task
 tags:
 - reconcile
@@ -424,6 +424,12 @@ comments:
   created_at: 2026-10-22T08:01:59.717806576Z
   modified_at: 2026-10-22T08:01:59.717806576Z
   session_id: ff6e8bf8-1dc6-42b0-b4cd-7470b3ef42aa
+- id: 01a162b1-4205-7e13-9ec6-9b6ed90a11a7
+  author: joe
+  content: 'ADVISOR 01:25: PR-2822 round 2. The final narrow round 3 covers only the false ''dropped the label anyway'' message and the load_human_holds primary-log test. MOVED to the completing slice: TASK-2138 (route or document the remaining MergeHoldChanged readers, e.g. history), replacing the include_str! source-grep test in task_1951_orphan_cleared_label_tests with a behavioural test, and context-specific retry wording when the unreadable-probe error reaches pr ship release (pr_cmd.rs:3538) or auto-release (rework_hold_release.rs:520).'
+  created_at: 2026-10-22T08:19:06.373761224Z
+  modified_at: 2026-10-22T08:19:06.373761224Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
