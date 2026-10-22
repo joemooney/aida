@@ -1,0 +1,29 @@
+id: 01a16306-83e5-7923-aa9a-4ff20622652e
+spec_id: TASK-2154
+agreed_id: TASK-2154
+title: 'Standalone implementer: exercise handle_queue_work wiring end to end and derive exit-code distinctness from one table'
+description: |
+  Non-blocking follow-ups from the review of PR-2829 (STORY-1662 PR1):
+  1. The stub-vendor e2e test (aida-cli-lib/src/tests/story_1662_standalone_implementer_tests.rs) calls standalone_implementer::run() directly. Nothing exercises the handle_queue_work wiring: is_standalone_implementer dispatch, acquire_slot before the queue row and lease, record_child_authority, and suppression of the manual-continuation hint. Add a queue-work-level test, including the documented claim that a cap refusal (exit 34) leaves no lease, worktree or queue row.
+  2. outcome_exit_codes_are_distinct_and_mapped_by_exit_code_for_error checks against a hand-written list that omits DRIVE_EXIT_HARD_FAIL=3 and TIMEOUT_EXIT_STATUS=124. Use a single exit-code table that both exit_code_for_error and the test read.
+
+  Raised in review of PR-2829: https://github.com/joemooney/aida/pull/2829#issuecomment-6337877063
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T09:52:13.797668281Z
+modified_at: 2026-10-22T09:52:13.797668281Z
+req_type: Task
+tags:
+- from-review:PR-2829
+- severity:minor
+filed_at:
+  code_sha: 597bc0c876bd4307043fa789df46ce811979321f
+  branch: pr-2829
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a162fd8426
+  harness_version: 2.1.308 (Claude Code)
