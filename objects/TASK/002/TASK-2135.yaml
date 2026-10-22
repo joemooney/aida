@@ -6,17 +6,26 @@ description: |
   review_verdict.rs close_verdict_on_merge (~L2427-2431). TASK-1671 moved prepare_archive_round ahead of the current-file write, so a refused archive entry now fails before anything is written. The archive's own write_verdict_atomic still runs after the current file is written, though. If it fails with an I/O error, the current file is left closed and the archive open, and a re-run returns already_closed, so the archive stays open and verdicts_for_sha keeps reporting the refusal as open. Fix: when the current file is already closed, also close its archive entry at that reviewed sha if it is still open.
 
   Raised in review of PR-2820: https://github.com/joemooney/aida/pull/2820#issuecomment-6332530277
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T04:14:34.796707368Z
-modified_at: 2026-10-22T04:14:34.796707368Z
+modified_at: 2026-10-22T04:33:19.863048675Z
 req_type: Task
 tags:
 - from-review:PR-2820
 - review-verdict
 - severity:minor
+history:
+- id: 01a161e2-8df7-77e0-9ce4-d270c6728003
+  author: joe
+  timestamp: 2026-10-22T04:33:19.863043373Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 15081ef196bb0d7a347d302cf9a7c69bcd03acdc
   branch: pr-2820
