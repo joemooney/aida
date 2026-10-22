@@ -1,0 +1,19 @@
+{
+  "id": "01b90a5d-9824-4d46-bdaf-518a6a33d0f5",
+  "thread_id": "01b90a5d-9824-4d46-bdaf-518a6a33d0f5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792672481241,
+  "body": "9affcca9bb on claude/task-1955-s7 (round-1 rework, takeover). (1)(2) BLOCKERs: .SUFFIXES $(S) and $(X) Y=1 now fail closed, fixtures added. (3) .DEFAULT marks implicit. (4) gc never moves roster-spelled mail, tested. (5) DEFERRED to 7b: MCP, interactive, legacy-tag and autopilot paths. (6) TASK-2088: exact-argument call pin, still a source pin. (7) TASK-2102: link_bg_session manifest test. (8) BUG-2205: e2e aida session end test. (9) TASK-2017: uid-named, 0700/euid-only template dir, atomic mkdtemp+rename repair. (10) merge_lock: O_EXCL fallback, orphan temp sweep, future mtime stale (release.sh too). (11)-(13) cosmetics done. PR body lists every deferral and covers comments 35 (7b) and 36 (folded). DISK FLOOR: cargo refuses, so no Rust test ran locally and CI is the gate. 32/34 fast gates pass; the other 2 are cargo builds refused at the floor. Not merged; no self-approval.",
+  "subject": "PR-2826 pushed (TASK-1955)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

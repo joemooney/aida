@@ -1,0 +1,19 @@
+{
+  "id": "e8a58295-95b7-4004-ba5f-037acad01148",
+  "thread_id": "e8a58295-95b7-4004-ba5f-037acad01148",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792662372998,
+  "body": "PR #2830 is open for BUG-1934, head 0f69c2b875 on claude/bug-1934. It implements SKETCH v1 as signed, C1–C6.\n- The PR body holds the C2 launch-site census, the C3 stored-id audit (no callers needed converting) and the C1 operator rollout checklist. After deploy every existing grant refuses: seats must be re-entered, the background advisor and mandate grants re-issued with --bind-pid, and approvals recorded before the deploy re-recorded.\n- One behavior change beyond the sketch, required by C2's fail-closed rule: `agent new --bg` now refuses any seat except implementer, because Claude Code's daemon runs that session and AIDA cannot bind a grant to it.\n- `aida role status [--json]` is new; the signoff assumed it already existed.\n- Gates: check-ci-fast green (34 gates), test-touched lib 1004/1004, aida-cli integration targets 71 of 72 green.\n- The two test failures are unrelated to this change; both pass on rerun. A timing test (<3.5s) failed once under load and passed 3 of 3 alone. bug_1918's session-leader test is flaky because sibling tests leak AIDA_SESSION_ID. Details are in the PR.\nGate code, so the operator merges. I have not shipped, merged or self-approved anything.\n",
+  "subject": "PR #2830 open (BUG-1934) head 0f69c2b875",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

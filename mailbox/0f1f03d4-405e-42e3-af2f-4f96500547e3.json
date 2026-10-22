@@ -1,0 +1,19 @@
+{
+  "id": "0f1f03d4-405e-42e3-af2f-4f96500547e3",
+  "thread_id": "0f1f03d4-405e-42e3-af2f-4f96500547e3",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792669558214,
+  "body": "PR #2831 round 2 is pushed: head 06f8be4827790b478907bef54ac92f96050ffb38.\nIt fixes the config-trust blocker and TASK-2165..2167:\n- The store-miss diagnosis now comes from the resolver's own walk (new aida_core::store_locate::locate_distributed_store_from), so there is no new config.toml read site.\n- The AIDA_STORE note now also covers NoRoster, via store_sync::aida_store_override.\n- A miss names every store_path candidate.\nTargeted tests pass (bug_2200, bug_1723 config-trust, core store_locate), as do the portability ratchet and fmt.\nBLOCKED: make test-touched and the build-backed fast gate refuse to build with: \"cargo: error: refusing build: target filesystem has 11.5G (2.5%) free, below hard floor (15G)\". `cargo reap` dry run finds 0 dirs to reclaim. I did not set AIDA_CARGO_DISK_MIN_GIB=0, and I've stopped here. The host disk needs freeing, or you can rely on CI for those gates.\n",
+  "subject": "TASK-2072 PR #2831 round 2 pushed (head 06f8be4827); local build gates blocked by disk floor",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

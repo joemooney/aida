@@ -1,0 +1,19 @@
+{
+  "id": "c072ebd0-281c-476b-a512-84f53005e888",
+  "thread_id": "c072ebd0-281c-476b-a512-84f53005e888",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792665667209,
+  "body": "20d37ec0df — merged origin/main into PR-2826.\n- pr_cmd.rs (the only conflict, in the hold-gate timeout arms): kept the branch's single TASK-2086 exit. It passes main's widened TASK-2124 exit scanner (9 exits) and the TASK-2087 ? pin.\n- Gates green: check-ci-fast, check-ci-compile, test-touched, and the task_1915 ledger tests.\n- Not the completing slice: the trailer stays Refs TASK-1955. The PR body defers TASK-2078/2080/2084 and the PR-2804 round-2 drive notes to slice 7b, which carries the completing trailer.\n- Neither the 22:06 mandate_drive notes TASK-1-424..428 nor the 21:27 dead-reviewer-lease-on-refused-delegation note are in this PR. Both are moved to slice 7b; please confirm or route them elsewhere.",
+  "subject": "PR-2826 pushed (TASK-1955)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

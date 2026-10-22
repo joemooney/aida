@@ -1,0 +1,19 @@
+{
+  "id": "093e5a02-529e-443d-9fb0-c4011b433d41",
+  "thread_id": "093e5a02-529e-443d-9fb0-c4011b433d41",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792661562365,
+  "body": "STORY-1662 PR1 is open: https://github.com/joemooney/aida/pull/2829\nHead: 597bc0c876bd4307043fa789df46ce811979321f (merged with origin/main 24d1b21562)\n\nCovered: Q1 and C1–C4 as signed, plus C6 (from the 18:16 comment). The C1–C6 mapping and the test list are in the PR body.\n\nRead these first:\n- C1: no `aida pr merge` command exists, so the refusals cover `pr ship` and `review record`. `integrate --run` and `mandate ship` need seats the implementer child can't hold. Rule if you want refusals there too.\n- C4: the launcher-only list is NOT added to scrub_launcher_session_env. A drain's own implementer child goes through that scrub and needs AIDA_AUTO_COMPLETE and its punt file. The single const drives the standalone child scrub and its test. scrub_launcher_session_env gains only the marker, which keeps grandchildren unbound.\n- C6: this narrows BUG-2207 for the standalone path only. The `claude --bg` recipe in BUG-2207 is untouched, so BUG-2207 isn't in a completing trailer.\n- Behaviour change: every non-drain `queue work <SPEC> --no-human` fresh implementer launch now waits and returns 0 or 31–33 instead of the vendor's code. I found no in-tree caller outside drains; every other caller sets the orchestrator phase env.\n\nGates: check-ci-fast passes; check-ci-compile passes after the merge; targeted tests and the touched binary suites pass. Two load flakes are noted in the PR (bug_1983, task_1287 timing); both pass alone.\nSecurity spec: not shipped, merged or approved by me. Needs an independent reviewer, then the operator merges.\n",
+  "subject": "PR opened (STORY-1662 PR1)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

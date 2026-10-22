@@ -1,0 +1,19 @@
+{
+  "id": "919e7f3b-c1f8-44fb-91a9-79c8485733ec",
+  "thread_id": "919e7f3b-c1f8-44fb-91a9-79c8485733ec",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792675269330,
+  "body": "4077e142f3: fixes the CI red from 9affcca9bb. The git template staging dir is now set to 0700 before install (tempfile used the umask mode, so the fixture refused its own dir on every fresh runner). A dir owned by this user and not writable by others is tightened, not refused; a 16-thread first-creation race test is added. Local cargo floor still applies, so CI is the gate.",
+  "subject": "PR-2826 pushed (TASK-1955)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

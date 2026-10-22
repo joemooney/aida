@@ -1,0 +1,19 @@
+{
+  "id": "7e164dce-efbd-4754-9f5e-b72635cc9900",
+  "thread_id": "7e164dce-efbd-4754-9f5e-b72635cc9900",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792669549825,
+  "body": "STORY-1689 PR1 is BLOCKED at the pre-push gate. Not pushed, no PR.\nThe PR1 forge fix is committed locally: e5b7a77b68 on claude/story-1689 (worktree impl-story-1689). 6 new forge tests pass, and make test-touched passed (231 passed, 0 failed).\nmake check-ci-fast fails at \"Check aida-cli without default features\" with this exact error:\n  cargo: error: refusing build: target filesystem has 11.0G (2.4%) free, below hard floor (15G); run 'cargo reap --apply' or set AIDA_CARGO_DISK_MIN_GIB=0 to override\nThe target is /dev/sdd1 (/home/joe/ai/aida/target, 458G of 469G used). A `cargo reap` dry run finds 0 dirs to reap. I have not overridden the floor or deleted anything. Once there is disk room, rerun check-ci-fast in this worktree, then push and open the PR.\n\nFYI for the Q3 ruling (PR2): no check-run is named \"Build / Require every CI lane\". On origin/main e33fec11d9 the aggregator check-run is \"Build (ubuntu-latest)\" (the build-result job). \"Require every CI lane\" is a step inside that job, and steps are not check-runs. I plan to require \"Build (ubuntu-latest)\" unless you rule otherwise.\n",
+  "subject": "BLOCKED: STORY-1689 PR1 pre-push gate (disk floor)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

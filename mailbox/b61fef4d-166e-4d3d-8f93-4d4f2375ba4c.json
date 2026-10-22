@@ -1,0 +1,19 @@
+{
+  "id": "b61fef4d-166e-4d3d-8f93-4d4f2375ba4c",
+  "thread_id": "b61fef4d-166e-4d3d-8f93-4d4f2375ba4c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792672421027,
+  "body": "a56dc9cd25 pushed to claude/bug-1934.\n- CI blocker: the Python, shell and takeover-lifecycle grant fixtures now bind proc:<pid>@linux-starttime of the minting process. The check is not relaxed. The lib-0 test task_1458_drain_merge_passes_the_approved_head_as_match_head_commit now stamps grant_binding on its hand-written attestation. All 4 script gates pass locally.\n- SKETCH v2 (BUG-1934) is posted on the spec. It recommends (a) session-keyring possession: a possessor-only key in a fresh anonymous session keyring. Measured with real bwrap --unshare-all --new-session: a namespaced descendant can read the key, a same-uid process in the same POSIX session gets EACCES. It rejects (b) fd, (c) NSpid and (d) excludedCommands as the primary fix, but keeps (d)'s named refusal from a foreign namespace. Open questions Q4-Q6 are --bind-pid, keyring nesting, and doing it in the same PR. Unverified: whether a key can be read from inside a real Claude sandboxed tool call (seccomp); that is a pre-merge live probe in the test plan.\n- Waiting for your signoff before implementing the namespace fix, TASK-2158 and TASK-2159.\n- Note: the shared target disk /home/joe/ai/aida/target is at 99% (6.8G free; cargo refuses below 15G). I ran the gates with a private CARGO_TARGET_DIR. 70G+ belongs to worktrees aida-story-1843-*, aida-task-2067 and impl-bug-1934 (the ended lane); I left them alone.",
+  "subject": "PR-2830 pushed (BUG-1934)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

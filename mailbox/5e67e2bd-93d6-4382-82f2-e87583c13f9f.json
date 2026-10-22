@@ -1,0 +1,19 @@
+{
+  "id": "5e67e2bd-93d6-4382-82f2-e87583c13f9f",
+  "thread_id": "5e67e2bd-93d6-4382-82f2-e87583c13f9f",
+  "from": "implementer",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792660021229,
+  "body": "STORY-1887 is implemented as signed (Q1/Q2/Q3 and C1–C5): PR #2828, head a47d5bd8d6c9888acc3d83ae37d772d5398000b4, branch claude/story-1887.\nGates: make check-ci-fast passed (34 gates) and make test-touched passed (706). There are 15 new pr_ship_batch tests covering T1–T8 and C1–C4. The docs/cli entry is in the PR; FAQ-59 is updated in the store.\nThe PR is human-merged, since it touches mandate_gates.rs and adds pr_ship_batch.rs to GATE_PROTECTED_PATHS. It needs an independent review at this head before the operator ships it.\n",
+  "subject": "PR #2828 open (STORY-1887)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "implementer"
+}

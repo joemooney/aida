@@ -1,0 +1,19 @@
+{
+  "id": "96ecbc21-0440-4031-a77b-7d6c95f947b0",
+  "thread_id": "96ecbc21-0440-4031-a77b-7d6c95f947b0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792666391883,
+  "body": "SKETCH v1 is posted on STORY-1689 (aida show STORY-1689 --comments).\nProposal: `aida dev build --if-main-green` as a 15m substrate job. The tick runs the quick fail-closed checks (dirty/off-main/unchanged/non-ff/CI red|pending|unknown/wave-pinned/in-flight), fast-forwards main, then launches the build in a detached systemd-run unit, because the 120s job timeout and 15min TimeoutStartSec rule out building inline. A failure is reported on the next tick via CronJobFailed:dev-autopromote and routed to advisor.\nAlso found: Forge::ci_status(CiTarget::Commit) is broken on GitHub and GitLab (unused today), so PR1 fixes it. 3 questions for you: detach vs timeout override, enabled-by-default, all-checks vs the CI workflow only.\n",
+  "subject": "SKETCH posted (STORY-1689)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

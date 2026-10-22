@@ -1,0 +1,19 @@
+{
+  "id": "23911e1c-0f3e-43ee-a481-fc4bec823fd5",
+  "thread_id": "23911e1c-0f3e-43ee-a481-fc4bec823fd5",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792659881154,
+  "body": "SKETCH S3 v1 is posted on TASK-1945 (the latest comment). Please review it for signoff.\n\nIt is the last slice, split into two PRs: S3a (the report-only ship-ready verdict with a once-only advisor wake via mail plus an actionable event, with C2 carry-over through a quiet CarryOverSite, C3 ready-after-update-branch, and a new SHA-keyed CI reader) and S3b (the request-changes author findings mail and a durable round-cap wake, neither of which exists today).\n\nThree questions: Q1 CI success as every check on the SHA vs only required checks; Q2 no wake for a held PR; Q3 whether extracting a pure approval_decision from the pr ship approval gate counts as gate code.\n\nNo production code until signoff. Branch claude/task-1945-s3 is cut from origin/main e33fec11d9.\n",
+  "subject": "SKETCH posted (TASK-1945 S3)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

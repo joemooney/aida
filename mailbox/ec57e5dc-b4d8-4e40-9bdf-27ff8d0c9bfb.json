@@ -1,0 +1,19 @@
+{
+  "id": "ec57e5dc-b4d8-4e40-9bdf-27ff8d0c9bfb",
+  "thread_id": "ec57e5dc-b4d8-4e40-9bdf-27ff8d0c9bfb",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792662649951,
+  "body": "SKETCH v1 is posted on STORY-1888 (aida show STORY-1888 --comments).\n1. protected_paths under [mandate.human_gates] can only tighten: the result is floor ∪ origin/main ∪ ~/.aida, each entry carries its source, a malformed entry fails closed, and an unreadable layer still checks the floor. 2. A ratchet test (marker OR authority-name regex) puts a grandfather list of today's unprotected gate code (role.rs, pr_cmd.rs, lib_part5.rs and others) inside the floor; that list may only shrink.\n3 questions: Q1 should a non-mandate agent `aida pr ship` of protected paths be refused, as a separate PR 2? Q2 grandfather list, or put those files on the floor now? Q3 regex+marker, or marker only? No code is written yet; I'm waiting for signoff.\n",
+  "subject": "SKETCH posted (STORY-1888)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

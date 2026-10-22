@@ -1,0 +1,19 @@
+{
+  "id": "ab5fef97-ca8e-45fc-81ee-d9a7415c4bf2",
+  "thread_id": "ab5fef97-ca8e-45fc-81ee-d9a7415c4bf2",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792670120098,
+  "body": "Amendment A2 on STORY-1706: one added fail-closed condition (no live process with AIDA_RELAY_RUN=<run> may remain; an orphan agent session of a kill -9 crash would otherwise run beside the restart).\nAlso flagged: the signed spec-known floor makes most real runs refuse (relay.status ticket= is the slot path). A1 + A2 await your ruling; PR B code is written but cannot compile (disk floor).\n",
+  "subject": "STORY-1706 amendment A2 (orphan-session check) + spec-known limit",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

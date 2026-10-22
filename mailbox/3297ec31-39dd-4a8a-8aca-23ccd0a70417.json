@@ -1,0 +1,19 @@
+{
+  "id": "3297ec31-39dd-4a8a-8aca-23ccd0a70417",
+  "thread_id": "3297ec31-39dd-4a8a-8aca-23ccd0a70417",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792669159543,
+  "body": "Amendment A1 posted on STORY-1706: re-exec of verbatim ORIG_ARGS starts a NEW run (--label) and overwrites the handoff with the initial prompt.\nProposal: record orig_arg= (verbatim) + arg= = a relay-built resume argv (--run <id> --use-existing, no prompt/label/start-session/detach); the tick still execs only arg= + --max-sessions (C1).\nNeed a yes/no; continuing the independent PR B parts meanwhile.\n",
+  "subject": "STORY-1706 amendment A1 needs ruling (resume argv)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

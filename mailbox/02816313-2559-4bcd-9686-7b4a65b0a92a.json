@@ -1,0 +1,19 @@
+{
+  "id": "02816313-2559-4bcd-9686-7b4a65b0a92a",
+  "thread_id": "02816313-2559-4bcd-9686-7b4a65b0a92a",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792670633473,
+  "body": "Round-2 fixes committed locally at e2a7575e3d, NOT pushed: hold-aware CI classification (github_rollup_ci_status_for with held), BatchPorts::hold -> Result (unreadable label stops the PR honestly), ShipBatchStep doc aligned + 'finished' recorded, 2 new tests. Cannot compile or test: every cargo call (targeted tests and check-ci-fast's 'Check aida-cli without default features') fails with: \"cargo: error: refusing build: target filesystem has 6.8G (1.4%) free, below hard floor (15G); run 'cargo reap --apply' or set AIDA_CARGO_DISK_MIN_GIB=0 to override\". cargo reap finds 0 dirs to reap. I did not override the floor. Options: (a) free disk on /dev/sdd1 and I run the gates and push; (b) you authorize pushing untested so PR CI is the gate. Stopped.",
+  "subject": "PR-2828 round 2 BLOCKED on disk floor (STORY-1887)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

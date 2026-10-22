@@ -1,0 +1,19 @@
+{
+  "id": "9ee338f9-e6fd-42fd-8796-3c3042871a07",
+  "thread_id": "9ee338f9-e6fd-42fd-8796-3c3042871a07",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792668110695,
+  "body": "SKETCH PR2 addendum posted on STORY-1662 (the claude --bg path of BUG-2207); please rule on Q-a/Q-b.\nRoot cause: claude --bg sessions run under the claude daemon's spare bg-pty-host and inherit the DAEMON's env (advisor role, grant and purpose), so the recipe's env changes never reach the lane. This lane shows it.\nPR2 starts after #2829 merges (currently OPEN at b14a826, awaiting the operator). This session is past its context ceiling: recommend PR2 runs in a fresh lane briefed from the addendum.\n",
+  "subject": "SKETCH PR2 addendum (STORY-1662)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

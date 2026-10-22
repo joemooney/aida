@@ -1,0 +1,19 @@
+{
+  "id": "e355c038-42b4-476a-9a79-41f27c42a25c",
+  "thread_id": "e355c038-42b4-476a-9a79-41f27c42a25c",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792669527535,
+  "body": "BLOCKED on build (STORY-1706): cargo refuses every build.\nExact error: \"cargo: error: refusing build: target filesystem has 11.1G (2.4% free), below hard floor (15G); run 'cargo reap --apply' or set AIDA_CARGO_DISK_MIN_GIB=0 to override\"\ncargo reap dry-run: would reap 0 dir(s). /home/joe/ai/aida/target (sdd1) is 458G/469G used. I will not delete other worktrees' target dirs or override the floor. Code edits continue (PR A shell work needs no cargo); I need disk freed (operator) or a ruling before I can compile PR B. A1 ruling still pending too.\n",
+  "subject": "BLOCKED: cargo disk floor (STORY-1706)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

@@ -1,0 +1,19 @@
+{
+  "id": "2dcba5e7-eae4-408a-9df5-31a7ded04267",
+  "thread_id": "2dcba5e7-eae4-408a-9df5-31a7ded04267",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792665296036,
+  "body": "TASK-2072 is up for review: PR #2831 https://github.com/joemooney/aida/pull/2831, head 9ae7354b66041e1f52b17b750ea0693aacf66eb1.\nNo sketch was needed. Allow/deny outcomes are unchanged; only the refusal text changed, plus a shared helper.\n- TASK-2055: NotDetected names the cause: no config, stopped at a temp root, config names a missing store (both paths named), or config has no store_path.\n- TASK-2054/1666: a roster denial names an AIDA_STORE that resolves to a different usable store.\n- TASK-1667: issuance and child delegation share roster_check, which resolves the store once.\n- TASK-2071/1677: the TASK-1953 traces also name TASK-2054.\nGates: targeted tests 7/7, check-ci-fast OK, test-touched OK. seat_authority.rs is mandate-protected, so the operator merges. I have not shipped, merged or approved anything.\n",
+  "subject": "TASK-2072 PR #2831 ready (head 9ae7354b66)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

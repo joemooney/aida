@@ -1,0 +1,19 @@
+{
+  "id": "37fdf151-ddfa-43d7-9ed6-84a8a117d028",
+  "thread_id": "37fdf151-ddfa-43d7-9ed6-84a8a117d028",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792668684179,
+  "body": "6bd6d6149c. (1) CI: golden re-blessed (ship-batch only), audit row added, clear_hold uses resolve_aida_exe (3rd CI failure: TASK-1262 current-exe ratchet). (2) TASK-2155: ShipBatchStep event kind in events.jsonl for start/outcome/stop; monitor contract 1.8.0. (3) TASK-2156: shared pr_cmd::ship_gate_known_ids used by ship gate and review wait; title-only ID test. (4) TASK-2157: dry-run skips git fetch, reads local tracking refs, documented. Gates green locally. Needs fresh independent review; operator merges.",
+  "subject": "PR-2828 pushed (STORY-1887)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
