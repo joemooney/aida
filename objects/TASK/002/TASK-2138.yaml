@@ -1,0 +1,28 @@
+id: 01a16247-652e-70f0-a891-124b9b93f8f6
+spec_id: TASK-2138
+agreed_id: TASK-2138
+title: MergeHoldChanged readers outside unrecorded_marker_removals still read the caller's events log after TASK-1406
+description: |
+  After PR-2822, write_marker emits MergeHoldChanged placements to hold_store_root, and unrecorded_marker_removals reads that log. Other readers still read the caller's log. lane_liveness.rs:1402 load_human_holds calls events::read_all(project_root), so from a linked worktree it misses placements and falls back to marker mtime. On the contained-writer fallback (merge_hold.rs:610) the placement goes to the local log, but the tamper check reads only the primary log, so an adopted marker's placement stays invisible. Placements recorded in worktree logs before the change also become invisible. Route the hold-event readers through hold_store_root, or document why they are excluded.
+
+  Raised in review of PR-2822: https://github.com/joemooney/aida/pull/2822#issuecomment-6334250410
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T06:23:28.558178707Z
+modified_at: 2026-10-22T06:23:28.558178707Z
+req_type: Task
+tags:
+- from-review:PR-2822
+- merge-hold
+- severity:minor
+filed_at:
+  code_sha: 5d8ae990b2c7c6faa7dfc467faa5833539017d4d
+  branch: pr-2822
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 0f68094ad3
+  vendor: claude
+  session: 01a16243ad56
+  harness_version: 2.1.308 (Claude Code)
