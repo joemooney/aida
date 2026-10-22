@@ -6,18 +6,27 @@ description: |-
 
   major (non-blocking): mandate_drive.rs PerMandate::dispatch_epoch closes an epoch when no owner appears within DISPATCH_STALE (2h) of routed_at, but routed_at is the advisor due-mail time, not a fixer dispatch. An approved spec the advisor deliberately leaves unqueued is re-routed (new approved#n item + advisor mail) every ~2h while an advisor is live; with 15 approved specs that is ~10 mails per 2h. Consider closing on owned_since_route only, or backing off the stale window per epoch.
   Reviewed sha: d37d96a02474a04e467a08bbee38a0aa13764bcf
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-10-22T05:04:12.247180883Z
-modified_at: 2026-10-22T05:04:12.247180883Z
+modified_at: 2026-10-22T05:04:58.573987946Z
 req_type: Task
 tags:
 - carried-from:TASK-1915
 - finding-hash:bdd48065
 - from-review:TASK-1915
 - kind:carried-forward
+history:
+- id: 01a161ff-86cd-7d01-9836-92bf305c4a4f
+  author: joe
+  timestamp: 2026-10-22T05:04:58.573982189Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 0f68094ad31c0db35673029cb338cb007054d624
   branch: main
