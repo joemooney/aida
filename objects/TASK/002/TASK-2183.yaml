@@ -1,0 +1,28 @@
+id: 01a16574-f140-7b93-b985-77f408090f50
+spec_id: TASK-2183
+agreed_id: TASK-2183
+title: 06-roles-sessions.md tells operators to re-issue background grants with --bind-pid
+description: |
+  docs/cli/06-roles-sessions.md, in the 'Grants are bound to a process tree' paragraph, says 're-issue a background seat's grant with --bind-pid'. That contradicts BUG-1934 v2 Q4, rebind_recovery and the PR's rollout checklist: --bind-pid serves only unsandboxed hooks and MCP, and a background or relay seat must be started from the role shell.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6351411790
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:12:05.184253825Z
+modified_at: 2026-10-22T21:12:05.184253825Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2830
+- severity:minor
+filed_at:
+  code_sha: 0225e2b8b382cfdfd515980dcc2cbfdb599a2273
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a1656778bf
+  harness_version: 2.1.308 (Claude Code)

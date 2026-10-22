@@ -1,0 +1,27 @@
+id: 01a16575-0637-7c20-bde2-ff1dc280b3d9
+spec_id: TASK-2184
+agreed_id: TASK-2184
+title: Grant lock files never removed; role-enter eval never restores xtrace
+description: |
+  (1) seat_authority.rs update_grant creates ~/.aida/session-grant-locks/<id>.lock per rewritten grant and never removes it, so lock files accumulate. Remove them on revoke, or sweep them with expired grants. (2) The adopt-key eval text's '{ set +x; } 2>/dev/null' permanently turns off xtrace in the operator's shell. Save and restore the prior -x state.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6351411790
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:12:10.551274557Z
+modified_at: 2026-10-22T21:12:10.551274557Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- severity:cosmetic
+filed_at:
+  code_sha: 0225e2b8b382cfdfd515980dcc2cbfdb599a2273
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a1656778bf
+  harness_version: 2.1.308 (Claude Code)

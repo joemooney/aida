@@ -1,0 +1,28 @@
+id: 01a16574-d80f-7552-817b-2274ac772a48
+spec_id: TASK-2182
+agreed_id: TASK-2182
+title: role enter prints the session-key secret to the terminal when not eval'd
+description: |
+  require_direct_tty (seat_authority.rs) checks stdin and stderr, not stdout. So a bare 'aida role enter <seat>', with no eval and no shell wrapper, prints the adopt_key_eval_lines heredoc (role_cmd.rs) carrying the 32-byte secret to the terminal and its scrollback. Any same-user process that reads the scrollback (tmux capture-pane, a terminal log) can run 'aida role adopt-key <id>' with it, possess the key, and satisfy the grant binding from any process tree. Fix: when stdout is a terminal, omit the adopt-key lines (or refuse) and print how to eval. Also, '{ set +x; }' does not suppress 'set -v' echoing of the eval'd heredoc.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6351411790
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:11:58.735069162Z
+modified_at: 2026-10-22T21:11:58.735069162Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- security
+- severity:minor
+filed_at:
+  code_sha: 0225e2b8b382cfdfd515980dcc2cbfdb599a2273
+  branch: pr-2830
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a1656778bf
+  harness_version: 2.1.308 (Claude Code)
