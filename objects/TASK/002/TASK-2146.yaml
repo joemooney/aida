@@ -1,0 +1,27 @@
+id: 01a162c1-1f18-72f2-9820-74bc4d61c934
+spec_id: TASK-2146
+agreed_id: TASK-2146
+title: 'contained_safety_scan: pin core.quotePath=true so the added submodule line matches git''s quoting'
+description: |
+  aida-core/src/git_ops.rs:3871 runs git status --porcelain without -c core.quotePath=true, but porcelain_quote assumes quotePath=true. Under a user core.quotePath=false, git prints non-ASCII paths raw while the added ' M' line is C-quoted, so the two lines are formatted differently (the TASK-1943 symptom). Dedupe still works.
+
+  Raised in review of PR-2827: https://github.com/joemooney/aida/pull/2827#issuecomment-6336460966
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T08:36:26.008308173Z
+modified_at: 2026-10-22T08:36:26.008308173Z
+req_type: Task
+tags:
+- from-review:PR-2827
+- severity:minor
+filed_at:
+  code_sha: 86b1f9f0fa9140ed3298da696de04e3ba4d84106
+  branch: pr-2827
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162bf1363
+  harness_version: 2.1.308 (Claude Code)

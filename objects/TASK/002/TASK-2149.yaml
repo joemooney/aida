@@ -1,0 +1,27 @@
+id: 01a162c1-5601-71a0-b9ea-ce8ef1c25074
+spec_id: TASK-2149
+agreed_id: TASK-2149
+title: 'host_git_cache.rs: move gitmodules_file_names below the Test seam comment'
+description: |
+  aida-core/src/host_git_cache.rs:44: the '// Test seam: treat every file as settled' comment is now separated from its ALWAYS_SETTLED thread_local by the new functions.
+
+  Raised in review of PR-2827: https://github.com/joemooney/aida/pull/2827#issuecomment-6336460966
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T08:36:40.065827495Z
+modified_at: 2026-10-22T08:36:40.065827495Z
+req_type: Task
+tags:
+- from-review:PR-2827
+- severity:cosmetic
+filed_at:
+  code_sha: 86b1f9f0fa9140ed3298da696de04e3ba4d84106
+  branch: pr-2827
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162bf1363
+  harness_version: 2.1.308 (Claude Code)

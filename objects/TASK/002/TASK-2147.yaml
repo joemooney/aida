@@ -1,0 +1,27 @@
+id: 01a162c1-313b-71b2-8e13-8382dbedf4f2
+spec_id: TASK-2147
+agreed_id: TASK-2147
+title: 'bug_1985 wrapper scanner: add an alias self-test case'
+description: |
+  aida-cli-lib/src/tests/bug_1929_contained_store_tests.rs:1043-1046: TASK-1926 widened the raw and bound regexes in bug_1985_raw_git_wrappers to \w+::new("git"), but only bug_1985_raw_status_git got an alias self-test case. Add a wrapper case such as 'let mut c = PCmd::new("git"); c.args(args)'.
+
+  Raised in review of PR-2827: https://github.com/joemooney/aida/pull/2827#issuecomment-6336460966
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T08:36:30.651632065Z
+modified_at: 2026-10-22T08:36:30.651632065Z
+req_type: Task
+tags:
+- from-review:PR-2827
+- severity:minor
+filed_at:
+  code_sha: 86b1f9f0fa9140ed3298da696de04e3ba4d84106
+  branch: pr-2827
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162bf1363
+  harness_version: 2.1.308 (Claude Code)
