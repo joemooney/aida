@@ -9,6 +9,6 @@ note: 'The 09:25Z trip came from the pre-#2690 binary. The binary rebuilt at 02:
 due_since: 2026-10-17T00:18:49.512927374Z
 due_reason: on CronJobFailed:relay-stall-guard
 due_failure:
-  trip_id: relay-stall-guard@2026-10-22T12:56:22.767835766Z
+  trip_id: relay-stall-guard@2026-10-22T13:20:08.509616902Z
   job: relay-stall-guard
   error: 'exit 1: '
