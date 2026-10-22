@@ -1,0 +1,20 @@
+id: 01a1657a-bfc2-77f2-a045-582e4b207f09
+spec_id: STORY-1894
+agreed_id: STORY-1894
+title: 'Review PR-2837: TASK-1952 S5 per-host credential scope and git hardening'
+description: 'Hand-filed review story: Refs-only PR (BUG-2208 gap). Covers TASK-1952.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:18:25.730592361Z
+modified_at: 2026-10-22T21:18:25.730592361Z
+req_type: Story
+filed_at:
+  code_sha: 519bdccd6ea180fd65fb2313aa0bb1641f257f28
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
