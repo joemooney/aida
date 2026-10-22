@@ -1,5 +1,6 @@
 id: 01a161fe-d1d7-74c1-9cb0-84730ad31eab
 spec_id: TASK-1-424
+agreed_id: TASK-1696
 title: 'major (non-blocking): mandate_drive.rs PerMandate::dispatch_epoch closes an epo…'
 description: |-
   Non-blocking finding carried forward from an APPROVED review verdict on TASK-1915, which has since completed — recorded here so it keeps a queryable home once the verdict record stops being read.
@@ -35,6 +36,11 @@ history:
 - id: 01a161ff-95aa-7252-850c-36b6cc1e2305
   author: joe
   timestamp: 2026-10-22T05:05:02.378318606Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
+- id: 01a1626d-6e4c-7a00-806e-2be889d9a6d9
+  author: joe
+  timestamp: 2026-10-22T07:05:01.260805380Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
 filed_at:
