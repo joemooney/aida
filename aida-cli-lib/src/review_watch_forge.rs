@@ -368,8 +368,9 @@ impl Repository {
 
 const PROBE_REF_PREFIX: &str = "refs/aida/review-watch/";
 
-/// A probe ref younger than this is never swept: a probe is bounded by its
-/// 30-second fetch timeout, so one this old has finished or died.
+/// A probe ref younger than this is never swept. Only the probe's fetch has a
+/// timeout (30 seconds); the local git steps after it carry none, so this is
+/// a generous margin over a normal probe, not a hard bound on one.
 // trace:TASK-1955 | ai:claude (TASK-2121)
 const PROBE_REF_AGE_FLOOR_SECS: i64 = 600;
 

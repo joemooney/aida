@@ -1040,7 +1040,21 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     // decision `refusal_with_mandate_rearm_*` tests pin behaviourally.
     // trace:TASK-1915 | ai:claude
     // trace:TASK-1955 | ai:claude (TASK-2088)
-    assert!(window.contains(concat!("refusal_with_mandate_", "rearm(")));
+    // The call passes exactly the facts the merge-failure arm tests (this
+    // ship's mandate released it, and a hold marker was read) in signature
+    // order, plus the shared re-arm; a swapped or constant argument fails.
+    let flat: String = window.split_whitespace().collect::<Vec<_>>().join(" ");
+    let call = concat!(
+        "refusal_with_mandate_",
+        "rearm( refusal, mandate_release.is_some(), marker_reason.is_some(), ",
+        "|| rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number), );"
+    );
+    assert_eq!(
+        flat.matches(call).count(),
+        1,
+        "moved-base call site: {call}"
+    );
+    assert!(flat.contains("if mandate_release.is_some() && marker_reason.is_some() {"));
 }
 
 /// TASK-2088: the moved-base exit re-arms exactly when this ship's mandate

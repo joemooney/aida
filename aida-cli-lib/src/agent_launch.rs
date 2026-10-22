@@ -5890,6 +5890,30 @@ mod task_1806_launch_mandate_tests {
         assert_eq!(entries[0].1.current_spec.as_deref(), Some("TASK-2000"));
     }
 
+    /// TASK-2102: the link records the launch name on the session manifest,
+    /// which a SessionStart hook firing after the link names the row from
+    /// (`bg_session_start_after_the_link_takes_the_launch_name` pins that
+    /// read); a blank launch name records none rather than an empty one.
+    // trace:TASK-1955 | ai:claude (TASK-2102)
+    #[test]
+    fn linking_a_bg_session_records_the_launch_name_on_the_manifest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().canonicalize().unwrap();
+        let load = |lease: &str| {
+            session_manifest::load(&session_manifest::manifest_path(&project, lease)).unwrap()
+        };
+
+        link_bg_session(&plan_at(&project), "leaseb00000003", "feed5678").unwrap();
+        let manifest = load("leaseb00000003");
+        assert_eq!(manifest.agent_name.as_deref(), Some("agy-lane"));
+        assert_eq!(manifest.claude_session_id.as_deref(), Some("feed5678"));
+
+        let mut blank = plan_at(&project);
+        blank.name = "  ".into();
+        link_bg_session(&blank, "leaseb00000004", "feed9999").unwrap();
+        assert_eq!(load("leaseb00000004").agent_name, None);
+    }
+
     #[test]
     fn launch_context_shows_the_mandate_only_while_one_is_active() {
         let tmp = tempfile::tempdir().unwrap();

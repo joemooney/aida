@@ -353,7 +353,22 @@ SCRIPT_GUARD_LINE = (
     "export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=maintenance.auto GIT_CONFIG_VALUE_0=false"
     " GIT_CONFIG_KEY_1=gc.auto GIT_CONFIG_VALUE_1=0"
 )
-SCRIPT_GUARD = re.compile(r"^[^#\n]*\bGIT_CONFIG_KEY_\d+=maintenance\.auto\b", re.M)
+SCRIPT_GUARD = re.compile(r"^[^#\n]*\bGIT_CONFIG_KEY_(\d+)=maintenance\.auto\b", re.M)
+
+
+def script_guard(source: str):
+    """The first SCRIPT_GUARD line that really applies: its GIT_CONFIG_COUNT
+    covers the key's index and the matching value turns maintenance off."""
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    for m in SCRIPT_GUARD.finditer(source):
+        end = source.find("\n", m.end())
+        line = source[m.start():end if end >= 0 else len(source)]
+        index = int(m.group(1))
+        count = re.search(r"\bGIT_CONFIG_COUNT=(\d+)\b", line)
+        value = re.search(rf"\bGIT_CONFIG_VALUE_{index}=false\b", line)
+        if count and int(count.group(1)) > index and value:
+            return m
+    return None
 PY_SITE = re.compile(
     r"""["']git["']\s*,((?:\s*(?:["'][^"'\n]*["']|[\w.]+)\s*,)*?)\s*["'](""" + "|".join(map(re.escape, WRITE_CLASS)) + r""")["']"""
 )
@@ -370,7 +385,7 @@ def script_sites(source: str, python: bool = False) -> list[str]:
                 if "maintenance.auto=false" not in m.group(1):
                     sites.append(f"{number}: py git {m.group(2)}")
         return sites
-    guard = SCRIPT_GUARD.search(source)
+    guard = script_guard(source)
     guard_line = source.count("\n", 0, guard.start()) + 1 if guard else None
     number = 0
     while number < len(lines):
@@ -604,6 +619,14 @@ env -i PATH="$PATH" \\
         guarded = script.replace("set -euo pipefail\n", "set -euo pipefail\n" + SCRIPT_GUARD_LINE + "\n")
         # The exported pair covers every site but the one behind `env -i`.
         self.assertEqual(["9: sh git commit"], script_sites(guarded))
+        # A pair the count does not reach, or a value that leaves maintenance
+        # on, guards nothing.
+        for broken in (
+            SCRIPT_GUARD_LINE.replace("GIT_CONFIG_COUNT=2", "GIT_CONFIG_COUNT=0"),
+            SCRIPT_GUARD_LINE.replace("GIT_CONFIG_VALUE_0=false", "GIT_CONFIG_VALUE_0=true"),
+        ):
+            unguarded = script.replace("set -euo pipefail\n", "set -euo pipefail\n" + broken + "\n")
+            self.assertEqual(["4: sh git commit", "8: sh git fetch", "9: sh git commit"], script_sites(unguarded))
         inline = guarded.replace("git -c user.name=t", "git -c maintenance.auto=false -c gc.auto=0 -c user.name=t")
         self.assertEqual([], script_sites(inline))
         python = '''
