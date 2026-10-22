@@ -8,12 +8,12 @@ description: |-
   - TASK-2055: RosterStoreError::NotDetected should say whether .aida/config.toml was missing or named a store that does not exist.
   - TASK-1667: issuance_roster_store and validate_child_delegation resolve the store differently; unify them.
   seat_authority.rs is a mandate-protected file, so this needs a human merge. Full original texts: aida show TASK-2054 / TASK-2055 / TASK-1667.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:18:16.485453920Z
-modified_at: 2026-10-21T17:19:26.768315952Z
+modified_at: 2026-10-22T01:45:52.284535232Z
 req_type: Task
 tags:
 - follow-up
@@ -64,6 +64,14 @@ history:
   timestamp: 2026-10-21T17:19:23.705741071Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16149-3d9c-77d0-b1f5-83ae42dc1ac4
+  author: joe
+  timestamp: 2026-10-22T01:45:52.284521560Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
   branch: main
