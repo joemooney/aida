@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:57:44.849505155Z
-modified_at: 2026-10-22T00:06:49.246497754Z
+modified_at: 2026-10-22T00:06:52.337480815Z
 req_type: Task
 tags:
 - contained
@@ -306,6 +306,12 @@ comments:
   content: 'ADVISOR 16:06: folded the PR-2813 notes TASK-2111 (verify_linked_worktree_main fails open on a .git dir or symlink), TASK-2112 (PRIORITY: claude --resume from the lease-tree cwd may not find a transcript stored under main''s project dir; Claude keys transcripts by cwd. Verify it, or copy/symlink the transcript into the lease tree''s project dir) and TASK-2113 (nits).'
   created_at: 2026-10-21T23:04:53.017413971Z
   modified_at: 2026-10-21T23:04:53.017413971Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a160ee-9ab1-7472-8649-2b0c2b1dd0ec
+  author: joe
+  content: 'ADVISOR 17:07: folded TASK-2123 (the NO_SLOT guard still blocks prose naming a shell), 2125 (private-group check misses members whose primary gid is the group), 2126 (known_to_git reads any ls-tree failure as an unborn HEAD) and 2127 (aida-store-pair loses its trailer with submodule or separate-git-dir layouts).'
+  created_at: 2026-10-22T00:06:52.337480815Z
+  modified_at: 2026-10-22T00:06:52.337480815Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e2-43c6-7962-8a7c-8c6c68d81e7d
