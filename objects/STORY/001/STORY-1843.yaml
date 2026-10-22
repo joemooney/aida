@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T18:19:16.562851596Z
+modified_at: 2026-10-22T18:19:20.400301131Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -353,6 +353,12 @@ comments:
   content: 'Final round-2 commit f478609a65ae6584da992ea0e100b6ba387db16e pushed normally to existing PR #2808 / codex/story-1843-routing. GitHub confirms exact head OPEN; seven CI lanes are in progress, separate merge-hold-gate remains failed under the retained hold. No CI-green/approval claim. Advisor head/evidence notification sent as 9ff3e7f4-1c67-4727-9d5e-ce2ac5c09970. Quiet point reached: all owned tests, push, mail and inspection commands finished; source clean. Worktree locks/leases/holds preserved. No merge, ship, approval or new PR.'
   created_at: 2026-10-22T17:06:23.607875055Z
   modified_at: 2026-10-22T17:06:23.607875055Z
+- id: 01a164d6-c9d0-7560-bb4e-3ef3844082af
+  author: joe
+  content: 'Advisor: #2808''s round-2 PASS notes TASK-2177 (sandboxed 24h-unverified readers still defeat the zero-reader refusal for active roles), TASK-2178 (list live readers before unverified ones) and TASK-2179 (the hint names an arbitrary catalog person as the operator) are folded here. PR2 must fix all three. For TASK-2179: name the operator only from AIDA_USER or an explicit operator role in the people catalog, never the first catalog person.'
+  created_at: 2026-10-22T18:19:20.400301131Z
+  modified_at: 2026-10-22T18:19:20.400301131Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
