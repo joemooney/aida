@@ -136,6 +136,10 @@ fn task_2053_bwrap_status_and_unshipped_report_a_seat_clones_work() {
                 "user.email=t@t",
                 "-c",
                 "commit.gpgsign=false",
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
             ])
             .args(args)
             .output()
@@ -178,4 +182,59 @@ fn task_2053_bwrap_status_and_unshipped_report_a_seat_clones_work() {
         violations.is_empty(),
         "host git ran in a seat clone: {violations:#?}"
     );
+}
+
+/// TASK-2110: after a squash merge (origin has none of the branch's commits)
+/// the merged PR's head counts as shipped; a commit past it, and a shipped id
+/// the clone does not have, are handled without reading every commit as
+/// unpushed or failing the probe.
+#[cfg(target_os = "linux")]
+#[test]
+fn task_2053_bwrap_a_merged_heads_commits_count_as_shipped() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "squash", "c0ffee000055");
+    let commit = |file: &str| {
+        std::fs::write(clone.join(file), "work\n").unwrap();
+        for args in [vec!["add", file], vec!["commit", "--no-verify", "-m", file]] {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&clone)
+                .args([
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "maintenance.auto=false",
+                    "-c",
+                    "gc.auto=0",
+                ])
+                .args(&args)
+                .output()
+                .unwrap();
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    };
+    let facts = |shipped: &[String]| match probe_with_shipped(&fx.main, &clone, shipped) {
+        Probe::Known(facts) => facts,
+        Probe::Unknown(why) => panic!("probe failed: {why}"),
+    };
+    commit("one.txt");
+    commit("two.txt");
+    let merged_head = facts(&[]).head.expect("a HEAD");
+    assert_eq!(facts(&[]).unpushed, 2);
+    assert_eq!(facts(&[merged_head.clone()]).unpushed, 0);
+    let absent = "0".repeat(merged_head.len());
+    assert_eq!(facts(&[absent, "not-an-oid".to_string()]).unpushed, 2);
+    commit("three.txt");
+    assert_eq!(facts(&[merged_head]).unpushed, 1);
 }

@@ -579,6 +579,12 @@ S4c (flip `seat_tree` to `clone`, retire `AIDA_DEV_SEAT_CLONE`, close PR #2694).
   phase driver's failed-attempt teardown keeps a clone (its session end or reap removes it);
   `local_commits_not_on_branch`, `worktree_reclaim`'s git and review-watch's root probe no longer
   run raw git in a clone.
+- **Squash-merged branches (TASK-2110).** After a squash merge and a pruned `origin/<branch>`,
+  every branch commit used to read as unpushed, so reap kept the clone and session end demanded
+  `--force`. `probe_with_shipped` / `destroy_with_shipped` take the heads of the branch's merged PRs
+  (`gh pr list --state merged --head`, full hex ids only) and count commits those reach as on
+  origin; an id the clone lacks is skipped inside the sandbox. Reap (scan and removal) and session
+  end use them; other views and salvage stay conservative. Another forge, or no gh, gives no heads.
 - **Not changed (by design §2d):** `branch_in_sibling_worktree`, `pr_gc_branch_checked_out` and
   `session_reap`'s checked-out-elsewhere check key off main's or origin's refs.
 - **Tests.** `tests/task_2053_s4b_seat_trees_tests.rs`: enumerator, brief, show, pickup,

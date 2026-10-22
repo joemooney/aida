@@ -959,6 +959,17 @@ fn pinned_base(main: &Path, clone: &Path) -> Option<String> {
 /// `main` is the main checkout from the LEASE, never from the clone's marker.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
+    probe_with_shipped(main, clone, &[])
+}
+
+/// [`probe`], with `shipped` commits (the heads of the clone branch's merged
+/// PRs, from the forge) counted as on origin. A squash merge puts none of the
+/// branch's commits on origin, and once the seat prunes `origin/<branch>`
+/// every one of them would otherwise read as unpushed. Only full hex ids the
+/// clone has as commits are used; work on other refs, or past a merged head,
+/// still counts.
+// trace:TASK-2053 trace:TASK-2110 | ai:claude
+pub(crate) fn probe_with_shipped(main: &Path, clone: &Path, shipped: &[String]) -> Probe {
     if !aida_core::seat_clone_detect::has_real_git_dir(clone) {
         return Probe::Unknown(format!(
             "{} has no .git directory of its own",
@@ -989,7 +1000,15 @@ pub(crate) fn probe(main: &Path, clone: &Path) -> Probe {
             UNPUSHED_COUNT_SCRIPT.as_ref(),
             "aida-seat-unpushed".as_ref(),
             base.as_ref(),
-        ],
+        ]
+        .into_iter()
+        .chain(
+            shipped
+                .iter()
+                .filter(|oid| is_full_oid(oid))
+                .map(|oid| oid.as_ref()),
+        )
+        .collect::<Vec<&std::ffi::OsStr>>(),
         "sh",
     );
     match count {
@@ -1035,13 +1054,49 @@ macro_rules! stash_entries_sh {
 
 /// Inside the probe sandbox: how many commits the clone holds that origin
 /// does not: reachable from ANY ref (every branch, tag, HEAD) or stash entry,
-/// and not from `origin/*` or the pinned base (`$1`, or empty).
+/// and not from `origin/*`, the pinned base (`$1`, or empty) or a shipped
+/// head (`$2...`, full hex ids; one the clone lacks is skipped).
 // trace:TASK-2053 | ai:claude
 const UNPUSHED_COUNT_SCRIPT: &str = concat!(
     "set -u\n",
     stash_entries_sh!(),
-    "git rev-list --count --all $s --not --remotes=origin ${1:+\"$1\"}\n"
+    "base=$1\nshift\nshipped=''\n",
+    "for t in \"$@\"; do\n  if git cat-file -e \"$t^{commit}\" 2>/dev/null; then shipped=\"$shipped $t\"; fi\ndone\n",
+    "git rev-list --count --all $s --not --remotes=origin ${base:+\"$base\"} $shipped\n"
 );
+
+/// A full 40- or 64-hex object id.
+fn is_full_oid(oid: &str) -> bool {
+    (oid.len() == 40 || oid.len() == 64) && oid.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The head commits of `branch`'s merged PRs on GitHub (`gh pr list --head
+/// <branch> --state merged`), for [`probe_with_shipped`]. Empty when gh is
+/// missing, fails, or the forge is not GitHub: the count then stays
+/// conservative.
+// trace:TASK-2110 | ai:claude
+pub(crate) fn merged_pr_heads(main: &Path, branch: &str) -> Vec<String> {
+    if branch.is_empty() {
+        return Vec::new();
+    }
+    let Ok(out) = std::process::Command::new("gh")
+        .current_dir(main)
+        .args(["pr", "list", "--state", "merged", "--head", branch])
+        .args(["--json", "headRefOid", "--jq", ".[].headRefOid"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|oid| is_full_oid(oid))
+        .map(str::to_string)
+        .collect()
+}
 
 /// Inside the probe sandbox: a git bundle of every commit
 /// [`UNPUSHED_COUNT_SCRIPT`] counts, with all of the clone's refs, on stdout.
@@ -1247,6 +1302,19 @@ pub(crate) fn destroy(
     mode: DestroyMode,
     expect_head: Option<&str>,
 ) -> Result<Destroyed> {
+    destroy_with_shipped(main, clone, mode, expect_head, &[])
+}
+
+/// [`destroy`], reading the clone with [`probe_with_shipped`]: commits that
+/// only a merged PR's head reaches count as on origin.
+// trace:TASK-2110 | ai:claude
+pub(crate) fn destroy_with_shipped(
+    main: &Path,
+    clone: &Path,
+    mode: DestroyMode,
+    expect_head: Option<&str>,
+    shipped: &[String],
+) -> Result<Destroyed> {
     if !is_seat_clone_location(main, clone) {
         anyhow::bail!(
             "{} is not a seat clone of {} (it must be an `{CLONE_DIR_PREFIX}*` directory in the \
@@ -1257,7 +1325,7 @@ pub(crate) fn destroy(
     }
     let mut salvaged = None;
     if std::fs::symlink_metadata(clone).is_ok() {
-        let facts = match probe(main, clone) {
+        let facts = match probe_with_shipped(main, clone, shipped) {
             Probe::Known(facts) => facts,
             Probe::Unknown(why) => {
                 return Ok(Destroyed::Kept {
