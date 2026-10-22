@@ -484,8 +484,9 @@ mod task_1244_drain_merge_lease_tests {
         let wave_start = src
             .find(concat!("fn merge_wave_pr", "(project_root"))
             .expect("wave fn");
-        // Window widened for BUG-1562's typed spec on the wave hold.
-        let wave_body = &src[wave_start..wave_start + 5000];
+        // Window widened for BUG-1562's typed spec on the wave hold, and
+        // for STORY-1662's standalone-implementer refusal at its top.
+        let wave_body = &src[wave_start..wave_start + 6000];
         let acquire = concat!("merge_lock::", "acquire(");
         let merge_call = concat!(".merge_change(", "&change_ref");
         let a = wave_body
