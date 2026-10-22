@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T05:33:59.711268880Z
+modified_at: 2026-10-22T05:48:14.351481860Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -258,6 +258,23 @@ comments:
   content: 'Fresh PR1 pre-push validation COMPLETE at 61888258f63bd932982cbb4ebcc3552f318bb1b5. make check-ci-fast exit 0: all 34 fast gates passed. make test-touched exit 0: 462 selected unit tests, all 43 TASK-1717 store-writer integration tests, and the TASK-1955 unknown-mention integration test passed. Logs: /tmp/story1843-pr1-6188825-fast-rerun.log and /tmp/story1843-pr1-6188825-touched-rerun.log. Both ran attached to this session and have finished; no owned validation jobs remain. All four PR1 advisor rulings checked against source. Earlier lost jobs count as no passes. Next: normal push, actual-head CI, then advisor READY only. No merge/ship/approval/hold clearance.'
   created_at: 2026-10-22T05:33:59.711268880Z
   modified_at: 2026-10-22T05:33:59.711268880Z
+- id: 01a16227-228f-79e0-8ac7-be90cf5cf6c8
+  author: ai:codex:joe
+  content: |
+    READY for fresh independent review: PR #2808 at 61888258f63bd932982cbb4ebcc3552f318bb1b5.
+    https://github.com/joemooney/aida/pull/2808
+
+    Normal append push succeeded; PR is OPEN at this exact SHA. All four PR1 rework rulings are covered: updated TASK-1955 live-reader fixture/unknown and zero-reader assertions; skip-and-warn damaged registry records with regression coverage; reserved role/vendor/person catalog precedence pin; mention-specific wording and no CLI-only agent-ls hint in MCP errors.
+
+    Fresh attached pre-push gates both exited 0: make check-ci-fast (34 gates); make test-touched (462 selected unit tests, all 43 TASK-1717 tests, TASK-1955 regression). The jobs lost during the earlier handoff count as no passes. Results are recorded on STORY-1843; logs are /tmp/story1843-pr1-6188825-{fast,touched}-rerun.log.
+
+    Exact-head CI run 39729148898 completed SUCCESS: all seven lanes plus aggregate Build (ubuntu-latest) passed.
+    https://github.com/joemooney/aida/actions/runs/39729148898
+
+    Separate merge-hold-gate remains FAILED under the existing active hold, run 39729148869. Exact error: This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated `aida merge-hold clear <pr>` path or an eligible recorded Rework approval through `aida merge-hold auto-release <pr>`.
+    No clearance, approval, verdict, merge or ship performed. READY means ready for review, not ready to merge. PR body updated with changed expectations and fresh checks. PR2 remains paused until PR1 merges; its next scope is dry-run plus manifest refusal only, with write mode deferred. Existing locks and leases preserved. Parent remains in-progress.
+  created_at: 2026-10-22T05:48:14.351481860Z
+  modified_at: 2026-10-22T05:48:14.351481860Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
