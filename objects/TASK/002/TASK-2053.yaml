@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-21T22:49:29.214148243Z
+modified_at: 2026-10-22T00:13:12.759068082Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -53,6 +53,11 @@ history:
   timestamp: 2026-10-21T22:49:30.454348261Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a160f4-6936-7be1-8450-0c32ee5612f7
+  author: joe
+  timestamp: 2026-10-22T00:13:12.886943754Z
+  session_id: 01a160f189e5
+  changes: []
 filed_at:
   code_sha: b66e4d93b8fefe25b2af3139fe725fa1801e1981
   branch: main
@@ -65,7 +70,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: S3 round-2 fixes verified and CI green incl. live-bwrap gate, but session end now follows a seat-controlled <clone>/.aida symlink and deletes runtime links / lock-info outside the clone (host write driven by seat content)
+  detail: S3 lifecycle unchanged since round 4 and CI green at 7ac6aaa5 (incl. live bwrap gate), but salvage silently drops an untracked nested git repository and then removes the clone (data loss on session end --force / dismiss).
   recovery_hint: address the review findings, move TASK-2053 back to In Progress, and clear the PR hold only after approval
   shelved_by: reviewer
-  shelved_at: 2026-10-21T22:47:52.856145584Z
+  shelved_at: 2026-10-22T00:13:12.759068082Z
