@@ -6,16 +6,25 @@ description: |
   mailbox_resolver.rs resolve() counts a live agent whose name equals a role, vendor or person in its ambiguity sum. An agent launched with -n advisor makes '--to advisor' refuse for every sender. Name reservation is planned for PR2; until then, pin the behavior with a test or ignore reserved-name agents in the name branch.
 
   Raised in review of PR-2808: https://github.com/joemooney/aida/pull/2808#issuecomment-6331976477
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T03:30:21.233079866Z
-modified_at: 2026-10-22T03:30:21.233079866Z
+modified_at: 2026-10-22T03:31:55.150170470Z
 req_type: Task
 tags:
 - from-review:PR-2808
 - severity:minor
+history:
+- id: 01a161aa-548e-7a50-8f11-c5cf7fe468b3
+  author: joe
+  timestamp: 2026-10-22T03:31:55.150162562Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: c540b90955548e997aad6d2e117be9d1bf85d2b5
   branch: main
