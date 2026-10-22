@@ -9105,12 +9105,13 @@ pub(crate) fn resolve_queue_work_plan(
         if let Some(req) = store.requirements.iter().find(|r| spec_matches(r, arg_str)) {
             // A deferred spec is an explicit operator hold. Refuse before
             // queue synthesis or other pickup side effects. trace:BUG-1793
-            if req.deferred && req.deferred_reason.is_some() {
-                return Err(crate::defer_cmd::hold_refusal(
-                    req.spec_id.as_deref().unwrap_or(arg_str),
-                    req.deferred_reason.as_deref(),
-                    req.deferred_until.as_deref(),
-                ));
+            if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
+                req.spec_id.as_deref().unwrap_or(arg_str),
+                req.deferred,
+                req.deferred_reason.as_deref(),
+                req.deferred_until.as_deref(),
+            ) {
+                return Err(refusal);
             }
             // trace:BUG-1106 | ai:codex
             // A phase child is assigned by the live orchestrator, not by its
@@ -11257,13 +11258,14 @@ pub(crate) fn handle_queue_work(
         .into_iter()
         .find(|r| spec_matches(r, &plan.anchor_display))
     {
-        if req.deferred && req.deferred_reason.is_some() {
-            let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
-            return Err(crate::defer_cmd::hold_refusal(
-                display,
-                req.deferred_reason.as_deref(),
-                req.deferred_until.as_deref(),
-            ));
+        let display = req.spec_id.as_deref().unwrap_or(&plan.anchor_display);
+        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
+            display,
+            req.deferred,
+            req.deferred_reason.as_deref(),
+            req.deferred_until.as_deref(),
+        ) {
+            return Err(refusal);
         }
     }
 
@@ -14069,14 +14071,15 @@ pub(crate) fn pick_auto_complete_head_for_role(
                 continue;
             }
         }
+        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
+            &candidate.id,
+            candidate.deferred,
+            candidate.deferred_reason.as_deref(),
+            candidate.deferred_until.as_deref(),
+        ) {
+            return Err(refusal);
+        }
         if candidate.deferred {
-            if candidate.deferred_reason.is_some() {
-                return Err(crate::defer_cmd::hold_refusal(
-                    &candidate.id,
-                    candidate.deferred_reason.as_deref(),
-                    candidate.deferred_until.as_deref(),
-                ));
-            }
             deferred_skipped.push(candidate.id.clone());
             continue;
         }
@@ -14201,14 +14204,15 @@ pub(crate) fn auto_complete_head_candidates_with_blocked(
                 continue;
             }
         }
+        if let Some(refusal) = crate::gate::operator_hold::operator_hold_refusal(
+            &candidate.id,
+            candidate.deferred,
+            candidate.deferred_reason.as_deref(),
+            candidate.deferred_until.as_deref(),
+        ) {
+            return Err(refusal);
+        }
         if candidate.deferred {
-            if candidate.deferred_reason.is_some() {
-                return Err(crate::defer_cmd::hold_refusal(
-                    &candidate.id,
-                    candidate.deferred_reason.as_deref(),
-                    candidate.deferred_until.as_deref(),
-                ));
-            }
             continue;
         }
         out.push((candidate.id, candidate.status, candidate.blocked));
