@@ -49,7 +49,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T02:43:59.810701479Z
-modified_at: 2026-10-21T13:11:48.062798559Z
+modified_at: 2026-10-22T14:24:35.761596727Z
 req_type: Story
 tags:
 - architecture
@@ -274,6 +274,30 @@ comments:
   created_at: 2026-10-21T13:11:48.062798559Z
   modified_at: 2026-10-21T13:11:48.062798559Z
   session_id: f91fd366-4181-4735-8802-dfc810a1c42e
+- id: 01a163ff-dfb1-79c0-acb8-c5585d2f2bf3
+  author: joe
+  content: |
+    REMAINING (STORY-1853) — implementer, 2026-10-22 07:30, main @ 6d3b5d1591
+
+    Acceptance:
+    - AC1 CI tests <= 6 min: DONE. Median slowest test lane 5:42 (runs 39527203901, 39529179840, 39543779263); advisor ruled MET 2026-10-20 21:52.
+    - AC2 full local run <= 10 min on an idle 6-core box: REMAINING, the only open item. Nobody has measured it. Host load1 is 36 right now. The automatic idle-window run mentioned in comment 14 is not running (no watcher process found). My brief forbids me from running the full suite, so I can't measure it myself.
+    - AC3 docs/skills say the full suite is not pre-push; no template sets NO_SLOT: DONE (evidence in comment 14; hook plus tests/test_git_guardrails_parse.sh:61-63).
+    - AC4 per-test budget enforced in CI: DONE (TASK-1988 / c43d5444ad; ci.yml "Test time budget" step; 0 unbudgeted tests over 10 s on run 39543779263).
+    - AC5 passed+ignored >= baseline, recorded: DONE. 11,870 vs 11,683 (comment 14).
+
+    Slices: S0/S0b/S1 TASK-1948 (128a5bb6eb), S6 TASK-1949 (#2762), S2 TASK-1957 + TASK-1988 (c43d5444ad), S3 TASK-1958 (6657ffff6d and the move), S4 TASK-1959 (58218872e4), lib-lane headroom TASK-1979, local compile TASK-1985: all completed.
+
+    Folded:
+    - TASK-1646 (PR body lacked the PR-side count): DONE by record. The PR count of 11,747 vs main's 11,721 is in comment 9 and in the TASK-1949 review. The PR has merged, so there's nothing left to edit.
+    - TASK-1644 (AC5 recorded but not gate-enforced): DONE as far as AC5's wording goes, which asks for a recorded count, not a gate. A hard ">= baseline" floor would be new gate code and would need an aggregate job across the partitioned lanes, which is beyond any signed sketch. I'm not implementing it; the advisor can rule on whether it's wanted.
+
+    Trailer hygiene: there are no open PRs carrying STORY-1853, and no main commit carries a bare (STORY-1853). Nothing to fix.
+
+    So: no code remains. Completion is waiting only on the AC2 measurement in a quiet window, and that needs a seat that is allowed to run the full suite.
+  created_at: 2026-10-22T14:24:35.761596727Z
+  modified_at: 2026-10-22T14:24:35.761596727Z
+  session_id: c8f252f7-2228-4405-941f-587ed20c61bd
 history:
 - id: 01a152ec-592c-7ec2-af4d-e6cf3cea3865
   author: joe
