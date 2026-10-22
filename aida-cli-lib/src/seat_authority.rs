@@ -123,10 +123,7 @@ fn update_grant(
     if Uuid::parse_str(id).is_err() {
         bail!("invalid session grant handle");
     }
-    let locks = dir
-        .parent()
-        .context("session grant store has no parent directory")?
-        .join("session-grant-locks");
+    let locks = grant_lock_dir()?;
     std::fs::create_dir_all(&locks)?;
     for _ in 0..ATTEMPTS {
         let lock = std::fs::OpenOptions::new()
@@ -151,6 +148,42 @@ fn update_grant(
         }
     }
     bail!("session grant {id} kept changing under concurrent writers; the update was not applied")
+}
+
+/// BUG-1934: `session-grant-locks/`, beside the grant store.
+// trace:BUG-1934 | ai:claude
+fn grant_lock_dir() -> Result<PathBuf> {
+    Ok(grant_dir()?
+        .parent()
+        .context("session grant store has no parent directory")?
+        .join("session-grant-locks"))
+}
+
+/// BUG-1934 (round 2): remove the lock file of every grant that can no
+/// longer be rewritten usefully: revoked, expired, or gone. Best effort; a
+/// lock still held by a late writer only costs that writer a retry.
+// trace:BUG-1934 | ai:claude
+pub(crate) fn sweep_grant_locks(now: DateTime<Utc>) {
+    let Ok(entries) = grant_lock_dir().and_then(|d| Ok(std::fs::read_dir(d)?)) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(id) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .and_then(|n| n.strip_suffix(".lock"))
+        else {
+            continue;
+        };
+        let stale = match read_grant(id) {
+            Ok(grant) => grant.revoked_at.is_some() || grant.expires_at <= now,
+            Err(_) => true,
+        };
+        if stale {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
 }
 
 /// Why the seat check could not reach a team roster. Distinct from a roster
@@ -1532,6 +1565,14 @@ pub(crate) fn issue_direct(
     bind_pid: Option<u32>,
 ) -> Result<IssuedGrant> {
     require_direct_human()?;
+    // BUG-1934 (round 2): a terminal-bound grant's eval text carries its
+    // session-key secret, so it is only ever written to a pipe the shell
+    // eval's, never printed to the terminal. trace:BUG-1934 | ai:claude
+    if bind_pid.is_none() && crate::authority_stdout_is_terminal() {
+        bail!(
+            "`aida role enter` prints shell code holding a one-time secret; run it as `eval \"$(aida role enter {seat})\"` (or through the aida shell helper) so it is never shown on the terminal"
+        );
+    }
     // BUG-1934: bind before anything is written; an unbindable grant is
     // never minted. trace:BUG-1934 | ai:claude
     let caller = presenter_source();
@@ -1965,7 +2006,7 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
     crate::grant_keyring::invalidate(id);
     // BUG-1934: under the record lock, so a concurrent pid stamp cannot
     // write back a pre-revocation copy. trace:BUG-1934 | ai:claude
-    update_grant(
+    let revoked = update_grant(
         id,
         |grant| {
             if grant.revoked_at.is_some() {
@@ -1975,7 +2016,11 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
             true
         },
         |grant| grant.revoked_at.is_some(),
-    )
+    )?;
+    // Round 2: the revoked grant's lock (and any expired grant's) is
+    // removed. trace:BUG-1934 | ai:claude
+    sweep_grant_locks(Utc::now());
+    Ok(revoked)
 }
 
 /// BUG-1934 (C4): bind grant `id` to live process `pid` as well: a launcher

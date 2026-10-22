@@ -461,7 +461,8 @@ fn bg_launch_refuses_a_seat_it_cannot_bind() {
         err.contains("`--bg` cannot launch a `reviewer` session"),
         "{err}"
     );
-    assert!(err.contains("--bind-pid"), "{err}");
+    assert!(err.contains("aida role enter reviewer"), "{err}");
+    assert!(err.contains("`--bind-pid` would serve only"), "{err}");
     crate::agent_launch::bg_seat_refusal("implementer").unwrap();
 }
 
@@ -505,4 +506,69 @@ fn review_record_refuses_a_presenter_not_bound_grant() {
         .map(|d| d.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
     assert!(written.is_empty(), "no verdict may be written: {written:?}");
+}
+
+/// Round 2: a bare `aida role enter` whose stdout is the terminal would
+/// print the session-key secret; it refuses before minting, naming the eval
+/// form. `--bind-pid` prints no secret and is unaffected by this check.
+// trace:BUG-1934 | ai:claude
+#[test]
+fn role_enter_refuses_to_print_the_secret_to_a_terminal() {
+    let dir = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS", None),
+        ("AIDA_AGENT_NAME", None),
+        ("AIDA_AGENT_TYPE", None),
+        ("AIDA_USER", Some("human-operator")),
+        ("AIDA_HOME", Some(dir.path().to_str().unwrap())),
+    ]);
+    let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
+        project_root: dir.path().to_path_buf(),
+        stdin_is_terminal: true,
+        stdout_is_terminal: true,
+        stderr_is_terminal: true,
+    }));
+    let err = issue_direct(dir.path(), "reviewer", Vec::new(), None, None)
+        .map(|_| ())
+        .unwrap_err()
+        .to_string();
+    crate::test_ambient::replace(prev);
+    assert!(
+        err.contains("eval \"$(aida role enter reviewer)\""),
+        "{err}"
+    );
+    let grants = dir.path().join(".aida").join("session-grants");
+    assert!(
+        std::fs::read_dir(&grants).map_or(true, |mut d| d.next().is_none()),
+        "no grant may be minted"
+    );
+}
+
+/// Round 2: revoking a grant removes its record lock, and the sweep removes
+/// the locks of expired or vanished grants while keeping a live one's.
+// trace:BUG-1934 | ai:claude
+#[test]
+fn revoke_removes_the_grant_lock_and_sweeps_stale_ones() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _env = pinned_env();
+    let live = test_support::mint_grant_for(root, SUBJECT, "reviewer", &[]);
+    let gone = test_support::mint_grant_for(root, SUBJECT, "reviewer", &[]);
+    bind_grant_token(&live, &own_process_token().unwrap()).unwrap();
+    bind_grant_token(&gone, &own_process_token().unwrap()).unwrap();
+    let locks = grant_dir()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("session-grant-locks");
+    let lock = |id: &str| locks.join(format!("{id}.lock"));
+    std::fs::write(lock(&gone), "").unwrap();
+    std::fs::write(lock("00000000-0000-4000-8000-00000000dead"), "").unwrap();
+    assert!(revoke_by_id(&gone).unwrap());
+    assert!(!lock(&gone).exists(), "the revoked grant's lock is removed");
+    assert!(
+        !lock("00000000-0000-4000-8000-00000000dead").exists(),
+        "a lock without a grant is swept"
+    );
+    assert!(lock(&live).exists(), "a live grant's lock stays");
 }

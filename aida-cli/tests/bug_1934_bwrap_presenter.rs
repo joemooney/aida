@@ -96,6 +96,7 @@ fn fixture() -> Fixture {
 }
 
 /// Run `script` under `sh -c` with the fixture's env; `$AIDA` is the binary.
+#[cfg(target_os = "linux")]
 fn sh(fx: &Fixture, script: &str) -> Output {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(script).current_dir(&fx.repo);

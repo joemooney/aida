@@ -5267,7 +5267,7 @@ pub(crate) fn bg_seat_refusal(role: &str) -> Result<()> {
         return Ok(());
     }
     anyhow::bail!(
-        "`--bg` cannot launch a `{seat}` session: it runs under the agent's background daemon, outside this launcher's process tree, so its seat grant cannot be bound to it. Launch it without `--bg`, or start it and bind a grant from a terminal with `aida role enter {seat} --bind-pid <harness pid>`"
+        "`--bg` cannot launch a `{seat}` session: it runs under the agent's background daemon, outside this launcher's process tree, so its seat grant cannot be bound to it. Launch it without `--bg` from a terminal that entered the role (`eval \"$(aida role enter {seat})\"`); `--bind-pid` would serve only its unsandboxed hooks and MCP server, not its tool calls"
     )
 }
 

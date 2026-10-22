@@ -287,7 +287,20 @@ fn role_enter_eval_keeps_the_secret_out_of_argv_and_xtrace() {
         "1234abcd-0000-4000-8000-000000000000",
         Some(&secret),
     );
-    assert_eq!(lines[0], "{ set +x; } 2>/dev/null");
+    assert!(
+        lines[0].ends_with("{ set +x; } 2>/dev/null"),
+        "{}",
+        lines[0]
+    );
+    assert!(
+        lines[0].starts_with("case $- in *x*)"),
+        "xtrace state saved"
+    );
+    assert_eq!(
+        lines.last().unwrap(),
+        "[ -n \"$_aida_xtrace\" ] && set -x; unset _aida_xtrace",
+        "xtrace state restored after the heredoc"
+    );
     let open = lines
         .iter()
         .position(|l| l.ends_with("<<'AIDA_GRANT_KEY'"))

@@ -502,7 +502,7 @@ fn test_issue_direct_writes_requested_ttl() {
     let prev = crate::test_ambient::replace(Some(crate::test_ambient::Ambient {
         project_root: dir.path().to_path_buf(),
         stdin_is_terminal: true,
-        stdout_is_terminal: true,
+        stdout_is_terminal: false,
         stderr_is_terminal: true,
     }));
     let grant = issue_direct(

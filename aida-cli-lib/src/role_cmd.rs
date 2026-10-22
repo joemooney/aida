@@ -1063,18 +1063,19 @@ fn handle_role_adopt_key(id: &str) -> Result<()> {
 /// `aida role adopt-key`, run by the eval'ing shell itself so the key lands
 /// in THAT shell's session keyring. xtrace is switched off first and the
 /// secret travels only in a quoted heredoc: never argv, env, a file or
-/// history (eval'd text is not recorded). v2 C3. Empty without a secret.
+/// history (eval'd text is not recorded). v2 C3. The shell's own xtrace
+/// state is saved first and restored after. Empty without a secret.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn adopt_key_eval_lines(grant_id: &str, secret: Option<&str>) -> Vec<String> {
     let Some(secret) = secret else {
         return Vec::new();
     };
-    let exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.to_str().map(str::to_string))
-        .unwrap_or_else(|| "aida".to_string());
+    let exe = crate::resolve_aida_exe()
+        .to_str()
+        .map_or_else(|| "aida".to_string(), str::to_string);
     vec![
-        "{ set +x; } 2>/dev/null".to_string(),
+        "case $- in *x*) _aida_xtrace=1 ;; *) _aida_xtrace= ;; esac; { set +x; } 2>/dev/null"
+            .to_string(),
         format!(
             "'{}' role adopt-key '{}' <<'AIDA_GRANT_KEY'",
             sh_single_quote(&exe),
@@ -1082,6 +1083,7 @@ pub(crate) fn adopt_key_eval_lines(grant_id: &str, secret: Option<&str>) -> Vec<
         ),
         secret.to_string(),
         "AIDA_GRANT_KEY".to_string(),
+        "[ -n \"$_aida_xtrace\" ] && set -x; unset _aida_xtrace".to_string(),
     ]
 }
 
