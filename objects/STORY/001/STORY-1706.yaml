@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-22T01:46:20.890402176Z
+modified_at: 2026-10-22T10:53:11.844005982Z
 req_type: Story
 comments:
 - id: 01a16149-ad5a-76e3-b0bb-520dd436cea8
@@ -17,6 +17,63 @@ comments:
   created_at: 2026-10-22T01:46:20.890402176Z
   modified_at: 2026-10-22T01:46:20.890402176Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1633e-5524-7e43-8c1c-9413ae2c5931
+  author: joe
+  content: |
+    SKETCH v1: STORY-1706, drive-tick auto-restart of a crashed relay from a human launch record (implementer, claude, worktree impl-story-1706, base origin/main e33fec11d9)
+
+    ## 1. Problem as observed
+    - Today `fleet_lanes::classify` returns LaneClass::Crashed for two different cases: (a) the on-disk state is running/queued, relay.lock is free and the owner pid is dead, so the EXIT trap never ran; (b) any exit code the relay does not define. `plan_relay_lane` routes both to the advisor as a Redispatch due item. The tick spawns nothing (`DriveEffects` says so).
+    - Nothing on disk could authorize a relaunch. relay.status carries no argv, principal or TTY provenance. The driver registry is deregistered in the EXIT trap. Implementer relays strip AIDA_SESSION_GRANT. That is why the STORY-1700 STRICT ruling (2026-10-16 01:20) moved restart here, built on a new launch record.
+    - relay.sh has no stop verb. Its exit reasons are inferred from exit codes only. `reason=` is used only for queue/yield waits.
+
+    ## 2. Design
+    ### Part 1: aida-relay (`bin/relay.sh`, docs, tests/shell)
+    - L1 Launch record. Written once the run dir is resolved and the run lock is held (next to `trap relay_exit_status EXIT`, ~line 3569). The file is `<run dir>/relay.launch`: tmp + `mv -f`, umask 077, so it is 0600 and replaced atomically. Format: `key=value` lines plus a `v=1` line, with `%`/newline escaped as in relay.status, and one `arg=` line per ORIG_ARGS element so arguments round-trip verbatim. Fields: v, run, launched_at, launch_cwd, project_root, relay_sh (realpath of $0), agent, session_role, force_seat (0/1), max_sessions, profile_ref, profile_file, profile_sha256 (empty when there is no profile), principal (AIDA_USER, then USER, then USERNAME, then "default", the chain `current_user_id` uses), launched_from_tty, pid.
+    - launched_from_tty mirrors `seat_authority::require_direct_human`. It is 1 only when stdin and stderr are TTYs AND AIDA_AGENT_NAME/AIDA_AGENT_TYPE are empty AND no AIDA_SESSION_GRANT is set. With --detach, the parent evaluates it (it has the TTY) and passes the record to the child through a 0600 `relay.launch.pending` in the run dir. The child that takes the lock promotes it. A child never re-derives TTY from the environment.
+    - L2 Restart lineage. When the drive tick re-execs, it sets AIDA_RELAY_RESTART=<sha256 of relay.launch>. If that matches the existing relay.launch, relay.sh leaves the record alone, so the TTY root is preserved. Any other launch rewrites relay.launch: a fresh human launch starts a new lineage, and an agent or non-TTY relaunch writes launched_from_tty=0, which disqualifies auto-restart (fail closed). The tick, not relay.sh, appends the lineage file `relay.restarts` (see R4).
+    - L3 Exit reasons. The trap writes `reason=` on the final status write: `signal:TERM` / `signal:INT` (from cleanup's per-signal trap), `session-cap` (the loop ended at MAX_SESSIONS), `setup-error` (the exit-1 paths before any session). Existing reasons and states are unchanged. A trap-written reason is positive evidence that the trap ran.
+    - L4 Stop verb `bin/relay.sh --no-restart TARGET` (TARGET resolves the way --status does). It atomically writes `<run dir>/relay.norestart` (holding who and when) and prints how to stop the live run. It does not signal anything, so there is no new kill path. The marker survives until a fresh human launch removes it.
+    ### Part 2: aida
+    - R1 `aida-cli-lib/src/relay_launch.rs` (new, pure plus fs readers): `LaunchRecord::load(run_dir)` and `restarts(run_dir)`. Fails closed: missing, symlink, not a regular file, mode != 0600, owner != euid, v != 1, a missing required field or a non-UTF-8 value all give Err(reason). Also `sha256_of(path)`.
+    - R2 `fleet_lanes`: add `LaneEvidence::trap_never_ran()`: on-disk state is running/queued AND lock_held == Some(false) AND owner_alive == Some(false) AND reason is not a trap reason. The Crashed class and its existing routing are otherwise unchanged (story_1699/1700 tests stay green unchanged).
+    - R3 `mandate.rs`: Scope::RelayRestart ("relay-restart"). `--drive` writes it from now on. Existing drive records do NOT cover it, so the operator must re-mint. `mandate_gates.rs`: GateOp::RelayRestart, so `[mandate.human_gates] ops = ["relay-restart"]` keeps it human. relay_launch.rs joins GATE_PROTECTED_PATHS.
+    - R4 `mandate_drive.rs`: a pure `restart_eligibility(lane, record, restarts, mandate, now, profile_sha_now, root) -> Result<RestartPlan, String>`. Every condition must hold; the first failing condition is the ledgered `why`:
+      1. `trap_never_ran()` (the crash ending only: never signal, session cap, setup or usage, complete, blocked, no-slot, run-locked or an unknown exit code);
+      2. no relay.norestart; handoff not .done or TASK_COMPLETE/BLOCKED_ON_HUMAN;
+      3. the record loads (R1); record.project_root == the tick's root; record.run == lane run; relay_sh is an existing executable regular file;
+      4. record.principal == mandate.principal;
+      5. the root record has launched_from_tty == 1;
+      6. profile_sha256 == sha256 of the profile file now (missing file means refuse);
+      7. seat_kind != Advisor AND session_role != advisor AND force_seat == 0;
+      8. relay.restarts count < 3 AND now >= last restart + {1,2,4}[count-1] ticks;
+      9. remaining = instance max_sessions (the root's, or the last restart line's) minus relay.status `session`; it must be >= 1;
+      10. mandate.expires_at - now >= 30m; the mandate covers RelayRestart; no relay-restart human gate; the run spec is known and not always-human (the existing act_on_run floor).
+      - When eligible: DriveAction::RelayRestart, Route::Substrate (new), routed nowhere. When ineligible: today's advisor Redispatch item, with "not auto-restarted: <why>" in the detail. At 3 restarts: ONE operator crash-loop notice per launch sha (dedup key in drive state), then the advisor item.
+    - R5 Exec, under the existing mandate-drive flock, in the existing act loop: (a) `tick.recheck()` re-reads the mandate (stop tombstone, expiry); (b) re-probe the lane and re-run `restart_eligibility` from fresh reads (the lock is still free, status head unchanged, record sha unchanged, profile sha unchanged); (c) append a `relay.restarts` line (gen, at, mandate_id, max_sessions, crashed head), and on write failure refuse without exec; (d) `DriveEffects::restart_relay(&RestartPlan) -> Result<pid>`. Live: `scrubbed_command(record.relay_sh)` with args = ORIG_ARGS + `--max-sessions <remaining>`, cwd = launch_cwd, env AIDA_RELAY_RESTART=<sha>, stdin null, stdout/stderr to `<run dir>/relay.restart.log`, `process_group(0)` so it outlives the tick. The tick never mints, holds or forwards a grant: `scrub()` strips GRANT/ROLE/PURPOSE, and it also strips AIDA_AGENT_NAME/TYPE. (e) Ledger MandateAction with outcome done (pid) or refused (error). A spawn error counts toward the 3 and backs off. A duplicate human relaunch racing the tick hits relay.sh's own run lock (exit 6, benign).
+    - R6 `aida fleet drive --preview` shows "auto-restart: eligible / not: <why>" per crashed lane. The ledger counts restarts in `mandate status` and the digest through the existing MandateAction plumbing.
+    ### Failure modes (all fail CLOSED, to the advisor or operator routing that exists today)
+    Missing, corrupt or mismatched record; unknown v; perms or owner wrong → no restart. Lock probe error or owner liveness unknown → not a crash, no restart. Mandate stopped or expired mid-tick → recheck refuses. Store unreadable → withheld like the other gated actions. State file unreadable → the tick refuses as today. Restarts file unwritable → no exec. Profile edited → no restart. Scheduler env lacking credentials → the relaunched relay exits 1 with reason=setup-error, which classifies as SetupError and routes FixSetup (no loop).
+
+    ## 3. Out of scope
+    Restarting session-cap, no-slot or unknown-exit runs (they stay advisor-routed). Advisor or force-seat relays. Recording or forwarding environment or secrets. Cross-host runs. A signalling stop verb. Non-relay drivers (codex/agy lanes that do not go through relay.sh). Doctor changes beyond the existing mandate-drive category text.
+
+    ## 4. Test plan (each fails before the change)
+    - aida-relay `tests/shell/story1706_launch_record.sh`: record fields and 0600 mode; ORIG_ARGS with spaces, `=`, `%` and newlines round-trip; a non-TTY launch writes launched_from_tty=0 (the TTY=1 case uses `script -qc`, skip 77 when it is absent); AIDA_AGENT_NAME forces 0; a matching AIDA_RELAY_RESTART keeps the record and a mismatched one rewrites it; --detach promotes the pending record; reason=signal:TERM / session-cap / setup-error; --no-restart writes the marker; an appended `--max-sessions` overrides an earlier one.
+    - aida `aida-cli-lib/src/tests/story_1706_relay_restart_tests.rs` (fake DriveEffects): trap_never_ran vs trap-written reason vs unknown exit code; an eligible lane calls restart_relay with ORIG_ARGS + `--max-sessions` remaining, cwd and env (no GRANT/ROLE/PURPOSE/AGENT_*), and a done ledger row. One refusal test per R4 condition 1-10 (principal mismatch, non-TTY root, profile changed, advisor handoff, role advisor, force_seat, 3-cap plus a single crash-loop notice over two ticks, 1/2/4 backoff, <30m left, norestart, scope absent from an old drive record, relay-restart human gate, operator-only spec, record missing / symlink / 0644 / v=2 / root mismatch). Mandate stopped between plan and exec → refused with no spawn. Lane relocked between plan and exec → no spawn. Restarts file unwritable → no spawn. A spawn error counts and backs off. Old drive JSON does not cover RelayRestart. One live test spawns a stub relay.sh in a tempdir and asserts args, cwd, scrubbed env and detachment.
+    - Gates: targeted tests, make check-ci-fast, make test-touched (never the full suite).
+
+    ## 5. PR split
+    - PR A (aida-relay repo): L1-L4, docs (README and docs/operations/unattended-runs.md) and the shell suite. It is harmless alone (nothing reads the record yet).
+    - PR B (aida): R1-R6 and tests. It is harmless without A: no record means no restart. It touches mandate_drive.rs/mandate.rs/mandate_gates.rs, which are gate-protected, so its merge goes to the operator after an attested STRICT approve.
+
+    ## 6. Questions for the advisor
+    Q1 Trust anchor. relay.launch is a same-uid file, and launched_from_tty is self-reported by relay.sh using the same test as require_direct_human. Its trust equals the mandate records' (also same-uid files). I propose accepting that, with the owner/0600/no-symlink checks. Or do you want a stronger anchor, given that none exists today?
+    Q2 Scope compat. Add Scope::RelayRestart, which existing drive mandates do NOT cover (re-mint needed). An older binary ignores a record carrying the new scope string (fail closed, so the whole drive mandate is invisible to an old binary). OK?
+    Q3 Cross-repo trailers. PR A (aida-relay) uses "(Refs STORY-1706)" so it does not complete the spec, and PR B carries "(STORY-1706)". Also confirm that `--no-restart` as a marker-only verb (no signalling) satisfies "a relay.norestart marker written by an operator stop verb".
+  created_at: 2026-10-22T10:53:11.844005982Z
+  modified_at: 2026-10-22T10:53:11.844005982Z
+  session_id: 0b08344d-2403-4936-8cfc-5e4276efb6b9
 history:
 - id: 01a16149-9ba7-7df3-aec7-b485bef56bae
   author: joe
