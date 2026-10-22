@@ -6,17 +6,26 @@ description: |
   review_authority.rs starts_in_different_schemes classes both linux-starttime: and sysinfo-start: as Exact. A pair of tokens split across those two exact schemes, for the same pid, therefore still falls through to strict_match, the liveness probe, so the TASK-2049 residual remains for that pair. Either class them separately (every caller is a refusal check, so this fails closed) or say in the doc comment that the residual is accepted.
 
   Raised in review of PR-2820: https://github.com/joemooney/aida/pull/2820#issuecomment-6332530277
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T04:14:41.724126360Z
-modified_at: 2026-10-22T04:14:41.724126360Z
+modified_at: 2026-10-22T04:33:27.724550970Z
 req_type: Task
 tags:
 - from-review:PR-2820
 - review-authority
 - severity:cosmetic
+history:
+- id: 01a161e2-acac-7430-aada-6cdea82e821b
+  author: joe
+  timestamp: 2026-10-22T04:33:27.724546063Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 15081ef196bb0d7a347d302cf9a7c69bcd03acdc
   branch: pr-2820
