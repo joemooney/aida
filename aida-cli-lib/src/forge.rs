@@ -714,6 +714,21 @@ pub(crate) fn head_matches_pin(pin: &str, actual: &str) -> bool {
         == crate::awaiting_you::ReviewRelation::Same
 }
 
+/// The `gh api` argv for GitHub's update-branch endpoint, pinned to
+/// `expected_head` so a head that moved since it was read is refused (422)
+/// instead of updated.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn github_update_branch_argv(id: u64, expected_head: &str) -> Vec<String> {
+    vec![
+        "api".to_string(),
+        "--method".to_string(),
+        "PUT".to_string(),
+        format!("repos/{{owner}}/{{repo}}/pulls/{id}/update-branch"),
+        "-f".to_string(),
+        format!("expected_head_sha={expected_head}"),
+    ]
+}
+
 /// TASK-1458: the `gh pr merge` argv for `opts`. Squash reuses the
 /// SPEC-410-pinned `pr_ship::merge_args`; a `match_head` pin appends
 /// `--match-head-commit <sha>` so GitHub itself refuses a head that moved
@@ -949,6 +964,19 @@ pub trait Forge {
     /// so the closure is self-explaining to whoever finds it.
     // trace:TASK-1289 | ai:claude
     fn close_change(&self, c: &ChangeRef, reason: &str) -> Result<()>;
+
+    /// Merge the base branch into change `id`'s head on the forge (GitHub's
+    /// "Update branch"), refused by the forge when the head is no longer
+    /// `expected_head`. Only GitHub implements it; every other forge refuses,
+    /// so `aida pr ship-batch` stops instead of guessing.
+    // trace:STORY-1887 | ai:claude
+    fn update_change_branch(&self, id: u64, expected_head: &str) -> Result<()> {
+        let _ = (id, expected_head);
+        anyhow::bail!(
+            "updating a change's branch from its base is not supported on {}",
+            self.kind().cli_name()
+        )
+    }
 
     /// `gh pr ready` / `glab mr update --ready` / pure-git no-op.
     ///
@@ -1627,6 +1655,19 @@ impl Forge for GitHubForge {
             crate::detect_merged_pr_for_branch_github(&self.project_root, branch),
             branch,
         ))
+    }
+
+    // trace:STORY-1887 | ai:claude
+    fn update_change_branch(&self, id: u64, expected_head: &str) -> Result<()> {
+        let argv = github_update_branch_argv(id, expected_head);
+        let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+        let out = self.gh(&argv)?;
+        anyhow::ensure!(
+            out.status.success(),
+            "gh could not update PR #{id}'s branch: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     fn change_status(&self, c: &ChangeRef) -> Result<ChangeStatus> {
