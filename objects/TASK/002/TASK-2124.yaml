@@ -6,16 +6,25 @@ description: |
   aida-cli-lib/src/tests/task_1915_mandate_ship_failure_ledger_tests.rs: the pin every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal finds exits by looking only for lines starting with 'return Err(' and lines containing 'bail!('. If someone adds a '?' early exit between the mandate release decision and the merge in pr_ship_with_method, that ship can fail without a MandateDriveAction row and the pin stays green. There are no '?' exits in the window today. Also: pr_cmd.rs:3581 (the non-mandate Ok(false) arm) makes a ledger call that never does anything, because mandate_release is always None there. A comment should say so.
 
   Raised in review of PR-2802: https://github.com/joemooney/aida/pull/2802#issuecomment-6329349919
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T00:05:26.966516737Z
-modified_at: 2026-10-22T00:05:26.966516737Z
+modified_at: 2026-10-22T00:06:07.305057932Z
 req_type: Task
 tags:
 - from-review:PR-2802
 - severity:minor
+history:
+- id: 01a160ed-eac9-7110-81cf-80f1e655fa01
+  author: joe
+  timestamp: 2026-10-22T00:06:07.305055124Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: bae5ada508f207cccb9e9408f08b23298cbd81ba
   branch: pr-2802
