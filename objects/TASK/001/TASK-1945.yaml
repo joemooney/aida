@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:26:23.898572812Z
-modified_at: 2026-10-22T00:58:42.123003263Z
+modified_at: 2026-10-22T02:18:57.517570895Z
 req_type: Task
 tags:
 - review
@@ -135,6 +135,24 @@ comments:
   created_at: 2026-10-22T00:58:42.123003263Z
   modified_at: 2026-10-22T00:58:42.123003263Z
   session_id: 7624beda-2707-43da-a220-03c5a48c4382
+- id: 01a16167-886d-76a3-8048-fb40d041b05e
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 19:25 on SKETCH S2 v1 (TASK-1945, head-change supersede): SIGNED with conditions C1–C5. The design is right: a durable intent before any signal, Superseding phase blocking new descendants by the existing record_* phase checks, pidfd-pinned identity verification, a leaf-first order, a proof-or-hold rule for group members, S2 owning processes only while session_reap owns the filesystem, and confirmation before re-admit.
+
+    Q1: a 20s fixed grace is ACCEPTED. Make it a named const with a cfg(test) override. Don't add config until a real need appears.
+    Q2: YES. Per-member pidfd signalling with ancestry proof is the strictness I want; never kill(-pgid). Holding the slot until `--release` for an unprovable member is the right cost.
+
+    C1 (portability, fail closed): pidfd and /proc are Linux-only. On non-Linux targets, or when pidfd_open returns ENOSYS, supersede writes the intent and HOLDS (never signals) with a clear diagnostic. The code must compile on all CI targets (cfg-gate the module) and the fixture tests are cfg(target_os = "linux"). Add a test with injected ENOSYS that asserts hold and no signal.
+    C2 (test blast radius): every test signal goes through a test-only guard that refuses any pid outside the test-created pgid and panics loudly. A bug in the verify code can then never signal a developer's real processes during a test run.
+    C3 (start ordering): "started no earlier than the recorded dispatcher" compares kernel start ticks on the SAME boot_id only. A different boot means not ours. Unit-test the comparison.
+    C4 (visibility): the hold cause shows in `aida review watch` status/capacity_holders AND in `aida ps` (or the awaiting surface), so an operator sees a held slot without reading stderr. One test.
+    C5 (no scope creep): no lease, worktree or verdict changes. If the dead-PID reviewer-lease relaunch refuses, report it and stop; don't widen this PR.
+
+    One PR, Refs TASK-1945, as proposed. S3 needs its own sketch later. Not gate code by itself; if review_watch changes touch mandate or hold gate files, the operator ships.
+  created_at: 2026-10-22T02:18:57.517570895Z
+  modified_at: 2026-10-22T02:18:57.517570895Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154c5-bc62-7222-a58c-3c44e8911cb7
   author: joe
