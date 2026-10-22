@@ -401,28 +401,53 @@ fn bug_1929_host_path_and_attribute_source() {
 fn bug_1929_only_owner_may_write_matrix() {
     use crate::store_hooks::only_owner_may_write as ok;
     let (me, my_group, other) = (1000, 1000, 2000);
-    assert!(ok(me, my_group, 0o755, me, my_group));
+    assert!(ok(me, my_group, 0o755, me, Some(my_group)));
     assert!(
-        ok(me, my_group, 0o775, me, my_group),
+        ok(me, my_group, 0o775, me, Some(my_group)),
         "user-private group 0775 is owner-only"
     );
     assert!(
-        !ok(me, other, 0o775, me, my_group),
+        !ok(me, other, 0o775, me, Some(my_group)),
         "a shared group could swap hooks"
     );
     assert!(
-        !ok(other, my_group, 0o775, me, my_group),
+        !ok(other, my_group, 0o775, me, Some(my_group)),
         "another owner's group-write"
     );
-    assert!(!ok(me, my_group, 0o777, me, my_group), "world-writable");
     assert!(
-        !ok(me, my_group, 0o757, me, my_group),
+        !ok(me, my_group, 0o777, me, Some(my_group)),
+        "world-writable"
+    );
+    assert!(
+        !ok(me, my_group, 0o757, me, Some(my_group)),
         "world-writable without group-write"
     );
     assert!(
-        ok(me, other, 0o755, me, my_group),
+        ok(me, other, 0o755, me, Some(my_group)),
         "no group-write: the group does not matter"
     );
+    // TASK-1759: a shared primary group (`users`) is not private, so its
+    // group-write refuses even on the user's own directory.
+    // trace:TASK-1952 | trace:TASK-1759 | ai:claude
+    assert!(
+        !ok(me, my_group, 0o775, me, None),
+        "a shared primary group could swap hooks"
+    );
+    assert!(ok(me, my_group, 0o755, me, None));
+}
+
+// TASK-1759: only a group named after the user with no supplementary members
+// is a user-private group. trace:TASK-1952 | trace:TASK-1759 | ai:claude
+#[test]
+fn task_1759_user_private_group_rule() {
+    use crate::store_hooks::is_user_private_group as upg;
+    assert!(upg("joe", "joe", &[]));
+    assert!(!upg("joe", "users", &[]), "shared primary group");
+    assert!(
+        !upg("joe", "joe", &["eve".to_string()]),
+        "a member could write"
+    );
+    assert!(!upg("", "", &[]));
 }
 
 // Reproduces the r8 blocker: on a host whose checkout and .git are 0775
@@ -439,6 +464,18 @@ fn bug_1929_user_private_group_0775_checkout_allows_store_writes() {
     };
     for p in [dir.path(), main.as_path(), main.join(".git").as_path()] {
         set(p, 0o775);
+    }
+    // TASK-1759: 0775 is owner-only only under a user-private primary group
+    // (CI runners may run with a shared one); otherwise it refuses.
+    // trace:TASK-1952 | trace:TASK-1759 | ai:claude
+    // SAFETY: geteuid/getegid have no preconditions.
+    let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+    if crate::store_hooks::private_primary_gid(uid, gid).is_none() {
+        assert!(
+            resolve_store_hooks_dir(&store).is_err(),
+            "a 0775 checkout under a shared primary group must refuse"
+        );
+        return;
     }
     let hooks = resolve_store_hooks_dir(&store).unwrap().unwrap();
     assert!(hooks.starts_with(main.join(".git")));
@@ -496,33 +533,33 @@ fn bug_1929_ancestor_overflow_uid_matrix() {
     let (me, my_group, overflow, other) = (1000, 1000, 65534, 2000);
     let ns = Some(overflow);
     // Overflow-owned / and /home inside bwrap.
-    assert!(check(overflow, overflow, 0o755, me, my_group, ns).is_ok());
+    assert!(check(overflow, overflow, 0o755, me, Some(my_group), ns).is_ok());
     assert!(
-        check(overflow, overflow, 0o1777, me, my_group, ns).is_ok(),
+        check(overflow, overflow, 0o1777, me, Some(my_group), ns).is_ok(),
         "sticky world-writable like /tmp"
     );
     // Outside a namespace the overflow uid is just another user.
-    let err = check(overflow, overflow, 0o755, me, my_group, None).unwrap_err();
+    let err = check(overflow, overflow, 0o755, me, Some(my_group), None).unwrap_err();
     assert!(err.contains("untrusted owner uid 65534"), "{err}");
     // Unsafe modes refuse even inside a namespace.
-    let err = check(overflow, overflow, 0o775, me, my_group, ns).unwrap_err();
+    let err = check(overflow, overflow, 0o775, me, Some(my_group), ns).unwrap_err();
     assert!(err.contains("group- or world-writable"), "{err}");
-    assert!(check(overflow, overflow, 0o757, me, my_group, ns).is_err());
-    assert!(check(overflow, overflow, 0o777, me, my_group, ns).is_err());
+    assert!(check(overflow, overflow, 0o757, me, Some(my_group), ns).is_err());
+    assert!(check(overflow, overflow, 0o777, me, Some(my_group), ns).is_err());
     // A different overflow value does not admit 65534.
-    assert!(check(overflow, overflow, 0o755, me, my_group, Some(4242)).is_err());
+    assert!(check(overflow, overflow, 0o755, me, Some(my_group), Some(4242)).is_err());
     // Other owners always refuse, namespace or not.
-    let err = check(other, other, 0o755, me, my_group, ns).unwrap_err();
+    let err = check(other, other, 0o755, me, Some(my_group), ns).unwrap_err();
     assert!(err.contains("untrusted owner uid 2000"), "{err}");
     // Root rule unchanged.
-    assert!(check(0, 0, 0o755, me, my_group, None).is_ok());
-    assert!(check(0, 0, 0o1777, me, my_group, None).is_ok());
-    assert!(check(0, 0, 0o775, me, my_group, None).is_err());
+    assert!(check(0, 0, 0o755, me, Some(my_group), None).is_ok());
+    assert!(check(0, 0, 0o1777, me, Some(my_group), None).is_ok());
+    assert!(check(0, 0, 0o775, me, Some(my_group), None).is_err());
     // User-owned components must still be user-only (UPG 0775 allowed).
-    assert!(check(me, my_group, 0o755, me, my_group, ns).is_ok());
-    assert!(check(me, my_group, 0o775, me, my_group, ns).is_ok());
-    assert!(check(me, other, 0o775, me, my_group, ns).is_err());
-    assert!(check(me, my_group, 0o1777, me, my_group, ns).is_err());
+    assert!(check(me, my_group, 0o755, me, Some(my_group), ns).is_ok());
+    assert!(check(me, my_group, 0o775, me, Some(my_group), ns).is_ok());
+    assert!(check(me, other, 0o775, me, Some(my_group), ns).is_err());
+    assert!(check(me, my_group, 0o1777, me, Some(my_group), ns).is_err());
 }
 
 // r4: a store whose git directory this process cannot write leaves its commit
@@ -996,4 +1033,88 @@ fn bug_2192_recently_changed_store_is_never_memoised() {
     };
     assert_eq!(spawns(), 2);
     assert_eq!(spawns(), 2, "a just-written store is looked up every time");
+}
+
+// TASK-1942: host git over a linked worktree (a contained-writable tree)
+// memoises its `.gitmodules` lookup, the file case included: an unchanged
+// tree spawns no lookup git, and an edited `.gitmodules` is re-read so its
+// new submodule still gets its override.
+// trace:TASK-1952 | trace:TASK-1942 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1942_linked_worktree_gitmodules_lookup_is_memoised() {
+    let dir = tempfile::tempdir().unwrap();
+    let (main, _store) = bug_1929_main_with_store(dir.path());
+    let wt = dir.path().join("wt");
+    run_git(
+        &main,
+        &["worktree", "add", "-q", "-b", "wt", wt.to_str().unwrap()],
+    );
+    assert!(is_contained_writable_tree(&wt));
+    let args = |cmd: &Command| -> Vec<String> {
+        cmd.get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect()
+    };
+
+    // No `.gitmodules`: the index/HEAD blob probes run once.
+    let (_, first) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert!(first >= 1, "first command probes .gitmodules");
+    let (_, second) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(second, 0, "an unchanged worktree reuses the probe");
+
+    // A `.gitmodules` file: one read, then memoised.
+    std::fs::write(
+        wt.join(".gitmodules"),
+        "[submodule \"one\"]\n\tpath = one\n\turl = ./x\n",
+    )
+    .unwrap();
+    let (_, file_first) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(file_first, 1);
+    let (cmd, file_second) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(file_second, 0, "an unchanged .gitmodules is not re-read");
+    assert!(args(&cmd).contains(&"submodule.one.ignore=dirty".to_string()));
+
+    // Replacing it (new inode) re-reads it.
+    std::fs::remove_file(wt.join(".gitmodules")).unwrap();
+    std::fs::write(
+        wt.join(".gitmodules"),
+        "[submodule \"two\"]\n\tpath = two\n\turl = ./x\n",
+    )
+    .unwrap();
+    let (cmd, after) = bug_2192_settled_spawns(|| host_git_command(&wt));
+    assert_eq!(after, 1);
+    assert!(args(&cmd).contains(&"submodule.two.ignore=dirty".to_string()));
+}
+
+// TASK-1943: an edited submodule whose path git C-quotes in porcelain v1 is
+// listed once, and the added line is quoted exactly as git quotes it.
+// trace:TASK-1952 | trace:TASK-1943 | ai:claude
+#[cfg(unix)]
+#[test]
+fn task_1943_quoted_porcelain_path_is_listed_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().join("r");
+    init(&repo).unwrap();
+    let name = "sub d\u{ef}r\t\"x\"";
+    std::fs::write(repo.join(name), "x").unwrap();
+    let git_line = run_git(&repo, &["status", "--porcelain"]);
+    let git_line = git_line.lines().next().unwrap().to_string();
+    assert!(git_line.starts_with("?? \""), "git quotes it: {git_line}");
+    assert_eq!(porcelain_quote(name), git_line[3..], "quoted like git");
+    assert_eq!(porcelain_unquote(&git_line[3..]), name);
+
+    let mut porcelain = format!("{git_line}\n");
+    note_edited_submodule(&mut porcelain, name);
+    assert_eq!(
+        porcelain,
+        format!("{git_line}\n"),
+        "already listed: no second line"
+    );
+    let mut empty = String::new();
+    note_edited_submodule(&mut empty, name);
+    assert_eq!(empty, format!(" M {}\n", &git_line[3..]));
+    let mut plain = String::new();
+    note_edited_submodule(&mut plain, "plain/sub");
+    assert_eq!(plain, " M plain/sub\n");
 }
