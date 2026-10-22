@@ -43,7 +43,10 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
 /// The 0-based lines of `#[cfg(test)] mod name { ... }` blocks (closed by a
 /// bare `}` at column 0).
 fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
-    let module = regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap();
+    static MODULE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"^\s*(pub(\(crate\))? )?mod \w+\s*\{").unwrap()
+    });
+    let module = &*MODULE;
     let mut skip = std::collections::HashSet::new();
     let mut i = 0;
     while i < lines.len() {
@@ -66,8 +69,15 @@ fn test_module_lines(lines: &[&str]) -> std::collections::HashSet<usize> {
 /// (`<Type>::new("git")`) without a `raw-git-ok(TASK-2053):` justification
 /// in the three lines above.
 fn raw_git_in_lease_reader(src: &str) -> Option<usize> {
-    let raw = regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap();
-    let field = regex::Regex::new(r"\bworktree_path\b").unwrap();
+    static RAW: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r#"\b\w+::new\("git"\)"#).unwrap());
+    static FIELD: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"\bworktree_path\b").unwrap());
+    // Cheap pre-filter: most files never name the field.
+    if !src.contains("worktree_path") {
+        return None;
+    }
+    let (raw, field) = (&*RAW, &*FIELD);
     let lines: Vec<&str> = src.lines().collect();
     let tests = test_module_lines(&lines);
     let code = |i: usize| !tests.contains(&i) && !lines[i].trim_start().starts_with("//");
