@@ -515,6 +515,20 @@ pub enum EventKind {
         #[serde(default, skip_serializing_if = "String::is_empty")]
         detail: String,
     },
+    /// STORY-1887: one step of an operator `aida pr ship-batch` run: the
+    /// batch start, each PR's outcome, a refusal, and the final stop.
+    /// `outcome` is started | shipped | skipped | stopped | planned |
+    /// refused | finished. **Not actionable**: the operator is at the TTY
+    /// running it; the record is for `aida history events --kind
+    /// ship-batch-step`.
+    // trace:STORY-1887 | ai:claude
+    ShipBatchStep {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pr: Option<u64>,
+        outcome: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        detail: String,
+    },
     /// Forward-compat catch-all: a kind a newer binary wrote that this one
     /// does not know. Never emitted by this binary; produced only by
     /// deserializing an unrecognized `event` tag. Classified **actionable**
@@ -582,6 +596,8 @@ impl EventKind {
             | EventKind::PlanRecorded { .. }
             // STORY-1700: the drive ledger records acts already taken.
             | EventKind::MandateDriveAction { .. }
+            // STORY-1887: an operator batch-ship step, run at the TTY.
+            | EventKind::ShipBatchStep { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
             | EventKind::GateHeld { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
@@ -674,6 +690,7 @@ impl EventKind {
             EventKind::PlanRecorded { .. } => "PlanRecorded",
             EventKind::MandateDriveAction { .. } => "MandateDriveAction",
             EventKind::MandateDriveDue { .. } => "MandateDriveDue",
+            EventKind::ShipBatchStep { .. } => "ShipBatchStep",
             EventKind::Unknown => "Unknown",
         }
     }
@@ -715,6 +732,7 @@ impl EventKind {
             "PlanRecorded",
             "MandateDriveAction",
             "MandateDriveDue",
+            "ShipBatchStep",
         ]
     }
 }

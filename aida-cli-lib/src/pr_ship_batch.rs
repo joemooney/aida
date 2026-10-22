@@ -92,8 +92,14 @@ pub(crate) trait BatchPorts {
     fn human_at_terminal(&self) -> bool;
     fn view(&mut self, pr: u64) -> Result<PrView>;
     /// C4: the CI-definition files that make `aida pr ship` refuse this PR's
-    /// green, from the stale-definition gate's own predicate.
-    fn stale_definition_files(&mut self, pr: u64, view: &PrView) -> Result<Vec<String>>;
+    /// green, from the stale-definition gate's own predicate. `fetch` false
+    /// (`--dry-run`) judges against the local tracking refs as they are.
+    fn stale_definition_files(
+        &mut self,
+        pr: u64,
+        view: &PrView,
+        fetch: bool,
+    ) -> Result<Vec<String>>;
     fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()>;
     fn ci_at_head(&mut self, pr: u64, head: &str) -> Result<CiAtHead>;
     /// Enqueue a review of the current head; never launches or records one.
@@ -220,7 +226,10 @@ fn plan_pr(ports: &mut dyn BatchPorts, pr: u64) -> PrOutcome {
     if view.mergeable == Mergeable::Conflicting {
         steps.push("conflicts with main: the batch would stop here".to_string());
     }
-    match ports.stale_definition_files(pr, &view) {
+    // TASK-2157: a dry run changes nothing, so it does not fetch; the
+    // stale-definition check reads the local `origin/*` refs as they are.
+    // trace:STORY-1887 | ai:claude
+    match ports.stale_definition_files(pr, &view, false) {
         Ok(files) if view.behind || !files.is_empty() => {
             steps.push("would refresh from main".to_string())
         }
@@ -262,7 +271,7 @@ fn ship_one(ports: &mut dyn BatchPorts, pr: u64, opts: BatchOptions) -> PrOutcom
         return done;
     }
     ports.say(&format!("PR #{pr} {}", view.title));
-    let stale = match ports.stale_definition_files(pr, &view) {
+    let stale = match ports.stale_definition_files(pr, &view, true) {
         Ok(files) => files,
         Err(e) => {
             return PrOutcome::Stopped(format!("could not check whether PR #{pr} is stale: {e:#}"))
@@ -687,17 +696,24 @@ impl BatchPorts for GitHubPorts {
         Ok(parse_pr_view(&v))
     }
 
-    fn stale_definition_files(&mut self, pr: u64, view: &PrView) -> Result<Vec<String>> {
-        let out = std::process::Command::new("git")
-            .arg("-C")
-            .arg(&self.project_root)
-            .args(["fetch", "--quiet", "origin"])
-            .output()?;
-        anyhow::ensure!(
-            out.status.success(),
-            "git fetch origin failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+    fn stale_definition_files(
+        &mut self,
+        pr: u64,
+        view: &PrView,
+        fetch: bool,
+    ) -> Result<Vec<String>> {
+        if fetch {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&self.project_root)
+                .args(["fetch", "--quiet", "origin"])
+                .output()?;
+            anyhow::ensure!(
+                out.status.success(),
+                "git fetch origin failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
+        }
         let (_, warning) =
             crate::pr_cmd::ship_stale_definition_warning(&self.project_root, &view.head_ref, pr);
         Ok(warning.map(|w| w.definition_files).unwrap_or_default())
@@ -725,11 +741,18 @@ impl BatchPorts for GitHubPorts {
 
     fn review_at_head(&mut self, pr: u64, view: &PrView) -> ReviewAtHead {
         let roots = [self.project_root.as_path(), self.main_worktree.as_path()];
+        // TASK-2156: the same candidate IDs the ship gate builds.
+        // trace:STORY-1887 | ai:claude
+        let ids = crate::pr_cmd::ship_gate_known_ids(
+            &self.project_root,
+            &view.head_ref,
+            Some(&view.title),
+        );
         let (candidates, policy) = crate::pr_cmd::merge_approval_inputs(
             &roots,
             &self.main_worktree,
             pr,
-            &[],
+            &ids,
             Some(&view.head_ref),
             Some(&view.head_sha),
         );
@@ -777,8 +800,7 @@ impl BatchPorts for GitHubPorts {
     }
 
     fn clear_hold(&mut self, pr: u64) -> Result<()> {
-        let exe = std::env::current_exe()?;
-        let status = std::process::Command::new(exe)
+        let status = std::process::Command::new(crate::resolve_aida_exe())
             .current_dir(&self.main_worktree)
             .args(["merge-hold", "clear", &pr.to_string()])
             .status()?;
@@ -828,10 +850,30 @@ impl BatchPorts for GitHubPorts {
             "detail": detail,
         });
         crate::pr_cmd::append_ship_activity_line(&self.main_worktree, &line.to_string());
+        // TASK-2155: every step also reaches the events feed, so
+        // `aida history events --kind ship-batch-step` shows the run.
+        // trace:STORY-1887 | ai:claude
+        crate::events::emit(&self.main_worktree, &ship_batch_event(pr, outcome, detail));
         if outcome == "refused" {
             crate::events::record_gate_held(&self.main_worktree, "ship-batch", None, pr, detail);
         }
     }
+}
+
+/// The events-feed record of one batch step (pure; [`GitHubPorts`] emits it).
+// trace:STORY-1887 | ai:claude
+fn ship_batch_event(pr: Option<u64>, outcome: &str, detail: &str) -> crate::events::Event {
+    let mut ev = crate::events::Event::new(
+        None,
+        "",
+        crate::events::EventKind::ShipBatchStep {
+            pr,
+            outcome: outcome.to_string(),
+            detail: detail.trim().to_string(),
+        },
+    );
+    ev.seat = crate::events::active_seat();
+    ev
 }
 
 #[cfg(test)]
@@ -871,6 +913,8 @@ mod tests {
         cleared: Vec<u64>,
         shipped: Vec<(u64, ShipOverrides)>,
         said: Vec<String>,
+        fetches: u32,
+        recorded: Vec<(Option<u64>, String)>,
     }
 
     impl Fake {
@@ -921,8 +965,14 @@ mod tests {
                 .and_then(next)
                 .ok_or_else(|| anyhow::anyhow!("no such PR"))
         }
-        fn stale_definition_files(&mut self, pr: u64, _view: &PrView) -> Result<Vec<String>> {
+        fn stale_definition_files(
+            &mut self,
+            pr: u64,
+            _view: &PrView,
+            fetch: bool,
+        ) -> Result<Vec<String>> {
             self.forge_calls += 1;
+            self.fetches += u32::from(fetch);
             Ok(self.stale.get(&pr).cloned().unwrap_or_default())
         }
         fn update_branch(&mut self, pr: u64, expected_head: &str) -> Result<()> {
@@ -974,7 +1024,9 @@ mod tests {
         fn say(&mut self, line: &str) {
             self.said.push(line.to_string());
         }
-        fn record(&mut self, _pr: Option<u64>, _outcome: &str, _detail: &str) {}
+        fn record(&mut self, pr: Option<u64>, outcome: &str, _detail: &str) {
+            self.recorded.push((pr, outcome.to_string()));
+        }
     }
 
     const OPTS: BatchOptions = BatchOptions {
@@ -1351,5 +1403,73 @@ mod tests {
             crate::mandate_gates::touches_gates(&["aida-cli-lib/src/pr_ship_batch.rs".to_string()]),
             Some("aida-cli-lib/src/pr_ship_batch.rs".to_string())
         );
+    }
+
+    // TASK-2155: the start, each PR's outcome and the stop are recorded, and
+    // the record is an events-feed kind `aida history events` can filter on.
+    // trace:STORY-1887 | ai:claude
+    #[test]
+    fn task_2155_batch_steps_reach_the_events_feed() {
+        let mut f = ready(Fake::human(), 1, "aaaaaaaaaaaa1")
+            .views(2, vec![open("bbbbbbbbbbbb2")])
+            .ci("bbbbbbbbbbbb2", vec![CiAtHead::Failing("Build".into())])
+            .answers(&["go", "1"]);
+        run_batch(&mut f, &[1, 2], OPTS).unwrap();
+        assert_eq!(
+            f.recorded,
+            vec![
+                (None, "started".to_string()),
+                (Some(1), "shipped".to_string()),
+                (Some(2), "stopped".to_string()),
+            ]
+        );
+        let ev = ship_batch_event(Some(2), "stopped", " CI red \n");
+        assert_eq!(ev.kind.name(), "ShipBatchStep");
+        assert!(crate::events::EventKind::known_names().contains(&"ShipBatchStep"));
+        assert!(!ev.kind.is_actionable());
+        let line = serde_json::to_string(&ev).unwrap();
+        assert!(line.contains("\"event\":\"ShipBatchStep\""), "{line}");
+        assert!(line.contains("\"detail\":\"CI red\""), "{line}");
+        let back: crate::events::Event = serde_json::from_str(&line).unwrap();
+        assert_eq!(back.kind, ev.kind);
+    }
+
+    // TASK-2156: the review wait looks verdicts up under the same IDs the
+    // ship gate does, including one that appears only in the PR title.
+    // trace:STORY-1887 | ai:claude
+    #[test]
+    fn task_2156_known_ids_include_a_title_only_spec_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ids = crate::pr_cmd::ship_gate_known_ids(
+            tmp.path(),
+            "claude/story-1887",
+            Some("feat(pr): ship-batch (TASK-9901)"),
+        );
+        assert!(ids.contains(&"TASK-9901".to_string()), "{ids:?}");
+        assert!(ids.contains(&"STORY-1887".to_string()), "{ids:?}");
+    }
+
+    // TASK-2157: `--dry-run` never fetches; a real run does.
+    // trace:STORY-1887 | ai:claude
+    #[test]
+    fn task_2157_dry_run_never_fetches() {
+        let dry = BatchOptions {
+            dry_run: true,
+            ..OPTS
+        };
+        let mut f = ready(Fake::human(), 4, "head_0000");
+        f.stale
+            .insert(4, vec![".github/workflows/ci.yml".to_string()]);
+        let out = run_batch(&mut f, &[4], dry).unwrap();
+        assert!(
+            matches!(&out[0].1, PrOutcome::Planned(p) if p.contains("would refresh")),
+            "{out:?}"
+        );
+        assert_eq!(f.fetches, 0);
+        assert!(f.updates.is_empty() && f.shipped.is_empty());
+
+        let mut f = ready(Fake::human(), 4, "head_0000").answers(&["go", "4"]);
+        run_batch(&mut f, &[4], OPTS).unwrap();
+        assert_eq!(f.fetches, 1);
     }
 }

@@ -557,7 +557,12 @@ new independent review before `aida pr ship` accepts it. `aida pr ship-batch
 
 **Options.** `--review-timeout` sets how long to wait for each approval
 (default `60m`). `--dry-run` reads each PR and reports what the batch would
-do, changing nothing.
+do, changing nothing. It does not run `git fetch`, so the stale-definition
+check reads your local `origin/*` refs as they are; fetch first for a current
+answer.
+
+**Record.** The start, each PR's outcome and the stop are written to the
+events feed; `aida history events --kind ship-batch-step` shows the run.
 
 **Stopping.** Any failure stops the batch and ships nothing further: red CI,
 CI or review timeout, a negative verdict, a head that keeps moving, an

@@ -12646,13 +12646,7 @@ Commands:
                      --auto-complete` (which drives the full reviewer pipeline) — use this for
                      human-pre-approved work where no orchestrator review phase is needed (docs PRs,
                      master-signed architecture work, recovery merges)
-  ship-batch         Ship several reviewed PRs that need a human merge, one at a time, in the order
-                     given. For each PR it refreshes the branch from main only when the PR is behind
-                     or its green predates a CI-definition change, waits for CI on that exact head,
-                     waits for an independent approval recorded at that head (it never records or
-                     requests one itself), then asks you to type the PR number before shipping it
-                     with every `aida pr ship` gate in force. A merge-hold on a confirmed PR is
-                     cleared only when you also type `clear`
+  ship-batch         Ship several PRs that need a human merge, one at a time, in order
   hold               Deliberately HOLD the PR on the current session — push the branch but
                      intentionally do not open the PR yet, pending a manual gate (a smoke test, an
                      out-of-band review, an operator decision)
@@ -12908,12 +12902,13 @@ Exit codes: 0 merged (or already merged; dry-run previews); 1 other error; 20 CI
 ownership/CI wait timed out; 22 needs rebase/not mergeable; 23 needs review/approval at head; 24
 stale CI definition; 25 merge-hold present.
 ===== aida pr ship-batch
-Ship several reviewed PRs that need a human merge, one at a time, in the order given. For each PR it
-refreshes the branch from main only when the PR is behind or its green predates a CI-definition
-change, waits for CI on that exact head, waits for an independent approval recorded at that head (it
-never records or requests one itself), then asks you to type the PR number before shipping it with
-every `aida pr ship` gate in force. A merge-hold on a confirmed PR is cleared only when you also
-type `clear`.
+Ship several PRs that need a human merge, one at a time, in order.
+
+For each PR, in the order given, it refreshes the branch from main only when the PR is behind or its
+green predates a CI-definition change, waits for CI on that exact head, waits for an independent
+approval recorded at that head (it queues the PR for review but never records a verdict), then asks
+you to type the PR number before shipping it with every `aida pr ship` gate in force. A merge-hold
+on a confirmed PR is cleared only when you also type `clear`.
 
 Any failure stops the batch without shipping: red or missing CI, a conflict, no approval in time, a
 refused gate, or an unconfirmed prompt. Re-run the same command to continue; merged PRs are skipped.
@@ -12931,7 +12926,8 @@ Options:
           minutes; default 60m)
 
       --dry-run
-          Show each PR's state and what the batch would do; change nothing
+          Show each PR's state and what the batch would do; change nothing. It does not fetch:
+          staleness is judged against your local `origin/*` refs as they are
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -36365,12 +36361,12 @@ Working on aida itself
       "pr",
       "ship-batch"
     ],
-    "about": "Ship several reviewed PRs that need a human merge, one at a time, in the order given. For each PR it refreshes the branch from main only when the PR is behind or its green predates a CI-definition change, waits for CI on that exact head, waits for an independent approval recorded at that head (it never records or requests one itself), then asks you to type the PR number before shipping it with every `aida pr ship` gate in force. A merge-hold on a confirmed PR is cleared only when you also type `clear`",
+    "about": "Ship several PRs that need a human merge, one at a time, in order",
     "flags": [
       {
         "name": "dry-run",
         "takes_value": false,
-        "help": "Show each PR's state and what the batch would do; change nothing"
+        "help": "Show each PR's state and what the batch would do; change nothing. It does not fetch: staleness is judged against your local `origin/*` refs as they are"
       },
       {
         "name": "format",

@@ -438,6 +438,23 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "mandate-drive-due",
             format!("drive routed {action} for {subject} to the advisor"),
         ),
+        // trace:STORY-1887 | ai:claude
+        EventKind::ShipBatchStep {
+            pr,
+            outcome,
+            detail,
+        } => (
+            "ship-batch-step",
+            format!(
+                "ship-batch {}{outcome}{}",
+                pr.map(|p| format!("#{p} ")).unwrap_or_default(),
+                if detail.is_empty() {
+                    String::new()
+                } else {
+                    format!(" — {detail}")
+                }
+            ),
+        ),
         // trace:TASK-1450 | ai:claude
         EventKind::ReviewVerdictRecorded {
             pr,

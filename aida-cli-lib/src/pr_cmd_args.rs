@@ -268,6 +268,8 @@ pub enum PrCommand {
         #[clap(long, value_name = "DURATION", value_parser = parse_review_timeout_secs)]
         review_timeout: Option<u64>,
         /// Show each PR's state and what the batch would do; change nothing.
+        /// It does not fetch: staleness is judged against your local
+        /// `origin/*` refs as they are.
         #[clap(long)]
         dry_run: bool,
     },

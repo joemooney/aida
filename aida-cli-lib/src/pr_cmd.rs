@@ -1804,6 +1804,27 @@ pub(crate) fn pr_gate_subject(
     )
 }
 
+/// The spec IDs the ship approval gate looks verdicts up under: the gate
+/// records for the local range, then every ID in the branch and the title.
+/// `aida pr ship-batch` waits on the same set, so its "approved at head"
+/// cannot drift from what ship accepts.
+// trace:STORY-1887 | ai:claude
+pub(crate) fn ship_gate_known_ids(
+    project_root: &std::path::Path,
+    branch: &str,
+    title: Option<&str>,
+) -> Vec<String> {
+    let mut ids: Vec<String> = ship_gate_spec_records(project_root)
+        .into_iter()
+        .map(|(id, _, _)| id)
+        .collect();
+    ids.extend(pr_ship::extract_spec_ids_from_text(branch));
+    if let Some(title) = title {
+        ids.extend(pr_ship::extract_spec_ids_from_text(title));
+    }
+    ids
+}
+
 /// BUG-1918: the approval candidates for merging PR `pr` (read from `roots`)
 /// and the [`ShipApprovalPolicy`] they are judged by — the one input every
 /// merge path (`aida pr ship`, the drain, `aida release --after-pr`,
@@ -2179,14 +2200,7 @@ fn ship_preflight_gates(
             change.id
         )));
     }
-    let mut ids: Vec<String> = ship_gate_spec_records(project_root)
-        .into_iter()
-        .map(|(id, _, _)| id)
-        .collect();
-    ids.extend(pr_ship::extract_spec_ids_from_text(&change.branch));
-    if let Some(title) = &change.title {
-        ids.extend(pr_ship::extract_spec_ids_from_text(title));
-    }
+    let ids = ship_gate_known_ids(project_root, &change.branch, change.title.as_deref());
     // BUG-1918: authors resolved from what the forge says the PR ships, not
     // only the local range (empty when shipping from main).
     let (candidates, policy) = merge_approval_inputs(
