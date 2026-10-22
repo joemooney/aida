@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:30:48.862626134Z
-modified_at: 2026-10-22T01:47:04.400519577Z
+modified_at: 2026-10-22T09:50:39.533293756Z
 req_type: Story
 tags:
 - authority
@@ -47,6 +47,67 @@ comments:
   created_at: 2026-10-22T01:47:04.400519577Z
   modified_at: 2026-10-22T01:47:04.400519577Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16305-13ad-7563-a7f1-97717db550bf
+  author: joe
+  content: |-
+    SKETCH v1 (STORY-1888), implementer claude, 2026-10-22.
+
+    PROBLEM AS OBSERVED
+    - GATE_PROTECTED_PATHS (mandate_gates.rs:344) is a fixed list of 14 exact files, checked by touches_gates() from two places: mandate::gate_checks (mandate ship / rework release) and mandate_drive::plan_held_pr (the drive tick's forced_gate). An operator cannot add a path without a code change.
+    - Gate-authority code already sits outside the floor and nothing flags it: role.rs (advisor_authority_from, hold_authority_from), pr_cmd.rs (pr_ship_approval_gate, merge_path_approval_gate, ship_preflight_gates), pr_merge_gate.rs (drain_merge_approval_gate), lib_part5.rs (review_author_gate and the review_*_refusal functions), defer_cmd.rs (hold_authorized). A mandate-shipped PR can change any of these today.
+    - (comment 0) The path rule applies only to a mandate-released ship. An unheld PR touching floor files can be shipped by an agent seat with no human step.
+
+    DESIGN
+    A. Tighten-only protected_paths (mandate_gates.rs only, plus two call-site signature changes)
+    - GateLayer gains `protected_paths: BTreeSet<String>`. parse_layer accepts `[mandate.human_gates] protected_paths = ["path", "dir/"]`. An entry ending in "/" is a directory prefix; any other entry is an exact path. "./" is stripped. Each of these is a parse ERROR: a non-list value, a non-string item, an empty string, an absolute path, a ".." segment, glob characters (*?[), or a backslash. An error makes the whole layer unreadable, so every op stays gated (today's fail-closed path). Nothing is silently dropped.
+    - New `ProtectedPaths { entries: Vec<ProtectedEntry { pattern, source: PathSource } > }`, where PathSource is BuiltIn | Committed | Operator. It is built as floor + committed + operator, deduplicated, keeping the first (strongest) source. No API removes or filters an entry: the type has only constructors that union, and the floor is always seeded first. HumanGates gains `protected: ProtectedPaths`, and union() fills it. So load_human_gates() still reads both layers once and returns one Result.
+    - `touches_gates(paths, &ProtectedPaths) -> Option<GateMatch { path, entry, source }>`. Exact entries match equality; prefix entries match `path.starts_with(entry)`. Paths are normalised the same way as today.
+    - An unreadable layer fails CLOSED. Callers that hold an Err use `ProtectedPaths::floor()` for the path check, and the existing HumanGated("gate config unreadable") refusal still refuses every ship. The floor check never depends on config being readable.
+    - Call sites:
+      (1) mandate::ShipCheck gains `protected: &ProtectedPaths`. mandate_ship.rs already loads the gates at :173 and passes `gates.as_ref().map(|g| &g.protected)`, falling back to the floor on Err.
+      (2) mandate_drive::plan_held_pr takes `&ProtectedPaths` from `inp.gates` (floor on Err). MandateRefusal::TouchesGates and forced_gate gain the matched entry and source, e.g. "it changes `x/y.rs`, protected by `x/` (operator ~/.aida/config.toml); a human must merge it".
+    - Status: `aida mandate status` prints a "protected paths:" block, one line per entry with its source tag [built-in | origin/main | ~/.aida]. `--json` adds `protected_paths: [{path, source}]`. The cached one-line describe() (the per-turn notice) is unchanged: ops only, so no new git calls per turn. The status block is computed live.
+    B. Drift ratchet (new test file tests/story_1888_gate_paths_tests.rs, added to the floor so the ratchet cannot be weakened under a mandate)
+    - The test scans every non-test .rs file under aida-cli-lib/src, aida-core/src and aida-server/src. Its scan skips tests/ dirs, *_tests.rs files, everything after a `#[cfg(test)]` mod line, and fns directly under #[test]. A file is GATE-AUTHORITY when either:
+      (a) it carries the marker comment `// mandate-gate`, or
+      (b) it defines a fn whose name matches `^(\w*_)?(approval|authority|hold|ship|merge|verdict|seat|mandate|signoff|review)\w*_(gate|gated|authority|authorized|decision|refusal)$`, or is named `\w*_authority_from`.
+    - Rules, each a separate assertion with its own message:
+      R1. Every gate-authority file is in GATE_PROTECTED_PATHS or in KNOWN_UNPROTECTED (below). Message: "add <path> to GATE_PROTECTED_PATHS in mandate_gates.rs (needs a human merge); do not remove the marker or rename the function".
+      R2. Every floor .rs file carries `// mandate-gate`, which keeps the marker vocabulary honest. This change adds the marker to the 13 floor .rs files, one line each.
+      R3. KNOWN_UNPROTECTED is a grandfather list of today's misses (role.rs, pr_cmd.rs, pr_merge_gate.rs, lib_part5.rs, defer_cmd.rs, plus any others the first scan reports). It lives in mandate_gates.rs, so changing it is itself a floor change. It may only shrink: the test fails if an entry no longer matches (B.b), so a moved function must take its list line with it. STORY-1889 owns burning it to zero.
+    - Honest limit: this is a tripwire for drift, not a security boundary. A deliberate rename evades (b). The security boundary stays the floor plus the human merge.
+    C. Non-mandate ship of protected paths (comment 0): proposed as slice 2, see Q1.
+
+    FAILURE MODES (each fails closed)
+    - Committed blob unreadable, a malformed entry, or an unreadable operator file: the layer Err refuses every op (HumanGated), and the floor path check still runs.
+    - Changed paths unresolved: the existing ChangedPathsUnresolved refusal, unchanged.
+    - A branch edits .aida/config.toml: the committed layer is read only from origin/main, and .aida/config.toml is itself on the floor.
+    - An operator entry with a trailing-slash typo or a non-existent path: it is accepted and simply matches nothing. Adding a protection can never loosen anything.
+    OUT OF SCOPE: removing or overriding floor entries (never); glob patterns; moving gate code into a module (STORY-1889); trace-exclusion expiry for completed operator-only specs (comment 1), which belongs in a separate spec. I will file it if the advisor agrees.
+
+    TEST PLAN (each test fails before the change)
+    - parse: protected_paths parses exact and prefix entries; each malformed form errors (abs, "..", glob, empty, non-string).
+    - operator_layer_path_refuses_mandate_ship: an operator-layer entry, run through gate_checks, refuses with TouchesGates naming the entry and source "operator".
+    - branch_only_committed_edit_has_no_effect: a temp repo where origin/main config has no entry and the working tree plus branch config do; touches_gates(None) for the path.
+    - directory_prefix_matches_nested: "foo/" matches foo/a/b.rs and does not match foobar.rs.
+    - floor_cannot_shrink: unioning layers of every shape keeps all floor entries. Also, a layer whose config lists a floor path only re-adds it and the source stays BuiltIn.
+    - plan_held_pr_uses_effective_set: a forced_gate fires for an operator-only path.
+    - unreadable_layer_falls_back_to_floor: the floor still matches, and ship is still refused.
+    - ratchet R1/R2/R3 (fails today: role.rs etc. are unlisted and no markers exist).
+    - status_lists_effective_paths_with_source.
+    Gates: targeted tests, make check-ci-fast, make test-touched.
+
+    PR SPLIT
+    - PR 1 (this story, human merge: it touches the floor): A + B + markers + status.
+    - PR 2 (only if Q1 = yes): the non-mandate `aida pr ship` refusal, touching pr_ship.rs.
+
+    QUESTIONS FOR THE ADVISOR
+    Q1. Comment 0. My recommendation: YES, in a separate PR 2. An agent-seat `aida pr ship` (no human TTY, by the same test merge-hold clear uses) refuses a PR whose diff touches the effective protected set, unless a human hold-clear is recorded at that head. The human clear then counts as the human merge. Is that acceptable, or should a TTY be required always, or should PR 2 be dropped?
+    Q2. Should the grandfather list KNOWN_UNPROTECTED land as described (tripwire on new drift now, STORY-1889 shrinks it)? The alternative is to add role.rs, pr_cmd.rs, lib_part5.rs and the others to the floor immediately. That makes most ship and review PRs human-merge until STORY-1889 lands. I recommend the grandfather list.
+    Q3. Is the ratchet heuristic (marker OR the authority-name regex, with tests excluded) acceptable, or do you want the marker alone (zero false positives, but it relies on authors adding it)?
+  created_at: 2026-10-22T09:50:39.533293756Z
+  modified_at: 2026-10-22T09:50:39.533293756Z
+  session_id: b0e26e8c-07b4-4b00-80ad-40571d0bfb76
 history:
 - id: 01a15f16-5a0d-7f63-9b4c-3e1a7a6c5560
   author: joe
