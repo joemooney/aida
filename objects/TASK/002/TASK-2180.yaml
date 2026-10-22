@@ -1,0 +1,28 @@
+id: 01a1655d-2db8-7fb3-b1f6-23673885f534
+spec_id: TASK-2180
+agreed_id: TASK-2180
+title: ship-batch dry-run plan reads hold twice; unreadable hold shows as 'CI unreadable'
+description: |
+  aida-cli-lib/src/pr_ship_batch.rs plan_pr (~:267-286): after TASK-2172, read_ci reads the hold label, and plan_pr reads it again for the merge-hold step. That is one extra forge call per PR in a dry run. When the label cannot be read, the plan prints "CI at <sha>: unreadable (could not read the hold label ...)" and then repeats the hold-label error. The inner text is right, but the line is still labelled as CI. Suggestion: in plan_pr, read the hold once and pass `held` to ports.ci_at_head directly.
+  Also: wait_for_review (~:500) still ignores read_ci errors with `_ => {}`. This is unchanged behaviour, so a hold-label read error there is retried silently until the review timeout.
+
+  Raised in review of PR-2835: https://github.com/joemooney/aida/pull/2835#issuecomment-6350935978
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T20:46:07.800901523Z
+modified_at: 2026-10-22T20:46:07.800901523Z
+req_type: Task
+tags:
+- from-review:PR-2835
+- severity:cosmetic
+filed_at:
+  code_sha: 5e3ada7fb19aaa7bebe1c2436a485808ed6d6d88
+  branch: pr-2835
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 7ffa46a9d0
+  vendor: claude
+  session: 01a1655a17f1
+  harness_version: 2.1.308 (Claude Code)
