@@ -420,14 +420,19 @@ the same user, and sit in the dispatcher's recorded process group. A reused PID
 is treated as gone and is never signalled. Other members of that group (the
 vendor's own children, say) are signalled only when their parent chain reaches
 a recorded process that is still running. A member that cannot be proved to
-belong to the review is never signalled. Recorded processes are signalled leaf
-first: reviewer, queue work, then dispatcher. The watcher never signals a
+belong to the review is never signalled. A process that left the group is not
+covered by group signalling: Claude Code's Bash tool, for example, runs each
+command under `setsid`, so those commands sit in a session and group of their
+own. Recorded processes are signalled leaf first: reviewer, queue work, then
+dispatcher. The watcher never signals a
 whole process group, and it never touches session leases, worktrees, verdict
 files or merge-hold markers; `aida session reap` handles those as usual.
 
 The new head is admitted only after the earlier review's recorded processes,
 its process group and any process it was still spawning are all confirmed
-gone. A superseded review wrote no verdict and uses no review round. The slot
+gone. A superseded review that was stopped before it recorded a verdict uses
+no review round; one that had already recorded a verdict counts toward the
+round history like any other review. The slot
 stays held, and nothing is signalled blind, when signalling is unsafe or
 fails: no pidfd support (ENOSYS) or a platform other than Linux, a permission
 error, an identity in an unexpected process group, a process that survives

@@ -1295,6 +1295,7 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
         let elapsed = |at: chrono::DateTime<chrono::Utc>| {
             (now - at).to_std().unwrap_or_default() >= SUPERSEDE_GRACE
         };
+        let killed = receipt.kill_at.is_some_and(elapsed);
         let signal = match (receipt.term_at, receipt.kill_at) {
             (None, _) => {
                 receipt.term_at = Some(now);
@@ -1304,42 +1305,34 @@ fn advance(store: &Store, key: &str, token: &str) -> Result<Option<String>> {
                 receipt.kill_at = Some(now);
                 Some(signal::Signal::Kill)
             }
-            (_, Some(kill)) if elapsed(kill) => {
-                const AFTER_KILL: &str = " after SIGKILL and its grace";
-                let reason = receipt.diagnostic.take().unwrap_or(cause.clone());
-                receipt.diagnostic = Some(if reason.ends_with(AFTER_KILL) {
-                    reason
-                } else {
-                    bounded_diagnostic(&format!("{reason}{AFTER_KILL}"))
-                });
-                None
-            }
             _ => None,
         };
-        if receipt.diagnostic.is_none() {
-            receipt.diagnostic = Some(bounded_diagnostic(&cause));
-        }
-        Ok(Some((signal, a.clone())))
+        Ok(Some((signal, cause, killed, a.clone())))
     })?;
-    let Some((signal, attempt)) = claim else {
+    let Some((signal, cause, killed, attempt)) = claim else {
         return Ok(None);
     };
-    if let Some(signal) = signal {
-        let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
-        let held = signal::signal_attempt(&attempt.recorded(), attempt.pgid, anchor, signal);
-        if !held.is_empty() {
-            let cause = bounded_diagnostic(&held.join("; "));
-            store.transaction(&key, |state| {
-                if let Some(receipt) = attempt_mut(state, &key, token)
-                    .filter(|a| a.phase == Phase::Superseding)
-                    .and_then(|a| a.supersede.as_mut())
-                {
-                    receipt.diagnostic = Some(cause.clone());
-                }
-                Ok(())
-            })?;
-        }
+    // Every holding pass rebuilds the cause from the processes running now,
+    // so it never names one that has since exited.
+    let anchor = attempt.dispatcher.as_ref().or(attempt.identity.as_ref());
+    let held = signal::signal_attempt(&attempt.recorded(), attempt.pgid, anchor, signal);
+    let mut diagnostic = std::iter::once(cause)
+        .chain(held)
+        .collect::<Vec<_>>()
+        .join("; ");
+    if killed {
+        diagnostic.push_str(" after SIGKILL and its grace");
     }
+    let diagnostic = bounded_diagnostic(&diagnostic);
+    store.transaction(&key, |state| {
+        if let Some(receipt) = attempt_mut(state, &key, token)
+            .filter(|a| a.phase == Phase::Superseding)
+            .and_then(|a| a.supersede.as_mut())
+        {
+            receipt.diagnostic = Some(diagnostic.clone());
+        }
+        Ok(())
+    })?;
     let state = store.load()?;
     Ok(state
         .entries

@@ -625,11 +625,18 @@ fn held_slot_cause_shows_in_capacity_and_ps() {
     assert!(held[0].1.contains("aida review watch --release PR-1"));
     let holders = capacity_holders(&store.load().unwrap());
     assert!(holders.contains("ENOSYS"), "{holders}");
-    let ps =
-        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ps_integrate.rs"))
-            .unwrap();
-    assert!(ps.contains("crate::review_watch::held_slots(&project_root)"));
-    assert!(ps.contains("\"review_watch_held\""));
+    // `aida ps` renders the same slots through its own JSON and TOON paths.
+    let json = crate::ps_integrate::ps_review_watch_held_json(&held);
+    assert_eq!(json[0]["change"], "PR-1");
+    assert!(
+        json[0]["cause"].as_str().unwrap().contains("ENOSYS"),
+        "{json}"
+    );
+    let toon = crate::ps_integrate::ps_review_watch_held_toon(&held);
+    assert!(
+        toon.contains("review_watch_held") && toon.contains("ENOSYS"),
+        "{toon}"
+    );
 }
 
 // A supersede in progress still finishes when the change moves back to the
@@ -654,4 +661,44 @@ fn superseding_finishes_when_the_head_returns() {
         select(&store, &h1, None, 2).unwrap(),
         Action::Dispatch(_)
     ));
+}
+
+// A held cause names only processes still running: a member that exited
+// drops out on the next pass. trace:TASK-1945 | ai:claude
+#[test]
+fn hold_cause_drops_an_exited_member() {
+    let (_temp, store) = fixture();
+    let group = Group::spawn(LOOP, &[]);
+    let stranger = || {
+        Command::new("sleep")
+            .arg("60")
+            .process_group(group.pgid as i32)
+            .spawn()
+            .unwrap()
+    };
+    let (mut gone, mut stays) = (stranger(), stranger());
+    let h2 = change(1, 2);
+    running(&store, &change(1, 1), &group, &[], true);
+    assert!(pass(&store, &h2).is_some());
+    until("the dispatcher exits", || !group.identity_alive());
+    let diagnostic = || first(&store, "PR-1").supersede.unwrap().diagnostic.unwrap();
+    let _ = pass(&store, &h2);
+    for pid in [gone.id(), stays.id()] {
+        assert!(
+            diagnostic().contains(&format!("process {pid} ")),
+            "{}",
+            diagnostic()
+        );
+    }
+    signal::test_signal(gone.id(), Signal::Kill);
+    gone.wait().unwrap();
+    let held = pass(&store, &h2).unwrap();
+    assert!(
+        !diagnostic().contains(&format!("process {} ", gone.id())),
+        "{}",
+        diagnostic()
+    );
+    assert!(held.contains(&format!("process {} ", stays.id())), "{held}");
+    signal::test_signal(stays.id(), Signal::Kill);
+    stays.wait().unwrap();
 }

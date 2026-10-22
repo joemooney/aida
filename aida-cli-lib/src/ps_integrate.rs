@@ -2598,6 +2598,25 @@ pub(crate) fn collapse_salvageable_by_worktree<'a>(
     collapsed
 }
 
+/// The `review_watch_held` field of `aida ps --json`: each change whose
+/// review-watch slot a superseded review still holds, with the cause.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_held_json(held: &[(String, String)]) -> serde_json::Value {
+    held.iter()
+        .map(|(change, cause)| serde_json::json!({ "change": change, "cause": cause }))
+        .collect()
+}
+
+/// The agent-mode `review_watch_held` table of `aida ps`.
+// trace:TASK-1945 | ai:claude
+pub(crate) fn ps_review_watch_held_toon(held: &[(String, String)]) -> String {
+    let rows: Vec<Vec<String>> = held
+        .iter()
+        .map(|(change, cause)| vec![change.clone(), cause.clone()])
+        .collect();
+    crate::toon::table_raw("review_watch_held", &["change", "cause"], &rows)
+}
+
 pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let project_root =
         find_project_root().unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
@@ -2751,10 +2770,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 // STORY-769: last-human-input oracle, null when never stamped.
                 "operator": operator,
                 // trace:TASK-1945 | ai:claude
-                "review_watch_held": watch_held
-                    .iter()
-                    .map(|(change, cause)| serde_json::json!({ "change": change, "cause": cause }))
-                    .collect::<Vec<_>>(),
+                "review_watch_held": ps_review_watch_held_json(&watch_held),
                 "wave": live_wave.as_ref().map(|l| serde_json::json!({
                     "id": if l.wave_id.is_empty() { format!("pid-{}", l.pid) } else { l.wave_id.clone() },
                     "pid": l.pid,
@@ -2992,14 +3008,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         );
         // trace:TASK-1945 | ai:claude
         if !watch_held.is_empty() {
-            let held: Vec<Vec<String>> = watch_held
-                .iter()
-                .map(|(change, cause)| vec![change.clone(), cause.clone()])
-                .collect();
-            println!(
-                "{}",
-                crate::toon::table_raw("review_watch_held", &["change", "cause"], &held)
-            );
+            println!("{}", ps_review_watch_held_toon(&watch_held));
         }
         return Ok(());
     }

@@ -90,13 +90,15 @@ enum Outcome {
 
 /// Signal the attempt's processes: proven members of `pgid` first (while
 /// their recorded ancestors still live to prove them), then the recorded
-/// processes in the given leaf-first order. Returns every hold cause.
+/// processes in the given leaf-first order. Returns every hold cause among
+/// the processes running now. `None` verifies the same set without sending,
+/// so a holding pass can report a current cause.
 // trace:TASK-1945 | ai:claude
 pub(super) fn signal_attempt(
     recorded: &[&Identity],
     pgid: Option<u32>,
     anchor: Option<&Identity>,
-    signal: Signal,
+    signal: Option<Signal>,
 ) -> Vec<String> {
     #[cfg(target_os = "linux")]
     {
@@ -310,7 +312,7 @@ mod imp {
         recorded: &[&Identity],
         pgid: Option<u32>,
         anchor: Option<&Identity>,
-        signal: Signal,
+        signal: Option<Signal>,
     ) -> Vec<String> {
         let mut held = Vec::new();
         let mut targets: Vec<(OwnedFd, u32, u32)> = Vec::new();
@@ -353,9 +355,11 @@ mod imp {
                 Err(cause) => held.push(cause),
             }
         }
-        for (fd, pid, pgrp) in &targets {
-            if let Outcome::Held(cause) = send(fd, *pid, *pgrp, signal) {
-                held.push(cause);
+        if let Some(signal) = signal {
+            for (fd, pid, pgrp) in &targets {
+                if let Outcome::Held(cause) = send(fd, *pid, *pgrp, signal) {
+                    held.push(cause);
+                }
             }
         }
         held
