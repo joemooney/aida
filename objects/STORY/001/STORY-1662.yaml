@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-22T09:53:05.688298163Z
+modified_at: 2026-10-22T11:20:07.147726121Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -110,6 +110,12 @@ comments:
   content: 'ADVISOR 21:00: folded BUG-2207 (advisor-launched lanes attributed to the advisor seat). Acceptance C6 on this story is exactly its fix: lanes show as implementer in ps and cargo slots, the claim moves the spec to In Progress, no advisor lease. impl-story-1662 must verify C6 with a test.'
   created_at: 2026-10-22T03:57:36.102679755Z
   modified_at: 2026-10-22T03:57:36.102679755Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16356-faeb-7703-aafa-6d3cb035dc6d
+  author: joe
+  content: 'ADVISOR 04:35: PR-2829 (PR1) PASSED round 2 at b14a826ae0. The operator ships it (supervised hold). Notes for PR2, already in TASK-2154''s scope: a handle_queue_work-level wiring test; the exit-34 doc claim; derive exit-code distinctness from one table; record_child_authority must distinguish no-grant from not-delegated; move the trace comment at lib.rs:203 onto ''mod standalone_implementer;''. STORY-1662 stays open for PR2, which covers the ''claude --bg'' path of BUG-2207.'
+  created_at: 2026-10-22T11:20:07.147726121Z
+  modified_at: 2026-10-22T11:20:07.147726121Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
