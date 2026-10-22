@@ -3,12 +3,12 @@ spec_id: STORY-1887
 agreed_id: STORY-1887
 title: 'Operator batch-ship for human-gated PRs: refresh, re-review and ship in sequence'
 description: 'On 2026-10-21 every operator-gated merge (PRs touching mandate.rs, pr_ship.rs, merge_hold.rs or operator-only specs) made the other gated PRs stale. Each then needed gh pr update-branch, a CI rerun, a fresh independent review and another operator round-trip (#2792, #2798 twice each). Idea: an operator command that takes a list of approved gated PRs and, in order, ships one, refreshes the next, waits for CI and a fresh attested review, then asks the operator to confirm the ship at a TTY. The human gate is kept while the operator only has to be there for confirmations.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-22T12:00:04.739032366Z
+modified_at: 2026-10-22T15:53:53.422735238Z
 req_type: Story
 tags:
 - mandate
@@ -155,6 +155,21 @@ history:
   session_id: 01a16378e267
   harness_version: 2.1.308 (Claude Code)
   changes: []
+- id: 01a16451-9fd8-7b70-b989-0bf5b15468e1
+  author: aida-auto-bump
+  timestamp: 2026-10-22T15:53:53.368606264Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a16451-a00e-74b1-9033-5b2560910b2b
+  timestamp: 2026-10-22T15:53:53.422726859Z
+  agent: aida
+  commit_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
+  summary: 'Round 4 at 0b38f53: two clean merges from main since the round-3 approval at e2a7575 (no conflicts in PR files; the only new interaction is main''s STORY-1662 refuse_under_marker in pr_ship_with_method, which fails closed). All SKETCH v1 T1-T8, C1-C5, Q1-Q3 and folded TASK-2155/2156/2157 verified by pr_ship_batch::tests; CI run 39803230416 is green at this head on every shard. Human-merged PR.'
+  review_verdict: approved
 filed_at:
   code_sha: 7be4321436b8f93b2daba2bd71b649046818e35f
   branch: main
@@ -163,11 +178,7 @@ filed_at:
   aida_build_sha: 0cc97d963b
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Round-1 blockers and TASK-2155/2156/2157 are fixed and CI is green, but a held PR''s red merge-hold-gate check is read as a CI failure, so the batch stops before the Q2 hold-clear prompt for any held PR (including #2828 itself).'
-  recovery_hint: address the review findings, move STORY-1887 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-10-22T12:00:04.739032366Z
+implementation_info:
+  implemented: false
+  completed_at: 2026-10-22T15:53:53.368574624Z
+  completion_sha: 7ffa46a9d0dff57c2e76d77a001e94dec1cb8009
