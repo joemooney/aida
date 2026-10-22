@@ -1,0 +1,28 @@
+id: 01a162d2-2326-7782-878b-ffc2a66683ea
+spec_id: TASK-2150
+agreed_id: TASK-2150
+title: 'Review watch: a supersede racing the dispatcher spawn record holds the slot with nothing running'
+description: |
+  aida-cli-lib/src/review_watch.rs:1929-1930 and 1968-1971. Suppose a concurrent watcher supersedes a Reserved attempt after select returns Dispatch but before this watcher records the spawned dispatcher. Two paths then record nothing: an immediate dispatcher exit (mark_unclaimed_exit filters phase == Reserved) and a spawn failure (ensure phase == Reserved returns an error instead). The Superseding attempt is left with no identity, dispatcher or pgid. confirm() then holds the slot as "a review process was being spawned but never recorded", though nothing runs, until an operator runs `aida review watch --release`. It fails closed and is rare, but it holds a capacity slot needlessly. Fix: on those paths, record the attempt as Superseded when the phase is Superseding (the child is provably reaped or was never spawned).
+
+  Raised in review of PR-2824: https://github.com/joemooney/aida/pull/2824#issuecomment-6336798246
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T08:55:01.158036663Z
+modified_at: 2026-10-22T08:55:01.158036663Z
+req_type: Task
+tags:
+- from-review:PR-2824
+- review-watch
+- severity:minor
+filed_at:
+  code_sha: 2363425f6ba6720195c8b346377af25e381c5d0b
+  branch: pr-2824
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162ce51b0
+  harness_version: 2.1.308 (Claude Code)

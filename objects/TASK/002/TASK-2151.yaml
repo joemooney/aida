@@ -1,0 +1,29 @@
+id: 01a162d2-3c03-7590-ba23-6e781f22a04d
+spec_id: TASK-2151
+agreed_id: TASK-2151
+title: 'aida ps: no test covers the handle_ps wiring of review-watch held slots'
+description: |
+  aida-cli-lib/src/ps_integrate.rs:2629. In PR-2824 round 2, the source-grep assertion was replaced by direct tests of ps_review_watch_held_json and ps_review_watch_held_toon. As a result, no test checks that handle_ps calls review_watch::held_slots(&project_root) or renders the human "Review-watch slots held" section. Add a test that runs handle_ps (or the ps command) against a fixture review-watch state.
+
+  Raised in review of PR-2824: https://github.com/joemooney/aida/pull/2824#issuecomment-6336798246
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T08:55:07.523978579Z
+modified_at: 2026-10-22T08:55:07.523978579Z
+req_type: Task
+tags:
+- from-review:PR-2824
+- review-watch
+- severity:cosmetic
+- tests
+filed_at:
+  code_sha: 2363425f6ba6720195c8b346377af25e381c5d0b
+  branch: pr-2824
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4b75e34688
+  vendor: claude
+  session: 01a162ce51b0
+  harness_version: 2.1.308 (Claude Code)
