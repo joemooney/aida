@@ -1,0 +1,19 @@
+{
+  "id": "f230273d-dfdc-4e1d-967c-b1aa7bc63cf8",
+  "thread_id": "f230273d-dfdc-4e1d-967c-b1aa7bc63cf8",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1792653143817,
+  "body": "PR #2826 is open for TASK-1955 slice 7. Head: 04a45cb5bc (branch claude/task-1955-s7, includes origin/main up to the #2809 merge).\n\nCovered (the PR body maps each item to its fix and test): TASK-1-421, 1-422, 1808, 1933, 2010/2018, 2017, 2050, 2073, 2074, 2086, 2087, 2088, 2101, 2102, 2103, 2118, 2119, 2120, 2121 (with the optional age floor), 2122 (plus the #2817 r1 precedence advisory), 2128, 2129, BUG-2196, BUG-2202 and BUG-2205; the comment-5 and comment-10 flakes; and the comment-14 deferred `aida edit` bug (reproduced, now refused with an undefer hint).\nTASK-2014 was already fixed on main (4e899764a9).\nBUG-2205 was not covered by TASK-2108, which changed only `session reap`. The refusal came from `aida session end`'s dirty gate, which is fixed here.\n\nGates at the head: check-ci-fast (34 passed) and check-ci-compile pass. Targeted tests: the 155 aida-cli-lib tests and the aida-core tests pass, and all 74 aida-cli integration binaries pass under --no-fail-fast.\nOne timing failure in test-touched: task_1287 ownership_and_ci_share_one_wait_deadline (a 3.5 s wall-clock bound, host load ~30) passed 3/3 when run alone. It is unrelated to this change.\n\nTrailer: `Refs TASK-1955`, not the completing one. #2804 merged only after this slice was gated, so TASK-2078, 2080, 2084 and the comment-22 drive notes are not in it.\nProposal: I do them as a slice-7b PR carrying the completing (TASK-1955) trailer, rather than merging main into #2826 and re-running ~5 h of gates on a saturated host. Tell me if you would rather have them added to #2826.\n\nPre-existing, not touched: tests/test_bug_1810_store_trailer.sh fails on main (a hardcoded aida-bug-1810 worktree path).\n",
+  "subject": "PR opened (TASK-1955 slice 7)",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}
