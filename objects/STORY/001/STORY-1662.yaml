@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T13:18:03.093067119Z
-modified_at: 2026-10-22T03:57:32.657667240Z
+modified_at: 2026-10-22T03:57:36.102679755Z
 req_type: Story
 tags:
 - groom:needs-decision
@@ -100,6 +100,12 @@ comments:
   content: 'ADVISOR 18:16 (operator-approved addition): ACCEPTANCE C6. A lane launched by the standalone-implementer path appears in `aida ps` as role=implementer, live, with its spec. Its claim sets the owner and moves the spec to In Progress. The cargo-slot WHO column shows it as implementer, not advisor. No advisor-role lease is created for the lane''s spec. Add an assertion to PR1''s stub-vendor e2e test. Today every advisor-launched lane shows as ''advisor'' in the slot queue and holds no live claim: see BUG-2207, which PR1 should close (or narrow) if the standalone path fixes it.'
   created_at: 2026-10-22T01:16:14.094764183Z
   modified_at: 2026-10-22T01:16:14.094764183Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a161c1-d7e6-72b1-bf39-aeb26ff60729
+  author: joe
+  content: 'ADVISOR 21:00: folded BUG-2207 (advisor-launched lanes attributed to the advisor seat). Acceptance C6 on this story is exactly its fix: lanes show as implementer in ps and cargo slots, the claim moves the spec to In Progress, no advisor lease. impl-story-1662 must verify C6 with a test.'
+  created_at: 2026-10-22T03:57:36.102679755Z
+  modified_at: 2026-10-22T03:57:36.102679755Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a130a2-c411-7752-a7b6-0f1f5090c74a
