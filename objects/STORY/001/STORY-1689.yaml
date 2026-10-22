@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-14T12:00:26.553324153Z
-modified_at: 2026-10-22T10:49:55.424027088Z
+modified_at: 2026-10-22T10:53:09.211425221Z
 req_type: Story
 tags:
 - dev-build
@@ -38,6 +38,78 @@ comments:
   created_at: 2026-10-22T01:46:08.156151111Z
   modified_at: 2026-10-22T01:46:08.156151111Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1633e-4adb-7943-a46b-29b46d693b64
+  author: joe
+  content: |-
+    SKETCH v1 (STORY-1689): a native, scheduled "promote when main is green" for the live dev binary
+
+    ## Problem as observed
+    - Promotion happens only when someone runs `aida dev build` in the primary checkout. On 2026-10-14 the live binary was ~20 merges stale (including BUG-2120). The operator stopgap `~/bin/aida-autobuild.sh` (cron, every 30 min, 68 promotes logged so far) covers the gap today.
+    - Three facts in the code shape the design:
+      1. `Forge::ci_status(CiTarget::Commit(sha))` is broken on both forges and has no callers. GitHub runs `gh pr checks <sha>` (forge.rs:1786), which finds no PR for a squash-merged main SHA, so it always returns `None`. GitLab queries `pipelines?ref=<sha>` (forge.rs:2420), but `ref` takes a branch or tag name; it needs `sha=`.
+      2. Substrate schedule jobs are killed after `SCHEDULED_COMMAND_TIMEOUT` = 120s (maintenance_schedule.rs:3274), and the tick holds the tick lock for the whole run. The systemd tick unit also has `TimeoutStartSec=15min`. An agent-profile build takes 5–6 min (from the autobuild log), more after `--clean`. So the build cannot run inside the tick.
+      3. `run_dev_build` already enforces the promote gates (primary checkout, `main`, clean, HEAD == origin/main, live-wave guard, `<live>/.lock`, smoke test before an atomic rename). The new mode adds the decision of *when* to build, and leaves those gates as they are.
+
+    ## Proposed design
+    New flag: `aida dev build --if-main-green` (dev_cmd_args.rs, in a group that conflicts with `--allow-dirty`, `--no-promote`, `--install-links` and `--clean`). New module `aida-cli-lib/src/dev_autopromote.rs`; dev_build.rs changes only by exposing `probe` and `read_promotion_meta`.
+
+    Tick-side run (quick, well under 120s):
+    1. Single-flight: try-lock `<live>/.autopromote.lock` (fs2). If it is held, or the state record says `running` with a live pid → skip `in-flight`.
+    2. Report a deferred failure: `<live>/autopromote.json` holds `{sha, phase: running|promoted|failed, pid, log, reported}`. If `failed && !reported` → set `reported=true` and exit 1 with the log path and its last 40 lines. That produces `CronJobFailed:dev-autopromote`, which routes to the advisor.
+    3. Probe with the existing `probe()`. Worktree, not on `main`, or tracked changes → skip (`worktree` / `off-main` / `dirty`).
+    4. `git fetch origin main` with a 60s bound. Failure → skip `fetch-failed`.
+    5. Compare `target = origin/main` with the live SHA (`.promoted` meta). Equal → skip `unchanged`: exit 0, no output, no log line.
+    6. If `target` == the SHA of the last *failed* build → skip `failed-sha` (wait for main to move; do not rebuild a known-bad SHA every 15 min).
+    7. `git merge-base --is-ancestor HEAD target` is false → skip `non-ff`.
+    8. `forge.ci_status(CiTarget::Commit(target))`: Success → continue; Pending/Running → skip `ci-pending`; Failed → skip `ci-red`; None or Err → skip `ci-unknown`.
+    9. Live-wave guard `guard_binary_change(repo, live/aida, after_wave=false)` returns Err → skip `wave-pinned`. This is the --after-wave meaning for a scheduler: it never swaps under a wave and never parks, and it retries on the next tick.
+    10. Re-probe clean, then `git merge --ff-only <target>` (never merge or reset). Failure → skip `non-ff`.
+    11. Write `phase=running`, then launch the build detached: `aida dev build --autopromote-child <target>` (hidden flag), with output to `~/.aida/dev-autopromote/<ts>.log`. It runs as its own transient `systemd-run --user` unit when available (reusing shift.rs `launch_wave_isolated`'s spawn path and env scrub, so it sits outside the tick cgroup and its 15-min kill), with a `setsid` detached fallback. Exit 0 with `launched <sha>`.
+
+    Child run (`--autopromote-child <sha>`): take `.autopromote.lock` (retry for 5s), check HEAD == `<sha>`, then call the unchanged `run_dev_build` with default options, so every existing gate is checked a second time. Write `phase=promoted` or `phase=failed, reported=false`, and release the lock.
+
+    Logging: each promote, launch, failure and skip appends one line to `~/.aida/dev-autopromote.log`. A skip line is written only when its reason differs from the previous line, so a quiet main does not add 96 lines a day. `unchanged` is never logged.
+
+    Schedule (.aida/config.toml):
+    ```
+    [[schedule.jobs]]  name="dev-autopromote"  command="dev build --if-main-green"  every="15m"  enabled=true
+    [[schedule.jobs]]  name="dev-autopromote-route"  seats=["advisor"]  on=["CronJobFailed:dev-autopromote"]  prompt="The scheduled live-binary build failed..."
+    ```
+    Plus a `command_table()` entry (`hook_allowed: false`).
+
+    Forge fix (PR1): for GitHub, `CiTarget::Commit` → `gh api repos/{owner}/{repo}/commits/{sha}/check-runs` (latest per check, paginated), mapped by a pure `ci_status_from_gh_check_runs`. For GitLab, `CiTarget::Commit` → `pipelines?sha=<sha>`. Branch and Change targets are unchanged. Pure-git forge → `None` → never auto-promotes (documented).
+
+    ## Failure modes, all closed (skip or leave the live binary untouched)
+    - Any probe, fetch or CI-query error → skip.
+    - CI `None`, unknown or partial → skip. Only completed+success promotes.
+    - ff fails → skip, and the checkout is left as it was (`--ff-only` is atomic).
+    - Child dies or the host reboots mid-build → `phase=running` with a dead pid. The next tick treats that as failed-unreported: it reports once and does not retry that SHA. `recover_live_dir` already handles an interrupted `.incoming`.
+    - Build or smoke failure → live untouched (the existing guarantee). It is reported once via CronJobFailed → advisor.
+    - Two ticks or a manual run at once → `.autopromote.lock`, plus `<live>/.lock` inside `run_dev_build`.
+    - A wave starts between the tick check and the child's promote → the child's `run_dev_build` guard refuses → `failed`, routed. That is acceptable and rare.
+
+    ## Out of scope
+    Automatic rollback after a bad promote; routing a red CI on main (it is skipped and logged, not routed); non-primary or non-AIDA repos; removing the operator's cron stopgap (the operator deletes it after this ships, as noted in the spec).
+
+    ## Test plan (each fails on main today)
+    - forge: `ci_status_from_gh_check_runs` fixtures for success, pending, failed, neutral/skipped, empty → None. A GitLab Commit target builds `sha=` (today it builds `ref=`).
+    - `plan_autopromote(inputs) -> Decision`, pure, one test per reason: dirty, off-main, worktree, unchanged, ci-red, ci-pending, ci-unknown, non-ff, wave-pinned, in-flight, failed-sha, fetch-failed. Plus the promote path.
+    - runner with a fake `AutopromoteSteps` (fetch / ci / ff / spawn) and a fake forge. Promote asserts ff followed by spawn; every skip asserts neither runs.
+    - deferred failure: a failed+unreported record → exit 1 once, then quiet; a dead-pid `running` record → reported as a failure.
+    - child: writes promoted/failed around a fake `BuildSteps`.
+    - schedule: allow-list parse plus the existing config/scaffold parity and the `CronJobFailed:<job>` binding validator.
+
+    ## PR split
+    - PR1: forge `CiTarget::Commit` fix for GitHub and GitLab, with tests.
+    - PR2: `--if-main-green` and the child, the state record and log, the schedule plus route entries, and docs (repository guide, dev-build paragraph, and `docs/cli`).
+
+    ## Questions for the advisor
+    Q1. Detach the build out of the tick (proposed), or add a per-command timeout override (~30 min) to `ScheduledCommand` and build inline? Building inline holds the tick lock for 5+ min and collides with systemd's 15-min `TimeoutStartSec`.
+    Q2. Ship the job `enabled = true` in the committed config.toml? Any AIDA-repo clone with a tick would then fetch and probe CI every 15 min. The flag is a no-op there unless that clone is the primary checkout on a clean main with a live dir.
+    Q3. CI gate: all check-runs on the SHA must be completed+success (proposed, stricter than the stopgap), or only the `CI` workflow as the stopgap does?
+  created_at: 2026-10-22T10:53:09.211425221Z
+  modified_at: 2026-10-22T10:53:09.211425221Z
+  session_id: ca09f1be-9664-4e8b-a138-fa567f7a729d
 history:
 - id: 01a16149-6e2b-7cc0-9c50-a8547ec8a529
   author: joe
