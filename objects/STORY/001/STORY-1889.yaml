@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:33:51.496539087Z
-modified_at: 2026-10-22T01:47:10.671253045Z
+modified_at: 2026-10-22T16:51:38.261015844Z
 req_type: Story
 tags:
 - architecture
@@ -41,6 +41,87 @@ comments:
   created_at: 2026-10-22T01:47:10.671253045Z
   modified_at: 2026-10-22T01:47:10.671253045Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16486-7e95-7951-9f32-9f2ec63078f7
+  author: joe
+  content: |
+    SKETCH v1 (STORY-1889), implementer claude, 2026-10-22. Builds on STORY-1888 PR #2832 (open). This sketch is written against #2832's head: GATE_PROTECTED_PATHS, KNOWN_UNPROTECTED (13 entries), the ratchet in tests/story_1888_gate_paths_tests.rs, and prefix entries that match on a path-component boundary.
+
+    GOAL
+    Burn KNOWN_UNPROTECTED to zero. Gate-authority code moves into a new protected directory, aida-cli-lib/src/gate/, with one module per concern. Every move is verbatim: no behaviour change, and no refusal string changes. Callers stay put; the old module re-exports the moved items (`pub(crate) use crate::gate::x::{..}`), so call-site churn is about one `use` line per source file.
+
+    STRUCTURE (PR 1, scaffold)
+    - New `aida-cli-lib/src/gate/mod.rs` (`// mandate-gate` marker), declared in lib.rs.
+    - GATE_PROTECTED_PATHS gains the prefix entry "aida-cli-lib/src/gate/". The floor type already handles prefix entries (#2832, ProtectedEntry::matches).
+    - Ratchet changes, all in the protected test file:
+      R1/R3 match a path against the floor via ProtectedPaths::floor() + touches_gates, so a file under gate/ counts as protected. Today they use exact `contains`.
+      R2 also requires the marker on every non-test .rs file under a floor prefix entry.
+    - Tests of gate/ code live in aida-cli-lib/src/gate/tests/*_tests.rs. They sit inside the prefix, so they are protected without new floor entries (spec acceptance 2). The scan already skips tests/ dirs and *_tests.rs files.
+    - This is the only PR that has to change the floor list itself. Every later PR also touches the floor, because it adds files under gate/ and removes lines from KNOWN_UNPROTECTED in mandate_gates.rs. So EVERY PR in this story is a human merge. Small PRs therefore mean several human merges; see Q3.
+
+    PER-FILE PLAN (functions the ratchet flags are marked *; others move with them because they are the same decision)
+    1. role.rs -> gate/seat.rs (PR 2)
+       *advisor_authority_from, *hold_authority_from, *dispatch_authority_from, *integrity_floor_authority_from, *has_hold_authority, plus has_advisor_authority, has_dispatch_authority and has_integrity_floor_authority (the same decision, which the regex misses).
+       Stays in role.rs: input gathering (effective_role_with_roster, authority_stdin_is_terminal, current_role_instance_is_companion, team_role_refusal_clause). gate/seat.rs calls into role.rs for these.
+       Churn: role.rs re-exports; external callers (requeue.rs, agent_registry.rs, mcp.rs, statusline/bug_1611 tests) are unchanged.
+    2. defer_cmd.rs -> gate/operator_hold.rs (PR 2)
+       OperatorHoldRefusal, *hold_refusal, enforce_reasoned_operator_hold, *hold_authorized. Also, the two inline seat checks in defer_single ("only the product, advisor, or operator seat may set/lift ...") become one gate function, operator_hold_change_refusal(setting, existing_reason, authorized) -> Option<&'static str>, with the strings unchanged. This is the only extraction rather than a verbatim move; it is needed because the decision is inline in the orchestrator.
+       Churn: queue_cmd.rs uses hold_refusal through the defer_cmd re-export.
+    3. lib_part5.rs -> gate/review.rs (PR 3)
+       *review_author_refusal, ReviewAuthorGate, *review_author_gate, *review_record_attribution_refusal, *review_stale_lease_refusal.
+       The inline test module bug_1978_attribution_message_tests moves to gate/tests/.
+    4. review_marker.rs -> gate/review.rs (PR 3)
+       MergeGate, *merge_gate, refusal_message, proceed_note. The marker read/write/clear/expiry helpers stay in review_marker.rs, and the gate calls into them.
+       Churn: pr_cmd.rs (2 sites) and phase_driver_trait.rs use the re-export. The lib_part5 merge_gate tests (around line 3478) move to gate/tests/.
+    5. pr_merge_gate.rs -> gate/approval.rs (PR 4)
+       *drain_merge_approval_gate, drain_merge_match_head.
+       Stays: dispatched_branch_head_sha and stamp_pr_review_verdict (orchestration).
+    6. pr_cmd.rs -> gate/approval.rs + gate/ci_freshness.rs (PR 4 + PR 5)
+       PR 4: *merge_path_approval_gate, *merge_path_approval_decision, merge_approval_inputs, ship_approval_policy (it builds the policy that judges approvals; the regex misses it).
+       PR 5: *pr_ship_approval_gate, *ship_stale_definition_gate (-> gate/ci_freshness.rs).
+       *pr_head_sha_for_merge_gate is a forge read, not a decision: it stays, see Q2.
+       Stays: ship_preflight_gates (it orders the gates and calls in), pr_gate_subject and ship_gate_known_ids (trailer/subject parsing, per the spec's "trailer parsing stays outside"), ship_refusal_release (delegates to merge_hold, already floor).
+       Churn: burndown_run.rs, upgrade_release.rs, phase_driver_trait.rs, rework_hold_release.rs and task_1960_carryover_tests.rs, through re-exports.
+    7. queue_cmd.rs -> gate/verdict.rs (PR 6)
+       *evaluate_review_verdict_gate. It reads verdicts under both roots and decides the done gate; the policy itself is already in review_verdict.rs (floor).
+    8. auto_complete.rs -> gate/merge_refusal.rs (PR 6)
+       *is_branch_policy_merge_refusal. It is a text classifier, but it is what keeps a supervised hold from reaching the transient-retry budget and the auto-rebase path (BUG-1447), so I treat it as hold authority. 2 callers.
+    9. Name-match false positives (PR 7, see Q2). None of these decides ship, merge, hold, verdict or seat authority:
+       aida-core git_ops.rs *merge_gate (agreed store-ID assignment; callers db_cmd.rs and store_push_pull.rs);
+       human.rs *pr_review_decision (the awaiting-view row and suppression classification);
+       status_prs.rs *detect_pr_review_decision (a forge probe for display);
+       leases.rs *review_source_branch_conflict_decision and session_start.rs *review_pickup_conflict_decision (lease coexistence on reviewer pickup; reviewer independence is decided by identity tokens in review_authority.rs, which is on the floor);
+       pr_cmd.rs *pr_head_sha_for_merge_gate (a forge read).
+
+    PR SPLIT (each is a human merge; each shrinks KNOWN_UNPROTECTED; Refs on all but the last)
+    PR 1 scaffold + ratchet prefix support. No list change.
+    PR 2 role.rs, defer_cmd.rs -> 11 entries.
+    PR 3 lib_part5.rs, review_marker.rs -> 9.
+    PR 4 pr_merge_gate.rs + pr_cmd.rs merge-path part -> 8.
+    PR 5 pr_cmd.rs ship part -> 7 (pr_cmd.rs leaves the list, if Q2 accepts the exemption for pr_head_sha_for_merge_gate).
+    PR 6 queue_cmd.rs, auto_complete.rs -> 5.
+    PR 7 false positives -> 0. Delete KNOWN_UNPROTECTED itself and its R3 test, and make R1 strict. Carries (STORY-1889) if Q1 = descope; otherwise phase B follows.
+    Each PR is a fresh branch off main after its predecessor merges, so there is no stacking. PR 1 waits for #2832 to merge.
+
+    BEHAVIOUR EVIDENCE (acceptance 4)
+    For each PR: (a) the story_1698 and story_1700 mandate tests, plus the moved modules' own tests (bug_1918, story_1655, task_1960, bug_775, bug_2149_2150, statusline, bug_1611), all unchanged and green; (b) a refusal-string inventory: every string literal in the moved functions, extracted before and after and diffed. The diff must be empty, and the PR body carries the list; (c) make check-ci-fast and make test-touched.
+
+    FAILURE MODES
+    - A missed caller: compile error, caught by test-touched and check-ci-compile.
+    - A re-export hides a moved item from codegraph: callers still resolve through the re-export path, and rg confirms.
+    - Ratchet R3 fails mid-split if a PR moves only some of a file's flagged functions: the list line stays until the last of them leaves. This is intended, and each PR above removes whole files except pr_cmd.rs (PR 4 leaves its line, PR 5 removes it).
+    - Merge conflicts with busy files (pr_cmd.rs, queue_cmd.rs, lib_part5.rs): small PRs, rebased just before review.
+
+    QUESTIONS FOR THE ADVISOR
+    Q1. Scope. The brief is the burn-down (PRs 1-7). The spec's acceptance 1-3 also asks to move the decisions out of the big three floor files (pr_ship.rs, merge_hold.rs, review_verdict.rs, and mandate*.rs), move their inline test modules to gate/tests/, and shrink the floor to gate/ + .aida/config.toml + the test files. That is the part that actually takes routine pr_ship/merge_hold changes off the human-merge path. Options:
+      (a) Phase B inside STORY-1889 as PRs 8-10 after PR 7: B1 inline tests out of the big three into gate/tests/ (test-only moves); B2 decisions out of pr_ship.rs, merge_hold.rs and review_verdict.rs into gate/; B3 the same for the mandate*, seat_authority, review_authority, solo_review, fleet_lanes and rework_hold_release files, then drop the exact entries from the floor once the ratchet shows no gate authority left in them. Dropping an entry is a deliberate loosening in a human-merged PR, and the strict R1 proves it safe.
+      (b) Descope Phase B to a child TASK of STORY-1889, and PR 7 carries (STORY-1889).
+      I recommend (a). Without it the spec's acceptance 1-3 is not met, and STORY-1889 would close on the wrong outcome.
+    Q2. False positives (item 9): rename them, or exempt them? I recommend a floor-resident NOT_GATE_AUTHORITY list of (path, fn, reason) in the protected test file. Renaming to get past the regex is exactly what the ratchet message forbids. A per-function exemption still catches a NEW matching function in the same file, and it needs a human merge to grow. The alternative is renaming (e.g. git_ops::merge_gate -> assign_agreed_ids), which touches the public aida-core API.
+    Q3. Human-merge count: 7 PRs (10 with Phase B), each a human merge. Is that acceptable, or should related moves be batched (e.g. PRs 2+3 and 4+5 together, 4-5 PRs in total)? The brief asks for small PRs, so I will keep it at 7 unless told otherwise.
+    Q4. Re-exports vs updating callers: I propose re-exports, to keep each diff a pure move. Updating callers to crate::gate::... directly is cleaner long-term but adds churn in busy files. Re-exports now, with call-site cleanup as a later TASK?
+  created_at: 2026-10-22T16:51:38.261015844Z
+  modified_at: 2026-10-22T16:51:38.261015844Z
+  session_id: 364267d2-ca2c-4808-ba78-5f63fb0d5d6e
 history:
 - id: 01a15f19-1b8d-7a60-bd9c-acf0c42193fc
   author: joe
