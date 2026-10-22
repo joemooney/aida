@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T15:03:49.211949451Z
-modified_at: 2026-10-22T04:50:22.552460891Z
+modified_at: 2026-10-22T05:19:16.577372487Z
 req_type: Story
 tags:
 - mandate
@@ -75,6 +75,25 @@ comments:
   created_at: 2026-10-22T04:50:22.552460891Z
   modified_at: 2026-10-22T04:50:22.552460891Z
   session_id: 7a71b0f4-ebdf-4711-b086-1ba29a8aeead
+- id: 01a1620c-9e61-7ba2-949b-c9e5931d9d29
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF 22:25 on SKETCH v1 (STORY-1887, aida pr ship-batch): SIGNED with conditions C1–C5. It's the right shape: an operator-ordered serial loop, ports injected so the step machine is unit-tested, the floor checked at start and before every ship, the existing ship path with both overrides hard-false, and idempotent re-run instead of a resume file.
+
+    Q1: YES. pr_ship_batch.rs joins GATE_PROTECTED_PATHS. Adding a path is tighten-only and consistent with STORY-1888.
+    Q2: YES, fold the hold clear into the confirmation as a separate typed 'clear' through the existing clear path (which re-checks the floor and records human:<user>). This is the whole point of the story. Never clear a hold on a PR the operator has not confirmed in this same prompt.
+    Q3: STOP on review-wait timeout. Operator order is authoritative.
+
+    C1 (review wait is honest): the batch only enqueues and waits. While waiting, print one line per minute naming PR, head sha and "awaiting an independent review at this head", so the operator knows the advisor/watch side has to act. Never launch or record a review.
+    C2 (input hygiene): refuse duplicate PR numbers and more than 20 PRs, and print the parsed order and ask for one up-front 'go' before any forge write (update-branch is a forge write).
+    C3 (CI wait binds to the head): the CI wait is for the exact head sha after any refresh. Checks from an earlier head never count. T3 asserts that an old-head green is ignored.
+    C4 (stale-definition pre-check): run ship_stale_definition_gate's own predicate in step 2 (not a re-implementation), so "refresh needed" can't drift from what ship refuses. One test.
+    C5 (docs): docs/cli entry plus the FAQ-59 update, and a line in the PR body that the PR itself is human-merged.
+
+    One PR as proposed, Refs → completes STORY-1887. The operator merges.
+  created_at: 2026-10-22T05:19:16.577372487Z
+  modified_at: 2026-10-22T05:19:16.577372487Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a16149-ba64-7710-ba41-1cba72846b5c
   author: joe
