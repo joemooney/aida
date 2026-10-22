@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T01:25:47.355804371Z
+modified_at: 2026-10-22T01:33:16.287529942Z
 req_type: Task
 tags:
 - reconcile
@@ -349,6 +349,12 @@ comments:
   content: 'ADVISOR 18:27: PR-2816 round 3 at 012be09660: the round-2 regression (duplicate subjects) and the empty-candidate ordering are fixed and verified. Remaining, all minor, DEFERRED to the next TASK-1951 slice by my 17:21 ruling (past the two-round cap): (a) TASK-1621: the already-merged --final-slice arm takes spec ids from the checkout-derived branch; (b) an already-merged re-run from a clone lacking the PR head object bails before writing the non-completing marker; (c) landed_commits_for_subjects can match against a stale origin/<base> if the best-effort fetch failed; (d) pull-skip wiring tested only via its truth table, plus the include_str! hint assertion (TASK-2117). #2816 is a Refs slice; TASK-1621 stays partial and is not claimed complete.'
   created_at: 2026-10-22T01:25:47.355804371Z
   modified_at: 2026-10-22T01:25:47.355804371Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1613d-b47f-7432-8baf-856248669478
+  author: joe
+  content: 'ADVISOR 18:35 (new item for the next slice): `aida merge-hold clear N` on a PR that was never forge-held still adds the aida:merge-hold-cleared label. merge-hold-gate then fails with ''Clearance label has no matching recorded hold'' (PR-2809: cleared label added 16:57, no recorded label in its history). A later `merge-hold clear` reports ''No merge-hold'' and leaves the orphaned label in place, while the ship error tells the operator that clear ''re-syncs'' it. Fix: clear adds the label only when a recorded hold exists, and the re-sync removes an orphaned cleared label. Add a test for both.'
+  created_at: 2026-10-22T01:33:16.287529942Z
+  modified_at: 2026-10-22T01:33:16.287529942Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
