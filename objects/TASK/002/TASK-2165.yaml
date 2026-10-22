@@ -1,0 +1,28 @@
+id: 01a1634e-800e-7681-a3d9-0d9d17214b7b
+spec_id: TASK-2165
+agreed_id: TASK-2165
+title: Roster NoRoster refusal omits a diverging AIDA_STORE note
+description: |
+  seat_authority.rs RosterStoreError::NoRoster: when the project store has no registry/team.toml but AIDA_STORE points at a usable store that does have one, 'aida team' shows the seat as allowed while role enter refuses (the BUG-2200 symptom), and the refusal never mentions AIDA_STORE. PR-2831 adds the note only on RosterRefusal::Denied.
+
+  Raised in review of PR-2831: https://github.com/joemooney/aida/pull/2831#issuecomment-6339303681
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T11:10:51.406432485Z
+modified_at: 2026-10-22T11:10:51.406432485Z
+req_type: Task
+tags:
+- from-review:PR-2831
+- roster
+- severity:minor
+filed_at:
+  code_sha: 9ae7354b66041e1f52b17b750ea0693aacf66eb1
+  branch: pr-2831
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a1633d1d5a
+  harness_version: 2.1.308 (Claude Code)

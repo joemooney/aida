@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:18:16.485453920Z
-modified_at: 2026-10-22T01:46:35.499628381Z
+modified_at: 2026-10-22T11:10:25.136227994Z
 req_type: Task
 tags:
 - follow-up
@@ -78,6 +78,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1634e-19bd-7e52-b23a-e4997fd0662d
+  author: joe
+  timestamp: 2026-10-22T11:10:25.213999456Z
+  session_id: 01a1633d1d5a
+  harness_version: 2.1.308 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d2990a214a67bc5e23d61b99a0013c314a7da6e4
   branch: main
@@ -86,3 +92,11 @@ filed_at:
   aida_build_sha: 9fcf463499
   vendor: claude
   session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: Code meets TASK-2055/TASK-1667 and most of TASK-2054 (46 seat_authority tests pass locally), but PR CI is red (CI (lib-0) Run tests + Build) and the failing test could not be identified from the reviewer sandbox; one TASK-2054 gap and two minor accuracy nits
+  recovery_hint: address the review findings, move TASK-2072 back to In Progress, and clear the PR hold only after approval
+  shelved_by: reviewer
+  shelved_at: 2026-10-22T11:10:25.136227994Z
