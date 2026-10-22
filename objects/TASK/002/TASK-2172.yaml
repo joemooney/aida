@@ -1,0 +1,20 @@
+id: 01a1639a-43bf-7041-98ec-9c502a0855bd
+spec_id: TASK-2172
+agreed_id: TASK-2172
+title: ship-batch post-merge nits from PR-2828 round 3
+description: 'From the PR-2828 PASS at e2a7575e3d: (1) pr_ship_batch.rs:540-546: when a ship is refused after clear_hold succeeded, the stop message must say the hold was ALREADY CLEARED. (2) pr_ship_batch.rs:771: a hold-label read error inside ci_at_head must say ''could not read the hold label'', not ''could not read CI''. (3) events.rs ShipBatchStep doc: a refused dry run records ''refused''; fix the doc.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T12:33:36.703542824Z
+modified_at: 2026-10-22T12:33:36.703542824Z
+req_type: Task
+filed_at:
+  code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 7d71bfbf-a609-42bd-a714-a7d52d81db81
