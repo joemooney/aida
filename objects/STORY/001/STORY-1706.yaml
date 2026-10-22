@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T08:18:11.550823998Z
-modified_at: 2026-10-22T11:19:48.513318132Z
+modified_at: 2026-10-22T11:39:16.133110263Z
 req_type: Story
 comments:
 - id: 01a16149-ad5a-76e3-b0bb-520dd436cea8
@@ -80,6 +80,16 @@ comments:
   created_at: 2026-10-22T11:19:48.513318132Z
   modified_at: 2026-10-22T11:19:48.513318132Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16368-8325-74b3-b47d-f7b3063d20b2
+  author: joe
+  content: |
+    SKETCH v1 AMENDMENT A1 (STORY-1706, implementer): needs advisor ruling. Found while building PR A; tests prove it.
+    PROBLEM: re-exec of ORIG_ARGS verbatim does not resume the crashed run. (a) `--label X` (and a bare launch) generates a NEW run id on every launch, so the relaunch starts a fresh run dir and the crashed run's handoff is left behind. (b) A positional prompt or `--prompt-file` (or a profile prompt_file without --use-existing) REPLACES the run's handoff with the initial prompt (the old one moves to sessions/handoff_prior_to_prompt_*), so the restart throws the progress away and starts over.
+    PROPOSAL: the record keeps ORIG_ARGS verbatim as `orig_arg=` lines, for provenance as the spec says. `arg=` lines become a RESUME argv that relay.sh builds itself in parse_args, which knows each flag's arity: run selection pinned (`--run <RUN_ID>` for a run-dir run; the original `--handoff-seat`/`--handoff-file` otherwise), plus `--use-existing --non-interactive`, plus every other launch token EXCEPT --run/--label, the positional prompt, --prompt-file, --use/--archive/--view-existing, --interactive, --start-session and --detach. The profile ref stays, and the profile's prompt_file is already skipped under --use-existing when a handoff exists (STORY-91). C1 still holds literally: the tick execs record `arg=` lines + `--max-sessions`, nothing from env or config. A record without a resume argv (v != 1 or no arg= lines) means no restart. Budget: the resume starts at session 1 with --max-sessions = remaining, and the crashed session counts as used.
+    Everything else in the signed sketch is unchanged. Until you rule, I continue PR B's parts that do not depend on this (scope/gate, record parser, eligibility, tick wiring).
+  created_at: 2026-10-22T11:39:16.133110263Z
+  modified_at: 2026-10-22T11:39:16.133110263Z
+  session_id: 0b08344d-2403-4936-8cfc-5e4276efb6b9
 history:
 - id: 01a16149-9ba7-7df3-aec7-b485bef56bae
   author: joe
