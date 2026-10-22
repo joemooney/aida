@@ -487,6 +487,8 @@ blocked or finished), and only when all of these hold:
   that it belongs to the mandate's principal, and that its profile is unchanged;
 - it is not an advisor-seat or `--force-seat` run, and no `bin/relay.sh
   --no-restart <run>` marker is present;
+- the run's spec is known: from its status, or from the `--spec <ID>` (or
+  profile `spec` key) it was launched with, and not an operator-only spec;
 - no agent session of the run is still alive (a `kill -9` of the relay alone
   leaves its session running; stop it first);
 - it has been restarted fewer than 3 times, after waiting 1, 2 and then 4 ticks;

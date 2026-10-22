@@ -51,6 +51,11 @@ pub(crate) struct LaunchRecord {
     pub profile_sha256: Option<String>,
     pub principal: String,
     pub launched_from_tty: bool,
+    /// The spec the run works, as the launch named it (`--spec` or the
+    /// profile's `spec` key); never guessed. Unvalidated: the drive tick
+    /// counts it only as an exact id the store knows.
+    // trace:STORY-1706 | ai:claude
+    pub spec: Option<String>,
     /// The argv a restart runs, in order.
     pub args: Vec<String>,
 }
@@ -242,6 +247,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<LaunchRecord, String> {
         profile_sha256: optional("profile_sha256")?,
         principal: get("principal")?,
         launched_from_tty: flag("launched_from_tty")?,
+        // Optional: records written before the field existed lack it.
+        spec: scalars.get("spec").cloned().filter(|v| !v.is_empty()),
         args,
     };
     if record.run.is_empty() || record.principal.trim().is_empty() {

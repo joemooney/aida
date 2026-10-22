@@ -665,7 +665,14 @@ pub(crate) fn restart_verdict(
             return no(format!("its profile {} changed or is gone", file.display()));
         }
     }
-    let Some(spec) = run_spec(lane, spec_known) else {
+    // The status's spec, else the one the launch named (exact id, known to
+    // the store); neither means unknown, refused.
+    let Some(spec) = run_spec(lane, spec_known).or_else(|| {
+        record
+            .spec
+            .clone()
+            .filter(|id| spec_ids_in(id).first() == Some(id) && spec_known(id))
+    }) else {
         return no(RUN_SPEC_UNKNOWN.into());
     };
     if let Some(class) = spec_always_human(&spec) {

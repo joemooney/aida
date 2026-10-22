@@ -512,6 +512,33 @@ fn refusals_each_condition() {
     }
 }
 
+/// Advisor ruling 12:55: the record's `spec=` (from `--spec` or the
+/// profile's `spec` key) names the run's spec when relay.status does not.
+/// Absent, malformed or unknown to the store, it is still refused.
+// trace:STORY-1706 | ai:claude
+#[test]
+fn the_record_spec_names_the_run_when_the_status_does_not() {
+    let mut fx = Fixture::new();
+    let m = fx.mandate();
+    fx.write_status(&[("ticket", "/tmp/slot-ticket")]);
+    fx.set("spec", "TASK-77");
+    match fx.verdict(&m, now()) {
+        Some(RestartVerdict::Restart(_)) => {}
+        other => panic!("want a restart from the record's spec, got {other:?}"),
+    }
+    for bad in [
+        "",
+        "TASK-99",
+        "task-77",
+        "TASK-77x",
+        " TASK-77",
+        "TASK-77 TASK-78",
+    ] {
+        fx.set("spec", bad);
+        expect_no(fx.verdict(&m, now()), "could not be determined");
+    }
+}
+
 #[test]
 fn an_advisor_seat_run_is_never_restarted() {
     let fx = Fixture::new();

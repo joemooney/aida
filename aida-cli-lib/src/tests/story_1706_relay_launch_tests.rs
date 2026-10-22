@@ -57,6 +57,17 @@ fn a_record_parses_with_its_args_in_order() {
     assert_eq!(r.sha256.len(), 64);
 }
 
+// trace:STORY-1706 | ai:claude
+#[test]
+fn the_spec_field_is_optional() {
+    assert_eq!(parse(body(&[]).as_bytes()).unwrap().spec, None);
+    assert_eq!(parse(body(&["spec="]).as_bytes()).unwrap().spec, None);
+    let r = parse(body(&["spec=STORY-1706"]).as_bytes()).unwrap();
+    assert_eq!(r.spec.as_deref(), Some("STORY-1706"));
+    let err = parse(body(&["spec=A-1", "spec=B-2"]).as_bytes()).unwrap_err();
+    assert!(err.contains("twice"), "{err}");
+}
+
 #[test]
 fn decode_refuses_escapes_relay_sh_never_writes() {
     assert_eq!(decode("a%25b%0Ac%0Dd").as_deref(), Some("a%b\nc\rd"));
