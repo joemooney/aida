@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T04:57:15.786444566Z
+modified_at: 2026-10-22T05:33:59.711268880Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -253,6 +253,11 @@ comments:
   content: 'PR1 validation correction and fresh result at 61888258f63bd932982cbb4ebcc3552f318bb1b5: prior 21:06/21:08 jobs were lost at session exit and count as no passes. Fresh attached make check-ci-fast exited 0: all 34 gates passed (log /tmp/story1843-pr1-6188825-fast-rerun.log). Fresh attached make test-touched remains active; no test pass claimed yet. PR2 paused until PR1 merges. No ship/merge/approval/hold clearance authorized. Future handoff requires no owned running jobs and recorded results.'
   created_at: 2026-10-22T04:57:15.786444566Z
   modified_at: 2026-10-22T04:57:15.786444566Z
+- id: 01a1621a-181f-77c3-9034-44ada147e90c
+  author: ai:codex:joe
+  content: 'Fresh PR1 pre-push validation COMPLETE at 61888258f63bd932982cbb4ebcc3552f318bb1b5. make check-ci-fast exit 0: all 34 fast gates passed. make test-touched exit 0: 462 selected unit tests, all 43 TASK-1717 store-writer integration tests, and the TASK-1955 unknown-mention integration test passed. Logs: /tmp/story1843-pr1-6188825-fast-rerun.log and /tmp/story1843-pr1-6188825-touched-rerun.log. Both ran attached to this session and have finished; no owned validation jobs remain. All four PR1 advisor rulings checked against source. Earlier lost jobs count as no passes. Next: normal push, actual-head CI, then advisor READY only. No merge/ship/approval/hold clearance.'
+  created_at: 2026-10-22T05:33:59.711268880Z
+  modified_at: 2026-10-22T05:33:59.711268880Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
