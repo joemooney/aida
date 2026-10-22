@@ -6,16 +6,25 @@ description: |
   aida-core/src/store_hooks.rs private_primary_gid/is_user_private_group checks only gr_mem. Another local user whose primary gid is this group never appears there, so g+w still passes. Scan passwd for another uid with pw_gid == gid, or document the limit.
 
   Raised in review of PR-2818: https://github.com/joemooney/aida/pull/2818#issuecomment-6329345831
-status: Draft
+status: Superseded
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-22T00:05:27.055544748Z
-modified_at: 2026-10-22T00:05:27.055544748Z
+modified_at: 2026-10-22T00:06:29.865870659Z
 req_type: Task
 tags:
 - from-review:PR-2818
 - severity:minor
+history:
+- id: 01a160ee-42e9-7e01-88b1-a89be7e3dd13
+  author: joe
+  timestamp: 2026-10-22T00:06:29.865867427Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 8ce86a1ca097c57f545618af141e1200ffe3b2c2
   branch: pr-2818
