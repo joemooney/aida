@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T03:32:05.083471232Z
+modified_at: 2026-10-22T03:36:36.110969263Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -207,6 +207,11 @@ comments:
   created_at: 2026-10-22T03:32:05.083471232Z
   modified_at: 2026-10-22T03:32:05.083471232Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a161ae-9e0e-75d3-a6fa-f2bda43f938c
+  author: joe
+  content: 'C3 actual real-store dry-run completed, NOT migration approval/fullPR2: new CLI source1ca6fc4c9457da0dbebca3a2946f60202c682dbf/version1ca6fc4c94, binarySHA256ebdb5af84ae22dc09eda8790755c8875697cf8cba2fe1431fd97bf3cfc9af1b3, mailbox migrate --dry-run --json from main cwd, exit0. Private evidence /tmp/story1843-real-preview-gknm01z0/report.json and metadata.json; reportSHA256564a5343a4ea9a4cb709836fe3b7caf7a4e3d53d8d872a5ffd2d867dc05dceec. Sourcefingerprint960074f68719c7e318bda1f5a07697127c1b65ac947ed87e5af95d34d750b10e. StoreHEAD unchanged f3b20101d671942af758f1a71a465f0514ca86db. 2582local+2584canonical->2587merged;28divergentIDs;95recipients(3human,5explicit-cohort groups,87unresolved preserve-history);2447 read-state records including2387receipts each one current candidate but advisory, not historical private ownership. No bodies/write path/UUID assignment. Six preview+18 registry tests and34fast gates passed; CLI build finished. Report submitted internally to advisor for required C3 review; old-writer policy also pending. PR1 branch506527 preserved but path/lease removed externally; affected checks not started, coordination requested. Full four-PR task remains active, parent In Progress.'
+  created_at: 2026-10-22T03:36:36.110969263Z
+  modified_at: 2026-10-22T03:36:36.110969263Z
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
