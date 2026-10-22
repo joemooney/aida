@@ -8,12 +8,11 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-06-08T07:50:19.270532830Z
-modified_at: 2026-06-08T15:47:48.068797711Z
+modified_at: 2026-10-22T16:45:01.126734640Z
 req_type: Task
 tags:
 - ci
 - clippy
-- deferred:supervised
 - from-task:TASK-709
 - tech-debt
 comments:
@@ -27,6 +26,12 @@ comments:
   content: 'Shipped the CLEANUP (PR #685: 335→~0 clippy warnings under 1.92, 56 files, +733/−788, all gates green) BUT deferred the -D warnings GATE FLIP. Why: CI runs dtolnay/rust-toolchain@stable (floating); clippy 1.96 surfaced 23+ lints the 1.92 cleanup couldn''t see — every Rust release would newly-break CI with no code change. Kept the stable -D clippy::correctness gate (TASK-709), which already catches real bugs (BUG-473). Full -D warnings tracked as a follow-up gated on pinning the toolchain.'
   created_at: 2026-06-08T15:47:48.068797711Z
   modified_at: 2026-06-08T15:47:48.068797711Z
+history:
+- id: 01a16480-77aa-73d1-b78f-e535529b1bbc
+  author: joe
+  timestamp: 2026-10-22T16:45:03.274785614Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
 implementation_info:
   implemented: false
   completed_at: 2026-06-08T15:47:20.839144034Z
