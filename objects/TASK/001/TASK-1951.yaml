@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T07:49:19.086880753Z
+modified_at: 2026-10-22T08:01:59.717806576Z
 req_type: Task
 tags:
 - reconcile
@@ -412,6 +412,18 @@ comments:
   created_at: 2026-10-22T07:49:19.086880753Z
   modified_at: 2026-10-22T07:49:19.086880753Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a162a1-97a5-7212-8301-6bdfb0a5047d
+  author: joe
+  content: |-
+    Implementer handoff 2026-10-22 00:30.
+    MERGED: #2811 (forge: TASK-1408/1411/1659/1663), #2812 (drain: TASK-1615/1617), #2815 (reconcile: TASK-1618 pull side, TASK-1765 (2)(4)), #2816 (ship slice: TASK-1619/1620/1622; TASK-1621 partial), #2819 (TASK-1668/1814(2), TASK-1670), #2820 (gate: TASK-1814(3)/1671/1669/2049).
+    OPEN: #2822 (gate, merge_hold.rs: the 18:35 orphaned cleared label item + TASK-1406), round-1 fixes at c2c8f4e126. #2823 (gate, pr_ship.rs/mandate.rs: TASK-1623, TASK-1662 deadline), awaiting review.
+    NO CHANGE, with evidence in the PR bodies: TASK-1814(1) (already fixed by renameat2, TASK-1801); TASK-2035 (fixed by BUG-2203); TASK-1765(3) (already fixed); TASK-1618 --final-slice with squash (refusal kept: after #2815 a squash completes on its trailer).
+    REMAINING: BUG-2123 + TASK-1757 (merge_hold.rs/rework_hold_release.rs, strict tier; keep every refused (spec,sha) when holds compose; hold lock across the second pass; docs; stale clearance cleanup; wiring test); TASK-1991 (ship-level carry-over test); TASK-1765(1) (held-merge retry list); TASK-2003 (I asked the advisor for a design ruling, display lens vs status flip; no answer yet); the #2816 deferred items (a-d in the 18:27 comment) plus TASK-2130/2131/2132; TASK-2099/2100 (GIT_SSH bare-program test, plink variant); TASK-2104/2105/2106; TASK-2114..2117; TASK-1-419/420/423.
+    Branches: claude/task-1951-s6 (#2822), claude/task-1951-s7 (#2823). Worktree: /home/joe/ai/aida-worktrees/fix-task-1951.
+  created_at: 2026-10-22T08:01:59.717806576Z
+  modified_at: 2026-10-22T08:01:59.717806576Z
+  session_id: ff6e8bf8-1dc6-42b0-b4cd-7470b3ef42aa
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
   author: joe
