@@ -1,0 +1,27 @@
+id: 01a1631b-8154-7be1-8ff6-6912700a6fbb
+spec_id: TASK-2159
+agreed_id: TASK-2159
+title: role status offers a transient tool-shell pid as shell_pid for --bind-pid
+description: |
+  seat_authority.rs grant_status sets shell_pid = chain[1], the immediate parent of the aida process. When `aida role status` runs from an agent's Bash tool, that is a per-command shell that exits right away. The status line still offers it for `aida role enter <seat> --bind-pid <pid>`, and binding to it gives a grant that can never be presented. Omit shell_pid when an agent harness is present, or label it so it is not suggested for --bind-pid.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6338292238
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T10:15:09.396170680Z
+modified_at: 2026-10-22T10:15:09.396170680Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- severity:cosmetic
+filed_at:
+  code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a16316a684
+  harness_version: 2.1.308 (Claude Code)

@@ -1,0 +1,27 @@
+id: 01a1631a-fe7c-7db3-8e8c-cab9c0afe72f
+spec_id: TASK-2158
+agreed_id: TASK-2158
+title: 'BUG-1934: add an end-to-end review record refusal test for a PresenterNotBound grant'
+description: |
+  The BUG-1934 sketch's test plan promised a `review record` refusal test. PR-2830 proves the refusal only at the grant_check level (bug_1934_grant_binding_tests::grant_refused_when_presenter_identity_does_not_overlap_binding) plus the pre-existing BUG-1983 bail at aida-cli-lib/src/lib_part5.rs:2998. Add a handle_review_record_at test with an exported grant bound to a foreign process. It should assert "refused: review record. Session grant … was rejected: it is bound to …" and that no verdict file is written.
+
+  Raised in review of PR-2830: https://github.com/joemooney/aida/pull/2830#issuecomment-6338292238
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T10:14:35.900286702Z
+modified_at: 2026-10-22T10:14:35.900286702Z
+req_type: Task
+tags:
+- from-review:PR-2830
+- severity:minor
+filed_at:
+  code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: 01a16316a684
+  harness_version: 2.1.308 (Claude Code)
