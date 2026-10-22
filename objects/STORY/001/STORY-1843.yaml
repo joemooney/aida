@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T00:49:06.564126632Z
+modified_at: 2026-10-22T01:09:41.037372316Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -165,6 +165,12 @@ comments:
   created_at: 2026-10-22T00:49:06.564126632Z
   modified_at: 2026-10-22T00:49:06.564126632Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16128-1c2d-7441-94fb-a1d8843d02e8
+  author: ai:codex:joe
+  content: 'Resumed saved integrator handoff. PR1 #2808 normal append-pushed and remote/OPEN verified at b10d20aa7667f92358d93514f4be7b68e7ff5ebb. Fixture-only commit seeds known bob roster entry; original unknown-recipient CI failure was reproduced locally. Completed saved current-source evidence: full task_1717 suite 43 passed; make test-touched 454 unit plus 43 integration tests passed; make check-ci-fast 33 gates passed. PR body updated with exact SHA and evidence. Current-head CI is newly registering and independent attested review is pending; no approval or completion claim. Advisor compatibility ruling for PR2 requested in thread d2840937 (message f2d0d369). Parent remains In Progress through PR1–3.'
+  created_at: 2026-10-22T01:09:41.037372316Z
+  modified_at: 2026-10-22T01:09:41.037372316Z
+  session_id: 01a15f84fa7c
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
