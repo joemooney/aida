@@ -57,7 +57,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T16:03:34.769123409Z
-modified_at: 2026-10-22T00:48:44.972896739Z
+modified_at: 2026-10-22T00:48:48.324609534Z
 req_type: Task
 tags:
 - launch
@@ -571,6 +571,12 @@ comments:
   content: 'ADVISOR 17:35: PR-2817 (slice 6) round 2 PASS. Folded TASK-2128 (hook resolver: define .RECIPEPREFIX, bare $(VAR) rule lines, upper-case suffix rules; add ifneq and ifndef fixtures) for slice 7.'
   created_at: 2026-10-22T00:34:47.461076609Z
   modified_at: 2026-10-22T00:34:47.461076609Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16114-fec4-7630-a320-7ad8e73b2136
+  author: joe
+  content: 'ADVISOR 17:52: folded BUG-2205 (reviewer launch refuses to end a dead lease when the worktree index equals an already-pushed commit, a false dirty). Related to TASK-2108''s pushed-commit reap gate from #2814: slice 7 verifies whether it''s already fixed, and adds the index==pushed-commit case with a test if not.'
+  created_at: 2026-10-22T00:48:48.324609534Z
+  modified_at: 2026-10-22T00:48:48.324609534Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e7-9a9e-7f53-9dba-5dc0d8e33566
