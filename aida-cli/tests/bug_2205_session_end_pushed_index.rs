@@ -35,6 +35,11 @@ fn aida(cwd: &Path, home: &Path) -> Command {
     cmd.current_dir(cwd);
     isolate(&mut cmd, home);
     cmd.env("AIDA_TELEMETRY", "0");
+    // Captured stdout is not a TTY, so unpinned `aida` runs in agent mode and
+    // routes a refusal to STDOUT as a TOON `error:` block; the assertions read
+    // the human STDERR channel, so pin it (the pin outranks AIDA_AGENT_OUTPUT).
+    // trace:TASK-1955 | ai:claude (BUG-2205)
+    cmd.env("AIDA_OUTPUT_FORMAT", "human");
     for k in [
         "AIDA_SESSION_ROLE",
         "AIDA_SESSION_GRANT",

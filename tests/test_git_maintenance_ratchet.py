@@ -267,6 +267,11 @@ def git_bindings(source: str, masked: str, definitions, lo: int, before: int):
 def git_receiver(source: str, masked: str, definitions, s: int, e: int, lo: int):
     """None when the statement calls methods on no git-command binding; else
     whether that binding is guarded."""
+    # trace:TASK-1955 | ai:claude (TASK-2010)
+    # A literal reaches a split command only through `.arg(` / `.args(`; a
+    # method on the captured output (`held.trim()` of `git_ok(..)`) is not a run.
+    if not re.search(r"\.\s*args?\s*\(", masked[s:e]):
+        return None
     names = set(re.findall(r"\b(\w+)\s*\.\s*\w+", masked[s:e]))
     if not names:
         return None
@@ -599,6 +604,14 @@ fn t() {
 }
 '''
         self.assertEqual([], self.sites(later))
+        # Output captured from a git helper is a string, not a command.
+        captured = '''
+fn t() {
+    let held = git_ok(dir, &["cat-file", "-t", sha]);
+    assert_eq!(held.trim(), "commit");
+}
+'''
+        self.assertEqual([], self.sites(captured))
 
     # trace:TASK-1955 | ai:claude (TASK-2010)
     def test_detects_unguarded_shell_and_python_fixture_sites(self):
