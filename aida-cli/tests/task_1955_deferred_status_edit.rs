@@ -103,7 +103,11 @@ fn status_edit_of_a_deferred_spec_is_refused_with_the_undefer_hint() {
         !stdout.contains("Updated"),
         "never `Updated` for a no-op: {stdout}"
     );
-    assert!(stderr.contains("aida undefer TASK-1"), "{stderr}");
+    // Off a terminal the error is rendered on stdout; either stream counts.
+    assert!(
+        format!("{stdout}{stderr}").contains("aida undefer TASK-1"),
+        "stderr: {stderr}\nstdout: {stdout}"
+    );
 
     // The stored status is untouched: undeferring shows the original draft.
     ok(&aida(&repo, &home, &["undefer", "TASK-1"]), "undefer");
