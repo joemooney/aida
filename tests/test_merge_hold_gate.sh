@@ -101,4 +101,58 @@ for spec in "${cases[@]}"; do
   done
 done
 
-echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates)"
+# STORY-1690 train mode (GitHub gate): a `train/*` PR passes only when its
+# body names its members and every member passes the same label rules. A fake
+# `gh` answers `gh api repos/<repo>/issues/<n>/labels` from MEMBER_LABELS_<n>
+# (unset = the API call fails).
+# trace:STORY-1690 | ai:claude
+mkdir -p "$work/bin"
+cat >"$work/bin/gh" <<'GH'
+#!/usr/bin/env bash
+[ "$1" = api ] || exit 2
+n=$(printf '%s' "$2" | sed -n 's#^repos/[^/]*/[^/]*/issues/\([0-9][0-9]*\)/labels$#\1#p')
+[ -n "$n" ] || exit 2
+var="MEMBER_LABELS_$n"
+[ "${!var+set}" = set ] || exit 1
+printf '%s\n' "${!var}"
+GH
+chmod +x "$work/bin/gh"
+grep -Fq 'aida-train-members:' "$work/github-gate.sh" || fail "extracted GitHub gate has no train mode"
+
+# $1 = head ref, $2 = PR body, then MEMBER_LABELS_<n>=... assignments.
+train_gate() {
+  local ref=$1 body=$2
+  shift 2
+  env PATH="$work/bin:$PATH" LABELS= HEAD_REF="$ref" PR_BODY="$body" REPO=o/r "$@" \
+    bash -e -o pipefail "$work/github-gate.sh" >/dev/null 2>&1
+}
+
+a40=$(printf 'a%.0s' $(seq 40))
+b40=$(printf 'b%.0s' $(seq 40))
+two="Train.
+
+aida-train-members: 11@$a40,12@$b40"
+train_cases=0
+expect_train() {
+  local want=$1 desc=$2
+  shift 2
+  local got=0
+  train_gate "$@" || got=$?
+  [ "$got" = "$want" ] || fail "train gate: expected exit $want, got $got ($desc)"
+  train_cases=$((train_cases + 1))
+}
+expect_train 0 'two clear members pass' train/x "$two" MEMBER_LABELS_11= MEMBER_LABELS_12=
+expect_train 0 'a member with a recorded clearance passes' train/x "$two" \
+  MEMBER_LABELS_11=aida:merge-hold-recorded,aida:merge-hold-cleared MEMBER_LABELS_12=
+expect_train 1 'a held member fails the train' train/x "$two" \
+  MEMBER_LABELS_11= MEMBER_LABELS_12=aida:merge-hold,aida:merge-hold-recorded
+expect_train 1 'a member held before without clearance fails the train' train/x "$two" \
+  MEMBER_LABELS_11=aida:merge-hold-recorded MEMBER_LABELS_12=
+expect_train 1 'a member with a forged clearance fails the train' train/x "$two" \
+  MEMBER_LABELS_11=aida:merge-hold-cleared MEMBER_LABELS_12=
+expect_train 1 'an unreadable member fails closed' train/x "$two" MEMBER_LABELS_11=
+expect_train 1 'a train PR with no members line fails' train/x 'no members here'
+expect_train 1 'a malformed member entry fails' train/x "aida-train-members: x@$a40"
+expect_train 0 'a non-train PR ignores a members line' feature/x "$two"
+
+echo "merge-hold gate fixtures passed (${#cases[@]} label states x 2 shipped gates, $train_cases train-mode cases)"

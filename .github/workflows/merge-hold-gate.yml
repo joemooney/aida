@@ -27,17 +27,25 @@ name: merge-hold-gate
 # Applying a hold drops `aida:merge-hold-cleared`, so `cleared` is present iff
 # the most recent hold has a recorded clearance; this makes label-only gate logic sound.
 #
+# STORY-1690 train mode: a merge-train PR (head branch `train/*`, opened by
+# `aida pr train`) lands other PRs' content, so its own labels are not enough.
+# Its body names the members (`aida-train-members: N@<sha>,...`); the gate
+# reads each member's labels through the API and applies the same three rules,
+# failing when the members line is missing or malformed. A body edit re-runs
+# the gate. `aida pr train` re-checks every member right before it merges.
+#
 # The `run:` block below is the shipped artifact that
 # tests/test_merge_hold_gate.sh extracts and executes, so its fixtures assert
 # against this file rather than against a copy of it. Keep the gate logic here.
 
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
 permissions:
   contents: read
   pull-requests: read
+  issues: read
 
 jobs:
   merge-hold-gate:
@@ -46,20 +54,53 @@ jobs:
       - name: Require recorded clearance for every previously held PR
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          has_label() {
-            printf '%s' "$LABELS" | tr ',' '\n' | grep -Fqx "$1"
+          # $1 = comma-joined labels, $2 = whose labels (for the message).
+          check_labels() {
+            has_label() {
+              printf '%s' "$1" | tr ',' '\n' | grep -Fqx "$2"
+            }
+            if has_label "$1" aida:merge-hold; then
+              echo "::error::$2 has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated \`aida merge-hold clear <pr>\` path or an eligible recorded Rework approval through \`aida merge-hold auto-release <pr>\`."
+              return 1
+            fi
+            if has_label "$1" aida:merge-hold-recorded && ! has_label "$1" aida:merge-hold-cleared; then
+              echo "::error::$2 was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
+              return 1
+            fi
+            if has_label "$1" aida:merge-hold-cleared && ! has_label "$1" aida:merge-hold-recorded; then
+              echo "::error::$2 has a clearance label with no matching recorded hold."
+              return 1
+            fi
           }
-          if has_label aida:merge-hold; then
-            echo "::error::This PR has an active aida:merge-hold — a supervised spec (drive/guided/operator/decide/unset) requires a human/advisor review before merge. Release requires the human-gated \`aida merge-hold clear <pr>\` path or an eligible recorded Rework approval through \`aida merge-hold auto-release <pr>\`."
-            exit 1
-          fi
-          if has_label aida:merge-hold-recorded && ! has_label aida:merge-hold-cleared; then
-            echo "::error::This PR was held previously but has no recorded clearance; removing aida:merge-hold alone does not release it."
-            exit 1
-          fi
-          if has_label aida:merge-hold-cleared && ! has_label aida:merge-hold-recorded; then
-            echo "::error::Clearance label has no matching recorded hold."
-            exit 1
-          fi
+          check_labels "$LABELS" "This PR" || exit 1
+          case "${HEAD_REF:-}" in
+            train/*)
+              members=$(printf '%s\n' "${PR_BODY:-}" | sed -n 's/^[[:space:]]*aida-train-members:[[:space:]]*//p' | head -n 1)
+              if [ -z "$members" ]; then
+                echo "::error::Merge-train PR names no members (no aida-train-members: line); it cannot pass."
+                exit 1
+              fi
+              for entry in $(printf '%s' "$members" | tr ',' ' '); do
+                n=${entry%%@*}
+                n=${n#\#}
+                case "$n" in
+                  ''|*[!0-9]*)
+                    echo "::error::Malformed merge-train member entry: $entry"
+                    exit 1
+                    ;;
+                esac
+                if ! member_labels=$(gh api "repos/$REPO/issues/$n/labels" --jq '[.[].name] | join(",")'); then
+                  echo "::error::Could not read the labels of train member #$n; failing closed."
+                  exit 1
+                fi
+                check_labels "$member_labels" "Train member #$n" || exit 1
+              done
+              echo "Merge-train members pass the merge-hold gate: $members"
+              ;;
+          esac
           echo "Merge-hold gate passes: no active hold, or a recorded clearance exists."

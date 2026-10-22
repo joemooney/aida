@@ -68,6 +68,45 @@ automatically before merging. Raw `gh pr merge --rebase` is no longer an
 exception (STORY-1663).
 <!-- trace:STORY-1663 | ai:antigravity -->
 
+### Merge train
+
+<!-- trace:STORY-1690 | ai:claude -->
+Two PRs that are each green can still break main together, because neither
+one's CI saw the other (#2599/#2597). When more than one approved PR is ready,
+the merge seat lands them with `aida pr train <N...>` (or `--all-ready`), the
+batched form of `aida pr ship`:
+
+1. **Same gates per member.** Each PR must be open, not a draft (CI never runs
+   Build on drafts, so a draft is refused with that reason), on the default
+   branch, free of merge holds (marker and labels), approved at its head or
+   carried over a clean merge from main (TASK-1960), with a clear verdict
+   corpus. The train never releases a hold.
+2. **Attestation carry-over by patch-id.** The train is main plus one squash
+   commit per member, with the subject `aida pr ship` would write (including
+   `(#N)` and the completing trailer). Each commit's patch-id must equal the
+   member's approved diff (`merge-base(main, head)..head`). A member that
+   conflicts, or whose diff changes when stacked, is dropped with its reason
+   and never auto-resolved. That proof is the train's authority to land the
+   members (advisor signoff 2026-10-19).
+3. **CI on exactly what main receives.** The stack is opened as a `train/*`
+   PR. Required checks run on it unchanged. merge-hold-gate's train mode reads
+   the `aida-train-members:` line and fails if any member carries a hold
+   without a recorded clearance.
+4. **Land pinned, only on an unmoved main.** Under the merge lease, the train
+   re-gates every member, refuses if main moved since the build (it rebuilds
+   and retests instead), then rebase-merges the train PR with
+   `--match-head-commit <tip>`. Each member PR is closed with a pointer to
+   its commit on main, and `aida pull` completes specs from the trailers.
+5. **Red trains bisect.** A red train is rerun once to rule out a flake, then
+   split in halves, two sub-trains at a time. A green half lands at once,
+   and the other half is rebuilt on the new main and retested. A one-member
+   train that is red leaves that PR open with a comment saying why.
+
+`aida pr train --dry-run` prints each member's gate verdict and the planned
+train without pushing anything; `--local-ci <CMD>` additionally simulates the
+whole run with a local command as CI. Branch protection's "require up to
+date" (`strict`) stays off; the train makes it unnecessary.
+
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not
 a control: the advisor must check the authorship ledger honestly. The

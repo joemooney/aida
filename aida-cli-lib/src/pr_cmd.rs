@@ -70,6 +70,21 @@ pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
                 *final_slice,
             )
         }
+        PrCommand::Train {
+            prs,
+            all_ready,
+            dry_run,
+            local_ci,
+            max,
+            no_pull,
+        } => crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+            prs,
+            all_ready: *all_ready,
+            dry_run: *dry_run,
+            local_ci: local_ci.as_deref(),
+            max: *max,
+            no_pull: *no_pull,
+        }),
         PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
         PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
         PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
@@ -1549,7 +1564,7 @@ fn acquire_merge_lease(
 // silently dropped. `emit` itself is best-effort (never errors the ship);
 // isolated here so the target-derivation logic is unit-testable without
 // stubbing `gh`. trace:BUG-1423 | ai:claude
-fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
+pub(crate) fn emit_ship_pr_merged(main_worktree: &std::path::Path, pr: u32, spec_ids: &[String]) {
     let seat = crate::events::active_seat();
     let targets: Vec<Option<String>> = if spec_ids.is_empty() {
         vec![None]

@@ -243,6 +243,59 @@ pub enum PrCommand {
         final_slice: bool,
     },
 
+    /// Land a batch of approved PRs together through a merge train, so two
+    /// PRs that are each green cannot break main together.
+    ///
+    /// Each PR must pass the same gates `aida pr ship` applies before a
+    /// merge: open, not a draft, on the default branch, no merge hold, an
+    /// approval recorded at its head (or carried over a clean merge from
+    /// main), and a clear verdict corpus. Drafts are refused with a reason,
+    /// since CI does not run Build on them.
+    ///
+    /// The train is main plus one squash commit per PR, each written with
+    /// the subject `aida pr ship` would use and checked to carry exactly the
+    /// PR's approved diff (by patch-id). A PR that conflicts, or whose diff
+    /// changes once stacked, is left out with its reason. The train is
+    /// opened as a `train/*` PR so the normal CI runs on exactly what main
+    /// will receive. When it is green and main has not moved, it is
+    /// rebase-merged pinned to its head, and each member PR is closed with a
+    /// pointer to its commit on main. When it is red, it is rerun once, then
+    /// split in halves (two at a time) until each bad PR is isolated and
+    /// left out with a comment.
+    ///
+    /// `--dry-run` gates and builds the train and prints the plan without
+    /// pushing anything; add `--local-ci <CMD>` to simulate the whole run
+    /// with a local command as CI, against a checkout of each train tip.
+    // trace:STORY-1690 | ai:claude
+    #[clap(group(ArgGroup::new("train_members").required(true).args(["prs", "all_ready"])))]
+    Train {
+        /// PR numbers to train, in landing order.
+        #[clap(value_name = "N")]
+        prs: Vec<u64>,
+
+        /// Train every open PR on the default branch that passes the gates,
+        /// oldest first.
+        #[clap(long, conflicts_with = "prs")]
+        all_ready: bool,
+
+        /// Gate and build the train and print the plan; push nothing.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// With --dry-run: run CMD in a checkout of each train tip as the
+        /// CI, and simulate the full land / rerun / bisect run locally.
+        #[clap(long, value_name = "CMD", requires = "dry_run")]
+        local_ci: Option<String>,
+
+        /// At most this many PRs per train; the rest wait for the next one.
+        #[clap(long, value_name = "N", default_value_t = 10)]
+        max: usize,
+
+        /// Skip the `aida pull` after a train lands.
+        #[clap(long)]
+        no_pull: bool,
+    },
+
     /// Deliberately HOLD the PR on the current session — push the branch but
     /// intentionally do not open the PR yet, pending a manual gate (a smoke
     /// test, an out-of-band review, an operator decision).
