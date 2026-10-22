@@ -1,0 +1,31 @@
+id: 01a16370-8bc8-7751-b927-63451f35bbb8
+spec_id: TASK-2168
+agreed_id: TASK-2168
+title: Mandate trace exclusions expire when the traced operator-only spec completes
+description: |
+  Advisor signoff on STORY-1888, condition C3: file this as a child of STORY-1888 and deliver it in that story's PR 2.
+
+  Problem (STORY-1888 comment 1): mandate_traces excludes from a mandate ship any code traced to an operator-only spec, even after that spec has been COMPLETED for a long time. For example, pr_cmd.rs carries trace:TASK-963 at four sites, so PR-2802 (non-gate pr_cmd.rs) was refused under the mandate (exit 25). Over time, large parts of busy files become ship-by-operator only, with no end date.
+
+  Acceptance:
+  1. A trace-derived operator-only exclusion stops applying once the traced spec is Completed (or Rejected/Superseded). Exclusions named directly on the PR's specs and the sticky exclusion ledger are unchanged.
+  2. Fail closed: if the traced spec's status cannot be read, the exclusion still applies.
+  3. Tests: a completed operator-only trace no longer excludes; an approved or in-progress one still excludes; an unreadable store still excludes.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T11:48:02.632271305Z
+modified_at: 2026-10-22T11:48:02.632271305Z
+req_type: Task
+tags:
+- authority
+- mandate
+filed_at:
+  code_sha: e33fec11d936d4cc6ce450719a506a68932915eb
+  branch: claude/story-1888
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: e33fec11d9
+  vendor: claude
+  session: b0e26e8c-07b4-4b00-80ad-40571d0bfb76
