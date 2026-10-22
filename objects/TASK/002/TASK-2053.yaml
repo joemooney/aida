@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T10:20:17.558089870Z
+modified_at: 2026-10-22T16:03:27.671237647Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -64,6 +64,34 @@ comments:
   created_at: 2026-10-22T10:20:17.558089870Z
   modified_at: 2026-10-22T10:20:17.558089870Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a1645a-6337-7e60-8830-18b179592a13
+  author: joe
+  content: |-
+    SKETCH S4 v1 (visibility + default flip). Built on origin/main 7ffa46a9d0, after S3 #2806 merged.
+
+    Three PRs, each one "Refs TASK-2053". The fresh branches come off origin/main. The old S4/S4b commits (ff51e12f85, e192ae6570, a2485c7bd3) are cherry-picked onto them and re-reconciled against the merged S3. Nothing is merged from the old stale branches.
+
+    S4a: test-gate honesty + host git
+    1. TASK-2161 (first commit): run_path_isolated_test_output forwards AIDA_REQUIRE_BWRAP_LIVE (only that var) through env_clear(), so a child that cannot get bwrap panics and does not skip. The CI live-bwrap step also tees its output and fails when it finds fewer than N "test task_2053_bwrap_... ok" lines or any SKIP line. N is the count of those tests, so that check is structural. In the PR I then quote the lines from the CI log that show each isolated test ran.
+    2. Port of ff51e12f85: routine host paths stop running git in a lease tree. These are status/ps/statusbar, burndown, lane liveness, doctor lease heal, agent re-entry and the drain push. They go through host_git_command, which refuses a clone. force_cleanup_lease and salvage_worktree_patch move onto seat_clone probe/salvage/destroy. The logging-git regression test comes with it.
+    3. TASK-2143 ratchet: a source test lists every remaining raw `Command::new("git")` in modules that read a lease worktree_path, as an allowlist of per-file counts. A new raw call in those files fails, with the message "use host_git_command". The counts may only go down.
+    4. TASK-2162: a test runs dismiss on a hand-removed clone that still holds a lease. The lease is released, the pin is dropped, and no host git runs.
+    5. TASK-2160: 03-work-autonomy.md documents submodule clones (kept, remove by hand) and the salvage bundle.
+
+    S4b (stacked on S4a): visibility
+    - Port of e192ae6570. The seat_trees enumerator covers linked worktrees plus clone-lease trees, and these consumers use it: status rows, WIP/unshipped detectors (read through the sandboxed probe), brief/show/preflight branch resolution, runaway, stray merge-hold markers and `aida worktree list`. A ship from a clone skips the post-merge pull and prints a note.
+    - Port of a2485c7bd3 (TASK-2110): the commits a merged PR head reaches count as shipped, so a squash-merged, pruned branch no longer pins its clone.
+
+    S4c: flip
+    - The seat_tree default becomes clone, AIDA_DEV_SEAT_CLONE is removed, and #2694 is closed. The operator can still choose `seat_tree = "worktree"`. Release note.
+
+    Asks:
+    (a) Should S4b stay a separate PR stacked on S4a? I recommend yes: the review surface is ~600 lines each.
+    (b) Is the per-file count ratchet acceptable as the TASK-2143 replacement for the grep gate?
+    (c) Is S5 (the host clone pool) still needed after S4c? I would defer that decision until we have measured clone creation time with the default flipped.
+  created_at: 2026-10-22T16:03:27.671237647Z
+  modified_at: 2026-10-22T16:03:27.671237647Z
+  session_id: 97692cb0-aaab-43f2-8620-eabef6bf9732
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
   author: joe
