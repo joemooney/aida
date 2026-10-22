@@ -1243,6 +1243,12 @@ pub(crate) struct HumanFinishOptions {
 // trace:STORY-720 | ai:claude — plain `//` keeps the marker out of any doc surface.
 pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> {
     use ship::FinishMode;
+    // `aida ship` merges unless told to stop at the PR; refuse that before
+    // any commit or push. `--no-merge` / `--no-pr` stay open to a standalone
+    // implementer. trace:STORY-1662 | ai:claude
+    if !opts.no_merge && !opts.no_pr {
+        crate::standalone_implementer::refuse_under_marker("ship")?;
+    }
 
     let project_root = find_project_root()?;
     let main_worktree = main_worktree_root_from(&project_root);
@@ -2319,6 +2325,9 @@ pub(crate) fn pr_ship_with_method(
         branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan_with_method,
         recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
     };
+    // The one merge path behind `aida pr ship` and `aida ship`: a standalone
+    // implementer stops at an open PR. trace:STORY-1662 | ai:claude
+    crate::standalone_implementer::refuse_under_marker("pr ship")?;
 
     if final_slice && merge_method != crate::forge::MergeMethod::Rebase {
         anyhow::bail!(

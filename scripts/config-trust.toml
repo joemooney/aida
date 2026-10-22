@@ -652,6 +652,9 @@ batch = "policy"
 max_redrives_per_tick = "policy"
 mail_latency = "policy"
 
+[keys.worktree.queue]
+standalone_implementer_cap = "policy" # concurrency cap on standalone implementer launches (STORY-1662)
+
 [keys.worktree.integrate]
 strategy = "policy"
 

@@ -84,6 +84,40 @@ artifacts before running the command from an attested reviewer session. The
 launcher never records or accepts a verdict from log text.
 <!-- trace:BUG-2187 | ai:codex -->
 
+**A standalone implementer reports one result line and an exit code.**
+An orchestrator, relay or advisor session launches an implementer as a
+separate process with Bash, not an in-session subagent:
+`aida queue work <SPEC> --role implementer --no-human`. Outside an
+`--auto-complete` drain, this launch waits for its child and ends with one
+result line, the last line on stdout, prefixed `implementer:` (setup output
+such as the queue row and the session export comes first). The caller
+branches on the exit code:
+
+| Exit | stdout line | Meaning |
+|---|---|---|
+| 0 | `implementer: pr-opened pr=<n> head=<sha>` | The PR is open; review it with a separate reviewer. |
+| 31 | `implementer: no-pr` | No PR, punt or hold. If the vendor itself exited non-zero, that code is returned instead. |
+| 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
+| 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
+| 34 | (none) | Refused before any setup: the concurrency cap is reached. |
+
+The child runs in its own lease and worktree as `implementer`. If the
+launcher's grant delegates `implementer`, it gets a child grant. Otherwise
+(no grant, or a grant that does not delegate it) it runs at baseline
+authority, with a notice on stderr and a note in the authorship ledger. It
+never inherits the launcher's grant, session purpose, or drain context. The
+lane shows in `aida ps` as a live implementer on its spec, and its pickup
+sets the spec's owner and moves it to In Progress.
+
+The child must stop once its PR is open. Inside it, `aida pr ship` and
+`aida review record` refuse (the child carries
+`AIDA_STANDALONE_IMPLEMENTER`). At most three standalone implementers run at
+once per project; set `[queue] standalone_implementer_cap` in
+`.aida/config.toml` to change the cap. A launch past the cap exits 34
+without creating a lease, worktree or status change. Do not `aida claim` the
+spec yourself before launching: the pickup refuses a spec whose lease is held.
+<!-- trace:STORY-1662 | ai:claude -->
+
 **`aida worktree add <ID>` re-enters only a live linked worktree.** A session lease is re-entered only when its path is a linked git worktree that still exists; a lease recorded at the project root (or any other path that is not a linked worktree) is no longer re-entered — `worktree add` refuses, names that session, and tells you to end it with `aida session end <id>`. If you deleted the spec's worktree by hand (`rm -rf`), `worktree add` ends the dead session (its lease and stale git registration; the branch is kept) and mints a fresh worktree on the same branch. <!-- trace:TASK-1784 | ai:claude -->
 
 **A drain phase failure is a comment on the parent spec, not a new spec.** When `queue work --auto-complete` fails a phase, the narrative record — the phase that failed, the seat, the branch and commit under test, the captured failure text, the recovery hint, the phase durations and the telemetry line — is appended as a comment on the spec the drain was driving. It does not file a draft spec, because a draft demands a disposition from a human while a comment simply informs the next reader. A re-drive that hits the same `(phase, failure-kind)` signature bumps that comment's `Attempts:` counter instead of stacking a second one. Everything else is unchanged: the drain still exits non-zero, still writes its `~/.aida/auto-complete.jsonl` line, and still routes to the due seat. Read the record with `aida comment list <SPEC>`.
@@ -392,7 +426,7 @@ It is **strictly opt-in (default OFF)** and **fail-closed**: if `bwrap` is not o
 
 > **Scope.** `os_wrap` wraps the headless drain paths (`aida queue work --auto-complete --no-human`, the `claude -p` launches), a foreground `aida agent new claude`, and a contained interactive `claude` launch or resume. A contained `aida agent new claude --bg` is **refused** under `os_wrap` before it claims, leases or creates anything: Claude Code's background supervisor starts that session itself, outside any sandbox around the launcher, so it cannot be confined. Run it in the foreground instead.
 
-> **Contained seats in a private clone** (`[contained] seat_tree = "clone"`, still a development switch). The seat's write boundary is its own clone (including its own `.git`), the main checkout's `.aida-store` and cache files, and its own cargo target directory under the main checkout's `target/worktrees/`. The main checkout's `.git` stays read-only, so the seat commits in its clone and pushes to origin. Cargo builds there run with `RUSTC_WRAPPER` empty, so a configured `sccache` is bypassed: a compile cache shared with the host and other seats is never writable from a contained seat.
+> **Contained seats in a private clone** (`[contained] seat_tree = "clone"`, still a development switch). The seat's write boundary is its own clone (including its own `.git`), the main checkout's `.aida-store` and cache files, and its own cargo target directory under the main checkout's `target/worktrees/`. The main checkout's `.git` stays read-only, so the seat commits in its clone and pushes to origin. Cargo builds there run with `RUSTC_WRAPPER` empty, so a configured `sccache` is bypassed: a compile cache shared with the host and other seats is never writable from a contained seat. Ending, reaping or dismissing a clone seat never runs git in the clone on the host: its state is read by git inside a read-only, network-less sandbox, and a clone whose state cannot be read is kept. `aida session end` refuses a clone holding commits origin does not have or uncommitted files unless you pass `--force`, which saves that work as a patch under `.aida/salvage/<clone>/` before removing the clone, its cargo target directory and its base pin. `aida session reap` removes a clone only when nothing in it is missing from origin and its PR is merged, and releases base pins left behind by clones that no longer exist. `aida worktree dismiss <clone>` salvages and removes one clone and releases its lease.
 
 > **Host requirement: unprivileged user namespaces.** `bwrap` needs the kernel to allow unprivileged user namespaces. On recent Ubuntu (23.10+/24.04) AppArmor blocks this by default, so even with `bwrap` installed the sandbox fails-closed until you run `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist it under `/etc/sysctl.d/`). **Discovery path:** `aida doctor` reports whether `bwrap` is available and confinement-capable on this host, and `aida config show` renders the resolved `[contained]` posture (including `os_wrap`) — start there before enabling it.
 
