@@ -1,0 +1,28 @@
+id: 01a165a0-c8af-7fe2-8aaf-e550200a65df
+spec_id: TASK-2187
+agreed_id: TASK-2187
+title: 'PR-2826 body: template-dir trust rule description is stale'
+description: |
+  The PR-2826 body round-1 row 9 says an existing template dir is used only at mode 0700 and otherwise refused. Since 4077e142f3, test_git::template_dir_trusted tightens a 0755 dir to 0700 and refuses only a group- or other-writable dir or a symlink. The code and the test agree.
+
+  Raised in review of PR-2826: https://github.com/joemooney/aida/pull/2826#issuecomment-6352239272
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:59:58.383187486Z
+modified_at: 2026-10-22T21:59:58.383187486Z
+req_type: Task
+tags:
+- docs
+- from-review:PR-2826
+- severity:cosmetic
+filed_at:
+  code_sha: 325ac5bff5f698bfaaa18bd9d3109234216e6535
+  branch: pr-2826
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 519bdccd6e
+  vendor: claude
+  session: 01a1659c41cf
+  harness_version: 2.1.308 (Claude Code)

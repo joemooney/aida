@@ -1,0 +1,28 @@
+id: 01a165a0-b6f4-7453-8801-f034ca60931a
+spec_id: TASK-2186
+agreed_id: TASK-2186
+title: 'Cargo-timeout hook: .SUFFIXES arm deletes an unused array (declared)'
+description: |
+  aida-core/templates/hooks/aida-cargo-timeout-guard.sh .SUFFIXES arm: "delete declared" deletes an array that nothing else uses. Remove it.
+
+  Raised in review of PR-2826: https://github.com/joemooney/aida/pull/2826#issuecomment-6352239272
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-10-22T21:59:53.844222292Z
+modified_at: 2026-10-22T21:59:53.844222292Z
+req_type: Task
+tags:
+- from-review:PR-2826
+- hooks
+- severity:cosmetic
+filed_at:
+  code_sha: 325ac5bff5f698bfaaa18bd9d3109234216e6535
+  branch: pr-2826
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 519bdccd6e
+  vendor: claude
+  session: 01a1659c41cf
+  harness_version: 2.1.308 (Claude Code)
