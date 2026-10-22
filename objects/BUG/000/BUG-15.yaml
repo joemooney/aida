@@ -8,10 +8,9 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-12T17:55:41.528538900Z
 created_by: Joe Mooney
-modified_at: 2026-06-16T16:22:01.092303027Z
+modified_at: 2026-10-22T16:42:02.613101192Z
 req_type: Bug
 tags:
-- deferred:needs-repro
 - stale-suspect
 - tui
 comments:
@@ -25,3 +24,9 @@ comments:
   content: 'Rejected as stale (advisor, 2026-06-16) per the deferred:needs-repro trigger (''if not reproducible, reject as stale''). Verified against the current TUI (STORY-137 rewrite): grep of aida-tui/src shows ''q'' binds to Quit/close-overlay everywhere (app.rs:273/304/327/359, launcher.rs:79/115) and there is NO ''q''→queue-view→''v'' stuck-popup path. The described flow does not exist in today''s TUI. If a stuck-popup recurs on the current build, re-file with the actual key sequence + view.'
   created_at: 2026-06-16T16:21:59.731206083Z
   modified_at: 2026-06-16T16:21:59.731206083Z
+history:
+- id: 01a1647d-b682-7522-a251-790f1163b149
+  author: joe
+  timestamp: 2026-10-22T16:42:02.754317647Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes: []
