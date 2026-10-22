@@ -22,7 +22,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-18T18:12:36.891615604Z
-modified_at: 2026-10-22T01:26:18.110982247Z
+modified_at: 2026-10-22T02:26:10.245740054Z
 req_type: Story
 relationships:
 - rel_type: Parent
@@ -177,6 +177,12 @@ comments:
   created_at: 2026-10-22T01:26:18.110982247Z
   modified_at: 2026-10-22T01:26:18.110982247Z
   session_id: 01a15f84fa7c
+- id: 01a1616e-22c5-7321-81d4-66ea74eb3073
+  author: ai:codex:joe
+  content: 'Partial PR2/C3 preparation checkpoint, not full PR2 acceptance: isolated /home/joe/ai/aida-story-1843-handles, branch codex/story-1843-handles, feature lease01a161600271 alongside preserved owning STORY-1843 lease01a15f84fa7c. Local-only d3bfa2cb40cdeb27991b811c51ba5ae310cb3b33 adds mailbox migrate --dry-run/--json with read policy and no write path. Inventories legacy messages/read-state filenames, unresolved recipients, divergent local/canonical IDs and filename collisions; preserves exact receipt filenames and only advisory candidate IDs, never claims private ownership. Reports observed source changes/malformed inputs rather than silently dropping them. No message bodies in reports. Two bounded author checks: first found omitted divergent IDs in text and lossy receipt-key labeling; corrected both with regressions; second found no actionable issues. No verdict authority. fmt/diff passed; six focused tests queued (log /tmp/story1843-pr2-migration-preview-tests.log), no compile/test success claim. No real-store report, UUID/schema activation, write migration, public PR or branch push. Real-store report review and old-writer compatibility policy remain gates. PR1 e8bf source is unchanged and current-plan test-touched remains active; broader3084unit+34fast gates passed. Parent stays In Progress; all four PRs remain the objective.'
+  created_at: 2026-10-22T02:26:10.245740054Z
+  modified_at: 2026-10-22T02:26:10.245740054Z
+  session_id: 01a161600271
 history:
 - id: 01a15048-cf43-7852-8483-34240a99bd57
   author: joe
