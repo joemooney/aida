@@ -3,12 +3,12 @@ spec_id: TASK-2067
 agreed_id: TASK-2067
 title: Resolve unresolved trace IDs via store history and aliases so they stop blocking mandate coverage
 description: 'Follow-up from TASK-1800 (AC2 slice 1, PR #2798). Item-level trace attribution was measured on the 50 frozen mandate endpoints and rejected: it never changed case-level refusals (49/50) and widened evidence (fallback 290 -> 414 as signed off, 333 after one advisor iteration). The remaining lever is the unresolved trace IDs: the 18-case audit has 30 scoped (case, ID) pairs judged unresolved (e.g. TASK-176, TASK-1335, EPIC-1-001, BUG-1-051, FR-1-043), whose frozen history or aliases are missing, and their refusals cannot be judged true or incidental. Acceptance: (1) for each unresolved ID in docs/testing/task-1800-semantic-audit.json, classify it as recorded alias, deleted-with-history, or dangling, using store history and the alias registry; (2) repair the resolution path for any alias or history that exists but is not found, keeping the comment-24 fail-closed rule (any history hit that cannot be read refuses); (3) report the before/after case-level refusals on the 50 frozen endpoints with make task-1800-replay. Named IDs and decide() fail-closed handling are unchanged.'
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T13:11:27.819459305Z
-modified_at: 2026-10-21T17:37:59.794750290Z
+modified_at: 2026-10-22T01:11:36.564957888Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -46,6 +46,14 @@ history:
   timestamp: 2026-10-21T17:37:57.332853090Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
   changes: []
+- id: 01a16129-df74-72a1-baff-7371601ec4d3
+  author: joe
+  timestamp: 2026-10-22T01:11:36.564954681Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: c8f7d054ba9d01bc4ecf7a48e90c91bc97f1f6cf
   branch: claude/task-1800-ac2-s1
