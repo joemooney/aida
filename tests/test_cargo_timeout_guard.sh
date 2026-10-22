@@ -150,6 +150,38 @@ for recipe in 'bin/check' 'python3 -m tool' 'npm run build' 'just ci' '@echo a &
 done
 mk_case inert 'hello: a' $'\t@mkdir -p out && cp a out/ && echo "done; ok" > out/log' $'\t-rm -f stale; touch out/stamp' $'\t@test -f a || printf \'%s\\n\' missing' 'a:' $'\t@true'
 expect_silent "only inert recipe commands" 'timeout 1h make hello'
+# TASK-1955 (TASK-2075): a conditional inside a recipe hides its lines from
+# the resolver, so any conditional directive fails closed.
+# trace:TASK-1955 | ai:claude
+mk_case cond 'hello:' $'\t@echo hi' 'ifeq ($(CI),1)' $'\tcargo test' 'endif'
+expect_warn "recipe inside a conditional fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case ifdef 'ifdef FAST' 'hello:' $'\t@echo hi' 'endif'
+expect_warn "ifdef fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# An unresolvable line after a safe target used to fall through awk's END.
+mk_case lateincl 'hello:' $'\t@echo hi' 'include extra.mk'
+printf '%s\n' 'hello: lint' 'lint:' $'\tcargo clippy' >"$MK/lateincl/extra.mk"
+expect_warn "include after a safe target fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+# TASK-2076: a pattern or suffix rule may build an unknown prerequisite.
+mk_case pattern 'hello: page.html' $'\t@echo hi' '%.html: %.md' $'\tcargo run --bin render $<'
+expect_warn "pattern rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case suffix 'hello: page.html' $'\t@echo hi' '.md.html:' $'\tcargo run --bin render $<'
+expect_warn "suffix rule may build a prerequisite" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+mk_case phony '.PHONY: hello' 'hello: a.txt' $'\t@echo hi'
+expect_silent "special target is no suffix rule" 'timeout 1h make hello'
+# TASK-2077: awk/sed bodies and process substitution can run anything;
+# .RECIPEPREFIX and $(eval) change what a recipe is.
+for recipe in "awk 'BEGIN{system(\"cargo build\")}'" "sed -n '1e cargo build' x" 'cat <(cargo metadata)'; do
+    mk_case exec 'hello:' $'\t'"$recipe"
+    expect_warn "not inert: $recipe" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case prefix '.RECIPEPREFIX = >' 'hello:' '>cargo test'
+expect_warn ".RECIPEPREFIX fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+for directive in 'override' 'export' 'private' 'override export'; do
+    mk_case prefix "$directive .RECIPEPREFIX = >" 'hello:' '>cargo test'
+    expect_warn "$directive .RECIPEPREFIX fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
+done
+mk_case evalrule '$(eval hello: ; cargo test)' 'other:' $'\t@echo hi'
+expect_warn "\$(eval) rule generation fails closed" 'timeout 1h make hello' 'AIDA_CARGO_TIMEOUT=1h make'
 RUN_DIR="$ROOT"
 
 # Malformed input never blocks.

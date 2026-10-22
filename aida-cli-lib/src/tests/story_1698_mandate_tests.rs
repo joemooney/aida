@@ -1033,9 +1033,12 @@ fn every_failure_after_a_mandate_release_re_arms_the_hold() {
     assert!(window.contains("re-arm a mandate-released hold on a failed merge"));
     assert_eq!(
         window.matches("rearm_after_mandate_failure(").count(),
-        3,
-        "gate timeout, lapse and merge failure each re-arm"
+        4,
+        "gate timeout, lapse, a moved base and merge failure each re-arm"
     );
+    // TASK-1915: the moved-base (TASK-1960) refusal re-arms too.
+    // trace:TASK-1915 | ai:claude
+    assert!(window.contains("like every other post-release exit"));
 }
 
 // ── Review B5: decide mode is always human ─────────────────────────────────
@@ -2256,4 +2259,41 @@ fn bug_2179_history_for_many_specs_runs_a_bounded_number_of_gits() {
         "{calls}"
     );
     assert_eq!(calls.lines().count(), 3, "{calls}");
+}
+
+/// TASK-1662: a store-history walk that outlives its deadline is an error
+/// (the ship path's HistoryUnreadable refusal), never an unbounded wait.
+// trace:TASK-1951 trace:TASK-1662 | ai:claude
+#[test]
+fn task_1951_store_history_walk_times_out_as_unreadable() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let real = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+        .map(|dir| dir.join("git"))
+        .find(|candidate| candidate.is_file())
+        .expect("git on PATH")
+        .display()
+        .to_string();
+    let store = bug_2179_store();
+    let shim = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &shim.path().join("git"),
+        format!(
+            "#!/bin/sh\ncase \"$*\" in *' log '*) exec /bin/sleep 30;; esac\nexec '{real}' \"$@\"\n"
+        ),
+    );
+    let path = format!(
+        "{}:{}",
+        shim.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let _guard = crate::test_env::EnvVarsGuard::apply(&[
+        ("PATH", Some(&path)),
+        ("AIDA_STORE_HISTORY_TIMEOUT_SECS", Some("1")),
+    ]);
+    let started = std::time::Instant::now();
+    let err = store_history_alias_map(store.path(), &["TASK-1".to_string()]).unwrap_err();
+    assert!(err.to_string().contains("timed out"), "{err}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
 }

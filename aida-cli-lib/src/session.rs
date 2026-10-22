@@ -1473,6 +1473,8 @@ pub(crate) fn spawn_vendor_headless_with_seat_granted(
         .env(ceiling_key, ceiling_value);
     // trace:BUG-2187 | ai:codex
     apply_child_agent_identity(&mut cmd, vendor, seat.as_str());
+    // trace:TASK-1955 | ai:claude (TASK-1804)
+    apply_headless_harness_version(&mut cmd, vendor, &headless_worktree_root());
     // BUG-2139: the child holds its own grant; the launcher's purpose stays
     // behind. trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
@@ -3955,6 +3957,8 @@ pub(crate) fn build_exec_vendor_headless_command(
     apply_headless_child_seat_env(&mut child_cmd, seat, grant_env);
     // trace:BUG-2187 | ai:codex
     apply_child_agent_identity(&mut child_cmd, vendor, seat);
+    // trace:TASK-1955 | ai:claude (TASK-1804)
+    apply_headless_harness_version(&mut child_cmd, vendor, &headless_worktree_root());
     if containment_applied(vendor, contained) {
         child_cmd.env("AIDA_CONTAINED", "1");
     } else {
@@ -4048,6 +4052,38 @@ fn apply_child_agent_identity(cmd: &mut std::process::Command, vendor: HeadlessV
     };
     cmd.env("AIDA_AGENT_TYPE", agent_type)
         .env("AIDA_AGENT_NAME", format!("{agent_type}-{seat}"));
+}
+
+/// Stamp `AIDA_HARNESS_VERSION` on a headless child from its own vendor
+/// binary's `--version`, probed under the same os_wrap boundary as the child
+/// (the #2710 probe: grant-scrubbed and bounded). A mocked vendor
+/// (`AIDA_AGENT_CMD`) or an unwrappable probe clears the inherited value
+/// rather than leaving the launcher's version on the child.
+// trace:TASK-1955 | ai:claude (TASK-1804)
+fn apply_headless_harness_version(
+    cmd: &mut std::process::Command,
+    vendor: HeadlessVendor,
+    worktree_root: &Path,
+) {
+    let mocked = std::env::var("AIDA_AGENT_CMD").is_ok_and(|c| !c.trim().is_empty());
+    let probe = (!mocked)
+        .then(|| {
+            os_wrapped_program_and_args(
+                worktree_root,
+                vendor.program(),
+                vec!["--version".to_string()],
+            )
+            .ok()
+        })
+        .flatten();
+    match probe {
+        Some((program, args)) => {
+            crate::agent_launch::apply_harness_version(cmd, (program.into(), args))
+        }
+        None => {
+            cmd.env_remove("AIDA_HARNESS_VERSION");
+        }
+    }
 }
 
 /// BUG-2139: strip the launcher-session env a child must not inherit.
@@ -4567,6 +4603,8 @@ pub(crate) fn spawn_claude_headless_resume_granted(
     // A resume launches Claude even when the launcher is another harness.
     // trace:BUG-2187 | ai:codex
     apply_child_agent_identity(&mut cmd, HeadlessVendor::Claude, seat);
+    // trace:TASK-1955 | ai:claude (TASK-1804)
+    apply_headless_harness_version(&mut cmd, HeadlessVendor::Claude, cwd);
     // trace:BUG-2139 | ai:claude
     scrub_launcher_session_env(&mut cmd);
     // trace:BUG-2006 | ai:antigravity
@@ -9634,6 +9672,68 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// TASK-1804: a headless seat / drain phase child carries its own
+    /// vendor's `--version` as AIDA_HARNESS_VERSION, never the launcher's;
+    /// a mocked vendor (AIDA_AGENT_CMD) clears it instead of probing the mock.
+    // trace:TASK-1955 | ai:claude (TASK-1804)
+    #[cfg(unix)]
+    #[test]
+    fn headless_child_carries_its_own_vendor_harness_version() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let bin = tempfile::tempdir().unwrap();
+        crate::test_exec::write_executable(
+            &bin.path().join("codex"),
+            "#!/bin/sh\n[ \"$1\" = --version ] && echo 'codex-cli 9.9.9'\nexit 0\n",
+        );
+        let path = format!(
+            "{}:{}",
+            bin.path().display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let env_of = |cmd: &std::process::Command| {
+            cmd.get_envs()
+                .find(|(k, _)| *k == "AIDA_HARNESS_VERSION")
+                .map(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
+        };
+        let build = || {
+            build_exec_vendor_headless_command(
+                HeadlessVendor::Codex,
+                "prompt",
+                "sid",
+                false,
+                None,
+                None,
+                "implementer",
+                "",
+            )
+            .unwrap()
+        };
+        {
+            let _env = crate::test_env::EnvVarsGuard::apply(&[
+                ("PATH", Some(path.as_str())),
+                ("AIDA_CONTAINED", None),
+                ("AIDA_OS_WRAP", None),
+                ("AIDA_AGENT_CMD", None),
+                ("AIDA_HARNESS_VERSION", Some("launcher-version")),
+            ]);
+            assert_eq!(env_of(&build()), Some(Some("codex-cli 9.9.9".into())));
+        }
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("PATH", Some(path.as_str())),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_OS_WRAP", None),
+            ("AIDA_AGENT_CMD", Some("/bin/true")),
+            ("AIDA_HARNESS_VERSION", Some("launcher-version")),
+        ]);
+        assert_eq!(
+            env_of(&build()),
+            Some(None),
+            "a mocked vendor is not probed"
+        );
     }
 
     /// TASK-2066: every seat's child is labelled from its own vendor and

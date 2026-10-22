@@ -1092,3 +1092,57 @@ fn no_verdict_message_caps_the_denial_list() {
     assert!(err.contains("Bash(denied-1); Bash(denied-2)."), "{err}");
     assert!(!err.contains("more"), "{err}");
 }
+
+/// TASK-1805: an explicit reviewer whose backing ID is unknown, or ambiguous
+/// (two requirements share it), never coexists with a live implementer lease,
+/// even when the change title credits that same ID; and the explicit role
+/// comes from the pickup, so a non-reviewer pickup never coexists.
+// trace:TASK-1955 | ai:claude (TASK-1805)
+#[test]
+fn task1805_pickup_refuses_an_unknown_or_ambiguous_backing_id() {
+    use crate::session_start::review_pickup_conflict_decision;
+    let spec = |id: &str, title: &str| {
+        let mut r = aida_core::Requirement::new(title.into(), String::new());
+        r.spec_id = Some(id.into());
+        r
+    };
+    let unique = aida_core::RequirementsStore {
+        requirements: vec![spec("STORY-77", "backing")],
+        ..Default::default()
+    };
+    let colliding = aida_core::RequirementsStore {
+        requirements: vec![spec("STORY-77", "one"), spec("STORY-77", "two")],
+        ..Default::default()
+    };
+    let decide = |pickup, store, title: &'static str| {
+        review_pickup_conflict_decision(
+            true,
+            true,
+            Some("implementer"),
+            pickup,
+            Some(store),
+            "widget",
+            || Ok(title.to_string()),
+        )
+    };
+    assert_eq!(
+        decide(Some(("reviewer", "STORY-77")), &unique, "Fix (STORY-77)"),
+        LeaseConflictDecision::Coexist,
+        "control: a unique, credited backing ID coexists"
+    );
+    assert_eq!(
+        decide(Some(("reviewer", "STORY-99")), &unique, "Fix (STORY-99)"),
+        LeaseConflictDecision::Refuse,
+        "unknown backing ID"
+    );
+    assert_eq!(
+        decide(Some(("reviewer", "STORY-77")), &colliding, "Fix (STORY-77)"),
+        LeaseConflictDecision::Refuse,
+        "ambiguous backing ID"
+    );
+    assert_ne!(
+        decide(Some(("implementer", "STORY-77")), &unique, "Fix (STORY-77)"),
+        LeaseConflictDecision::Coexist,
+        "the explicit role is the pickup's, not the backing spec's"
+    );
+}
