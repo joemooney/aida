@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-19T15:55:48.750553278Z
-modified_at: 2026-10-22T07:48:41.906906918Z
+modified_at: 2026-10-22T07:49:19.086880753Z
 req_type: Task
 tags:
 - reconcile
@@ -405,6 +405,12 @@ comments:
   content: 'ADVISOR 23:42: folded TASK-2138 (MergeHoldChanged readers outside unrecorded_marker_removals still read the caller''s log; the same family as the PR-2822 TASK-1406 note). fix-task-1951 has it in the #2822 rework.'
   created_at: 2026-10-22T06:45:01.311573591Z
   modified_at: 2026-10-22T06:45:01.311573591Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16295-fc6e-7661-8ba7-67c7bc85512e
+  author: joe
+  content: 'ADVISOR 00:52: folded TASK-2141 (the store-history timeout default of 120s is below the measured cold walk of 4m26s, and the refusal doesn''t name the knob). PR-2823 note.'
+  created_at: 2026-10-22T07:49:19.086880753Z
+  modified_at: 2026-10-22T07:49:19.086880753Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a154e0-78cf-7a40-bc67-d8f6e5580d97
