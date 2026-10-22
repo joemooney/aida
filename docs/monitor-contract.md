@@ -64,6 +64,13 @@ whose actor is instead identified by `run_uuid`. // trace:BUG-1423 | ai:claude /
 
 ## Migration notes
 
+- `1.8.0` — the new `ReviewWatchReady` event kind records that `aida review
+  watch` found a PR ready to ship (`pr`, `head`, and `after_update_branch`,
+  true when the branch must be updated from its base first). It is emitted
+  once per head and readiness, and it is actionable. The watcher only
+  reports; it never merges. An `aida watch` older than `1.8.0` reads it as
+  `Unknown`, which is actionable. Additive only.
+  // trace:TASK-1945 | ai:claude
 - `1.7.0` — two new event kinds come from the drive mandate.
   `MandateDriveAction` records one action taken under a mandate (`mandate_id`,
   `actor` = `tick` or `session`, `lane`, `subject`, `action`, `outcome` =

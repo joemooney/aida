@@ -96,6 +96,9 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         // trace:STORY-1700 | ai:claude
         | MandateDriveAction { .. }
         | MandateDriveDue { .. }
+        // A watcher wake is coordination, not lifecycle evidence.
+        // trace:TASK-1945 | ai:claude
+        | ReviewWatchReady { .. }
         | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }
