@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T17:18:16.485453920Z
-modified_at: 2026-10-22T01:45:52.284535232Z
+modified_at: 2026-10-22T01:46:35.499628381Z
 req_type: Task
 tags:
 - follow-up
@@ -42,6 +42,12 @@ comments:
   content: 'ADVISOR 10:20: folded the auto-filed duplicates TASK-2070 and TASK-1-408, plus the cosmetic trace note TASK-2071/TASK-1-409. When you touch these lines, trace them to their original item IDs as well as TASK-2072.'
   created_at: 2026-10-21T17:19:26.768315952Z
   modified_at: 2026-10-21T17:19:26.768315952Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16149-e66b-7703-9561-4e4811ce167c
+  author: joe
+  content: 'ADVISOR 18:47: promoted to approved. Touches seat_authority.rs (mandate-protected), so the operator merges. Dispatched when a lane frees.'
+  created_at: 2026-10-22T01:46:35.499628381Z
+  modified_at: 2026-10-22T01:46:35.499628381Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15f79-1285-7f81-8475-987e9496927f
