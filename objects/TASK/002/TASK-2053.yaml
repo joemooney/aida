@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-21T09:53:13.924066900Z
-modified_at: 2026-10-22T20:06:03.426026886Z
+modified_at: 2026-10-22T20:07:09.773058806Z
 req_type: Task
 relationships:
 - rel_type: References
@@ -117,6 +117,12 @@ comments:
     Gates: targeted tests, make check-ci-fast, make test-touched. Never the full suite. Commit (Refs TASK-2053).
   created_at: 2026-10-22T18:58:19.574373571Z
   modified_at: 2026-10-22T18:58:19.574373571Z
+  session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
+- id: 01a16539-80cd-78e3-9f3c-997e015576f6
+  author: joe
+  content: 'ADVISOR 13:08, PR #2833 round 2 at 5b014fb9e2: CI is green and the C1 quote is in, but items 3-7 of the 12:00 brief are UNADDRESSED (only the ratchet perf fix landed). This is ONE narrow final round under the cap exception: do items 3-7 of the 12:00 brief exactly, nothing else. 3: tests for the fail-closed preflight_agent_launch_lease clone probe and the salvage_worktree_patch error. 4: TASK-2162 asserts the target dir is released. 5: brace-balanced test_module_lines plus two layout tests. 6: doc count 157. 7: the blank line. Push and report the head. If any item can''t be done, say which and why in a comment; don''t skip it silently.'
+  created_at: 2026-10-22T20:07:09.773058806Z
+  modified_at: 2026-10-22T20:07:09.773058806Z
   session_id: 7d71bfbf-a609-42bd-a714-a7d52d81db81
 history:
 - id: 01a15de1-409d-7c42-b18e-94acbd5eb19d
